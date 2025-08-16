@@ -1,0 +1,56 @@
+Glucemia
+Colesterol Total
+HDL Colesterol
+LDL Colesterol
+Triglicéridos
+Urea
+Creatinina
+Ácido Úrico
+Hemoglobina
+Hematocrito
+Glóbulos Rojos
+Glóbulos Blancos
+Plaquetas
+VCM (Volumen Corpuscular Medio)
+HCM (Hemoglobina Corpuscular Media)
+CHCM (Concentración de Hemoglobina Corpuscular Media)
+RDW (Ancho de Distribución de Glóbulos Rojos)
+Neutrófilos
+Linfocitos
+Monocitos
+Eosinófilos
+Basófilos
+Hepatograma (GOT/AST)
+Hepatograma (GPT/ALT)
+Hepatograma (Fosfatasa Alcalina)
+Hepatograma (Bilirrubina Total)
+Hepatograma (Bilirrubina Directa)
+Hepatograma (Bilirrubina Indirecta)
+Tiroides (TSH)
+Tiroides (T3 Libre)
+Tiroides (T4 Libre)
+Orina Completa (pH)
+Orina Completa (Densidad)
+Orina Completa (Glucosa)
+Orina Completa (Proteínas)
+Orina Completa (Cuerpos Cetónicos)
+Orina Completa (Urobilinógeno)
+Orina Completa (Bilirrubina)
+Orina Completa (Nitritos)
+Orina Completa (Leucocitos)
+Orina Completa (Eritrocitos)
+Coprocultivo
+Cultivo de Orina
+PCR (Proteína C Reactiva)
+VSG (Velocidad de Sedimentación Globular)
+Grupo Sanguíneo
+Factor Rh
+Tiempo de Protrombina (TP)
+Tiempo Parcial de Tromboplastina (KPTT)
+Fibrinógeno
+Ionograma (Sodio)
+Ionograma (Potasio)
+Ionograma (Cloro)
+Calcio
+Fósforo
+Magnesio

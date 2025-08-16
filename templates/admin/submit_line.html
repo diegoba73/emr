@@ -1,0 +1,13 @@
+{% load i18n admin_urls %}
+<div class="submit-row">
+    {% if show_save %}
+        <input type="submit" value="{% translate 'Guardar' %}" class="default" name="_save">
+        {# --- BOTÓN CANCELAR AL LADO DE GUARDAR --- #}
+        <input type="button" value="{% translate 'Cancelar' %}" onclick="javascript:history.back();" name="_cancel" style="margin-left: 5px;">
+    {% endif %}
+
+    {% if show_delete_link and original %}
+        {% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}
+        <p class="deletelink-box"><a href="{% add_preserved_filters delete_url %}" class="deletelink">{% translate 'Eliminar' %}</a></p>
+    {% endif %}
+</div>

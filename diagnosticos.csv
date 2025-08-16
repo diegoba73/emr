@@ -1,0 +1,634 @@
+codigo,capitulo,enfermedad,tipo de enfermedad,descripcion
+A00,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Cólera
+A01,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebres tifoidea y paratifoidea
+A02,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras infecciones debidas a Salmonella
+A03,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Shigelosis
+A04,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras infecciones intestinales bacterianas
+A05,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras intoxicaciones alimentarias bacterianas
+A06,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Amebiasis
+A07,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras enfermedades intestinales debidas a protozoarios
+A08,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infecciones intestinales debidas a virus y otros organismos especificados
+A09,CAPITULO I,Enfermedades infecciosas intestinales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Diarrea y gastroenteritis de presunto origen infeccioso
+A15,CAPITULO I,Tuberculosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Tuberculosis respiratoria, confirmada bacteriológica e histológicamente"
+A16,CAPITULO I,Tuberculosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Tuberculosis respiratoria, no confirmada bacteriológica o histológicamente"
+A17,CAPITULO I,Tuberculosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tuberculosis del sistema nervioso
+A18,CAPITULO I,Tuberculosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tuberculosis de otros órganos
+A19,CAPITULO I,Tuberculosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tuberculosis miliar
+A20,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Peste
+A21,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tularemia
+A22,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Carbunco [ántrax]
+A23,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Brucelosis
+A24,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Muermo y melioidosis
+A25,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebres por mordedura de rata
+A26,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Erisipeloide
+A27,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Leptospirosis
+A28,CAPITULO I,Ciertas zoonosis bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras enfermedades zoonoticas bacterianas, no clasificadas en otra parte"
+A30,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Lepra [enfermedad de Hansen]
+A31,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infecciones debidas a otras micobacterias
+A32,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Listeriosis
+A33,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tétanos neonatal
+A34,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tétanos obstétrico
+A35,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otros tétanos
+A36,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Difteria
+A37,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tos ferina [tos convulsiva]
+A38,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Escarlatina
+A39,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infección meningococica
+A40,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Septicemia estreptococica
+A41,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras septicemias
+A42,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Actinomicosis
+A43,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Nocardiosis
+A44,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Bartonelosis
+A46,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Erisipela
+A48,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras enfermedades bacterianas, no clasificadas en otra parte"
+A49,CAPITULO I,Otras enfermedades bacterianas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infección bacteriana de sitio no especificado
+A50,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Sífilis congénita
+A51,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Sífilis precoz
+A52,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Sífilis tardía
+A53,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras sífilis y las no especificadas
+A54,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infección gonococica
+A55,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Linfogranuloma (venéreo) por clamidias
+A56,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras enfermedades de transmisión sexual debidas a clamidias
+A57,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Chancro blando
+A58,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Granuloma inguinal
+A59,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tricomoniasis
+A60,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infección anogenital debida a virus del herpes (herpes simple)
+A63,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras enfermedades de transmisión predominantemente sexual, no clasificadas en otra parte"
+A64,CAPITULO I,Infecciones con modo de transmisión predominantemente sexual,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Enfermedad de transmisión sexual no especificada
+A65,CAPITULO I,Otras enfermedades debidas a espiroquetas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Sífilis no venérea
+A66,CAPITULO I,Otras enfermedades debidas a espiroquetas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Frambesia
+A67,CAPITULO I,Otras enfermedades debidas a espiroquetas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Pinta [carate]
+A68,CAPITULO I,Otras enfermedades debidas a espiroquetas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebres recurrentes
+A69,CAPITULO I,Otras enfermedades debidas a espiroquetas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras infecciones causadas por espiroquetas
+A70,CAPITULO I,Otras enfermedades causadas por clamidias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infección debida a Chlamydia psittaci
+A71,CAPITULO I,Otras enfermedades causadas por clamidias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tracoma
+A74,CAPITULO I,Otras enfermedades causadas por clamidias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras enfermedades causadas por clamidias
+A75,CAPITULO I,Rickettsiosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tifus
+A77,CAPITULO I,Rickettsiosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebre maculosa (rickettsiosis transmitida por garrapatas)
+A78,CAPITULO I,Rickettsiosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebre Q
+A79,CAPITULO I,Rickettsiosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras rickettsiosis
+A80,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Poliomielitis aguda
+A81,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infecciones del sistema nervioso central por virus lento
+A82,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Rabia
+A83,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Encefalitis viral transmitida por mosquitos
+A84,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Encefalitis viral transmitida por garrapatas
+A85,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras encefalitis virales, no clasificadas en otra parte"
+A86,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Encefalitis viral, no especificada"
+A87,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Meningitis viral
+A88,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras infecciones virales del sistema nervioso central, no clasificadas en otra parte"
+A89,CAPITULO I,Infecciones virales del sistema nervioso central,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Infección viral del sistema nervioso central, no especificada"
+A90,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebre del dengue [dengue clásico]
+A91,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebre del dengue hemorrágico
+A92,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras fiebres virales transmitidas por mosquitos
+A93,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras fiebres virales transmitidas por artrópodos, no clasificadas en otra parte"
+A94,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Fiebre viral transmitida por artrópodos, no especificada"
+A95,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebre amarilla
+A96,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Fiebre hemorrágica por arenavirus
+A98,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras fiebres virales hemorrágicas, no clasificadas en otra parte"
+A99,CAPITULO I,Fiebres virales trasmitidas por artrópodos y fiebres virales hemorrágicas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Fiebre viral hemorrágica, no especificada"
+B00,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infecciones herpéticas [herpes simple]
+B01,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Varicela
+B02,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Herpes zoster
+B03,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Viruela
+B04,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Viruela de los monos
+B05,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Sarampión
+B06,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Rubeola [sarampión alemán]
+B07,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Verrugas víricas
+B08,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras infecciones víricas caracterizadas por lesiones de la piel y de las membranas mucosas, no clasificadas en otra"
+B09,CAPITULO I,Infecciones virales caracterizadas por lesiones de la piel y de las membranas mucosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Infección viral no especificada, caracterizada por lesiones de la piel y de las membranas mucosas"
+B15,CAPITULO I,Hepatitis viral,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Hepatitis aguda tipo A
+B16,CAPITULO I,Hepatitis viral,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Hepatitis aguda tipo B
+B17,CAPITULO I,Hepatitis viral,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras hepatitis virales agudas
+B18,CAPITULO I,Hepatitis viral,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Hepatitis viral crónica
+B19,CAPITULO I,Hepatitis viral,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Hepatitis viral, sin otra especificación"
+B20,CAPITULO I,Enfermedad por virus de la inmunodeficiencia humana (HIV),CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad por virus de la inmunodeficiencia humana [VIH], resultante en enfermedades infecciosas y parasitarias"
+B21,CAPITULO I,Enfermedad por virus de la inmunodeficiencia humana (HIV),CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad por virus de la inmunodeficiencia humana [VIH], resultante en tumores malignos"
+B22,CAPITULO I,Enfermedad por virus de la inmunodeficiencia humana (HIV),CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad por virus de la inmunodeficiencia humana [VIH], resultante en otras enfermedades especificadas"
+B23,CAPITULO I,Enfermedad por virus de la inmunodeficiencia humana (HIV),CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad por virus de la inmunodeficiencia humana [VIH], resultante en otras afecciones"
+B24,CAPITULO I,Enfermedad por virus de la inmunodeficiencia humana (HIV),CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad por virus de la inmunodeficiencia humana [VIH], sin otra especificación"
+B25,CAPITULO I,Otras enfermedades virales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Enfermedad debida a virus citomegalico
+B26,CAPITULO I,Otras enfermedades virales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Parotiditis infecciosa
+B27,CAPITULO I,Otras enfermedades virales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Mononucleosis infecciosa
+B30,CAPITULO I,Otras enfermedades virales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Conjuntivitis viral
+B33,CAPITULO I,Otras enfermedades virales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras enfermedades virales, no clasificadas en otra parte"
+B34,CAPITULO I,Otras enfermedades virales,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Infección viral de sitio no especificado
+B35,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Dermatofitosis
+B36,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras micosis superficiales
+B37,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Candidiasis
+B38,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Coccidioidomicosis
+B39,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Histoplasmosis
+B40,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Blastomicosis
+B41,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Paracoccidioidomicosis
+B42,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Esporotricosis
+B43,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Cromomicosis y absceso feomicotico
+B44,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Aspergilosis
+B45,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Criptococosis
+B46,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Cigomicosis
+B47,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Micetoma
+B48,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras micosis, no clasificadas en otra parte"
+B49,CAPITULO I,Micosis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Micosis, no especificada"
+B50,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Paludismo [malaria] debido a Plasmodium falciparum
+B51,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Paludismo [malaria] debido a Plasmodium vivax
+B52,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Paludismo [malaria] debido a Plasmodium malaria
+B53,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otro paludismo [malaria] confirmado parasitológicamente
+B54,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Paludismo [malaria] no especificado
+B55,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Leishmaniasis
+B56,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tripanosomiasis africana
+B57,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Enfermedad de Chagas
+B58,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Toxoplasmosis
+B59,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Neumocistosis
+B60,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras enfermedades debidas a protozoarios, no clasificadas en otra parte"
+B64,CAPITULO I,Enfermedades debidas a protozoarios,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad debida a protozoarios, no especificada"
+B65,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Esquistosomiasis [bilharziasis]
+B66,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras infecciones debidas a tremátodos
+B67,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Equinococosis
+B68,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Teniasis
+B69,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Cisticercosis
+B70,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Difilobotriasis y esparganosis
+B71,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras infecciones debidas a cestodos
+B72,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Dracontiasis
+B73,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Oncocercosis
+B74,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Filariasis
+B75,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Triquinosis
+B76,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Anquilostomiasis y necatoriasis
+B77,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Ascariasis
+B78,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Estrongiloidiasis
+B79,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Tricuriasis
+B80,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Enterobiasis
+B81,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Otras helmintiasis intestinales, no clasificadas en otra parte"
+B82,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Parasitosis intestinales, sin otra especificación"
+B83,CAPITULO I,Helmintiasis,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras helmintiasis
+B85,CAPITULO I,Pediculosis. Acariasis y otras manifestaciones,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Pediculosis y pithiriasis
+B86,CAPITULO I,Pediculosis. Acariasis y otras manifestaciones,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Escabiosis
+B87,CAPITULO I,Pediculosis. Acariasis y otras manifestaciones,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Miasis
+B88,CAPITULO I,Pediculosis. Acariasis y otras manifestaciones,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras infestaciones
+B89,CAPITULO I,Pediculosis. Acariasis y otras manifestaciones,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,"Enfermedad parasitaria, no especificada"
+B90,CAPITULO I,Secuelas de enfermedades infecciosas y parasitarias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Secuelas de tuberculosis
+B91,CAPITULO I,Secuelas de enfermedades infecciosas y parasitarias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Secuelas de poliomielitis
+B92,CAPITULO I,Secuelas de enfermedades infecciosas y parasitarias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Secuelas de lepra
+B94,CAPITULO I,Secuelas de enfermedades infecciosas y parasitarias,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Secuelas de otras enfermedades infecciosas y parasitarias y de las no especificadas
+B95,CAPITULO I,"Bacterias, virus y otros agentes infecciosos",CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Estreptococos y estafilococos como causa de enfermedades clasificadas en otros capítulos
+B96,CAPITULO I,"Bacterias, virus y otros agentes infecciosos",CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otros agentes bacterianos como causa de enfermedades clasificadas en otros capítulos
+B97,CAPITULO I,"Bacterias, virus y otros agentes infecciosos",CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Agentes virales como causa de enfermedades clasificadas en otros capítulos
+B99,CAPITULO I,Otras enfermedades infecciosas,CIERTAS ENFERMEDADES INFECCIOSAS Y PARASITARIAS,Otras enfermedades infecciosas y las no especificadas
+C00,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno del labio
+C01,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la base de la lengua
+C02,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de otras partes y de las no especificadas de la lengua
+C03,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la encía
+C04,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno del piso de la boca
+C05,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno del paladar
+C06,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de otras partes y de las no especificadas de la boca
+C07,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la glándula parótida
+C08,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de otras glándulas salivales mayores y de las no especificadas
+C09,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la amígdala
+C10,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la orofaringe
+C11,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la nasofaringe
+C12,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno del seno piriforme
+C13,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),Tumor maligno de la hipofaringe
+C14,CAPITULO II,Tumores malignos de labio de la cavidad bucal y de la faringe,TUMORES (NEOPLASIAS),"Tumor maligno de otros sitios y de los mal definidos del labio, de la cavidad bucal y de la faringe"
+C15,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del esófago
+C16,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del estomago
+C17,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del intestino delgado
+C18,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del colon
+C19,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno de la unión rectosigmoidea
+C20,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del recto
+C21,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del ano y del conducto anal
+C22,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del hígado y de las vias biliares intrahepaticas
+C23,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno de la vesícula biliar
+C24,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno de otras partes y de las no especificadas de las vias biliares
+C25,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno del páncreas
+C26,CAPITULO II,Tumores malignos de los órganos digestivos,TUMORES (NEOPLASIAS),Tumor maligno de otros sitios y de los mal definidos de los órganos digestivos
+C30,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno de las fosas nasales y del oído medio
+C31,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno de los senos paranasales
+C32,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno de la laringe
+C33,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno de la traquea
+C34,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno de los bronquios y del pulmón
+C37,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno del timo
+C38,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),"Tumor maligno del corazón, del mediastino y de la pleura"
+C39,CAPITULO II,Tumores malignos de los órganos respiratorios e intratorácicos,TUMORES (NEOPLASIAS),Tumor maligno de otros sitios y de los mal definidos del sistema respiratorio y de los órganos intratorácicos
+C40,CAPITULO II,Tumores malignos de los huesos y de los cartílagos articulares,TUMORES (NEOPLASIAS),Tumor maligno de los huesos y de los cartílagos articulares de los miembros
+C41,CAPITULO II,Tumores malignos de los huesos y de los cartílagos articulares,TUMORES (NEOPLASIAS),"Tumor maligno de los huesos y de los cartílagos articulares, de otros sitios y de sitios no especificados"
+C43,CAPITULO II,Melanoma y otros tumores malignos de la piel,TUMORES (NEOPLASIAS),Melanoma maligno de la piel
+C44,CAPITULO II,Melanoma y otros tumores malignos de la piel,TUMORES (NEOPLASIAS),Otros tumores malignos de la piel
+C45,CAPITULO II,Tumores malignos de los tejidos mesoteliales y de los tejidos blandos,TUMORES (NEOPLASIAS),Mesotelioma
+C46,CAPITULO II,Tumores malignos de los tejidos mesoteliales y de los tejidos blandos,TUMORES (NEOPLASIAS),Sarcoma de Kaposi
+C47,CAPITULO II,Tumores malignos de los tejidos mesoteliales y de los tejidos blandos,TUMORES (NEOPLASIAS),Tumor maligno de los nervios periféricos y del sistema nervioso autónomo
+C48,CAPITULO II,Tumores malignos de los tejidos mesoteliales y de los tejidos blandos,TUMORES (NEOPLASIAS),Tumor maligno del peritoneo y del retroperitoneo
+C49,CAPITULO II,Tumores malignos de los tejidos mesoteliales y de los tejidos blandos,TUMORES (NEOPLASIAS),Tumor maligno de otros tejidos conjuntivos y de tejidos blandos
+C50,CAPITULO II,Tumor maligno de mama,TUMORES (NEOPLASIAS),Tumor maligno de la mama
+C51,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno de la vulva
+C52,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno de la vagina
+C53,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno del cuello del útero
+C54,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno del cuerpo del útero
+C55,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),"Tumor maligno del útero, parte no especificada"
+C56,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno del ovario
+C57,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno de otros órganos genitales femeninos y de los no especificados
+C58,CAPITULO II,Tumores malignos de los órganos genitales femeninos,TUMORES (NEOPLASIAS),Tumor maligno de la placenta
+C60,CAPITULO II,Tumores malignos de los órganos genitales masculinos,TUMORES (NEOPLASIAS),Tumor maligno del pene
+C61,CAPITULO II,Tumores malignos de los órganos genitales masculinos,TUMORES (NEOPLASIAS),Tumor maligno de la próstata
+C62,CAPITULO II,Tumores malignos de los órganos genitales masculinos,TUMORES (NEOPLASIAS),Tumor maligno del testículo
+C63,CAPITULO II,Tumores malignos de los órganos genitales masculinos,TUMORES (NEOPLASIAS),Tumor maligno de otros órganos genitales masculinos y de los no especificados
+C64,CAPITULO II,Tumores malignos de las vías urinarias,TUMORES (NEOPLASIAS),"Tumor maligno del riñon, excepto de la pelvis renal"
+C65,CAPITULO II,Tumores malignos de las vías urinarias,TUMORES (NEOPLASIAS),Tumor maligno de la pelvis renal
+C66,CAPITULO II,Tumores malignos de las vías urinarias,TUMORES (NEOPLASIAS),Tumor maligno del uréter
+C67,CAPITULO II,Tumores malignos de las vías urinarias,TUMORES (NEOPLASIAS),Tumor maligno de la vejiga urinaria
+C68,CAPITULO II,Tumores malignos de las vías urinarias,TUMORES (NEOPLASIAS),Tumor maligno de otros órganos urinarios y de los no especificados
+C69,CAPITULO II,Tumores malignos del ojo del encéfalo y de otras partes del sistema nervioso,TUMORES (NEOPLASIAS),Tumor maligno del ojo y sus anexos
+C70,CAPITULO II,Tumores malignos del ojo del encéfalo y de otras partes del sistema nervioso,TUMORES (NEOPLASIAS),Tumor maligno de las meninges
+C71,CAPITULO II,Tumores malignos del ojo del encéfalo y de otras partes del sistema nervioso,TUMORES (NEOPLASIAS),Tumor maligno del encéfalo
+C72,CAPITULO II,Tumores malignos del ojo del encéfalo y de otras partes del sistema nervioso,TUMORES (NEOPLASIAS),"Tumor maligno de la medula espinal, de los nervios craneales y de otras partes del sistema nervioso central"
+C73,CAPITULO II,Tumores malignos de la glándula tiroides y de otras glándulas endocrinas,TUMORES (NEOPLASIAS),Tumor maligno de la glándula tiroides
+C74,CAPITULO II,Tumores malignos de la glándula tiroides y de otras glándulas endocrinas,TUMORES (NEOPLASIAS),Tumor maligno de la glándula suprarrenal
+C75,CAPITULO II,Tumores malignos de la glándula tiroides y de otras glándulas endocrinas,TUMORES (NEOPLASIAS),Tumor maligno de otras glándulas endocrinas y de estructuras afines
+C76,CAPITULO II,Tumores malignos de sitios mal definidos secundarios y de sitios no especificados,TUMORES (NEOPLASIAS),Tumor maligno de otros sitios y de sitios mal definidos
+C77,CAPITULO II,Tumores malignos de sitios mal definidos secundarios y de sitios no especificados,TUMORES (NEOPLASIAS),Tumor maligno secundario y el no especificado de los ganglios linfáticos
+C78,CAPITULO II,Tumores malignos de sitios mal definidos secundarios y de sitios no especificados,TUMORES (NEOPLASIAS),Tumor maligno secundario de los órganos respiratorios y digestivos
+C79,CAPITULO II,Tumores malignos de sitios mal definidos secundarios y de sitios no especificados,TUMORES (NEOPLASIAS),Tumor maligno secundario de otros sitios
+C80,CAPITULO II,Tumores malignos de sitios mal definidos secundarios y de sitios no especificados,TUMORES (NEOPLASIAS),Tumor maligno de sitios no especificados
+C81,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Enfermedad de Hodgkin
+C82,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Linfoma no Hodgkin folicular [nodular]
+C83,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Linfoma no Hodgkin difuso
+C84,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),"Linfoma de células T, periférico y cutáneo"
+C85,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Linfoma no Hodgkin de otro tipo y el no especificado
+C88,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Enfermedades inmunoproliferativas malignas
+C90,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Mieloma múltiple y tumores malignos de células plasmáticas
+C91,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Leucemia linfoide
+C92,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Leucemia mieloide
+C93,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Leucemia monocitica
+C94,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Otras leucemias de tipo celular especificado
+C95,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),Leucemia de células de tipo no especificado
+C96,CAPITULO II,"Tumores malignos del tejido linfático, de los órganos hematopoyéticos y de tejidos afines",TUMORES (NEOPLASIAS),"Otros tumores malignos y los no especificados del tejido linfático, de los órganos hematopoyéticos y de tejidos afines"
+C97,CAPITULO II,Tumores malignos(primarios) de sitios múltiples independientes,TUMORES (NEOPLASIAS),Tumores malignos (primarios) de sitios múltiples independientes
+D00,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),"Carcinoma in situ de la cavidad bucal, del esófago y del estomago"
+D01,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ de otros órganos digestivos y de los no especificados
+D02,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ del sistema respiratorio y del oído medio
+D03,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Melanoma in situ
+D04,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ de la piel
+D05,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ de la mama
+D06,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ del cuello del útero
+D07,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ de otros órganos genitales y de los no especificados
+D09,CAPITULO II,Tumores (neoplasias) in situ,TUMORES (NEOPLASIAS),Carcinoma in situ de otros sitios y de los no especificados
+D10,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de la boca y de la faringe
+D11,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de las glándulas salivales mayores
+D12,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),"Tumor benigno del colon, del recto, del conducto anal y del ano"
+D13,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de otras partes y de las mal definidas del sistema digestivo
+D14,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno del oído medio y del sistema respiratorio
+D15,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de otros órganos intratoracicos y de los no especificados
+D16,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno del hueso y del cartílago articular
+D17,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumores benignos lipomatosos
+D18,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Hemangioma y linfangioma de cualquier sitio
+D19,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumores benignos del tejido mesotelial
+D20,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno del tejido blando del peritoneo y del retroperitoneo
+D21,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Otros tumores benignos del tejido conjuntivo y de los tejidos blandos
+D22,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Nevo melanocitico
+D23,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Otros tumores benignos de la piel
+D24,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de la mama
+D25,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Leiomioma del útero
+D26,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Otros tumores benignos del tuero
+D27,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno del ovario
+D28,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de otros órganos genitales femeninos y de los no especificados
+D29,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de los órganos genitales masculinos
+D30,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de los órganos urinarios
+D31,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno del ojo y sus anexos
+D32,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumores benignos de las meninges
+D33,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno del encéfalo y de otras partes del sistema nervioso central
+D34,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de la glándula tiroides
+D35,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de otras glándulas endocrinas y de las no especificadas
+D36,CAPITULO II,Tumores (neoplasias) benignos,TUMORES (NEOPLASIAS),Tumor benigno de otros sitios y de los no especificados
+D37,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de la cavidad bucal y de los órganos digestivos
+D38,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido del oído medio y de los órganos respiratorios e intratoracicos
+D39,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de los órganos genitales femeninos
+D40,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de los órganos genitales masculinos
+D41,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de los órganos urinarios
+D42,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de las meninges
+D43,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido del encéfalo y del sistema nervioso central
+D44,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de las glándulas endocrinas
+D45,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Policitemia vera
+D46,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Síndromes mielodisplasicos
+D47,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),"Otros tumores de comportamiento incierto o desconocido del tejido linfático, de los órganos hematopoyeticos y de"
+D48,CAPITULO II,Tumores (neoplasias) de comportamiento incierto o desconocido,TUMORES (NEOPLASIAS),Tumor de comportamiento incierto o desconocido de otros sitios y de los no especificados
+D50,CAPITULO III,Anemias nutricionales,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemias por deficiencia de hierro
+D51,CAPITULO III,Anemias nutricionales,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemia por deficiencia de vitamina B12
+D52,CAPITULO III,Anemias nutricionales,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemia por deficiencia de folatos
+D53,CAPITULO III,Anemias nutricionales,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otras anemias nutricionales
+D55,CAPITULO III,Anemias hemolíticas,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemia debida a trastornos enzimáticos
+D56,CAPITULO III,Anemias hemolíticas,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Talasemia
+D57,CAPITULO III,Anemias hemolíticas,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Trastornos falciformes
+D58,CAPITULO III,Anemias hemolíticas,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otras anemias hemoliticas hereditarias
+D59,CAPITULO III,Anemias hemolíticas,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemia hemolitica adquirida
+D60,CAPITULO III,Anemias aplásticas y otras anemias,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD","Aplasia adquirida, exclusiva de la serie roja [eritroblastopenia]"
+D61,CAPITULO III,Anemias aplásticas y otras anemias,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otras anemias aplásticas
+D62,CAPITULO III,Anemias aplásticas y otras anemias,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemia posthemorragica aguda
+D63,CAPITULO III,Anemias aplásticas y otras anemias,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Anemia en enfermedades crónicas clasificadas en otra parte
+D64,CAPITULO III,Anemias aplásticas y otras anemias,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otras anemias
+D65,CAPITULO III,"Defectos de la coagulación, púrpura y otras afecciones hemorrágicas","ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Coagulación intravascular diseminada [síndrome de desfibrinacion]
+D66,CAPITULO III,"Defectos de la coagulación, púrpura y otras afecciones hemorrágicas","ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Deficiencia hereditaria del factor VIII
+D67,CAPITULO III,"Defectos de la coagulación, púrpura y otras afecciones hemorrágicas","ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Deficiencia hereditaria del factor IX
+D68,CAPITULO III,"Defectos de la coagulación, púrpura y otras afecciones hemorrágicas","ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otros defectos de la coagulación
+D69,CAPITULO III,"Defectos de la coagulación, púrpura y otras afecciones hemorrágicas","ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Púrpura y otras afecciones hemorrágicas
+D70,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Agranulocitosis
+D71,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Trastornos funcionales de los polimorfonucleares neutrofilos
+D72,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otros trastornos de los leucocitos
+D73,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Enfermedades del bazo
+D74,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Metahemoglobinemia
+D75,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otras enfermedades de la sangre y de los órganos hematopoyeticos
+D76,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Ciertas enfermedades que afectan al tejido linforreticular y al sistema reticuloendotelial
+D77,CAPITULO III,Otras enfermedades de la sangre y de los órganos hematopoyeticos,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otros trastornos de la sangre y de los órganos hematopoyeticos en enfermedades clasificadas en otra parte
+D80,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Inmunodeficiencia con predominio de defectos de los anticuerpos
+D81,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Inmunodeficiencias combinadas
+D82,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Inmunodeficiencia asociada con otros defectos mayores
+D83,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Inmunodeficiencia variable común
+D84,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Otras inmunodeficiencias
+D86,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD",Sarcoidosis
+D89,CAPITULO III,Ciertos trastornos que afectan el mecanismo de la inmunidad,"ENFERMEDADES DE LA SANGRE Y DE LOS ÓRGANOS HEMATOPOYETICOS Y CIERTOS TRASTORNOS QUE AFECTAN EL
+MECANISMO DE LA INMUNIDAD","Otros trastornos que afectan el mecanismo de la inmunidad, no clasificados en otra parte"
+E00,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Síndrome congénito de deficiencia de yodo
+E01,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos tiroideos vinculados a deficiencia de yodo y afecciones
+E02,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Hipotiroidismo subclinico por deficiencia de yodo
+E03,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otro hipotiroidismo
+E04,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otro bocio no tóxico
+E05,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Tirotoxicosis [hipertiroidismo]
+E06,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Tiroiditis
+E07,CAPITULO IV,Trastornos de la glándula tiroides,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos tiroideos
+E10,CAPITULO IV,Diabetes mellitus,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Diabetes mellitus insulinodependiente
+E11,CAPITULO IV,Diabetes mellitus,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Diabetes mellitus no insulinodependiente
+E12,CAPITULO IV,Diabetes mellitus,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Diabetes mellitus asociada con desnutrición
+E13,CAPITULO IV,Diabetes mellitus,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otras diabetes mellitus especificadas
+E14,CAPITULO IV,Diabetes mellitus,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS","Diabetes mellitus, no especificada"
+E15,CAPITULO IV,Otros trastornos de la regulación de la glucosa y de la secreción interna del páncreas,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Coma hipoglicemico no diabético
+E16,CAPITULO IV,Otros trastornos de la regulación de la glucosa y de la secreción interna del páncreas,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos de la secreción interna del páncreas
+E20,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Hipoparatiroidismo
+E21,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Hiperparatiroidismo y otros trastornos de la glándula paratiroides
+E22,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Hiperfuncion de la glándula hipófisis
+E23,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Hipofuncion y otros trastornos de la glándula hipófisis
+E24,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Síndrome de Cushing
+E25,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos adrenogenitales
+E26,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Hiperaldosteronismo
+E27,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos de la glándula suprarrenal
+E28,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Disfunción ovarica
+E29,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Disfunción testicular
+E30,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS","Trastornos de la pubertad, no clasificados en otra parte"
+E31,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Disfunción poliglandular
+E32,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Enfermedades del timo
+E34,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos endocrinos
+E35,CAPITULO IV,Trastornos de otras glándulas endocrinas.,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos endocrinos en enfermedades clasificadas en otra parte
+E40,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Kwashiorkor
+E41,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Marasmo nutricional
+E42,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Kwashiorkor marasmatico
+E43,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS","Desnutrición proteicocalorica severa, no especificada"
+E44,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Desnutrición proteicocalorica de grado moderado y leve
+E45,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Retardo del desarrollo debido a desnutrición proteicocalorica
+E46,CAPITULO IV,Desnutrición,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS","Desnutrición proteicocalorica, no especificada"
+E50,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia de vitamina A
+E51,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia de tiamina
+E52,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia de niacina [pelagra]
+E53,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencias de otras vitaminas del grupo B
+E54,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia de ácido ascorbico
+E55,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia de vitamina D
+E56,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otras deficiencias de vitaminas
+E58,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia dietética de calcio
+E59,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia dietética de selenio
+E60,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencia dietética de zinc
+E61,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deficiencias de otros elementos nutricionales
+E63,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otras deficiencias nutricionales
+E64,CAPITULO IV,Otras deficiencias nutricionales,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Secuelas de la desnutrición y de otras deficiencias nutricionales
+E65,CAPITULO IV,Obesidad y otros tipo de hiperalimentación,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Adiposidad localizada
+E66,CAPITULO IV,Obesidad y otros tipo de hiperalimentación,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Obesidad
+E67,CAPITULO IV,Obesidad y otros tipo de hiperalimentación,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros tipos de hiperalimentación
+E68,CAPITULO IV,Obesidad y otros tipo de hiperalimentación,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Secuelas de hiperalimentación
+E70,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de los aminoácidos aromáticos
+E71,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de los aminoácidos de cadena ramificada y de los ácidos grasos
+E72,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos del metabolismo de los aminoácidos
+E73,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Intolerancia a la lactosa
+E74,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos del metabolismo de los carbohidratos
+E75,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de los esfingolipidos y otros trastornos por almacenamiento de lípidos
+E76,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de los glucosamínoglicanos
+E77,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de las glucoproteinas
+E78,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de las lipoproteinas y otras lipidemias
+E79,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de las purinas y de las pirimidinas
+E80,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de las porfirinas y de la bilirrubina
+E83,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos del metabolismo de los minerales
+E84,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Fibrosis quistica
+E85,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Amiloidosis
+E86,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Deplecion del volumen
+E87,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS","Otros trastornos de los líquidos, de los electrolitos y del equilibrio ácido-básico"
+E88,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Otros trastornos metabólicos
+E89,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS","Trastornos endocrinos y metabólicos consecutivos a procedimientos, no clasificados en otra parte"
+E90,CAPITULO IV,Trastornos metabólicos,"ENFERMEDADES ENDOCRINAS, NUTRICIONALES Y METABOLICAS",Trastornos nutricionales y metabólicos en enfermedades clasificadas en otra parte
+F00,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Demencia en la enfermedad de Alzheimer (G30.-+)
+F01,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Demencia vascular
+F02,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Demencia en otras enfermedades clasificadas en otra parte
+F03,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Demencia, no especificada"
+F04,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Síndrome amnésico orgánico, no inducido por alcohol o por otras sustancias psicoactivas"
+F05,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Delirio, no inducido por alcohol o por otras sustancias psicoactivas"
+F06,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Otros trastornos mentales debidos a lesión y disfunción cerebral, y a enfermedad física"
+F07,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastornos de la personalidad y del comportamiento debidos a enfermedad, lesión o disfunción cerebral"
+F09,CAPITULO V,"Trastornos mentales orgánicos, incluidos los trastornos sintomáticos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastorno mental orgánico o sintomático, no especificado"
+F20,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Esquizofrenia
+F21,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastorno esquizotipico
+F22,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos delirantes persistentes
+F23,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos psicoticos agudos y transitorios
+F24,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastorno delirante inducido
+F25,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos esquizoafectivos
+F28,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos psicoticos de origen no orgánico
+F29,CAPITULO V,"Esquizofrenia,trastornos esquizotípicos y trastornos delirantes",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Psicosis de origen no orgánico, no especificada"
+F30,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Episodio maníaco
+F31,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastorno afectivo bipolar
+F32,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Episodio depresivo
+F33,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastorno depresivo recurrente
+F34,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos del humor [afectivos] persistentes
+F38,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos del humor [afectivos]
+F39,CAPITULO V,Trastornos del humor (afectivos),TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastorno del humor [afectivo], no especificado"
+F40,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos fobicos de ansiedad
+F41,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos de ansiedad
+F42,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastorno obsesivo-compulsivo
+F43,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Reacción al estrés grave y trastornos de adaptación
+F44,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos disociativos [de conversión]
+F45,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos somatomorfos
+F48,CAPITULO V,"Trastornos neuróticos, trastornos relacionados con el stress y trastornos somatomorfos",TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos neuróticos
+F50,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos de la ingestión de alimentos
+F51,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos no orgánicos del sueno
+F52,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Disfunción sexual no ocasionada por trastorno ni enfermedad orgánicos
+F53,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastornos mentales y del comportamiento asociados con el puerperio, no clasificados en otra parte"
+F54,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Factores psicológicos y del comportamiento asociados con trastornos o enfermedades clasificados en otra parte
+F55,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Abuso de sustancias que no producen dependencia
+F59,CAPITULO V,Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Síndromes del comportamiento asociados con alteraciones fisiológicas y factores físicos, no especificados"
+F60,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos específicos de la personalidad
+F61,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos mixtos y otros trastornos de la personalidad
+F62,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Cambios perdurables de la personalidad, no atribuibles a lesión o a enfermedad cerebral"
+F63,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos de los hábitos y de los impulsos
+F64,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos de la identidad de genero
+F65,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos de la preferencia sexual
+F66,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos psicológicos y del comportamiento asociados con el desarrollo y con la orientación sexuales
+F68,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos de la personalidad y del comportamiento en adultos
+F69,CAPITULO V,Trastornos de la personalidad y del comportamiento en adultos,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastorno de la personalidad y del comportamiento en adultos, no especificado"
+F70,CAPITULO V,Retraso mental,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Retraso mental leve
+F71,CAPITULO V,Retraso mental,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Retraso mental moderado
+F72,CAPITULO V,Retraso mental,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Retraso mental grave
+F73,CAPITULO V,Retraso mental,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Retraso mental profundo
+F78,CAPITULO V,Retraso mental,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros tipos de retraso mental
+F79,CAPITULO V,Retraso mental,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Retraso mental, no especificado"
+F80,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos específicos del desarrollo del habla y del lenguaje
+F81,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos específicos del desarrollo de las habilidades escolares
+F82,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastorno especifico del desarrollo de la función motriz
+F83,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos específicos mixtos del desarrollo
+F84,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos generalizados del desarrollo
+F88,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos del desarrollo psicológico
+F89,CAPITULO V,Trastornos del desarrollo psicológico,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastorno del desarrollo psicológico, no especificado"
+F90,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos hipercineticos
+F91,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos de la conducta
+F92,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos mixtos de la conducta y de las emociones
+F93,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos emocionales de comienzo especifico en la niñez
+F94,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos del comportamiento social de comienzo especifico en la niñez y en la adolescencia
+F95,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Trastornos por tics
+F98,CAPITULO V,Trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez u en la adolescencia,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,Otros trastornos emocionales y del comportamiento que aparecen habitualmente en la niñez y en la adolescencia
+F99,CAPITULO V,Trastorno mental no especificado,TRASTORNOS MENTALES Y DEL COMPORTAMIENTO,"Trastorno mental, no especificado"
+G00,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,"Meningitis bacteriana, no clasificada en otra parte"
+G01,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Meningitis en enfermedades bacterianas clasificadas en otra parte
+G02,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Meningitis en otras enfermedades infecciosas y parasitarias clasificadas en otra parte
+G03,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Meningitis debida a otras causas y a las no especificadas
+G04,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,"Encefalitis, mielitis y encefalomielitis"
+G05,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,"Encefalitis, mielitis y encefalomielitis en enfermedades clasificadas en otra parte"
+G06,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Absceso y granuloma intracraneal e intrarraquideo
+G07,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Absceso y granuloma intracraneal e intrarraquideo en enfermedades
+G08,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Flebitis y tromboflebitis intracraneal e intrarraquidea
+G09,CAPITULO VI,Enfermedades inflamatorias del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Secuelas de enfermedades inflamatorias del sistema nervioso central
+G10,CAPITULO VI,Atrofias sistémicas que afectan principalmente el sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Enfermedad de Huntington
+G11,CAPITULO VI,Atrofias sistémicas que afectan principalmente el sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Ataxia hereditaria
+G12,CAPITULO VI,Atrofias sistémicas que afectan principalmente el sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Atrofia muscular espinal y síndromes afines
+G13,CAPITULO VI,Atrofias sistémicas que afectan principalmente el sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Atrofias sistémicas que afectan primariamente el sistema nervioso central en enfermedades clasificadas en otra parte
+G20,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Enfermedad de Parkinson
+G21,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Parkinsonismo secundario
+G22,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Parkinsonismo en enfermedades clasificadas en otra parte
+G23,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras enfermedades degenerativas de los núcleos de la base
+G24,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Distonia
+G25,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos extrapiramidales y del movimiento
+G26,CAPITULO VI,Trastornos extrapiramidales y del movimiento,ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos extrapiramidales y del movimiento en enfermedades clasificadas en otra parte
+G30,CAPITULO VI,Otras enfermedades degenerativas del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Enfermedad de Alzheimer
+G31,CAPITULO VI,Otras enfermedades degenerativas del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras enfermedades degenerativas del sistema nervioso
+G32,CAPITULO VI,Otras enfermedades degenerativas del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos degenerativos del sistema nervioso en enfermedades
+G35,CAPITULO VI,Enfermedades desmielinizantes del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Esclerosis múltiple
+G36,CAPITULO VI,Enfermedades desmielinizantes del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras desmielinizaciones diseminadas agudas
+G37,CAPITULO VI,Enfermedades desmielinizantes del sistema nervioso central,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras enfermedades desmielinizantes del sistema nervioso central
+G40,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Epilepsia
+G41,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Estado de mal epiléptico
+G43,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Migraña
+G44,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros síndromes de cefalea
+G45,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Ataques de isquemia cerebral transitoria y síndromes afines
+G46,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Síndromes vasculares encefálicos en enfermedades cerebrovasculares (I60-167+)
+G47,CAPITULO VI,Trastornos episódicos y paroxístico,ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos del sueno
+G50,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos del nervio trigémino
+G51,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos del nervio facial
+G52,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos de otros nervios craneales
+G53,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos de los nervios craneales en enfermedades clasificadas en otra parte
+G54,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos de las raíces y de los plexos nerviosos
+G55,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Compresiones de las raíces y de los plexos nerviosos en enfermedades
+G56,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Mononeuropatias del miembro superior
+G57,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Mononeuropatias del miembro inferior
+G58,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Otras mononeuropatias
+G59,CAPITULO VI,"Trastorno de los nervios,de las raíces y de los plexos nerviosos",ENFERMEDADES DEL SISTEMA NERVIOSO,Mononeuropatia en enfermedades clasificadas en otra parte
+G60,CAPITULO VI,Polineuropatías y otros trastornos del sistema nervioso periférico,ENFERMEDADES DEL SISTEMA NERVIOSO,Neuropatía hereditaria e idiopatica
+G61,CAPITULO VI,Polineuropatías y otros trastornos del sistema nervioso periférico,ENFERMEDADES DEL SISTEMA NERVIOSO,Polineuropatia inflamatoria
+G62,CAPITULO VI,Polineuropatías y otros trastornos del sistema nervioso periférico,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras polineuropatias.
+G63,CAPITULO VI,Polineuropatías y otros trastornos del sistema nervioso periférico,ENFERMEDADES DEL SISTEMA NERVIOSO,Polineuropatias en enfermedades clasificadas en otra parte
+G64,CAPITULO VI,Polineuropatías y otros trastornos del sistema nervioso periférico,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos del sistema nervioso periférico
+G70,CAPITULO VI,Enfermedades musculares y de la unión neuromuscular,ENFERMEDADES DEL SISTEMA NERVIOSO,Miastenia gravis y otros trastornos neuromusculares
+G71,CAPITULO VI,Enfermedades musculares y de la unión neuromuscular,ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos musculares primarios
+G72,CAPITULO VI,Enfermedades musculares y de la unión neuromuscular,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras miopatias
+G73,CAPITULO VI,Enfermedades musculares y de la unión neuromuscular,ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos del músculo y de la unión neuromuscular en enfermedades clasificadas en otra parte
+G80,CAPITULO VI,Parálisis cerebral y otros síndromes paralíticos,ENFERMEDADES DEL SISTEMA NERVIOSO,Parálisis cerebral infantil
+G81,CAPITULO VI,Parálisis cerebral y otros síndromes paralíticos,ENFERMEDADES DEL SISTEMA NERVIOSO,Hemiplejía
+G82,CAPITULO VI,Parálisis cerebral y otros síndromes paralíticos,ENFERMEDADES DEL SISTEMA NERVIOSO,Paraplejia y cuadriplejia
+G83,CAPITULO VI,Parálisis cerebral y otros síndromes paralíticos,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros síndromes paralíticos
+G90,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Trastornos del sistema nervioso autónomo
+G91,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Hidrocéfalo
+G92,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Encefalopatía tóxica
+G93,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos del encéfalo
+G94,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos del encéfalo en enfermedades clasificadas en otra parte
+G95,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otras enfermedades de la medula espinal
+G96,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos del sistema nervioso central
+G97,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,"Trastornos del sistema nervioso consecutivos a procedimientos, no clasificados en otra parte"
+G98,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,"Otros trastornos del sistema nervioso, no clasificados en otra parte"
+G99,CAPITULO VI,Otros trastornos del sistema nervioso,ENFERMEDADES DEL SISTEMA NERVIOSO,Otros trastornos del sistema nervioso en enfermedades clasificadas en otra parte
+H00,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Orzuelo y calacio
+H01,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Otras inflamaciones del párpado
+H02,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos de los párpados
+H03,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del párpado en enfermedades clasificadas en otra parte
+H04,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del aparato lagrimal
+H05,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos de la órbita
+H06,CAPITULO Vll,"Trastornos del párpado, aparato lagrimal y órbita",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del aparato lagrimal y de la órbita en enfermedades clasificadas en otra parte
+H10,CAPITULO Vll,Trastornos de la conjuntiva,ENFERMEDADES DEL OJO Y SUS ANEXOS,Conjuntivitis
+H11,CAPITULO Vll,Trastornos de la conjuntiva,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos de la conjuntiva
+H13,CAPITULO Vll,Trastornos de la conjuntiva,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos de la conjuntiva en enfermedades clasificadas en otra parte
+H15,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos de la esclerótica
+H16,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Queratitis
+H17,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Opacidades y cicatrices corneales
+H18,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos de la cornea
+H19,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos de la esclerótica y de la cornea en enfermedades clasificadas en otra parte
+H20,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Iridociclitis
+H21,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos del iris y del cuerpo ciliar
+H22,CAPITULO Vll,"Trastornos de la esclerótica, córnea, iris y cuerpo ciliar",ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del iris y del cuerpo ciliar en enfermedades clasificadas en otra parte
+H25,CAPITULO Vll,Trastornos del cristalino,ENFERMEDADES DEL OJO Y SUS ANEXOS,Catarata senil
+H26,CAPITULO Vll,Trastornos del cristalino,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otras cataratas
+H27,CAPITULO Vll,Trastornos del cristalino,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos del cristalino
+H28,CAPITULO Vll,Trastornos del cristalino,ENFERMEDADES DEL OJO Y SUS ANEXOS,Catarata y otros trastornos del cristalino en enfermedades clasificadas en otra parte
+H30,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Inflamación coriorretiniana
+H31,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos de la coroides
+H32,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos coriorretinianos en enfermedades clasificadas en otra parte
+H33,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Desprendimiento y desgarro de la retina
+H34,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Oclusión vascular de la retina
+H35,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos de la retina
+H36,CAPITULO Vll,Trastornos de la coroides y retina,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos de la retina en enfermedades clasificadas en otra parte
+H40,CAPITULO Vll,Glaucoma,ENFERMEDADES DEL OJO Y SUS ANEXOS,Glaucoma
+H42,CAPITULO Vll,Glaucoma,ENFERMEDADES DEL OJO Y SUS ANEXOS,Glaucoma en enfermedades clasificadas en otra parte
+H43,CAPITULO Vll,Trastornos del cuerpo vitreo y del globo ocular,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del cuerpo vitreo
+H44,CAPITULO Vll,Trastornos del cuerpo vitreo y del globo ocular,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del globo ocular
+H45,CAPITULO Vll,Trastornos del cuerpo vitreo y del globo ocular,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del cuerpo vitreo y del globo ocular en enfermedades clasificadas
+H46,CAPITULO Vll,Trastornos del nervio óptico y de las vías ópticas,ENFERMEDADES DEL OJO Y SUS ANEXOS,Neuritis óptica
+H47,CAPITULO Vll,Trastornos del nervio óptico y de las vías ópticas,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos del nervio óptico [II par] y de las vías ópticas
+H48,CAPITULO Vll,Trastornos del nervio óptico y de las vías ópticas,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos del nervio óptico [II par] y de las vías ópticas en enfermedades clasificadas en otra parte
+H49,CAPITULO Vll,Trastornos de los músculos oculares del movimiento binocular de la acomodación y de la refracción,ENFERMEDADES DEL OJO Y SUS ANEXOS,Estrabismo paralítico
+H50,CAPITULO Vll,Trastornos de los músculos oculares del movimiento binocular de la acomodación y de la refracción,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros estrabismos
+H51,CAPITULO Vll,Trastornos de los músculos oculares del movimiento binocular de la acomodación y de la refracción,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos de los movimientos binoculares
+H52,CAPITULO Vll,Trastornos de los músculos oculares del movimiento binocular de la acomodación y de la refracción,ENFERMEDADES DEL OJO Y SUS ANEXOS,Trastornos de la acomodación y de la refracción
+H53,CAPITULO Vll,Alteración de la visión y ceguera,ENFERMEDADES DEL OJO Y SUS ANEXOS,Alteraciones de la visión
+H54,CAPITULO Vll,Alteración de la visión y ceguera,ENFERMEDADES DEL OJO Y SUS ANEXOS,Ceguera y disminución de la agudeza visual
+H55,CAPITULO Vll,Otros trastornos del ojo y sus anexos,ENFERMEDADES DEL OJO Y SUS ANEXOS,Nistagmo y otros movimientos oculares irregulares
+H57,CAPITULO Vll,Otros trastornos del ojo y sus anexos,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos del ojo y sus anexos
+H58,CAPITULO Vll,Otros trastornos del ojo y sus anexos,ENFERMEDADES DEL OJO Y SUS ANEXOS,Otros trastornos del ojo y sus anexos en enfermedades clasificadas en otra parte
+H59,CAPITULO Vll,Otros trastornos del ojo y sus anexos,ENFERMEDADES DEL OJO Y SUS ANEXOS,"Trastornos del ojo y sus anexos consecutivos a procedimientos, no clasificados en otra parte"
+H60,CAPITULO VIII,Enfermedades del oído externo,ENFERMEDADES DEL OIDO Y DE LA APÓFISIS MASTOIDES,Otitis externa
+H61,CAPITULO VIII,Enfermedades del oído externo,ENFERMEDADES DEL OIDO Y DE LA APÓFISIS MASTOIDES,Otros trastornos del oído externo
+H62,CAPITULO VIII,Enfermedades del oído externo,ENFERMEDADES DEL OIDO Y DE LA APÓFISIS MASTOIDES,Trastornos del oído externo en enfermedades clasificadas en otra parte

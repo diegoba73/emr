@@ -1,0 +1,16 @@
+Fiebre
+Tos
+Dolor de cabeza
+Fatiga
+Nauseas
+Vomitos
+Diarrea
+Dolor abdominal
+Erupción cutánea
+Dificultad para respirar
+Malestar general
+Cansancio
+Vértigo
+Mareo
+Insomnio
+Dolor muscular

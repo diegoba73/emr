@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend Debug</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Frontend Debug</h1>
+    
+    <div>
+        <button onclick="testLogin()">🔐 Test Login</button>
+        <button onclick="testCurrentUser()">👤 Test Current User</button>
+        <button onclick="testLoadData()">📊 Test Load Data</button>
+        <button onclick="testAll()">🚀 Test All</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+    
+    <div id="log"></div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api';
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            logDiv.innerHTML += `<div class="log ${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function testLogin() {
+            log('🔐 Iniciando test de login...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        username: 'secretaria1',
+                        password: 'changeme123'
+                    })
+                });
+                
+                log(`📊 Login response status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Login exitoso: ${data.user?.username}`, 'success');
+                } else {
+                    const error = await response.text();
+                    log(`❌ Login falló: ${error}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Error en login: ${error}`, 'error');
+            }
+        }
+        
+        async function testCurrentUser() {
+            log('👤 Verificando usuario actual...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/current-user/`, {
+                    credentials: 'include'
+                });
+                
+                log(`📊 Current user status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Usuario autenticado: ${data.username}`, 'success');
+                } else {
+                    const error = await response.text();
+                    log(`❌ Usuario no autenticado: ${error}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Error verificando usuario: ${error}`, 'error');
+            }
+        }
+        
+        async function testLoadData() {
+            log('📊 Cargando datos...');
+            
+            const endpoints = [
+                { url: '/medicos/', name: 'Médicos' },
+                { url: '/especialidades/', name: 'Especialidades' },
+                { url: '/pacientes/', name: 'Pacientes' },
+                { url: '/turnos/', name: 'Turnos' }
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    log(`🔍 Cargando ${endpoint.name}...`);
+                    const response = await fetch(`${API_BASE}${endpoint.url}`, {
+                        credentials: 'include'
+                    });
+                    
+                    log(`📊 ${endpoint.name} status: ${response.status}`);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const count = data.results ? data.results.length : 0;
+                        log(`✅ ${endpoint.name}: ${count} registros`, 'success');
+                    } else {
+                        const error = await response.text();
+                        log(`❌ ${endpoint.name}: ${error}`, 'error');
+                    }
+                } catch (error) {
+                    log(`❌ Error en ${endpoint.name}: ${error}`, 'error');
+                }
+                
+                // Pequeño delay entre peticiones
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        }
+        
+        async function testAll() {
+            log('🚀 Iniciando test completo...');
+            clearLog();
+            
+            // 1. Login
+            await testLogin();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 2. Verificar usuario
+            await testCurrentUser();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 3. Cargar datos
+            await testLoadData();
+            
+            log('✅ Test completo finalizado', 'success');
+        }
+        
+        // Auto-test al cargar la página
+        window.onload = function() {
+            log('📱 Página cargada, iniciando auto-test...');
+            setTimeout(testAll, 1000);
+        };
+    </script>
+</body>
+</html>
