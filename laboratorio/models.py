@@ -1,22 +1,79 @@
+"""
+Modelos para el sistema LIMS (Laboratory Information Management System).
+Soporta flujo mixto: Digital (EMR) y Papel (recetas externas).
+"""
 from django.db import models
-from django.db.models import Max
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+from django.conf import settings
 from pacientes.models import Paciente
 from medicos.models import Medico
-from django.utils import timezone
-from historias_clinicas.models import Consulta
+
+
+# ============================================================================
+# MODELOS DE INFRAESTRUCTURA
+# ============================================================================
+
+class TipoMuestra(models.Model):
+    """
+    Tipos de muestras biológicas (sangre, orina, etc.).
+    """
+    codigo = models.CharField(max_length=10, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=100, verbose_name="Nombre")
+    color_tubo = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="Color del Tubo",
+        help_text="Útil para UI (ej: Rojo, Azul, Verde)"
+    )
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+
+    class Meta:
+        verbose_name = "Tipo de Muestra"
+        verbose_name_plural = "Tipos de Muestra"
+        ordering = ['nombre']
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
 
 
 class TipoExamen(models.Model):
-    """Tipos de exámenes de laboratorio disponibles"""
-    codigo = models.CharField(max_length=20, unique=True, null=True, blank=True, verbose_name="Código")
-    nombre = models.CharField(max_length=100, verbose_name="Nombre del Examen")
-    descripcion = models.TextField(blank=True, verbose_name="Descripción")
-    precio = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Precio")
+    """
+    Análisis individual (ej: "Glucosa", "Hemoglobina").
+    """
+    codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    abreviatura = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name="Abreviatura"
+    )
+    tipo_muestra_requerida = models.ForeignKey(
+        TipoMuestra,
+        on_delete=models.CASCADE,
+        related_name='tipos_examen',
+        verbose_name="Tipo de Muestra Requerida"
+    )
+    precio = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Precio"
+    )
+    rango_referencia_texto = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Rango de Referencia (Texto)",
+        help_text="Para imprimir en informe (ej: '70-100 mg/dL')"
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
         verbose_name = "Tipo de Examen"
-        verbose_name_plural = "Tipos de Exámenes"
+        verbose_name_plural = "Tipos de Examen"
         ordering = ['nombre']
 
     def __str__(self):
@@ -24,150 +81,268 @@ class TipoExamen(models.Model):
 
 
 class PanelExamen(models.Model):
-    """Paneles que agrupan varios tipos de exámenes"""
-    codigo = models.CharField(max_length=20, unique=True, null=True, blank=True, verbose_name="Código")
-    nombre = models.CharField(max_length=100, verbose_name="Nombre del Panel")
-    descripcion = models.TextField(blank=True, verbose_name="Descripción")
-    examenes = models.ManyToManyField(TipoExamen, verbose_name="Exámenes del Panel")
-    precio = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Precio")
+    """
+    Grupo de análisis (ej: "Hepatograma", "Perfil Lipídico").
+    """
+    codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    tipos_examen = models.ManyToManyField(
+        TipoExamen,
+        related_name='paneles',
+        blank=True,
+        verbose_name="Tipos de Examen",
+        help_text="Exámenes que componen este panel"
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
         verbose_name = "Panel de Examen"
-        verbose_name_plural = "Paneles de Exámenes"
+        verbose_name_plural = "Paneles de Examen"
         ordering = ['nombre']
 
     def __str__(self):
         return f"{self.codigo} - {self.nombre}"
 
 
+# ============================================================================
+# MODELOS TRANSACCIONALES (CORE DEL LAB)
+# ============================================================================
+
 class SolicitudExamen(models.Model):
-    """Solicitudes de exámenes de laboratorio"""
-    ESTADOS = [
+    """
+    La Orden de Laboratorio.
+    Soporta flujo mixto: Digital (EMR) y Papel (recetas externas).
+    """
+    ESTADO_CHOICES = [
         ('PENDIENTE', 'Pendiente'),
+        ('TOMA_MUESTRA', 'Toma de Muestra'),
         ('EN_PROCESO', 'En Proceso'),
-        ('COMPLETADO', 'Completado'),
+        ('VALIDADO', 'Validado'),
+        ('ENTREGADO', 'Entregado'),
         ('CANCELADO', 'Cancelado'),
     ]
 
-    numero = models.CharField(max_length=20, unique=True, null=True, blank=True, verbose_name="Número de Solicitud")
-    paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, verbose_name="Paciente")
-    medico = models.ForeignKey(Medico, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Médico")
-    consulta = models.ForeignKey(Consulta, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Consulta")
-    
-    # Campos para exámenes individuales y paneles
-    examenes_individuales = models.ManyToManyField(TipoExamen, blank=True, verbose_name="Exámenes Individuales")
-    paneles = models.ManyToManyField(PanelExamen, blank=True, verbose_name="Paneles")
-    
-    fecha_solicitud = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Solicitud")
-    fecha_entrega = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Entrega")
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='PENDIENTE', verbose_name="Estado")
-    observaciones = models.TextField(blank=True, verbose_name="Observaciones")
-    total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Total")
+    ORIGEN_CHOICES = [
+        ('EMR', 'EMR (Digital)'),
+        ('GUARDIA', 'Guardia'),
+        ('EXTERNO_PAPEL', 'Externo (Papel)'),
+    ]
+
+    # Identificador único generado automáticamente
+    numero = models.CharField(
+        max_length=20,
+        unique=True,
+        blank=True,
+        null=True,
+        verbose_name="Número de Protocolo",
+        help_text="Generado automáticamente en formato LAB-YYYY-XXXXX"
+    )
+
+    # Paciente (link estricto al EMR)
+    paciente = models.ForeignKey(
+        Paciente,
+        on_delete=models.CASCADE,
+        related_name='solicitudes_examen',
+        verbose_name="Paciente"
+    )
+
+    # Médico Híbrido (IMPORTANTE: soporta interno y externo)
+    medico_interno = models.ForeignKey(
+        Medico,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='solicitudes_examen',
+        verbose_name="Médico Interno",
+        help_text="Médico del sistema EMR"
+    )
+    medico_externo_nombre = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name="Médico Externo",
+        help_text="Nombre del médico para recetas en papel de médicos fuera de la clínica"
+    )
+
+    # Origen de la solicitud
+    origen_solicitud = models.CharField(
+        max_length=20,
+        choices=ORIGEN_CHOICES,
+        default='EMR',
+        verbose_name="Origen de la Solicitud"
+    )
+
+    # Contenido: Exámenes y Paneles
+    tipos_examen = models.ManyToManyField(
+        TipoExamen,
+        related_name='solicitudes',
+        blank=True,
+        verbose_name="Tipos de Examen"
+    )
+    paneles = models.ManyToManyField(
+        PanelExamen,
+        related_name='solicitudes',
+        blank=True,
+        verbose_name="Paneles de Examen"
+    )
+
+    # Estado
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default='PENDIENTE',
+        verbose_name="Estado"
+    )
+
+    # Fechas
+    fecha_solicitud = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de Solicitud"
+    )
+    fecha_entrega_prometida = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha de Entrega Prometida"
+    )
+
+    # Campos adicionales
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observaciones"
+    )
 
     class Meta:
         verbose_name = "Solicitud de Examen"
-        verbose_name_plural = "Solicitudes de Exámenes"
+        verbose_name_plural = "Solicitudes de Examen"
         ordering = ['-fecha_solicitud']
+        indexes = [
+            models.Index(fields=['estado', 'fecha_solicitud']),
+            models.Index(fields=['paciente', 'estado']),
+        ]
 
     def __str__(self):
-        return f"Solicitud {self.numero} - {self.paciente}"
+        numero_str = self.numero or f"Sin número ({self.id})"
+        paciente_str = self.paciente.nombre_completo if self.paciente else "Sin paciente"
+        return f"{numero_str} - {paciente_str}"
+
+    def clean(self):
+        """
+        Validaciones personalizadas.
+        La orden puede cancelarse aunque existan filas ResultadoExamen (p. ej. vacías al crear la orden).
+        No cargar ni mutar resultados sobre solicitud cancelada: ver ResultadoExamen.clean().
+        """
 
     def save(self, *args, **kwargs):
+        """
+        Generador de Protocolo: Si no tiene número, genera uno con formato LAB-YYYY-XXXXX.
+        """
         if not self.numero:
-            # Generar número automático de forma más robusta
             year = timezone.now().year
-            try:
-                last_solicitud = SolicitudExamen.objects.filter(
-                    numero__startswith=f'LAB{year}'
-                ).order_by('-numero').first()
-                
-                if last_solicitud and last_solicitud.numero:
-                    # Extraer el número de forma más segura
-                    try:
-                        # Buscar el último número después del guión
-                        parts = last_solicitud.numero.split('-')
-                        if len(parts) == 2:
-                            last_num = int(parts[1])
-                            new_num = last_num + 1
-                        else:
-                            new_num = 1
-                    except (ValueError, IndexError):
-                        # Si hay error al parsear, empezar desde 1
-                        new_num = 1
-                else:
+            # Buscar el último número del año
+            last_solicitud = SolicitudExamen.objects.filter(
+                numero__startswith=f'LAB-{year}-'
+            ).order_by('-fecha_solicitud').first()
+
+            if last_solicitud and last_solicitud.numero:
+                try:
+                    # Extraer el número secuencial (última parte después del último guión)
+                    last_num = int(last_solicitud.numero.split('-')[-1])
+                    new_num = last_num + 1
+                except (ValueError, IndexError):
                     new_num = 1
-                
-                self.numero = f'LAB{year}-{new_num:04d}'
-            except Exception as e:
-                # Fallback: usar timestamp si algo falla
-                import time
-                self.numero = f'LAB{year}-{int(time.time())}'
-        
+            else:
+                new_num = 1
+
+            # Formato: LAB-YYYY-XXXXX (con padding a 5 dígitos)
+            self.numero = f'LAB-{year}-{new_num:05d}'
+
+        # Validar antes de guardar
+        self.full_clean()
         super().save(*args, **kwargs)
 
-    def calcular_total(self):
-        """Calcula el total de la solicitud de forma robusta"""
-        total = 0
-        
-        try:
-            # Sumar exámenes individuales
-            for examen in self.examenes_individuales.all():
-                if examen.precio:
-                    total += examen.precio
-            
-            # Sumar paneles
-            for panel in self.paneles.all():
-                if panel.precio:
-                    total += panel.precio
-        except Exception as e:
-            # Si hay error al calcular, retornar 0
-            total = 0
-        
-        return total
+    @property
+    def medico_display(self):
+        """
+        Retorna el nombre del médico (interno o externo) para display.
+        """
+        if self.medico_interno:
+            return self.medico_interno.nombre_completo
+        elif self.medico_externo_nombre:
+            return self.medico_externo_nombre
+        return "Sin médico asignado"
 
 
 class ResultadoExamen(models.Model):
-    """Resultados de los exámenes mejorados"""
-    solicitud = models.ForeignKey(SolicitudExamen, on_delete=models.CASCADE, verbose_name="Solicitud")
-    tipo_examen = models.ForeignKey(TipoExamen, on_delete=models.CASCADE, verbose_name="Tipo de Examen")
-    
-    # Valores del resultado
-    valor_numerico = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, verbose_name="Valor Numérico")
-    valor_texto = models.CharField(max_length=255, blank=True, verbose_name="Valor Texto")
-    unidad = models.CharField(max_length=50, blank=True, verbose_name="Unidad")
-    
-    # Rangos normales
-    valor_normal_min = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, verbose_name="Valor Normal Mínimo")
-    valor_normal_max = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, verbose_name="Valor Normal Máximo")
-    valor_normal_texto = models.CharField(max_length=255, blank=True, verbose_name="Valor Normal (Texto)")
-    
-    # Análisis del resultado
-    es_normal = models.BooleanField(default=True, verbose_name="¿Es Normal?")
-    interpretacion_ia = models.TextField(blank=True, verbose_name="Interpretación IA")
-    observaciones = models.TextField(blank=True, verbose_name="Observaciones")
-    
-    # Metadatos
-    fecha_resultado = models.DateTimeField(auto_now_add=True, verbose_name="Fecha del Resultado")
-    tecnico = models.CharField(max_length=100, blank=True, verbose_name="Técnico Responsable")
-    validado_por = models.ForeignKey('medicos.Medico', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Validado por")
+    """
+    Resultado de un examen individual dentro de una solicitud.
+    """
+    solicitud = models.ForeignKey(
+        SolicitudExamen,
+        on_delete=models.CASCADE,
+        related_name='resultados',
+        verbose_name="Solicitud"
+    )
+    tipo_examen = models.ForeignKey(
+        TipoExamen,
+        on_delete=models.PROTECT,  # Integridad histórica: no borrar exámenes con resultados
+        related_name='resultados',
+        verbose_name="Tipo de Examen"
+    )
+    valor_obtenido = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        verbose_name="Valor Obtenido",
+        help_text="Puede ser número o texto (ej: 'Positivo', 'Negativo', '120.5'). Vacío hasta cargar resultado.",
+    )
+    es_patologico = models.BooleanField(
+        default=False,
+        verbose_name="Es Patológico"
+    )
+    validado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resultados_validados',
+        verbose_name="Validado por"
+    )
+    fecha_validacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha de Validación"
+    )
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Observaciones"
+    )
 
     class Meta:
         verbose_name = "Resultado de Examen"
-        verbose_name_plural = "Resultados de Exámenes"
-        unique_together = ['solicitud', 'tipo_examen']
-        ordering = ['-fecha_resultado']
+        verbose_name_plural = "Resultados de Examen"
+        ordering = ['tipo_examen__nombre']
+        unique_together = ['solicitud', 'tipo_examen']  # Un resultado por tipo de examen por solicitud
 
     def __str__(self):
-        return f"Resultado {self.tipo_examen} - {self.solicitud.numero}"
+        return f"{self.solicitud.numero} - {self.tipo_examen.nombre}: {self.valor_obtenido}"
 
-    def calcular_es_normal(self):
-        """Calcula automáticamente si el valor es normal"""
-        if self.valor_numerico and self.valor_normal_min and self.valor_normal_max:
-            return self.valor_normal_min <= self.valor_numerico <= self.valor_normal_max
-        return True
+    def clean(self):
+        """
+        Validación: Un resultado no puede cargarse si la solicitud está cancelada.
+        """
+        if self.solicitud.estado == 'CANCELADO':
+            raise ValidationError({
+                'solicitud': 'No se pueden cargar resultados en una solicitud cancelada.'
+            })
 
     def save(self, *args, **kwargs):
-        # Calcular automáticamente si es normal
-        self.es_normal = self.calcular_es_normal()
+        """
+        Validar antes de guardar.
+        """
+        self.full_clean()
         super().save(*args, **kwargs)
+
+
+

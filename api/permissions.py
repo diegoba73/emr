@@ -1,5 +1,106 @@
 from rest_framework import permissions
 
+
+def get_normalized_role(user):
+    """Normaliza `User.rol` a minúsculas; cadena vacía si no hay usuario autenticado."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return ''
+    return str(getattr(user, 'rol', '') or '').lower()
+
+
+class LimsCatalogReadPermission(permissions.BasePermission):
+    """
+    Lectura de catálogos LIMS (tipos de muestra, exámenes, paneles).
+    Roles: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
+    Sin acceso: anónimo y paciente. Los ViewSets son ReadOnly; métodos no seguros se niegan.
+    """
+    _roles_read = frozenset({'admin', 'laboratorio', 'medico', 'secretaria', 'enfermeria'})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            return role in self._roles_read
+        return False
+
+
+class LimsSolicitudExamenPermission(permissions.BasePermission):
+    """
+    Permisos provisionales para SolicitudExamenViewSet y acciones custom LIMS.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+
+        role = get_normalized_role(request.user)
+        action = getattr(view, 'action', None)
+
+        if action == 'list':
+            return role in ('admin', 'laboratorio', 'medico')
+        if action == 'create':
+            return role in ('admin', 'laboratorio', 'medico')
+        if action in ('retrieve', 'update', 'partial_update', 'destroy'):
+            if action in ('retrieve',) and role in ('admin', 'laboratorio', 'medico'):
+                return True
+            if action in ('update', 'partial_update') and role in ('admin', 'laboratorio'):
+                return True
+            if action == 'destroy' and role == 'admin':
+                return True
+            return False
+        if action == 'cargar_resultados':
+            return role in ('admin', 'laboratorio')
+        if action in ('tomar_muestra', 'cancelar', 'marcar_entregado'):
+            return role in ('admin', 'laboratorio')
+        if action == 'validar':
+            return role == 'admin'
+        if action == 'etiqueta':
+            return role in ('admin', 'laboratorio')
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+
+        role = get_normalized_role(request.user)
+        action = getattr(view, 'action', None)
+
+        if action == 'retrieve':
+            if role in ('admin', 'laboratorio'):
+                return True
+            if role == 'medico':
+                mi = getattr(obj, 'medico_interno', None)
+                return bool(mi and getattr(mi, 'user_id', None) == request.user.id)
+            return False
+
+        if action in ('update', 'partial_update'):
+            return role in ('admin', 'laboratorio')
+
+        if action == 'destroy':
+            return role == 'admin'
+
+        if action == 'cargar_resultados':
+            return role in ('admin', 'laboratorio')
+
+        if action in ('tomar_muestra', 'cancelar', 'marcar_entregado'):
+            return role in ('admin', 'laboratorio')
+
+        if action == 'validar':
+            return role == 'admin'
+
+        if action == 'etiqueta':
+            return role in ('admin', 'laboratorio')
+
+        return False
+
+
 class IsSecretariaOrAdmin(permissions.BasePermission):
     """
     Permiso para secretarias y administradores
@@ -31,6 +132,27 @@ class IsMedicoOrAdmin(permissions.BasePermission):
         # Verificar si el usuario está en el grupo Médicos o es médico
         return (request.user.groups.filter(name='Médicos').exists() or 
                 request.user.rol == 'medico')
+
+class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
+    """
+    Permiso para médicos, enfermería y administradores
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        
+        # Los superusuarios siempre tienen acceso
+        if request.user.is_superuser:
+            return True
+        
+        # Verificar si el usuario tiene rol apropiado
+        user_rol = getattr(request.user, 'rol', None)
+        if not user_rol:
+            return False
+        
+        # Normalizar a minúsculas para comparación
+        user_rol = str(user_rol).lower()
+        return user_rol in ['medico', 'enfermeria', 'admin']
 
 class IsPacienteOrStaff(permissions.BasePermission):
     """
@@ -73,8 +195,9 @@ class IsMedicoOrSecretariaOrAdmin(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         
-        # Verificar si el usuario tiene rol apropiado
-        return request.user.rol in ['medico', 'secretaria', 'admin']
+        # Verificar si el usuario tiene rol apropiado (normalizar para soportar may/min)
+        user_rol = (request.user.rol or '').lower()
+        return user_rol in ['medico', 'secretaria', 'admin']
 
 class CanManageTurnos(permissions.BasePermission):
     """
@@ -101,7 +224,68 @@ class CanManageTurnos(permissions.BasePermission):
             return True
         
         # Médicos solo pueden gestionar sus propios turnos
-        if request.user.rol == 'medico' and hasattr(obj, 'medico'):
-            return obj.medico.user == request.user
+        if request.user.rol == 'medico' and hasattr(obj, 'medico') and obj.medico:
+            if obj.medico.user:
+                return obj.medico.user == request.user
+            return False
         
+        return False
+
+
+class IsEMRClinician(permissions.BasePermission):
+    """
+    Permite acceso de escritura a personal clínico EMR: médicos, secretaría y administración.
+    No incluye el operador LIMS (rol `laboratorio`); ese acceso se define en permisos LIMS.
+    """
+    allowed_roles = {'medico', 'secretaria', 'admin'}
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return (request.user.rol or '').lower() in self.allowed_roles
+
+
+class IsEMRClinicianOrReadOnly(permissions.BasePermission):
+    """
+    Permite lectura a cualquier usuario autenticado y escritura solo a personal clínico autorizado.
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        clinician_permission = IsEMRClinician()
+        return clinician_permission.has_permission(request, view)
+
+
+class CanUpdatePacienteDemographics(permissions.BasePermission):
+    """
+    Permiso para actualizar datos demográficos de pacientes.
+    - Admin/Secretaria: pueden actualizar cualquier paciente
+    - Médicos: pueden actualizar datos demográficos de CUALQUIER paciente
+    - Pacientes: solo pueden actualizar su propio perfil
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        return True
+    
+    def has_object_permission(self, request, view, obj):
+        # Admin o Secretaria pueden editar siempre
+        if request.user.is_staff or request.user.rol in ['admin', 'secretaria'] or request.user.is_superuser:
+            return True
+        
+        # Médicos pueden leer y actualizar datos demográficos de CUALQUIER paciente
+        if request.user.rol == 'medico':
+            if request.method in ('GET', 'PATCH', 'PUT', 'HEAD', 'OPTIONS'):
+                return True
+        
+        # Pacientes solo pueden actualizar su propio perfil
+        if request.user.rol == 'paciente':
+            if hasattr(obj, 'user'):
+                return obj.user == request.user
+        
+        # Para otras operaciones, usar la lógica por defecto
         return False
