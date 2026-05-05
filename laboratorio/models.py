@@ -345,4 +345,12 @@ class ResultadoExamen(models.Model):
         super().save(*args, **kwargs)
 
 
+# Catálogos B0 y muestras B1 (evita ciclos de import: FK string en Muestra hacia SolicitudExamen)
+from laboratorio.models_catalog import (  # noqa: E402,F401
+    AreaLaboratorio,
+    EventoMuestra,
+    Muestra,
+    SeccionLaboratorio,
+    TipoContenedor,
+)
 

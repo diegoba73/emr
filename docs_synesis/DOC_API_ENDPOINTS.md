@@ -233,3 +233,30 @@ Inferidos por ViewSet en cada app; listados detallados en serializers de `pacien
 
 - Lista exacta de acciones en `SolicitudViewSet` y `DashboardViewSet`.
 - Permisos finos en `list_users` / `list_groups`.
+
+---
+
+## LIMS Fase B0/B1 (catálogos y muestra transaccional)
+
+Prefijos **`/api/lab/...`** y alias **`/api/laboratorio/...`** (mismos ViewSets).
+
+| Ruta | Métodos | Rol típico |
+|------|---------|------------|
+| `/api/lab/areas/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
+| `/api/lab/areas/{id}/` | GET, PATCH | Igual. |
+| `/api/lab/secciones/` | GET, POST | Igual. |
+| `/api/lab/secciones/{id}/` | GET, PATCH | Igual. |
+| `/api/lab/contenedores/` | GET, POST | Igual. |
+| `/api/lab/contenedores/{id}/` | GET, PATCH | Igual. |
+| `/api/lab/muestras-transaccionales/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico: solo órdenes propias). |
+| `/api/lab/muestras-transaccionales/{id}/` | GET, PATCH | PATCH solo campos administrativos (`tipo_contenedor`, `ubicacion_actual`, `observaciones`); **`estado` no se modifica por PATCH**. |
+| `.../{id}/tomar/` | POST | admin/lab |
+| `.../{id}/recibir/` | POST | admin/lab |
+| `.../{id}/rechazar/` | POST | admin/lab (`motivo_rechazo` obligatorio) |
+| `.../{id}/conservar/` | POST | admin/lab |
+| `.../{id}/descartar/` | POST | admin/lab |
+| `.../{id}/cancelar/` | POST | admin/lab |
+
+**DELETE** en catálogos y muestras: no soportado / 405 u objeto no expuesto a borrado (desactivar catálogos con `activo=false`).
+
+Contrato de creación de muestra (JSON): `solicitud_id`, `tipo_muestra_id`, `tipo_contenedor_id` (opcional), `observaciones` (opcional). El paciente se deriva de la solicitud (no se acepta paciente inconsistente).

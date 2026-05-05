@@ -260,6 +260,83 @@ class IsEMRClinicianOrReadOnly(permissions.BasePermission):
         return clinician_permission.has_permission(request, view)
 
 
+class LimsB0CatalogPermission(permissions.BasePermission):
+    """
+    Catálogos B0 (área, sección, tipo contenedor).
+    Lectura: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
+    Escritura (POST/PATCH): solo admin/superuser (catálogos maestros).
+    """
+
+    _roles_read = frozenset({"admin", "laboratorio", "medico", "secretaria", "enfermeria"})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            return role in self._roles_read
+        return role == "admin"
+
+
+class LimsMuestraTransaccionalPermission(permissions.BasePermission):
+    """
+    Muestra transaccional (Fase B1).
+    - admin/superuser: CRUD restringido (sin destroy en práctica), todas las acciones.
+    - laboratorio: listar/ver, crear, PATCH administrativo, tomar/recibir/rechazar/conservar/descartar/cancelar.
+    - médico: solo lectura de muestras vinculadas a solicitudes propias (medico_interno.user).
+    Sin acceso: anónimo, paciente, secretaría (no lectura técnica de muestras en esta fase).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        action = getattr(view, "action", None)
+        if role not in ("admin", "laboratorio", "medico"):
+            return False
+        if action in ("list", "retrieve"):
+            return True
+        if action == "create":
+            return role in ("admin", "laboratorio")
+        if action in ("update", "partial_update"):
+            return role in ("admin", "laboratorio")
+        if action == "destroy":
+            return False
+        if action in (
+            "tomar",
+            "recibir",
+            "rechazar",
+            "conservar",
+            "descartar",
+            "cancelar",
+        ):
+            return role in ("admin", "laboratorio")
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        action = getattr(view, "action", None)
+        solicitud = getattr(obj, "solicitud", None)
+        if role == "medico":
+            if action not in ("retrieve", "list"):
+                return False
+            mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
+            return bool(mi and getattr(mi, "user_id", None) == request.user.id)
+        if role == "laboratorio":
+            return True
+        if role == "admin":
+            return True
+        return False
+
+
 class CanUpdatePacienteDemographics(permissions.BasePermission):
     """
     Permiso para actualizar datos demográficos de pacientes.

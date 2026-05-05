@@ -149,7 +149,9 @@ Valores de modelo: `PENDIENTE`, `TOMA_MUESTRA`, `EN_PROCESO`, `VALIDADO`, `ENTRE
 
 Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incluye `PENDIENTE`/`TOMA_MUESTRA` → `EN_PROCESO` por carga, `VALIDADO` → `ENTREGADO`, cancelación desde no finales). Terminales: **`CANCELADO`**, **`ENTREGADO`**.
 
-**No implementado:** validación técnica vs profesional como estados distintos; informe PDF final; entidad `Muestra`/tubos; recepción/rechazo de muestra transaccional.
+**No implementado (sigue pendiente):** validación técnica vs profesional como estados distintos; informe PDF final; vinculación obligatoria `ResultadoExamen`↔`Muestra`; microbiología/QC avanzado.
+
+**Implementado (Fase B1):** entidad **`Muestra`** (material físico) vinculada a `SolicitudExamen` y `TipoMuestra`; **`EventoMuestra`**; catálogos **`AreaLaboratorio`**, **`SeccionLaboratorio`**, **`TipoContenedor`**. Cambios de estado de muestra **solo** por acciones POST dedicadas; `PATCH` no altera `estado`. Recepción solo desde **`TOMADA`** (sin recepción directa desde `PENDIENTE_TOMA` en esta fase). Rechazo exige **motivo**. Auditoría y eventos por acción.
 
 ---
 

@@ -1,118 +1,209 @@
+"""
+Admin panel para la app laboratorio.
+"""
 from django.contrib import admin
 from django.utils.html import format_html
-from django.urls import reverse
-from .models import TipoExamen, PanelExamen, SolicitudExamen, ResultadoExamen
+from .models import (
+    TipoMuestra,
+    TipoExamen,
+    PanelExamen,
+    SolicitudExamen,
+    ResultadoExamen,
+    AreaLaboratorio,
+    SeccionLaboratorio,
+    TipoContenedor,
+    Muestra,
+    EventoMuestra,
+)
+
+
+@admin.register(AreaLaboratorio)
+class AreaLaboratorioAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "activo")
+    search_fields = ("codigo", "nombre")
+
+
+@admin.register(SeccionLaboratorio)
+class SeccionLaboratorioAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "area", "activo")
+    list_filter = ("area", "activo")
+    search_fields = ("codigo", "nombre")
+
+
+@admin.register(TipoContenedor)
+class TipoContenedorAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "activo")
+    search_fields = ("codigo", "nombre")
+
+
+class EventoMuestraInline(admin.TabularInline):
+    model = EventoMuestra
+    extra = 0
+    readonly_fields = ("accion", "estado_anterior", "estado_nuevo", "actor", "fecha", "metadata", "request_id")
+    can_delete = False
+
+
+@admin.register(Muestra)
+class MuestraAdmin(admin.ModelAdmin):
+    list_display = ("codigo_barra", "solicitud", "paciente", "estado", "tipo_muestra", "created_at")
+    list_filter = ("estado",)
+    search_fields = ("codigo_barra", "solicitud__numero")
+    readonly_fields = ("codigo_barra", "created_at", "updated_at")
+    inlines = [EventoMuestraInline]
+
+
+@admin.register(TipoMuestra)
+class TipoMuestraAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'color_tubo', 'activo')
+    list_filter = ('activo',)
+    search_fields = ('codigo', 'nombre')
+    ordering = ('nombre',)
 
 
 @admin.register(TipoExamen)
 class TipoExamenAdmin(admin.ModelAdmin):
-    list_display = ['codigo', 'nombre', 'precio', 'activo']
-    list_filter = ['activo']
-    search_fields = ['codigo', 'nombre']
-    ordering = ['nombre']
+    list_display = ('codigo', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'precio', 'activo')
+    list_filter = ('activo', 'tipo_muestra_requerida')
+    search_fields = ('codigo', 'nombre', 'abreviatura')
+    ordering = ('nombre',)
 
 
 @admin.register(PanelExamen)
 class PanelExamenAdmin(admin.ModelAdmin):
-    list_display = ['codigo', 'nombre', 'precio', 'activo', 'mostrar_examenes']
-    list_filter = ['activo']
-    search_fields = ['codigo', 'nombre']
-    filter_horizontal = ['examenes']
-    ordering = ['nombre']
+    list_display = ('codigo', 'nombre', 'get_tipos_examen_count', 'activo')
+    list_filter = ('activo',)
+    search_fields = ('codigo', 'nombre')
+    filter_horizontal = ('tipos_examen',)
+    ordering = ('nombre',)
 
-    def mostrar_examenes(self, obj):
-        examenes = obj.examenes.all()[:5]  # Mostrar solo los primeros 5
-        nombres = [examen.nombre for examen in examenes]
-        if obj.examenes.count() > 5:
-            nombres.append(f"... y {obj.examenes.count() - 5} más")
-        return ", ".join(nombres)
-    mostrar_examenes.short_description = "Exámenes del Panel"
-
-
-class ResultadoExamenInline(admin.TabularInline):
-    model = ResultadoExamen
-    extra = 0
-    readonly_fields = ['fecha_resultado']
-    fields = [
-        'tipo_examen', 
-        'valor_numerico', 
-        'valor_texto', 
-        'unidad',
-        'valor_normal_min', 
-        'valor_normal_max', 
-        'valor_normal_texto',
-        'es_normal', 
-        'interpretacion_ia',
-        'observaciones', 
-        'tecnico',
-        'validado_por'
-    ]
+    def get_tipos_examen_count(self, obj):
+        """Muestra la cantidad de tipos de examen en el panel"""
+        return obj.tipos_examen.count()
+    get_tipos_examen_count.short_description = 'Cantidad de Exámenes'
 
 
 @admin.register(SolicitudExamen)
 class SolicitudExamenAdmin(admin.ModelAdmin):
-    list_display = ['numero', 'paciente', 'medico', 'estado', 'fecha_solicitud', 'total', 'ver_resultados']
-    list_filter = ['estado', 'fecha_solicitud']
-    search_fields = ['numero', 'paciente__nombre', 'paciente__apellido', 'medico__nombre']
-    readonly_fields = ['numero', 'fecha_solicitud', 'total']
-    filter_horizontal = ['examenes_individuales', 'paneles']
-    inlines = [ResultadoExamenInline]
+    list_display = (
+        'numero',
+        'paciente',
+        'medico_display',
+        'origen_solicitud',
+        'estado',
+        'fecha_solicitud',
+        'fecha_entrega_prometida',
+    )
+    list_filter = ('estado', 'origen_solicitud', 'fecha_solicitud')
+    search_fields = (
+        'numero',
+        'paciente__nombre',
+        'paciente__apellido',
+        'paciente__dni',
+        'medico_interno__nombre',
+        'medico_interno__apellido',
+        'medico_externo_nombre',
+    )
+    readonly_fields = ('numero', 'fecha_solicitud')
+    filter_horizontal = ('tipos_examen', 'paneles')
     date_hierarchy = 'fecha_solicitud'
-    
+
     fieldsets = (
         ('Información Básica', {
-            'fields': ('numero', 'paciente', 'medico', 'consulta')
+            'fields': (
+                'numero',
+                'paciente',
+                'origen_solicitud',
+                'estado',
+            )
         }),
-        ('Exámenes', {
-            'fields': ('examenes_individuales', 'paneles')
+        ('Médico (Híbrido)', {
+            'fields': (
+                'medico_interno',
+                'medico_externo_nombre',
+            ),
+            'description': 'Médico interno (del EMR) o externo (papel)'
         }),
-        ('Estado y Fechas', {
-            'fields': ('estado', 'fecha_solicitud', 'fecha_entrega')
+        ('Exámenes Solicitados', {
+            'fields': (
+                'tipos_examen',
+                'paneles',
+            )
         }),
-        ('Información Adicional', {
-            'fields': ('observaciones', 'total'),
+        ('Fechas', {
+            'fields': (
+                'fecha_solicitud',
+                'fecha_entrega_prometida',
+            )
+        }),
+        ('Observaciones', {
+            'fields': ('observaciones',),
             'classes': ('collapse',)
         }),
     )
 
-    def ver_resultados(self, obj):
-        if obj.resultadoexamen_set.exists():
-            url = reverse('admin:laboratorio_resultadoexamen_changelist') + f'?solicitud__id__exact={obj.id}'
-            return format_html('<a href="{}">Ver Resultados</a>', url)
-        return "Sin resultados"
-    ver_resultados.short_description = "Resultados"
-
-    def save_model(self, request, obj, form, change):
-        try:
-            # Calcular total antes de guardar
-            obj.total = obj.calcular_total()
-            super().save_model(request, obj, form, change)
-        except Exception as e:
-            # Si hay error al calcular el total, guardar con total 0
-            obj.total = 0
-            super().save_model(request, obj, form, change)
+    def medico_display(self, obj):
+        """
+        Muestra claramente si es médico interno o externo.
+        """
+        if obj.medico_interno:
+            return format_html(
+                '<span style="color: green;">✓ Interno:</span> {}',
+                obj.medico_interno.nombre_completo
+            )
+        elif obj.medico_externo_nombre:
+            return format_html(
+                '<span style="color: orange;">📄 Externo:</span> {}',
+                obj.medico_externo_nombre
+            )
+        return format_html('<span style="color: red;">Sin médico</span>')
+    medico_display.short_description = 'Médico'
 
 
 @admin.register(ResultadoExamen)
 class ResultadoExamenAdmin(admin.ModelAdmin):
-    list_display = ['solicitud', 'tipo_examen', 'valor_numerico', 'valor_texto', 'es_normal', 'fecha_resultado', 'tecnico']
-    list_filter = ['es_normal', 'fecha_resultado', 'tipo_examen']
-    search_fields = ['solicitud__numero', 'tipo_examen__nombre', 'tecnico']
-    readonly_fields = ['fecha_resultado']
-    date_hierarchy = 'fecha_resultado'
-    
+    list_display = (
+        'solicitud',
+        'tipo_examen',
+        'valor_obtenido',
+        'es_patologico',
+        'validado_por',
+        'fecha_validacion',
+    )
+    list_filter = ('es_patologico', 'fecha_validacion', 'tipo_examen')
+    search_fields = (
+        'solicitud__numero',
+        'solicitud__paciente__nombre',
+        'solicitud__paciente__apellido',
+        'tipo_examen__nombre',
+        'valor_obtenido',
+    )
+    readonly_fields = ('fecha_validacion',)
+    autocomplete_fields = ('solicitud', 'tipo_examen', 'validado_por')
+
     fieldsets = (
-        ('Información de la Solicitud', {
-            'fields': ('solicitud', 'tipo_examen')
+        ('Información Básica', {
+            'fields': (
+                'solicitud',
+                'tipo_examen',
+            )
         }),
         ('Resultado', {
-            'fields': ('valor_numerico', 'valor_texto', 'unidad', 'valor_normal_min', 'valor_normal_max', 'valor_normal_texto', 'es_normal')
+            'fields': (
+                'valor_obtenido',
+                'es_patologico',
+            )
         }),
-        ('Análisis', {
-            'fields': ('interpretacion_ia', 'observaciones')
+        ('Validación', {
+            'fields': (
+                'validado_por',
+                'fecha_validacion',
+            )
         }),
-        ('Responsables', {
-            'fields': ('tecnico', 'validado_por', 'fecha_resultado'),
+        ('Observaciones', {
+            'fields': ('observaciones',),
             'classes': ('collapse',)
         }),
     )
+
+
+

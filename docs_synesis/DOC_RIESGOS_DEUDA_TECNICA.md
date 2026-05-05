@@ -130,3 +130,11 @@ Este documento las agrupa; detalle en módulos específicos.
 
 - Amenazas y controles en producción (HTTPS, WAF, backups).
 - Concurrencia en numeradores de protocolo.
+
+---
+
+## LIMS B0/B1 (notas)
+
+- Numerador `codigo_barra` (`MUE-YYYY-NNNNNN`) no usa bloqueo global explícito; bajo alta concurrencia podría requerir secuencia dedicada o bloqueo por año.
+- Estado `EN_PROCESO` en `Muestra` reservado para fases futuras (conservación admite `RECIBIDA` o `EN_PROCESO` en servicio).
+- Sin FK obligatoria resultado↔muestra: riesgo de desalineación operativa hasta B2.

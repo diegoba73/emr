@@ -157,3 +157,10 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 - Política real de grupos Django vs `rol` en BD.
 - Si existe rate limiting o WAF frente a `/api/auth/login/`.
+
+---
+
+## LIMS B0/B1 (permisos añadidos)
+
+- **`LimsB0CatalogPermission`** (`AreaLaboratorioViewSet`, `SeccionLaboratorioViewSet`, `TipoContenedorViewSet`): métodos seguros con roles `admin`, `laboratorio`, `medico`, `secretaria`, `enfermeria` (+ superuser). POST/PATCH solo **`admin`** (+ superuser). Anónimo denegado.
+- **`LimsMuestraTransaccionalPermission`** (`MuestraTransaccionalViewSet`): list/retrieve `admin`/`laboratorio`/`medico`; create/update/partial y acciones `tomar`/`recibir`/… solo **`admin`**/**`laboratorio`**; `medico` solo lectura de muestras cuya solicitud tiene `medico_interno.user` = usuario actual; **paciente** y **secretaría** sin acceso a este endpoint; anónimo denegado; `destroy` denegado en permiso.

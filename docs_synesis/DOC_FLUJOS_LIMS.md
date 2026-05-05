@@ -109,6 +109,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 ## Eventos auditables
 
 - `log_create` / `log_update` en crear/actualizar orden (campos permitidos por serializer, sin `estado` por PATCH), `cargar_resultados`, `validar`, `tomar_muestra`, `cancelar`, `marcar_entregado`.
+- **Muestra (B1):** `log_create` al crear muestra; `log_update` tras cada acción de estado (`tomar`, `recibir`, `rechazar`, `conservar`, `descartar`, `cancelar`) y tras PATCH administrativo; siempre fila `EventoMuestra` por acción.
 - Transiciones de estado de solicitud: metadata con `accion`, `estado_anterior`, `estado_nuevo`, `solicitud_id`, `numero_solicitud` (además de `before_state`/`after_state` del snapshot).
 - En `validar`, por resultado se captura snapshot **antes** del `update()` masivo para `before_state`.
 - `log_event` (`DELETE`) en borrado de orden (`perform_destroy`, solo rol admin): incluye `before_state` de la solicitud eliminada.
@@ -148,7 +149,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 ## Riesgos o inconsistencias
 
 - Validación técnica / profesional no separada en estados distintos (deuda).
-- Sin entidad transaccional muestra/tubo ni recepción/rechazo de muestra en BD (solo catálogo + `tomar-muestra` como marca de estado + etiqueta ZPL).
+- ~~Sin entidad transaccional muestra/tubo~~ — **Fase B1:** modelo `Muestra` + `EventoMuestra` y acciones REST; sigue sin vinculación obligatoria `ResultadoExamen`→`Muestra` (fase posterior). La acción de orden `tomar-muestra` (Fase A) coexiste con la toma física por muestra; al **tomar** una muestra en `PENDIENTE_TOMA`, si la solicitud está `PENDIENTE`, el servicio intenta `PENDIENTE`→`TOMA_MUESTRA` de forma segura (idempotente si ya avanzó).
 
 ---
 

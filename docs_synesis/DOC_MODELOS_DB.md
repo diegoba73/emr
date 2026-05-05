@@ -255,6 +255,12 @@
 
 `SolicitudExamen`, `ResultadoExamen`, `TipoExamen`, `PanelExamen`, `TipoMuestra`
 
+**Fase B0/B1 (app `laboratorio`, definidos en `laboratorio/models_catalog.py` y reexportados en `laboratorio.models`):**
+
+- `AreaLaboratorio`, `SeccionLaboratorio` (unicidad `area`+`codigo`), `TipoContenedor` — catálogos maestros con `activo`.
+- `Muestra` — material físico/transaccional: FK `SolicitudExamen` (PROTECT), `Paciente` (validado = paciente de la solicitud), `TipoMuestra`, `TipoContenedor` opcional, `estado` (máquina B1), fechas/usuarios de toma, recepción, rechazo, descarte, `codigo_barra` único (autogenerado `MUE-YYYY-NNNNNN` si vacío).
+- `EventoMuestra` — historial append-only por muestra (`accion`, estados anterior/nuevo, `actor`, `metadata`, `request_id`); FK muestra con **PROTECT** para no borrar trazabilidad al intentar borrar la muestra si hay eventos.
+
 ---
 
 ## Posibles riesgos de integridad
