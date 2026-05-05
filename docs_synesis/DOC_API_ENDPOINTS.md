@@ -149,7 +149,7 @@ Mismo `TipoAtencionViewSet`, `CentroFisicoViewSet`, más `ProcedimientoViewSet` 
 | `/api/pacientes/buscar/` | GET | Búsqueda `q` |
 | `/api/historias-clinicas/{id}/resumen/` | GET | Resumen HC |
 | `/api/lab/solicitudes/{id}/tomar-muestra/` | POST | Marca orden en toma de muestra (`PENDIENTE` → `TOMA_MUESTRA`) |
-| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; transiciones de estado según `DOC_FLUJOS_LIMS.md` |
+| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` puede incluir **`muestra_id`** opcional por ítem (y `null` para limpiar); transiciones de orden según `DOC_FLUJOS_LIMS.md` |
 | `/api/lab/solicitudes/{id}/validar/` | POST | Valida orden (`EN_PROCESO` → `VALIDADO`; solo admin/superuser) |
 | `/api/lab/solicitudes/{id}/cancelar/` | POST | Cancela orden no final (`PENDIENTE` / `TOMA_MUESTRA` / `EN_PROCESO` → `CANCELADO`) |
 | `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
@@ -178,7 +178,7 @@ Inferidos por ViewSet en cada app; listados detallados en serializers de `pacien
 
 ## Payload / respuesta
 
-- Crear orden lab: cuerpo con `paciente_id`, `examenes_ids`, `paneles_ids`, etc. → respuesta `SolicitudExamenSerializer`.
+- Crear orden lab: cuerpo con `paciente_id`, `examenes_ids`, `paneles_ids`, etc. → respuesta `SolicitudExamenSerializer` (resultados anidados incluyen **`muestra_id`** lectura, Fase B2).
 - Actualizar orden lab (`PATCH`/`PUT`): campos editables según serializer; **`estado` ignorado/no escribible** desde API estándar.
 - Acciones `tomar-muestra`, `cancelar`, `marcar-entregado`: cuerpo típico `{}` (JSON vacío aceptable).
 - Crear atención: `{ "turno": <id>, "observaciones_generales": "..." }` → `AtencionSerializer`.

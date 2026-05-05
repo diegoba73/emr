@@ -378,6 +378,8 @@ Lista completa en `DOC_API_ENDPOINTS.md` (GET/POST solicitudes, PATCH sin estado
 | **B0** | Catálogos área/sección/contenedor; permisos lectura; admin carga | Bajo | Medio |
 | **B1** | `Muestra` + `EventoMuestra` + API recepción/rechazo/toma; integrar con `tomar-muestra` (payload opcional) | Medio | Alto |
 | **B2** | FK `muestra` en `ResultadoExamen` + reglas carga; coordinación estados orden ↔ muestras; índices recepción | Medio | Alto |
+
+**Implementación B2 (SYNESIS, mayo 2026):** migración `laboratorio.0004_lims_b2_resultado_muestra`; payload retrocompatible en `cargar-resultados`; validación de muestra en `validar`; sin pasar muestra automáticamente a `EN_PROCESO` al cargar resultado (dejado para refinamiento **B2.1**).
 | **B3** | `EstudioMicrobiologia` + siembra + lectura + reglas incubación | Medio | Alto |
 | **B4** | Aislados + identificación + significancia/reportable | Medio | Alto |
 | **B5** | Antibiograma + `ResultadoAntibiotico` + validaciones completitud | Medio | Alto |

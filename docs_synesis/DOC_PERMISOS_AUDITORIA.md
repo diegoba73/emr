@@ -75,6 +75,8 @@ Ubicación: `api/permissions.py`
 
 - `auditoria/audit_service.py` — `log_create`, `log_update`, `log_delete` (usados en p. ej. turnos, laboratorio, solicitudes).
 
+**LIMS Fase B2 (`cargar_resultados`):** metadata de `log_update` sobre `ResultadoExamen` puede incluir `resultado_id`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, y si cambió la vínculación `muestra_anterior_id` / `muestra_nueva_id` (sin PHI de paciente en texto libre).
+
 ### API
 
 - `GET /api/auditoria/events/` — `AuditEventViewSet` **solo lectura**.

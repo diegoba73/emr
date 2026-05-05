@@ -318,6 +318,15 @@ class ResultadoExamen(models.Model):
         null=True,
         verbose_name="Observaciones"
     )
+    muestra = models.ForeignKey(
+        "laboratorio.Muestra",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="resultados",
+        verbose_name="Muestra",
+        help_text="Muestra física asociada (opcional; compatibilidad con resultados históricos sin muestra).",
+    )
 
     class Meta:
         verbose_name = "Resultado de Examen"
@@ -331,11 +340,22 @@ class ResultadoExamen(models.Model):
     def clean(self):
         """
         Validación: Un resultado no puede cargarse si la solicitud está cancelada.
+        Si hay muestra: misma solicitud, mismo paciente, no estados terminales inválidos.
         """
         if self.solicitud.estado == 'CANCELADO':
             raise ValidationError({
                 'solicitud': 'No se pueden cargar resultados en una solicitud cancelada.'
             })
+        if self.muestra_id:
+            from laboratorio.resultado_muestra_validacion import (
+                validate_muestra_integridad_resultado,
+            )
+
+            validate_muestra_integridad_resultado(
+                solicitud_id=self.solicitud_id,
+                paciente_solicitud_id=self.solicitud.paciente_id,
+                muestra=self.muestra,
+            )
 
     def save(self, *args, **kwargs):
         """

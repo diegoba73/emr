@@ -123,6 +123,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
         source='validado_por.username',
         read_only=True
     )
+    muestra_id = serializers.IntegerField(read_only=True, allow_null=True)
     
     class Meta:
         model = ResultadoExamen
@@ -139,6 +140,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'validado_por_nombre',
             'fecha_validacion',
             'observaciones',
+            'muestra_id',
         ]
         read_only_fields = [
             'id',
@@ -149,6 +151,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'tipo_examen_rango_referencia',
             'validado_por_nombre',
             'fecha_validacion',
+            'muestra_id',
         ]
 
 

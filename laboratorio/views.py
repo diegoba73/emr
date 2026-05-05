@@ -15,6 +15,11 @@ from .models import (
     SolicitudExamen,
     ResultadoExamen,
 )
+from .models_catalog import Muestra
+from .resultado_muestra_validacion import (
+    MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN,
+    assert_muestra_estado_carga_resultado,
+)
 from .serializers import (
     TipoMuestraSerializer,
     TipoExamenSerializer,
@@ -84,7 +89,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     ).prefetch_related(
         'tipos_examen',
         'paneles',
-        'resultados__tipo_examen'
+        'resultados__tipo_examen',
+        'resultados__muestra',
     ).all()
     permission_classes = [LimsSolicitudExamenPermission]
     filter_backends = [DjangoFilterBackend]
@@ -207,26 +213,83 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         continue
 
                     try:
-                        resultado = ResultadoExamen.objects.select_for_update().get(
+                        resultado = ResultadoExamen.objects.select_for_update(of=("self",)).get(
                             id=resultado_id,
                             solicitud=solicitud
                         )
                         before_res = safe_model_snapshot(resultado)
+                        prev_muestra_id = resultado.muestra_id
+                        muestra_meta_aplica = False
+
+                        if "muestra_id" in resultado_item:
+                            muestra_meta_aplica = True
+                            raw_muestra_id = resultado_item.get("muestra_id")
+                            if raw_muestra_id is None:
+                                resultado.muestra = None
+                            else:
+                                try:
+                                    muestra = Muestra.objects.select_for_update().get(
+                                        pk=raw_muestra_id,
+                                        solicitud_id=solicitud.pk,
+                                    )
+                                except Muestra.DoesNotExist:
+                                    return Response(
+                                        {
+                                            "error": (
+                                                "La muestra no existe o no pertenece a esta solicitud."
+                                            )
+                                        },
+                                        status=status.HTTP_400_BAD_REQUEST,
+                                    )
+                                if muestra.paciente_id != solicitud.paciente_id:
+                                    return Response(
+                                        {
+                                            "error": (
+                                                "La muestra no corresponde al paciente de la solicitud."
+                                            )
+                                        },
+                                        status=status.HTTP_400_BAD_REQUEST,
+                                    )
+                                try:
+                                    assert_muestra_estado_carga_resultado(muestra)
+                                except ValueError as exc:
+                                    return Response(
+                                        {"error": str(exc)},
+                                        status=status.HTTP_400_BAD_REQUEST,
+                                    )
+                                resultado.muestra = muestra
+
                         resultado.valor_obtenido = valor_obtenido
                         resultado.es_patologico = es_patologico
                         if observaciones:
                             resultado.observaciones = observaciones
                         resultado.save()
+                        meta_carga = {
+                            "action": "cargar_resultados",
+                            "accion": "cargar_resultados",
+                            "view": "SolicitudExamenViewSet.cargar_resultados",
+                            "resultado_id": resultado.pk,
+                            "solicitud_id": solicitud.pk,
+                            "numero_solicitud": solicitud.numero,
+                        }
+                        if muestra_meta_aplica:
+                            meta_carga["muestra_id"] = resultado.muestra_id
+                            if resultado.muestra_id:
+                                cb = (
+                                    Muestra.objects.filter(pk=resultado.muestra_id)
+                                    .values_list("codigo_barra", flat=True)
+                                    .first()
+                                )
+                                meta_carga["codigo_barra"] = (cb or "")
+                        if prev_muestra_id != resultado.muestra_id:
+                            meta_carga["muestra_anterior_id"] = prev_muestra_id
+                            meta_carga["muestra_nueva_id"] = resultado.muestra_id
                         log_update(
                             actor=request.user,
                             entity=resultado,
                             before=before_res,
                             module="laboratorio",
-                            metadata={
-                                "action": "cargar_resultados",
-                                "accion": "cargar_resultados",
-                                "view": "SolicitudExamenViewSet.cargar_resultados",
-                            },
+                            metadata=meta_carga,
                         )
                     except ResultadoExamen.DoesNotExist:
                         logger.warning("ResultadoExamen inexistente para carga de resultados")
@@ -319,6 +382,18 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         {'error': 'No se puede validar una solicitud con resultados vacíos.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
+
+                for res in solicitud.resultados.select_related("muestra").all():
+                    if res.muestra_id and res.muestra.estado in MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN:
+                        return Response(
+                            {
+                                "error": (
+                                    "No se puede validar: hay un resultado vinculado a una muestra "
+                                    "en estado incompatible con la validación."
+                                )
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
                 before_resultados = {
                     r.id: safe_model_snapshot(r)

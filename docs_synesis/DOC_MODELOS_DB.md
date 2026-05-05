@@ -205,9 +205,9 @@
 
 ### ResultadoExamen
 
-- FK Solicitud CASCADE; FK TipoExamen PROTECT
+- FK Solicitud CASCADE; FK TipoExamen PROTECT; FK **`Muestra` opcional** (`null=True`, `blank=True`, `on_delete=PROTECT`, `related_name='resultados'`) — **Fase B2** (`laboratorio` migración `0004_lims_b2_resultado_muestra`).
 - `valor_obtenido` (**puede estar vacío** mientras el resultado está pendiente: `blank=True`, `default=''` en modelo; migración `laboratorio` 0002+); `es_patologico`; FK User `validado_por`; `fecha_validacion`
-- `save()` llama `full_clean()`; la **validación de orden** en vista `validar` impide cerrar protocolos con valores vacíos (regla de negocio, no relajación del modelo)
+- `save()` llama `full_clean()` (incluye coherencia solicitud–paciente–muestra si hay FK muestra); la **validación de orden** en vista `validar` impide cerrar protocolos con valores vacíos y **rechaza** muestras en estado incompatible si el resultado tiene muestra asociada.
 - **unique_together** solicitud + tipo_examen
 
 ---
@@ -283,7 +283,8 @@ Turno ─1:1─ Atencion ─1:1─ ConsultaAmbulatoria / Registro*
                 ├─N─ Documento (emr)
                 └─N─ SignosVitales
 
-Paciente ─1:N─ SolicitudExamen ─1:N─ ResultadoExamen ─N:1─ TipoExamen ─N:1─ TipoMuestra
+Paciente ─1:N─ SolicitudExamen ─1:N─ ResultadoExamen ─N:1─ TipoExamen ─N:1─ TipoMuestra  
+`ResultadoExamen` ─N:1─ `Muestra` (opcional, Fase B2); `Muestra` ─N:1─ `SolicitudExamen`
 ```
 
 ---

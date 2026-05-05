@@ -3,6 +3,7 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (post-hardening LIMS):** 2 de mayo de 2026  
 **Actualización (post–Fase A máquina de estados LIMS):** 3 de mayo de 2026  
+**Actualización (Fase B2 LIMS — riesgo TOCTOU en `validar`):** 5 de mayo de 2026  
 
 **Alcance:** Consolidación de riesgos funcionales, técnicos y de seguridad detectados en el análisis estático del repositorio.
 
@@ -14,7 +15,7 @@
 
 - **Doble flujo de consulta/atención** (HC vs consulta ambulatoria por `Atencion`) — riesgo de registros clínicos duplicados o incompletos en reporting.
 - **Dos modelos de internación** (`historias_clinicas.Internacion` vs `internacion.Internacion`) — datos pueden divergir.
-- ~~Estados **TOMA_MUESTRA** / **ENTREGADO** sin acciones en API~~ — **mitigado (Fase A):** acciones `tomar-muestra`, `cargar-resultados` (incl. desde `TOMA_MUESTRA`), `marcar-entregado`; siguen pendientes tubos/muestra transaccional e informe PDF.
+- ~~Estados **TOMA_MUESTRA** / **ENTREGADO** sin acciones en API~~ — **mitigado (Fase A):** acciones `tomar-muestra`, `cargar-resultados` (incl. desde `TOMA_MUESTRA`), `marcar-entregado`; ~~tubos/muestra transaccional~~ — **mitigado (B1/B2):** `Muestra` + vínculo opcional `ResultadoExamen.muestra`; sigue pendiente informe PDF y obligatoriedad de muestra para órdenes nuevas.
 - **Solicitud** EMR vs **SolicitudExamen** LIMS nativo sin vínculo obligatorio — doble entrada operativa.
 
 ---
@@ -77,7 +78,8 @@
 - ~~String **`tecnico`** en EMR~~ — **retirado** de `IsEMRClinician` y `api/views.py`; `laboratorio` sigue acotado a LIMS (no añadido a permisos EMR generales).
 - Comparaciones de rol inconsistentes (mayúsculas/minúsculas), p. ej. en `solicitudes.views`.
 - Validación técnica / profesional **no** separada en estados distintos en LIMS nativo (un solo `VALIDADO`).
-- Flujo **muestras/tubos** transaccional no modelado (solo catálogo + etiqueta ZPL).
+- ~~Flujo **muestras/tubos** transaccional no modelado~~ — **parcialmente mitigado (B1/B2):** modelo `Muestra` + resultados asociables; **deuda:** orden puede validarse con resultados sin muestra si hay muestras activas en la solicitud (riesgo operativo hasta política explícita); **sin** transición automática muestra `RECIBIDA`→`EN_PROCESO` al cargar (B2.1).
+- **LIMS B2 — concurrencia en `validar` (TOCTOU):** al validar la orden (`SolicitudExamenViewSet.validar`), la comprobación del **estado** de la `Muestra` vinculada a cada `ResultadoExamen` **no** bloquea la fila `Muestra` con `select_for_update`. Existe una ventana **TOCTOU** teórica en la que otro proceso podría cambiar el estado de la muestra entre la lectura del estado y el cierre de la transacción de validación. **Hardening propuesto: B2.1** (p. ej. bloqueo/`SELECT … FOR UPDATE` sobre muestras referenciadas o re-validación inmediata antes del commit).
 
 ---
 

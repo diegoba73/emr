@@ -105,7 +105,8 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de muestras
 
 - Catálogo `TipoMuestra`; cada `TipoExamen` exige un tipo de muestra.
-- **No hay** entidad transaccional de muestra/tubo con recepción o rechazo en BD. La acción `tomar-muestra` es solo **marcador de flujo** en la orden (`PENDIENTE` → `TOMA_MUESTRA`).
+- **Fase B1:** entidad **`Muestra`** vinculada a `SolicitudExamen` y `Paciente` (redundante validada en `Muestra.clean`); eventos y transiciones en `laboratorio/muestra_estado.py`.
+- La acción de orden `tomar-muestra` (Fase A) sigue siendo **marcador** `PENDIENTE` → `TOMA_MUESTRA`; la toma física es la transaccional **Muestra** (`PENDIENTE_TOMA` → …).
 
 ---
 
@@ -118,7 +119,8 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de resultados
 
 - Valor en texto (`valor_obtenido`); bandera `es_patologico`.
-- **Pendiente de carga:** `valor_obtenido` puede estar **vacío** en modelo (`blank=True`, `default=''`) al crear filas `ResultadoExamen`; eso **no** autoriza validar la orden incompleta: la acción `validar` sigue rechazando si queda algún resultado con valor vacío.
+- **Fase B2 — muestra opcional:** FK nullable `ResultadoExamen.muestra`; si está definida: misma `SolicitudExamen`, mismo paciente que la orden; no `RECHAZADA`, `DESCARTADA`, ni `CANCELADA` (`clean`). Para **carga** vía API: muestra en **`RECIBIDA`** o **`EN_PROCESO`** únicamente (no `PENDIENTE_TOMA` ni `TOMADA`). Resultados **sin** muestra siguen siendo válidos (compatibilidad histórica hasta política futura).
+- **Pendiente de carga:** `valor_obtenido` puede estar **vacío** en modelo (`blank=True`, `default=''`) al crear filas `ResultadoExamen`; eso **no** autoriza validar la orden incompleta: la acción `validar` sigue rechazando si queda algún resultado con valor vacío. Con muestra vinculada, `validar` además rechaza si la muestra quedó en estados incompatibles (listado en `DOC_FLUJOS_LIMS.md`).
 - Carga masiva vía acción `cargar-resultados` con transacción y bloqueo de solicitud; no modificar si orden está en `VALIDADO`, `CANCELADO` o `ENTREGADO`.
 - Validación de orden: solo desde **`EN_PROCESO`**; no permitir validar con valores vacíos; asigna usuario y fecha a resultados. Solo rol **admin** (y superuser) puede ejecutar `validar`; rol **laboratorio** puede tomar muestra, cargar, cancelar y marcar entregado, pero **no** validar.
 - **Entrega:** `marcar-entregado` solo desde **`VALIDADO`**; no genera PDF.
@@ -149,9 +151,11 @@ Valores de modelo: `PENDIENTE`, `TOMA_MUESTRA`, `EN_PROCESO`, `VALIDADO`, `ENTRE
 
 Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incluye `PENDIENTE`/`TOMA_MUESTRA` → `EN_PROCESO` por carga, `VALIDADO` → `ENTREGADO`, cancelación desde no finales). Terminales: **`CANCELADO`**, **`ENTREGADO`**.
 
-**No implementado (sigue pendiente):** validación técnica vs profesional como estados distintos; informe PDF final; vinculación obligatoria `ResultadoExamen`↔`Muestra`; microbiología/QC avanzado.
+**No implementado (sigue pendiente):** validación técnica vs profesional como estados distintos; informe PDF final; vinculación **obligatoria** `ResultadoExamen`↔`Muestra` para órdenes nuevas; transición automática de muestra `RECIBIDA`→`EN_PROCESO` al cargar resultado; microbiología/QC avanzado.
 
 **Implementado (Fase B1):** entidad **`Muestra`** (material físico) vinculada a `SolicitudExamen` y `TipoMuestra`; **`EventoMuestra`**; catálogos **`AreaLaboratorio`**, **`SeccionLaboratorio`**, **`TipoContenedor`**. Cambios de estado de muestra **solo** por acciones POST dedicadas; `PATCH` no altera `estado`. Recepción solo desde **`TOMADA`** (sin recepción directa desde `PENDIENTE_TOMA` en esta fase). Rechazo exige **motivo**. Auditoría y eventos por acción.
+
+**Implementado (Fase B2):** FK opcional **`ResultadoExamen.muestra`** (`PROTECT`); reglas de carga y validación coordinadas con estados de muestra; migración **`0004_lims_b2_resultado_muestra`**.
 
 ---
 

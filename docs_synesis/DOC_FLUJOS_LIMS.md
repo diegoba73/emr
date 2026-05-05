@@ -3,10 +3,11 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (hardening mínimo LIMS, resultados pendientes):** 2 de mayo de 2026  
 **Actualización (Fase A — máquina de estados `SolicitudExamen`):** 3 de mayo de 2026  
+**Actualización (Fase B2 — `ResultadoExamen.muestra`):** 5 de mayo de 2026  
 
 **Alcance:** Flujo LIMS **nativo** (`laboratorio` app) y vínculos con `solicitudes` / `integracion_lims`.
 
-**Fuentes revisadas:** `laboratorio/models.py`, `laboratorio/serializers.py`, `laboratorio/views.py`, `laboratorio/solicitud_estado.py`, `solicitudes/models.py`, `integracion_lims/lims_service.py`.
+**Fuentes revisadas:** `laboratorio/models.py`, `laboratorio/models_catalog.py`, `laboratorio/serializers.py`, `laboratorio/views.py`, `laboratorio/solicitud_estado.py`, `laboratorio/resultado_muestra_validacion.py`, `solicitudes/models.py`, `integracion_lims/lims_service.py`.
 
 ---
 
@@ -24,11 +25,11 @@
 ## Flujo de muestras
 
 - **Catálogo:** `TipoMuestra` (código, nombre, color tubo).
-- **No hay entidad transaccional “Muestra” / tubo** con trazabilidad por alícuota en BD — el flujo es por **orden y resultados**.
-- **Toma de muestra (Fase A):** la acción `POST .../tomar-muestra/` solo cambia el estado de la orden a `TOMA_MUESTRA`; **no** crea filas de muestra ni recepción física.
+- **Fase B1:** entidad transaccional **`Muestra`** (`EventoMuestra`, catálogos `AreaLaboratorio` / `SeccionLaboratorio` / `TipoContenedor`). Estados y acciones REST documentadas en `DOC_API_ENDPOINTS.md` y tests `test_muestras_*`.
+- **Toma de muestra (Fase A — orden):** `POST .../tomar-muestra/` cambia la orden `PENDIENTE` → `TOMA_MUESTRA` (marcador de flujo); es independiente de la toma física por **`Muestra`** (`aplicar_tomar` en `muestra_estado.py`).
 - **Etiqueta ZPL:** acción `GET .../etiqueta/` devuelve JSON con fragmento ZPL simulado.
-
-**Aún no implementado:** recepción de muestra transaccional, rechazo de muestra, tubos con ID de trazabilidad.
+- **Fase B2:** al cargar resultados se puede enviar **`muestra_id`** opcional por ítem; debe ser muestra de **la misma solicitud**, mismo paciente, estado **`RECIBIDA` o `EN_PROCESO`** (no `PENDIENTE_TOMA`, `TOMADA`, ni terminales `RECHAZADA` / `DESCARTADA` / `CANCELADA`). Resultados sin muestra siguen admitidos por compatibilidad histórica.
+- **Transición automática `RECIBIDA` → `EN_PROCESO` en la muestra** al cargar el primer resultado: **no implementada** en B2 (posible **B2.1**); la muestra permanece `RECIBIDA` hasta una acción explícita futura.
 
 ---
 
@@ -42,9 +43,9 @@
 ## Flujo de carga de resultados
 
 - **Endpoint:** `POST /api/lab/solicitudes/{id}/cargar-resultados/` (y alias bajo `/api/laboratorio/solicitudes/{id}/cargar-resultados/`).
-- **Payload:** `{ "resultados": [ { "id": <ResultadoExamen.id>, "valor": "...", "es_patologico": bool, "observaciones": "..." } ] }`.
-- **Reglas (Fase A):** rechaza si orden está en `CANCELADO`, `VALIDADO` o `ENTREGADO`. Transacción + bloqueo de fila (`select_for_update`) sobre la solicitud. Tras aplicar cambios a resultados: si el estado era `PENDIENTE` o `TOMA_MUESTRA`, transición a `EN_PROCESO` (compatibilidad: se puede cargar sin pasar obligatoriamente por toma). Si ya estaba en `EN_PROCESO`, solo se actualizan resultados (sin cambio de estado).
-- **Auditoría:** `log_update` por resultado; en transición de estado, evento de solicitud con metadata (`accion`, `estado_anterior`, `estado_nuevo`, `solicitud_id`, `numero_solicitud`) vía `laboratorio/solicitud_estado.py`.
+- **Payload (retrocompatible):** `{ "resultados": [ { "id": <ResultadoExamen.id>, "valor": "...", "es_patologico": bool, "observaciones": "...", "muestra_id": <opcional int|null> } ] }`. Si **`muestra_id`** no viene en el ítem, no se modifica la asociación previa. Si viene **`null`**, se limpia la muestra del resultado (misma política de bloqueo que la carga: orden no `VALIDADO`/`ENTREGADO`/`CANCELADO`).
+- **Reglas (Fase A + B2):** rechaza si orden está en `CANCELADO`, `VALIDADO` o `ENTREGADO`. Transacción + bloqueo de fila (`select_for_update`) sobre la solicitud y cada resultado (`of=("self",)` en PostgreSQL para FK muestra nullable). Tras aplicar cambios a resultados: si el estado era `PENDIENTE` o `TOMA_MUESTRA`, transición a `EN_PROCESO` (compatibilidad: se puede cargar sin pasar obligatoriamente por toma). Si ya estaba en `EN_PROCESO`, solo se actualizan resultados (sin cambio de estado).
+- **Auditoría:** `log_update` por resultado con metadata extendida si aplica muestra: `resultado_id`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, `muestra_anterior_id` / `muestra_nueva_id` si cambió la asociación; en transición de estado de orden, evento de solicitud con metadata (`accion`, `estado_anterior`, `estado_nuevo`, `solicitud_id`, `numero_solicitud`) vía `laboratorio/solicitud_estado.py`.
 
 ---
 
@@ -53,6 +54,7 @@
 - Un único paso **`validar`** (`POST .../validar/`) que:
   - Solo acepta orden en estado **`EN_PROCESO`** (rechaza `PENDIENTE`, `TOMA_MUESTRA`, `VALIDADO`, `CANCELADO`, `ENTREGADO`).
   - Exige que no haya resultados con `valor_obtenido` vacío.
+  - Si un resultado tiene **`muestra`** vinculada, la muestra **no** debe estar en `RECHAZADA`, `DESCARTADA`, `CANCELADA`, `PENDIENTE_TOMA` ni `TOMADA` (resultados **sin** muestra siguen validándose si los valores están completos — compatibilidad histórica).
   - Transiciona `EN_PROCESO` → `VALIDADO` mediante la misma capa de transiciones auditadas que el resto de acciones.
   - Asigna `validado_por` y `fecha_validacion` a **todos** los `ResultadoExamen` vía `queryset.update` (mismo usuario/fecha para todos).
 - **Permiso:** solo **`admin`** o **superuser** puede invocar `validar`. El rol **`laboratorio`** puede cargar resultados, tomar muestra, cancelar y marcar entregado, pero **no** validar.
