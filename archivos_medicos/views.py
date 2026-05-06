@@ -2,14 +2,15 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action, permission_classes, api_view
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
-from django.shortcuts import get_object_or_404
-from django.http import FileResponse, HttpResponseForbidden
-from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
-from django.utils.decorators import method_decorator
+from django.http import FileResponse
+from django.utils import timezone
 import os
 import logging
+from datetime import timedelta
 
 from .models import ArchivoMedico
 from .serializers import ArchivoMedicoSerializer, ArchivoMedicoListSerializer
@@ -17,43 +18,76 @@ from .serializers import ArchivoMedicoSerializer, ArchivoMedicoListSerializer
 logger = logging.getLogger(__name__)
 
 
-class CsrfExemptSessionAuthentication(SessionAuthentication):
-    """Autenticación de sesión sin exigir CSRF para APIs (solo desarrollo)."""
-    def enforce_csrf(self, request):  # type: ignore[override]
-        return  # No-op: desactiva verificación CSRF para SessionAuthentication
-
-
 class ArchivoMedicoViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para archivos médicos con autenticación JWT y permisos basados en roles.
+
+    Nota sobre destroy: el borrado por defecto elimina el registro en BD; los bytes en
+    MEDIA pueden quedar huérfanos salvo política explícita de limpieza (no se borra
+    disco aquí por decisión de trazabilidad/seguridad).
+    """
     queryset = ArchivoMedico.objects.select_related('paciente', 'consulta', 'subido_por').all()
     serializer_class = ArchivoMedicoSerializer
     permission_classes = [IsAuthenticated]
-    authentication_classes = [CsrfExemptSessionAuthentication, TokenAuthentication]
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['paciente', 'tipo_archivo', 'es_urgente', 'fecha_estudio']
     search_fields = ['titulo', 'descripcion', 'paciente__nombre', 'paciente__apellido']
     ordering_fields = ['fecha_subida', 'fecha_estudio', 'titulo']
     ordering = ['-fecha_subida']
-
+    
     def get_queryset(self):
-        """Filtra por rol del usuario sin relaciones inexistentes.
-
-        - Admin/Staff: ven todo
-        - Médicos/Secretarias: ven todo (hasta implementar reglas específicas)
-        - Pacientes: solo sus propios archivos
         """
-        user = self.request.user
+        Filtra archivos médicos basándose en el rol del usuario.
+        Permite filtrar por paciente_id desde query params para vista de pacientes.
+        """
         queryset = super().get_queryset()
-
-        if user.is_superuser or user.is_staff:
+        
+        # Permitir filtrar por paciente_id desde query params (para compatibilidad con ?paciente_id=)
+        paciente_id = self.request.query_params.get('paciente_id')
+        if paciente_id:
+            try:
+                paciente_id = int(paciente_id)
+                queryset = queryset.filter(paciente_id=paciente_id)
+            except (ValueError, TypeError):
+                pass  # Ignorar si no es un ID válido
+        
+        user = self.request.user
+        
+        # Admin ve todos los archivos
+        if user.rol == 'admin' or user.is_superuser:
             return queryset
 
-        # No existe relación Paciente.medico en el modelo actual; evitar filtros inválidos
-        if hasattr(user, 'medico') or any(getattr(user, attr, None) for attr in ['secretaria']):
-            return queryset
+        # Secretaria no tiene acceso a archivos médicos
+        if user.rol == 'secretaria':
+            return queryset.none()
 
-        if hasattr(user, 'paciente'):
-            return queryset.filter(paciente=user.paciente)
+        # Médico ve archivos de pacientes que ha atendido
+        if user.rol == 'medico':
+            try:
+                from medicos.models import Medico
+                from historias_clinicas.models import Consulta
+                medico = Medico.objects.get(user=user)
+                # Obtener IDs de pacientes que han tenido consultas con este médico
+                pacientes_con_consultas = Consulta.objects.filter(
+                    medico=medico
+                ).values_list('historia_clinica__paciente_id', flat=True).distinct()
+                return queryset.filter(paciente_id__in=pacientes_con_consultas)
+            except:
+                # Si no existe el médico, no mostrar archivos
+                return queryset.none()
 
+        # Paciente ve solo sus propios archivos
+        if user.rol == 'paciente':
+            try:
+                from pacientes.models import Paciente
+                paciente = Paciente.objects.get(user=user)
+                return queryset.filter(paciente=paciente)
+            except:
+                # Si no existe el paciente, no mostrar archivos
+                return queryset.none()
+
+        # Por defecto, no mostrar archivos
         return queryset.none()
 
     def get_serializer_class(self):
@@ -62,27 +96,53 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
         return ArchivoMedicoSerializer
 
     def perform_create(self, serializer):
-        """Asigna el usuario que sube el archivo. Permiso: autenticado."""
+        """Asigna el usuario que sube el archivo"""
         serializer.save(subido_por=self.request.user)
         logger.info(f"Archivo subido por {self.request.user.username}")
 
     def _tiene_permiso_lectura(self, user, archivo):
-        """Verificar si el usuario tiene permiso para ver/descargar el archivo"""
-        if user.is_superuser or user.is_staff:
+        """
+        Verificar si el usuario tiene permiso para ver/descargar el archivo
+        """
+        # Admin tiene acceso total
+        if user.rol == 'admin' or user.is_superuser:
             return True
+        
+        # Secretaria no tiene acceso a archivos médicos
+        if user.rol == 'secretaria':
+            return False
             
-        # Si es médico, puede ver archivos de sus pacientes
-        if hasattr(user, 'medico') and archivo.paciente.medico == user.medico:
-            return True
+        # Médico puede ver archivos de pacientes que ha atendido
+        if user.rol == 'medico':
+            try:
+                from medicos.models import Medico
+                from historias_clinicas.models import Consulta
+                medico = Medico.objects.get(user=user)
+                # Verificar si el paciente ha tenido consultas con este médico
+                tiene_consultas = Consulta.objects.filter(
+                    medico=medico,
+                    historia_clinica__paciente=archivo.paciente
+                ).exists()
+                return tiene_consultas
+            except:
+                return False
             
-        # Si es paciente, solo puede ver sus propios archivos
-        if hasattr(user, 'paciente') and archivo.paciente == user.paciente:
-            return True
+        # Paciente solo puede ver sus propios archivos
+        if user.rol == 'paciente':
+            try:
+                from pacientes.models import Paciente
+                paciente = Paciente.objects.get(user=user)
+                return archivo.paciente == paciente
+            except:
+                return False
             
         return False
 
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):
+        """
+        Descargar archivo médico con verificación de permisos
+        """
         archivo = self.get_object()
         
         # Verificar permisos de descarga
@@ -93,108 +153,72 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
             )
             
         if not os.path.exists(archivo.archivo.path):
-            logger.error(f"Archivo no encontrado en la ruta: {archivo.archivo.path}")
+            logger.error("Archivo no encontrado en almacenamiento (id=%s)", archivo.id)
             return Response(
                 {'error': 'Archivo no encontrado en el servidor'},
                 status=status.HTTP_404_NOT_FOUND
             )
-            
+        
         try:
-            response = FileResponse(open(archivo.archivo.path, 'rb'), as_attachment=True)
-            # Configurar encabezados de seguridad
-            response['Content-Disposition'] = f'attachment; filename="{os.path.basename(archivo.archivo.path)}"'
-            response['X-Content-Type-Options'] = 'nosniff'
+            response = FileResponse(
+                open(archivo.archivo.path, 'rb'),
+                content_type='application/octet-stream'
+            )
+            # Nombre de descarga: preferir basename del fichero almacenado (incluye extensión); evitar título sin sanitizar
+            nombre_descarga = os.path.basename(archivo.archivo.name) or 'archivo'
+            nombre_descarga = nombre_descarga.replace('"', '_')
+            response['Content-Disposition'] = f'attachment; filename="{nombre_descarga}"'
             return response
         except Exception as e:
-            logger.error(f"Error al descargar archivo: {str(e)}")
+            logger.error(f"Error al descargar archivo: {e}")
             return Response(
-                {'error': 'Error al procesar la descarga'},
+                {'error': 'Error al procesar el archivo'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=False, methods=['get'])
     def tipos_disponibles(self, request):
-        """Devuelve tipos de archivo disponibles (requiere autenticación)."""
-        tipos = [{'value': choice[0], 'label': choice[1]} for choice in ArchivoMedico.TIPO_CHOICES]
-        return Response(tipos)
+        """
+        Obtener tipos de archivo disponibles
+        """
+        tipos = ArchivoMedico.TIPO_CHOICES
+        return Response([{'value': choice[0], 'label': choice[1]} for choice in tipos])
 
     @action(detail=False, methods=['get'])
-    def por_paciente(self, request):
-        """Lista archivos por paciente (query param: paciente_id)."""
-        paciente_id = request.query_params.get('paciente_id')
-        if not paciente_id:
-            return Response({'error': 'paciente_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
-        archivos = self.get_queryset().filter(paciente_id=paciente_id)
-        serializer = ArchivoMedicoListSerializer(archivos, many=True)
-        return Response(serializer.data)
+    def estadisticas(self, request):
+        """
+        Estadísticas de archivos médicos (solo para admin/secretaria)
+        """
+        if request.user.rol not in ['admin', 'secretaria'] and not request.user.is_superuser:
+            return Response(
+                {'error': 'No tiene permisos para ver estadísticas'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        queryset = self.get_queryset()
+        stats = {
+            'total_archivos': queryset.count(),
+            'por_tipo': {},
+            'urgentes': queryset.filter(es_urgente=True).count(),
+            'recientes': queryset.filter(fecha_subida__gte=timezone.now() - timedelta(days=7)).count()
+        }
+        
+        for choice in ArchivoMedico.TIPO_ARCHIVO_CHOICES:
+            stats['por_tipo'][choice[0]] = queryset.filter(tipo_archivo=choice[0]).count()
+        
+        return Response(stats)
 
-    @action(detail=False, methods=['get'])
-    def por_consulta(self, request):
-        """Lista archivos por consulta (query param: consulta_id)."""
-        consulta_id = request.query_params.get('consulta_id')
-        if not consulta_id:
-            return Response({'error': 'consulta_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
-        archivos = self.get_queryset().filter(consulta_id=consulta_id)
-        serializer = ArchivoMedicoListSerializer(archivos, many=True)
-        return Response(serializer.data)
-
-    def destroy(self, request, *args, **kwargs):
-        """Elimina el archivo respetando permisos y borrando el fichero físico."""
-        archivo = self.get_object()
-
-        # Permisos: superuser/staff o permiso de app o dueño paciente que lo subió
-        has_model_perm = request.user.has_perm('archivos_medicos.delete_archivomedico')
-        is_admin = request.user.is_superuser or request.user.is_staff
-        is_owner_patient = hasattr(request.user, 'paciente') and (
-            archivo.paciente_id == getattr(request.user.paciente, 'id', None) and archivo.subido_por_id == request.user.id
-        )
-
-        if not (is_admin or has_model_perm or is_owner_patient):
-            logger.warning(f"Eliminación no autorizada por {request.user.username}")
-            return Response({'error': 'No tiene permisos para eliminar este archivo'}, status=status.HTTP_403_FORBIDDEN)
-
-        # Eliminar archivo físico si existe
-        try:
-            if archivo.archivo and archivo.archivo.path and os.path.exists(archivo.archivo.path):
-                os.remove(archivo.archivo.path)
-        except Exception as file_err:
-            logger.warning(f"No se pudo eliminar el archivo físico: {file_err}")
-
-        archivo.delete()
-        logger.info(f"Archivo {archivo.id} eliminado por {request.user.username}")
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    def update(self, request, *args, **kwargs):
-        """Actualiza un archivo con reglas de permiso similares a eliminar."""
-        archivo = self.get_object()
-
-        has_model_perm = request.user.has_perm('archivos_medicos.change_archivomedico')
-        is_admin = request.user.is_superuser or request.user.is_staff
-        is_owner_uploader = archivo.subido_por_id == request.user.id
-        is_owner_patient = hasattr(request.user, 'paciente') and (archivo.paciente_id == getattr(request.user.paciente, 'id', None))
-
-        if not (is_admin or has_model_perm or is_owner_uploader or is_owner_patient):
-            return Response({'error': 'No tiene permisos para editar este archivo'}, status=status.HTTP_403_FORBIDDEN)
-
-        return super().update(request, *args, **kwargs)
-
-    def partial_update(self, request, *args, **kwargs):
-        """PATCH con las mismas reglas que update."""
-        archivo = self.get_object()
-
-        has_model_perm = request.user.has_perm('archivos_medicos.change_archivomedico')
-        is_admin = request.user.is_superuser or request.user.is_staff
-        is_owner_uploader = archivo.subido_por_id == request.user.id
-        is_owner_patient = hasattr(request.user, 'paciente') and (archivo.paciente_id == getattr(request.user.paciente, 'id', None))
-
-        if not (is_admin or has_model_perm or is_owner_uploader or is_owner_patient):
-            return Response({'error': 'No tiene permisos para editar este archivo'}, status=status.HTTP_403_FORBIDDEN)
-
-        return super().partial_update(request, *args, **kwargs)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@ensure_csrf_cookie
-def get_csrf_token(request):
-    """Endpoint para obtener el token CSRF"""
-    return Response({'detail': 'CSRF cookie set'})
+@csrf_exempt
+def tipos_archivo_publicos(request):
+    """
+    Catálogo estático de tipos de archivo permitidos (value/label del modelo).
+
+    AllowAny: no expone datos de pacientes ni rutas; solo metadatos de formulario.
+    GET no modifica estado.
+    """
+    from .models import ArchivoMedico
+    tipos = ArchivoMedico.TIPO_CHOICES
+    return Response([{'value': choice[0], 'label': choice[1]} for choice in tipos])

@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from pacientes.models import Paciente
+from .validators import validar_tamanio_archivo, validar_extension_archivo
 
 
 class ArchivoMedico(models.Model):
@@ -30,8 +31,9 @@ class ArchivoMedico(models.Model):
     archivo = models.FileField(
         upload_to='archivos_medicos/%Y/%m/%d/',
         verbose_name="Archivo",
-        blank=True,  # Para desarrollo, permitir archivos vacíos
-        null=True    # Para desarrollo, permitir archivos vacíos
+        validators=[validar_tamanio_archivo, validar_extension_archivo],
+        blank=True,
+        null=True
     )
 
     # Relaciones
