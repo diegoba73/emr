@@ -94,10 +94,16 @@ INSTALLED_APPS = [
     'catalogos',
     'api',
     'archivos_medicos',
+    'auditoria',
+    'core',
+    'emr.apps.EmrConfig',
+    'internacion',
+    'solicitudes',
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'auditoria.middleware.RequestContextMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
