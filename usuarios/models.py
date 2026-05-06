@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.core.validators import RegexValidator
 
 class User(AbstractUser):
     """
@@ -10,29 +9,13 @@ class User(AbstractUser):
         ('paciente', 'Paciente'),
         ('medico', 'Médico'),
         ('secretaria', 'Secretaria'),
+        ('enfermeria', 'Enfermería'),
+        ('laboratorio', 'Laboratorio'),
         ('admin', 'Administrador'),
     ]
     
-    # Campos adicionales
-    rol = models.CharField(
-        max_length=20,
-        choices=ROL_CHOICES,
-        default='paciente',
-        help_text='Rol del usuario en el sistema'
-    )
-    
-    # Validación de teléfono
-    phone_regex = RegexValidator(
-        regex=r'^\+?1?\d{9,15}$',
-        message="El número de teléfono debe estar en formato: '+999999999'. Hasta 15 dígitos permitidos."
-    )
-    telefono = models.CharField(
-        validators=[phone_regex],
-        max_length=17,
-        blank=True,
-        null=True,
-        help_text='Número de teléfono'
-    )
+    rol = models.CharField(max_length=20, choices=ROL_CHOICES, default='paciente')
+    telefono = models.CharField(max_length=25, blank=True, null=True)
     
     # Campos de verificación
     email_verificado = models.BooleanField(default=False)
@@ -65,6 +48,10 @@ class User(AbstractUser):
     @property
     def es_admin(self):
         return self.rol == 'admin'
+    
+    @property
+    def es_enfermeria(self):
+        return self.rol == 'enfermeria'
     
     def puede_ver_todos_los_turnos(self):
         """Determina si el usuario puede ver todos los turnos"""
