@@ -9,6 +9,7 @@ htmlcov/
 # Entornos locales
 .env
 .env.*
+.envrc
 !.env.example
 .venv/
 venv/
