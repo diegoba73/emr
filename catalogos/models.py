@@ -6,12 +6,19 @@ class DiagnosticoCIE10(models.Model):
     codigo = models.CharField(max_length=10, unique=True, verbose_name="Código CIE-10")
     descripcion = models.TextField(verbose_name="Descripción")
     categoria = models.CharField(max_length=100, verbose_name="Categoría")
+    # Nuevos campos del CSV
+    capitulo = models.CharField(max_length=100, verbose_name="Capítulo", blank=True, null=True)
+    enfermedad = models.CharField(max_length=200, verbose_name="Enfermedad", blank=True, null=True)
+    tipo_enfermedad = models.CharField(max_length=200, verbose_name="Tipo de Enfermedad", blank=True, null=True)
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
         verbose_name = "Diagnóstico CIE-10"
         verbose_name_plural = "Diagnósticos CIE-10"
         ordering = ['codigo']
+        indexes = [
+            models.Index(fields=['descripcion'], name='cie10_descripcion_idx'),
+        ]
 
     def __str__(self):
         return f"{self.codigo} - {self.descripcion[:50]}"
@@ -33,7 +40,7 @@ class Medicamento(models.Model):
         ordering = ['nombre']
 
     def __str__(self):
-        return f"{self.nombre} - {self.presentacion}"
+        return f"{self.nombre} ({self.principio_activo}) {self.concentracion}"
 
 
 class Procedimiento(models.Model):
@@ -87,11 +94,11 @@ class CentroFisico(models.Model):
     """Centros físicos de la clínica"""
     CENTRO_CHOICES = [
         ('CEHTA', 'CEHTA - Centro de Atención Ambulatoria'),
-        ('ICPL', 'ICPL - Instituto Cardiológico con Internación'),
+        ('PUEBLO_DE_LUIS', 'PUEBLO DE LUIS - Instituto Cardiológico con Internación'),
     ]
     
     codigo = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=CENTRO_CHOICES,
         unique=True,
         verbose_name="Código del Centro"
@@ -230,3 +237,35 @@ class CamaInternacion(models.Model):
     
     def __str__(self):
         return f"Cama {self.numero} - {self.area.nombre} ({self.area.centro_fisico.codigo})"
+
+
+class EstudioDiagnostico(models.Model):
+    """Catálogo simplificado de estudios/diagnósticos disponibles."""
+
+    nombre = models.CharField(max_length=255, unique=True, verbose_name="Nombre del Estudio")
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+
+    class Meta:
+        verbose_name = "Estudio Diagnóstico"
+        verbose_name_plural = "Estudios Diagnóstico"
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+class ProcedimientoCatalogo(models.Model):
+    """Listado simplificado de procedimientos quirúrgicos/intervencionistas."""
+
+    nombre = models.CharField(max_length=255, unique=True, verbose_name="Nombre del Procedimiento")
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+
+    class Meta:
+        verbose_name = "Procedimiento (Catálogo)"
+        verbose_name_plural = "Procedimientos (Catálogo)"
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
