@@ -1,13 +1,10 @@
-from django.test import TestCase
-from .models import HistoriaClinica, Consulta, Sintoma, Diagnostico, Tratamiento
-from pacientes.models import Paciente
-from medicos.models import Medico
-from turnos.models import Turno
-from django.utils import timezone
+"""Placeholder de la suite legacy de ``historias_clinicas``.
 
-class SintomaModelTest(TestCase):
-    def test_creacion_sintoma(self):
-        sintoma = Sintoma.objects.create(nombre="Fiebre")
-        self.assertEqual(str(sintoma), "Fiebre")
+La suite real ahora vive bajo ``historias_clinicas/tests/`` (paquete). Este
+módulo se mantiene vacío deliberadamente para preservar el path histórico y
+para que ``pytest`` pueda incluirlo en sus rutas sin recoger tests obsoletos
+que asumían modelos o tablas que ya no se usan en este flujo (``Sintoma``
+quedó dentro de ``historias_clinicas`` y se cubre desde el paquete nuevo).
 
-# Puedes agregar más tests para los otros modelos siguiendo este ejemplo.
+No agregar tests aquí: usar el paquete ``historias_clinicas/tests/``.
+"""

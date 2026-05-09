@@ -42,7 +42,12 @@ class ConsultaAdmin(admin.ModelAdmin):
     form = ConsultaForm
     list_display = ['historia_clinica', 'medico', 'fecha_hora_consulta', 'motivo_consulta_detalle']
     list_filter = ['fecha_hora_consulta', 'medico']
-    search_fields = ['historia_clinica__paciente__nombre', 'historia_clinica__paciente__apellido', 'medico__nombre']
+    search_fields = [
+        'historia_clinica__paciente__nombre',
+        'historia_clinica__paciente__apellido',
+        'medico__nombre',
+        'diagnostico_presuntivo'  # Útil para epidemiología básica
+    ]
     readonly_fields = ['fecha_registro', 'ultima_actualizacion']
     inlines = [DiagnosticoInline, TratamientoInline, PrescripcionInline]
     
@@ -76,7 +81,7 @@ class SintomaAdmin(admin.ModelAdmin):
 @admin.register(Diagnostico)
 class DiagnosticoAdmin(admin.ModelAdmin):
     list_display = ['consulta', 'diagnostico_cie', 'nombre_diagnostico', 'fecha_diagnostico']
-    list_filter = ['fecha_diagnostico', 'diagnostico_cie__categoria']
+    list_filter = ['fecha_diagnostico', 'diagnostico_cie__capitulo']
     search_fields = ['nombre_diagnostico', 'diagnostico_cie__codigo', 'diagnostico_cie__descripcion']
     filter_horizontal = ['sintomas_asociados']
 

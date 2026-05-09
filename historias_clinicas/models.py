@@ -1,7 +1,32 @@
 from django.db import models
+from django.utils import timezone
+
 from pacientes.models import Paciente
 from medicos.models import Medico
-from turnos.models import Turno # Opcional, pero útil para vincular con el turno que generó la consulta
+from turnos.models import Turno  # Vincula opcionalmente la consulta con el turno que la generó
+
+
+def _paciente_label(paciente) -> str:
+    """Devuelve una etiqueta legible para un ``Paciente``, tolerando ``None``.
+
+    Centraliza la lógica para que ``__str__`` de varios modelos no rompa si
+    ``apellido``/``nombre`` están vacíos. Prefiere ``nombre_completo`` (que
+    ya tolera ``None`` desde el bloque ``pacientes``) y cae a DNI si todo lo
+    demás es vacío.
+    """
+    if paciente is None:
+        return "Paciente desconocido"
+    nombre_completo = getattr(paciente, "nombre_completo", "") or ""
+    if nombre_completo.strip():
+        return nombre_completo.strip()
+    apellido = (getattr(paciente, "apellido", "") or "").strip()
+    nombre = (getattr(paciente, "nombre", "") or "").strip()
+    if apellido or nombre:
+        return f"{apellido}, {nombre}".strip(", ")
+    dni = getattr(paciente, "dni", None)
+    if dni:
+        return f"Paciente {dni}"
+    return "Paciente sin datos"
 
 
 # Modelo para la Historia Clínica general de un Paciente
@@ -19,10 +44,10 @@ class HistoriaClinica(models.Model):
     class Meta:
         verbose_name = "Historia Clínica"
         verbose_name_plural = "Historias Clínicas"
-        ordering = ['paciente__user__last_name', 'paciente__user__first_name']
+        ordering = ['paciente__apellido', 'paciente__nombre']
 
     def __str__(self):
-        return f"Historia Clínica de {self.paciente.user.last_name}, {self.paciente.user.first_name}"
+        return f"Historia Clínica de {_paciente_label(self.paciente)}"
 
 
 # Modelo para cada Consulta (visita médica)
@@ -70,11 +95,22 @@ class Consulta(models.Model):
     class Meta:
         verbose_name = "Consulta"
         verbose_name_plural = "Consultas"
-        ordering = ['-fecha_hora_consulta'] # Ordenar por fecha de consulta descendente (más reciente primero)
+        ordering = ['-fecha_hora_consulta']  # Ordenar por fecha de consulta descendente (más reciente primero)
+        indexes = [
+            models.Index(fields=['-fecha_hora_consulta'], name='hist_consulta_fecha_idx'),
+        ]
 
     def __str__(self):
-        paciente_str = f"{self.historia_clinica.paciente.user.last_name}, {self.historia_clinica.paciente.user.first_name}" if self.historia_clinica else "Paciente Desconocido"
-        return f"Consulta de {paciente_str} el {self.fecha_hora_consulta.strftime('%d-%m-%Y %H:%M')}"
+        paciente_str = (
+            _paciente_label(self.historia_clinica.paciente)
+            if self.historia_clinica_id
+            else "Paciente desconocido"
+        )
+        medico_str = (
+            f"Dr. {self.medico.apellido}" if (self.medico and self.medico.apellido) else "Sin médico"
+        )
+        fecha_str = self.fecha_hora_consulta.strftime('%Y-%m-%d %H:%M') if self.fecha_hora_consulta else "Sin fecha"
+        return f"Consulta de {paciente_str} con {medico_str} - {fecha_str}"
 
 
 # Modelo para Catálogo de Síntomas (útil para estandarizar datos para IA)
@@ -166,7 +202,13 @@ class Tratamiento(models.Model):
         ordering = ['fecha_registro', 'tipo_tratamiento']
 
     def __str__(self):
-        return f"{self.tipo_tratamiento} para {self.consulta.historia_clinica.paciente.user.last_name} ({self.consulta.fecha_hora_consulta.strftime('%d-%m-%Y')})"
+        paciente_str = (
+            _paciente_label(self.consulta.historia_clinica.paciente)
+            if self.consulta and self.consulta.historia_clinica_id
+            else "Paciente desconocido"
+        )
+        fecha_str = self.consulta.fecha_hora_consulta.strftime('%Y-%m-%d') if (self.consulta and self.consulta.fecha_hora_consulta) else "Sin fecha"
+        return f"{self.get_tipo_tratamiento_display()} - {paciente_str} ({fecha_str})"
 
 
 # NUEVO: Modelo para Prescripciones Médicas
@@ -180,7 +222,7 @@ class Prescripcion(models.Model):
     )
     medicamento = models.ForeignKey(
         'catalogos.Medicamento',
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,  # Integridad histórica: no borrar medicamentos con prescripciones
         verbose_name="Medicamento"
     )
     dosis = models.CharField(max_length=100, verbose_name="Dosis")
@@ -201,7 +243,12 @@ class Prescripcion(models.Model):
         ordering = ['-fecha_prescripcion']
 
     def __str__(self):
-        return f"{self.medicamento.nombre} - {self.consulta.historia_clinica.paciente.user.last_name} ({self.fecha_prescripcion.strftime('%d-%m-%Y')})"
+        # Formato legible: "Ibuprofeno 600mg - Cada 8hs"
+        medicamento_str = self.medicamento.nombre if self.medicamento else "Medicamento desconocido"
+        concentracion_str = self.medicamento.concentracion if self.medicamento else ""
+        dosis_str = f"{concentracion_str} - {self.dosis}" if concentracion_str else self.dosis
+        frecuencia_str = f" - {self.frecuencia}" if self.frecuencia else ""
+        return f"{medicamento_str} {dosis_str}{frecuencia_str}"
 
 
 # NUEVO: Modelo para Internaciones
@@ -281,19 +328,21 @@ class Internacion(models.Model):
         ordering = ['-fecha_ingreso']
     
     def __str__(self):
-        return f"Internación {self.numero_internacion} - {self.paciente.user.last_name} ({self.estado})"
-    
+        paciente_str = _paciente_label(self.paciente)
+        return f"Internación {self.numero_internacion} - {paciente_str} ({self.estado})"
+
     def save(self, *args, **kwargs):
         # Generar número de internación automáticamente si no existe
         if not self.numero_internacion:
-            from datetime import datetime
-            fecha_actual = datetime.now()
-            # Formato: INT-YYYYMMDD-XXX (donde XXX es un número secuencial)
+            # ``timezone.now()`` respeta USE_TZ; antes se usaba
+            # ``datetime.now()`` (naive) lo cual podía generar warnings y
+            # comportamientos inconsistentes según la zona horaria activa.
+            fecha_actual = timezone.now()
             prefijo = f"INT-{fecha_actual.strftime('%Y%m%d')}"
             ultima_internacion = Internacion.objects.filter(
                 numero_internacion__startswith=prefijo
             ).order_by('-numero_internacion').first()
-            
+
             if ultima_internacion:
                 try:
                     ultimo_numero = int(ultima_internacion.numero_internacion.split('-')[-1])
@@ -302,19 +351,17 @@ class Internacion(models.Model):
                     nuevo_numero = 1
             else:
                 nuevo_numero = 1
-            
+
             self.numero_internacion = f"{prefijo}-{nuevo_numero:03d}"
-        
+
         super().save(*args, **kwargs)
-    
+
     @property
     def duracion_dias(self):
-        """Calcula la duración de la internación en días"""
+        """Calcula la duración de la internación en días."""
         if self.fecha_alta:
             return (self.fecha_alta - self.fecha_ingreso).days
-        else:
-            from datetime import datetime
-            return (datetime.now() - self.fecha_ingreso).days
+        return (timezone.now() - self.fecha_ingreso).days
     
     @property
     def centro_fisico(self):
