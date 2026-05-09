@@ -1,103 +1,269 @@
 from django.db import models
 from pacientes.models import Paciente
 from medicos.models import Medico
-from medicos.models import Especialidad
-from catalogos.models import CentroFisico, TipoAtencion
-from datetime import timedelta # Importamos timedelta para operaciones con tiempo
+from catalogos.models import ProcedimientoCatalogo, EstudioDiagnostico
 
-class Turno(models.Model):
-    # Relaciones con Paciente y Medico
+
+class TimestampedModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class Recurso(TimestampedModel):
+    """
+    Representa un recurso físico agendable (consultorio, quirófano, sala de hemodinamia).
+    Define la capacidad y el tipo de atención que se puede realizar.
+    """
+
+    class Ubicacion(models.TextChoices):
+        CEHTA = 'CEHTA', 'CEHTA'
+        ICPL = 'ICPL', 'ICPL'
+
+    class TipoRecurso(models.TextChoices):
+        CONSULTORIO = 'CONSULTORIO', 'Consultorio Ambulatorio'
+        SALA_PROCEDIMIENTO = 'SALA_PROCEDIMIENTO', 'Sala de Procedimiento/Estudio'
+        SALA_HEMODINAMIA = 'SALA_HEMODINAMIA', 'Sala de Hemodinamia'
+        QUIROFANO = 'QUIROFANO', 'Quirófano'
+
+    nombre = models.CharField(max_length=100, unique=True)
+    ubicacion = models.CharField(max_length=10, choices=Ubicacion.choices)
+    tipo_recurso = models.CharField(max_length=30, choices=TipoRecurso.choices, db_index=True)
+    activo = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Recurso: {self.nombre} ({self.get_ubicacion_display()}) - {self.get_tipo_recurso_display()}"
+
+
+class Turno(TimestampedModel):
+    """
+    Representa una reserva logística de tiempo y recursos.
+    """
+    
+    class Estado(models.TextChoices):
+        DISPONIBLE = 'DISPONIBLE', 'Disponible'
+        RESERVADO = 'RESERVADO', 'Reservado'
+        CONFIRMADO = 'CONFIRMADO', 'Confirmado'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+        REALIZADO = 'REALIZADO', 'Realizado'
+
     paciente = models.ForeignKey(
         Paciente,
-        on_delete=models.CASCADE,
-        related_name='turnos',
-        verbose_name="Paciente",
+        on_delete=models.SET_NULL,
         null=True,
-        blank=True
+        blank=True,
+        related_name="turnos"
     )
     medico = models.ForeignKey(
         Medico,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='turnos',
-        verbose_name="Médico"
+        related_name="turnos"
     )
-    especialidad = models.ForeignKey(
-        Especialidad,
-        on_delete=models.SET_NULL,
+    recurso = models.ForeignKey(
+        'Recurso',
+        on_delete=models.CASCADE,
+        related_name="turnos",
         null=True,
-        blank=True,
-        verbose_name="Especialidad del Turno"
+        blank=True
     )
-    
-    # NUEVO: Centro físico y tipo de atención
-    centro_fisico = models.ForeignKey(
-        CentroFisico,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='turnos',
-        verbose_name="Centro Físico"
-    )
-    tipo_atencion = models.ForeignKey(
-        TipoAtencion,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='turnos',
-        verbose_name="Tipo de Atención"
-    )
-
-    # Información del turno
-    fecha_hora = models.DateTimeField(verbose_name="Fecha y Hora del Turno", null=True, blank=True)
-    fecha_hora_inicio = models.DateTimeField(verbose_name="Fecha y Hora de Inicio")
-    # Campo de fecha_hora_fin, ahora opcional en DB y formulario
-    fecha_hora_fin = models.DateTimeField(blank=True, null=True, verbose_name="Fecha y Hora de Fin")
-    motivo_consulta = models.TextField(blank=True, null=True, verbose_name="Motivo de Consulta")
-
-    # Estado del turno
-    ESTADO_CHOICES = [
-        ('DISPONIBLE', 'Disponible'),
-        ('RESERVADO', 'Reservado'),
-        ('CONFIRMADO', 'Confirmado'),
-        ('REALIZADO', 'Realizado'),
-        ('CANCELADO', 'Cancelado'),
-        ('REAGENDADO', 'Reagendado'),
-    ]
+    fecha_hora_inicio = models.DateTimeField(db_index=True)
+    fecha_hora_fin = models.DateTimeField(null=True, blank=True)
     estado = models.CharField(
         max_length=20,
-        choices=ESTADO_CHOICES,
-        default='DISPONIBLE',
-        verbose_name="Estado del Turno"
+        choices=Estado.choices,
+        default=Estado.DISPONIBLE,
+        db_index=True
     )
-
-    # Campos para IA/Análisis de datos (futuro)
-    notas_administrativas = models.TextField(blank=True, null=True, verbose_name="Notas Administrativas")
-
-    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Creación")
-    ultima_modificacion = models.DateTimeField(auto_now=True, verbose_name="Última Modificación")
-
+    motivo_reserva = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        verbose_name = "Turno"
-        verbose_name_plural = "Turnos"
         ordering = ['fecha_hora_inicio']
-        # unique_together = ('medico', 'fecha_hora_inicio') # Puedes mantenerlo si quieres asegurar que un médico no tenga dos turnos exactamente a la misma hora
+
+    def clean(self):
+        """
+        Validación: Si fecha_hora_fin se provee, debe ser mayor a fecha_hora_inicio.
+        """
+        from django.core.exceptions import ValidationError
+        
+        if self.fecha_hora_fin and self.fecha_hora_inicio:
+            if self.fecha_hora_fin <= self.fecha_hora_inicio:
+                raise ValidationError({
+                    'fecha_hora_fin': 'La fecha/hora de fin debe ser posterior a la fecha/hora de inicio.'
+                })
+    
+    def save(self, *args, **kwargs):
+        """
+        Sobrescribe save() para ejecutar validaciones automáticamente.
+        """
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        paciente_str = f"{self.paciente.apellido}, {self.paciente.nombre}" if self.paciente else "Sin Paciente"
-        medico_str = f"Dr. {self.medico.apellido}" if self.medico else "Médico Desconocido"
-        return f"Turno de {paciente_str} con {medico_str} el {self.fecha_hora_inicio.strftime('%d-%m-%Y %H:%M')} ({self.estado})"
+        paciente_str = f"{self.paciente.apellido}, {self.paciente.nombre}" if self.paciente else "Sin paciente"
+        recurso_str = self.recurso.nombre if self.recurso else "Sin recurso"
+        fecha_str = self.fecha_hora_inicio.strftime('%Y-%m-%d %H:%M') if self.fecha_hora_inicio else "Sin fecha"
+        return f"Turno #{self.id} ({paciente_str}) - {recurso_str} - {fecha_str}"
 
-    # --- AÑADIR ESTE MÉTODO save() ---
-    def save(self, *args, **kwargs):
-        # Si fecha_hora está establecida pero fecha_hora_inicio no, la copiamos
-        if self.fecha_hora and not self.fecha_hora_inicio:
-            self.fecha_hora_inicio = self.fecha_hora
-        
-        # Si la fecha_hora_fin no está establecida, la calculamos
-        if self.fecha_hora_inicio and not self.fecha_hora_fin:
-            # Duración predeterminada: 1 hora
-            self.fecha_hora_fin = self.fecha_hora_inicio + timedelta(hours=1)
-        super().save(*args, **kwargs) # Llama al método save original del modelo
+
+class Atencion(TimestampedModel):
+    """
+    Contenedor principal para un encuentro clínico. Se crea cuando un turno
+    se admite y vincula todos los registros médicos asociados.
+    """
+    
+    class TipoIntervencion(models.TextChoices):
+        CONSULTA = 'CONSULTA', 'Consulta'
+        ESTUDIO = 'ESTUDIO', 'Estudio'
+        PROCEDIMIENTO = 'PROCEDIMIENTO', 'Procedimiento'
+        CIRUGIA = 'CIRUGIA', 'Cirugía'
+
+    class EstadoClinico(models.TextChoices):
+        ABIERTA = 'ABIERTA', 'Abierta'
+        FINALIZADA = 'FINALIZADA', 'Finalizada'
+        EN_REVISION = 'EN_REVISION', 'En revisión'
+
+    turno = models.OneToOneField(
+        Turno,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="atencion"
+    )
+    paciente = models.ForeignKey(
+        Paciente,
+        on_delete=models.PROTECT,
+        related_name="atenciones"
+    )
+    medico_principal = models.ForeignKey(
+        Medico,
+        on_delete=models.PROTECT,
+        related_name="atenciones_lideradas"
+    )
+    fecha_admision = models.DateTimeField(auto_now_add=True, db_index=True)
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    tipo_atencion = models.CharField(max_length=30, choices=Recurso.TipoRecurso.choices)
+    tipo_intervencion = models.CharField(
+        max_length=20,
+        choices=TipoIntervencion.choices,
+        default=TipoIntervencion.CONSULTA
+    )
+    estado_clinico = models.CharField(
+        max_length=20,
+        choices=EstadoClinico.choices,
+        default=EstadoClinico.ABIERTA
+    )
+    observaciones_generales = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        paciente_str = f"{self.paciente.apellido}, {self.paciente.nombre}" if self.paciente else "Sin paciente"
+        medico_str = f"Dr. {self.medico_principal.apellido}" if self.medico_principal else "Sin médico"
+        fecha_str = self.fecha_admision.strftime('%Y-%m-%d') if self.fecha_admision else "Sin fecha"
+        return f"Atención #{self.id} - {paciente_str} con {medico_str} - {fecha_str} ({self.get_estado_clinico_display()})"
+
+
+class ConsultaAmbulatoria(TimestampedModel):
+    """
+    Registro específico para una consulta ambulatoria.
+    """
+
+    atencion = models.OneToOneField(Atencion, on_delete=models.CASCADE, primary_key=True, related_name="consulta_ambulatoria")
+    anamnesis = models.TextField(blank=True, null=True)
+    examen_fisico = models.TextField(blank=True, null=True)
+    diagnostico_presuntivo = models.TextField(blank=True, null=True)
+    plan_manejo = models.TextField(blank=True, null=True)
+    antecedentes_relevantes = models.TextField(blank=True, null=True)
+    alergias = models.TextField(blank=True, null=True)
+    medicacion_actual = models.TextField(blank=True, null=True)
+    diagnostico_definitivo = models.TextField(blank=True, null=True)
+    observaciones_medicas = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Consulta de Atención {self.atencion_id}"
+
+
+class RegistroProcedimiento(TimestampedModel):
+    """
+    Registro para estudios y procedimientos (ej. Eco Doppler, Estudios).
+    """
+
+    atencion = models.OneToOneField(Atencion, on_delete=models.CASCADE, primary_key=True, related_name="registro_procedimiento")
+    descripcion_procedimiento = models.CharField(max_length=255)
+    informe_medico = models.TextField(blank=True, null=True)
+    hallazgos = models.TextField(blank=True, null=True)
+    estudio = models.ForeignKey(
+        EstudioDiagnostico,
+        on_delete=models.SET_NULL,
+        related_name='registros_procedimiento',
+        null=True,
+        blank=True
+    )
+    procedimiento = models.ForeignKey(
+        ProcedimientoCatalogo,
+        on_delete=models.SET_NULL,
+        related_name='registros_procedimiento',
+        null=True,
+        blank=True
+    )
+    profesional_asistente = models.ForeignKey(
+        Medico,
+        on_delete=models.SET_NULL,
+        related_name='procedimientos_asistente',
+        null=True,
+        blank=True
+    )
+
+    class TipoProcedimiento(models.TextChoices):
+        DIAGNOSTICO = 'DIAGNOSTICO', 'Diagnóstico'
+        TERAPEUTICO = 'TERAPEUTICO', 'Terapéutico'
+
+    tipo_procedimiento = models.CharField(
+        max_length=20,
+        choices=TipoProcedimiento.choices,
+        null=True,
+        blank=True
+    )
+    complicaciones = models.TextField(blank=True, null=True)
+    adjunto_resultado = models.FileField(upload_to='emr/procedimientos/', blank=True, null=True)
+
+    def __str__(self):
+        return f"Procedimiento de Atención {self.atencion_id}"
+
+
+class RegistroQuirurgico(TimestampedModel):
+    """
+    Registro específico para intervenciones de Hemodinamia y Cirugía.
+    """
+
+    atencion = models.OneToOneField(Atencion, on_delete=models.CASCADE, primary_key=True, related_name="registro_quirurgico")
+    anestesista = models.ForeignKey(Medico, on_delete=models.PROTECT, related_name="anestesias_realizadas")
+    diagnostico_preoperatorio = models.TextField()
+    protocolo_quirurgico = models.TextField()
+    recuento_instrumental_ok = models.BooleanField(default=False)
+    procedimiento = models.ForeignKey(
+        ProcedimientoCatalogo,
+        on_delete=models.SET_NULL,
+        related_name='registros_quirurgicos',
+        null=True,
+        blank=True
+    )
+    diagnostico_postoperatorio = models.TextField(blank=True, null=True)
+    hallazgos_operatorios = models.TextField(blank=True, null=True)
+    complicaciones = models.TextField(blank=True, null=True)
+    equipo_quirurgico = models.JSONField(default=list, blank=True)
+    consentimiento_informado = models.FileField(
+        upload_to='emr/consentimientos/',
+        blank=True,
+        null=True
+    )
+    documentos_adjuntos = models.ManyToManyField(
+        'emr.Documento',
+        related_name='registros_quirurgicos',
+        blank=True
+    )
+
+    def __str__(self):
+        return f"Cirugía de Atención {self.atencion_id}"
