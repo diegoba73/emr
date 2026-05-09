@@ -36,7 +36,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """
-    Serializer para la gestión de usuarios por administradores
+    Serializer para la gestión de usuarios por administradores.
+
+    **Política de hardening (anti privilege-escalation):**
+
+    - ``is_superuser``, ``is_staff`` y ``rol='admin'`` solo pueden ser asignados
+      o modificados por un usuario que ya es ``superuser``.
+    - Un staff regular (``is_staff=True`` pero no superuser) puede crear/editar
+      usuarios no privilegiados (roles ``paciente``/``medico``/``secretaria``/
+      ``enfermeria``/``laboratorio``) pero NO escalar privilegios propios ni
+      ajenos.
+    - El password es ``write_only`` y se valida con ``validate_password``.
     """
     password = serializers.CharField(
         write_only=True,
@@ -70,11 +80,75 @@ class UserSerializer(serializers.ModelSerializer):
             'password': {'write_only': True, 'required': False},
             'password_confirm': {'write_only': True, 'required': False},
         }
-    
+
+    # ------------------------------------------------------------------
+    # Helpers internos (anti privilege-escalation)
+    # ------------------------------------------------------------------
+    def _request_user(self):
+        """Devuelve el ``request.user`` del context, o ``None`` si no aplica.
+
+        Cuando el serializer se invoca desde un test/script sin request,
+        ``context['request']`` puede no existir. En ese caso devolvemos
+        ``None`` y los validadores de privilegio bloquean por defecto
+        cualquier intento de escalada (modo seguro).
+        """
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        return getattr(request, 'user', None)
+
+    def _is_actor_superuser(self) -> bool:
+        actor = self._request_user()
+        return bool(actor and getattr(actor, 'is_authenticated', False) and getattr(actor, 'is_superuser', False))
+
+    def _value_changes(self, attrs: dict, field: str, target_value) -> bool:
+        """``True`` si el set explícito de ``field`` cambia respecto a la instancia.
+
+        Para creación (``self.instance is None``) considera "cambio" cualquier
+        valor truthy distinto del default seguro. Para edición, compara con
+        el valor actual de la instancia.
+        """
+        if field not in attrs:
+            return False
+        new_value = attrs[field]
+        if self.instance is None:
+            # Creación: marcar como escalada si se intenta True (booleans) o
+            # 'admin' (rol). El default seguro se asume falsy/no-admin.
+            if isinstance(target_value, bool):
+                return bool(new_value) is True
+            return new_value == target_value
+        current = getattr(self.instance, field, None)
+        return new_value != current and (
+            (isinstance(target_value, bool) and bool(new_value) is True) or
+            new_value == target_value
+        )
+
+    # ------------------------------------------------------------------
+    # Validators contextuales (require superuser)
+    # ------------------------------------------------------------------
     def validate(self, attrs):
         """
         Validación personalizada para el serializer
         """
+        # ----- Anti privilege-escalation -----
+        # Solo un superuser puede crear o promover otro superuser, otorgar
+        # ``is_staff`` o asignar ``rol='admin'``. Esto se verifica antes de
+        # cualquier otra validación para que un actor no privilegiado reciba
+        # un 400 explícito y nunca llegue a persistir.
+        actor_is_superuser = self._is_actor_superuser()
+
+        if not actor_is_superuser:
+            if self._value_changes(attrs, 'is_superuser', True):
+                raise serializers.ValidationError({
+                    'is_superuser': 'Solo un superuser puede asignar este flag.'
+                })
+            if self._value_changes(attrs, 'is_staff', True):
+                raise serializers.ValidationError({
+                    'is_staff': 'Solo un superuser puede asignar este flag.'
+                })
+            if self._value_changes(attrs, 'rol', 'admin'):
+                raise serializers.ValidationError({
+                    'rol': "Solo un superuser puede asignar el rol 'admin'."
+                })
+
         # Verificar que las contraseñas coincidan (solo si se proporcionan)
         password = attrs.get('password')
         password_confirm = attrs.get('password_confirm')

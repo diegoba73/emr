@@ -1,13 +1,16 @@
-"""
-Tests mínimos del rol `laboratorio`: modelo, serializers y rutas auth/JWT declaradas.
+"""Tests mínimos del rol ``laboratorio``: modelo, serializers y JWT.
 
-No cubre permisos LIMS ni ViewSets de laboratorio.
+No cubre permisos LIMS ni ViewSets de laboratorio. El test de JWT no
+depende del montaje global de ``usuarios.urls`` (deliberadamente fuera de
+``synesis/urls.py`` por hardening pendiente): usa ``APIRequestFactory``
+contra ``CustomTokenObtainPairView`` directamente.
 """
 import pytest
 from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 
 from usuarios.serializers import UserSerializer
+from usuarios.views import CustomTokenObtainPairView
 
 User = get_user_model()
 
@@ -77,22 +80,25 @@ class TestLaboratorioRoleAuthEndpoints:
         assert r_me.status_code == 200
         assert r_me.json()['rol'] == 'laboratorio'
 
-    def test_jwt_token_incluye_rol_laboratorio(self, client, usuario_laboratorio):
-        r_token = client.post(
-            '/api/usuarios/token/',
+    def test_jwt_token_incluye_rol_laboratorio(self, usuario_laboratorio):
+        """Verifica el payload JWT sin depender de ``/api/usuarios/token/``.
+
+        ``usuarios.urls`` no está montado en ``synesis/urls.py`` (decisión
+        deliberada hasta cerrar el bloque de hardening). Para no acoplar el
+        test al routing global, invocamos la vista directamente con
+        ``APIRequestFactory``.
+        """
+        factory = APIRequestFactory()
+        view = CustomTokenObtainPairView.as_view()
+        request = factory.post(
+            '/token/',
             {'username': 'lab_auth_user', 'password': 'secret123!'},
             format='json',
         )
-        assert r_token.status_code == 200
-        payload = r_token.json()
+        response = view(request)
+        response.render()
+        assert response.status_code == 200, response.data
+        payload = response.data
         assert 'access' in payload
+        assert 'refresh' in payload
         assert payload['user']['rol'] == 'laboratorio'
-
-        client.credentials(HTTP_AUTHORIZATION=f"Bearer {payload['access']}")
-        r_refresh = client.post(
-            '/api/usuarios/token/refresh/',
-            {'refresh': payload['refresh']},
-            format='json',
-        )
-        assert r_refresh.status_code == 200
-        assert 'access' in r_refresh.json()
