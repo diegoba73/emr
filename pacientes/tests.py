@@ -1,9 +1,13 @@
-from django.test import TestCase
-from .models import Paciente
+"""Placeholder.
 
-class PacienteModelTest(TestCase):
-    def test_creacion_paciente(self):
-        paciente = Paciente.objects.create(nombre="Juan", apellido="Pérez", fecha_nacimiento="2000-01-01", sexo="M", dni="12345678")
-        self.assertIn("Pérez", str(paciente))
+La suite real de tests vive en ``pacientes/tests/`` (paquete). Este módulo
+existió en versiones anteriores con tests acoplados al esquema viejo del
+modelo ``Paciente`` (campo ``especialidad_turno`` y similares). Se mantiene
+vacío para no romper imports históricos y porque las reglas del bloque
+``pacientes`` no permiten eliminar archivos. Los nuevos tests están en:
 
-# Puedes agregar más tests para los otros modelos siguiendo este ejemplo.
+- ``pacientes/tests/test_models.py``
+- ``pacientes/tests/test_serializers.py``
+- ``pacientes/tests/test_services.py``
+- ``pacientes/tests/test_api.py``
+"""

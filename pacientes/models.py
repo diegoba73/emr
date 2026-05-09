@@ -2,30 +2,33 @@ from django.db import models
 from django.conf import settings
 
 class Paciente(models.Model):
-    # Relación con el usuario del sistema (opcional)
+    """
+    Modelo para pacientes del sistema.
+    Almacena TODA la información del paciente directamente en esta tabla.
+    La relación con User es opcional.
+    """
+    # Relación con el usuario del sistema (OPCIONAL)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name='paciente',
         verbose_name="Usuario del Sistema",
-        null=True,
-        blank=True
+        blank=True,
+        null=True
     )
     
-    # Información personal básica
-    nombre = models.CharField(max_length=100, verbose_name="Nombre", default="")
-    apellido = models.CharField(max_length=100, verbose_name="Apellido", default="")
+    # Información personal del paciente (almacenada directamente en esta tabla)
+    nombre = models.CharField(max_length=100, verbose_name="Nombre", null=True, blank=True)
+    apellido = models.CharField(max_length=100, verbose_name="Apellido", null=True, blank=True)
     dni = models.CharField(max_length=20, unique=True, verbose_name="DNI / Documento")
-    fecha_nacimiento = models.DateField(null=True, blank=True, verbose_name="Fecha de Nacimiento")
+    fecha_nacimiento = models.DateField(blank=True, null=True, verbose_name="Fecha de Nacimiento")
     sexo = models.CharField(
         max_length=1,
-        choices=[('M', 'Masculino'), ('F', 'Femenino')],
-        null=True,
+        choices=[('M', 'Masculino'), ('F', 'Femenino'), ('O', 'Otro')],
         blank=True,
+        null=True,
         verbose_name="Sexo"
     )
-    
-    # Información de contacto
     telefono = models.CharField(max_length=20, blank=True, null=True, verbose_name="Teléfono")
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
     direccion = models.TextField(blank=True, null=True, verbose_name="Dirección")
@@ -46,19 +49,40 @@ class Paciente(models.Model):
     class Meta:
         verbose_name = "Paciente"
         verbose_name_plural = "Pacientes"
-        ordering = ['user__last_name', 'user__first_name']
+        ordering = ['apellido', 'nombre']
+        indexes = [
+            models.Index(fields=['apellido'], name='paciente_apellido_idx'),
+            models.Index(fields=['nombre'], name='paciente_nombre_idx'),
+        ]
 
     def __str__(self):
         return f"{self.apellido}, {self.nombre} ({self.dni})"
     
     @property
     def nombre_completo(self):
-        return f"{self.nombre} {self.apellido}"
-    
+        """Nombre completo del paciente. Tolera valores ``None``.
+
+        Si ``nombre`` y ``apellido`` están vacíos, devuelve ``"Paciente {dni}"``
+        para que la UI nunca muestre la cadena literal ``"None None"``.
+        """
+        nombre = (self.nombre or "").strip()
+        apellido = (self.apellido or "").strip()
+        completo = f"{nombre} {apellido}".strip()
+        return completo or f"Paciente {self.dni}"
+
     @property
     def edad(self):
-        if self.fecha_nacimiento:
-            from datetime import date
-            today = date.today()
-            return today.year - self.fecha_nacimiento.year - ((today.month, today.day) < (self.fecha_nacimiento.month, self.fecha_nacimiento.day))
-        return None
+        """Calcula la edad del paciente en años cumplidos.
+
+        Devuelve ``None`` si no hay fecha de nacimiento. Si la fecha es futura,
+        el resultado puede ser ``0`` o negativo (caso borde explícito).
+        """
+        fecha_nac = self.fecha_nacimiento
+        if not fecha_nac:
+            return None
+        from datetime import date
+
+        today = date.today()
+        return today.year - fecha_nac.year - (
+            (today.month, today.day) < (fecha_nac.month, fecha_nac.day)
+        )
