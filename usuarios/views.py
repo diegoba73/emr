@@ -8,6 +8,8 @@ Hardening aplicado en este módulo (sin tocar routing global):
 - ``UserViewSet.bulk_activate``/``bulk_deactivate`` intersectan los IDs
   recibidos con ``self.get_queryset()`` para que un staff regular no pueda
   alcanzar superusers no visibles.
+- ``UserViewSet.destroy`` está bloqueado (405): no se permite borrado físico
+  de usuarios (trazabilidad y FKs); usar ``activate``/``deactivate``.
 - ``UserProfileViewSet.destroy`` está bloqueado (405). El perfil contiene
   PHI (alergias, medicamentos, contacto de emergencia) y no debe poder
   borrarse físicamente vía API.
@@ -103,6 +105,9 @@ class UserViewSet(viewsets.ModelViewSet):
     Anti-escalada en serializer y en bulk actions: aunque ``IsAdminUser``
     permita el acceso, ningún actor no-superuser puede modificar superusers
     ni escalarse a sí mismo (ver ``UserSerializer.validate``).
+
+    ``destroy`` (DELETE) está deshabilitado: no hay borrado físico vía API;
+    use las acciones ``activate`` / ``deactivate``.
     """
 
     queryset = User.objects.all()
@@ -154,6 +159,16 @@ class UserViewSet(viewsets.ModelViewSet):
                 module="usuarios",
                 metadata={"view": "UserViewSet.perform_update"},
             )
+
+    def destroy(self, request, *args, **kwargs):
+        """Bloquea DELETE físico del modelo User (auditoría e integridad referencial)."""
+        raise MethodNotAllowed(
+            "DELETE",
+            detail=(
+                "El borrado físico de usuarios no está permitido. "
+                "Use desactivación para preservar trazabilidad."
+            ),
+        )
 
     # ------------------------------------------------------------------
     # Actions

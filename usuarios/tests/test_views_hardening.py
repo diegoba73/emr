@@ -3,6 +3,8 @@
 Cubre, sin depender del routing global de ``usuarios.urls``:
 - ``UserViewSet.bulk_activate``/``bulk_deactivate`` respetan ``get_queryset``
   (un staff regular no puede tocar superusers);
+- ``UserViewSet.destroy`` devuelve 405 (sin borrado físico de User);
+- ``activate``/``deactivate`` siguen operativos;
 - ``UserProfileViewSet.destroy`` devuelve 405;
 - usuario común solo ve su propio perfil;
 - password no aparece en respuestas (``UserListSerializer`` /
@@ -108,6 +110,69 @@ class TestUserViewSetBulkRespectsQueryset:
         paciente_objetivo.refresh_from_db()
         assert superuser_objetivo.is_active is False  # intacto (no visible)
         assert paciente_objetivo.is_active is True  # afectado
+
+
+# ---------------------------------------------------------------------------
+# UserViewSet — DELETE bloqueado; activate/deactivate intactos
+# ---------------------------------------------------------------------------
+@pytest.mark.django_db
+class TestUserViewSetDestroyHardening:
+    @pytest.fixture
+    def staff_actor(self):
+        return User.objects.create_user(
+            username='hard_del_staff',
+            email='hard_del_staff@hd.test',
+            password='Sup3rStr0ng!Pass',
+            rol='secretaria',
+            is_staff=True,
+            is_superuser=False,
+        )
+
+    @pytest.fixture
+    def target_user(self):
+        return User.objects.create_user(
+            username='hard_del_target',
+            email='hard_del_target@hd.test',
+            password='Sup3rStr0ng!Pass',
+            rol='paciente',
+            is_active=True,
+        )
+
+    def test_destroy_devuelve_405_conserva_usuario_y_is_active(self, staff_actor, target_user):
+        uid = target_user.id
+        is_active_before = target_user.is_active
+        factory = APIRequestFactory()
+        request = factory.delete(f'/dummy/{uid}/')
+        force_authenticate(request, user=staff_actor)
+        view = UserViewSet.as_view({'delete': 'destroy'})
+        response = view(request, pk=uid)
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert User.objects.filter(pk=uid).exists()
+        target_user.refresh_from_db()
+        assert target_user.is_active == is_active_before
+
+    def test_activate_sigue_funcionando(self, staff_actor, target_user):
+        target_user.is_active = False
+        target_user.save(update_fields=['is_active'])
+        factory = APIRequestFactory()
+        request = factory.post(f'/dummy/{target_user.pk}/activate/')
+        force_authenticate(request, user=staff_actor)
+        view = UserViewSet.as_view({'post': 'activate'})
+        response = view(request, pk=target_user.pk)
+        assert response.status_code == status.HTTP_200_OK, getattr(response, 'data', response)
+        target_user.refresh_from_db()
+        assert target_user.is_active is True
+
+    def test_deactivate_sigue_funcionando(self, staff_actor, target_user):
+        assert target_user.is_active is True
+        factory = APIRequestFactory()
+        request = factory.post(f'/dummy/{target_user.pk}/deactivate/')
+        force_authenticate(request, user=staff_actor)
+        view = UserViewSet.as_view({'post': 'deactivate'})
+        response = view(request, pk=target_user.pk)
+        assert response.status_code == status.HTTP_200_OK, getattr(response, 'data', response)
+        target_user.refresh_from_db()
+        assert target_user.is_active is False
 
 
 # ---------------------------------------------------------------------------
