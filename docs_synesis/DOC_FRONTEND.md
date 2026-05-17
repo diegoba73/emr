@@ -93,3 +93,57 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 - Ubicación y stack del cliente EMR+LIMS real (React, otro).
 - Si Storybook o assets estáticos existen fuera del repo.
+
+---
+
+## Frontend EMR+LIMS (submódulo `frontend/`) — actualización UI-2
+
+> Las secciones anteriores de este documento reflejan un escaneo previo sin SPA. La aplicación React vive en el **submódulo Git** `frontend/` (commit UI-2: `d46d276`). Repo padre referencia ese commit en `4de661d`.
+
+**Stack:** React + TypeScript + MUI + React Router; cliente HTTP con sesión/cookies; tests CRA/Jest.
+
+### Rutas LIMS — UI-2 Microbiología
+
+| Ruta | Componente |
+|------|----------------|
+| `/laboratorio/microbiologia` | `MicrobiologiaHub` (redirige a estudios) |
+| `/laboratorio/microbiologia/estudios` | `MicrobiologiaEstudios` |
+| `/laboratorio/microbiologia/estudios/:id` | `MicrobiologiaEstudioDetalle` (tabs) |
+| `/laboratorio/microbiologia/catalogos` | `MicrobiologiaCatalogos` |
+
+**UI-1 (sin cambios):** `/laboratorio/ordenes`, `/laboratorio/ordenes/:id`. No se modifica `/solicitudes` EMR.
+
+### Componentes principales (UI-2)
+
+- **Páginas:** `MicrobiologiaEstudios`, `MicrobiologiaEstudioDetalle`, `MicrobiologiaCatalogos`, `MicrobiologiaHub`.
+- **Panels (tabs detalle):** `EstudioMicroResumenTab`, `SiembrasLecturasPanel`, `AisladosIdentificacionPanel`, `AntibiogramaPanel`, `InformesMicrobiologiaPanel`.
+- **Badges:** `MicroBadges.tsx` (`EstudioMicrobiologiaEstadoBadge`, `AisladoEstadoBadge`, `AntibiogramaEstadoBadge`, `InformeMicrobiologiaEstadoBadge`, `InterpretacionAntibioticoBadge`).
+
+### Servicios API (cliente)
+
+- **`frontend/src/services/limsMicroApi.ts`:** prefijo canónico `/lab/microbiologia/...` (medios, estudios, siembras, lecturas, microorganismos, aislados, identificaciones, antibióticos, antibiogramas, resultados, informes + acciones `iniciar`, `cancelar`, `marcar_informado`, `descartar`, `completar`, `emitir`, `validar`, `anular`).
+- Re-export desde `limsApi.ts`; errores DRF vía `formatDrfError` (403 → toast, sin logout).
+
+### Permisos visuales (`frontend/src/utils/limsAccess.ts`)
+
+| Función | Quién |
+|---------|--------|
+| `canAccessMicrobiologia` | ADMIN, LABORATORIO, MEDICO (lectura) |
+| `canOperateMicrobiologia` | ADMIN, LABORATORIO |
+| `canValidarInformeMicro` | ADMIN |
+| `canEditMicroCatalogos` | ADMIN |
+
+Médico: sin acciones operativas. Backend sigue siendo fuente de verdad en 403.
+
+### Validaciones ejecutadas (UI-2, mayo 2026)
+
+```bash
+cd frontend && npx tsc --noEmit && npm run build
+CI=true npm test -- --watchAll=false --runInBand
+```
+
+Resultado: TypeScript OK, build OK, **11 suites / 25 tests** OK.
+
+### Fuera de alcance UI-2
+
+PDF, firma digital, QC/equipamiento, portal paciente, endpoints legacy `/solicitudes-examen/` y `/resultados-examen/`.

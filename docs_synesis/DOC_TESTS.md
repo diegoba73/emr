@@ -3,6 +3,8 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (rol laboratorio, tests LIMS API):** 2 de mayo de 2026  
 **Actualización (Fase A LIMS — máquina de estados):** 3 de mayo de 2026  
+**Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
+**Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
@@ -43,7 +45,21 @@
 
 ## Tests frontend
 
-**No detectados** (sin Jest/Vitest/Playwright config en repo).
+La suite vive en el **submódulo** `frontend/` (Create React App + Jest + Testing Library). No hay tests E2E de microbiología aún.
+
+**Comandos validados (UI-2, commit `d46d276`, mayo 2026):**
+
+```bash
+export PATH="$HOME/.nvm/versions/node/v18.20.8/bin:$PATH"  # si aplica
+cd frontend
+npx tsc --noEmit
+npm run build
+CI=true npm test -- --watchAll=false --runInBand
+```
+
+**Resultado documentado:** TypeScript OK, build OK, **11 test suites / 25 tests** passed (incluye regresión UI-1; **sin** tests unitarios dedicados a pantallas `Microbiologia*`).
+
+**Pendiente:** tests frontend específicos de microbiología (panels, permisos por rol, manejo 400/403).
 
 ---
 
@@ -138,6 +154,34 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 **Fase B0/B1:** `laboratorio/tests/test_muestras_models.py` (catálogos, `crear_muestra`, transiciones y coordinación solicitud); `laboratorio/tests/test_muestras_api.py` (permisos catálogo, CRUD muestra, acciones, PATCH `estado` ignorado, auditoría con `captureOnCommitCallbacks`).
 
 **Fase B2:** `laboratorio/tests/test_resultados_muestras_models.py` (FK muestra, integridad, `PROTECT`); `laboratorio/tests/test_resultados_muestras_api.py` (`cargar-resultados` con/sin `muestra_id`, `validar` con muestra válida/incompatible, permisos laboratorio vs médico).
+
+**Fase B4.1:** `laboratorio/tests/test_resultados_clinicos_models.py` (TipoExamen rangos/críticos/sección; ResultadoExamen numérico, snapshots, patológico/crítico, pendiente); `laboratorio/tests/test_resultados_clinicos_api.py` (payload viejo, `valor_numerico`, unidad default, cálculo patológico/crítico, validar, permisos laboratorio/médico).
+
+**Fase B3.1 (Microbiología base):**
+
+- `laboratorio/tests/test_microbiologia_models.py`: alta de `MedioCultivo` (incluido `codigo` único), creación de `EstudioMicrobiologia` con muestras `RECIBIDA`/`EN_PROCESO`, rechazo con muestras `PENDIENTE_TOMA`/`TOMADA`/`RECHAZADA`/`DESCARTADA`/`CANCELADA`, consistencia solicitud/paciente, validaciones de `SiembraMicrobiologia` (medio activo, misma muestra que el estudio) y `LecturaCultivo` (siembra y estudio coincidentes, no cancelados, fecha coherente).
+- `laboratorio/tests/test_microbiologia_api.py`: permisos del catálogo medios (admin escribe, laboratorio no), permisos sobre estudios/siembras/lecturas por rol (laboratorio opera, médico solo ve sus estudios, paciente/anónimo bloqueados), creación de estudio con auditoría `CREATE`, fallas con muestras inválidas, idempotencia de `iniciar`, cancelación con/sin motivo, PATCH sin cambio de `estado`, transiciones automáticas `SEMBRADO` / `LECTURA_PRELIMINAR`, bloqueos por estudio/siembra cancelados, aliases `/api/laboratorio/microbiologia/...`. Las aserciones de auditoría usan `captureOnCommitCallbacks(execute=True)` para materializar los eventos `on_commit`.
+
+**Fase B3.2 (Microorganismos / aislados / identificación):**
+
+- `laboratorio/tests/test_microbiologia_models.py` (clases nuevas `TestMicroorganismoModel`, `TestAisladoModel`, `TestIdentificacionModel`): alta de `Microorganismo` (con `codigo` único), creación de aislado desde lectura válida, validaciones (lectura del estudio incorrecto, estudio cancelado, microorganismo inactivo, `IDENTIFICADO` exige microorganismo), `requiere_antibiograma` se registra sin disparar antibiograma, creación de identificación, bloqueos por microorganismo inactivo y aislado descartado, y verificación end-to-end con el servicio `crear_identificacion` para confirmar que actualiza el aislado a `IDENTIFICADO` y el estudio a `IDENTIFICACION`.
+- `laboratorio/tests/test_microbiologia_api.py` (clases nuevas `TestMicroorganismoAPI`, `TestAisladoAPI`, `TestIdentificacionAPI`): catálogo de microorganismos (admin escribe, laboratorio no, paciente/anónimo bloqueados, alias), aislados (laboratorio crea, médico/paciente no, lectura de otro estudio rechazada, estudio cancelado bloquea, microorganismo inactivo bloquea, `descartar` con/sin motivo, PATCH no toca `estado`, alias), identificaciones (crea + actualiza aislado y estudio con auditoría `auto_identificacion`, microorganismo inactivo bloquea, aislado descartado y estudio cancelado bloquean, médico no crea, append-only via 405 en PATCH, alias). Continúa usando `captureOnCommitCallbacks(execute=True)` para auditoría.
+
+**Fase B3.3 (Antibiograma microbiológico):**
+
+- `laboratorio/tests/test_microbiologia_models.py` (clases nuevas `TestAntibioticoModel`, `TestAntibiogramaModel`, `TestResultadoAntibioticoModel`, `TestServiciosAntibiograma`): alta de `Antibiotico` con `codigo` único; creación de `Antibiograma` para aislado `IDENTIFICADO` y rechazo para aislados `SOSPECHADO`/`DESCARTADO` y para estudios `CANCELADO`; creación de `ResultadoAntibiotico` con interpretaciones válidas; bloqueo por antibiótico inactivo, interpretación inválida, antibiograma `COMPLETO`/`CANCELADO` y duplicado de antibiótico (UniqueConstraint); servicio `aplicar_completar_antibiograma` falla sin resultados, completa setea `fecha_resultado`; servicio `crear_antibiograma` mueve el estudio a `ANTIBIOGRAMA` y el primer resultado lleva el antibiograma a `EN_PROCESO`.
+- `laboratorio/tests/test_microbiologia_api.py` (clases nuevas `TestAntibioticoAPI`, `TestAntibiogramaAPI`, `TestResultadoAntibioticoAPI`): catálogo de antibióticos (admin escribe y desactiva con auditoría `actualizar_antibiotico`, laboratorio lista pero no crea, paciente/anónimo bloqueados, sin DELETE, alias `/api/laboratorio/microbiologia/antibioticos/`); antibiogramas (laboratorio crea con auditoría `crear_antibiograma` + `auto_antibiograma`, médico/paciente/anónimo bloqueados para crear, fallas 400 con aislado descartado/no identificado/estudio cancelado, completar sin resultados falla, cancelar con/sin motivo, PATCH bloqueado si `COMPLETO`, médico vinculado lee solo su antibiograma —ajeno 404—, alias); resultados (laboratorio carga con auditoría y avanza a `EN_PROCESO`, duplicar antibiótico 400, antibiótico inactivo 400, no se carga si antibiograma `COMPLETO`/`CANCELADO`, completar con resultados funciona, PATCH bloqueado si antibiograma `COMPLETO`, alias). Auditoría sigue verificada con `captureOnCommitCallbacks(execute=True)`.
+
+**Fase B3.4 (Informes microbiológicos):**
+
+- `laboratorio/tests/test_microbiologia_models.py` (`TestInformeMicrobiologiaModel`): informes preliminares múltiples; unicidad de `FINAL` vigente; emisión con texto obligatorio; completitud (lecturas, aislados, antibiograma `COMPLETO` cuando `requiere_antibiograma`); transiciones de estudio `LISTO_PARA_VALIDAR` / `VALIDADO` / `INFORMADO`; anulación con motivo; bloqueos PATCH tras `VALIDADO`; etc.
+- `laboratorio/tests/test_microbiologia_api.py` (`TestInformeMicrobiologiaAPI`): permisos lab/admin/médico/paciente; `validar` solo admin; `marcar-informado`; anulación con motivo; alias de rutas; auditoría con `captureOnCommitCallbacks(execute=True)`.
+
+**Fase B2.1:** ampliación de `laboratorio/tests/test_resultados_muestras_api.py`:
+- `test_carga_muestra_descartada_400`, `test_carga_muestra_cancelada_400` (matriz API completa de estados inválidos).
+- `test_carga_primer_resultado_transiciona_muestra_a_en_proceso` (transición automática `RECIBIDA→EN_PROCESO` + `EventoMuestra` + `AuditEvent`, usando `captureOnCommitCallbacks`).
+- `test_carga_segundo_resultado_misma_muestra_idempotente` (no duplica evento si muestra ya `EN_PROCESO`).
+- `test_validar_muestra_descartada_falla`, `test_validar_muestra_cancelada_falla`, `test_validar_releyendo_muestras_con_select_for_update` (TOCTOU defensivo: mutación de muestra entre carga y validar bloquea la validación).
 
 ---
 

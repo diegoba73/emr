@@ -4,6 +4,13 @@
 **Actualización (post-hardening LIMS):** 2 de mayo de 2026  
 **Actualización (post–Fase A máquina de estados LIMS):** 3 de mayo de 2026  
 **Actualización (Fase B2 LIMS — riesgo TOCTOU en `validar`):** 5 de mayo de 2026  
+**Actualización (Fase B2.1 LIMS — TOCTOU mitigado + transición auto):** 13 de mayo de 2026  
+**Actualización (Fase B3.1 LIMS — Microbiología base):** 13 de mayo de 2026  
+**Actualización (Fase B3.2 LIMS — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
+**Actualización (Fase B3.3 LIMS — Antibiograma microbiológico):** 13 de mayo de 2026  
+**Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
+**Actualización (Fase B4.1 LIMS — Resultados clínicos estructurados):** 16 de mayo de 2026  
+**Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
 
 **Alcance:** Consolidación de riesgos funcionales, técnicos y de seguridad detectados en el análisis estático del repositorio.
 
@@ -31,7 +38,20 @@
 
 ## Riesgos de frontend
 
-- **Ausencia de aplicación versionada** — imposible validar contrato UI/API ni regresiones de UX.
+- ~~**Ausencia de aplicación versionada**~~ — **parcialmente mitigado:** submódulo `frontend/` con consola LIMS UI-1/UI-1.2 y microbiología UI-2 (`d46d276`). Siguen sin tests E2E ni cobertura de pantallas micro.
+- **Drift UI/API:** el cliente usa prefijo `/lab/...`; el backend expone alias `/laboratorio/...` — documentar y no mezclar en nuevas pantallas.
+
+### Frontend UI-2 — Microbiología (deuda / riesgos pendientes)
+
+| Riesgo | Impacto | Mitigación sugerida |
+|--------|---------|---------------------|
+| Sin filtros server-side en detalle de estudio | Lentitud / carga excesiva con muchos registros | Query params `?estudio=` cuando el backend los exponga |
+| Alta de estudio con IDs manuales | Errores operativos, mala UX | Selector orden/muestra desde UI-1 |
+| `prompt()` para motivos | UX pobre, sin validación inline | Diálogos MUI con campo obligatorio |
+| Sin tests Jest de microbiología | Regresiones silenciosas en permisos y transiciones | Tests de `limsAccess` + smoke de panels |
+| PDF / firma / QC | Expectativa clínica no cubierta | Fuera de alcance UI-2; backend B3.4 ya lo marca |
+
+**No modificado en UI-2:** backend, migraciones, `/solicitudes` EMR, `integracion_lims`, endpoints legacy.
 
 ---
 
@@ -78,8 +98,8 @@
 - ~~String **`tecnico`** en EMR~~ — **retirado** de `IsEMRClinician` y `api/views.py`; `laboratorio` sigue acotado a LIMS (no añadido a permisos EMR generales).
 - Comparaciones de rol inconsistentes (mayúsculas/minúsculas), p. ej. en `solicitudes.views`.
 - Validación técnica / profesional **no** separada en estados distintos en LIMS nativo (un solo `VALIDADO`).
-- ~~Flujo **muestras/tubos** transaccional no modelado~~ — **parcialmente mitigado (B1/B2):** modelo `Muestra` + resultados asociables; **deuda:** orden puede validarse con resultados sin muestra si hay muestras activas en la solicitud (riesgo operativo hasta política explícita); **sin** transición automática muestra `RECIBIDA`→`EN_PROCESO` al cargar (B2.1).
-- **LIMS B2 — concurrencia en `validar` (TOCTOU):** al validar la orden (`SolicitudExamenViewSet.validar`), la comprobación del **estado** de la `Muestra` vinculada a cada `ResultadoExamen` **no** bloquea la fila `Muestra` con `select_for_update`. Existe una ventana **TOCTOU** teórica en la que otro proceso podría cambiar el estado de la muestra entre la lectura del estado y el cierre de la transacción de validación. **Hardening propuesto: B2.1** (p. ej. bloqueo/`SELECT … FOR UPDATE` sobre muestras referenciadas o re-validación inmediata antes del commit).
+- ~~Flujo **muestras/tubos** transaccional no modelado~~ — **mitigado (B1/B2/B2.1):** modelo `Muestra` + resultados asociables; transición automática `RECIBIDA`→`EN_PROCESO` al cargar primer resultado vinculado (B2.1). **Deuda remanente:** orden puede validarse con resultados sin muestra aunque existan muestras activas en la solicitud (política operativa explícita pendiente — no automatizado en B2.1).
+- ~~**LIMS B2 — concurrencia en `validar` (TOCTOU):**~~ **mitigado (B2.1):** la acción `SolicitudExamenViewSet.validar` ahora hace `Muestra.objects.select_for_update().filter(pk__in=<muestras_referenciadas>)` dentro de la misma `transaction.atomic()` antes de leer el estado de cada muestra. Esto bloquea cualquier mutación concurrente entre la lectura del estado y el cierre de la transacción de validación. **Limitación conocida:** se asume PostgreSQL en producción; SQLite ignora `select_for_update` (solo afecta tests locales no concurrentes); no se testeó concurrencia real con hilos.
 
 ---
 
@@ -140,3 +160,57 @@ Este documento las agrupa; detalle en módulos específicos.
 - Numerador `codigo_barra` (`MUE-YYYY-NNNNNN`) no usa bloqueo global explícito; bajo alta concurrencia podría requerir secuencia dedicada o bloqueo por año.
 - Estado `EN_PROCESO` en `Muestra` reservado para fases futuras (conservación admite `RECIBIDA` o `EN_PROCESO` en servicio).
 - Sin FK obligatoria resultado↔muestra: riesgo de desalineación operativa hasta B2.
+
+---
+
+## LIMS B3.1 — Microbiología base (notas / pendientes)
+
+- Numerador `numero` de `EstudioMicrobiologia` (`MIC-YYYY-NNNNNN`) usa el mismo patrón que `codigo_barra` y comparte la limitación: sin bloqueo global; bajo alta concurrencia conviene migrar a secuencia dedicada.
+- **No** se cableó el estado decorativo `INCUBANDO` (sigue sin transición operativa). Los estados `IDENTIFICACION`, `ANTIBIOGRAMA`, `LISTO_PARA_VALIDAR`, `VALIDADO` e `INFORMADO` se implementaron en **B3.2 / B3.3 / B3.4**.
+- **Pendiente** (post–B3.4): PDF de informe, frontend dedicado microbiología, integración LIMS externa, QC/equipamiento, microbiología molecular, toxicología, anatomía patológica.
+- `secretaria` y `enfermeria` quedan **sin lectura** de microbiología técnica ni de informes (decisión documentada — `LimsMicrobiologiaPermission` / `LimsMicrobiologiaInformePermission`). Revisar política si se requiere visibilidad clínica/secretaría.
+- El `medico` ve estudios sólo si su `medico_interno.user` coincide; no se modela todavía visibilidad por equipo/servicio.
+- Auditoría: metadata estable cubre `estudio_id`, `numero_estudio`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, `siembra_id`, `lectura_id`, `estado_anterior`, `estado_nuevo`. No se registra PHI del paciente (solo `Paciente.pk` vía FK del estudio).
+- Frontend: no se modificó. `/laboratorio/examenes-test` sigue siendo pantalla de prueba; `/solicitudes` corresponde al flujo EMR. Microbiología solo expone backend/API en B3.1.
+
+---
+
+## LIMS B3.2 — Microorganismos / aislados / identificación (notas / pendientes)
+
+- **Pendientes B3.3** (no implementados en B3.2): `Antibiotico`, `Antibiograma`, `ResultadoAntibiotico` (implementados ya en B3.3). **Pendientes post–B3.4:** PDF, frontend dedicado, integración LIMS externa, QC/equipamiento, anatomía patológica.
+- `AisladoMicrobiologico.requiere_antibiograma` queda registrado; **B3.3** no crea antibiograma automáticamente al marcar el flag (solo POST explícito). Evaluar en UI si se desea un atajo.
+- `IdentificacionMicroorganismo` es **append-only** (sin PATCH/DELETE): una identificación errónea se corrige creando otra y/o descartando el aislado. Documentar a usuarios finales para evitar confusión cuando exista UI.
+- `AlterField` sobre `EstudioMicrobiologia.estado` en `0006_lims_b3_2_microbiologia_aislados` es no destructivo (solo agrega el choice `IDENTIFICACION`); todos los registros previos se mantienen.
+- Visibilidad para `medico`: igual patrón B3.1 (filtrado por `solicitud.medico_interno.user`). Cuando un aislado/identificación se cree fuera del flujo (admin), `medico` sigue requiriendo que la solicitud sea propia para verlo.
+- `descartar` aislado **no borra** identificaciones existentes (PROTECT); preserva historia.
+- El microorganismo de una identificación no puede estar inactivo en el momento de la creación; no se reevalúa si el catálogo se desactiva después (las identificaciones históricas se conservan tal cual). Evaluar en B3.3 si conviene "marcar como obsoleta" las identificaciones cuyo microorganismo se desactivó.
+- `confianza` en identificación: rango 0-100 validado en `clean`; precisión `DECIMAL(5,2)`. No se exige obligatoriedad.
+- Frontend: no se modificó. B3.2 sólo expone backend/API; las pantallas de microbiología quedan pendientes.
+
+## LIMS B3.3 — Antibiograma microbiológico (notas / pendientes)
+
+- **Pendientes post–B3.4** (no implementados): PDF de informe, frontend dedicado, integración LIMS externa, QC/equipamiento, anatomía patológica, biología molecular avanzada, toxicología.
+- `AisladoMicrobiologico.requiere_antibiograma` sigue siendo informativo: B3.3 **no** crea antibiograma automáticamente al marcar el flag; sólo se crea por POST explícito. Evaluar en B3.4 si la UI debe ofrecer un atajo.
+- Antibiograma **no** valida profesionalmente ni emite informe por sí solo; la obligatoriedad de antibiograma `COMPLETO` para **informe final** se aplica en **B3.4** (`verificar_completitud_para_informe_final`).
+- `ResultadoAntibiotico` no admite mover `antibiograma`/`antibiotico` por PATCH (solo `halo_mm`/`mic`/`interpretacion`/`observaciones`); para corregir, eliminar (no soportado) o cancelar todo el antibiograma. Si se requiere "anular un resultado individual" se evaluará en B3.4 mediante motivo + nuevo registro.
+- `actualizar_resultado_antibiotico` rechaza la edición si el `Antibiotico` está inactivo en el momento de la edición (defensivo): los resultados históricos se conservan, pero no se pueden modificar después de desactivado el catálogo. Documentar para evitar confusión.
+- `AlterField` sobre `EstudioMicrobiologia.estado` en `0007_lims_b3_3_microbiologia_antibiograma` es no destructivo (solo agrega el choice `ANTIBIOGRAMA`); todos los registros previos se mantienen.
+- `UniqueConstraint(antibiograma, antibiotico)` evita duplicados a nivel DB; la API devuelve 400 con mensaje claro antes de tocar la BD (verificación previa) además del INTEGRITY de Postgres.
+- `select_for_update` se usa con `of=("self",)` para evitar el error de Postgres "FOR UPDATE cannot be applied to the nullable side of an outer join" cuando el `select_related` toca FKs nullable (`microorganismo`).
+- Visibilidad para `medico` en informes: `LimsMicrobiologiaInformePermission` filtra por `estudio.solicitud.medico_interno.user` (consistente con B3.1–B3.3).
+- ~~Frontend: no se modificó. B3.3 sólo expone backend/API; las pantallas de antibiograma quedan pendientes.~~ **UI-2 (mayo 2026):** consola frontend de antibiograma e informes en `frontend/` commit `d46d276`; ver sección «Frontend UI-2 — Microbiología».
+
+## LIMS B3.4 — Informes microbiológicos (notas / pendientes)
+
+- **Sin DELETE** de informes; **PATCH** solo en estado **`BORRADOR`** (no en `EMITIDO` ni `VALIDADO`).
+- Anular un informe **FINAL** en `EMITIDO` deja el estudio en **`LISTO_PARA_VALIDAR`** hasta que laboratorio/admin emita un nuevo `FINAL` (diseño intencional).
+- `marcar-informado` es explícito: no se asume entrega automática al validar.
+- Numerador `MIC-YYYY-NNNNNN` comparte el patrón sin bloqueo global (misma nota que B3.1).
+- **Pendientes post–B3.4:** PDF, integración LIMS externa, QC/equipamiento avanzado. ~~Frontend dedicado microbiología~~ cubierto por **UI-2** (sin PDF/firma).
+
+## LIMS B4.1 — Resultados clínicos estructurados (notas / pendientes)
+
+- Cálculo de `es_patologico`/`es_critico` es **global** por `TipoExamen` (sin edad, sexo ni condición clínica).
+- No hay conversión de unidades ni fórmulas derivadas; `valor_obtenido` sigue siendo obligatorio para considerar el resultado cargado y para validar la orden.
+- Cambiar rangos en catálogo **no** altera snapshots ya guardados en resultados históricos.
+- **Pendientes post–B4.1:** PDF informe clínico general, frontend avanzado de carga, QC/equipamiento, rangos por demografía, Westgard.
