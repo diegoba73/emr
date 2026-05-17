@@ -256,6 +256,55 @@ def aplicar_recibir(
         return muestra
 
 
+def aplicar_iniciar_proceso(
+    muestra_id: int,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+    observaciones: str = "",
+) -> Muestra:
+    """
+    Transición controlada RECIBIDA → EN_PROCESO (LIMS Fase B2.1).
+
+    - Idempotente: si la muestra ya está EN_PROCESO, no genera evento ni auditoría.
+    - Disparada típicamente desde la carga del primer resultado con muestra asociada.
+    - Otros estados → MuestraAccionError.
+    """
+    with transaction.atomic():
+        muestra = Muestra.objects.select_for_update().select_related("solicitud").get(pk=muestra_id)
+        prev = muestra.estado
+        if prev == "EN_PROCESO":
+            return muestra
+        if prev != "RECIBIDA":
+            raise MuestraAccionError(
+                "Solo se puede iniciar el proceso de una muestra recibida."
+            )
+        before = safe_model_snapshot(muestra)
+        muestra.estado = "EN_PROCESO"
+        if observaciones:
+            muestra.observaciones = (muestra.observaciones + "\n" if muestra.observaciones else "") + observaciones
+        muestra.save()
+        meta = _base_metadata(
+            muestra,
+            accion="EN_PROCESO",
+            view=view,
+            actor=actor,
+            estado_anterior=prev,
+            estado_nuevo=muestra.estado,
+        )
+        _append_evento(
+            muestra,
+            accion="EN_PROCESO",
+            estado_anterior=prev,
+            estado_nuevo=muestra.estado,
+            actor=actor,
+            observaciones=observaciones,
+            metadata=meta,
+        )
+        _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        return muestra
+
+
 def aplicar_rechazar(
     muestra_id: int,
     *,

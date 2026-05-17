@@ -11,6 +11,8 @@ from rest_framework.test import APITestCase
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from laboratorio.models_catalog import Muestra
 from laboratorio.muestra_estado import (
+    aplicar_cancelar,
+    aplicar_descartar,
     aplicar_recibir,
     aplicar_rechazar,
     aplicar_tomar,
@@ -295,6 +297,102 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         )
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_carga_muestra_descartada_400(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = self._muestra_recibida(sol)
+        aplicar_descartar(m.pk, actor=None, view="t")
+        m.refresh_from_db()
+        assert m.estado == "DESCARTADA"
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res.pk, "valor": "1", "muestra_id": m.pk},
+                ]
+            },
+            format="json",
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        res.refresh_from_db()
+        assert res.muestra_id is None
+
+    def test_carga_muestra_cancelada_400(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tipo_muestra.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="test",
+        )
+        aplicar_cancelar(m.pk, actor=None, view="t", motivo="por test")
+        m.refresh_from_db()
+        assert m.estado == "CANCELADA"
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res.pk, "valor": "1", "muestra_id": m.pk},
+                ]
+            },
+            format="json",
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        res.refresh_from_db()
+        assert res.muestra_id is None
+
+    def test_carga_primer_resultado_transiciona_muestra_a_en_proceso(self):
+        """B2.1: muestra RECIBIDA pasa a EN_PROCESO al asociarse al primer resultado."""
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = self._muestra_recibida(sol)
+        assert m.estado == "RECIBIDA"
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+                {
+                    "resultados": [
+                        {"id": res.pk, "valor": "12", "muestra_id": m.pk},
+                    ]
+                },
+                format="json",
+            )
+        assert r.status_code == status.HTTP_200_OK
+        m.refresh_from_db()
+        assert m.estado == "EN_PROCESO"
+        eventos = list(m.eventos.values_list("accion", "estado_anterior", "estado_nuevo"))
+        assert ("EN_PROCESO", "RECIBIDA", "EN_PROCESO") in eventos
+        assert AuditEvent.objects.filter(
+            entity_type="laboratorio.Muestra",
+            entity_id=str(m.pk),
+            action="UPDATE",
+            metadata__estado_nuevo="EN_PROCESO",
+        ).exists()
+
+    def test_carga_segundo_resultado_misma_muestra_idempotente(self):
+        """B2.1: cargar de nuevo con la misma muestra (ya EN_PROCESO) no falla ni genera evento extra."""
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = self._muestra_recibida(sol)
+        r1 = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": res.pk, "valor": "10", "muestra_id": m.pk}]},
+            format="json",
+        )
+        assert r1.status_code == status.HTTP_200_OK
+        m.refresh_from_db()
+        assert m.estado == "EN_PROCESO"
+        eventos_iniciales = m.eventos.filter(accion="EN_PROCESO").count()
+        r2 = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": res.pk, "valor": "11", "muestra_id": m.pk}]},
+            format="json",
+        )
+        assert r2.status_code == status.HTTP_200_OK
+        m.refresh_from_db()
+        assert m.estado == "EN_PROCESO"
+        # No se duplicó la transición.
+        assert m.eventos.filter(accion="EN_PROCESO").count() == eventos_iniciales
+
     def test_carga_muestra_tomada_no_recibida_400(self):
         sol, res = self._solicitud_en_proceso_con_resultado()
         m = crear_muestra(
@@ -444,6 +542,76 @@ class TestValidarConMuestraAPI(APITestCase):
         self.client.force_authenticate(user=self.user_admin)
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
         assert r.status_code == status.HTTP_200_OK
+
+    def _solicitud_resultado_con_muestra(self, estado_muestra_final=None):
+        """Crea solicitud EN_PROCESO con un resultado vinculado a muestra RECIBIDA.
+
+        Si `estado_muestra_final` es provisto, transiciona la muestra a ese estado
+        después de asociarla al resultado (simulando TOCTOU entre carga y validar).
+        """
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud="EMR",
+            estado="EN_PROCESO",
+        )
+        sol.tipos_examen.add(self.tipo_examen)
+        m = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tipo_muestra.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="t",
+        )
+        aplicar_tomar(m.pk, actor=None, view="t")
+        aplicar_recibir(m.pk, actor=None, view="t")
+        ResultadoExamen.objects.create(
+            solicitud=sol,
+            tipo_examen=self.tipo_examen,
+            valor_obtenido="100",
+            muestra=m,
+        )
+        if estado_muestra_final == "DESCARTADA":
+            from laboratorio.muestra_estado import aplicar_descartar
+            aplicar_descartar(m.pk, actor=None, view="t")
+        elif estado_muestra_final == "CANCELADA":
+            from laboratorio.muestra_estado import aplicar_cancelar
+            aplicar_cancelar(m.pk, actor=None, view="t", motivo="test")
+        return sol, m
+
+    def test_validar_muestra_descartada_falla(self):
+        """B2.1 TOCTOU defensivo: validar rechaza si muestra asociada pasó a DESCARTADA."""
+        sol, m = self._solicitud_resultado_con_muestra(estado_muestra_final="DESCARTADA")
+        self.client.force_authenticate(user=self.user_admin)
+        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        sol.refresh_from_db()
+        assert sol.estado == "EN_PROCESO"
+
+    def test_validar_muestra_cancelada_falla(self):
+        """B2.1 TOCTOU defensivo: validar rechaza si muestra asociada pasó a CANCELADA."""
+        sol, m = self._solicitud_resultado_con_muestra(estado_muestra_final="CANCELADA")
+        self.client.force_authenticate(user=self.user_admin)
+        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        sol.refresh_from_db()
+        assert sol.estado == "EN_PROCESO"
+
+    def test_validar_releyendo_muestras_con_select_for_update(self):
+        """B2.1: confirma que `validar` releyó el estado de las muestras dentro de la
+        transacción (no usa el snapshot del momento de carga). Mutamos la muestra a
+        un estado inválido vía servicio justo antes de invocar `validar`.
+        """
+        sol, m = self._solicitud_resultado_con_muestra()
+        # Mutación posterior fuera de cliente (simula otro proceso en otra sesión).
+        from laboratorio.muestra_estado import aplicar_rechazar
+        aplicar_rechazar(m.pk, actor=None, view="t", motivo_rechazo="hemolisis")
+        self.client.force_authenticate(user=self.user_admin)
+        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        sol.refresh_from_db()
+        assert sol.estado == "EN_PROCESO"
 
     def test_validar_muestra_rechazada_falla(self):
         from laboratorio.muestra_estado import aplicar_rechazar

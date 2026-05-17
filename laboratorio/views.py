@@ -6,6 +6,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from .models import (
@@ -20,6 +21,8 @@ from .resultado_muestra_validacion import (
     MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN,
     assert_muestra_estado_carga_resultado,
 )
+from .muestra_estado import MuestraAccionError, aplicar_iniciar_proceso
+from .resultados_clinicos import aplicar_carga_estructurada
 from .serializers import (
     TipoMuestraSerializer,
     TipoExamenSerializer,
@@ -205,9 +208,6 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
                 for resultado_item in resultados_data:
                     resultado_id = resultado_item.get('id')
-                    valor_obtenido = resultado_item.get('valor', '')
-                    es_patologico = resultado_item.get('es_patologico', False)
-                    observaciones = resultado_item.get('observaciones', '')
 
                     if not resultado_id:
                         continue
@@ -220,6 +220,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         before_res = safe_model_snapshot(resultado)
                         prev_muestra_id = resultado.muestra_id
                         muestra_meta_aplica = False
+                        muestra_asociada_recibida_id: int | None = None
 
                         if "muestra_id" in resultado_item:
                             muestra_meta_aplica = True
@@ -258,12 +259,30 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                                         status=status.HTTP_400_BAD_REQUEST,
                                     )
                                 resultado.muestra = muestra
+                                if muestra.estado == "RECIBIDA":
+                                    muestra_asociada_recibida_id = muestra.pk
 
-                        resultado.valor_obtenido = valor_obtenido
-                        resultado.es_patologico = es_patologico
-                        if observaciones:
-                            resultado.observaciones = observaciones
+                        try:
+                            audit_estructurado = aplicar_carga_estructurada(
+                                resultado,
+                                resultado.tipo_examen,
+                                resultado_item,
+                            )
+                        except ValidationError as exc:
+                            msg = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
+                            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
                         resultado.save()
+                        muestra_transitioned_en_proceso = False
+                        if muestra_asociada_recibida_id is not None:
+                            try:
+                                aplicar_iniciar_proceso(
+                                    muestra_asociada_recibida_id,
+                                    actor=request.user,
+                                    view="SolicitudExamenViewSet.cargar_resultados",
+                                )
+                                muestra_transitioned_en_proceso = True
+                            except MuestraAccionError:
+                                pass
                         meta_carga = {
                             "action": "cargar_resultados",
                             "accion": "cargar_resultados",
@@ -271,7 +290,12 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                             "resultado_id": resultado.pk,
                             "solicitud_id": solicitud.pk,
                             "numero_solicitud": solicitud.numero,
+                            "actor_id": getattr(request.user, "pk", None),
+                            **audit_estructurado,
                         }
+                        if muestra_transitioned_en_proceso:
+                            meta_carga["muestra_estado_anterior"] = "RECIBIDA"
+                            meta_carga["muestra_estado_nuevo"] = "EN_PROCESO"
                         if muestra_meta_aplica:
                             meta_carga["muestra_id"] = resultado.muestra_id
                             if resultado.muestra_id:
@@ -383,17 +407,29 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                for res in solicitud.resultados.select_related("muestra").all():
-                    if res.muestra_id and res.muestra.estado in MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN:
-                        return Response(
-                            {
-                                "error": (
-                                    "No se puede validar: hay un resultado vinculado a una muestra "
-                                    "en estado incompatible con la validación."
-                                )
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                # B2.1: mitigar TOCTOU bloqueando las muestras referenciadas dentro de la
+                # transacción ANTES de leer su estado. select_for_update sobre Muestra impide
+                # que otro proceso cambie el estado entre lectura y commit de la validación.
+                muestra_ids = list(
+                    solicitud.resultados.filter(muestra_id__isnull=False)
+                    .values_list("muestra_id", flat=True)
+                    .distinct()
+                )
+                if muestra_ids:
+                    muestras_bloqueadas = list(
+                        Muestra.objects.select_for_update().filter(pk__in=muestra_ids)
+                    )
+                    for m in muestras_bloqueadas:
+                        if m.estado in MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN:
+                            return Response(
+                                {
+                                    "error": (
+                                        "No se puede validar: hay un resultado vinculado a una muestra "
+                                        "en estado incompatible con la validación."
+                                    )
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
 
                 before_resultados = {
                     r.id: safe_model_snapshot(r)

@@ -42,6 +42,12 @@ class TipoExamen(models.Model):
     """
     Análisis individual (ej: "Glucosa", "Hemoglobina").
     """
+    TIPO_RESULTADO_CHOICES = [
+        ("TEXTO", "Texto"),
+        ("NUMERICO", "Numérico"),
+        ("CUALITATIVO", "Cualitativo"),
+    ]
+
     codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
     nombre = models.CharField(max_length=200, verbose_name="Nombre")
     abreviatura = models.CharField(
@@ -56,6 +62,26 @@ class TipoExamen(models.Model):
         related_name='tipos_examen',
         verbose_name="Tipo de Muestra Requerida"
     )
+    seccion = models.ForeignKey(
+        "laboratorio.SeccionLaboratorio",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tipos_examen",
+        verbose_name="Sección",
+    )
+    tipo_resultado = models.CharField(
+        max_length=32,
+        choices=TIPO_RESULTADO_CHOICES,
+        default="TEXTO",
+        verbose_name="Tipo de resultado",
+    )
+    unidad_default = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        verbose_name="Unidad por defecto",
+    )
     precio = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -69,6 +95,38 @@ class TipoExamen(models.Model):
         verbose_name="Rango de Referencia (Texto)",
         help_text="Para imprimir en informe (ej: '70-100 mg/dL')"
     )
+    rango_min = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Rango mínimo",
+    )
+    rango_max = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Rango máximo",
+    )
+    valor_critico_min = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Valor crítico mínimo",
+    )
+    valor_critico_max = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Valor crítico máximo",
+    )
+    permite_resultado_texto = models.BooleanField(
+        default=True,
+        verbose_name="Permite resultado textual",
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
@@ -78,6 +136,29 @@ class TipoExamen(models.Model):
 
     def __str__(self):
         return f"{self.codigo} - {self.nombre}"
+
+    def clean(self):
+        super().clean()
+        if self.rango_min is not None and self.rango_max is not None:
+            if self.rango_min > self.rango_max:
+                raise ValidationError(
+                    {"rango_max": "rango_max debe ser mayor o igual que rango_min."}
+                )
+        if self.valor_critico_min is not None and self.valor_critico_max is not None:
+            if self.valor_critico_min > self.valor_critico_max:
+                raise ValidationError(
+                    {
+                        "valor_critico_max": (
+                            "valor_critico_max debe ser mayor o igual que valor_critico_min."
+                        )
+                    }
+                )
+        if self.seccion_id:
+            seccion = self.seccion
+            if seccion and not seccion.activo:
+                raise ValidationError(
+                    {"seccion": "La sección de laboratorio debe estar activa."}
+                )
 
 
 class PanelExamen(models.Model):
@@ -300,6 +381,57 @@ class ResultadoExamen(models.Model):
         default=False,
         verbose_name="Es Patológico"
     )
+    valor_numerico = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Valor numérico",
+    )
+    unidad = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        verbose_name="Unidad",
+    )
+    rango_referencia_snapshot = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Rango referencia (snapshot)",
+    )
+    rango_min_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Rango mínimo (snapshot)",
+    )
+    rango_max_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Rango máximo (snapshot)",
+    )
+    es_critico = models.BooleanField(
+        default=False,
+        verbose_name="Es crítico",
+    )
+    valor_critico_min_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Crítico mínimo (snapshot)",
+    )
+    valor_critico_max_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Crítico máximo (snapshot)",
+    )
     validado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -355,6 +487,19 @@ class ResultadoExamen(models.Model):
                 solicitud_id=self.solicitud_id,
                 paciente_solicitud_id=self.solicitud.paciente_id,
                 muestra=self.muestra,
+            )
+        if self.solicitud.estado in ("VALIDADO", "ENTREGADO", "CANCELADO"):
+            raise ValidationError(
+                {"solicitud": "No se pueden modificar resultados en el estado actual de la solicitud."}
+            )
+        if self.valor_obtenido == "" and self.valor_numerico is not None:
+            raise ValidationError(
+                {
+                    "valor_obtenido": (
+                        "El resultado sigue pendiente si valor_obtenido está vacío, "
+                        "aunque exista valor_numerico."
+                    )
+                }
             )
 
     def save(self, *args, **kwargs):
