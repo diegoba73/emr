@@ -337,6 +337,141 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
         return False
 
 
+class LimsMicrobiologiaCatalogPermission(permissions.BasePermission):
+    """
+    Catálogo de microbiología (medios de cultivo) — LIMS Fase B3.1.
+    Lectura: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
+    Escritura (POST/PATCH): solo admin/superuser. Sin destroy (se desactiva).
+    """
+
+    _roles_read = frozenset({"admin", "laboratorio", "medico", "secretaria", "enfermeria"})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            return role in self._roles_read
+        return role == "admin"
+
+
+class LimsMicrobiologiaPermission(permissions.BasePermission):
+    """
+    Estudios microbiológicos, siembras y lecturas — LIMS Fase B3.1.
+
+    - admin / superuser: acceso total a list/retrieve/create/update y acciones.
+    - laboratorio: list/retrieve/create/update y acciones ``iniciar`` / ``cancelar``.
+    - médico: list/retrieve sólo de estudios cuya solicitud tiene
+      ``medico_interno.user`` = usuario actual (el queryset filtra; este permiso
+      bloquea operaciones de escritura).
+    - secretaría / enfermería / paciente / anónimo: sin acceso a operación
+      técnica de microbiología en esta fase.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if role not in ("admin", "laboratorio", "medico"):
+            return False
+        action = getattr(view, "action", None)
+        if action in ("list", "retrieve"):
+            return True
+        if action == "create":
+            return role in ("admin", "laboratorio")
+        if action in ("update", "partial_update"):
+            return role in ("admin", "laboratorio")
+        if action in ("iniciar", "cancelar", "descartar", "completar", "marcar_informado"):
+            return role in ("admin", "laboratorio")
+        if action == "destroy":
+            return False
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if role == "admin":
+            return True
+        if role == "laboratorio":
+            return True
+        if role == "medico":
+            action = getattr(view, "action", None)
+            if action not in ("retrieve", "list"):
+                return False
+            # Resolver solicitud caminando: estudio → aislado → antibiograma → resultado.
+            solicitud = getattr(obj, "solicitud", None)
+            if solicitud is None:
+                estudio = getattr(obj, "estudio", None)
+                if estudio is None:
+                    aislado = getattr(obj, "aislado", None)
+                    if aislado is None:
+                        antibiograma = getattr(obj, "antibiograma", None)
+                        aislado = getattr(antibiograma, "aislado", None) if antibiograma else None
+                    estudio = getattr(aislado, "estudio", None) if aislado else None
+                solicitud = getattr(estudio, "solicitud", None) if estudio else None
+            mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
+            return bool(mi and getattr(mi, "user_id", None) == request.user.id)
+        return False
+
+
+class LimsMicrobiologiaInformePermission(permissions.BasePermission):
+    """
+    Informes de microbiología (B3.4).
+
+    - admin / superuser: acceso total (incluye ``validar``).
+    - laboratorio: crear/editar borradores, emitir, anular (no ``validar``).
+    - médico: solo list/retrieve de informes de estudios de sus solicitudes.
+    - secretaría / enfermería / paciente / anónimo: sin acceso.
+    """
+
+    _read_roles = frozenset({"admin", "laboratorio", "medico"})
+    _write_roles = frozenset({"admin", "laboratorio"})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        action = getattr(view, "action", None)
+        if action == "validar":
+            return role == "admin"
+        if action in ("list", "retrieve"):
+            return role in self._read_roles
+        if action in ("create", "partial_update", "update", "emitir", "anular"):
+            return role in self._write_roles
+        if action == "destroy":
+            return False
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        action = getattr(view, "action", None)
+        if action == "validar":
+            return role == "admin"
+        if role in ("admin", "laboratorio"):
+            return True
+        if role == "medico":
+            if action not in ("retrieve", "list"):
+                return False
+            estudio = getattr(obj, "estudio", None)
+            solicitud = getattr(estudio, "solicitud", None) if estudio else None
+            mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
+            return bool(mi and getattr(mi, "user_id", None) == request.user.id)
+        return False
+
+
 class CanUpdatePacienteDemographics(permissions.BasePermission):
     """
     Permiso para actualizar datos demográficos de pacientes.

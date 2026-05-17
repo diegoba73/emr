@@ -19,6 +19,19 @@ from laboratorio.views_muestras import (
     SeccionLaboratorioViewSet,
     TipoContenedorViewSet,
 )
+from laboratorio.views_microbiologia import (
+    AisladoMicrobiologicoViewSet,
+    AntibiogramaViewSet,
+    AntibioticoViewSet,
+    EstudioMicrobiologiaViewSet,
+    IdentificacionMicroorganismoViewSet,
+    InformeMicrobiologiaViewSet,
+    LecturaCultivoViewSet,
+    MedioCultivoViewSet,
+    MicroorganismoViewSet,
+    ResultadoAntibioticoViewSet,
+    SiembraMicrobiologiaViewSet,
+)
 from usuarios.views import PacienteRegisterView
 from core.views import HealthCheckView
 
@@ -62,6 +75,121 @@ router.register(
     r'laboratorio/muestras-transaccionales',
     MuestraTransaccionalViewSet,
     basename='laboratorio-muestras-transaccionales',
+)
+# Microbiología base B3.1 — /api/lab/microbiologia/...
+router.register(
+    r'lab/microbiologia/medios',
+    MedioCultivoViewSet,
+    basename='lab-micro-medios',
+)
+router.register(
+    r'lab/microbiologia/estudios',
+    EstudioMicrobiologiaViewSet,
+    basename='lab-micro-estudios',
+)
+router.register(
+    r'lab/microbiologia/siembras',
+    SiembraMicrobiologiaViewSet,
+    basename='lab-micro-siembras',
+)
+router.register(
+    r'lab/microbiologia/lecturas',
+    LecturaCultivoViewSet,
+    basename='lab-micro-lecturas',
+)
+# Alias /api/laboratorio/microbiologia/... (misma clase ViewSet).
+router.register(
+    r'laboratorio/microbiologia/medios',
+    MedioCultivoViewSet,
+    basename='laboratorio-micro-medios',
+)
+router.register(
+    r'laboratorio/microbiologia/estudios',
+    EstudioMicrobiologiaViewSet,
+    basename='laboratorio-micro-estudios',
+)
+router.register(
+    r'laboratorio/microbiologia/siembras',
+    SiembraMicrobiologiaViewSet,
+    basename='laboratorio-micro-siembras',
+)
+router.register(
+    r'laboratorio/microbiologia/lecturas',
+    LecturaCultivoViewSet,
+    basename='laboratorio-micro-lecturas',
+)
+# B3.2 — Microorganismos, aislados, identificaciones (mismo patrón alias).
+router.register(
+    r'lab/microbiologia/microorganismos',
+    MicroorganismoViewSet,
+    basename='lab-micro-microorganismos',
+)
+router.register(
+    r'lab/microbiologia/aislados',
+    AisladoMicrobiologicoViewSet,
+    basename='lab-micro-aislados',
+)
+router.register(
+    r'lab/microbiologia/identificaciones',
+    IdentificacionMicroorganismoViewSet,
+    basename='lab-micro-identificaciones',
+)
+router.register(
+    r'laboratorio/microbiologia/microorganismos',
+    MicroorganismoViewSet,
+    basename='laboratorio-micro-microorganismos',
+)
+router.register(
+    r'laboratorio/microbiologia/aislados',
+    AisladoMicrobiologicoViewSet,
+    basename='laboratorio-micro-aislados',
+)
+router.register(
+    r'laboratorio/microbiologia/identificaciones',
+    IdentificacionMicroorganismoViewSet,
+    basename='laboratorio-micro-identificaciones',
+)
+# B3.3 — Antibióticos / Antibiogramas / Resultados de antibiótico (con aliases).
+router.register(
+    r'lab/microbiologia/antibioticos',
+    AntibioticoViewSet,
+    basename='lab-micro-antibioticos',
+)
+router.register(
+    r'lab/microbiologia/antibiogramas',
+    AntibiogramaViewSet,
+    basename='lab-micro-antibiogramas',
+)
+router.register(
+    r'lab/microbiologia/resultados-antibiotico',
+    ResultadoAntibioticoViewSet,
+    basename='lab-micro-resultados-antibiotico',
+)
+router.register(
+    r'laboratorio/microbiologia/antibioticos',
+    AntibioticoViewSet,
+    basename='laboratorio-micro-antibioticos',
+)
+router.register(
+    r'laboratorio/microbiologia/antibiogramas',
+    AntibiogramaViewSet,
+    basename='laboratorio-micro-antibiogramas',
+)
+router.register(
+    r'laboratorio/microbiologia/resultados-antibiotico',
+    ResultadoAntibioticoViewSet,
+    basename='laboratorio-micro-resultados-antibiotico',
+)
+# B3.4 — Informes microbiológicos (con aliases).
+router.register(
+    r'lab/microbiologia/informes',
+    InformeMicrobiologiaViewSet,
+    basename='lab-micro-informes',
+)
+router.register(
+    r'laboratorio/microbiologia/informes',
+    InformeMicrobiologiaViewSet,
+    basename='laboratorio-micro-informes',
 )
 router.register(r'disponibilidades', views.DisponibilidadMedicoViewSet, basename='disponibilidades')
 router.register(r'excepciones', views.ExcepcionMedicoViewSet, basename='excepciones')

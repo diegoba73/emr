@@ -373,4 +373,18 @@ from laboratorio.models_catalog import (  # noqa: E402,F401
     SeccionLaboratorio,
     TipoContenedor,
 )
+# Microbiología B3.1 + B3.2 + B3.3 (registro Django; FK string a SolicitudExamen / Muestra).
+from laboratorio.models_microbiologia import (  # noqa: E402,F401
+    AisladoMicrobiologico,
+    Antibiograma,
+    Antibiotico,
+    EstudioMicrobiologia,
+    IdentificacionMicroorganismo,
+    InformeMicrobiologia,
+    LecturaCultivo,
+    MedioCultivo,
+    Microorganismo,
+    ResultadoAntibiotico,
+    SiembraMicrobiologia,
+)
 
