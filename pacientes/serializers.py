@@ -48,8 +48,10 @@ class PacienteLightSerializer(serializers.ModelSerializer):
 class PacienteSerializer(serializers.ModelSerializer):
     """Serializer completo del modelo ``Paciente``.
 
-    Normaliza ``nombre`` y ``apellido`` (``strip`` + ``title``) tolerando
-    ``None``. Expone ``nombre_completo`` y ``edad`` como campos derivados de
+    Normaliza ``nombre`` y ``apellido`` (``strip`` + ``title``). En **creación**
+    exige identidad mínima: ``dni``, ``nombre``, ``apellido`` y
+    ``fecha_nacimiento``. En actualización no obliga a completar campos legacy
+    vacíos. Expone ``nombre_completo`` y ``edad`` como campos derivados de
     solo lectura.
     """
 
@@ -102,3 +104,26 @@ class PacienteSerializer(serializers.ModelSerializer):
         if not text:
             raise serializers.ValidationError("El DNI no puede estar vacío.")
         return text
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            return attrs
+
+        errors = {}
+        nombre = attrs.get("nombre")
+        if nombre is None or (isinstance(nombre, str) and not nombre.strip()):
+            errors["nombre"] = "El nombre es obligatorio al crear un paciente."
+
+        apellido = attrs.get("apellido")
+        if apellido is None or (isinstance(apellido, str) and not apellido.strip()):
+            errors["apellido"] = "El apellido es obligatorio al crear un paciente."
+
+        if attrs.get("fecha_nacimiento") is None:
+            errors["fecha_nacimiento"] = (
+                "La fecha de nacimiento es obligatoria al crear un paciente."
+            )
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs

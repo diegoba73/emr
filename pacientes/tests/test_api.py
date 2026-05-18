@@ -2,11 +2,14 @@
 
 Cubren:
 
+- Identidad mínima al crear vía POST (dni, nombre, apellido, fecha_nacimiento).
 - Normalización de nombre/apellido al crear vía POST.
 - Búsqueda inteligente respetando filtros de rol (admin vs médico vs paciente).
 - Privacidad: ``?all=true`` no debe escalar acceso para un médico.
 - DELETE físico bloqueado para todos.
 """
+from datetime import date
+
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework import status
@@ -15,6 +18,17 @@ from rest_framework.test import APIClient
 from pacientes.models import Paciente
 
 User = get_user_model()
+
+
+def _payload_create(**overrides):
+    base = {
+        "dni": "API-BASE-0",
+        "nombre": "Juan",
+        "apellido": "Pérez",
+        "fecha_nacimiento": "1990-05-15",
+    }
+    base.update(overrides)
+    return base
 
 
 def _admin(username):
@@ -59,13 +73,88 @@ def _paciente_user(username):
     )
 
 
+def _laboratorio_user(username):
+    return User.objects.create_user(
+        username=username,
+        email=f"{username}@example.com",
+        password="x",
+        rol="laboratorio",
+        is_staff=False,
+    )
+
+
+@pytest.mark.django_db
+class TestPacienteAPICreacionIdentidadMinima:
+    def test_post_sin_nombre_400(self):
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.noname"))
+        data = _payload_create(dni="API-NONAME-0")
+        del data["nombre"]
+        response = client.post("/api/pacientes/", data, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "nombre" in response.data
+
+    def test_post_sin_apellido_400(self):
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.noape"))
+        data = _payload_create(dni="API-NOAPE-0")
+        del data["apellido"]
+        response = client.post("/api/pacientes/", data, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "apellido" in response.data
+
+    def test_post_sin_fecha_nacimiento_400(self):
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.nofnac"))
+        data = _payload_create(dni="API-NOFNAC-0")
+        del data["fecha_nacimiento"]
+        response = client.post("/api/pacientes/", data, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "fecha_nacimiento" in response.data
+
+    def test_post_valido_201(self):
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.ok"))
+        data = _payload_create(dni="API-OK-0")
+        response = client.post("/api/pacientes/", data, format="json")
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        paciente = Paciente.objects.get(dni="API-OK-0")
+        assert paciente.nombre == "Juan"
+        assert paciente.fecha_nacimiento == date(1990, 5, 15)
+
+    def test_patch_legacy_sin_reenviar_identidad(self):
+        paciente = Paciente.objects.create(dni="API-LEG-0")
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.patchleg"))
+        response = client.patch(
+            f"/api/pacientes/{paciente.id}/",
+            {"telefono": "555"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK, response.data
+        paciente.refresh_from_db()
+        assert paciente.telefono == "555"
+
+    def test_retrieve_legacy_con_nulos_200(self):
+        paciente = Paciente.objects.create(dni="API-LEG-RET-0")
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.retleg"))
+        response = client.get(f"/api/pacientes/{paciente.id}/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["dni"] == "API-LEG-RET-0"
+
+
 @pytest.mark.django_db
 class TestPacienteAPINormalizacion:
     def test_normalizacion_nombre_apellido(self):
         client = APIClient()
         client.force_authenticate(user=_admin("admin.api.norm"))
 
-        data = {"dni": "API-NRM-0", "nombre": "  juan  ", "apellido": "  perez  "}
+        data = _payload_create(
+            dni="API-NRM-0",
+            nombre="  juan  ",
+            apellido="  perez  ",
+        )
         response = client.post("/api/pacientes/", data, format="json")
 
         assert response.status_code == status.HTTP_201_CREATED, response.data
@@ -182,6 +271,14 @@ class TestPacienteAPIPrivacidad:
         client.force_authenticate(user=user)
         response = client.get("/api/pacientes/")
 
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["results"] == []
+
+    def test_laboratorio_no_lista_pacientes(self):
+        Paciente.objects.create(dni="PRIV-LAB-0", nombre="A", apellido="B")
+        client = APIClient()
+        client.force_authenticate(user=_laboratorio_user("lab.priv.list"))
+        response = client.get("/api/pacientes/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["results"] == []
 

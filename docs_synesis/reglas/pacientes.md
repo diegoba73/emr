@@ -1,7 +1,7 @@
-# Reglas — Pacientes (Fase C0)
+# Reglas — Pacientes (Fase C0 / C2)
 
-**Versión:** C0 — 18 de mayo de 2026  
-**Estado:** Constitución + checklist de auditoría. **No certifica** cumplimiento total sin revisión de código en cada release.
+**Versión:** C2 — 18 de mayo de 2026  
+**Estado:** Constitución + auditoría C1 + identidad mínima en creación API.
 
 **SoT operativo:** `DOC_REGLAS_NEGOCIO.md` (sección pacientes), `DOC_MODELOS_DB.md`, `pacientes/views.py`.
 
@@ -24,12 +24,19 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Regla | Etiqueta |
 |-------|----------|
 | DNI único en base de datos. | **[IMPLEMENTADO]** |
+| **Creación API** exige `dni`, `nombre`, `apellido`, `fecha_nacimiento` (`PacienteSerializer.validate`). | **[IMPLEMENTADO]** C2 |
+| BD aún permite `NULL` en nombre/apellido/fecha (pacientes legacy). | **[DEUDA]** migración NOT NULL / limpieza futura |
+| PATCH parcial no exige completar identidad legacy vacía. | **[IMPLEMENTADO]** C2 |
 | Búsqueda: numérico → DNI; texto → nombre/apellido con prioridad. | **[IMPLEMENTADO]** `buscar` |
-| Admin/secretaría/enfermería: listado amplio; médico: acotado salvo `?all=true`. | **[IMPLEMENTADO]** |
-| Paciente solo ve/edita su ficha según `CanUpdatePacienteDemographics`. | **[IMPLEMENTADO]** |
-| Alta de paciente vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user` en turnos). | **[IMPLEMENTADO]** |
-| Fusión de duplicados con auditoría. | **[OBJETIVO]** |
+| Admin/secretaría/enfermería: listado amplio; médico: acotado; `?all=true` no escala médico. | **[IMPLEMENTADO]** `pacientes.views` |
+| Paciente solo ve su ficha vía queryset activo. | **[IMPLEMENTADO]** |
+| Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
+| DELETE físico API bloqueado (405). | **[IMPLEMENTADO]** |
+| Auditoría create/update best-effort (`log_create` / `log_update`). | **[IMPLEMENTADO]** — **[DEUDA]** fail-closed |
+| `creado_por` / `modificado_por` en modelo. | **[DEUDA]** |
+| Soft delete / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
+| Borrado en Django Admin. | **[DEUDA]** |
 
 ---
 
@@ -56,15 +63,16 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 | Evento | Estado |
 |--------|--------|
-| CREATE paciente | **[OBJETIVO]** instrumentar si no está en todas las rutas |
-| UPDATE demográficos | **[DEUDA]** verificar cobertura en views |
-| Vinculación User ↔ Paciente | **[DEUDA]** |
+| CREATE paciente | **[IMPLEMENTADO]** `perform_create` → `log_create` (best-effort) |
+| UPDATE demográficos | **[IMPLEMENTADO]** `perform_update` → `log_update` (best-effort) |
+| Vinculación User ↔ Paciente | **[DEUDA]** sin evento dedicado |
 
 ---
 
 ## Pendientes de validación contra código
 
-- [ ] Confirmar `log_create`/`log_update` en todas las rutas de alta/edición de `PacienteViewSet`.
+- [x] Identidad mínima en POST (C2).
+- [ ] Tests de auditoría en CI.
 - [ ] Revisar comandos `pacientes/management/` (no versionados) antes de cualquier commit.
 - [ ] Alinear mensajes de error de DNI duplicado con frontend.
 
@@ -72,4 +80,4 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 ## Próximo paso recomendado
 
-**Auditoría C1 del módulo `pacientes/`** (views, serializers, tests) contra esta hoja de reglas.
+**C3:** tests de auditoría fail-closed o bloquear DELETE en Django Admin; sin migración hasta limpieza de legacy.
