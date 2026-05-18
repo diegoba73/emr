@@ -3,6 +3,7 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (hardening mínimo LIMS):** 2 de mayo de 2026  
 **Actualización (Fase A LIMS — acciones y auditoría de estado):** 3 de mayo de 2026  
+**Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 
 **Alcance:** Autenticación, autorización, auditoría y exposición de datos según código revisado.
 
@@ -76,6 +77,8 @@ Ubicación: `api/permissions.py`
 - `auditoria/audit_service.py` — `log_create`, `log_update`, `log_delete` (usados en p. ej. turnos, laboratorio, solicitudes).
 
 **LIMS Fase B2 (`cargar_resultados`):** metadata de `log_update` sobre `ResultadoExamen` puede incluir `resultado_id`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, y si cambió la vínculación `muestra_anterior_id` / `muestra_nueva_id` (sin PHI de paciente en texto libre).
+
+**LIMS Fase B4.1 (`cargar_resultados`):** metadata adicional: `tipo_examen_id`, `valor_anterior`/`valor_nuevo`, `valor_numerico_anterior`/`valor_numerico_nuevo`, `unidad_anterior`/`unidad_nueva`, `es_patologico_anterior`/`es_patologico_nuevo`, `es_critico_anterior`/`es_critico_nuevo`, `actor_id`. Si `es_critico_nuevo=True`, queda visible en `after_state` del snapshot del resultado.
 
 ### API
 
@@ -166,3 +169,63 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 - **`LimsB0CatalogPermission`** (`AreaLaboratorioViewSet`, `SeccionLaboratorioViewSet`, `TipoContenedorViewSet`): métodos seguros con roles `admin`, `laboratorio`, `medico`, `secretaria`, `enfermeria` (+ superuser). POST/PATCH solo **`admin`** (+ superuser). Anónimo denegado.
 - **`LimsMuestraTransaccionalPermission`** (`MuestraTransaccionalViewSet`): list/retrieve `admin`/`laboratorio`/`medico`; create/update/partial y acciones `tomar`/`recibir`/… solo **`admin`**/**`laboratorio`**; `medico` solo lectura de muestras cuya solicitud tiene `medico_interno.user` = usuario actual; **paciente** y **secretaría** sin acceso a este endpoint; anónimo denegado; `destroy` denegado en permiso.
+
+## LIMS B3.1 (microbiología base)
+
+- **`LimsMicrobiologiaCatalogPermission`** (`MedioCultivoViewSet`): lectura GET para roles `admin`, `laboratorio`, `medico`, `secretaria`, `enfermeria` (+ superuser); POST/PATCH **solo admin** (+ superuser); paciente y anónimo bloqueados. `destroy` 405 (los medios se desactivan con `activo=False`).
+- **`LimsMicrobiologiaPermission`** (`EstudioMicrobiologiaViewSet`, `SiembraMicrobiologiaViewSet`, `LecturaCultivoViewSet`):
+  - **admin** / **superuser**: list/retrieve/create/partial_update y acciones `iniciar` / `cancelar`.
+  - **laboratorio**: list/retrieve/create/partial_update + acciones `iniciar` / `cancelar`.
+  - **medico**: solo list/retrieve y únicamente sobre estudios/siembras/lecturas cuya `solicitud.medico_interno.user` = usuario actual (filtrado en `get_queryset` + `has_object_permission`).
+  - **secretaria**, **enfermeria**, **paciente**, **anónimo**: sin acceso a operación técnica de microbiología en esta fase.
+  - **`destroy`** siempre denegado a nivel permiso.
+- Cancelación de estudio: **motivo obligatorio**; auditado vía `log_update` con `metadata.accion="cancelar"` y `motivo_cancelacion` truncado a 200 chars.
+- Auditoría de microbiología:
+  - `log_create` para `MedioCultivo`, `EstudioMicrobiologia`, `SiembraMicrobiologia`, `LecturaCultivo` al crear.
+  - `log_update` en `iniciar`, `cancelar`, transiciones automáticas (`auto_sembrado`, `auto_lectura_preliminar`), PATCH administrativo.
+  - Metadata estable incluye: `accion`, `estudio_id`, `numero_estudio`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, `siembra_id` / `lectura_id` cuando aplica, `estado_anterior`, `estado_nuevo`, `actor_id`, `view`, `request_id`. **No** se registra nombre/PHI del paciente en metadata.
+
+## LIMS B3.2 (microorganismos / aislados / identificación)
+
+- **`LimsMicrobiologiaCatalogPermission`** reutilizado para `MicroorganismoViewSet`: lectura amplia (admin/lab/medico/secretaria/enfermeria + superuser); escritura **solo admin/superuser**; sin destroy (`activo=False`).
+- **`LimsMicrobiologiaPermission`** extendido para `AisladoMicrobiologicoViewSet` e `IdentificacionMicroorganismoViewSet`:
+  - **admin / superuser**: acceso total (list/retrieve/create/partial_update/acciones).
+  - **laboratorio**: list/retrieve/create + PATCH limitado (no toca `estado` ni `microorganismo` del aislado) + acción `descartar` (con motivo obligatorio).
+  - **medico**: solo list/retrieve y solo de aislados/identificaciones cuya `estudio.solicitud.medico_interno.user` = usuario actual.
+  - **secretaria / enfermeria / paciente / anónimo**: sin acceso operativo.
+  - `destroy` siempre denegado.
+- **`IdentificacionMicroorganismoViewSet`** es **append-only**: `http_method_names = ["get","post","head","options"]`. Sin PATCH ni DELETE (405).
+- Cancelar estudio sigue siendo solo admin/laboratorio (sin cambios).
+- Auditoría B3.2:
+  - `log_create` para `Microorganismo`, `AisladoMicrobiologico`, `IdentificacionMicroorganismo`.
+  - `log_update` para PATCH de microorganismo/aislado y para transiciones automáticas (`auto_identificado` del aislado, `auto_identificacion` del estudio) y para `descartar_aislado`.
+  - Metadata estable agrega: `aislado_id`, `microorganismo_id`, `lectura_id`, `identificacion_id` (cuando aplica), `significancia`, `requiere_antibiograma`, `motivo_descarte` (truncado). Sin PHI del paciente.
+
+## LIMS B3.3 (antibiograma)
+
+- **`LimsMicrobiologiaCatalogPermission`** reutilizado para `AntibioticoViewSet`: lectura amplia (admin/lab/medico/secretaria/enfermeria + superuser); escritura **solo admin/superuser**; sin destroy (`activo=False`).
+- **`LimsMicrobiologiaPermission`** extendido para `AntibiogramaViewSet` y `ResultadoAntibioticoViewSet`:
+  - **admin / superuser**: acceso total (list/retrieve/create/partial_update/`completar`/`cancelar`).
+  - **laboratorio**: list/retrieve/create + PATCH limitado (antibiograma solo `metodo`/`observaciones` y siempre que no esté `COMPLETO`/`CANCELADO`; resultado solo `halo_mm`/`mic`/`interpretacion`/`observaciones` y solo si antibiograma editable) + acciones `completar` y `cancelar`.
+  - **medico**: solo list/retrieve, filtrado por `aislado.estudio.solicitud.medico_interno.user` del usuario actual (resolución vía `antibiograma → aislado → estudio` y `resultado → antibiograma → aislado → estudio`).
+  - **secretaria / enfermeria / paciente / anónimo**: sin acceso operativo.
+  - `destroy` siempre denegado (405).
+- Acciones agregadas al permiso de microbiología: `completar` (admin/lab) además de `iniciar`, `cancelar`, `descartar` ya existentes.
+- B3.3 **no** introduce roles nuevos, **no** habilita validación profesional final ni emisión de informe.
+- Auditoría B3.3:
+  - `log_create` para `Antibiotico`, `Antibiograma`, `ResultadoAntibiotico` (acciones: `crear_antibiotico`, `crear_antibiograma`, `crear_resultado_antibiotico`).
+  - `log_update` para PATCH de antibiótico (`actualizar_antibiotico`, incluye `activo_nuevo`), PATCH de antibiograma (`actualizar_antibiograma`), PATCH de resultado (`actualizar_resultado_antibiotico`), transiciones (`auto_en_proceso` del antibiograma, `auto_antibiograma` del estudio), `completar_antibiograma`, `cancelar_antibiograma`.
+  - Metadata estable agrega: `antibiograma_id`, `resultado_antibiotico_id`, `antibiotico_id`, `antibiotico_codigo`, `interpretacion`, `motivo_cancelacion` (truncado). Sin PHI del paciente.
+
+## LIMS B3.4 (informes microbiológicos)
+
+- **`LimsMicrobiologiaInformePermission`** para `InformeMicrobiologiaViewSet`:
+  - **admin / superuser**: todas las acciones del viewset, incluida **`validar`** (único rol no superuser con `has_permission` para `action=validar`).
+  - **laboratorio**: `list`, `retrieve`, `create`, `partial_update`/`update`, **`emitir`**, **`anular`**; **no** `validar`.
+  - **medico**: solo `list`/`retrieve`; en objeto, solo si `estudio.solicitud.medico_interno.user` coincide con el usuario.
+  - **secretaria / enfermeria / paciente / anónimo**: sin acceso (`has_permission` false).
+  - **`destroy`**: siempre denegado en `has_permission`.
+  - Cualquier otra `action` no listada arriba cae en `return False` en `has_permission` (p. ej. si se agregara una `@action` nueva habría que extender el permiso).
+- **`LimsMicrobiologiaPermission`**: acción **`marcar_informado`** permitida a **admin** y **laboratorio** (además de `iniciar`, `cancelar`, `descartar`, etc.).
+- **secretaria / enfermeria**: siguen **sin** lectura de informes ni del resto de microbiología LIMS en B3.4 (misma política que B3.1–B3.3).
+- Auditoría B3.4: eventos de creación/actualización/emisión/validación/anulación de informe y de `marcar_informado` (acciones y metadata acotada en `microbiologia_estado.py` — sin PHI del paciente en metadata estable).

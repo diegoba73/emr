@@ -3,6 +3,8 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (permisos LIMS):** 2 de mayo de 2026  
 **Actualización (Fase A LIMS — acciones de estado):** 3 de mayo de 2026  
+**Actualización (Fase B3.1 — Microbiología base):** 13 de mayo de 2026  
+**Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
 
 **Alcance:** Endpoints definidos por URLconf y routers bajo el prefijo del proyecto; métodos estándar DRF para `ModelViewSet` salvo donde se indica.
 
@@ -149,7 +151,7 @@ Mismo `TipoAtencionViewSet`, `CentroFisicoViewSet`, más `ProcedimientoViewSet` 
 | `/api/pacientes/buscar/` | GET | Búsqueda `q` |
 | `/api/historias-clinicas/{id}/resumen/` | GET | Resumen HC |
 | `/api/lab/solicitudes/{id}/tomar-muestra/` | POST | Marca orden en toma de muestra (`PENDIENTE` → `TOMA_MUESTRA`) |
-| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` puede incluir **`muestra_id`** opcional por ítem (y `null` para limpiar); transiciones de orden según `DOC_FLUJOS_LIMS.md` |
+| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` con `id`, `valor` (obligatorio para considerar cargado), `es_patologico`, `observaciones`, **`muestra_id`** opcional. **B4.1 (retrocompatible):** por ítem también `valor_numerico`, `unidad`, `es_critico`; si no viene `unidad` y el `TipoExamen` tiene `unidad_default`, se copia; si hay rango/críticos estructurados en catálogo, se calculan `es_patologico`/`es_critico` y snapshots de referencia. Respuesta de lectura incluye campos estructurados en `resultados[]`. |
 | `/api/lab/solicitudes/{id}/validar/` | POST | Valida orden (`EN_PROCESO` → `VALIDADO`; solo admin/superuser) |
 | `/api/lab/solicitudes/{id}/cancelar/` | POST | Cancela orden no final (`PENDIENTE` / `TOMA_MUESTRA` / `EN_PROCESO` → `CANCELADO`) |
 | `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
@@ -260,3 +262,101 @@ Prefijos **`/api/lab/...`** y alias **`/api/laboratorio/...`** (mismos ViewSets)
 **DELETE** en catálogos y muestras: no soportado / 405 u objeto no expuesto a borrado (desactivar catálogos con `activo=false`).
 
 Contrato de creación de muestra (JSON): `solicitud_id`, `tipo_muestra_id`, `tipo_contenedor_id` (opcional), `observaciones` (opcional). El paciente se deriva de la solicitud (no se acepta paciente inconsistente).
+
+---
+
+## LIMS Fase B3.1 (microbiología base)
+
+Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiologia/...`** (mismas clases ViewSet).
+
+| Ruta | Métodos | Rol típico |
+|------|---------|------------|
+| `/api/lab/microbiologia/medios/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
+| `/api/lab/microbiologia/medios/{id}/` | GET, PATCH | Igual. |
+| `/api/lab/microbiologia/estudios/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico: solo estudios cuya solicitud tiene `medico_interno.user`=usuario actual). |
+| `/api/lab/microbiologia/estudios/{id}/` | GET, PATCH | PATCH solo `tipo_estudio` y `observaciones`; **`estado` no se modifica por PATCH**. |
+| `/api/lab/microbiologia/estudios/{id}/iniciar/` | POST | admin/lab. Transición `PENDIENTE→RECIBIDO` (idempotente). |
+| `/api/lab/microbiologia/estudios/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Transición a `CANCELADO`. |
+| `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). |
+| `/api/lab/microbiologia/siembras/{id}/` | GET, PATCH | PATCH: `condicion_incubacion`, `temperatura_c`, `atmosfera`, `observaciones`. |
+| `/api/lab/microbiologia/lecturas/` | GET, POST | Crear: admin/lab. Si `es_preliminar=True` y el estudio está `SEMBRADO`, lo pasa a `LECTURA_PRELIMINAR`. |
+| `/api/lab/microbiologia/lecturas/{id}/` | GET, PATCH | PATCH: `horas_incubacion`, `crecimiento`, `descripcion_colonias`, `tincion_gram`, `observaciones`, `es_preliminar`. |
+
+**DELETE** no soportado (405).
+
+Contrato `crear estudio` (JSON): `solicitud_id`, `muestra_id`, `tipo_estudio` (opcional, default `CULTIVO_RUTINA`), `observaciones`.
+Contrato `crear siembra` (JSON): `estudio_id`, `medio_id`, `fecha_siembra` opcional, `condicion_incubacion`, `temperatura_c`, `atmosfera`, `observaciones`.
+Contrato `crear lectura` (JSON): `siembra_id`, `fecha_lectura` opcional, `horas_incubacion`, `crecimiento` (choices), `descripcion_colonias`, `tincion_gram`, `observaciones`, `es_preliminar`.
+
+**Fuera de alcance B3.1:** microorganismos, aislados, identificación, antibiograma, informes preliminares/finales, PDF, cierre/validación final microbiológico.
+
+---
+
+## LIMS Fase B3.2 (microorganismos / aislados / identificación)
+
+Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiologia/...`** (mismas clases ViewSet).
+
+| Ruta | Métodos | Rol típico |
+|------|---------|------------|
+| `/api/lab/microbiologia/microorganismos/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
+| `/api/lab/microbiologia/microorganismos/{id}/` | GET, PATCH | Igual. Sin DELETE (desactivar con `activo=false`). |
+| `/api/lab/microbiologia/aislados/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). |
+| `/api/lab/microbiologia/aislados/{id}/` | GET, PATCH | PATCH solo `descripcion`, `cantidad`, `significancia`, `requiere_antibiograma`, `observaciones`; **`estado` y `microorganismo` no se editan**. |
+| `/api/lab/microbiologia/aislados/{id}/descartar/` | POST | admin/lab. Requiere `motivo` no vacío. Aislado → `DESCARTADO`. |
+| `/api/lab/microbiologia/identificaciones/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado). |
+| `/api/lab/microbiologia/identificaciones/{id}/` | GET | **Append-only**: PATCH/DELETE no soportados (405). |
+
+**DELETE** no soportado en ningún endpoint B3.2 (405).
+
+Contrato `crear aislado` (JSON): `estudio_id`, `lectura_id`, `microorganismo_id` (opcional), `descripcion`, `cantidad`, `significancia` (choices), `requiere_antibiograma` (bool), `observaciones`.
+Contrato `crear identificación` (JSON): `aislado_id`, `microorganismo_id`, `metodo`, `resultado`, `confianza` (0-100 opcional), `fecha` (opcional), `observaciones`.
+Contrato `descartar aislado` (JSON): `motivo` (obligatorio).
+
+**Fuera de alcance B3.2:** antibiograma, `Antibiotico`, `ResultadoAntibiotico`, `InformeMicrobiologia`, informes preliminares/finales, PDF, frontend dedicado, cierre/validación profesional, integración LIMS externa.
+
+## LIMS Fase B3.3 (antibiograma)
+
+Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiologia/...`** (mismas clases ViewSet).
+
+| Ruta | Métodos | Rol típico |
+|------|---------|------------|
+| `/api/lab/microbiologia/antibioticos/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
+| `/api/lab/microbiologia/antibioticos/{id}/` | GET, PATCH | Igual. Sin DELETE (desactivar con `activo=false`). |
+| `/api/lab/microbiologia/antibiogramas/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). |
+| `/api/lab/microbiologia/antibiogramas/{id}/` | GET, PATCH | PATCH solo `metodo`, `observaciones`; bloqueado si `COMPLETO` o `CANCELADO`. **`estado`, fechas y motivo se mueven solo por servicio**. |
+| `/api/lab/microbiologia/antibiogramas/{id}/completar/` | POST | admin/lab. Requiere ≥1 `ResultadoAntibiotico`. Antibiograma → `COMPLETO`, setea `fecha_resultado`. |
+| `/api/lab/microbiologia/antibiogramas/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Antibiograma → `CANCELADO`. |
+| `/api/lab/microbiologia/resultados-antibiotico/` | GET, POST | Crear: admin/lab. Bloqueado si antibiograma `COMPLETO`/`CANCELADO` o antibiótico inactivo; antibiótico no se duplica por antibiograma. |
+| `/api/lab/microbiologia/resultados-antibiotico/{id}/` | GET, PATCH | PATCH solo `halo_mm`, `mic`, `interpretacion`, `observaciones` (no `antibiograma`/`antibiotico`); bloqueado si antibiograma `COMPLETO`/`CANCELADO`. |
+
+**DELETE** no soportado en ningún endpoint B3.3 (405).
+
+Contrato `crear antibiograma` (JSON): `aislado_id`, `metodo`, `fecha_inicio` (opcional), `observaciones`.
+Contrato `crear resultado` (JSON): `antibiograma_id`, `antibiotico_id`, `interpretacion` ∈ {`S`,`I`,`R`,`SDD`,`NO_APLICA`}, `halo_mm` (opcional), `mic`, `observaciones`.
+Contrato `cancelar antibiograma` (JSON): `motivo` (obligatorio).
+Contrato `completar antibiograma` (JSON): `{}` (sin payload obligatorio); requiere resultados existentes.
+
+**Transiciones cableadas (B3.3):**
+- `Antibiograma`: `PENDIENTE → EN_PROCESO` automático al cargar el primer `ResultadoAntibiotico` válido. `COMPLETO`/`CANCELADO` solo por acción explícita.
+- `EstudioMicrobiologia`: `IDENTIFICACION | LECTURA_PRELIMINAR | SEMBRADO → ANTIBIOGRAMA` al crear antibiograma o primer resultado (idempotente).
+
+**Fuera de alcance B3.3:** validación profesional final vía informe (pasa a B3.4), cierre `INFORMADO` (B3.4), PDF, frontend dedicado, integración LIMS externa, QC/equipamiento.
+
+## LIMS Fase B3.4 (informes microbiológicos)
+
+Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiologia/...`**.
+
+| Ruta | Métodos | Rol típico |
+|------|---------|------------|
+| `/api/lab/microbiologia/informes/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). |
+| `/api/lab/microbiologia/informes/{id}/` | GET, PATCH | PATCH solo en `BORRADOR` (`texto`, `observaciones`, `version`). |
+| `/api/lab/microbiologia/informes/{id}/emitir/` | POST | admin/lab. Body opcional `texto`; si falta, usa el del borrador. Texto emitido no vacío. |
+| `/api/lab/microbiologia/informes/{id}/validar/` | POST | **Solo admin** (+ superuser). Solo informe `FINAL` en `EMITIDO` y estudio `LISTO_PARA_VALIDAR`. |
+| `/api/lab/microbiologia/informes/{id}/anular/` | POST | admin/lab. `motivo` obligatorio. Solo `BORRADOR` o `EMITIDO` (no `VALIDADO`). |
+| `/api/lab/microbiologia/estudios/{id}/marcar-informado/` | POST | admin/lab. Requiere estudio `VALIDADO` e informe final `VALIDADO`. |
+
+**DELETE** no soportado en informes (405).
+
+**Transiciones estudio (B3.4):** `… → LISTO_PARA_VALIDAR` al emitir informe final; `LISTO_PARA_VALIDAR → VALIDADO` al validar informe final; `VALIDADO → INFORMADO` con `marcar-informado`.
+
+**Fuera de alcance B3.4:** PDF, frontend, firma digital avanzada, rectificación/addendum avanzado, QC/equipamiento, integración externa.

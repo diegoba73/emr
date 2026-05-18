@@ -2,6 +2,10 @@
 
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (LIMS resultados pendientes / rol laboratorio):** 2 de mayo de 2026  
+**Actualización (Fase B3.1 — Microbiología base):** 13 de mayo de 2026  
+**Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
+**Actualización (Fase B3.3 — Antibiograma microbiológico):** 13 de mayo de 2026  
+**Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
 
 **Alcance:** Modelos Django presentes en el repositorio; tablas inferidas por convención `app_label` salvo `db_table` explícito.
 
@@ -191,7 +195,8 @@
 
 ### TipoExamen
 
-- `codigo` unique; FK TipoMuestra CASCADE; `precio` decimal; `rango_referencia_texto`
+- `codigo` unique; FK TipoMuestra CASCADE; `precio` decimal; `rango_referencia_texto` (sigue válido para rangos no estructurados)
+- **B4.1:** FK opcional `seccion` → `SeccionLaboratorio`; `tipo_resultado` (`TEXTO`/`NUMERICO`/`CUALITATIVO`, default `TEXTO`); `unidad_default`; `rango_min`/`rango_max`; `valor_critico_min`/`valor_critico_max`; `permite_resultado_texto` (default True). Validaciones: rangos y críticos coherentes; sección activa si se asigna.
 
 ### PanelExamen
 
@@ -207,6 +212,7 @@
 
 - FK Solicitud CASCADE; FK TipoExamen PROTECT; FK **`Muestra` opcional** (`null=True`, `blank=True`, `on_delete=PROTECT`, `related_name='resultados'`) — **Fase B2** (`laboratorio` migración `0004_lims_b2_resultado_muestra`).
 - `valor_obtenido` (**puede estar vacío** mientras el resultado está pendiente: `blank=True`, `default=''` en modelo; migración `laboratorio` 0002+); `es_patologico`; FK User `validado_por`; `fecha_validacion`
+- **B4.1:** `valor_numerico` opcional; `unidad`; snapshots `rango_referencia_snapshot`, `rango_min_snapshot`, `rango_max_snapshot`, `valor_critico_min_snapshot`, `valor_critico_max_snapshot`; `es_critico`. Pendiente si `valor_obtenido` vacío aunque exista `valor_numerico`. Snapshots se fijan al cargar (no se recalculan al cambiar el catálogo).
 - `save()` llama `full_clean()` (incluye coherencia solicitud–paciente–muestra si hay FK muestra); la **validación de orden** en vista `validar` impide cerrar protocolos con valores vacíos y **rechaza** muestras en estado incompatible si el resultado tiene muestra asociada.
 - **unique_together** solicitud + tipo_examen
 
@@ -285,7 +291,62 @@ Turno ─1:1─ Atencion ─1:1─ ConsultaAmbulatoria / Registro*
 
 Paciente ─1:N─ SolicitudExamen ─1:N─ ResultadoExamen ─N:1─ TipoExamen ─N:1─ TipoMuestra  
 `ResultadoExamen` ─N:1─ `Muestra` (opcional, Fase B2); `Muestra` ─N:1─ `SolicitudExamen`
+
+`Muestra` ─1:N─ `EstudioMicrobiologia` ─1:N─ `SiembraMicrobiologia` ─1:N─ `LecturaCultivo`  (Fase B3.1)
+`SiembraMicrobiologia` ─N:1─ `MedioCultivo`
+`LecturaCultivo` ─1:N─ `AisladoMicrobiologico` ─1:N─ `IdentificacionMicroorganismo` ─N:1─ `Microorganismo`  (Fase B3.2)
 ```
+
+### Microbiología base (Fase B3.1)
+
+App: `laboratorio` — modelos definidos en `laboratorio/models_microbiologia.py` y reexportados desde `laboratorio/models.py` para registro.
+
+| Modelo | Campos clave | Notas |
+|--------|--------------|-------|
+| `MedioCultivo` | `codigo` (unique), `nombre`, `tipo`, `descripcion`, `activo`, timestamps | Catálogo administrativo (escritura solo admin); se desactiva en vez de borrar. |
+| `EstudioMicrobiologia` | `numero` (unique, autogenerado `MIC-YYYY-NNNNNN`), `solicitud` (PROTECT), `muestra` (PROTECT, `related_name=estudios_microbiologia`), `paciente` (PROTECT), `tipo_estudio` (choices), `estado` (choices), `observaciones`, `fecha_inicio`, `fecha_cierre`, `responsable`, `cancelado_por`, `fecha_cancelacion`, `motivo_cancelacion`, timestamps | Estados cableados (B3.1–B3.4): `PENDIENTE` → `RECIBIDO` → `SEMBRADO` → `LECTURA_PRELIMINAR` → `IDENTIFICACION` → `ANTIBIOGRAMA` → `LISTO_PARA_VALIDAR` → `VALIDADO` → `INFORMADO`, con `CANCELADO` desde no terminales; terminales: `CANCELADO`, `INFORMADO`. El estado **no** se modifica por PATCH. Validación en `clean`: muestra ∈ {`RECIBIDA`, `EN_PROCESO`} al crear; consistencia solicitud/paciente/muestra. Índices: `(solicitud, estado)`, `(muestra, estado)`, `(paciente, estado)`, `(estado, created_at)`, `(fecha_inicio)`. |
+| `SiembraMicrobiologia` | `estudio` (PROTECT, `related_name=siembras`), `muestra` (PROTECT), `medio` (PROTECT), `fecha_siembra`, `sembrado_por`, `condicion_incubacion`, `temperatura_c`, `atmosfera`, `observaciones`, `estado` (SEMBRADA/CANCELADA), timestamps | Validación en `clean`: misma muestra del estudio; medio activo; estudio no cancelado; muestra `RECIBIDA`/`EN_PROCESO` al crear. Crear siembra dispara transición auto de estudio a `SEMBRADO`. |
+| `LecturaCultivo` | `siembra` (PROTECT, `related_name=lecturas`), `estudio` (PROTECT), `fecha_lectura`, `leido_por`, `horas_incubacion` ≥ 0, `crecimiento` (choices), `descripcion_colonias`, `tincion_gram`, `observaciones`, `es_preliminar`, timestamps | Validación: `siembra.estudio_id == estudio_id`; estudio y siembra no cancelados; `fecha_lectura >= siembra.fecha_siembra`. `es_preliminar=True` sobre estudio `SEMBRADO` lo pasa a `LECTURA_PRELIMINAR`. |
+
+**Fuera de modelo en B3.1**: `Microorganismo`, `AisladoMicrobiologico`, `IdentificacionMicroorganismo`, `Antibiotico`, `Antibiograma`, `ResultadoAntibiotico`, `InformeMicrobiologia` (postergados a B3.2/B3.3/B3.4). Microbiología **nunca** se serializa en `ResultadoExamen.valor_obtenido`.
+
+Migración: `laboratorio/migrations/0005_lims_b3_1_microbiologia_base.py` (aditiva, no destructiva).
+
+### Microbiología B3.2 — Microorganismos, aislados, identificación
+
+App: `laboratorio` — modelos en `laboratorio/models_microbiologia.py`. Migración: `laboratorio/migrations/0006_lims_b3_2_microbiologia_aislados.py` (aditiva: 3 modelos nuevos + `AlterField` no destructivo sobre `EstudioMicrobiologia.estado` para sumar el choice `IDENTIFICACION`).
+
+| Modelo | Campos clave | Notas |
+|--------|--------------|-------|
+| `Microorganismo` | `codigo` (unique), `nombre`, `genero`, `especie`, `grupo`, `descripcion`, `activo`, timestamps | Catálogo administrativo; escritura solo admin; se desactiva con `activo=False`. Índices: `(activo, nombre)`, `(genero, especie)`. |
+| `AisladoMicrobiologico` | `estudio` (PROTECT, `related_name=aislados`), `lectura_origen` (PROTECT, `related_name=aislados`), `microorganismo` (PROTECT, opcional), `estado` (`SOSPECHADO`/`IDENTIFICADO`/`DESCARTADO`), `descripcion`, `cantidad`, `significancia` (choices), `requiere_antibiograma` (bool), `observaciones`, `creado_por`, `descartado_por`, `fecha_descarte`, `motivo_descarte`, timestamps | Estado cableado: `SOSPECHADO` → `IDENTIFICADO` (auto al crear primera identificación) o `DESCARTADO` (acción con motivo). `estado` y `microorganismo` no se editan vía PATCH. Validaciones `clean`: lectura del mismo estudio; estudio no cancelado; siembra de la lectura no cancelada; microorganismo activo si se asigna; `IDENTIFICADO` requiere microorganismo. Índices: `(estudio, estado)`, `(lectura_origen)`, `(microorganismo, estado)`, `(significancia)`. |
+| `IdentificacionMicroorganismo` | `aislado` (PROTECT, `related_name=identificaciones`), `microorganismo` (PROTECT, `related_name=identificaciones`), `metodo`, `resultado`, `confianza` (0-100 opcional), `fecha`, `realizado_por`, `observaciones`, timestamps | **Append-only**: sin PATCH ni DELETE. Validaciones `clean`: microorganismo activo; aislado no `DESCARTADO`; estudio no `CANCELADO`; `confianza` ∈ [0, 100]. Índices: `(aislado, -fecha)`, `(microorganismo)`. |
+
+Cambio adicional en `EstudioMicrobiologia.ESTADO_CHOICES`: se agrega `IDENTIFICACION` (cableado en B3.2). El servicio promociona el estudio desde `SEMBRADO` o `LECTURA_PRELIMINAR` cuando se crea la primera identificación válida.
+
+**Fuera de modelo en B3.2**: `Antibiotico`, `Antibiograma`, `ResultadoAntibiotico`, `InformeMicrobiologia` (postergados a B3.3/B3.4).
+
+### Microbiología B3.3 — Antibiograma
+
+App: `laboratorio` — modelos en `laboratorio/models_microbiologia.py`. Migración: `laboratorio/migrations/0007_lims_b3_3_microbiologia_antibiograma.py` (aditiva: 3 modelos nuevos + `AlterField` no destructivo sobre `EstudioMicrobiologia.estado` para sumar el choice `ANTIBIOGRAMA` + `UniqueConstraint(antibiograma, antibiotico)` en `ResultadoAntibiotico`).
+
+| Modelo | Campos clave | Notas |
+|--------|--------------|-------|
+| `Antibiotico` | `codigo` (unique), `nombre`, `familia`, `descripcion`, `activo`, timestamps | Catálogo administrativo; escritura solo admin; se desactiva con `activo=False` (sin DELETE). Índices: `(activo, nombre)`, `(familia)`. |
+| `Antibiograma` | `aislado` (PROTECT, `related_name=antibiogramas`), `estado` (`PENDIENTE`/`EN_PROCESO`/`COMPLETO`/`CANCELADO`), `metodo`, `fecha_inicio` (default `now`), `fecha_resultado` (set al completar), `realizado_por`, `cancelado_por`, `fecha_cancelacion`, `motivo_cancelacion`, `observaciones`, timestamps | Validación `clean` en alta: aislado `IDENTIFICADO` con microorganismo y estudio no `CANCELADO`. PATCH solo `metodo`/`observaciones` y solo si no está `COMPLETO`/`CANCELADO`. Estado/fechas/motivo cambian solo por servicios (`crear_antibiograma`, `aplicar_completar_antibiograma`, `aplicar_cancelar_antibiograma`). Índices: `(aislado, estado)`, `(estado, created_at)`, `(fecha_inicio)`. |
+| `ResultadoAntibiotico` | `antibiograma` (PROTECT, `related_name=resultados`), `antibiotico` (PROTECT, `related_name=resultados`), `halo_mm` (Decimal opcional), `mic`, `interpretacion` (`S`/`I`/`R`/`SDD`/`NO_APLICA`), `observaciones`, timestamps | `UniqueConstraint(antibiograma, antibiotico)`. Validaciones `clean`: antibiótico activo; antibiograma no `COMPLETO` ni `CANCELADO`; interpretación dentro de choices. PATCH solo `halo_mm`/`mic`/`interpretacion`/`observaciones` (no cambia `antibiograma`/`antibiotico`). Índices: `(antibiograma)`, `(antibiotico)`, `(interpretacion)`. |
+
+Cambio adicional en `EstudioMicrobiologia.ESTADO_CHOICES`: se agrega `ANTIBIOGRAMA` (cableado en B3.3). El servicio promociona el estudio desde `IDENTIFICACION`, `LECTURA_PRELIMINAR` o `SEMBRADO` al crear antibiograma o primer resultado (idempotente).
+
+### Microbiología B3.4 — Informes, validación, informado
+
+App: `laboratorio` — modelo en `laboratorio/models_microbiologia.py`. Migración: `laboratorio/migrations/0008_lims_b3_4_microbiologia_informes.py` (aditiva: `InformeMicrobiologia` + `AlterField` no destructivo sobre `EstudioMicrobiologia.estado` para sumar los choices `LISTO_PARA_VALIDAR`, `VALIDADO`, `INFORMADO` + `UniqueConstraint` condicional: a lo sumo un informe `FINAL` con `estado ≠ ANULADO` por estudio).
+
+| Modelo | Campos clave | Notas |
+|--------|--------------|-------|
+| `InformeMicrobiologia` | `estudio` (PROTECT, `related_name=informes`), `tipo` (`PRELIMINAR`/`FINAL`), `estado` (`BORRADOR`/`EMITIDO`/`VALIDADO`/`ANULADO`), `texto`, `version`, `emitido_por`, `fecha_emision`, `validado_por`, `fecha_validacion`, `reemplaza_a` (self FK), `observaciones`, `motivo_anulacion`, `anulado_por`, `fecha_anulacion`, timestamps | Alta vía servicio `crear_informe_borrador`; PATCH solo en `BORRADOR`. Emisión/anulación/validación solo por servicios y acciones API. `ANULADO` en `FINAL` libera el cupo del constraint único. |
+
+Cambio adicional en `EstudioMicrobiologia.ESTADO_CHOICES`: se agregan `LISTO_PARA_VALIDAR`, `VALIDADO`, `INFORMADO` (cableados en B3.4 vía informe final + `validar` + `marcar-informado`). `ESTADOS_TERMINALES` incluye `INFORMADO` además de `CANCELADO`.
 
 ---
 
