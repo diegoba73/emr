@@ -57,6 +57,8 @@ class PacienteSerializer(serializers.ModelSerializer):
 
     nombre_completo = serializers.ReadOnlyField()
     edad = serializers.ReadOnlyField(help_text="Edad calculada automáticamente")
+    creado_por = serializers.SerializerMethodField()
+    modificado_por = serializers.SerializerMethodField()
 
     class Meta:
         model = Paciente
@@ -80,13 +82,27 @@ class PacienteSerializer(serializers.ModelSerializer):
             "antecedentes_familiares",
             "fecha_registro",
             "ultima_actualizacion",
+            "creado_por",
+            "modificado_por",
         ]
         read_only_fields = [
             "fecha_registro",
             "ultima_actualizacion",
             "edad",
             "nombre_completo",
+            "creado_por",
+            "modificado_por",
         ]
+
+    def get_creado_por(self, obj):
+        if obj.creado_por_id is None:
+            return None
+        return obj.creado_por.username
+
+    def get_modificado_por(self, obj):
+        if obj.modificado_por_id is None:
+            return None
+        return obj.modificado_por.username
 
     def validate_nombre(self, value):
         return _normalize_name(value)

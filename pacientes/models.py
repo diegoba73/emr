@@ -46,6 +46,26 @@ class Paciente(models.Model):
     fecha_registro = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Registro")
     ultima_actualizacion = models.DateTimeField(auto_now=True, verbose_name="Última Actualización")
 
+    # Trazabilidad operativa (usuario staff que creó/modificó la ficha; distinto de ``user`` portal)
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pacientes_creados",
+        verbose_name="Creado por",
+        help_text="Usuario operador que dio de alta la ficha (no la cuenta portal del paciente).",
+    )
+    modificado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pacientes_modificados",
+        verbose_name="Modificado por",
+        help_text="Último usuario operador que modificó la ficha.",
+    )
+
     class Meta:
         verbose_name = "Paciente"
         verbose_name_plural = "Pacientes"

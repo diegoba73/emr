@@ -63,7 +63,9 @@ class PacienteViewSet(viewsets.ModelViewSet):
     - Cualquier otro rol: queryset vacío.
     """
 
-    queryset = Paciente.objects.select_related("user").all()
+    queryset = Paciente.objects.select_related(
+        "user", "creado_por", "modificado_por"
+    ).all()
     serializer_class = PacienteSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -142,7 +144,10 @@ class PacienteViewSet(viewsets.ModelViewSet):
         return queryset.filter(id__in=pacientes_ids)
 
     def perform_create(self, serializer):
-        instance = serializer.save()
+        instance = serializer.save(
+            creado_por=self.request.user,
+            modificado_por=self.request.user,
+        )
         if _AUDIT_AVAILABLE:
             try:
                 log_create(
@@ -156,7 +161,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         before = safe_model_snapshot(self.get_object()) if _AUDIT_AVAILABLE else None
-        instance = serializer.save()
+        instance = serializer.save(modificado_por=self.request.user)
         if _AUDIT_AVAILABLE:
             try:
                 log_update(

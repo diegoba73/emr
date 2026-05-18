@@ -46,6 +46,7 @@
 - Obra social: `obra_social`, `numero_afiliado`
 - Clínico: `observaciones`, `antecedentes_*`
 - `fecha_registro`, `ultima_actualizacion`
+- FK User nullable `creado_por`, `modificado_por` (`related_name` `pacientes_creados` / `pacientes_modificados`) — operador staff; distinto de `user` portal
 - **Índices:** apellido, nombre
 
 ---
@@ -247,7 +248,7 @@
 
 ## Trazabilidad
 
-- Auditoría central + logs en vistas; `creado_por` en solicitudes; `subido_por` archivos; `validado_por` resultados.
+- Auditoría central + logs en vistas; `creado_por` / `modificado_por` en solicitudes y pacientes (API activa); `subido_por` archivos; `validado_por` resultados.
 
 ---
 

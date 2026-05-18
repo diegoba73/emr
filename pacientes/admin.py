@@ -16,7 +16,12 @@ class PacienteAdmin(admin.ModelAdmin):
     list_display = ("dni", "apellido", "nombre", "fecha_registro")
     list_filter = ("fecha_registro", "sexo")
     search_fields = ("dni", "apellido", "nombre")
-    readonly_fields = ("fecha_registro", "ultima_actualizacion")
+    readonly_fields = (
+        "fecha_registro",
+        "ultima_actualizacion",
+        "creado_por",
+        "modificado_por",
+    )
 
     fieldsets = (
         (
@@ -52,7 +57,12 @@ class PacienteAdmin(admin.ModelAdmin):
         (
             "Auditoría",
             {
-                "fields": ("fecha_registro", "ultima_actualizacion"),
+                "fields": (
+                    "fecha_registro",
+                    "ultima_actualizacion",
+                    "creado_por",
+                    "modificado_por",
+                ),
                 "classes": ("collapse",),
             },
         ),
