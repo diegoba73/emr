@@ -263,6 +263,36 @@ class RecursoSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'ubicacion', 'ubicacion_display', 'tipo_recurso', 'tipo_recurso_display', 'activo']
 
 
+class TurnoAtencionNestedSerializer(serializers.ModelSerializer):
+    """Turno embebido en ``AtencionSerializer`` sin PHI ni trazabilidad en ``paciente``.
+
+    No incluye ``atencion`` anidada (evita redundancia/ciclos). Para turnos completos
+    usar ``/api/turnos/`` (``turnos.serializers.TurnoSerializer``).
+    """
+    paciente = PacienteLightSerializer(read_only=True, allow_null=True)
+    paciente_id = serializers.IntegerField(read_only=True, allow_null=True)
+    medico = MedicoLightSerializer(read_only=True, allow_null=True)
+    medico_id = serializers.IntegerField(read_only=True, allow_null=True)
+    recurso = RecursoSerializer(read_only=True, allow_null=True)
+    recurso_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Turno
+        fields = [
+            'id',
+            'paciente',
+            'paciente_id',
+            'medico',
+            'medico_id',
+            'recurso',
+            'recurso_id',
+            'fecha_hora_inicio',
+            'fecha_hora_fin',
+            'estado',
+            'motivo_reserva',
+        ]
+
+
 class TurnoSerializer(serializers.ModelSerializer):
     paciente = PacienteSerializer(read_only=True, allow_null=True)
     paciente_id = serializers.IntegerField(read_only=True, allow_null=True)
@@ -834,14 +864,14 @@ class AtencionSerializer(serializers.ModelSerializer):
     """Serializer completo para Atencion con sus registros relacionados.
 
     SIEMPRE devuelve IDs explícitos junto con objetos anidados.
-    El paciente embebido usa ``PacienteLightSerializer`` (sin antecedentes ni
-    trazabilidad operativa); la ficha completa queda en ``/api/pacientes/{id}/``.
+    El paciente embebido (directo y vía ``turno.paciente``) usa
+    ``PacienteLightSerializer``; la ficha completa queda en ``/api/pacientes/{id}/``.
     """
     paciente = PacienteLightSerializer(read_only=True)
     paciente_id = serializers.IntegerField(read_only=True)
     medico_principal = MedicoSerializer(read_only=True)
     medico_principal_id = serializers.IntegerField(read_only=True)
-    turno = TurnoSerializer(read_only=True, allow_null=True)
+    turno = TurnoAtencionNestedSerializer(read_only=True, allow_null=True)
     turno_id = serializers.IntegerField(read_only=True, allow_null=True)
     consulta_ambulatoria = ConsultaAmbulatoriaSerializer(read_only=True, allow_null=True)
     registro_procedimiento = RegistroProcedimientoSerializer(read_only=True, allow_null=True)

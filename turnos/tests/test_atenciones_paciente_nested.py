@@ -1,4 +1,4 @@
-"""Contrato de exposición de ``paciente`` anidado en ``GET /api/atenciones/`` (C5.2)."""
+"""Contrato de exposición de ``paciente`` anidado en ``GET /api/atenciones/`` (C5.2 / C5.3)."""
 from datetime import date, timedelta
 
 import pytest
@@ -24,6 +24,10 @@ _FORBIDDEN_PACIENTE_KEYS = frozenset(
         "modificado_por",
         "creado_por_id",
         "modificado_por_id",
+        "obra_social",
+        "numero_afiliado",
+        "fecha_registro",
+        "ultima_actualizacion",
         "alergias",
         "medicacion_actual",
     }
@@ -31,6 +35,10 @@ _FORBIDDEN_PACIENTE_KEYS = frozenset(
 
 _REQUIRED_PACIENTE_KEYS = frozenset(
     {"id", "dni", "nombre", "apellido", "fecha_nacimiento"}
+)
+
+_REQUIRED_TURNO_KEYS = frozenset(
+    {"id", "estado", "fecha_hora_inicio", "paciente", "paciente_id"}
 )
 
 
@@ -56,6 +64,55 @@ def _medico_client(username_suffix):
     return client, user, medico
 
 
+def _paciente_con_phi_extra(creator=None, **kwargs):
+    defaults = {
+        "nombre": "Ana",
+        "apellido": "Nested",
+        "fecha_nacimiento": date(1985, 6, 10),
+        "antecedentes_personales": "Antecedente secreto",
+        "antecedentes_familiares": "Familiar secreto",
+        "observaciones": "Observación secreta",
+        "obra_social": "OSPE",
+        "numero_afiliado": "AFF-999",
+    }
+    defaults.update(kwargs)
+    if creator:
+        defaults["creado_por"] = creator
+        defaults["modificado_por"] = creator
+    return Paciente.objects.create(**defaults)
+
+
+def _atencion_con_turno(client, medico, paciente, suffix):
+    recurso = Recurso.objects.create(
+        nombre=f"Cons Nested {suffix}",
+        ubicacion="P1",
+        tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
+        activo=True,
+    )
+    turno = Turno.objects.create(
+        paciente=paciente,
+        medico=medico,
+        recurso=recurso,
+        fecha_hora_inicio=timezone.now() + timedelta(hours=1),
+        fecha_hora_fin=timezone.now() + timedelta(hours=2),
+        estado="CONFIRMADO",
+        motivo_reserva="Control",
+    )
+    atencion = Atencion.objects.create(
+        turno=turno,
+        paciente=paciente,
+        medico_principal=medico,
+        tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
+    )
+    return atencion, turno
+
+
+def _assert_paciente_liviano(paciente_data):
+    assert paciente_data is not None
+    assert _FORBIDDEN_PACIENTE_KEYS.isdisjoint(paciente_data.keys())
+    assert _REQUIRED_PACIENTE_KEYS.issubset(paciente_data.keys())
+
+
 @pytest.mark.django_db
 class TestAtencionPacienteNestedExposure:
     def test_retrieve_paciente_sin_phi_ni_trazabilidad_ids(self):
@@ -74,58 +131,22 @@ class TestAtencionPacienteNestedExposure:
         )
         client, _, medico = _medico_client("retrieve")
 
-        paciente = Paciente.objects.create(
+        paciente = _paciente_con_phi_extra(
+            creator,
             dni="NST-RET-001",
-            nombre="Ana",
-            apellido="Nested",
-            fecha_nacimiento=date(1985, 6, 10),
             user=portal_user,
-            antecedentes_personales="Antecedente secreto",
-            antecedentes_familiares="Familiar secreto",
-            observaciones="Observación secreta",
-            creado_por=creator,
-            modificado_por=creator,
         )
-        recurso = Recurso.objects.create(
-            nombre="Cons Nested",
-            ubicacion="P1",
-            tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
-            activo=True,
-        )
-        turno = Turno.objects.create(
-            paciente=paciente,
-            medico=medico,
-            recurso=recurso,
-            fecha_hora_inicio=timezone.now() + timedelta(hours=1),
-            fecha_hora_fin=timezone.now() + timedelta(hours=2),
-            estado="CONFIRMADO",
-        )
-        atencion = Atencion.objects.create(
-            turno=turno,
-            paciente=paciente,
-            medico_principal=medico,
-            tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
-        )
+        atencion, _ = _atencion_con_turno(client, medico, paciente, "ret")
 
         response = client.get(reverse("atenciones-detail", kwargs={"pk": atencion.pk}))
         assert response.status_code == status.HTTP_200_OK, response.data
 
-        paciente_data = response.data["paciente"]
-        assert paciente_data is not None
-        assert _FORBIDDEN_PACIENTE_KEYS.isdisjoint(paciente_data.keys())
-        assert _REQUIRED_PACIENTE_KEYS.issubset(paciente_data.keys())
-        assert paciente_data["dni"] == "NST-RET-001"
+        _assert_paciente_liviano(response.data["paciente"])
+        assert response.data["paciente"]["dni"] == "NST-RET-001"
 
     def test_list_paciente_anidado_liviano(self):
         client, _, medico = _medico_client("list")
-        paciente = Paciente.objects.create(
-            dni="NST-LST-001",
-            nombre="List",
-            apellido="Nested",
-            fecha_nacimiento=date(1990, 1, 1),
-            antecedentes_personales="No debe filtrarse",
-            observaciones="Tampoco",
-        )
+        paciente = _paciente_con_phi_extra(dni="NST-LST-001")
         atencion = Atencion.objects.create(
             paciente=paciente,
             medico_principal=medico,
@@ -139,48 +160,44 @@ class TestAtencionPacienteNestedExposure:
         if isinstance(results, dict) and "results" in results:
             results = results["results"]
         row = next(r for r in results if r["id"] == atencion.id)
-        paciente_data = row["paciente"]
-        assert _FORBIDDEN_PACIENTE_KEYS.isdisjoint(paciente_data.keys())
-        assert _REQUIRED_PACIENTE_KEYS.issubset(paciente_data.keys())
+        _assert_paciente_liviano(row["paciente"])
 
-    def test_turno_paciente_puede_seguir_con_exposicion_legacy(self):
-        """C5.3: ``turno.paciente`` aún usa ``api.TurnoSerializer`` con ``PacienteSerializer`` legacy."""
-        client, _, medico = _medico_client("turno-debt")
-        paciente = Paciente.objects.create(
-            dni="NST-TUR-001",
-            nombre="Turno",
-            apellido="Debt",
-            fecha_nacimiento=date(1991, 2, 2),
-            antecedentes_personales="Solo en turno anidado por ahora",
+    def test_retrieve_turno_paciente_tambien_liviano(self):
+        creator = User.objects.create_user(
+            username="admin.nested.turno",
+            email="admin.nested.turno@example.com",
+            password="x",
+            rol="admin",
+            is_staff=True,
         )
-        recurso = Recurso.objects.create(
-            nombre="Cons Turno Debt",
-            ubicacion="P2",
-            tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
-            activo=True,
-        )
-        turno = Turno.objects.create(
-            paciente=paciente,
-            medico=medico,
-            recurso=recurso,
-            fecha_hora_inicio=timezone.now() + timedelta(hours=3),
-            fecha_hora_fin=timezone.now() + timedelta(hours=4),
-            estado="CONFIRMADO",
-        )
-        atencion = Atencion.objects.create(
-            turno=turno,
-            paciente=paciente,
-            medico_principal=medico,
-            tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
-        )
+        client, _, medico = _medico_client("turno-light")
+        paciente = _paciente_con_phi_extra(creator, dni="NST-TUR-002")
+        atencion, turno = _atencion_con_turno(client, medico, paciente, "tur")
 
         response = client.get(reverse("atenciones-detail", kwargs={"pk": atencion.pk}))
         assert response.status_code == status.HTTP_200_OK
 
-        top = response.data["paciente"]
-        assert "antecedentes_personales" not in top
+        turno_block = response.data["turno"]
+        assert turno_block is not None
+        assert turno_block["id"] == turno.id
+        assert _REQUIRED_TURNO_KEYS.issubset(turno_block.keys())
+        assert "atencion" not in turno_block
 
-        turno_block = response.data.get("turno") or {}
-        turno_paciente = (turno_block or {}).get("paciente") or {}
-        if turno_paciente:
-            assert "antecedentes_personales" in turno_paciente
+        turno_paciente = turno_block["paciente"]
+        _assert_paciente_liviano(turno_paciente)
+        assert turno_paciente["dni"] == "NST-TUR-002"
+
+    def test_list_turno_paciente_tambien_liviano(self):
+        client, _, medico = _medico_client("list-turno")
+        paciente = _paciente_con_phi_extra(dni="NST-LST-TUR-001")
+        atencion, _ = _atencion_con_turno(client, medico, paciente, "lst-tur")
+
+        response = client.get(reverse("atenciones-list"))
+        assert response.status_code == status.HTTP_200_OK
+
+        results = response.data
+        if isinstance(results, dict) and "results" in results:
+            results = results["results"]
+        row = next(r for r in results if r["id"] == atencion.id)
+        turno_paciente = (row.get("turno") or {}).get("paciente")
+        _assert_paciente_liviano(turno_paciente)
