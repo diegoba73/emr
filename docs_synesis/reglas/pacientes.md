@@ -1,7 +1,7 @@
-# Reglas — Pacientes (Fase C0 / C2 / C3)
+# Reglas — Pacientes (Fase C0 / C2 / C3 / C4)
 
-**Versión:** C3 — 18 de mayo de 2026  
-**Estado:** Constitución + C2 (identidad mínima API) + C3 (sin delete en Admin).
+**Versión:** C4 — 18 de mayo de 2026  
+**Estado:** C2 identidad mínima + C3 sin delete Admin + C4 auditoría verificada en tests.
 
 **SoT operativo:** `DOC_REGLAS_NEGOCIO.md` (sección pacientes), `DOC_MODELOS_DB.md`, `pacientes/views.py`.
 
@@ -33,7 +33,8 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
 | DELETE físico API bloqueado (405). | **[IMPLEMENTADO]** |
 | DELETE físico Django Admin bloqueado (`has_delete_permission=False`, sin `delete_selected`). | **[IMPLEMENTADO]** C3 |
-| Auditoría create/update best-effort (`log_create` / `log_update`). | **[IMPLEMENTADO]** — **[DEUDA]** fail-closed |
+| Auditoría CREATE/UPDATE en POST/PATCH/PUT (`log_create` / `log_update`). | **[IMPLEMENTADO]** — tests en `pacientes/tests/test_audit.py` |
+| Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
 | `creado_por` / `modificado_por` en modelo. | **[DEUDA]** |
 | Soft delete / desactivación (`activo=False`) / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
@@ -73,7 +74,8 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 - [x] Identidad mínima en POST (C2).
 - [x] Sin delete físico en Admin (C3).
-- [ ] Tests de auditoría en CI.
+- [x] Tests de auditoría CREATE/UPDATE en API (C4).
+- [ ] Auditoría fail-closed (fase posterior).
 - [ ] Revisar comandos `pacientes/management/` (no versionados) antes de cualquier commit.
 - [ ] Alinear mensajes de error de DNI duplicado con frontend.
 
@@ -81,4 +83,4 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 ## Próximo paso recomendado
 
-**C4:** tests de auditoría fail-closed; o soft-delete formal con `activo`; sin migración NOT NULL hasta limpieza de legacy.
+**C5:** soft-delete (`activo`) o fusión de duplicados; fail-closed de auditoría solo si negocio lo exige; migración NOT NULL tras limpieza legacy.

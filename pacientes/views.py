@@ -9,7 +9,7 @@ Reglas de negocio aplicadas:
   soft-delete con auditoría dedicada.
 - Las altas y modificaciones quedan auditadas vía ``auditoria.audit_service``
   cuando el módulo está disponible (best-effort, no bloquea la operación si
-  falla la auditoría).
+  falla la auditoría; cubierto por tests en ``pacientes/tests/test_audit.py``).
 """
 import logging
 
