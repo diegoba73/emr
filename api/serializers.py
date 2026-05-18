@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from pacientes.models import Paciente
+from pacientes.serializers import PacienteLightSerializer
 from medicos.models import Medico, Especialidad
 from medicos.models import DisponibilidadMedico, ExcepcionMedico
 
@@ -831,8 +832,12 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
 
 class AtencionSerializer(serializers.ModelSerializer):
     """Serializer completo para Atencion con sus registros relacionados.
-    SIEMPRE devuelve IDs explícitos junto con objetos anidados."""
-    paciente = PacienteSerializer(read_only=True)
+
+    SIEMPRE devuelve IDs explícitos junto con objetos anidados.
+    El paciente embebido usa ``PacienteLightSerializer`` (sin antecedentes ni
+    trazabilidad operativa); la ficha completa queda en ``/api/pacientes/{id}/``.
+    """
+    paciente = PacienteLightSerializer(read_only=True)
     paciente_id = serializers.IntegerField(read_only=True)
     medico_principal = MedicoSerializer(read_only=True)
     medico_principal_id = serializers.IntegerField(read_only=True)
