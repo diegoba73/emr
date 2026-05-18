@@ -8,6 +8,9 @@ class PacienteAdmin(admin.ModelAdmin):
     """Admin de ``Paciente`` alineado con el modelo: los datos personales
     viven en la propia ficha y se exponen como campos editables. La relación
     con ``User`` queda como vínculo opcional, no como fuente de verdad.
+
+    La eliminación física está deshabilitada (identidad clínica longitudinal).
+    La baja lógica / soft-delete se resolverá en una fase posterior.
     """
 
     list_display = ("dni", "apellido", "nombre", "fecha_registro")
@@ -54,3 +57,11 @@ class PacienteAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions

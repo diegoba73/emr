@@ -1,7 +1,7 @@
-# Reglas — Pacientes (Fase C0 / C2)
+# Reglas — Pacientes (Fase C0 / C2 / C3)
 
-**Versión:** C2 — 18 de mayo de 2026  
-**Estado:** Constitución + auditoría C1 + identidad mínima en creación API.
+**Versión:** C3 — 18 de mayo de 2026  
+**Estado:** Constitución + C2 (identidad mínima API) + C3 (sin delete en Admin).
 
 **SoT operativo:** `DOC_REGLAS_NEGOCIO.md` (sección pacientes), `DOC_MODELOS_DB.md`, `pacientes/views.py`.
 
@@ -32,11 +32,11 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Paciente solo ve su ficha vía queryset activo. | **[IMPLEMENTADO]** |
 | Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
 | DELETE físico API bloqueado (405). | **[IMPLEMENTADO]** |
+| DELETE físico Django Admin bloqueado (`has_delete_permission=False`, sin `delete_selected`). | **[IMPLEMENTADO]** C3 |
 | Auditoría create/update best-effort (`log_create` / `log_update`). | **[IMPLEMENTADO]** — **[DEUDA]** fail-closed |
 | `creado_por` / `modificado_por` en modelo. | **[DEUDA]** |
-| Soft delete / fusión de duplicados. | **[OBJETIVO]** |
+| Soft delete / desactivación (`activo=False`) / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
-| Borrado en Django Admin. | **[DEUDA]** |
 
 ---
 
@@ -55,7 +55,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 |--------|----------|
 | Duplicados por carga manual o CSV sin validación. | **[DEUDA]** |
 | `get_queryset` manual diverge de clase de permiso documentada. | **[DEUDA]** |
-| Borrado accidental en admin Django. | **[RECTOR]** mitigar con política operativa |
+| Borrado vía shell/ORM directo (fuera API/Admin). | **[DEUDA]** solo política operativa |
 
 ---
 
@@ -72,6 +72,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 ## Pendientes de validación contra código
 
 - [x] Identidad mínima en POST (C2).
+- [x] Sin delete físico en Admin (C3).
 - [ ] Tests de auditoría en CI.
 - [ ] Revisar comandos `pacientes/management/` (no versionados) antes de cualquier commit.
 - [ ] Alinear mensajes de error de DNI duplicado con frontend.
@@ -80,4 +81,4 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 ## Próximo paso recomendado
 
-**C3:** tests de auditoría fail-closed o bloquear DELETE en Django Admin; sin migración hasta limpieza de legacy.
+**C4:** tests de auditoría fail-closed; o soft-delete formal con `activo`; sin migración NOT NULL hasta limpieza de legacy.
