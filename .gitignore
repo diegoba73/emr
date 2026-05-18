@@ -47,3 +47,12 @@ yarn-error.log*
 
 # Backups y documentación local no canónica
 backup_documentacion/
+
+# Artefactos locales de desarrollo / IDE / contexto IA
+synesis_db
+DB_GAP_REPORT.txt
+_GEM_CONTEXT/
+.cursor_setup.sh
+.cursorrules
+.vscode/
+*.code-workspace
