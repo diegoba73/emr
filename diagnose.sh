@@ -143,13 +143,33 @@ else
   echo "   ℹ️  Frontend no responde en http://localhost:3000"
 fi
 
+# --- Postgres (conectividad) ---
+echo ""
+echo "7️⃣  PostgreSQL"
+echo "-------------"
+if command -v pg_isready >/dev/null 2>&1; then
+  if pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
+    echo "   ✅ pg_isready: Postgres acepta conexiones en 127.0.0.1:5432"
+  else
+    echo "   ⚠️  pg_isready: Postgres no responde en 127.0.0.1:5432"
+    echo "      💡 START_DB=true ./emr-start  o  docker compose up -d db"
+  fi
+elif lsof -i :5432 >/dev/null 2>&1; then
+  echo "   ⚠️  :5432 en uso pero pg_isready no está instalado (no se pudo verificar readiness)"
+else
+  echo "   ❌ :5432 sin servicio (levantá Postgres antes de ./emr-start)"
+  echo "      💡 START_DB=true ./emr-start"
+fi
+
 echo ""
 echo "================================"
 echo "✅ Diagnóstico completado (sin cambios aplicados)"
 echo ""
+echo "Guía de arranque: docs/dev-start.md"
+echo ""
 echo "Comandos sugeridos (no ejecutados automáticamente):"
 echo "  ./emr_env/bin/python manage.py check"
 echo "  ./emr_env/bin/pytest laboratorio/tests/test_api.py -q --reuse-db"
-echo "  docker compose up -d db"
+echo "  START_DB=true ./emr-start"
 echo "  RUN_SEED=true ./emr-start"
 echo "  ./stop_servers.sh"
