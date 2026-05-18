@@ -1,0 +1,66 @@
+# Python / entornos
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+emr_env/
+
+# Node / frontend (imagen solo backend)
+frontend/node_modules/
+frontend/build/
+node_modules/
+
+# IDE / contexto local
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor_setup.sh
+.cursorrules
+_GEM_CONTEXT/
+
+# Git
+.git/
+.gitignore
+
+# Django / datos locales
+*.log
+logs/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+synesis_db
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Dumps / backups
+*.sql
+*.sqlite3
+*.dump
+*.bak
+backup_documentacion/
+DB_GAP_REPORT.txt
+
+# Docs build artifacts
+docs/_build/

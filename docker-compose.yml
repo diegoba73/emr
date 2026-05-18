@@ -1,0 +1,43 @@
+# Stack de desarrollo local (credenciales dummy; no usar en producción).
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: emr_postgres
+    environment:
+      POSTGRES_DB: synesis_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d synesis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: emr_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      DJANGO_SECRET_KEY: dev_secret_key_change_me
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,backend
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: synesis_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+      DB_PORT: "5432"
+      # Migraciones al arranque (solo dev). Sin seeds ni management destructivos.
+      RUN_MIGRATIONS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
