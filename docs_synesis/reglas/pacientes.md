@@ -1,7 +1,7 @@
-# Reglas — Pacientes (Fase C0 / C2 / C3 / C4 / C5 / C5.2 / C5.3)
+# Reglas — Pacientes (Fase C0 / C2 / C3 / C4 / C5 / C5.2 / C5.3 / C5.4)
 
-**Versión:** C5.3 — 18 de mayo de 2026  
-**Estado:** C5 trazabilidad en CRUD + C5.2/C5.3 paciente liviano en `/api/atenciones/` (directo y `turno.paciente`).
+**Versión:** C5.4 — 18 de mayo de 2026  
+**Estado:** C5 trazabilidad en CRUD + paciente liviano en atenciones e internaciones legacy API.
 
 **SoT operativo:** `DOC_REGLAS_NEGOCIO.md` (sección pacientes), `DOC_MODELOS_DB.md`, `pacientes/views.py`.
 
@@ -42,8 +42,9 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Serializers anidados no exponen ficha completa de paciente. | **[IMPLEMENTADO]** C5.2 |
 | `/api/atenciones/` embebe paciente con `PacienteLightSerializer` (sin antecedentes ni `user` / provenance). | **[IMPLEMENTADO]** C5.2 |
 | `/api/atenciones/` — `turno.paciente` vía `TurnoAtencionNestedSerializer` + `PacienteLightSerializer`. | **[IMPLEMENTADO]** C5.3 |
+| `/api/internaciones/` embebe paciente con `PacienteLightSerializer`. | **[IMPLEMENTADO]** C5.4 |
 | `/api/turnos/` global (puede seguir usando serializer completo de pacientes). | **[DEUDA]** |
-| `api.serializers.PacienteSerializer` con `fields='__all__'` en internaciones u otros legacy. | **[DEUDA]** |
+| `api.serializers.PacienteSerializer` con `fields='__all__'` en otros legacy (p. ej. `api.TurnoSerializer`). | **[DEUDA]** |
 | Deprecar / eliminar serializer duplicado en `api/serializers.py`. | **[DEUDA]** |
 | Backfill opcional de `creado_por` / `modificado_por` en datos históricos. | **[DEUDA]** |
 | Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
@@ -88,6 +89,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 - [x] Tests de auditoría CREATE/UPDATE en API (C4).
 - [x] Trazabilidad estructural `creado_por` / `modificado_por` (C5) — `pacientes/tests/test_provenance.py`.
 - [x] Paciente liviano en `/api/atenciones/` directo y `turno.paciente` (C5.2 / C5.3) — `turnos/tests/test_atenciones_paciente_nested.py`.
+- [x] Paciente liviano en `/api/internaciones/` (C5.4) — `historias_clinicas/tests/test_internaciones_paciente_nested.py`.
 - [ ] Auditoría fail-closed (fase posterior).
 - [ ] Revisar comandos `pacientes/management/` (no versionados) antes de cualquier commit.
 - [ ] Alinear mensajes de error de DNI duplicado con frontend.
@@ -96,4 +98,4 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 ## Próximo paso recomendado
 
-**C6+:** alinear `/api/turnos/` global e internaciones anidadas; deprecar `api.PacienteSerializer` (`__all__`); soft-delete / fusión; fail-closed; NOT NULL tras limpieza legacy.
+**C6+:** alinear `/api/turnos/` global; deprecar `api.PacienteSerializer` (`__all__`); soft-delete / fusión; fail-closed; NOT NULL tras limpieza legacy.

@@ -1050,10 +1050,15 @@ class ConsultaSearchSerializer(serializers.ModelSerializer):
 
 # NUEVO: Serializer para Internaciones
 class InternacionSerializer(serializers.ModelSerializer):
-    paciente = PacienteSerializer(read_only=True)
+    """Internación legacy (``historias_clinicas.Internacion``).
+
+    El paciente embebido usa ``PacienteLightSerializer``; ficha completa en
+    ``/api/pacientes/{id}/``.
+    """
+    paciente = PacienteLightSerializer(read_only=True)
     medico_responsable = MedicoSerializer(read_only=True)
     duracion_dias = serializers.ReadOnlyField()
-    
+
     class Meta:
         model = Internacion
         fields = '__all__' 
