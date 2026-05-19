@@ -17,7 +17,7 @@ from .models import (
     RegistroQuirurgico,
 )
 from pacientes.models import Paciente
-from pacientes.serializers import PacienteSerializer
+from pacientes.serializers import PacienteLightSerializer
 from medicos.models import Medico
 from api.serializers import MedicoSerializer
 
@@ -103,17 +103,17 @@ class TurnoSerializer(serializers.ModelSerializer):
     """
     Serializer para Turno implementando patrón Read-Nested / Write-ID.
     
-    - Lectura: Devuelve objetos anidados completos (paciente, medico, recurso)
+    - Lectura: Paciente liviano (``PacienteLightSerializer``); médico y recurso anidados
     - Escritura: Acepta IDs (paciente_id, medico_id, recurso_id)
     Incluye validación de solapamiento y campos calculados.
     """
     # ============================================================
     # CAMPOS DE LECTURA (read_only=True) - Objetos anidados
     # ============================================================
-    paciente = PacienteSerializer(
+    paciente = PacienteLightSerializer(
         read_only=True,
         allow_null=True,
-        help_text="Objeto completo del paciente (solo lectura)"
+        help_text="Identificación mínima del paciente (solo lectura)",
     )
     medico = MedicoSerializer(
         read_only=True,
