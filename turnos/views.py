@@ -3,7 +3,7 @@ ViewSets para la app turnos.
 """
 import logging
 from rest_framework import viewsets, filters, status
-from rest_framework.exceptions import MethodNotAllowed, ValidationError
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,6 +38,43 @@ def _puede_ver_agenda_global_turnos(user) -> bool:
     if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
         return True
     return (getattr(user, 'rol', '') or '').lower() in _ROLES_AGENDA_GLOBAL_TURNOS
+
+
+def _rol_usuario(user) -> str:
+    return (getattr(user, 'rol', '') or '').lower()
+
+
+def _puede_gestionar_turnos_global(user) -> bool:
+    """Crear/modificar turnos en agenda institucional (no incluye enfermería en C5.8.1)."""
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+    return _rol_usuario(user) in {'admin', 'secretaria'}
+
+
+def _es_enfermeria(user) -> bool:
+    return _rol_usuario(user) == 'enfermeria'
+
+
+def _es_laboratorio(user) -> bool:
+    return _rol_usuario(user) == 'laboratorio'
+
+
+def _reject_foreign_medico_assignment(serializer, medico) -> None:
+    if 'medico' not in serializer.validated_data:
+        return
+    nuevo = serializer.validated_data['medico']
+    nuevo_id = nuevo.id if nuevo else None
+    if nuevo_id != medico.id:
+        raise PermissionDenied('No puede reasignar el turno a otro médico.')
+
+
+def _reject_foreign_paciente_assignment(serializer, paciente) -> None:
+    if 'paciente' not in serializer.validated_data:
+        return
+    nuevo = serializer.validated_data['paciente']
+    nuevo_id = nuevo.id if nuevo else None
+    if nuevo_id != paciente.id:
+        raise PermissionDenied('No puede reasignar el turno a otro paciente.')
 
 
 def _safe_audit(callable_, *args, **kwargs):
@@ -180,24 +217,55 @@ class TurnoViewSet(viewsets.ModelViewSet):
             return queryset.none()
         return queryset.filter(paciente=pac)
 
+    def _deny_readonly_roles_on_write(self) -> None:
+        """Enfermería y laboratorio: lectura global sin mutación (C5.8.1)."""
+        user = self.request.user
+        if _es_enfermeria(user) or _es_laboratorio(user):
+            raise PermissionDenied('No tiene permiso para modificar turnos.')
+        if not _puede_gestionar_turnos_global(user) and _rol_usuario(user) not in {
+            'medico',
+            'paciente',
+        }:
+            raise PermissionDenied('No tiene permiso para modificar turnos.')
+
+    def update(self, request, *args, **kwargs):
+        self._deny_readonly_roles_on_write()
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._deny_readonly_roles_on_write()
+        return super().partial_update(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         """
-        Garantizar que un usuario con rol paciente no cree turnos sin ficha o con otro paciente.
-        El GET lista solo turnos con paciente = user.paciente; si el front no enviaba
-        paciente_id, el turno quedaba con paciente NULL y "desaparecía" de la grilla.
+        Matriz de creación (C5.8.1): no confiar en IDs del cliente para médico/paciente
+        cuando el rol exige turno propio.
         """
         user = self.request.user
+        rol = _rol_usuario(user)
+
         with transaction.atomic():
-            if (getattr(user, "rol", "") or "").lower() == "paciente":
+            if _puede_gestionar_turnos_global(user):
+                instance = serializer.save()
+            elif _es_enfermeria(user) or _es_laboratorio(user):
+                raise PermissionDenied('No tiene permiso para crear turnos.')
+            elif rol == 'medico':
+                try:
+                    med = user.medico
+                except ObjectDoesNotExist:
+                    raise PermissionDenied(
+                        'El usuario médico no tiene ficha profesional vinculada.'
+                    )
+                instance = serializer.save(medico=med)
+            elif rol == 'paciente':
                 pac = ensure_paciente_linked_to_user(user)
                 if not pac:
-                    raise ValidationError(
-                        "No hay ficha de paciente vinculada a su usuario. Compruebe que el email "
-                        "de la cuenta coincida con el de su ficha, o contacte a administración."
+                    raise PermissionDenied(
+                        'El usuario paciente no tiene ficha de paciente vinculada.'
                     )
                 instance = serializer.save(paciente=pac)
             else:
-                instance = serializer.save()
+                raise PermissionDenied('No tiene permiso para crear turnos.')
 
             _safe_audit(
                 log_create,
@@ -208,19 +276,40 @@ class TurnoViewSet(viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
-        """Mismo criterio que en create: un paciente no puede reasignar el turno a otro."""
+        """Matriz de modificación (C5.8.1) además del acotamiento por ``get_queryset``."""
         user = self.request.user
-        before = safe_model_snapshot(self.get_object())
+        rol = _rol_usuario(user)
+        instance = self.get_object()
+        before = safe_model_snapshot(instance)
+
         with transaction.atomic():
-            if (getattr(user, "rol", "") or "").lower() == "paciente":
+            if _puede_gestionar_turnos_global(user):
+                instance = serializer.save()
+            elif _es_enfermeria(user) or _es_laboratorio(user):
+                raise PermissionDenied('No tiene permiso para modificar turnos.')
+            elif rol == 'medico':
+                try:
+                    med = user.medico
+                except ObjectDoesNotExist:
+                    raise PermissionDenied(
+                        'El usuario médico no tiene ficha profesional vinculada.'
+                    )
+                if instance.medico_id != med.id:
+                    raise PermissionDenied('No puede modificar turnos de otro médico.')
+                _reject_foreign_medico_assignment(serializer, med)
+                instance = serializer.save(medico=med)
+            elif rol == 'paciente':
                 pac = ensure_paciente_linked_to_user(user)
                 if not pac:
-                    raise ValidationError(
-                        "No hay ficha de paciente vinculada a su usuario. Contacte a administración."
+                    raise PermissionDenied(
+                        'El usuario paciente no tiene ficha de paciente vinculada.'
                     )
+                if instance.paciente_id != pac.id:
+                    raise PermissionDenied('No puede modificar turnos de otro paciente.')
+                _reject_foreign_paciente_assignment(serializer, pac)
                 instance = serializer.save(paciente=pac)
             else:
-                instance = serializer.save()
+                raise PermissionDenied('No tiene permiso para modificar turnos.')
 
             _safe_audit(
                 log_update,

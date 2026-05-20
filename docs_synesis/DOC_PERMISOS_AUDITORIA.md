@@ -48,7 +48,7 @@ Ubicación: `api/permissions.py`
 | `IsMedicoOrEnfermeriaOrAdmin` | roles medico, enfermeria, admin (minúsculas) |
 | `IsPacienteOrStaff` | staff o grupo Pacientes / rol paciente; objeto: solo propio |
 | `IsMedicoOrSecretariaOrAdmin` | medico, secretaria, admin |
-| `CanManageTurnos` | `user.puede_gestionar_turnos()`; objeto: secretaria/admin todos; médico solo sus turnos |
+| `CanManageTurnos` | `user.puede_gestionar_turnos()`; **no aplicado** al `TurnoViewSet` activo (`turnos.views`); ver C5.8.1 en `perform_create`/`perform_update` |
 | `IsEMRClinician` | medico, secretaria, admin — **no** incluye `laboratorio` (operador LIMS) |
 | `IsEMRClinicianOrReadOnly` | GET para autenticados; escritura como EMR clinician |
 | `CanUpdatePacienteDemographics` | staff/admin/secretaria; médico cualquier paciente GET/PATCH; paciente solo su ficha |
@@ -99,7 +99,9 @@ Ubicación: `api/permissions.py`
 
 ## Eventos registrados (ejemplos en código)
 
-- Alta/edición/borrado de turnos (`TurnoViewSet`).
+- Alta/edición de turnos (`TurnoViewSet`): `log_create` / `log_update` con actor y snapshot (best-effort). Mutaciones restringidas por rol desde C5.8.1; ver `turnos/tests/test_permissions_mutations.py`.
+- Borrado físico de turnos: **bloqueado** (405); no genera `log_delete`.
+- **[DEUDA]** Transiciones de estado de turno vía acciones dedicadas (`cancelar`, `confirmar`, …); hoy `estado` puede cambiarse por PATCH dentro de permisos de rol.
 - Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**.
 - Transiciones de estado de `SolicitudExamen`: `log_update` con `metadata` que incluye **`accion`**, **`estado_anterior`**, **`estado_nuevo`**, **`solicitud_id`**, **`numero_solicitud`** (vía `laboratorio/solicitud_estado.apply_solicitud_estado_transition`); además `before_state`/`after_state` del snapshot.
 - Solicitudes: `log_create` / `log_update` en flujos del ViewSet.

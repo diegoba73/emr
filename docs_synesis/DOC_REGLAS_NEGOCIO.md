@@ -68,8 +68,13 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 - Estados: DISPONIBLE, RESERVADO, CONFIRMADO, CANCELADO, REALIZADO.
 - Validación: `fecha_hora_fin` > inicio si ambas presentes.
-- Paciente al crear/actualizar: debe tener ficha vinculada (`ensure_paciente_linked_to_user`) y no puede cambiar paciente ajeno.
-- `TurnoViewSet`: admin/staff/superuser/secretaría/enfermería ven agenda global; médico solo sus turnos; `?all=true` no escala médico; médico sin ficha `Medico` → queryset vacío; laboratorio y roles no contemplados → vacío (**[IMPLEMENTADO]** C5.7.1).
+- **Lectura** (`GET`): admin/staff/superuser/secretaría/enfermería agenda global; médico solo propios; paciente solo propios; laboratorio/otros vacío (**[IMPLEMENTADO]** C5.7.1).
+- **Creación** (`POST`): admin/staff/secretaría global; médico solo con su `Medico` forzado; paciente solo con su ficha forzada; enfermería/laboratorio/rol desconocido → 403 (**[IMPLEMENTADO]** C5.8.1).
+- **Modificación** (`PATCH`/`PUT`): misma matriz; médico/paciente no reasignan `medico_id`/`paciente_id` ajenos; enfermería/laboratorio → 403 (**[IMPLEMENTADO]** C5.8.1).
+- Paciente: ficha vía `ensure_paciente_linked_to_user`; sin ficha → 403 en mutaciones.
+- `?all=true` no escala lectura de médico (C5.7.1).
+- DELETE físico: 405; cancelar por `estado` (**[DEUDA]** acciones de negocio para estados).
+- Validación serializer: solapamiento, bloqueo de cambios en turno REALIZADO/consulta cargada.
 - Filtros de calendario: query params `start`, `end`.
 
 ---

@@ -1,6 +1,6 @@
 # Reglas — Usuarios y permisos (Fase C0)
 
-**Versión:** C5.7.1 — 20 de mayo de 2026  
+**Versión:** C5.8.1 — 20 de mayo de 2026  
 **SoT operativo:** `DOC_PERMISOS_AUDITORIA.md`, `api/permissions.py`, `usuarios/models.py`.
 
 ---
@@ -45,7 +45,7 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Leer catálogo LIMS | admin, laboratorio, medico, secretaria, enfermeria |
 | Crear/cargar resultados | admin, laboratorio |
 | Validar orden LIMS | admin (+ superuser) |
-| Gestionar turnos | secretaria, admin, médico (propios) |
+| Gestionar turnos (crear/modificar) | secretaria, admin/staff; médico y paciente solo propios; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
 
 Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
@@ -67,6 +67,29 @@ Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
 - **[OBJETIVO]** Permiso explícito (p. ej. coordinación médica / `turnos.ver_agenda_global`) para excepciones auditables sin reabrir bypass por query param.
 
 Implementación: `turnos.views.TurnoViewSet.get_queryset`, tests en `turnos/tests/test_api.py`.
+
+---
+
+## Mutaciones de turnos **[IMPLEMENTADO]** (C5.8.1)
+
+`POST` / `PATCH` / `PUT` en `/api/turnos/` — `TurnoViewSet.perform_create` / `perform_update` (no usa `CanManageTurnos` del router activo).
+
+| Rol | Leer turnos | Crear turnos | Modificar turnos |
+|-----|-------------|--------------|------------------|
+| superuser / staff | Global | Global | Global |
+| `admin` | Global | Global | Global |
+| `secretaria` | Global | Global | Global |
+| `enfermeria` | Global | No (403) | No (403) |
+| `medico` (con ficha) | Propios | Propios (`medico` forzado) | Propios; no reasignar `medico_id` |
+| `medico` sin ficha | Vacío | No (403) | No (403) |
+| `paciente` vinculado | Propios | Propios (`paciente` forzado) | Propios; no reasignar `paciente_id` |
+| `laboratorio` | No | No (403) | No (403) |
+| Rol no reconocido | Vacío | No (403) | No (403) |
+
+- `DELETE` físico sigue **405** (cancelar vía `estado`, no borrado).
+- Cambio de `estado` por PATCH directo: permitido dentro del turno editable por rol; **[DEUDA]** mover a acciones de negocio (`cancelar`, `confirmar`, etc.).
+- Tests: `turnos/tests/test_permissions_mutations.py`, regresión en `turnos/tests/test_api.py`.
+- **[DEUDA]** Aplicar `CanManageTurnos` o permiso DRF unificado; código duplicado en `api/views.TurnoViewSet` (no registrado en router).
 
 ---
 
@@ -97,4 +120,5 @@ Ver `DOC_INVARIANTES.md` (U1–U5).
 ## Pendientes de validación
 
 - [ ] Matriz rol × endpoint crítica actualizada en `DOC_API_ENDPOINTS.md` tras cada fase LIMS.
-- [ ] Tests de permiso negativo por rol en rutas nuevas.
+- [x] Tests de permiso negativo create/patch turnos (C5.8.1).
+- [ ] Matriz completa en `DOC_API_ENDPOINTS.md`.
