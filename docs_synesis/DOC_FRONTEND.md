@@ -147,3 +147,19 @@ Resultado: TypeScript OK, build OK, **11 suites / 25 tests** OK.
 ### Fuera de alcance UI-2
 
 PDF, firma digital, QC/equipamiento, portal paciente, endpoints legacy `/solicitudes-examen/` y `/resultados-examen/`.
+
+---
+
+### Turnos — permisos UI (C5.8.2, mayo 2026)
+
+Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
+
+| Archivo | Rol |
+|---------|-----|
+| `frontend/src/utils/turnoPermissions.ts` | Helpers `canCreateTurno`, `canEditTurno`, `canDeleteTurno` (siempre false) |
+| `frontend/src/pages/Turnos.tsx` | Oculta “Nuevo Turno”, slots y franjas si no puede crear; laboratorio: mensaje; enfermería: banner solo lectura |
+| `frontend/src/components/TurnoModal.tsx` | `forceReadOnly`; médico bloqueado para rol `MEDICO`; paciente bloqueado para `PACIENTE` |
+
+- No hay botón eliminar (DELETE → 405 en API).
+- Estado editable en formulario según rol: **[DEUDA]** flujos de negocio dedicados.
+- Validación: `cd frontend && npm run build && npm exec -- tsc --noEmit`.

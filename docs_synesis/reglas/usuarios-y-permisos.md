@@ -1,6 +1,6 @@
 # Reglas — Usuarios y permisos (Fase C0)
 
-**Versión:** C5.8.1 — 20 de mayo de 2026  
+**Versión:** C5.8.2 — 20 de mayo de 2026  
 **SoT operativo:** `DOC_PERMISOS_AUDITORIA.md`, `api/permissions.py`, `usuarios/models.py`.
 
 ---
@@ -90,6 +90,24 @@ Implementación: `turnos.views.TurnoViewSet.get_queryset`, tests en `turnos/test
 - Cambio de `estado` por PATCH directo: permitido dentro del turno editable por rol; **[DEUDA]** mover a acciones de negocio (`cancelar`, `confirmar`, etc.).
 - Tests: `turnos/tests/test_permissions_mutations.py`, regresión en `turnos/tests/test_api.py`.
 - **[DEUDA]** Aplicar `CanManageTurnos` o permiso DRF unificado; código duplicado en `api/views.TurnoViewSet` (no registrado en router).
+
+---
+
+## UI de turnos (frontend) **[IMPLEMENTADO]** (C5.8.2)
+
+Helpers: `frontend/src/utils/turnoPermissions.ts` (`canCreateTurno`, `canEditTurno`, `canDeleteTurno` → siempre `false`).
+
+| Rol | Pantalla `/turnos` | Crear (botón / slot) | Editar formulario |
+|-----|-------------------|----------------------|-------------------|
+| admin / staff / superuser / secretaria | Agenda global | Sí | Sí (todos) |
+| enfermería | Agenda global, banner solo lectura | No | No (modal ver turno) |
+| médico | Propios | Sí (médico fijo en modal) | Solo propios |
+| paciente | Propios | Sí (paciente fijo) | Solo propios |
+| laboratorio | Mensaje sin acceso | No | No |
+
+- **DELETE** no se ofrece en UI (API 405).
+- Cambio de **estado** por PATCH en formulario: **[DEUDA]** acciones de negocio (`cancelar`, `confirmar`, etc.).
+- Backend sigue siendo fuente de verdad; la UI evita acciones que devolverían 403.
 
 ---
 
