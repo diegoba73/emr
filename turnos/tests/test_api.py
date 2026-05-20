@@ -227,7 +227,8 @@ class TestTurnoAPI(APITestCase):
         assert medico_field is not None
         assert medico_field['id'] == medico_b.id
 
-    def test_medico_puede_ver_todos_con_all_true(self):
+    def test_medico_all_true_no_escala(self):
+        """``?all=true`` no debe convertir a un médico en lector de agenda global."""
         medico_b = Medico.objects.create(
             nombre='Dr. B',
             apellido='Médico',
@@ -252,7 +253,7 @@ class TestTurnoAPI(APITestCase):
             fecha_hora_fin=fecha_base + timedelta(minutes=30),
             estado=Turno.Estado.CONFIRMADO,
         )
-        Turno.objects.create(
+        turno_propio = Turno.objects.create(
             paciente=self.paciente,
             medico=medico_b,
             recurso=self.recurso,
@@ -265,7 +266,158 @@ class TestTurnoAPI(APITestCase):
         response = self.client.get('/api/turnos/?all=true')
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) == 2
+        results = response.data['results']
+        assert len(results) == 1
+        assert results[0]['id'] == turno_propio.id
+
+    def test_medico_sin_ficha_medico_ve_vacio(self):
+        user_sin_ficha = User.objects.create_user(
+            username='ta_medico_sin_ficha',
+            email='ta_medico_sin_ficha@test.com',
+            password='testpass123',
+            rol='medico',
+        )
+        Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=timezone.now() + timedelta(days=1),
+            fecha_hora_fin=timezone.now() + timedelta(days=1, minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+
+        self.client.force_authenticate(user=user_sin_ficha)
+        for url in ('/api/turnos/', '/api/turnos/?all=true'):
+            response = self.client.get(url)
+            assert response.status_code == status.HTTP_200_OK
+            assert response.data['results'] == []
+
+    def test_medico_no_puede_retrieve_turno_ajeno_con_all_true(self):
+        medico_b = Medico.objects.create(
+            nombre='Dr. Ajeno',
+            apellido='Retrieve',
+            matricula='MTA-004',
+            especialidad=self.especialidad,
+        )
+        user_medico = User.objects.create_user(
+            username='ta_medico_retrieve',
+            email='ta_medico_retrieve@test.com',
+            password='testpass123',
+            rol='medico',
+        )
+        medico_b.user = user_medico
+        medico_b.save()
+
+        fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        turno_ajeno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_base,
+            fecha_hora_fin=fecha_base + timedelta(minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+
+        self.client.force_authenticate(user=user_medico)
+        response = self.client.get(f'/api/turnos/{turno_ajeno.id}/?all=true')
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_medico_no_puede_patch_turno_ajeno_con_all_true(self):
+        medico_b = Medico.objects.create(
+            nombre='Dr. Ajeno',
+            apellido='Patch',
+            matricula='MTA-005',
+            especialidad=self.especialidad,
+        )
+        user_medico = User.objects.create_user(
+            username='ta_medico_patch',
+            email='ta_medico_patch@test.com',
+            password='testpass123',
+            rol='medico',
+        )
+        medico_b.user = user_medico
+        medico_b.save()
+
+        fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        turno_ajeno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_base,
+            fecha_hora_fin=fecha_base + timedelta(minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+
+        self.client.force_authenticate(user=user_medico)
+        response = self.client.patch(
+            f'/api/turnos/{turno_ajeno.id}/?all=true',
+            {'motivo_reserva': 'intento'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        turno_ajeno.refresh_from_db()
+        assert turno_ajeno.motivo_reserva != 'intento'
+
+    def test_secretaria_ve_agenda_global_con_y_sin_all_true(self):
+        secretaria = User.objects.create_user(
+            username='ta_secretaria_turnos',
+            email='ta_secretaria@test.com',
+            password='testpass123',
+            rol='secretaria',
+        )
+        medico_b = Medico.objects.create(
+            nombre='Dr. B',
+            apellido='Sec',
+            matricula='MTA-006',
+            especialidad=self.especialidad,
+        )
+        fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_base,
+            fecha_hora_fin=fecha_base + timedelta(minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+        Turno.objects.create(
+            paciente=self.paciente,
+            medico=medico_b,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_base + timedelta(hours=1),
+            fecha_hora_fin=fecha_base + timedelta(hours=1, minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+
+        self.client.force_authenticate(user=secretaria)
+        for url in ('/api/turnos/', '/api/turnos/?all=true'):
+            response = self.client.get(url)
+            assert response.status_code == status.HTTP_200_OK
+            assert len(response.data['results']) == 2
+
+    def test_laboratorio_no_ve_turnos(self):
+        lab_user = User.objects.create_user(
+            username='ta_laboratorio_turnos',
+            email='ta_lab@test.com',
+            password='testpass123',
+            rol='laboratorio',
+        )
+        Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=timezone.now() + timedelta(days=2),
+            fecha_hora_fin=timezone.now() + timedelta(days=2, minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+
+        self.client.force_authenticate(user=lab_user)
+        response = self.client.get('/api/turnos/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['results'] == []
 
     def test_validacion_fecha_fin_mayor_inicio(self):
         fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)

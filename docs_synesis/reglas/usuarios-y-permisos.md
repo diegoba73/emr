@@ -1,6 +1,6 @@
 # Reglas — Usuarios y permisos (Fase C0)
 
-**Versión:** C0 — 18 de mayo de 2026  
+**Versión:** C5.7.1 — 20 de mayo de 2026  
 **SoT operativo:** `DOC_PERMISOS_AUDITORIA.md`, `api/permissions.py`, `usuarios/models.py`.
 
 ---
@@ -49,6 +49,24 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Cerrar atención | medico, enfermeria, admin |
 
 Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
+
+---
+
+## Agenda global de turnos **[IMPLEMENTADO]** (C5.7.1)
+
+| Rol / condición | `GET /api/turnos/` |
+|-----------------|-------------------|
+| superuser, staff, `admin`, `secretaria`, `enfermeria` | Todos los turnos (agenda institucional) |
+| `medico` con ficha `Medico` vinculada | Solo turnos donde `medico` = su ficha |
+| `medico` sin ficha `Medico` | Lista vacía |
+| `paciente` vinculado | Solo sus turnos |
+| `laboratorio` y otros roles no contemplados | Lista vacía |
+
+- El query param `?all=true` **no** amplía el alcance de un médico (defensa alineada con `/api/pacientes/`).
+- El frontend no envía `all=true` en la carga global de turnos (`DataContext.loadTurnos`).
+- **[OBJETIVO]** Permiso explícito (p. ej. coordinación médica / `turnos.ver_agenda_global`) para excepciones auditables sin reabrir bypass por query param.
+
+Implementación: `turnos.views.TurnoViewSet.get_queryset`, tests en `turnos/tests/test_api.py`.
 
 ---
 

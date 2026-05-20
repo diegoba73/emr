@@ -30,6 +30,15 @@ from auditoria.snapshot import safe_model_snapshot
 
 logger = logging.getLogger(__name__)
 
+_ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'secretaria', 'enfermeria'})
+
+
+def _puede_ver_agenda_global_turnos(user) -> bool:
+    """Agenda institucional de turnos: staff operativo, no médico estándar."""
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+    return (getattr(user, 'rol', '') or '').lower() in _ROLES_AGENDA_GLOBAL_TURNOS
+
 
 def _safe_audit(callable_, *args, **kwargs):
     """Best-effort wrapper para auditoría: no debe romper el request."""
@@ -147,24 +156,23 @@ class TurnoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filtrado por rol según reglas de negocio:
-        - Admin, Secretaría, Enfermería: ven todo
-        - Médico: los suyos, o todos con ?all=true; sin ficha vinculada, ver todo
-        - Cualquier usuario con ficha de paciente: solo sus turnos
+        - Admin, staff, secretaría, enfermería: agenda global (``?all=true`` ignorado)
+        - Médico: solo turnos propios; ``?all=true`` no escala; sin ficha Medico: vacío
+        - Paciente vinculado: solo sus turnos
+        - Otros roles (p. ej. laboratorio): ninguno
         """
         queryset = super().get_queryset()
         user = self.request.user
         user_rol = (user.rol or '').lower()
 
-        if user.is_superuser or user.is_staff or user_rol in ['admin', 'secretaria', 'enfermeria']:
+        if _puede_ver_agenda_global_turnos(user):
             return queryset
 
         if user_rol == 'medico':
             try:
                 med = user.medico
             except ObjectDoesNotExist:
-                return queryset
-            if self.request.query_params.get('all') == 'true':
-                return queryset
+                return queryset.none()
             return queryset.filter(medico=med)
 
         pac = ensure_paciente_linked_to_user(user)

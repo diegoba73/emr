@@ -58,7 +58,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de pacientes
 
 - DNI **único** en modelo.
-- `PacienteViewSet`: admin/secretaría/enfermería ven todos; médico ve pacientes con turno o consulta con él, o todos con `?all=true`; paciente solo su ficha.
+- `PacienteViewSet`: admin/secretaría/enfermería ven todos; médico acotado a relación turno/consulta (`?all=true` no escala); paciente solo su ficha.
 - `buscar`: numérico → DNI icontains; texto → nombre/apellido; orden por prioridad de coincidencia.
 - Actualización demográfica: permiso `CanUpdatePacienteDemographics` (médico puede PATCH cualquier paciente según clase).
 
@@ -69,7 +69,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - Estados: DISPONIBLE, RESERVADO, CONFIRMADO, CANCELADO, REALIZADO.
 - Validación: `fecha_hora_fin` > inicio si ambas presentes.
 - Paciente al crear/actualizar: debe tener ficha vinculada (`ensure_paciente_linked_to_user`) y no puede cambiar paciente ajeno.
-- Médico ve solo sus turnos salvo `?all=true` o ausencia de objeto médico.
+- `TurnoViewSet`: admin/staff/superuser/secretaría/enfermería ven agenda global; médico solo sus turnos; `?all=true` no escala médico; médico sin ficha `Medico` → queryset vacío; laboratorio y roles no contemplados → vacío (**[IMPLEMENTADO]** C5.7.1).
 - Filtros de calendario: query params `start`, `end`.
 
 ---

@@ -11,7 +11,7 @@
 ## Flujo de pacientes
 
 1. **Registro de ficha:** modelo `pacientes.Paciente` (DNI único); usuario opcional `OneToOne` a `User`.
-2. **API:** `PacienteViewSet` — listado filtrado por rol (admin/secretaría/enfermería todo; médico con relación turno/consulta o `?all=true`; paciente solo su id).
+2. **API:** `PacienteViewSet` — listado filtrado por rol (admin/secretaría/enfermería todo; médico acotado por relación; `?all=true` no escala; paciente solo su id).
 3. **Búsqueda:** `GET /api/pacientes/buscar/?q=` — numérico → DNI; texto → nombre/apellido.
 4. **Vinculación usuario–paciente:** `ensure_paciente_linked_to_user` usado en turnos para rol paciente.
 
@@ -22,7 +22,7 @@
 1. **Recurso:** `Recurso` (ubicación CEHTA/ICPL, tipo consultorio/sala/quirófano).
 2. **Turno:** estados `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO`.
 3. **Validación modelo:** `clean`/`save` en `Turno` — fin > inicio.
-4. **API:** `TurnoViewSet` — filtros `start`/`end` para calendario; paciente fuerza `paciente` en create/update; médico ve solo sus turnos salvo `?all=true` o sin ficha médico.
+4. **API:** `TurnoViewSet` — filtros `start`/`end` para calendario; paciente fuerza `paciente` en create/update; agenda global para admin/staff/secretaría/enfermería; médico solo turnos propios (`?all=true` ignorado); médico sin ficha `Medico` → vacío (C5.7.1).
 5. **Disponibilidad/excepción:** `DisponibilidadMedico`, `ExcepcionMedico` expuestos vía `api/views.py` registrados en router.
 
 ---

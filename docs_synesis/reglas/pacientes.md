@@ -1,7 +1,7 @@
 # Reglas — Pacientes (Fase C0 / C2 / C3 / C4 / C5 / C5.2–C5.6)
 
-**Versión:** C5.6 — 18 de mayo de 2026  
-**Estado:** C5 trazabilidad en CRUD + paciente liviano en atenciones, internaciones legacy y turnos.
+**Versión:** C5.7.1 — 20 de mayo de 2026  
+**Estado:** C5 trazabilidad en CRUD + paciente liviano en atenciones, internaciones legacy y turnos; agenda global de turnos acotada por rol.
 
 **SoT operativo:** `DOC_REGLAS_NEGOCIO.md` (sección pacientes), `DOC_MODELOS_DB.md`, `pacientes/views.py`.
 
@@ -44,7 +44,8 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | `/api/atenciones/` — `turno.paciente` vía `TurnoAtencionNestedSerializer` + `PacienteLightSerializer`. | **[IMPLEMENTADO]** C5.3 |
 | `/api/internaciones/` embebe paciente con `PacienteLightSerializer`. | **[IMPLEMENTADO]** C5.4 |
 | `/api/turnos/` embebe paciente con `PacienteLightSerializer` (calendario/listado). | **[IMPLEMENTADO]** C5.6 |
-| Médico con `?all=true` en carga de turnos (alcance de turnos visibles, no campos). | **[DEUDA]** |
+| Médico con `?all=true` en `/api/turnos/` no escala a agenda global; médico sin ficha `Medico` ve lista vacía. | **[IMPLEMENTADO]** C5.7.1 `turnos.views` |
+| Permiso explícito de agenda institucional para coordinación médica. | **[OBJETIVO]** |
 | `api.serializers.PacienteSerializer` con `fields='__all__'` en otros legacy (p. ej. `api.TurnoSerializer`). | **[DEUDA]** |
 | Deprecar / eliminar serializer duplicado en `api/serializers.py`. | **[DEUDA]** |
 | Backfill opcional de `creado_por` / `modificado_por` en datos históricos. | **[DEUDA]** |
@@ -92,6 +93,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 - [x] Paciente liviano en `/api/atenciones/` directo y `turno.paciente` (C5.2 / C5.3) — `turnos/tests/test_atenciones_paciente_nested.py`.
 - [x] Paciente liviano en `/api/internaciones/` (C5.4) — `historias_clinicas/tests/test_internaciones_paciente_nested.py`.
 - [x] Paciente liviano en `/api/turnos/` (C5.6) — `turnos/tests/test_turnos_paciente_nested.py`.
+- [x] `?all=true` en turnos no escala médico; médico sin ficha Medico vacío (C5.7.1) — `turnos/tests/test_api.py`.
 - [ ] Auditoría fail-closed (fase posterior).
 - [ ] Revisar comandos `pacientes/management/` (no versionados) antes de cualquier commit.
 - [ ] Alinear mensajes de error de DNI duplicado con frontend.
@@ -100,4 +102,4 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 ## Próximo paso recomendado
 
-**C6+:** alinear `/api/turnos/` global; deprecar `api.PacienteSerializer` (`__all__`); soft-delete / fusión; fail-closed; NOT NULL tras limpieza legacy.
+**C6+:** permiso explícito agenda institucional médicos; deprecar `api.PacienteSerializer` (`__all__`); soft-delete / fusión; fail-closed; NOT NULL tras limpieza legacy.
