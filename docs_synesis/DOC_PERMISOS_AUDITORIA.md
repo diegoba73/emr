@@ -61,7 +61,16 @@ Ubicación: `api/permissions.py`
 
 ## Permisos frontend
 
-**No hay código frontend** en el repo. “Guards” no aplicables aquí.
+La aplicación React/TypeScript vive en el **submódulo Git** `frontend/` (referenciado desde el repo padre). Los permisos **no** se delegan al cliente: el backend (DRF + `get_queryset` + acciones) sigue siendo la fuente de verdad.
+
+Guards visuales relevantes (ejemplos):
+
+| Área | Archivo | Notas |
+|------|---------|--------|
+| Turnos agenda | `frontend/src/utils/turnoPermissions.ts` | C5.8.2: crear/editar por rol; C5.9.1: `confirmar`/`cancelar`; PATCH `estado` solo admin/secretaría en UI |
+| LIMS | `frontend/src/utils/limsAccess.ts` | Lectura vs operación vs validar |
+
+Ocultar botones o campos en UI **no sustituye** controles de API; un cliente malicioso puede llamar endpoints directamente.
 
 ---
 

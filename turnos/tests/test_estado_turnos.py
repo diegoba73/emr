@@ -461,11 +461,16 @@ class TestAuditoriaTransicionTurno(APITestCase):
             .first()
         )
         assert ev is not None
+        assert ev.actor_id == admin.id
+        assert ev.before_state is not None
+        assert ev.after_state is not None
+        assert ev.before_state.get('estado') == Turno.Estado.RESERVADO
+        assert ev.after_state.get('estado') == Turno.Estado.CONFIRMADO
         assert ev.metadata.get('accion') == 'confirmar_turno'
         assert ev.metadata.get('estado_anterior') == Turno.Estado.RESERVADO
         assert ev.metadata.get('estado_nuevo') == Turno.Estado.CONFIRMADO
         assert ev.metadata.get('turno_id') == turno.id
-        assert ev.actor_id == admin.id
+        assert ev.metadata.get('view') == 'TurnoViewSet.confirmar'
 
     def test_cancelar_auditoria_con_motivo(self):
         from auditoria.tests.compat import capture_on_commit_callbacks
@@ -500,5 +505,246 @@ class TestAuditoriaTransicionTurno(APITestCase):
             .order_by('-id')
             .first()
         )
+        assert ev is not None
+        assert ev.actor_id == admin.id
+        assert ev.before_state.get('estado') == Turno.Estado.CONFIRMADO
+        assert ev.after_state.get('estado') == Turno.Estado.CANCELADO
         assert ev.metadata.get('accion') == 'cancelar_turno'
         assert ev.metadata.get('motivo') == 'Motivo prueba auditoría'
+        assert ev.metadata.get('estado_anterior') == Turno.Estado.CONFIRMADO
+        assert ev.metadata.get('estado_nuevo') == Turno.Estado.CANCELADO
+        assert ev.metadata.get('turno_id') == turno.id
+        assert ev.metadata.get('view') == 'TurnoViewSet.cancelar'
+
+
+def _audit_update_count(turno_id: int) -> int:
+    return AuditEvent.objects.filter(
+        entity_type='turnos.Turno',
+        entity_id=str(turno_id),
+        action='UPDATE',
+    ).count()
+
+
+@pytest.mark.django_db
+class TestPutEstadoBloqueado(APITestCase):
+    """PUT completo también pasa por ``_reject_direct_estado_change``."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.especialidad = _esp('Cardiología PUT Est')
+        cls.paciente = Paciente.objects.create(
+            dni='TE-PUT-P', nombre='Pac', apellido='Put',
+        )
+        cls.medico = Medico.objects.create(
+            nombre='Dr', apellido='Put', matricula='TE-PUT-M', especialidad=cls.especialidad,
+        )
+        cls.recurso = _recurso('put')
+
+    def _turno(self) -> Turno:
+        base = timezone.now() + timedelta(hours=130)
+        return Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=base,
+            fecha_hora_fin=base + timedelta(minutes=30),
+            estado=Turno.Estado.RESERVADO,
+        )
+
+    def _put_payload(self, turno: Turno, estado: str) -> dict:
+        return {
+            'paciente_id': turno.paciente_id,
+            'medico_id': turno.medico_id,
+            'recurso_id': turno.recurso_id,
+            'fecha_hora_inicio': turno.fecha_hora_inicio.isoformat(),
+            'fecha_hora_fin': turno.fecha_hora_fin.isoformat(),
+            'estado': estado,
+            'motivo_reserva': turno.motivo_reserva or '',
+        }
+
+    def test_medico_no_puede_put_estado_directo(self):
+        user = User.objects.create_user(
+            username='te_put_med', email='te_put_med@test.com', password='x', rol='medico',
+        )
+        self.medico.user = user
+        self.medico.save()
+        turno = self._turno()
+        self.client.force_authenticate(user=user)
+        r = self.client.put(
+            f'/api/turnos/{turno.id}/',
+            self._put_payload(turno, Turno.Estado.CONFIRMADO),
+            format='json',
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'estado' in r.data
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.RESERVADO
+
+    def test_paciente_no_puede_put_estado_directo(self):
+        user = User.objects.create_user(
+            username='te_put_pac', email='te_put_pac@test.com', password='x', rol='paciente',
+        )
+        self.paciente.user = user
+        self.paciente.save()
+        turno = self._turno()
+        self.client.force_authenticate(user=user)
+        r = self.client.put(
+            f'/api/turnos/{turno.id}/',
+            self._put_payload(turno, Turno.Estado.CANCELADO),
+            format='json',
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.RESERVADO
+
+
+@pytest.mark.django_db
+class TestIdempotenciaSinAuditoriaDuplicada(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.especialidad = _esp('Cardiología Idem Aud')
+        cls.paciente = Paciente.objects.create(
+            dni='TE-IDEM-A', nombre='Pac', apellido='Idem',
+        )
+        cls.medico = Medico.objects.create(
+            nombre='Dr', apellido='Idem', matricula='TE-IDEM-M', especialidad=cls.especialidad,
+        )
+        cls.recurso = _recurso('idem')
+
+    def test_confirmar_idempotente_no_duplica_auditoria(self):
+        from auditoria.tests.compat import capture_on_commit_callbacks
+
+        admin = User.objects.create_user(
+            username='te_idem_conf_aud', email='te_idem_conf_aud@test.com', password='x',
+            rol='admin', is_staff=True,
+        )
+        base = timezone.now() + timedelta(hours=140)
+        turno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=base,
+            fecha_hora_fin=base + timedelta(minutes=30),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+        self.client.force_authenticate(user=admin)
+        n_before = _audit_update_count(turno.id)
+        with capture_on_commit_callbacks(execute=True):
+            r = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
+        assert r.status_code == status.HTTP_200_OK
+        assert r.data['applied'] is False
+        assert _audit_update_count(turno.id) == n_before
+
+    def test_cancelar_idempotente_no_duplica_auditoria(self):
+        from auditoria.tests.compat import capture_on_commit_callbacks
+
+        admin = User.objects.create_user(
+            username='te_idem_can_aud', email='te_idem_can_aud@test.com', password='x',
+            rol='admin', is_staff=True,
+        )
+        base = timezone.now() + timedelta(hours=141)
+        turno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=base,
+            fecha_hora_fin=base + timedelta(minutes=30),
+            estado=Turno.Estado.CANCELADO,
+        )
+        self.client.force_authenticate(user=admin)
+        n_before = _audit_update_count(turno.id)
+        with capture_on_commit_callbacks(execute=True):
+            r = self.client.post(
+                f'/api/turnos/{turno.id}/cancelar/',
+                {'motivo': 'Reintento'},
+                format='json',
+            )
+        assert r.status_code == status.HTTP_200_OK
+        assert r.data['applied'] is False
+        assert _audit_update_count(turno.id) == n_before
+
+
+@pytest.mark.django_db
+class TestLaboratorioCancelarTurno(APITestCase):
+    """Laboratorio: queryset vacío → 404 al cancelar (ocultamiento por rol)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.especialidad = _esp('Cardiología Lab Can')
+        cls.paciente = Paciente.objects.create(
+            dni='TE-LAB-CAN', nombre='Pac', apellido='Lab',
+        )
+        cls.medico = Medico.objects.create(
+            nombre='Dr', apellido='Lab', matricula='TE-LAB-CAN-M', especialidad=cls.especialidad,
+        )
+        cls.recurso = _recurso('labc')
+
+    def test_laboratorio_no_puede_cancelar(self):
+        lab = User.objects.create_user(
+            username='te_lab_can', email='te_lab_can@test.com', password='x', rol='laboratorio',
+        )
+        base = timezone.now() + timedelta(hours=150)
+        turno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=base,
+            fecha_hora_fin=base + timedelta(minutes=30),
+            estado=Turno.Estado.RESERVADO,
+        )
+        self.client.force_authenticate(user=lab)
+        r = self.client.post(
+            f'/api/turnos/{turno.id}/cancelar/',
+            {'motivo': 'Intento lab'},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_404_NOT_FOUND
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.RESERVADO
+
+
+@pytest.mark.django_db
+class TestUsuarioSinRolAccionesTurno(APITestCase):
+    """Usuario autenticado sin rol de gestión ni vínculo médico/paciente útil."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.especialidad = _esp('Cardiología Sin Rol')
+        cls.paciente = Paciente.objects.create(
+            dni='TE-NOROL-P', nombre='Pac', apellido='Norol',
+        )
+        cls.medico = Medico.objects.create(
+            nombre='Dr', apellido='Norol', matricula='TE-NOROL-M', especialidad=cls.especialidad,
+        )
+        cls.recurso = _recurso('norol')
+
+    def _turno(self) -> Turno:
+        base = timezone.now() + timedelta(hours=160)
+        return Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=base,
+            fecha_hora_fin=base + timedelta(minutes=30),
+            estado=Turno.Estado.RESERVADO,
+        )
+
+    def test_usuario_sin_rol_no_puede_confirmar_ni_cancelar(self):
+        user = User.objects.create_user(
+            username='te_norol', email='te_norol@test.com', password='x', rol='',
+        )
+        turno = self._turno()
+        self.client.force_authenticate(user=user)
+
+        r_conf = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
+        assert r_conf.status_code == status.HTTP_404_NOT_FOUND
+
+        r_can = self.client.post(
+            f'/api/turnos/{turno.id}/cancelar/',
+            {'motivo': 'X'},
+            format='json',
+        )
+        assert r_can.status_code == status.HTTP_404_NOT_FOUND
+
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.RESERVADO
