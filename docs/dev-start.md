@@ -1,18 +1,25 @@
 # Arranque local EMR + LIMS (desarrollo)
 
-`docs_synesis/` documenta el sistema en producción/diseño. Este archivo describe **cómo levantar el stack en tu máquina** para probar con distintos usuarios.
+`docs_synesis/` documenta el sistema en producción/diseño. Para trabajo con IA (SYNESIS, Cursor, Codex), ver `docs_synesis/DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md`. Este archivo describe **cómo levantar el stack en tu máquina** para probar con distintos usuarios.
 
 ## Requisitos
 
 - Python virtualenv en `emr_env/` (raíz del repo)
-- Node.js y `npm` en `PATH` (sin rutas absolutas; nvm u otro gestor es válido)
-- `cd frontend && npm install` (una vez)
+- Node.js y `npm` en `PATH` (sin rutas absolutas; nvm u otro gestor es válido), **solo si** vas a levantar cliente en `frontend/`
 - PostgreSQL en `:5432` (instalación local **o** contenedor Docker)
+
+### Frontend local (contrastar con SoT)
+
+Según **`docs_synesis/DOC_FRONTEND.md`**, una SPA React/Vue **no está confirmada como aplicación versionada** en este repositorio. Si existe la carpeta `frontend/` en tu checkout, tratala como **artefacto local o rama no alineada** hasta validar contra `DOC_FRONTEND.md` y el diff actual (`git status`, `package.json`, `frontend/src/`).
+
+- Antes de `cd frontend && npm install` o asumir http://localhost:3000 como UI de producción: leer `DOC_FRONTEND.md`.
+- Backend solo (API en :8000): omitir Node y `frontend/`.
+- Si el frontend real está en **otro repo o rama**, indicarlo en tareas SYNESIS/Cursor (ver `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md`).
 
 ## Comandos
 
 ```bash
-# Backend + frontend (Postgres ya debe estar escuchando en :5432)
+# Backend (+ frontend en :3000 solo si existe y está alineado con DOC_FRONTEND.md)
 ./emr-start
 
 # Levantar solo la DB con Docker Compose
@@ -55,14 +62,14 @@ Creados por `core/management/commands/seed_data.py`:
 
 ## URLs
 
-- Frontend: http://localhost:3000
+- Frontend (solo si levantaste cliente local y `DOC_FRONTEND.md` lo confirma en tu tree): http://localhost:3000
 - API / Django: http://localhost:8000
 - Admin: http://localhost:8000/admin/
 
 ## Logs
 
 - `logs/backend.log`
-- `logs/frontend.log`
+- `logs/frontend.log` (solo si `./emr-start` levantó cliente en `frontend/`)
 
 ## Seguridad
 

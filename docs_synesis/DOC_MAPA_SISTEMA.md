@@ -124,6 +124,7 @@ En `docs_synesis/`:
 - Antes de diseñar cambios: `DOC_MAPA_SISTEMA` → `DOC_REGLAS_NEGOCIO` → módulo específico (`DOC_FLUJOS_*`, `DOC_MODELOS_DB`, `DOC_API_ENDPOINTS`).
 - Para seguridad y trazabilidad: `DOC_PERMISOS_AUDITORIA.md`.
 - Para riesgos y deuda: `DOC_RIESGOS_DEUDA_TECNICA.md`.
+- Para coordinar SYNESIS, Cursor y Codex: `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md`.
 
 ---
 
@@ -139,6 +140,7 @@ En `docs_synesis/`:
 8. `DOC_FRONTEND.md`
 9. `DOC_TESTS.md`
 10. `DOC_RIESGOS_DEUDA_TECNICA.md`
+11. `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md` (proceso IA: SYNESIS → Cursor → Codex → validación → commit)
 
 ---
 
