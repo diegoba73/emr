@@ -27,7 +27,18 @@
 | En revisión | `EN_REVISION` | **[IMPLEMENTADO]** en modelo; uso en UI/API según implementación. |
 | Cancelada | **[OBJETIVO]** | No hay `CANCELADA` en `EstadoClinico` hoy. |
 
-**Turno** (agenda): `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO` — **[IMPLEMENTADO]**; transición a `REALIZADO` en `registrar-consulta` o modo servicio completo de atención.
+**Turno** (agenda): `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO` — **[IMPLEMENTADO]**.
+
+Transiciones C5.9.1 (acciones dedicadas, `turnos/turno_estado.py`):
+
+| Acción API | Desde | Hacia |
+|------------|-------|-------|
+| `confirmar` | `RESERVADO` | `CONFIRMADO` |
+| `cancelar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | `CANCELADO` |
+
+- `REALIZADO`: vía `registrar-consulta` (consulta con contenido) o `AtencionService` completo; no por `cancelar`.
+- Idempotencia: confirmar en `CONFIRMADO` / cancelar en `CANCELADO` → 200 sin duplicar auditoría de cambio.
+- **[DEUDA]:** `NO_ASISTIO`, reprogramar, campos `cancelado_por`/`motivo_cancelacion`, bloquear PATCH estado para admin.
 
 ---
 

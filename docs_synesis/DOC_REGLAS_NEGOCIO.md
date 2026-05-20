@@ -73,7 +73,8 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **Modificación** (`PATCH`/`PUT`): misma matriz; médico/paciente no reasignan `medico_id`/`paciente_id` ajenos; enfermería/laboratorio → 403 (**[IMPLEMENTADO]** C5.8.1).
 - Paciente: ficha vía `ensure_paciente_linked_to_user`; sin ficha → 403 en mutaciones.
 - `?all=true` no escala lectura de médico (C5.7.1).
-- DELETE físico: 405; cancelar por `estado` (**[DEUDA]** acciones de negocio para estados).
+- DELETE físico: 405; cancelar/confirmar por acciones `POST .../cancelar/` y `POST .../confirmar/` (**[IMPLEMENTADO]** C5.9.1).
+- PATCH directo de `estado`: bloqueado para médico/paciente; admin/secretaría temporalmente permitido **[DEUDA]**.
 - Validación serializer: solapamiento, bloqueo de cambios en turno REALIZADO/consulta cargada.
 - Filtros de calendario: query params `start`, `end`.
 

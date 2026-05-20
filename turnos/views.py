@@ -3,7 +3,7 @@ ViewSets para la app turnos.
 """
 import logging
 from rest_framework import viewsets, filters, status
-from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
+from rest_framework.exceptions import MethodNotAllowed, NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -15,6 +15,7 @@ from datetime import datetime
 from pacientes.services import ensure_paciente_linked_to_user
 
 from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria
+from . import turno_estado
 from .services import AtencionService, BusinessLogicError
 from .serializers import (
     TurnoSerializer,
@@ -275,11 +276,27 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 metadata={"view": "TurnoViewSet.perform_create"},
             )
 
+    def _reject_direct_estado_change(self, serializer) -> None:
+        """C5.9.1: médico/paciente no cambian estado por PATCH; usar acciones dedicadas."""
+        if 'estado' not in serializer.validated_data:
+            return
+        user = self.request.user
+        if _puede_gestionar_turnos_global(user):
+            return
+        if _rol_usuario(user) in {'medico', 'paciente'}:
+            raise ValidationError({
+                'estado': (
+                    'El estado del turno solo puede cambiarse mediante las acciones '
+                    'confirmar o cancelar.'
+                ),
+            })
+
     def perform_update(self, serializer):
         """Matriz de modificación (C5.8.1) además del acotamiento por ``get_queryset``."""
         user = self.request.user
         rol = _rol_usuario(user)
         instance = self.get_object()
+        self._reject_direct_estado_change(serializer)
         before = safe_model_snapshot(instance)
 
         with transaction.atomic():
@@ -333,6 +350,70 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 "El borrado físico de turnos no está permitido. "
                 "Cancele o finalice el turno cambiando su estado."
             ),
+        )
+
+    def _get_turno_locked_for_estado_action(self, pk: int) -> Turno:
+        """Visibilidad por ``get_queryset``; bloqueo en tabla base sin OUTER JOIN."""
+        if not self.get_queryset().filter(pk=pk).exists():
+            raise NotFound()
+        return Turno.objects.select_for_update().get(pk=pk)
+
+    @action(detail=True, methods=['post'], url_path='confirmar')
+    def confirmar(self, request, pk=None):
+        """Confirma un turno: RESERVADO → CONFIRMADO (idempotente si ya confirmado)."""
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_confirmar_turno(request.user, turno):
+                raise PermissionDenied('No tiene permiso para confirmar este turno.')
+            try:
+                outcome = turno_estado.confirmar_turno(
+                    turno,
+                    actor=request.user,
+                    view_name='TurnoViewSet.confirmar',
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+
+        serializer = self.get_serializer(outcome.turno)
+        return Response(
+            {
+                'message': outcome.message,
+                'applied': outcome.applied,
+                'estado_anterior': outcome.estado_anterior,
+                'estado_nuevo': outcome.estado_nuevo,
+                'turno': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['post'], url_path='cancelar')
+    def cancelar(self, request, pk=None):
+        """Cancela un turno (motivo obligatorio en body). Idempotente si ya cancelado."""
+        motivo = request.data.get('motivo', '')
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_cancelar_turno(request.user, turno):
+                raise PermissionDenied('No tiene permiso para cancelar este turno.')
+            try:
+                outcome = turno_estado.cancelar_turno(
+                    turno,
+                    actor=request.user,
+                    motivo=motivo,
+                    view_name='TurnoViewSet.cancelar',
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+
+        serializer = self.get_serializer(outcome.turno)
+        return Response(
+            {
+                'message': outcome.message,
+                'applied': outcome.applied,
+                'estado_anterior': outcome.estado_anterior,
+                'estado_nuevo': outcome.estado_nuevo,
+                'turno': serializer.data,
+            },
+            status=status.HTTP_200_OK,
         )
 
     def filter_queryset(self, queryset):

@@ -1,6 +1,6 @@
 # Reglas — Usuarios y permisos (Fase C0)
 
-**Versión:** C5.8.2 — 20 de mayo de 2026  
+**Versión:** C5.9.1 — 20 de mayo de 2026  
 **SoT operativo:** `DOC_PERMISOS_AUDITORIA.md`, `api/permissions.py`, `usuarios/models.py`.
 
 ---
@@ -108,6 +108,22 @@ Helpers: `frontend/src/utils/turnoPermissions.ts` (`canCreateTurno`, `canEditTur
 - **DELETE** no se ofrece en UI (API 405).
 - Cambio de **estado** por PATCH en formulario: **[DEUDA]** acciones de negocio (`cancelar`, `confirmar`, etc.).
 - Backend sigue siendo fuente de verdad; la UI evita acciones que devolverían 403.
+
+---
+
+## Acciones de estado de turno **[IMPLEMENTADO]** (C5.9.1)
+
+Endpoints activos en `turnos.views.TurnoViewSet`:
+
+| Acción | Ruta | Transición | Roles |
+|--------|------|------------|-------|
+| Confirmar | `POST /api/turnos/{id}/confirmar/` | `RESERVADO` → `CONFIRMADO` (idempotente si ya confirmado) | admin/staff, secretaría, médico propio |
+| Cancelar | `POST /api/turnos/{id}/cancelar/` | `DISPONIBLE`/`RESERVADO`/`CONFIRMADO` → `CANCELADO` (motivo **obligatorio**; idempotente si ya cancelado) | admin/staff, secretaría, médico propio, paciente propio |
+
+- **PATCH/PUT `estado`:** bloqueado para **médico** y **paciente** (400); admin/secretaría pueden PATCH temporalmente **[DEUDA]** unificar solo acciones.
+- Auditoría: `log_update` con metadata `accion`, `estado_anterior`, `estado_nuevo`, `turno_id`, `motivo` (cancelar), `view`.
+- Servicio: `turnos/turno_estado.py`. Tests: `turnos/tests/test_estado_turnos.py`.
+- `REALIZADO` no se cancela; no hay acción `marcar_realizado` en C5.9.1 (sigue vía atención/consulta).
 
 ---
 

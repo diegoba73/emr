@@ -20,9 +20,9 @@
 ## Flujo de turnos
 
 1. **Recurso:** `Recurso` (ubicación CEHTA/ICPL, tipo consultorio/sala/quirófano).
-2. **Turno:** estados `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO`.
+2. **Turno:** estados `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO`. Confirmar/cancelar vía `POST /api/turnos/{id}/confirmar/` y `.../cancelar/` (C5.9.1); `REALIZADO` vía atención/consulta, no por cancelar.
 3. **Validación modelo:** `clean`/`save` en `Turno` — fin > inicio.
-4. **API:** `TurnoViewSet` (`turnos.views`) — lectura por rol (C5.7.1); creación/modificación por matriz en `perform_create`/`perform_update` (C5.8.1): secretaría/admin/staff global; enfermería solo lectura; médico/paciente solo propios con IDs forzados; laboratorio sin mutaciones; filtros `start`/`end`; DELETE 405.
+4. **API:** `TurnoViewSet` (`turnos.views`) — lectura por rol (C5.7.1); creación/modificación por matriz (C5.8.1); acciones `confirmar`/`cancelar` (C5.9.1, `turnos/turno_estado.py`); PATCH `estado` bloqueado médico/paciente; filtros `start`/`end`; DELETE 405.
 5. **Disponibilidad/excepción:** `DisponibilidadMedico`, `ExcepcionMedico` expuestos vía `api/views.py` registrados en router.
 
 ---

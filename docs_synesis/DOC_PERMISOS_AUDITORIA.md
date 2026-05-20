@@ -101,7 +101,7 @@ Ubicación: `api/permissions.py`
 
 - Alta/edición de turnos (`TurnoViewSet`): `log_create` / `log_update` con actor y snapshot (best-effort). Mutaciones restringidas por rol desde C5.8.1; ver `turnos/tests/test_permissions_mutations.py`.
 - Borrado físico de turnos: **bloqueado** (405); no genera `log_delete`.
-- **[DEUDA]** Transiciones de estado de turno vía acciones dedicadas (`cancelar`, `confirmar`, …); hoy `estado` puede cambiarse por PATCH dentro de permisos de rol.
+- Transiciones de estado de turno: **`POST .../confirmar/`**, **`POST .../cancelar/`** con metadata `accion`, `estado_anterior`, `estado_nuevo`, `motivo` (C5.9.1). PATCH `estado` bloqueado para médico/paciente; admin/secretaría aún pueden PATCH **[DEUDA]**.
 - Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**.
 - Transiciones de estado de `SolicitudExamen`: `log_update` con `metadata` que incluye **`accion`**, **`estado_anterior`**, **`estado_nuevo`**, **`solicitud_id`**, **`numero_solicitud`** (vía `laboratorio/solicitud_estado.apply_solicitud_estado_transition`); además `before_state`/`after_state` del snapshot.
 - Solicitudes: `log_create` / `log_update` en flujos del ViewSet.
