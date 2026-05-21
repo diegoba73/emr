@@ -169,6 +169,8 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 |----|-----|
 | Botones en `TurnoModal`: Confirmar, Cancelar, Marcar realizado, No asistió | `POST .../confirmar/`, `cancelar/`, `marcar-realizado/`, `marcar-no-asistio/` |
 | Crear / abrir consulta (médico) | `POST .../iniciar-atencion/` vía `iniciarAtencionTurno` (C5.10.1) |
+| Cerrar atención | `POST .../cerrar/` vía `closeAtencion` (C5.10.1-A; antes `/cerrar_atencion/` legacy) |
+| `TurnosMedico.tsx` | **No enrutado** en `App.tsx`; migrado a `iniciarAtencionTurno` por si se reactiva |
 | Chip de estado (solo lectura) para todos los roles | PATCH/PUT `estado` bloqueado (400) |
 | Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo por `prompt`) **[DEUDA]** modal dedicado |
 | `cancelarTurno(id, motivo)` en `api.ts` | Motivo obligatorio (prompt mínimo) |

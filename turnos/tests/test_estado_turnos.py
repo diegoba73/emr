@@ -1616,3 +1616,23 @@ class TestIniciarAtencionTurno(APITestCase):
         self.client.force_authenticate(user=sec)
         r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
         assert r.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_usuario_sin_rol_no_puede_iniciar_atencion(self):
+        from turnos.models import Atencion
+
+        user = User.objects.create_user(
+            username='te_ini_norol', email='te_ini_norol@test.com', password='x', rol='',
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 13)
+        self.client.force_authenticate(user=user)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert not Atencion.objects.filter(turno_id=turno.id).exists()
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.CONFIRMADO
+        assert not AuditEvent.objects.filter(
+            entity_type='turnos.Turno',
+            entity_id=str(turno.id),
+            action='UPDATE',
+            metadata__accion='iniciar_atencion_turno',
+        ).exists()
