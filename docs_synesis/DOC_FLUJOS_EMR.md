@@ -20,7 +20,7 @@
 ## Flujo de turnos
 
 1. **Recurso:** `Recurso` (ubicación CEHTA/ICPL, tipo consultorio/sala/quirófano).
-2. **Turno:** estados `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO`. Acciones POST C5.9.2: confirmar, cancelar, reprogramar, marcar-realizado, marcar-no-asistio (`turnos/turno_estado.py`). `REALIZADO` ideal vía atención/consulta.
+2. **Turno:** estados `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO`. Acciones POST C5.9.2: confirmar, cancelar, reprogramar, marcar-realizado, marcar-no-asistio. **C5.10.1:** `iniciar-atencion` — flujo clínico real (crea/obtiene `Atencion`, pasa turno a `REALIZADO`, registro hijo). `marcar-realizado` = operación administrativa/excepción (no crea atención).
 3. **Validación modelo:** `clean`/`save` en `Turno` — fin > inicio.
 4. **API:** `TurnoViewSet` (`turnos.views`) — lectura por rol (C5.7.1); creación/modificación por matriz (C5.8.1); PATCH/PUT `estado` bloqueado para todos; filtros `start`/`end`; DELETE 405.
 5. **Disponibilidad/excepción:** `DisponibilidadMedico`, `ExcepcionMedico` expuestos vía `api/views.py` registrados en router.
@@ -29,9 +29,9 @@
 
 ## Flujo de atenciones
 
-1. **Creación desde API:** `POST /api/atenciones/` con `turno` (ID) — delega en `AtencionService.iniciar_atencion_desde_turno(..., api_post_compat=True)`.
-2. **Comportamiento modo API (compat):** si ya existe `Atencion` para el turno, **devuelve la existente** (idempotente); **no** cambia estado del turno ni crea registro hijo en este modo (según docstring del servicio).
-3. **Modo servicio completo** (`api_post_compat=False`): exige turno `RESERVADO`/`CONFIRMADO`, pasa a `REALIZADO`, crea `Atencion` y registro hijo según tipo de recurso (`ConsultaAmbulatoria`, `RegistroProcedimiento`, `RegistroQuirurgico`).
+1. **Flujo clínico activo (C5.10.1):** `POST /api/turnos/{id}/iniciar-atencion/` — `AtencionService.iniciar_atencion_clinica_desde_turno`; auditoría en `TurnoViewSet.iniciar_atencion`. Frontend médico (`TurnoModal`) usa esta acción.
+2. **Compat integraciones:** `POST /api/atenciones/` — `api_post_compat=True`; idempotente; **no** mueve turno ni crea hijo. **[DEUDA]** migrar clientes a `iniciar-atencion`; posible deprecación.
+3. **Modo servicio completo legacy** (`api_post_compat=False` en `iniciar_atencion_desde_turno`): no idempotente; usado en tests; no enrutado en router principal.
 4. **Cierre:** acción `cerrar` en `AtencionViewSet` (detalle en código; no expandido aquí).
 5. **Permisos:** `IsMedicoOrEnfermeriaOrAdmin`; queryset limita por médico principal o paciente.
 

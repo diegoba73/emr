@@ -500,6 +500,75 @@ class TurnoViewSet(viewsets.ModelViewSet):
 
         return self._estado_action_response(outcome)
 
+    @action(detail=True, methods=['post'], url_path='iniciar-atencion')
+    def iniciar_atencion(self, request, pk=None):
+        """
+        Inicia atención clínica desde turno (C5.10.1): crea/obtiene Atención y pasa turno a REALIZADO.
+        """
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_iniciar_atencion_turno(request.user, turno):
+                raise PermissionDenied(
+                    'No tiene permiso para iniciar atención clínica en este turno.'
+                )
+            before_turno = safe_model_snapshot(turno)
+            try:
+                outcome = AtencionService.iniciar_atencion_clinica_desde_turno(turno)
+            except BusinessLogicError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+
+            if outcome.created_new:
+                _safe_audit(
+                    log_create,
+                    actor=request.user,
+                    entity=outcome.atencion,
+                    module='turnos',
+                    metadata={
+                        'view': 'TurnoViewSet.iniciar_atencion',
+                        'accion': 'iniciar_atencion_turno',
+                        'turno_id': turno.pk,
+                        'atencion_id': outcome.atencion.pk,
+                        'created_new': True,
+                    },
+                )
+
+            if outcome.turno_estado_changed:
+                turno.refresh_from_db()
+                _safe_audit(
+                    log_update,
+                    actor=request.user,
+                    entity=turno,
+                    before=before_turno,
+                    module='turnos',
+                    metadata={
+                        'accion': 'iniciar_atencion_turno',
+                        'turno_id': turno.pk,
+                        'atencion_id': outcome.atencion.pk,
+                        'estado_anterior': outcome.turno_estado_anterior,
+                        'estado_nuevo': outcome.turno_estado_nuevo,
+                        'view': 'TurnoViewSet.iniciar_atencion',
+                    },
+                )
+
+        serializer = AtencionSerializer(
+            outcome.atencion,
+            context=self.get_serializer_context(),
+        )
+        http_status = status.HTTP_201_CREATED if outcome.created_new else status.HTTP_200_OK
+        return Response(
+            {
+                'atencion': serializer.data,
+                'created_new': outcome.created_new,
+                'turno_estado': outcome.turno_estado_nuevo,
+                'message': (
+                    'Atención iniciada correctamente.'
+                    if outcome.created_new
+                    else 'Atención ya existente para este turno.'
+                ),
+            },
+            status=http_status,
+        )
+
     def filter_queryset(self, queryset):
         """
         Filtros adicionales por query params:

@@ -73,7 +73,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **Modificación** (`PATCH`/`PUT`): misma matriz; médico/paciente no reasignan `medico_id`/`paciente_id` ajenos; enfermería/laboratorio → 403 (**[IMPLEMENTADO]** C5.8.1).
 - Paciente: ficha vía `ensure_paciente_linked_to_user`; sin ficha → 403 en mutaciones.
 - `?all=true` no escala lectura de médico (C5.7.1).
-- DELETE físico: 405; transiciones por acciones `POST` dedicadas (**[IMPLEMENTADO]** C5.9.1 / C5.9.2): `confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`.
+- DELETE físico: 405; transiciones por acciones `POST` dedicadas (**[IMPLEMENTADO]** C5.9.1 / C5.9.2 / **C5.10.1**): `confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`, **`iniciar-atencion`** (flujo clínico).
 - PATCH/PUT directo de `estado`: bloqueado para **todos** los roles (400). Creación: no permitir `REALIZADO` ni `CANCELADO` en POST genérico.
 - No asistencia: `marcar-no-asistio` → `CANCELADO` con metadata `marcar_no_asistio` (sin estado `NO_ASISTIO`) **[DEUDA]** campos estructurales.
 - Validación serializer: solapamiento, bloqueo de cambios en turno REALIZADO/consulta cargada.
@@ -83,7 +83,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 ## Reglas de atenciones
 
-- `AtencionViewSet.create`: requiere ID de turno; usa `AtencionService` modo compat (no altera estado del turno ni crea hijo) vs servicio interno documentado en `AtencionService` que sí cambia turno a REALIZADO y crea registro hijo.
+- **C5.10.1 `iniciar-atencion`:** estados permitidos `RESERVADO`/`CONFIRMADO`; rechaza `CANCELADO`/`DISPONIBLE`; idempotente si ya existe `Atencion` (200, sin duplicar auditoría de alta); si atención existe y turno sigue `CONFIRMADO`, sincroniza a `REALIZADO` y audita turno. Permisos: médico propio; admin/staff/superuser; no secretaría/paciente/enfermería/laboratorio.
+- `AtencionViewSet.create`: modo compat **[DEUDA]** — no altera turno ni crea hijo; mantener para integraciones legacy.
+- `marcar-realizado`: no sustituye `iniciar-atencion` (no crea atención).
 - Permisos: `IsMedicoOrEnfermeriaOrAdmin`; queryset médico = `medico_principal`; paciente = su paciente.
 - Acción **cerrar** para finalizar (detalle en implementación).
 

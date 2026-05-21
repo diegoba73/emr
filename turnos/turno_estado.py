@@ -103,6 +103,23 @@ def puede_marcar_realizado_turno(user, turno: Turno) -> bool:
     return False
 
 
+def puede_iniciar_atencion_turno(user, turno: Turno) -> bool:
+    """C5.10.1: flujo clínico real — médico propio o admin/staff; no secretaría ni paciente."""
+    rol = _rol_usuario(user)
+    if rol in {'enfermeria', 'laboratorio', 'paciente', 'secretaria'}:
+        return False
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+    if rol == 'admin':
+        return True
+    if rol == 'medico':
+        try:
+            return turno.medico_id == user.medico.id
+        except ObjectDoesNotExist:
+            return False
+    return False
+
+
 def puede_marcar_no_asistio_turno(user, turno: Turno) -> bool:
     if _rol_usuario(user) in {'enfermeria', 'laboratorio', 'paciente'}:
         return False

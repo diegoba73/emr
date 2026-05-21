@@ -1410,3 +1410,209 @@ class TestMarcarNoAsistioTurno(APITestCase):
         assert ev.metadata.get('estado_nuevo') == Turno.Estado.CANCELADO
         assert ev.metadata.get('motivo') == 'El paciente no asistió'
         assert ev.metadata.get('view') == 'TurnoViewSet.marcar_no_asistio'
+
+
+@pytest.mark.django_db
+class TestIniciarAtencionTurno(APITestCase):
+    """POST /api/turnos/{id}/iniciar-atencion/ — flujo clínico C5.10.1."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.especialidad = _esp('Cardiología Iniciar Aten')
+        cls.paciente = Paciente.objects.create(
+            dni='TE-INI-1', nombre='Pac', apellido='Ini',
+        )
+        cls.medico_a = Medico.objects.create(
+            nombre='Dr', apellido='IniA', matricula='TE-INI-A', especialidad=cls.especialidad,
+        )
+        cls.medico_b = Medico.objects.create(
+            nombre='Dr', apellido='IniB', matricula='TE-INI-B', especialidad=cls.especialidad,
+        )
+        cls.recurso = _recurso('ini')
+
+    def _turno(self, medico, estado, suffix: int, **extra):
+        base = timezone.now().replace(second=0, microsecond=0) + timedelta(hours=72 + suffix)
+        data = {
+            'paciente': self.paciente,
+            'medico': medico,
+            'recurso': self.recurso,
+            'fecha_hora_inicio': base,
+            'fecha_hora_fin': base + timedelta(minutes=30),
+            'estado': estado,
+        }
+        data.update(extra)
+        return Turno.objects.create(**data)
+
+    def _auth_medico_a(self):
+        user = User.objects.create_user(
+            username='te_ini_med_a', email='te_ini_med_a@test.com', password='x', rol='medico',
+        )
+        self.medico_a.user = user
+        self.medico_a.save()
+        self.client.force_authenticate(user=user)
+        return user
+
+    def test_medico_propio_inicia_desde_confirmado(self):
+        from auditoria.tests.compat import capture_on_commit_callbacks
+        from turnos.models import Atencion, ConsultaAmbulatoria
+
+        self._auth_medico_a()
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 1)
+        with capture_on_commit_callbacks(execute=True):
+            r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_201_CREATED
+        assert r.data['created_new'] is True
+        assert r.data['turno_estado'] == Turno.Estado.REALIZADO
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.REALIZADO
+        atencion = Atencion.objects.get(turno_id=turno.id)
+        assert r.data['atencion']['id'] == atencion.id
+        assert ConsultaAmbulatoria.objects.filter(atencion_id=atencion.id).exists()
+        ev_turno = AuditEvent.objects.filter(
+            entity_type='turnos.Turno', entity_id=str(turno.id), action='UPDATE',
+        ).order_by('-id').first()
+        assert ev_turno.metadata.get('accion') == 'iniciar_atencion_turno'
+        assert ev_turno.metadata.get('estado_anterior') == Turno.Estado.CONFIRMADO
+        assert ev_turno.metadata.get('atencion_id') == atencion.id
+        ev_at = AuditEvent.objects.filter(
+            entity_type='turnos.Atencion', entity_id=str(atencion.id), action='CREATE',
+        ).first()
+        assert ev_at is not None
+
+    def test_medico_propio_inicia_desde_reservado(self):
+        self._auth_medico_a()
+        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 2)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_201_CREATED
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.REALIZADO
+
+    def test_cancelado_rechazado(self):
+        from turnos.models import Atencion
+
+        self._auth_medico_a()
+        turno = self._turno(self.medico_a, Turno.Estado.CANCELADO, 3)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert not Atencion.objects.filter(turno_id=turno.id).exists()
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.CANCELADO
+
+    def test_disponible_rechazado(self):
+        from turnos.models import Atencion
+
+        self._auth_medico_a()
+        turno = self._turno(self.medico_a, Turno.Estado.DISPONIBLE, 4)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert not Atencion.objects.filter(turno_id=turno.id).exists()
+
+    def test_realizado_con_atencion_idempotente(self):
+        from auditoria.tests.compat import capture_on_commit_callbacks
+        from turnos.models import Atencion
+        from turnos.services import AtencionService
+
+        self._auth_medico_a()
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 5)
+        with capture_on_commit_callbacks(execute=True):
+            first = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        atencion_id = first.data['atencion']['id']
+        count_events = AuditEvent.objects.filter(entity_type='turnos.Atencion').count()
+        with capture_on_commit_callbacks(execute=True):
+            second = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert second.status_code == status.HTTP_200_OK
+        assert second.data['created_new'] is False
+        assert second.data['atencion']['id'] == atencion_id
+        assert Atencion.objects.filter(turno_id=turno.id).count() == 1
+        assert AuditEvent.objects.filter(entity_type='turnos.Atencion').count() == count_events
+
+    def test_confirmado_con_atencion_legacy_sincroniza_realizado(self):
+        from auditoria.tests.compat import capture_on_commit_callbacks
+        from turnos.models import Atencion
+        from turnos.services import AtencionService
+
+        self._auth_medico_a()
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 6)
+        user = self.medico_a.user
+        out = AtencionService.iniciar_atencion_desde_turno(
+            turno.id, api_post_compat=True, actor=user,
+        )
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.CONFIRMADO
+        assert out.created_new is True
+        before_updates = AuditEvent.objects.filter(
+            entity_type='turnos.Turno', entity_id=str(turno.id), action='UPDATE',
+        ).count()
+        with capture_on_commit_callbacks(execute=True):
+            r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_200_OK
+        assert r.data['created_new'] is False
+        assert r.data['atencion']['id'] == out.atencion.id
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.REALIZADO
+        assert Atencion.objects.filter(turno_id=turno.id).count() == 1
+        assert AuditEvent.objects.filter(
+            entity_type='turnos.Turno', entity_id=str(turno.id), action='UPDATE',
+        ).count() == before_updates + 1
+
+    def test_medico_ajeno_no_puede(self):
+        user = User.objects.create_user(
+            username='te_ini_med_b', email='te_ini_med_b@test.com', password='x', rol='medico',
+        )
+        self.medico_b.user = user
+        self.medico_b.save()
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 7)
+        self.client.force_authenticate(user=user)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_paciente_no_puede(self):
+        from turnos.models import Atencion
+
+        user = User.objects.create_user(
+            username='te_ini_pac', email='te_ini_pac@test.com', password='x', rol='paciente',
+        )
+        self.paciente.user = user
+        self.paciente.save()
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 8)
+        self.client.force_authenticate(user=user)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_403_FORBIDDEN
+        assert not Atencion.objects.filter(turno_id=turno.id).exists()
+
+    def test_enfermeria_no_puede(self):
+        enf = User.objects.create_user(
+            username='te_ini_enf', email='te_ini_enf@test.com', password='x', rol='enfermeria',
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 9)
+        self.client.force_authenticate(user=enf)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_laboratorio_no_puede(self):
+        lab = User.objects.create_user(
+            username='te_ini_lab', email='te_ini_lab@test.com', password='x', rol='laboratorio',
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 10)
+        self.client.force_authenticate(user=lab)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_admin_staff_puede_iniciar(self):
+        admin = User.objects.create_user(
+            username='te_ini_admin', email='te_ini_admin@test.com', password='x',
+            rol='admin', is_staff=True,
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 11)
+        self.client.force_authenticate(user=admin)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_201_CREATED
+
+    def test_secretaria_no_puede(self):
+        sec = User.objects.create_user(
+            username='te_ini_sec', email='te_ini_sec@test.com', password='x', rol='secretaria',
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 12)
+        self.client.force_authenticate(user=sec)
+        r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
+        assert r.status_code == status.HTTP_403_FORBIDDEN

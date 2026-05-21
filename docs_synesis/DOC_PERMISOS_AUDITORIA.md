@@ -67,7 +67,7 @@ Guards visuales relevantes (ejemplos):
 
 | Área | Archivo | Notas |
 |------|---------|--------|
-| Turnos agenda | `frontend/src/utils/turnoPermissions.ts` | C5.8.2: crear/editar por rol; C5.9.2: acciones `confirmar`/`cancelar`/`reprogramar`/`marcar-realizado`/`marcar-no-asistio`; sin PATCH `estado` en UI |
+| Turnos agenda | `frontend/src/utils/turnoPermissions.ts` | C5.8.2: crear/editar; C5.9.2: acciones de estado; **C5.10.1:** `canIniciarAtencionTurno`; sin PATCH `estado` en UI |
 | LIMS | `frontend/src/utils/limsAccess.ts` | Lectura vs operación vs validar |
 
 Ocultar botones o campos en UI **no sustituye** controles de API; un cliente malicioso puede llamar endpoints directamente.
@@ -110,7 +110,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 
 - Alta/edición de turnos (`TurnoViewSet`): `log_create` / `log_update` con actor y snapshot (best-effort). Mutaciones restringidas por rol desde C5.8.1; ver `turnos/tests/test_permissions_mutations.py`.
 - Borrado físico de turnos: **bloqueado** (405); no genera `log_delete`.
-- Transiciones de estado de turno: acciones POST con metadata `accion`, `estado_anterior`, `estado_nuevo`, `motivo`, `view` (C5.9.1–C5.9.2). Reprogramar incluye fechas/médico/recurso antes/después. PATCH/PUT `estado` bloqueado para todos los roles.
+- Transiciones de estado de turno: acciones POST con metadata `accion`, `estado_anterior`, `estado_nuevo`, `motivo`, `view` (C5.9.1–C5.9.2). **C5.10.1 `iniciar_atencion_turno`:** `log_create` solo si alta nueva de `Atencion`; `log_update` de `Turno` solo si cambia a `REALIZADO` (coordina `TurnoViewSet.iniciar_atencion`, no duplica con `AtencionViewSet.create`). PATCH/PUT `estado` bloqueado para todos los roles.
 - Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**.
 - Transiciones de estado de `SolicitudExamen`: `log_update` con `metadata` que incluye **`accion`**, **`estado_anterior`**, **`estado_nuevo`**, **`solicitud_id`**, **`numero_solicitud`** (vía `laboratorio/solicitud_estado.apply_solicitud_estado_transition`); además `before_state`/`after_state` del snapshot.
 - Solicitudes: `log_create` / `log_update` en flujos del ViewSet.

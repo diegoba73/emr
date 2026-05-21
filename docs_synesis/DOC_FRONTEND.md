@@ -161,13 +161,14 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | `frontend/src/components/TurnoModal.tsx` | `forceReadOnly`; médico bloqueado para rol `MEDICO`; paciente bloqueado para `PACIENTE` |
 
 - No hay botón eliminar (DELETE → 405 en API).
-- **Estado del turno:** chip de solo lectura en `TurnoModal`; cambios vía acciones POST (`confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`). No se envía `estado` por PATCH/PUT (todos los roles, 400 en API). Admin/secretaría usan las mismas acciones, no selector CRUD.
+- **Estado del turno:** chip de solo lectura en `TurnoModal`; cambios vía acciones POST (`confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`). **C5.10.1:** inicio clínico vía `apiService.iniciarAtencionTurno` → `POST .../iniciar-atencion/` (no `createAtencion` en flujo médico principal). No PATCH `estado`.
 
 ### Turnos — acciones de estado (C5.9.2)
 
 | UI | API |
 |----|-----|
 | Botones en `TurnoModal`: Confirmar, Cancelar, Marcar realizado, No asistió | `POST .../confirmar/`, `cancelar/`, `marcar-realizado/`, `marcar-no-asistio/` |
+| Crear / abrir consulta (médico) | `POST .../iniciar-atencion/` vía `iniciarAtencionTurno` (C5.10.1) |
 | Chip de estado (solo lectura) para todos los roles | PATCH/PUT `estado` bloqueado (400) |
 | Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo por `prompt`) **[DEUDA]** modal dedicado |
 | `cancelarTurno(id, motivo)` en `api.ts` | Motivo obligatorio (prompt mínimo) |

@@ -38,8 +38,9 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 | `reprogramar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | conserva estado; cambia fechas/médico/recurso |
 | `marcar-realizado` | `CONFIRMADO` (médico); `RESERVADO`/`CONFIRMADO` (admin/secretaría) | `REALIZADO` |
 | `marcar-no-asistio` | `RESERVADO`, `CONFIRMADO` | `CANCELADO` (metadata `marcar_no_asistio`) |
+| `iniciar-atencion` **(C5.10.1)** | `RESERVADO`, `CONFIRMADO` (+ idempotencia si ya hay atención / `REALIZADO`) | `REALIZADO` + crea/obtiene `Atencion` y registro hijo si alta nueva |
 
-- `REALIZADO` ideal: vía `registrar-consulta` / `AtencionService`; `marcar-realizado` es operación administrativa.
+- `REALIZADO` clínico: **`iniciar-atencion`** (agenda → atención) o `registrar-consulta`; `marcar-realizado` es operación administrativa (no crea atención).
 - Idempotencia: confirmar/cancelar/marcar-realizado ya en estado destino → 200 `applied=false` sin auditoría duplicada.
 - PATCH/PUT `estado`: bloqueado para todos (400).
 - **[DEUDA]:** estado `NO_ASISTIO`; campos `cancelado_por`/`motivo_cancelacion`.

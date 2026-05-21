@@ -122,6 +122,7 @@ Endpoints en `turnos.views.TurnoViewSet`:
 | Reprogramar | `POST .../reprogramar/` | conserva estado; cambia agenda | admin/staff, secretaría, médico/paciente propio |
 | Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría; médico propio si `CONFIRMADO` |
 | Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría, médico propio |
+| Iniciar atención **(C5.10.1)** | `POST .../iniciar-atencion/` | `REALIZADO` + atención clínica | médico propio; admin/staff/superuser; **no** secretaría/paciente/enfermería/laboratorio |
 
 - **PATCH/PUT `estado`:** bloqueado para **todos** (400).
 - Auditoría: metadata por acción (`reprogramar` incluye fechas/médico/recurso antes/después).

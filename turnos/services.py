@@ -52,6 +52,17 @@ class IniciarAtencionOutcome:
     created_new: bool
 
 
+@dataclass(frozen=True)
+class IniciarAtencionClinicaOutcome:
+    """Resultado del flujo clínico C5.10.1 (turno → REALIZADO + atención idempotente)."""
+
+    atencion: Atencion
+    created_new: bool
+    turno_estado_anterior: str
+    turno_estado_nuevo: str
+    turno_estado_changed: bool
+
+
 class AtencionService:
     """
     Service Layer para operaciones relacionadas con Atención.
@@ -263,7 +274,83 @@ class AtencionService:
             )
 
             return IniciarAtencionOutcome(atencion=atencion, created_new=True)
-    
+
+    @staticmethod
+    def iniciar_atencion_clinica_desde_turno(turno: Turno) -> IniciarAtencionClinicaOutcome:
+        """
+        Flujo clínico activo (C5.10.1): idempotente, mueve turno a REALIZADO, crea hijo si es alta nueva.
+
+        El turno debe estar bloqueado con ``select_for_update`` en la capa de vista.
+        No registra auditoría (la coordina ``TurnoViewSet.iniciar_atencion``).
+        """
+        estados_inicio_nueva = (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO)
+
+        if turno.estado in (Turno.Estado.CANCELADO, Turno.Estado.DISPONIBLE):
+            raise BusinessLogicError(
+                f"El turno está en estado '{turno.estado}'. "
+                "No se puede iniciar atención clínica."
+            )
+
+        existing = Atencion.objects.filter(turno_id=turno.pk).first()
+        estado_anterior = turno.estado
+
+        if existing is not None:
+            turno_estado_changed = False
+            if turno.estado != Turno.Estado.REALIZADO:
+                turno.estado = Turno.Estado.REALIZADO
+                turno.save(update_fields=["estado", "updated_at"])
+                turno_estado_changed = True
+            return IniciarAtencionClinicaOutcome(
+                atencion=existing,
+                created_new=False,
+                turno_estado_anterior=estado_anterior,
+                turno_estado_nuevo=turno.estado,
+                turno_estado_changed=turno_estado_changed,
+            )
+
+        if turno.estado == Turno.Estado.REALIZADO:
+            raise BusinessLogicError(
+                "El turno está realizado pero no tiene atención asociada."
+            )
+
+        if turno.estado not in estados_inicio_nueva:
+            raise BusinessLogicError(
+                f"El turno está en estado '{turno.estado}'. "
+                f"Solo se pueden iniciar atenciones desde turnos en estado: "
+                f"{', '.join(estados_inicio_nueva)}"
+            )
+
+        if not turno.paciente:
+            raise BusinessLogicError("El turno no tiene un paciente asociado")
+        if not turno.medico:
+            raise BusinessLogicError("El turno no tiene un médico asociado")
+        if not turno.recurso:
+            raise BusinessLogicError("El turno no tiene un recurso asociado")
+
+        turno.estado = Turno.Estado.REALIZADO
+        turno.save(update_fields=["estado", "updated_at"])
+
+        tipo_atencion = turno.recurso.tipo_recurso
+        tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
+
+        atencion = Atencion.objects.create(
+            turno=turno,
+            paciente=turno.paciente,
+            medico_principal=turno.medico,
+            tipo_atencion=tipo_atencion,
+            tipo_intervencion=tipo_intervencion,
+            estado_clinico=Atencion.EstadoClinico.ABIERTA,
+        )
+        AtencionService._crear_registro_hijo(atencion, tipo_atencion)
+
+        return IniciarAtencionClinicaOutcome(
+            atencion=atencion,
+            created_new=True,
+            turno_estado_anterior=estado_anterior,
+            turno_estado_nuevo=turno.estado,
+            turno_estado_changed=True,
+        )
+
     @staticmethod
     def _crear_registro_hijo(atencion: Atencion, tipo_atencion: str) -> None:
         """

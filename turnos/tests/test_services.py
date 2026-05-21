@@ -544,3 +544,51 @@ class TestAtencionServiceApiPostCompat(TestCase):
                 )
 
         self.assertFalse(Atencion.objects.filter(turno_id=turno.id).exists())
+
+
+class TestAtencionServiceClinicaDesdeTurno(TestCase):
+    """C5.10.1: iniciar_atencion_clinica_desde_turno — idempotente y REALIZADO."""
+
+    def setUp(self):
+        self.especialidad, _ = Especialidad.objects.get_or_create(nombre="Cardiología Clinica")
+        self.medico = Medico.objects.create(
+            nombre="Ana",
+            apellido="Clin",
+            matricula="CLIN01",
+            especialidad=self.especialidad,
+        )
+        self.paciente = Paciente.objects.create(
+            dni="CLINPAC01",
+            nombre="Pac",
+            apellido="Clin",
+            fecha_nacimiento="1990-01-01",
+        )
+        self.recurso = Recurso.objects.create(
+            nombre="Consultorio Clinica",
+            ubicacion=Recurso.Ubicacion.ICPL,
+            tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
+            activo=True,
+        )
+
+    def test_clinica_idempotente_con_atencion_existente(self):
+        fecha_inicio = timezone.now() + timedelta(days=4)
+        turno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_inicio,
+            fecha_hora_fin=fecha_inicio + timedelta(hours=1),
+            estado="CONFIRMADO",
+        )
+        compat = AtencionService.iniciar_atencion_desde_turno(
+            turno.id, api_post_compat=True,
+        )
+        turno.refresh_from_db()
+        self.assertEqual(turno.estado, "CONFIRMADO")
+
+        outcome = AtencionService.iniciar_atencion_clinica_desde_turno(turno)
+        self.assertFalse(outcome.created_new)
+        self.assertEqual(outcome.atencion.id, compat.atencion.id)
+        turno.refresh_from_db()
+        self.assertEqual(turno.estado, "REALIZADO")
+        self.assertTrue(outcome.turno_estado_changed)
