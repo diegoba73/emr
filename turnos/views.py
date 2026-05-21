@@ -14,6 +14,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from datetime import datetime
 from pacientes.services import ensure_paciente_linked_to_user
 
+from medicos.models import Medico
 from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria
 from . import turno_estado
 from .services import AtencionService, BusinessLogicError
@@ -245,6 +246,14 @@ class TurnoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         rol = _rol_usuario(user)
 
+        if 'estado' in serializer.validated_data:
+            try:
+                turno_estado.validate_estado_en_creacion(
+                    serializer.validated_data['estado'],
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'estado': str(exc)}) from exc
+
         with transaction.atomic():
             if _puede_gestionar_turnos_global(user):
                 instance = serializer.save()
@@ -277,19 +286,15 @@ class TurnoViewSet(viewsets.ModelViewSet):
             )
 
     def _reject_direct_estado_change(self, serializer) -> None:
-        """C5.9.1: médico/paciente no cambian estado por PATCH; usar acciones dedicadas."""
+        """C5.9.2: ningún rol cambia estado por PATCH/PUT; usar acciones de negocio."""
         if 'estado' not in serializer.validated_data:
             return
-        user = self.request.user
-        if _puede_gestionar_turnos_global(user):
-            return
-        if _rol_usuario(user) in {'medico', 'paciente'}:
-            raise ValidationError({
-                'estado': (
-                    'El estado del turno solo puede cambiarse mediante las acciones '
-                    'confirmar o cancelar.'
-                ),
-            })
+        raise ValidationError({
+            'estado': (
+                'El estado del turno debe modificarse mediante acciones específicas '
+                '(confirmar, cancelar, reprogramar, marcar-realizado, marcar-no-asistio).'
+            ),
+        })
 
     def perform_update(self, serializer):
         """Matriz de modificación (C5.8.1) además del acotamiento por ``get_queryset``."""
@@ -358,6 +363,19 @@ class TurnoViewSet(viewsets.ModelViewSet):
             raise NotFound()
         return Turno.objects.select_for_update().get(pk=pk)
 
+    def _estado_action_response(self, outcome: turno_estado.TurnoEstadoOutcome) -> Response:
+        serializer = self.get_serializer(outcome.turno)
+        return Response(
+            {
+                'message': outcome.message,
+                'applied': outcome.applied,
+                'estado_anterior': outcome.estado_anterior,
+                'estado_nuevo': outcome.estado_nuevo,
+                'turno': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=True, methods=['post'], url_path='confirmar')
     def confirmar(self, request, pk=None):
         """Confirma un turno: RESERVADO → CONFIRMADO (idempotente si ya confirmado)."""
@@ -374,17 +392,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
             except turno_estado.TurnoEstadoTransitionError as exc:
                 raise ValidationError({'detail': str(exc)}) from exc
 
-        serializer = self.get_serializer(outcome.turno)
-        return Response(
-            {
-                'message': outcome.message,
-                'applied': outcome.applied,
-                'estado_anterior': outcome.estado_anterior,
-                'estado_nuevo': outcome.estado_nuevo,
-                'turno': serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return self._estado_action_response(outcome)
 
     @action(detail=True, methods=['post'], url_path='cancelar')
     def cancelar(self, request, pk=None):
@@ -404,17 +412,93 @@ class TurnoViewSet(viewsets.ModelViewSet):
             except turno_estado.TurnoEstadoTransitionError as exc:
                 raise ValidationError({'detail': str(exc)}) from exc
 
-        serializer = self.get_serializer(outcome.turno)
-        return Response(
-            {
-                'message': outcome.message,
-                'applied': outcome.applied,
-                'estado_anterior': outcome.estado_anterior,
-                'estado_nuevo': outcome.estado_nuevo,
-                'turno': serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return self._estado_action_response(outcome)
+
+    @action(detail=True, methods=['post'], url_path='reprogramar')
+    def reprogramar(self, request, pk=None):
+        """Reprograma fecha/hora (y opcionalmente médico/recurso) sin cambiar estado."""
+        fecha_hora_inicio = request.data.get('fecha_hora_inicio')
+        fecha_hora_fin = request.data.get('fecha_hora_fin')
+        motivo = request.data.get('motivo', '')
+        medico_obj = None
+        recurso_obj = None
+        medico_id = request.data.get('medico_id')
+        recurso_id = request.data.get('recurso_id')
+
+        if medico_id is not None:
+            try:
+                medico_obj = Medico.objects.get(pk=medico_id)
+            except (Medico.DoesNotExist, ValueError, TypeError):
+                raise ValidationError({'medico_id': 'Médico no válido.'}) from None
+        if recurso_id is not None:
+            try:
+                recurso_obj = Recurso.objects.get(pk=recurso_id)
+            except (Recurso.DoesNotExist, ValueError, TypeError):
+                raise ValidationError({'recurso_id': 'Recurso no válido.'}) from None
+
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_reprogramar_turno(request.user, turno):
+                raise PermissionDenied('No tiene permiso para reprogramar este turno.')
+            try:
+                outcome = turno_estado.reprogramar_turno(
+                    turno,
+                    actor=request.user,
+                    fecha_hora_inicio=fecha_hora_inicio,
+                    fecha_hora_fin=fecha_hora_fin,
+                    motivo=motivo,
+                    medico=medico_obj,
+                    recurso=recurso_obj,
+                    view_name='TurnoViewSet.reprogramar',
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+
+        return self._estado_action_response(outcome)
+
+    @action(detail=True, methods=['post'], url_path='marcar-realizado')
+    def marcar_realizado(self, request, pk=None):
+        """Marca turno como REALIZADO (transiciones según rol)."""
+        motivo = request.data.get('motivo')
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_marcar_realizado_turno(request.user, turno):
+                raise PermissionDenied(
+                    'No tiene permiso para marcar este turno como realizado.'
+                )
+            try:
+                outcome = turno_estado.marcar_realizado_turno(
+                    turno,
+                    actor=request.user,
+                    motivo=motivo,
+                    view_name='TurnoViewSet.marcar_realizado',
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+
+        return self._estado_action_response(outcome)
+
+    @action(detail=True, methods=['post'], url_path='marcar-no-asistio')
+    def marcar_no_asistio(self, request, pk=None):
+        """Registra no asistencia → CANCELADO con metadata ``marcar_no_asistio``."""
+        motivo = request.data.get('motivo', '')
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_marcar_no_asistio_turno(request.user, turno):
+                raise PermissionDenied(
+                    'No tiene permiso para registrar no asistencia en este turno.'
+                )
+            try:
+                outcome = turno_estado.marcar_no_asistio_turno(
+                    turno,
+                    actor=request.user,
+                    motivo=motivo,
+                    view_name='TurnoViewSet.marcar_no_asistio',
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+
+        return self._estado_action_response(outcome)
 
     def filter_queryset(self, queryset):
         """

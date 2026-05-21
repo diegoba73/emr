@@ -44,14 +44,15 @@ def test_turno_create_and_update_generates_audit_events():
     assert ev.actor_id == admin.id
     assert ev.request_id
 
-    # update estado
+    # confirmar vía acción (C5.9.2: PATCH estado bloqueado)
     with capture_on_commit_callbacks(execute=True):
-        r2 = client.patch(f"/api/turnos/{turno_id}/", {"estado": "CONFIRMADO"}, format="json")
-    assert r2.status_code in (200, 202)
+        r2 = client.post(f"/api/turnos/{turno_id}/confirmar/", {}, format="json")
+    assert r2.status_code == 200
     ev2 = AuditEvent.objects.filter(entity_type="turnos.Turno", entity_id=str(turno_id), action="UPDATE").order_by("-id").first()
     assert ev2 is not None
     assert ev2.before_state is not None
     assert ev2.after_state is not None
+    assert ev2.metadata.get("accion") == "confirmar_turno"
 
 
 @pytest.mark.django_db

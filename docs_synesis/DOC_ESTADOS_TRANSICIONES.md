@@ -29,16 +29,20 @@
 
 **Turno** (agenda): `DISPONIBLE`, `RESERVADO`, `CONFIRMADO`, `CANCELADO`, `REALIZADO` — **[IMPLEMENTADO]**.
 
-Transiciones C5.9.1 (acciones dedicadas, `turnos/turno_estado.py`):
+Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 
-| Acción API | Desde | Hacia |
-|------------|-------|-------|
+| Acción API | Desde | Hacia / efecto |
+|------------|-------|----------------|
 | `confirmar` | `RESERVADO` | `CONFIRMADO` |
 | `cancelar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | `CANCELADO` |
+| `reprogramar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | conserva estado; cambia fechas/médico/recurso |
+| `marcar-realizado` | `CONFIRMADO` (médico); `RESERVADO`/`CONFIRMADO` (admin/secretaría) | `REALIZADO` |
+| `marcar-no-asistio` | `RESERVADO`, `CONFIRMADO` | `CANCELADO` (metadata `marcar_no_asistio`) |
 
-- `REALIZADO`: vía `registrar-consulta` (consulta con contenido) o `AtencionService` completo; no por `cancelar`.
-- Idempotencia: confirmar en `CONFIRMADO` / cancelar en `CANCELADO` → 200 sin duplicar auditoría de cambio.
-- **[DEUDA]:** `NO_ASISTIO`, reprogramar, campos `cancelado_por`/`motivo_cancelacion`, bloquear PATCH estado para admin.
+- `REALIZADO` ideal: vía `registrar-consulta` / `AtencionService`; `marcar-realizado` es operación administrativa.
+- Idempotencia: confirmar/cancelar/marcar-realizado ya en estado destino → 200 `applied=false` sin auditoría duplicada.
+- PATCH/PUT `estado`: bloqueado para todos (400).
+- **[DEUDA]:** estado `NO_ASISTIO`; campos `cancelado_por`/`motivo_cancelacion`.
 
 ---
 

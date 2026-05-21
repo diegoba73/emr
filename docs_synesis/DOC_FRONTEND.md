@@ -163,12 +163,13 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 - No hay botón eliminar (DELETE → 405 en API).
 - Estado editable en formulario según rol: **[DEUDA]** flujos de negocio dedicados.
 
-### Turnos — acciones de estado (C5.9.1)
+### Turnos — acciones de estado (C5.9.2)
 
 | UI | API |
 |----|-----|
-| Botones **Confirmar turno** / **Cancelar turno** (`TurnoModal`) | `POST /api/turnos/{id}/confirmar/`, `POST /api/turnos/{id}/cancelar/` |
-| Selector de estado solo admin/secretaría | Médico/paciente: PATCH `estado` bloqueado (400) |
+| Botones en `TurnoModal`: Confirmar, Cancelar, Marcar realizado, No asistió | `POST .../confirmar/`, `cancelar/`, `marcar-realizado/`, `marcar-no-asistio/` |
+| Chip de estado (solo lectura) para todos los roles | PATCH/PUT `estado` bloqueado (400) |
+| Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo por `prompt`) **[DEUDA]** modal dedicado |
 | `cancelarTurno(id, motivo)` en `api.ts` | Motivo obligatorio (prompt mínimo) |
 
 - Validación: `cd frontend && npm run build && npm exec -- tsc --noEmit`.

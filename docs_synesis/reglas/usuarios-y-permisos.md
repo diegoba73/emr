@@ -1,6 +1,6 @@
 # Reglas — Usuarios y permisos (Fase C0)
 
-**Versión:** C5.9.1 — 20 de mayo de 2026  
+**Versión:** C5.9.2 — 20 de mayo de 2026  
 **SoT operativo:** `DOC_PERMISOS_AUDITORIA.md`, `api/permissions.py`, `usuarios/models.py`.
 
 ---
@@ -106,24 +106,27 @@ Helpers: `frontend/src/utils/turnoPermissions.ts` (`canCreateTurno`, `canEditTur
 | laboratorio | Mensaje sin acceso | No | No |
 
 - **DELETE** no se ofrece en UI (API 405).
-- Cambio de **estado** por PATCH en formulario: **[DEUDA]** acciones de negocio (`cancelar`, `confirmar`, etc.).
+- Cambio de **estado** solo por botones de acción en `TurnoModal` (C5.9.2); sin PATCH `estado` en formulario.
 - Backend sigue siendo fuente de verdad; la UI evita acciones que devolverían 403.
 
 ---
 
-## Acciones de estado de turno **[IMPLEMENTADO]** (C5.9.1)
+## Acciones de estado de turno **[IMPLEMENTADO]** (C5.9.2)
 
-Endpoints activos en `turnos.views.TurnoViewSet`:
+Endpoints en `turnos.views.TurnoViewSet`:
 
-| Acción | Ruta | Transición | Roles |
-|--------|------|------------|-------|
-| Confirmar | `POST /api/turnos/{id}/confirmar/` | `RESERVADO` → `CONFIRMADO` (idempotente si ya confirmado) | admin/staff, secretaría, médico propio |
-| Cancelar | `POST /api/turnos/{id}/cancelar/` | `DISPONIBLE`/`RESERVADO`/`CONFIRMADO` → `CANCELADO` (motivo **obligatorio**; idempotente si ya cancelado) | admin/staff, secretaría, médico propio, paciente propio |
+| Acción | Ruta | Transición / efecto | Roles |
+|--------|------|---------------------|-------|
+| Confirmar | `POST .../confirmar/` | `RESERVADO` → `CONFIRMADO` | admin/staff, secretaría, médico propio |
+| Cancelar | `POST .../cancelar/` | → `CANCELADO` (motivo obligatorio) | admin/staff, secretaría, médico/paciente propio |
+| Reprogramar | `POST .../reprogramar/` | conserva estado; cambia agenda | admin/staff, secretaría, médico/paciente propio |
+| Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría; médico propio si `CONFIRMADO` |
+| Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría, médico propio |
 
-- **PATCH/PUT `estado`:** bloqueado para **médico** y **paciente** (400); admin/secretaría pueden PATCH temporalmente **[DEUDA]** unificar solo acciones.
-- Auditoría: `log_update` con metadata `accion`, `estado_anterior`, `estado_nuevo`, `turno_id`, `motivo` (cancelar), `view`.
+- **PATCH/PUT `estado`:** bloqueado para **todos** (400).
+- Auditoría: metadata por acción (`reprogramar` incluye fechas/médico/recurso antes/después).
 - Servicio: `turnos/turno_estado.py`. Tests: `turnos/tests/test_estado_turnos.py`.
-- `REALIZADO` no se cancela; no hay acción `marcar_realizado` en C5.9.1 (sigue vía atención/consulta).
+- **[DEUDA]:** estado `NO_ASISTIO`; campos estructurales; endpoints legacy `api/views.py`.
 
 ---
 
