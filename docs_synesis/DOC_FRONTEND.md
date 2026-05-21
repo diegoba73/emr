@@ -161,7 +161,7 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | `frontend/src/components/TurnoModal.tsx` | `forceReadOnly`; médico bloqueado para rol `MEDICO`; paciente bloqueado para `PACIENTE` |
 
 - No hay botón eliminar (DELETE → 405 en API).
-- Estado editable en formulario según rol: **[DEUDA]** flujos de negocio dedicados.
+- **Estado del turno:** chip de solo lectura en `TurnoModal`; cambios vía acciones POST (`confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`). No se envía `estado` por PATCH/PUT (todos los roles, 400 en API). Admin/secretaría usan las mismas acciones, no selector CRUD.
 
 ### Turnos — acciones de estado (C5.9.2)
 

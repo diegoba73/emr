@@ -103,6 +103,41 @@ class TestTurnoCreatePermissions(APITestCase):
         )
         assert response.status_code == status.HTTP_201_CREATED
 
+    def test_no_se_puede_crear_turno_realizado(self):
+        """C5.9.2: POST genérico no crea turnos en estado REALIZADO."""
+        admin = User.objects.create_user(
+            username='ta_mut_crea_rea',
+            email='ta_mut_crea_rea@test.com',
+            password='x',
+            rol='admin',
+            is_staff=True,
+        )
+        payload = _turno_payload(self.paciente_a, self.medico_a, self.recurso, 199)
+        payload['estado'] = Turno.Estado.REALIZADO
+        n_antes = Turno.objects.filter(estado=Turno.Estado.REALIZADO).count()
+        self.client.force_authenticate(user=admin)
+        response = self.client.post('/api/turnos/', payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'estado' in response.data
+        assert Turno.objects.filter(estado=Turno.Estado.REALIZADO).count() == n_antes
+
+    def test_no_se_puede_crear_turno_cancelado(self):
+        """C5.9.2: POST genérico no crea turnos en estado CANCELADO."""
+        sec = User.objects.create_user(
+            username='ta_mut_crea_can_sec',
+            email='ta_mut_crea_can_sec@test.com',
+            password='x',
+            rol='secretaria',
+        )
+        payload = _turno_payload(self.paciente_b, self.medico_b, self.recurso, 200)
+        payload['estado'] = Turno.Estado.CANCELADO
+        n_antes = Turno.objects.filter(estado=Turno.Estado.CANCELADO).count()
+        self.client.force_authenticate(user=sec)
+        response = self.client.post('/api/turnos/', payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'estado' in response.data
+        assert Turno.objects.filter(estado=Turno.Estado.CANCELADO).count() == n_antes
+
     def test_enfermeria_no_puede_crear_turno(self):
         enf = User.objects.create_user(
             username='ta_mut_enf',
