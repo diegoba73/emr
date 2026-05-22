@@ -54,10 +54,12 @@
 
 ---
 
-## Flujo de documentos clínicos
+## Flujo de documentos clínicos (C6.2 [IMPLEMENTADO])
 
-1. **`emr.Documento`:** archivo por `Atencion`, tipos INFORME, ESTUDIO, etc. — `DocumentoViewSet` en `api/views.py`.
-2. **`archivos_medicos.ArchivoMedico`:** archivo por paciente y opcionalmente `Consulta`; reglas de visibilidad estrictas por rol (secretaría: sin acceso).
+1. **`emr.Documento`:** adjunto por `Atencion`; upload POST; lectura/descarga autenticada (`download`); sin eliminación física (405). Secretaría/enfermería/laboratorio sin acceso.
+2. **`archivos_medicos.ArchivoMedico`:** adjunto por `Paciente` (+ opcional `Consulta` HC); médico ve pacientes vinculados por consulta HC, **atención** o **turno**; paciente solo propios; descarga auditada; DELETE → 405.
+
+No es flujo PACS ni `EstudioComplementario`. Ver `reglas/documentos-e-imagenes.md`.
 
 ---
 

@@ -176,3 +176,13 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | `cancelarTurno(id, motivo)` en `api.ts` | Motivo obligatorio (prompt mínimo) |
 
 - Validación: `cd frontend && npm run build && npm exec -- tsc --noEmit`.
+
+### Archivos y documentos clínicos (C6.2)
+
+| Archivo | Cambio |
+|---------|--------|
+| `Sidebar.tsx` | Menú **Archivos** solo `medico`, `admin`, `paciente` |
+| `ArchivosMedicos.tsx` | Descarga vía `downloadArchivoMedico`; sin botón eliminar |
+| `apiService.ts` | Errores genéricos; `getArchivosPorConsulta` filtra por `consulta` |
+| `DocumentosAdjuntos.tsx` | Descarga vía `apiService.downloadDocumento`; sin URL media directa |
+| `types/index.ts` | `download_url`, `archivo_nombre`, `archivo_size` |

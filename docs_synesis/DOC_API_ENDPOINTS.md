@@ -90,7 +90,7 @@ Registros `router.register` (recurso → ViewSet). Convención DRF:
 | `registros-quirurgicos` | `api.views.RegistroQuirurgicoViewSet` | — | — |
 | `estudios-diagnosticos` | `api.views.EstudioDiagnosticoViewSet` | — | — |
 | `procedimientos-catalogo` | `api.views.ProcedimientoCatalogoViewSet` | — | — |
-| `documentos` | `api.views.DocumentoViewSet` | Documentos EMR | — |
+| `documentos` | `api.views.DocumentoViewSet` | Documentos EMR (C6.2: sin URL `/media/`; `GET {id}/download/`) | — |
 
 **ViewSets definidos en `api/views.py` pero no registrados en `api/urls.py`:** p. ej. `SignosVitalesViewSet` — **sin ruta** en el router actual (no aparece `register` para signos).
 
@@ -104,12 +104,24 @@ Mismo `TipoAtencionViewSet`, `CentroFisicoViewSet`, más `ProcedimientoViewSet` 
 
 ---
 
-## Archivos médicos (`/api/archivos-medicos/`)
+## Archivos médicos (`/api/archivos-medicos/`) — C6.2 [IMPLEMENTADO]
 
 | Recurso | Notas |
 |---------|-------|
-| `archivos` | CRUD `ArchivoMedicoViewSet`; acción descarga si implementada |
-| `tipos_disponibles/` | `tipos_archivo_publicos` (ruta explícita en `archivos_medicos/urls.py`) |
+| `archivos` | List/detail/create/update; **DELETE → 405**; serializer sin URL `/media/`; `download_url` + `GET archivos/{id}/download/` |
+| `archivos/tipos_disponibles/` | Catálogo de tipos (autenticado) |
+| `tipos/` | `tipos_archivo_publicos` AllowAny (metadatos de formulario) |
+
+Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
+
+## Documentos EMR (`/api/documentos/`) — C6.2
+
+| Método | Ruta | Notas |
+|--------|------|-------|
+| GET | `documentos/` | Filtrado por rol; sin URL media en JSON |
+| POST | `documentos/` | Upload; auditoría `documento_create` |
+| GET | `documentos/{id}/download/` | Descarga autenticada; auditoría `documento_download` |
+| DELETE | `documentos/{id}/` | **405** — eliminación física no permitida |
 
 ---
 

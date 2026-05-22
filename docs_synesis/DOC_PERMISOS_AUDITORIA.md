@@ -240,3 +240,11 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - **`LimsMicrobiologiaPermission`**: acción **`marcar_informado`** permitida a **admin** y **laboratorio** (además de `iniciar`, `cancelar`, `descartar`, etc.).
 - **secretaria / enfermeria**: siguen **sin** lectura de informes ni del resto de microbiología LIMS en B3.4 (misma política que B3.1–B3.3).
 - Auditoría B3.4: eventos de creación/actualización/emisión/validación/anulación de informe y de `marcar_informado` (acciones y metadata acotada en `microbiologia_estado.py` — sin PHI del paciente en metadata estable).
+
+## EMR C6.2 — archivos y documentos clínicos [IMPLEMENTADO]
+
+- **ArchivoMedico** (`archivos_medicos/views.py`): admin todo; médico por vínculo paciente (Consulta / Atencion / Turno); paciente propio; secretaría, enfermería, laboratorio → queryset vacío.
+- **Documento** (`api/views.py` DocumentoViewSet): admin todo; médico atenciones propias o cargados por él; paciente lectura de sus atenciones; secretaría sin acceso (C6.2).
+- **Auditoría:** `archivo_medico_create|update|download`, `documento_create|update|download` en metadata; sin paths ni URLs `/media/`.
+- **DELETE:** 405 en ambos viewsets.
+- Regla detallada: `docs_synesis/reglas/documentos-e-imagenes.md`.

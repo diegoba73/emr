@@ -145,12 +145,14 @@
 ### Documento
 
 - FK Atencion CASCADE; `tipo_documento`; `FileField`; FK `usuario_cargador`
+- **C6.2:** API sin URL `/media/`; bytes vía `GET /api/documentos/{id}/download/`; DELETE HTTP no permitido (405)
 
 ---
 
 ## archivos_medicos.ArchivoMedico
 
 - FK Paciente CASCADE; FK Consulta null; `FileField` con validators; `tipo_archivo` choices; `subido_por`
+- **C6.2:** API expone `download_url`, `archivo_nombre`, `archivo_size`; `GET …/archivos/{id}/download/`; DELETE → 405
 
 ---
 

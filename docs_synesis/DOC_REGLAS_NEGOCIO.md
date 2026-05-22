@@ -190,8 +190,11 @@ Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incl
 
 ## Restricciones funcionales
 
+- Secretaría / enfermería / laboratorio: **sin** accivos clínicos (`ArchivoMedico`, `Documento`) en C6.2.
 - Secretaría: **sin** acceso a listados de archivos médicos (`queryset.none()`).
-- Paciente: turnos y datos acotados a su vínculo.
+- Paciente: turnos y datos acotados a su vínculo; archivos propios; documentos de sus atenciones (lectura/descarga).
+- **C6.2 [IMPLEMENTADO]:** APIs no exponen URL `/media/`; descarga vía `…/download/`; DELETE → 405; auditoría create/update/download. Detalle: `reglas/documentos-e-imagenes.md`.
+- Médico — archivos: pacientes vinculados por `Consulta` HC, `Atencion` o `Turno` (no solo HC legacy).
 - Resultados: no editar orden validada vía acción de carga.
 
 ---
