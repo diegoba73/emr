@@ -1,3 +1,5 @@
+import os
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from pacientes.models import Paciente
@@ -504,18 +506,18 @@ class ProcedimientoCatalogoSerializer(serializers.ModelSerializer):
 
 
 class DocumentoSerializer(serializers.ModelSerializer):
-    """Serializer para documentos clínicos asociados a una atención"""
+    """Documentos clínicos: sin URL /media/; descarga vía endpoint autenticado."""
     atencion_id = serializers.PrimaryKeyRelatedField(
         source='atencion',
         queryset=Atencion.objects.all(),
-        write_only=True
+        write_only=True,
     )
     usuario_cargador_id = serializers.IntegerField(source='usuario_cargador.id', read_only=True)
     usuario_cargador_nombre = serializers.SerializerMethodField()
-    # Campo para lectura: devuelve la URL del archivo
-    archivo_url = serializers.SerializerMethodField()
-    # Campo para escritura: recibe el archivo subido
     archivo = serializers.FileField(write_only=True)
+    archivo_nombre = serializers.SerializerMethodField()
+    archivo_size = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Documento
@@ -524,7 +526,9 @@ class DocumentoSerializer(serializers.ModelSerializer):
             'atencion_id',
             'tipo_documento',
             'archivo',
-            'archivo_url',
+            'archivo_nombre',
+            'archivo_size',
+            'download_url',
             'descripcion',
             'fecha_subida',
             'usuario_cargador_id',
@@ -532,21 +536,33 @@ class DocumentoSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['fecha_subida', 'usuario_cargador_id', 'usuario_cargador_nombre', 'created_at', 'updated_at']
+        read_only_fields = [
+            'fecha_subida',
+            'usuario_cargador_id',
+            'usuario_cargador_nombre',
+            'created_at',
+            'updated_at',
+            'archivo_nombre',
+            'archivo_size',
+            'download_url',
+        ]
 
-    def get_archivo_url(self, obj):
-        """Retornar la URL del archivo de forma segura"""
-        if obj.archivo:
-            request = self.context.get('request')
-            if request:
-                try:
-                    return request.build_absolute_uri(obj.archivo.url)
-                except Exception:
-                    # Si falla (ej: host inválido en tests), devolver URL relativa
-                    return obj.archivo.url
-            # Si no hay request, retornar la URL relativa
-            return obj.archivo.url
-        return None
+    def get_archivo_nombre(self, obj):
+        if not obj.archivo:
+            return None
+        return os.path.basename(obj.archivo.name)
+
+    def get_archivo_size(self, obj):
+        try:
+            return obj.archivo.size if obj.archivo else None
+        except (OSError, ValueError):
+            return None
+
+    def get_download_url(self, obj):
+        request = self.context.get('request')
+        if not request or not obj.pk:
+            return None
+        return request.build_absolute_uri(f'/api/documentos/{obj.pk}/download/')
 
     def get_usuario_cargador_nombre(self, obj):
         if obj.usuario_cargador:
@@ -557,8 +573,7 @@ class DocumentoSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['atencion_id'] = instance.atencion_id
-        # Mantener compatibilidad: devolver archivo como la URL para el frontend
-        data['archivo'] = self.get_archivo_url(instance)
+        data.pop('archivo', None)
         return data
 
 

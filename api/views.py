@@ -19,7 +19,9 @@ from .permissions import (
 )
 from django.db.models import Count, Q
 from django.utils import timezone
-from django.http import Http404
+from django.http import FileResponse, Http404
+from django.db import transaction
+import os
 from datetime import datetime, timedelta
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
@@ -53,6 +55,8 @@ from turnos.models import Turno, Recurso, Atencion, ConsultaAmbulatoria, Registr
 from turnos.services import AtencionService, BusinessLogicError, resolve_tipo_intervencion_from_recurso
 from catalogos.models import EstudioDiagnostico, ProcedimientoCatalogo
 from emr.models import Documento, SignosVitales
+from auditoria.audit_service import log_create, log_update
+from auditoria.snapshot import safe_model_snapshot
 
 
 # La función resolve_tipo_intervencion_from_recurso fue movida a turnos/services.py
@@ -2546,9 +2550,21 @@ class RegistroQuirurgicoViewSet(viewsets.ModelViewSet):
         return queryset.none()
 
 
+def _safe_audit_documento(callable_, *args, **kwargs):
+    try:
+        callable_(*args, **kwargs)
+    except Exception:  # pragma: no cover
+        logger.exception(
+            'Fallo silencioso en auditoría de documento: %s',
+            getattr(callable_, '__name__', 'audit'),
+        )
+
+
 class DocumentoViewSet(viewsets.ModelViewSet):
-    """ViewSet para gestionar documentos clínicos"""
-    queryset = Documento.objects.select_related('atencion', 'atencion__paciente', 'atencion__medico_principal', 'usuario_cargador')
+    """Documentos clínicos por atención: descarga protegida, sin URL /media/, DELETE bloqueado."""
+    queryset = Documento.objects.select_related(
+        'atencion', 'atencion__paciente', 'atencion__medico_principal', 'usuario_cargador'
+    )
     serializer_class = DocumentoSerializer
     permission_classes = [IsEMRClinicianOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
@@ -2569,7 +2585,7 @@ class DocumentoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or role in ['admin', 'secretaria']:
+        if user.is_superuser or role == 'admin':
             pass
         elif role == 'medico':
             try:
@@ -2596,16 +2612,127 @@ class DocumentoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tipo_documento=tipo_documento)
         return queryset
 
+    def _user_puede_leer_documento(self, user, documento):
+        role = str(getattr(user, 'rol', '') or '').lower()
+        if user.is_superuser or role == 'admin':
+            return True
+        if role == 'medico':
+            try:
+                medico = user.medico
+                return (
+                    documento.atencion.medico_principal_id == medico.id
+                    or documento.usuario_cargador_id == user.id
+                )
+            except Exception:
+                return False
+        if role == 'paciente':
+            try:
+                return documento.atencion.paciente_id == user.paciente.id
+            except Exception:
+                return False
+        return False
+
     def perform_create(self, serializer):
         usuario = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(usuario_cargador=usuario)
+        with transaction.atomic():
+            instance = serializer.save(usuario_cargador=usuario)
+            _safe_audit_documento(
+                log_create,
+                actor=usuario,
+                entity=instance,
+                module='emr.documentos',
+                metadata={
+                    'accion': 'documento_create',
+                    'view': 'DocumentoViewSet',
+                    'tipo': instance.tipo_documento,
+                },
+            )
 
     def perform_update(self, serializer):
-        instance = serializer.save()
-        if not instance.usuario_cargador and self.request.user.is_authenticated:
-            instance.usuario_cargador = self.request.user
-            instance.save(update_fields=['usuario_cargador', 'updated_at'])
-    
+        before = safe_model_snapshot(serializer.instance)
+        with transaction.atomic():
+            instance = serializer.save()
+            if not instance.usuario_cargador and self.request.user.is_authenticated:
+                instance.usuario_cargador = self.request.user
+                instance.save(update_fields=['usuario_cargador', 'updated_at'])
+            _safe_audit_documento(
+                log_update,
+                actor=self.request.user,
+                entity=instance,
+                before=before,
+                module='emr.documentos',
+                metadata={
+                    'accion': 'documento_update',
+                    'view': 'DocumentoViewSet',
+                    'tipo': instance.tipo_documento,
+                },
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {
+                'detail': (
+                    'La eliminación física de archivos clínicos no está permitida.'
+                )
+            },
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        documento = self.get_object()
+        if not self._user_puede_leer_documento(request.user, documento):
+            return Response(
+                {'detail': 'No tiene permiso para descargar este documento.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not documento.archivo:
+            return Response(
+                {'detail': 'Archivo no encontrado en el servidor.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            storage_path = documento.archivo.path
+        except Exception:
+            return Response(
+                {'detail': 'Archivo no encontrado en el servidor.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not os.path.exists(storage_path):
+            logger.error('Documento clínico ausente en almacenamiento')
+            return Response(
+                {'detail': 'Archivo no encontrado en el servidor.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        _safe_audit_documento(
+            log_update,
+            actor=request.user,
+            entity=documento,
+            module='emr.documentos',
+            metadata={
+                'accion': 'documento_download',
+                'view': 'DocumentoViewSet.download',
+                'tipo': documento.tipo_documento,
+            },
+        )
+
+        try:
+            response = FileResponse(
+                open(storage_path, 'rb'),
+                content_type='application/octet-stream',
+            )
+            nombre = os.path.basename(documento.archivo.name) or 'documento'
+            nombre = nombre.replace('"', '_')
+            response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+            return response
+        except Exception:
+            logger.exception('Error al servir descarga de documento clínico')
+            return Response(
+                {'detail': 'Error al procesar el archivo.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=False, methods=['get'])
     def tipos(self, request):
         """
