@@ -161,7 +161,7 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | `frontend/src/components/TurnoModal.tsx` | `forceReadOnly`; médico bloqueado para rol `MEDICO`; paciente bloqueado para `PACIENTE` |
 
 - No hay botón eliminar (DELETE → 405 en API).
-- **Estado del turno:** chip de solo lectura en `TurnoModal`; cambios vía acciones POST (`confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`). **C5.10.1:** inicio clínico vía `apiService.iniciarAtencionTurno` → `POST .../iniciar-atencion/` (no `createAtencion` en flujo médico principal). No PATCH `estado`.
+- **Estado del turno:** chip de solo lectura en `TurnoModal`; cambios vía acciones POST (`confirmar`, `cancelar`, `reprogramar`, `marcar-realizado`, `marcar-no-asistio`). **C5.10.1:** inicio clínico vía `iniciarAtencionTurno`. **C5.10.2:** `createAtencion` marcado `@deprecated` (compat); agenda no debe usarlo. No PATCH `estado`.
 
 ### Turnos — acciones de estado (C5.9.2)
 

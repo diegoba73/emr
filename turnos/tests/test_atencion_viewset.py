@@ -19,6 +19,25 @@ from auditoria.models import AuditEvent
 
 User = get_user_model()
 
+_ATENCIONES_COMPAT_DEPRECATED = "POST /api/atenciones/"
+_ATENCIONES_COMPAT_REPLACEMENT = "POST /api/turnos/{id}/iniciar-atencion/"
+
+
+def _assert_atenciones_compat_deprecation_headers(test_case, response):
+    test_case.assertEqual(response.get("Deprecation"), "true")
+    test_case.assertEqual(
+        response.get("X-Synesis-Deprecated-Endpoint"),
+        _ATENCIONES_COMPAT_DEPRECATED,
+    )
+    test_case.assertEqual(
+        response.get("X-Synesis-Replacement-Endpoint"),
+        _ATENCIONES_COMPAT_REPLACEMENT,
+    )
+    warning = response.get("Warning") or ""
+    test_case.assertIn("299", warning)
+    test_case.assertIn("/api/atenciones/", warning)
+    test_case.assertIn("iniciar-atencion", warning)
+
 
 class TestAtencionViewSetCreate(APITestCase):
     """Tests para POST /api/atenciones/"""
@@ -245,6 +264,69 @@ class TestAtencionViewSetCreate(APITestCase):
             AuditEvent.objects.filter(action="CREATE", entity_type="turnos.Atencion").count(),
             prior2,
         )
+
+    def _turno_confirmado_fresco(self, hours_offset: int) -> Turno:
+        base = timezone.now() + timedelta(hours=hours_offset)
+        return Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=base,
+            fecha_hora_fin=base + timedelta(hours=1),
+            estado="CONFIRMADO",
+            motivo_reserva="Compat deprec",
+        )
+
+    def test_post_atenciones_compat_devuelve_headers_deprecated(self):
+        turno = self._turno_confirmado_fresco(20)
+        url = reverse("atenciones-list")
+        data = {"turno": turno.id}
+
+        response = self.client.post(url, data, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("id", response.data)
+        _assert_atenciones_compat_deprecation_headers(self, response)
+        turno.refresh_from_db()
+        self.assertEqual(turno.estado, "CONFIRMADO")
+
+    def test_post_atenciones_compat_idempotente_mantiene_headers_deprecated(self):
+        turno = self._turno_confirmado_fresco(21)
+        url = reverse("atenciones-list")
+        data = {"turno": turno.id}
+
+        response1 = self.client.post(url, data, format="json")
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        atencion_id = response1.data["id"]
+
+        response2 = self.client.post(url, data, format="json")
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        self.assertEqual(response2.data["id"], atencion_id)
+        _assert_atenciones_compat_deprecation_headers(self, response2)
+        turno.refresh_from_db()
+        self.assertEqual(turno.estado, "CONFIRMADO")
+        self.assertEqual(Atencion.objects.filter(turno=turno).count(), 1)
+
+    def test_iniciar_atencion_turno_no_devuelve_headers_deprecated(self):
+        turno = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=timezone.now() + timedelta(hours=5),
+            fecha_hora_fin=timezone.now() + timedelta(hours=6),
+            estado="CONFIRMADO",
+            motivo_reserva="Inicio clínico",
+        )
+        response = self.client.post(
+            f"/api/turnos/{turno.id}/iniciar-atencion/",
+            {},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn("X-Synesis-Deprecated-Endpoint", response)
+        self.assertNotIn("Deprecation", response)
+        turno.refresh_from_db()
+        self.assertEqual(turno.estado, "REALIZADO")
 
 
 

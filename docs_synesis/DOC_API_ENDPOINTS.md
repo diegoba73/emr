@@ -156,7 +156,9 @@ Mismo `TipoAtencionViewSet`, `CentroFisicoViewSet`, más `ProcedimientoViewSet` 
 | `/api/lab/solicitudes/{id}/cancelar/` | POST | Cancela orden no final (`PENDIENTE` / `TOMA_MUESTRA` / `EN_PROCESO` → `CANCELADO`) |
 | `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
 | `/api/lab/solicitudes/{id}/etiqueta/` | GET | JSON ZPL |
+| `/api/atenciones/` | POST | **Compat/deprecated (C5.10.2):** alta idempotente de `Atencion` desde `turno`; no mueve estado del turno; headers `Deprecation`, `X-Synesis-Deprecated-Endpoint`, `X-Synesis-Replacement-Endpoint`, `Warning` |
 | `/api/atenciones/{id}/cerrar/` | POST | Cerrar atención |
+| `/api/turnos/{id}/iniciar-atencion/` | POST | **Flujo clínico activo (C5.10.1):** crea/obtiene atención, turno → `REALIZADO`, registro hijo; sin headers deprecated |
 | `/api/turnos/` + query | GET | `start`, `end`, `all` |
 
 **Alias:** mismas acciones bajo `/api/laboratorio/solicitudes/{id}/...` (mismo `SolicitudExamenViewSet` registrado dos veces en `api/urls.py`).

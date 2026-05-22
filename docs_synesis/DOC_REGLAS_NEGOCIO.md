@@ -84,7 +84,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de atenciones
 
 - **C5.10.1 `iniciar-atencion`:** estados permitidos `RESERVADO`/`CONFIRMADO`; rechaza `CANCELADO`/`DISPONIBLE`; idempotente si ya existe `Atencion` (200, sin duplicar auditoría de alta); si atención existe y turno sigue `CONFIRMADO`, sincroniza a `REALIZADO` y audita turno. Permisos: médico propio; admin/staff/superuser; no secretaría/paciente/enfermería/laboratorio.
-- `AtencionViewSet.create`: modo compat **[DEUDA]** — no altera turno ni crea hijo; mantener para integraciones legacy.
+- **C5.10.2 `POST /api/atenciones/`:** compat/deprecated (headers HTTP); no altera `Turno.estado`; puede dejar turno `CONFIRMADO` con atención abierta — no usar como inicio clínico en UI. Integraciones externas pueden seguir consumiendo el JSON; migrar a `iniciar-atencion`.
 - `marcar-realizado`: no sustituye `iniciar-atencion` (no crea atención).
 - Permisos: `IsMedicoOrEnfermeriaOrAdmin`; queryset médico = `medico_principal`; paciente = su paciente.
 - Acción **cerrar** para finalizar (detalle en implementación).

@@ -123,6 +123,7 @@ Endpoints en `turnos.views.TurnoViewSet`:
 | Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría; médico propio si `CONFIRMADO` |
 | Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría, médico propio |
 | Iniciar atención **(C5.10.1)** | `POST .../iniciar-atencion/` | `REALIZADO` + atención clínica | médico propio; admin/staff/superuser; **no** secretaría/paciente/enfermería/laboratorio |
+| Alta atención compat **(C5.10.2)** | `POST /api/atenciones/` | Crea/obtiene atención; turno sin cambio | Mismos permisos que `AtencionViewSet`; **deprecated** (headers); no usar en UI de agenda |
 
 - **PATCH/PUT `estado`:** bloqueado para **todos** (400).
 - Auditoría: metadata por acción (`reprogramar` incluye fechas/médico/recurso antes/después).

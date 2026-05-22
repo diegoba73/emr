@@ -36,7 +36,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | ID | Invariante | Estado |
 |----|------------|--------|
 | A1 | Una `Atencion` por `Turno` (OneToOne). | **[IMPLEMENTADO]** |
-| A2 | `POST /api/atenciones/` idempotente por turno (200 vs 201). | **[IMPLEMENTADO]** `api_post_compat` |
+| A2 | `POST /api/atenciones/` idempotente por turno (200 vs 201); deprecated vía headers (C5.10.2). | **[IMPLEMENTADO]** `api_post_compat` |
 | A3 | Datos de paciente/médico en alta vienen del turno, no inventados por cliente. | **[IMPLEMENTADO]** servicio |
 | A4 | Cierre explícito antes de tratar encuentro como finalizado. | **[IMPLEMENTADO]** `cerrar` |
 | A5 | No dos “consultas” canónicas sin vínculo (HC vs ambulatoria). | **[DEUDA]** |

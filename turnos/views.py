@@ -608,6 +608,24 @@ class TurnoViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+_ATENCIONES_COMPAT_DEPRECATED_ENDPOINT = "POST /api/atenciones/"
+_ATENCIONES_COMPAT_REPLACEMENT_ENDPOINT = "POST /api/turnos/{id}/iniciar-atencion/"
+_ATENCIONES_COMPAT_WARNING = (
+    '299 - "POST /api/atenciones/ is compatibility-only; '
+    'use POST /api/turnos/{id}/iniciar-atencion/ for clinical start"'
+)
+
+
+def _atenciones_compat_deprecation_headers() -> dict[str, str]:
+    """Headers HTTP no disruptivos para POST /api/atenciones/ (C5.10.2). Sin PHI."""
+    return {
+        "Deprecation": "true",
+        "X-Synesis-Deprecated-Endpoint": _ATENCIONES_COMPAT_DEPRECATED_ENDPOINT,
+        "X-Synesis-Replacement-Endpoint": _ATENCIONES_COMPAT_REPLACEMENT_ENDPOINT,
+        "Warning": _ATENCIONES_COMPAT_WARNING,
+    }
+
+
 class AtencionViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestionar Atenciones.
@@ -676,11 +694,10 @@ class AtencionViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """
-        Crea una Atención desde un Turno.
+        Compat/deprecated (C5.10.2): crea u obtiene Atención sin mover el turno a REALIZADO.
 
-        - Si ya existe una atención para el turno, retorna la existente (idempotencia).
-        - Resuelve automáticamente paciente, medico_principal, tipo_atencion desde el turno.
-        - El frontend NO necesita enviar medico_principal.
+        Flujo clínico desde agenda: POST /api/turnos/{id}/iniciar-atencion/.
+        Respuesta incluye headers Deprecation / X-Synesis-* / Warning (sin cambiar el JSON).
         """
         turno_raw = request.data.get("turno")
         if not turno_raw:
@@ -701,9 +718,14 @@ class AtencionViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(outcome.atencion)
+        headers = _atenciones_compat_deprecation_headers()
         if outcome.created_new:
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED,
+                headers=headers,
+            )
+        return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
     
     @action(detail=True, methods=['post'], url_path='cerrar')
     @transaction.atomic

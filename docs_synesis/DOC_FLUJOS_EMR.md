@@ -30,7 +30,7 @@
 ## Flujo de atenciones
 
 1. **Flujo clínico activo (C5.10.1):** `POST /api/turnos/{id}/iniciar-atencion/` — `AtencionService.iniciar_atencion_clinica_desde_turno`; auditoría en `TurnoViewSet.iniciar_atencion`. Frontend médico (`TurnoModal`) usa esta acción.
-2. **Compat integraciones:** `POST /api/atenciones/` — `api_post_compat=True`; idempotente; **no** mueve turno ni crea hijo. **[DEUDA]** migrar clientes a `iniciar-atencion`; posible deprecación.
+2. **Compat/deprecated (C5.10.2):** `POST /api/atenciones/` — preservado; headers `Deprecation`, `X-Synesis-Deprecated-Endpoint`, `X-Synesis-Replacement-Endpoint`, `Warning` (299); **no** mueve turno ni crea hijo; JSON sin cambios. **[DEUDA]** retiro cuando no queden clientes legacy.
 3. **Modo servicio completo legacy** (`api_post_compat=False` en `iniciar_atencion_desde_turno`): no idempotente; usado en tests; no enrutado en router principal.
 4. **Cierre:** acción `cerrar` en `AtencionViewSet` (detalle en código; no expandido aquí).
 5. **Permisos:** `IsMedicoOrEnfermeriaOrAdmin`; queryset limita por médico principal o paciente.
