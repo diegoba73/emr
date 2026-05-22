@@ -95,10 +95,8 @@ class AtencionService:
             IniciarAtencionOutcome: atencion + created_new (False si idempotencia en modo API)
         """
         logger.info(
-            "Intentando iniciar atención desde turno %s (api_post_compat=%s). Usuario solicitante: %s",
-            turno_id,
+            "Iniciando atención desde turno (api_post_compat=%s).",
             api_post_compat,
-            usuario_solicitante.username if usuario_solicitante else "N/A",
         )
 
         if api_post_compat:
@@ -114,16 +112,12 @@ class AtencionService:
                 try:
                     turno = Turno.objects.select_for_update().get(pk=turno_id)
                 except Turno.DoesNotExist:
-                    logger.error("Turno %s no existe", turno_id)
+                    logger.error("Turno no existe al iniciar atención.")
                     raise BusinessLogicError(f"El turno {turno_id} no existe")
 
                 try:
                     atencion_existente = turno.atencion
-                    logger.warning(
-                        "El turno %s ya tiene una atención asociada (ID: %s)",
-                        turno_id,
-                        atencion_existente.id,
-                    )
+                    logger.warning("El turno ya tiene una atención asociada.")
                     raise BusinessLogicError(
                         f"El turno {turno_id} ya tiene una atención asociada. "
                         f"No se puede crear una nueva atención."
@@ -134,8 +128,7 @@ class AtencionService:
                 estados_permitidos = ["RESERVADO", "CONFIRMADO"]
                 if turno.estado not in estados_permitidos:
                     logger.warning(
-                        "El turno %s está en estado '%s', no permite iniciar atención.",
-                        turno_id,
+                        "Estado de turno '%s' no permite iniciar atención.",
                         turno.estado,
                     )
                     raise BusinessLogicError(
@@ -145,23 +138,22 @@ class AtencionService:
                     )
 
                 if not turno.paciente:
-                    logger.error("El turno %s no tiene paciente asociado", turno_id)
+                    logger.error("Turno sin paciente al iniciar atención.")
                     raise BusinessLogicError("El turno no tiene un paciente asociado")
 
                 if not turno.medico:
-                    logger.error("El turno %s no tiene médico asociado", turno_id)
+                    logger.error("Turno sin médico al iniciar atención.")
                     raise BusinessLogicError("El turno no tiene un médico asociado")
 
                 if not turno.recurso:
-                    logger.error("El turno %s no tiene recurso asociado", turno_id)
+                    logger.error("Turno sin recurso al iniciar atención.")
                     raise BusinessLogicError("El turno no tiene un recurso asociado")
 
                 estado_anterior = turno.estado
                 turno.estado = "REALIZADO"
                 turno.save(update_fields=["estado", "updated_at"])
                 logger.info(
-                    "Estado del turno %s cambiado de '%s' a 'REALIZADO'",
-                    turno_id,
+                    "Estado de turno cambiado de '%s' a REALIZADO.",
                     estado_anterior,
                 )
 
@@ -183,14 +175,12 @@ class AtencionService:
                     estado_clinico=Atencion.EstadoClinico.ABIERTA,
                 )
 
-                logger.info("Atencion %s creada exitosamente para turno %s", atencion.id, turno_id)
+                logger.info("Atención creada correctamente.")
 
                 AtencionService._crear_registro_hijo(atencion, tipo_atencion)
 
                 logger.info(
-                    "Atención %s iniciada exitosamente desde turno %s (tipo registro %s)",
-                    atencion.id,
-                    turno_id,
+                    "Atención iniciada correctamente (tipo registro %s).",
                     tipo_atencion,
                 )
 
@@ -200,8 +190,7 @@ class AtencionService:
             raise
         except Exception as e:
             logger.error(
-                "Error inesperado al iniciar atención desde turno %s: %s",
-                turno_id,
+                "Error inesperado al iniciar atención desde turno: %s",
                 str(e),
                 exc_info=True,
             )
@@ -258,13 +247,7 @@ class AtencionService:
                 observaciones_generales=observaciones_generales,
             )
 
-            logger.info(
-                "Atención %s creada para turno %s. Paciente: %s, Médico: %s",
-                atencion.id,
-                turno_id,
-                atencion.paciente_id,
-                atencion.medico_principal_id,
-            )
+            logger.info("Atención compat creada correctamente.")
 
             log_create(
                 actor=actor,
@@ -360,15 +343,13 @@ class AtencionService:
             atencion: Instancia de Atencion recién creada
             tipo_atencion: Tipo de atención/recurso (CONSULTORIO, SALA_PROCEDIMIENTO, etc.)
         """
-        logger.debug(
-            f"Creando registro hijo para Atencion {atencion.id}, tipo_atencion={tipo_atencion}"
-        )
+        logger.debug("Creando registro hijo clínico (tipo_atencion=%s).", tipo_atencion)
         
         # Mapeo de tipo_recurso a registro hijo
         if tipo_atencion == Recurso.TipoRecurso.CONSULTORIO:
             # Crear ConsultaAmbulatoria
             ConsultaAmbulatoria.objects.create(atencion=atencion)
-            logger.info(f"ConsultaAmbulatoria creada para Atencion {atencion.id}")
+            logger.info("ConsultaAmbulatoria creada.")
             
         elif tipo_atencion == Recurso.TipoRecurso.SALA_PROCEDIMIENTO:
             # Crear RegistroProcedimiento (requiere descripcion_procedimiento mínimo)
@@ -376,7 +357,7 @@ class AtencionService:
                 atencion=atencion,
                 descripcion_procedimiento=f"Procedimiento iniciado desde turno {atencion.turno_id}"
             )
-            logger.info(f"RegistroProcedimiento creado para Atencion {atencion.id}")
+            logger.info("RegistroProcedimiento creado.")
             
         elif tipo_atencion in [Recurso.TipoRecurso.QUIROFANO, Recurso.TipoRecurso.SALA_HEMODINAMIA]:
             # Crear RegistroQuirurgico (requiere anestesista, diagnostico_preoperatorio, protocolo_quirurgico)
@@ -392,12 +373,12 @@ class AtencionService:
                 diagnostico_preoperatorio="Pendiente de completar",
                 protocolo_quirurgico="Pendiente de completar",
             )
-            logger.info(f"RegistroQuirurgico creado para Atencion {atencion.id}")
+            logger.info("RegistroQuirurgico creado.")
             
         else:
             logger.warning(
-                f"Tipo de recurso '{tipo_atencion}' no tiene mapeo a registro hijo. "
-                f"Atencion {atencion.id} creada sin registro hijo."
+                "Tipo de recurso '%s' sin mapeo a registro hijo; atención sin registro hijo.",
+                tipo_atencion,
             )
             # No crear registro hijo si no hay mapeo definido
 
