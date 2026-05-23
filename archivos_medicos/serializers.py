@@ -4,6 +4,10 @@ from rest_framework import serializers
 
 from historias_clinicas.models import Consulta
 
+from .access import (
+    resolver_consulta_para_paciente,
+    validar_consulta_archivo_para_usuario,
+)
 from .models import ArchivoMedico
 
 
@@ -69,12 +73,57 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def _paciente_id_efectivo(self, attrs) -> int:
+        if 'paciente_id' in attrs:
+            return attrs['paciente_id']
+        if self.instance:
+            return self.instance.paciente_id
+        raise serializers.ValidationError({'paciente_id': 'Este campo es obligatorio.'})
+
+    def _consulta_id_efectivo(self, attrs):
+        if 'consulta_id' in attrs:
+            return attrs['consulta_id']
+        if self.instance:
+            return self.instance.consulta_id
+        return None
+
+    def validate(self, attrs):
+        paciente_id = self._paciente_id_efectivo(attrs)
+        consulta_id = self._consulta_id_efectivo(attrs)
+        request = self.context.get('request')
+
+        if (
+            self.instance
+            and 'paciente_id' in attrs
+            and attrs['paciente_id'] != self.instance.paciente_id
+            and 'consulta_id' not in attrs
+            and self.instance.consulta_id
+        ):
+            raise serializers.ValidationError({
+                'paciente_id': (
+                    'Al cambiar de paciente debe actualizar o quitar consulta_id.'
+                ),
+            })
+
+        if consulta_id is not None:
+            if not request or not request.user.is_authenticated:
+                raise serializers.ValidationError({
+                    'consulta_id': 'Se requiere autenticación para asociar una consulta.',
+                })
+            try:
+                consulta = resolver_consulta_para_paciente(consulta_id, paciente_id)
+                validar_consulta_archivo_para_usuario(request.user, consulta, paciente_id)
+            except ValueError as exc:
+                raise serializers.ValidationError({'consulta_id': str(exc)}) from exc
+
+        return attrs
+
     def create(self, validated_data):
         paciente_id = validated_data.pop('paciente_id')
         consulta_id = validated_data.pop('consulta_id', None)
         consulta = None
         if consulta_id is not None:
-            consulta = Consulta.objects.filter(pk=consulta_id).first()
+            consulta = Consulta.objects.get(pk=consulta_id)
         return ArchivoMedico.objects.create(
             paciente_id=paciente_id,
             consulta=consulta,
@@ -86,7 +135,7 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
             instance.paciente_id = validated_data.pop('paciente_id')
         if 'consulta_id' in validated_data:
             cid = validated_data.pop('consulta_id')
-            instance.consulta = Consulta.objects.filter(pk=cid).first() if cid else None
+            instance.consulta = Consulta.objects.get(pk=cid) if cid else None
         return super().update(instance, validated_data)
 
 

@@ -589,6 +589,43 @@ class DocumentoSerializer(serializers.ModelSerializer):
             qs = Atencion.objects.none()
         self.fields['atencion_id'].queryset = qs
 
+    def validate(self, attrs):
+        atencion = attrs.get('atencion')
+        if atencion is None:
+            if self.instance and 'atencion' not in attrs:
+                return attrs
+            if not self.instance:
+                raise serializers.ValidationError(
+                    {'atencion_id': 'Este campo es obligatorio.'}
+                )
+            return attrs
+
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError(
+                {'atencion_id': 'Se requiere autenticación.'}
+            )
+        user = request.user
+        role = str(getattr(user, 'rol', '') or '').lower()
+        if user.is_superuser or role == 'admin':
+            return attrs
+        if role == 'medico':
+            try:
+                if atencion.medico_principal_id != user.medico.id:
+                    raise serializers.ValidationError(
+                        {'atencion_id': 'No puede adjuntar documentos a atenciones ajenas.'}
+                    )
+            except serializers.ValidationError:
+                raise
+            except Exception as exc:
+                raise serializers.ValidationError(
+                    {'atencion_id': 'Médico no vinculado.'}
+                ) from exc
+            return attrs
+        raise serializers.ValidationError(
+            {'atencion_id': 'No tiene permiso para modificar esta atención.'}
+        )
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['atencion_id'] = instance.atencion_id

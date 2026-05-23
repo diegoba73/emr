@@ -24,3 +24,47 @@ def paciente_ids_vinculados_a_medico(medico) -> set[int]:
 
 def medico_puede_acceder_paciente(medico, paciente) -> bool:
     return paciente.id in paciente_ids_vinculados_a_medico(medico)
+
+
+def consulta_pertenece_a_paciente(consulta, paciente_id: int) -> bool:
+    """HistoriaClinica usa paciente como PK; historia_clinica_id == paciente_id."""
+    return consulta.historia_clinica_id == paciente_id
+
+
+def resolver_consulta_para_paciente(consulta_id: int, paciente_id: int) -> Consulta:
+    """Existe y pertenece al paciente; si no, lanza ValueError con mensaje."""
+    try:
+        consulta = Consulta.objects.select_related('medico').get(pk=consulta_id)
+    except Consulta.DoesNotExist as exc:
+        raise ValueError('Consulta no encontrada.') from exc
+    if not consulta_pertenece_a_paciente(consulta, paciente_id):
+        raise ValueError('La consulta no pertenece al paciente indicado.')
+    return consulta
+
+
+def validar_consulta_archivo_para_usuario(user, consulta: Consulta, paciente_id: int) -> None:
+    """Permiso de vínculo consulta↔archivo; lanza ValueError si no procede."""
+    rol = str(getattr(user, 'rol', '') or '').lower()
+    if user.is_superuser or rol == 'admin':
+        return
+    if rol == 'paciente':
+        try:
+            if user.paciente.id != paciente_id:
+                raise ValueError('No puede asociar consultas de otro paciente.')
+        except AttributeError as exc:
+            raise ValueError('Paciente no vinculado.') from exc
+        return
+    if rol == 'medico':
+        try:
+            medico = user.medico
+        except Exception as exc:
+            raise ValueError('Médico no vinculado.') from exc
+        if consulta.medico_id and consulta.medico_id != medico.id:
+            raise ValueError('No puede asociar una consulta de otro médico.')
+        from pacientes.models import Paciente
+
+        paciente = Paciente.objects.get(pk=paciente_id)
+        if not medico_puede_acceder_paciente(medico, paciente):
+            raise ValueError('No tiene vínculo clínico con el paciente de la consulta.')
+        return
+    raise ValueError('No tiene permiso para asociar consultas clínicas.')

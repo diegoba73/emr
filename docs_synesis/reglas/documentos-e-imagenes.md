@@ -12,6 +12,17 @@
 
 No son estudios realizados ni flujo orden → realización → informe → validación.
 
+## Integridad `consulta_id` (C6.2-B)
+
+Al crear o actualizar `ArchivoMedico` con `consulta_id`:
+
+- la consulta debe existir y pertenecer al mismo `paciente_id` (HC);
+- el paciente no puede asociar consultas ajenas;
+- el médico no puede asociar consulta de otro médico ni de paciente sin vínculo;
+- cambiar `paciente_id` sin actualizar `consulta_id` incompatible → rechazo.
+
+`Documento`: `atencion_id` validado en serializer y view; update no puede mover a atención ajena.
+
 ## Seguridad API (C6.2)
 
 - **No** se expone URL directa `/media/` en list/detail de serializers.

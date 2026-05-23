@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from auditoria.models import AuditEvent
+from auditoria.snapshot import safe_model_snapshot
 from auditoria.tests.compat import capture_on_commit_callbacks
 from emr.models import Documento
 from medicos.models import Medico
@@ -152,6 +153,127 @@ def test_medico_no_puede_crear_documento_atencion_ajena(client, setup_atencion):
         format='multipart',
     )
     assert r.status_code in (400, 403)
+
+
+@pytest.mark.django_db
+def test_paciente_no_puede_crear_documento(client, setup_atencion):
+    at = setup_atencion['atencion']
+    client.force_authenticate(user=setup_atencion['paciente'].user)
+    f = SimpleUploadedFile('x.pdf', b'%PDF', content_type='application/pdf')
+    r = client.post(
+        '/api/documentos/',
+        {'atencion_id': at.id, 'tipo_documento': 'INFORME', 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_enfermeria_no_puede_crear_documento(client, setup_atencion):
+    at = setup_atencion['atencion']
+    enf = User.objects.create_user(username=f'enf_{_uid()}', password='x', rol='enfermeria')
+    client.force_authenticate(user=enf)
+    f = SimpleUploadedFile('x.pdf', b'%PDF', content_type='application/pdf')
+    r = client.post(
+        '/api/documentos/',
+        {'atencion_id': at.id, 'tipo_documento': 'INFORME', 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_laboratorio_no_puede_crear_documento(client, setup_atencion):
+    at = setup_atencion['atencion']
+    lab = User.objects.create_user(username=f'lab_{_uid()}', password='x', rol='laboratorio')
+    client.force_authenticate(user=lab)
+    f = SimpleUploadedFile('x.pdf', b'%PDF', content_type='application/pdf')
+    r = client.post(
+        '/api/documentos/',
+        {'atencion_id': at.id, 'tipo_documento': 'INFORME', 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_documento_create_rechazado_no_crea_registro_ni_auditoria(client, setup_atencion):
+    at = setup_atencion['atencion']
+    n_doc = Documento.objects.count()
+    n_ev = AuditEvent.objects.filter(entity_type='emr.Documento', action='CREATE').count()
+    sec = User.objects.create_user(username=f'sec2_{_uid()}', password='x', rol='secretaria')
+    client.force_authenticate(user=sec)
+    f = SimpleUploadedFile('x.pdf', b'%PDF', content_type='application/pdf')
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            '/api/documentos/',
+            {'atencion_id': at.id, 'tipo_documento': 'INFORME', 'archivo': f},
+            format='multipart',
+        )
+    assert r.status_code == 403
+    assert Documento.objects.count() == n_doc
+    assert AuditEvent.objects.filter(entity_type='emr.Documento', action='CREATE').count() == n_ev
+
+
+@pytest.mark.django_db
+def test_documento_update_no_permite_cambiar_a_atencion_ajena(client, setup_atencion):
+    doc = setup_atencion['documento']
+    med = setup_atencion['medico']
+    u = User.objects.create_user(username=f'ma_{_uid()}', password='x', rol='medico')
+    med_ajeno = Medico.objects.create(user=u, matricula=f'MA{_uid()}', nombre='A', apellido='B')
+    pac2 = Paciente.objects.create(dni=f'D2{_uid()}', nombre='P2', apellido='A2')
+    rec = Recurso.objects.create(
+        nombre=f'R2{_uid()}', ubicacion='CEHTA', tipo_recurso='CONSULTORIO', activo=True,
+    )
+    turno2 = Turno.objects.create(
+        paciente=pac2,
+        medico=med_ajeno,
+        recurso=rec,
+        fecha_hora_inicio=timezone.now(),
+        fecha_hora_fin=timezone.now() + timedelta(minutes=30),
+        estado='CONFIRMADO',
+    )
+    at_ajena = Atencion.objects.create(
+        turno=turno2,
+        paciente=pac2,
+        medico_principal=med_ajeno,
+        tipo_atencion='CONSULTORIO',
+        tipo_intervencion='CONSULTA',
+        estado_clinico='ABIERTA',
+    )
+    client.force_authenticate(user=med.user)
+    r = client.patch(
+        f'/api/documentos/{doc.id}/',
+        {'atencion_id': at_ajena.id},
+        format='multipart',
+    )
+    assert r.status_code in (400, 403)
+    doc.refresh_from_db()
+    assert doc.atencion_id == setup_atencion['atencion'].id
+
+
+@pytest.mark.django_db
+def test_documento_audit_no_incluye_filename_ni_path(client, setup_atencion):
+    doc = setup_atencion['documento']
+    snap = safe_model_snapshot(doc)
+    assert snap.get('archivo') == '<file presente>'
+    after = str(snap)
+    assert 'emr/documentos' not in after
+    assert 'informe.pdf' not in after
+
+    client.force_authenticate(user=setup_atencion['medico'].user)
+    with capture_on_commit_callbacks(execute=True):
+        client.get(f'/api/documentos/{doc.id}/download/')
+    ev = AuditEvent.objects.filter(
+        entity_type='emr.Documento',
+        entity_id=str(doc.id),
+        action='UPDATE',
+    ).order_by('-id').first()
+    assert ev is not None
+    assert ev.entity_repr == f'emr.Documento:{doc.id}'
+    blob = str(ev.after_state or {}) + str(ev.before_state or {})
+    assert 'informe.pdf' not in blob
+    assert 'emr/documentos/' not in blob
 
 
 @pytest.mark.django_db

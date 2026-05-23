@@ -13,6 +13,7 @@ from rest_framework.test import APIClient
 from archivos_medicos.models import ArchivoMedico
 from auditoria.models import AuditEvent
 from auditoria.tests.compat import capture_on_commit_callbacks
+from historias_clinicas.models import Consulta, HistoriaClinica
 from medicos.models import Medico
 from pacientes.models import Paciente
 from turnos.models import Atencion, Recurso, Turno
@@ -78,6 +79,32 @@ def archivo_medico(paciente, medico):
         titulo='Estudio',
         tipo_archivo='PDF',
         archivo=content,
+    )
+
+
+@pytest.fixture
+def historia_paciente(paciente):
+    return HistoriaClinica.objects.create(paciente=paciente)
+
+
+@pytest.fixture
+def consulta_vinculada(historia_paciente, medico):
+    return Consulta.objects.create(
+        historia_clinica=historia_paciente,
+        medico=medico,
+        fecha_hora_consulta=timezone.now(),
+        motivo_consulta_detalle='Control',
+    )
+
+
+@pytest.fixture
+def consulta_otro_paciente(otro_paciente, medico):
+    hc = HistoriaClinica.objects.create(paciente=otro_paciente)
+    return Consulta.objects.create(
+        historia_clinica=hc,
+        medico=medico,
+        fecha_hora_consulta=timezone.now(),
+        motivo_consulta_detalle='Otro',
     )
 
 
@@ -252,6 +279,118 @@ def test_create_audit_sin_ruta_archivo(client, paciente, medico, atencion_vincul
     after = str(ev.after_state or {})
     assert 'archivos_medicos/' not in after
     assert 'sensible_nombre' not in after
+
+
+@pytest.mark.django_db
+def test_enfermeria_no_puede_crear_archivo_medico(client, paciente):
+    enf = User.objects.create_user(username=f'enf_{_uid()}', password='x', rol='enfermeria')
+    client.force_authenticate(user=enf)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_laboratorio_no_puede_crear_archivo_medico(client, paciente):
+    lab = User.objects.create_user(username=f'labc_{_uid()}', password='x', rol='laboratorio')
+    client.force_authenticate(user=lab)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_paciente_no_puede_crear_archivo_para_otro_paciente(client, paciente, otro_paciente):
+    client.force_authenticate(user=otro_paciente.user)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_archivo_medico_create_rechazado_no_crea_registro_ni_auditoria(
+    client, paciente, medico_ajeno, atencion_vinculada,
+):
+    n_am = ArchivoMedico.objects.count()
+    n_ev = AuditEvent.objects.filter(
+        entity_type='archivos_medicos.ArchivoMedico', action='CREATE'
+    ).count()
+    client.force_authenticate(user=medico_ajeno.user)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            '/api/archivos-medicos/archivos/',
+            {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+            format='multipart',
+        )
+    assert r.status_code == 403
+    assert ArchivoMedico.objects.count() == n_am
+    assert AuditEvent.objects.filter(
+        entity_type='archivos_medicos.ArchivoMedico', action='CREATE'
+    ).count() == n_ev
+
+
+@pytest.mark.django_db
+def test_archivo_medico_no_permite_consulta_de_otro_paciente(
+    client, paciente, medico, atencion_vinculada, consulta_otro_paciente,
+):
+    client.force_authenticate(user=medico.user)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {
+            'titulo': 'X',
+            'tipo_archivo': 'PDF',
+            'paciente_id': paciente.id,
+            'consulta_id': consulta_otro_paciente.id,
+            'archivo': f,
+        },
+        format='multipart',
+    )
+    assert r.status_code == 400
+    assert 'consulta' in str(r.data).lower()
+
+
+@pytest.mark.django_db
+def test_archivo_medico_update_no_permite_cambiar_a_paciente_ajeno(
+    client, archivo_medico, medico, atencion_vinculada, otro_paciente,
+):
+    client.force_authenticate(user=medico.user)
+    r = client.patch(
+        f'/api/archivos-medicos/archivos/{archivo_medico.id}/',
+        {'paciente_id': otro_paciente.id},
+        format='json',
+    )
+    assert r.status_code in (400, 403)
+    archivo_medico.refresh_from_db()
+    assert archivo_medico.paciente_id != otro_paciente.id
+
+
+@pytest.mark.django_db
+def test_archivo_medico_update_no_permite_consulta_de_otro_paciente(
+    client, archivo_medico, medico, atencion_vinculada, consulta_otro_paciente,
+):
+    client.force_authenticate(user=medico.user)
+    r = client.patch(
+        f'/api/archivos-medicos/archivos/{archivo_medico.id}/',
+        {'consulta_id': consulta_otro_paciente.id},
+        format='json',
+    )
+    assert r.status_code == 400
+    archivo_medico.refresh_from_db()
+    assert archivo_medico.consulta_id != consulta_otro_paciente.id
 
 
 @pytest.mark.django_db
