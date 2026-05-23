@@ -19,6 +19,12 @@ _MAX_RECURSION = 48
 _JSON_MAX_BYTES_DEFAULT = 400_000
 _LEAF_STRING_MAX_CHARS = 8_192
 
+# Modelos con FileField clínico: no persistir ruta ni nombre de archivo en auditoría (C6.2).
+_CLINICAL_FILE_MODEL_LABELS = frozenset({
+    'archivos_medicos.ArchivoMedico',
+    'emr.Documento',
+})
+
 
 class SnapshotTooLarge(ValidationError):
     """Snapshot rechazado por superar tamaño tras serialización mínima."""
@@ -85,10 +91,14 @@ def safe_model_snapshot(
 
         if isinstance(field, (models.FileField, models.ImageField)):
             val = getattr(instance, field.name, None)
-            if val and getattr(val, "name", None):
-                state[field.name] = f"<file: {getattr(val, 'name', '?')}>"
-            elif val:
-                state[field.name] = "<file presente>"
+            redact_name = getattr(opts, 'label', '') in _CLINICAL_FILE_MODEL_LABELS
+            if val:
+                if redact_name:
+                    state[field.name] = "<file presente>"
+                elif getattr(val, "name", None):
+                    state[field.name] = f"<file: {getattr(val, 'name', '?')}>"
+                else:
+                    state[field.name] = "<file presente>"
             elif include_nulls:
                 state[field.name] = None
             continue

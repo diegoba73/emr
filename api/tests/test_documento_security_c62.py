@@ -126,6 +126,35 @@ def test_create_audit(client, setup_atencion):
 
 
 @pytest.mark.django_db
+def test_secretaria_no_puede_crear_documento(client, setup_atencion):
+    at = setup_atencion['atencion']
+    sec = User.objects.create_user(username=f'sec_{_uid()}', password='x', rol='secretaria')
+    client.force_authenticate(user=sec)
+    f = SimpleUploadedFile('x.pdf', b'%PDF', content_type='application/pdf')
+    r = client.post(
+        '/api/documentos/',
+        {'atencion_id': at.id, 'tipo_documento': 'INFORME', 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_medico_no_puede_crear_documento_atencion_ajena(client, setup_atencion):
+    at = setup_atencion['atencion']
+    u = User.objects.create_user(username=f'mx_{_uid()}', password='x', rol='medico')
+    med_ajeno = Medico.objects.create(user=u, matricula=f'MX{_uid()}', nombre='X', apellido='Y')
+    client.force_authenticate(user=med_ajeno.user)
+    f = SimpleUploadedFile('x.pdf', b'%PDF', content_type='application/pdf')
+    r = client.post(
+        '/api/documentos/',
+        {'atencion_id': at.id, 'tipo_documento': 'INFORME', 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code in (400, 403)
+
+
+@pytest.mark.django_db
 def test_delete_405(client, setup_atencion):
     doc = setup_atencion['documento']
     client.force_authenticate(user=setup_atencion['medico'].user)

@@ -14,6 +14,7 @@ from .permissions import (
     CanManageTurnos,
     IsMedicoOrSecretariaOrAdmin,
     IsEMRClinicianOrReadOnly,
+    CanWriteDocumentoClinico,
     IsEMRClinician,
     IsMedicoOrEnfermeriaOrAdmin,
 )
@@ -55,7 +56,7 @@ from turnos.models import Turno, Recurso, Atencion, ConsultaAmbulatoria, Registr
 from turnos.services import AtencionService, BusinessLogicError, resolve_tipo_intervencion_from_recurso
 from catalogos.models import EstudioDiagnostico, ProcedimientoCatalogo
 from emr.models import Documento, SignosVitales
-from auditoria.audit_service import log_create, log_update
+from auditoria.audit_service import log_event
 from auditoria.snapshot import safe_model_snapshot
 
 
@@ -2580,6 +2581,11 @@ class DocumentoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['fecha_subida', 'created_at']
     ordering = ['-fecha_subida']
 
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return [IsAuthenticated(), CanWriteDocumentoClinico()]
+        return [IsEMRClinicianOrReadOnly()]
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
@@ -2632,14 +2638,36 @@ class DocumentoViewSet(viewsets.ModelViewSet):
                 return False
         return False
 
+    def _validar_atencion_escritura(self, user, atencion) -> None:
+        role = str(getattr(user, 'rol', '') or '').lower()
+        if user.is_superuser or role == 'admin':
+            return
+        if role == 'medico':
+            try:
+                if atencion.medico_principal_id != user.medico.id:
+                    raise PermissionDenied(
+                        'No puede adjuntar documentos a atenciones ajenas.'
+                    )
+            except PermissionDenied:
+                raise
+            except Exception as exc:
+                raise PermissionDenied('Médico no vinculado.') from exc
+            return
+        raise PermissionDenied('No tiene permiso para subir documentos clínicos.')
+
     def perform_create(self, serializer):
         usuario = self.request.user if self.request.user.is_authenticated else None
+        atencion = serializer.validated_data['atencion']
+        self._validar_atencion_escritura(usuario, atencion)
         with transaction.atomic():
             instance = serializer.save(usuario_cargador=usuario)
             _safe_audit_documento(
-                log_create,
+                log_event,
+                action='CREATE',
                 actor=usuario,
                 entity=instance,
+                after=safe_model_snapshot(instance),
+                entity_repr=f'{instance._meta.label}:{instance.pk}',
                 module='emr.documentos',
                 metadata={
                     'accion': 'documento_create',
@@ -2649,6 +2677,8 @@ class DocumentoViewSet(viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
+        atencion = serializer.validated_data.get('atencion', serializer.instance.atencion)
+        self._validar_atencion_escritura(self.request.user, atencion)
         before = safe_model_snapshot(serializer.instance)
         with transaction.atomic():
             instance = serializer.save()
@@ -2656,10 +2686,13 @@ class DocumentoViewSet(viewsets.ModelViewSet):
                 instance.usuario_cargador = self.request.user
                 instance.save(update_fields=['usuario_cargador', 'updated_at'])
             _safe_audit_documento(
-                log_update,
+                log_event,
+                action='UPDATE',
                 actor=self.request.user,
                 entity=instance,
                 before=before,
+                after=safe_model_snapshot(instance),
+                entity_repr=f'{instance._meta.label}:{instance.pk}',
                 module='emr.documentos',
                 metadata={
                     'accion': 'documento_update',
@@ -2706,9 +2739,12 @@ class DocumentoViewSet(viewsets.ModelViewSet):
             )
 
         _safe_audit_documento(
-            log_update,
+            log_event,
+            action='UPDATE',
             actor=request.user,
             entity=documento,
+            after=safe_model_snapshot(documento),
+            entity_repr=f'{documento._meta.label}:{documento.pk}',
             module='emr.documentos',
             metadata={
                 'accion': 'documento_download',

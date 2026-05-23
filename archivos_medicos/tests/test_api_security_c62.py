@@ -209,6 +209,52 @@ def test_delete_returns_405(client, archivo_medico, medico, atencion_vinculada):
 
 
 @pytest.mark.django_db
+def test_secretaria_no_puede_crear_archivo(client, paciente, archivo_medico):
+    sec = User.objects.create_user(username=f'sec_{_uid()}', password='x', rol='secretaria')
+    client.force_authenticate(user=sec)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_medico_no_puede_crear_archivo_paciente_ajeno(
+    client, paciente, medico, medico_ajeno, atencion_vinculada,
+):
+    otro = Paciente.objects.create(dni=f'OT{_uid()}', nombre='O', apellido='T')
+    client.force_authenticate(user=medico_ajeno.user)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': otro.id, 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_create_audit_sin_ruta_archivo(client, paciente, medico, atencion_vinculada):
+    client.force_authenticate(user=medico.user)
+    f = SimpleUploadedFile('sensible_nombre.pdf', b'pdf', content_type='application/pdf')
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            '/api/archivos-medicos/archivos/',
+            {'titulo': 'T', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+            format='multipart',
+        )
+    assert r.status_code in (200, 201)
+    ev = AuditEvent.objects.filter(action='CREATE').order_by('-id').first()
+    assert ev is not None
+    after = str(ev.after_state or {})
+    assert 'archivos_medicos/' not in after
+    assert 'sensible_nombre' not in after
+
+
+@pytest.mark.django_db
 def test_invalid_extension_rejected(client, paciente, medico, atencion_vinculada):
     client.force_authenticate(user=medico.user)
     f = SimpleUploadedFile('mal.exe', b'x', content_type='application/octet-stream')

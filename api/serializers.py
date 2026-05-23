@@ -509,7 +509,7 @@ class DocumentoSerializer(serializers.ModelSerializer):
     """Documentos clínicos: sin URL /media/; descarga vía endpoint autenticado."""
     atencion_id = serializers.PrimaryKeyRelatedField(
         source='atencion',
-        queryset=Atencion.objects.all(),
+        queryset=Atencion.objects.none(),
         write_only=True,
     )
     usuario_cargador_id = serializers.IntegerField(source='usuario_cargador.id', read_only=True)
@@ -569,6 +569,25 @@ class DocumentoSerializer(serializers.ModelSerializer):
             full_name = obj.usuario_cargador.get_full_name()
             return full_name or obj.usuario_cargador.username
         return None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if not request or 'atencion_id' not in self.fields:
+            return
+        user = request.user
+        role = str(getattr(user, 'rol', '') or '').lower()
+        qs = Atencion.objects.all()
+        if user.is_superuser or role == 'admin':
+            pass
+        elif role == 'medico':
+            try:
+                qs = qs.filter(medico_principal=user.medico)
+            except Exception:
+                qs = Atencion.objects.none()
+        else:
+            qs = Atencion.objects.none()
+        self.fields['atencion_id'].queryset = qs
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

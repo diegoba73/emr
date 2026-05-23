@@ -28,19 +28,19 @@ No son estudios realizados ni flujo orden → realización → informe → valid
 | Rol | Listar / descargar | Crear |
 |-----|-------------------|-------|
 | admin / superuser | Todos | Sí |
-| médico | Pacientes vinculados por `Consulta` HC, `Atencion.medico_principal` o `Turno.medico` | Sí |
+| médico | Pacientes vinculados por `Consulta` HC, `Atencion.medico_principal` o `Turno.medico` | Sí (solo pacientes vinculados; validado en `perform_create`) |
 | paciente | Solo propios | Sí (solo `paciente_id` propio) |
-| secretaría / enfermería / laboratorio | **Ninguno** | No |
+| secretaría / enfermería / laboratorio | **Ninguno** | **403** (`CanWriteArchivoMedico`) |
 | otros | Ninguno | No |
 
 ### Documento
 
 | Rol | Listar / descargar | Crear |
 |-----|-------------------|-------|
-| admin / superuser | Todos | Sí (clínico EMR) |
-| médico | Atenciones propias o documentos que cargó | Sí |
-| paciente | Documentos de sus atenciones | No (C6.2) |
-| secretaría / enfermería / laboratorio | **Ninguno** | No |
+| admin / superuser | Todos | Sí |
+| médico | Atenciones propias o documentos que cargó | Sí (solo `atencion` propia; `CanWriteDocumentoClinico` + queryset serializer) |
+| paciente | Documentos de sus atenciones | No (`IsEMRClinicianOrReadOnly` bloquea POST) |
+| secretaría / enfermería / laboratorio | **Ninguno** | **403** en POST |
 
 Frontend: menú **Archivos** solo `medico`, `admin`, `paciente`.
 

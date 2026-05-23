@@ -260,6 +260,35 @@ class IsEMRClinicianOrReadOnly(permissions.BasePermission):
         return clinician_permission.has_permission(request, view)
 
 
+class CanWriteArchivoMedico(permissions.BasePermission):
+    """
+    Alta/actualización de ArchivoMedico: admin, médico (vínculo validado en view) o paciente (propio).
+    Secretaría, enfermería y laboratorio no pueden subir archivos clínicos (C6.2).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        return role in {'admin', 'medico', 'paciente'}
+
+
+class CanWriteDocumentoClinico(permissions.BasePermission):
+    """
+    Alta/actualización de Documento por atención: solo admin y médico (C6.2).
+    No incluye secretaría aunque sea IsEMRClinician en otros módulos.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return get_normalized_role(request.user) in {'admin', 'medico'}
+
+
 class LimsB0CatalogPermission(permissions.BasePermission):
     """
     Catálogos B0 (área, sección, tipo contenedor).

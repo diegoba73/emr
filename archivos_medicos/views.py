@@ -14,10 +14,13 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from auditoria.audit_service import log_create, log_update
+from auditoria.audit_service import log_event
 from auditoria.snapshot import safe_model_snapshot
 
+from api.permissions import CanWriteArchivoMedico
+
 from .access import medico_puede_acceder_paciente, paciente_ids_vinculados_a_medico
+from pacientes.models import Paciente
 from .models import ArchivoMedico
 from .serializers import ArchivoMedicoListSerializer, ArchivoMedicoSerializer
 
@@ -92,22 +95,49 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
             return ArchivoMedicoListSerializer
         return ArchivoMedicoSerializer
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        if str(getattr(user, 'rol', '') or '').lower() == 'paciente':
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return [IsAuthenticated(), CanWriteArchivoMedico()]
+        return [IsAuthenticated()]
+
+    def _validar_paciente_escritura(self, user, paciente_id: int) -> None:
+        rol = str(getattr(user, 'rol', '') or '').lower()
+        if user.is_superuser or rol == 'admin':
+            return
+        if rol == 'paciente':
             try:
-                paciente_prop = user.paciente
+                if user.paciente.id != paciente_id:
+                    raise PermissionDenied('No puede subir archivos para otro paciente.')
+            except PermissionDenied:
+                raise
             except Exception as exc:
                 raise PermissionDenied('Paciente no vinculado.') from exc
-            if serializer.validated_data.get('paciente_id') != paciente_prop.id:
-                raise PermissionDenied('No puede subir archivos para otro paciente.')
+            return
+        if rol == 'medico':
+            try:
+                paciente = Paciente.objects.get(pk=paciente_id)
+            except Paciente.DoesNotExist as exc:
+                raise PermissionDenied('Paciente no encontrado.') from exc
+            if not medico_puede_acceder_paciente(user.medico, paciente):
+                raise PermissionDenied(
+                    'No puede subir archivos para pacientes sin vínculo clínico.'
+                )
+            return
+        raise PermissionDenied('No tiene permiso para subir archivos clínicos.')
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        self._validar_paciente_escritura(user, serializer.validated_data['paciente_id'])
 
         with transaction.atomic():
             instance = serializer.save(subido_por=user)
             _safe_audit(
-                log_create,
+                log_event,
+                action='CREATE',
                 actor=user,
                 entity=instance,
+                after=safe_model_snapshot(instance),
+                entity_repr=f'{instance._meta.label}:{instance.pk}',
                 module='archivos_medicos',
                 metadata={
                     'accion': 'archivo_medico_create',
@@ -117,14 +147,21 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
+        paciente_id = serializer.validated_data.get(
+            'paciente_id', serializer.instance.paciente_id
+        )
+        self._validar_paciente_escritura(self.request.user, paciente_id)
         before = safe_model_snapshot(serializer.instance)
         with transaction.atomic():
             instance = serializer.save()
             _safe_audit(
-                log_update,
+                log_event,
+                action='UPDATE',
                 actor=self.request.user,
                 entity=instance,
                 before=before,
+                after=safe_model_snapshot(instance),
+                entity_repr=f'{instance._meta.label}:{instance.pk}',
                 module='archivos_medicos',
                 metadata={
                     'accion': 'archivo_medico_update',
@@ -188,9 +225,12 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
             )
 
         _safe_audit(
-            log_update,
+            log_event,
+            action='UPDATE',
             actor=request.user,
             entity=archivo,
+            after=safe_model_snapshot(archivo),
+            entity_repr=f'{archivo._meta.label}:{archivo.pk}',
             module='archivos_medicos',
             metadata={
                 'accion': 'archivo_medico_download',
