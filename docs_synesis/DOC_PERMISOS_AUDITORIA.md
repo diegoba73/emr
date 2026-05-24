@@ -246,5 +246,11 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - **ArchivoMedico** (`archivos_medicos/views.py`): admin todo; médico por vínculo paciente (Consulta / Atencion / Turno); paciente propio; secretaría, enfermería, laboratorio → queryset vacío.
 - **Documento** (`api/views.py` DocumentoViewSet): admin todo; médico atenciones propias o cargados por él; paciente lectura de sus atenciones; secretaría sin acceso (C6.2).
 - **Auditoría:** `archivo_medico_create|update|download`, `documento_create|update|download` en metadata; sin paths ni URLs `/media/`.
+
+### Estudios complementarios (C6.4.1)
+
+- **EstudioComplementario** (`estudios/views.py`): admin/superuser global; médico pacientes vinculados; paciente solo **ENTREGADO** propio; secretaría/enfermería/laboratorio lista vacía.
+- Validación informe: solo admin/superuser.
+- **Auditoría:** `estudio_complementario_create|update`, `estudio_estado_cambio`, `estudio_archivo_asociar|download`, `estudio_informe_create|emitir|validar|rectificar`, `estudio_anular|entregar`; `entity_repr` técnico; sin texto completo de informe ni filename/path.
 - **DELETE:** 405 en ambos viewsets.
 - Regla detallada: `docs_synesis/reglas/documentos-e-imagenes.md`.

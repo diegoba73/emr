@@ -23,6 +23,12 @@ _LEAF_STRING_MAX_CHARS = 8_192
 _CLINICAL_FILE_MODEL_LABELS = frozenset({
     'archivos_medicos.ArchivoMedico',
     'emr.Documento',
+    'estudios.InformeEstudioComplementario',
+})
+
+# Campos de texto clínico no deben persistirse completos en auditoría (C6.4.1).
+_REDACT_LONG_TEXT_FIELDS = frozenset({
+    ('estudios.InformeEstudioComplementario', 'texto'),
 })
 
 
@@ -125,6 +131,11 @@ def safe_model_snapshot(
         value = getattr(instance, field.attname, None)
 
         if value is None and not include_nulls:
+            continue
+
+        label = getattr(opts, 'label', '')
+        if (label, field.name) in _REDACT_LONG_TEXT_FIELDS and value:
+            state[field.name] = '<texto clínico omitido>'
             continue
 
         state[field.name] = to_jsonable(value)

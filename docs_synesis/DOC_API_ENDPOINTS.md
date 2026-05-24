@@ -114,6 +114,25 @@ Mismo `TipoAtencionViewSet`, `CentroFisicoViewSet`, más `ProcedimientoViewSet` 
 
 Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
+## Estudios complementarios (`/api/estudios-complementarios/`) — C6.4.1 [IMPLEMENTADO]
+
+| Método | Ruta | Notas |
+|--------|------|-------|
+| GET/POST | `/` | List/create; filtro `paciente`, `estado`, `modalidad` |
+| GET/PATCH | `/{id}/` | **PATCH no modifica `estado`**; DELETE → **405** |
+| POST | `/{id}/marcar-realizado/` | SOLICITADO → REALIZADO |
+| POST | `/{id}/anular/` | body `motivo_anulacion` obligatorio |
+| POST | `/{id}/entregar/` | Requiere informe validado vigente |
+| POST | `/{id}/agregar-archivo/` | body `archivo_medico_id` (mismo paciente) |
+| GET | `/{id}/archivos/` | Sin URL `/media/`; `download_url` protegido |
+| GET | `/{id}/archivos/{archivo_id}/download/` | Descarga vía `ArchivoMedico` |
+| GET/POST | `/{id}/informes/` | Informes versionados |
+| POST | `/{id}/informes/{informe_id}/emitir/` | Borrador → emitido; estudio → INFORMADO |
+| POST | `/{id}/informes/{informe_id}/validar/` | Solo admin/superuser |
+| POST | `/{id}/informes/{informe_id}/rectificar/` | Nueva versión; motivo obligatorio |
+
+No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
+
 ## Documentos EMR (`/api/documentos/`) — C6.2
 
 | Método | Ruta | Notas |

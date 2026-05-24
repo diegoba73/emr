@@ -15,7 +15,7 @@
 
 ## Apps o módulos backend con modelos
 
-`pacientes`, `usuarios`, `medicos`, `catalogos`, `turnos`, `historias_clinicas`, `emr`, `archivos_medicos`, `solicitudes`, `integracion_lims`, `internacion`, `laboratorio`, `auditoria`
+`pacientes`, `usuarios`, `medicos`, `catalogos`, `turnos`, `historias_clinicas`, `emr`, `archivos_medicos`, `estudios`, `solicitudes`, `integracion_lims`, `internacion`, `laboratorio`, `auditoria`
 
 **Sin modelos de negocio:** `core`, `api` (vacíos).
 
@@ -153,6 +153,30 @@
 
 - FK Paciente CASCADE; FK Consulta null; `FileField` con validators; `tipo_archivo` choices; `subido_por`
 - **C6.2:** API expone `download_url`, `archivo_nombre`, `archivo_size`; `GET …/archivos/{id}/download/`; DELETE → 405
+
+---
+
+## estudios (C6.4.1)
+
+### TipoEstudioComplementario
+
+- Catálogo EMR: `modalidad` (IMAGEN_RX, IMAGEN_TC, IMAGEN_RM, IMAGEN_US, PDF_INFORME_EXTERNO, OTRO); `requiere_informe`, `activo`
+
+### EstudioComplementario
+
+- FK Paciente PROTECT; FK opcional `TipoEstudioComplementario`, `catalogos.EstudioDiagnostico`
+- Estados: SOLICITADO → REALIZADO → INFORMADO → VALIDADO → ENTREGADO; ANULADO terminal
+- FK opcional Atencion, Consulta HC, solicitudes.Solicitud EMR; placeholders PACS (`study_instance_uid`, `pacs_metadata`)
+- Validación `clean()`: coherencia paciente en vínculos
+
+### ArchivoEstudioComplementario
+
+- FK Estudio CASCADE; FK ArchivoMedico PROTECT; `tipo_rol`; unique (estudio, archivo_medico)
+
+### InformeEstudioComplementario
+
+- Versionado; estados BORRADOR/EMITIDO/VALIDADO/ANULADO; `es_vigente`; FK `reemplaza_a` (rectificación)
+- `archivo_pdf` FileField — snapshot auditoría sin path/nombre
 
 ---
 

@@ -1,7 +1,8 @@
 # Documentos e imágenes clínicas (C6.2)
 
 **Estado:** C6.2 [IMPLEMENTADO] — hardening de seguridad y auditoría.  
-**No incluye:** PACS/DICOM/RIS, visor, `EstudioComplementario`, soft-delete con motivo.
+**Incluye (C6.4.1):** backend `estudios.EstudioComplementario` (instancia clínica, estados, informes, archivos vía `ArchivoMedico`).  
+**No incluye:** PACS/DICOM/RIS, visor OHIF, frontend estudios (C6.4.2), soft-delete con motivo en `ArchivoMedico`.
 
 ## Dos vías de adjuntos (sin unificar aún)
 
@@ -10,7 +11,7 @@
 | `archivos_medicos.ArchivoMedico` | `Paciente` (+ opcional `historias_clinicas.Consulta`) | `/api/archivos-medicos/archivos/` | Tomografías, DICOM, rayos, PDF clínico por paciente |
 | `emr.Documento` | `turnos.Atencion` | `/api/documentos/` | Informes/estudios ligados a una atención |
 
-No son estudios realizados ni flujo orden → realización → informe → validación.
+`ArchivoMedico` / `Documento` no reemplazan el flujo profesional de estudios complementarios (ver C6.4.1).
 
 ## Integridad `consulta_id` (C6.2-B)
 
@@ -68,12 +69,34 @@ Frontend: menú **Archivos** solo `medico`, `admin`, `paciente`.
 
 Metadata: `entity_id`, `tipo`, `view`, `accion`. **Sin** path absoluto, URL `/media/`, contenido binario, nombres con PHI innecesarios.
 
-## Deuda (C6.3+)
+## Estudios complementarios (C6.4.1)
 
-- Soft-delete / anulación con motivo y trazabilidad.
+| Entidad | Rol |
+|---------|-----|
+| `estudios.EstudioComplementario` | Instancia clínica por paciente (estados, vínculos atención/consulta/solicitud EMR) |
+| `estudios.ArchivoEstudioComplementario` | Puente a `ArchivoMedico` (mismo paciente; descarga protegida) |
+| `estudios.InformeEstudioComplementario` | Informe versionado (borrador → emitido → validado; rectificación) |
+| `estudios.TipoEstudioComplementario` | Catálogo EMR (modalidad RX/TC/RM/US/PDF/OTRO) |
+
+API: `/api/estudios-complementarios/`. Estados solo por acciones POST, no PATCH.
+
+| Rol | Acceso |
+|-----|--------|
+| admin / superuser | Completo |
+| médico | Pacientes vinculados (misma regla que `ArchivoMedico`) |
+| paciente | Solo estudios propios en estado **ENTREGADO** |
+| secretaría / enfermería / laboratorio | Sin acceso (lista vacía) |
+
+Validación de informe: **solo admin/superuser** en C6.4.1.
+
+Auditoría: `estudio_complementario_*`, `estudio_estado_cambio`, `estudio_archivo_*`, `estudio_informe_*` — sin filename/path/texto completo.
+
+## Deuda (post C6.4.1)
+
+- Frontend lista/detalle/informe (C6.4.2).
+- Soft-delete / anulación con motivo en `ArchivoMedico`.
 - Hash/checksum e integridad de archivo.
 - Escaneo MIME/malware.
-- Entidad `EstudioComplementario` y flujo profesional de imágenes.
-- Imágenes multiarchivo no-DICOM.
-- PACS / DICOM / RIS y visor.
+- Constraint DB único informe vigente por estudio.
+- PACS / DICOMweb / RIS y visor.
 - URLs firmadas de corta duración si se expone storage externo.

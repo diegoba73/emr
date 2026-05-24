@@ -59,7 +59,17 @@
 1. **`emr.Documento`:** adjunto por `Atencion`; upload POST; lectura/descarga autenticada (`download`); sin eliminación física (405). Secretaría/enfermería/laboratorio sin acceso.
 2. **`archivos_medicos.ArchivoMedico`:** adjunto por `Paciente` (+ opcional `Consulta` HC); médico ve pacientes vinculados por consulta HC, **atención** o **turno**; paciente solo propios; descarga auditada; DELETE → 405.
 
-No es flujo PACS ni `EstudioComplementario`. Ver `reglas/documentos-e-imagenes.md`.
+Ver `reglas/documentos-e-imagenes.md`.
+
+## Flujo estudios complementarios (C6.4.1 [IMPLEMENTADO — solo backend])
+
+1. Crear `EstudioComplementario` (SOLICITADO) vinculado a paciente (+ opcional atención/consulta/solicitud EMR).
+2. `marcar-realizado` → REALIZADO; asociar archivos (`ArchivoMedico` del mismo paciente).
+3. Informe: crear borrador → `emitir` → INFORMADO → `validar` (admin) → VALIDADO → `entregar` → ENTREGADO (visible paciente).
+4. `anular` desde SOLICITADO/REALIZADO/INFORMADO con motivo.
+5. Rectificación: nuevo informe reemplaza validado; estudio puede volver a INFORMADO.
+
+No LIMS. No PACS/visor. Frontend: C6.4.2.
 
 ---
 

@@ -1,0 +1,45 @@
+"""Transiciones de estado de EstudioComplementario (C6.4.1)."""
+
+from __future__ import annotations
+
+from django.core.exceptions import ValidationError
+
+from .models import EstudioComplementario
+
+_ALLOWED = frozenset({
+    ('marcar_realizado', EstudioComplementario.Estado.SOLICITADO, EstudioComplementario.Estado.REALIZADO),
+    ('informar', EstudioComplementario.Estado.REALIZADO, EstudioComplementario.Estado.INFORMADO),
+    ('informar', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.INFORMADO),
+    ('validar', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.VALIDADO),
+    ('entregar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.ENTREGADO),
+    ('anular', EstudioComplementario.Estado.SOLICITADO, EstudioComplementario.Estado.ANULADO),
+    ('anular', EstudioComplementario.Estado.REALIZADO, EstudioComplementario.Estado.ANULADO),
+    ('anular', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.ANULADO),
+    ('rectificar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.INFORMADO),
+})
+
+
+class TransicionEstudioNoPermitida(ValidationError):
+    pass
+
+
+def transicion_permitida(accion: str, estado_origen: str, estado_destino: str) -> bool:
+    return (accion, estado_origen, estado_destino) in _ALLOWED
+
+
+def aplicar_transicion_estudio(
+    estudio: EstudioComplementario,
+    *,
+    accion: str,
+    nuevo_estado: str,
+) -> str:
+    if estudio.es_terminal and accion != 'anular':
+        raise TransicionEstudioNoPermitida('El estudio no admite cambios en su estado actual.')
+    anterior = estudio.estado
+    if not transicion_permitida(accion, anterior, nuevo_estado):
+        raise TransicionEstudioNoPermitida(
+            'Transición de estado no permitida para esta acción y estado actual.'
+        )
+    estudio.estado = nuevo_estado
+    estudio.save(update_fields=['estado', 'updated_at'])
+    return anterior

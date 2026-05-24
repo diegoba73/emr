@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     'emr.apps.EmrConfig',
     'internacion',
     'solicitudes',
+    'estudios',
 ]
 
 MIDDLEWARE = [

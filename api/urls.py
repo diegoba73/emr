@@ -226,6 +226,9 @@ urlpatterns = [
     
     # Ruta para archivos médicos (compatibilidad con frontend)
     path('archivos-medicos/', include('archivos_medicos.urls')),
+
+    # Estudios complementarios EMR (C6.4.1 — sin LIMS/PACS)
+    path('estudios-complementarios/', include('estudios.urls')),
     
     # Ruta para internación (sectores, camas, internaciones)
     path('internacion/', include('internacion.urls')),
