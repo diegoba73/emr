@@ -105,19 +105,23 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
                         ),
                     }
                 )
-            if 'paciente_id' in self.initial_data:
-                raw = self.initial_data.get('paciente_id')
+            for key in ('paciente_id', 'paciente'):
+                if key not in self.initial_data:
+                    continue
+                raw = self.initial_data.get(key)
                 try:
                     if int(raw) != inst.paciente_id:
                         raise serializers.ValidationError(
                             {
-                                'paciente_id': (
+                                key: (
                                     'No se puede cambiar el paciente del estudio por PATCH.'
                                 ),
                             }
                         )
                 except (TypeError, ValueError):
-                    pass
+                    raise serializers.ValidationError(
+                        {key: 'Valor de paciente inválido en PATCH.'},
+                    ) from None
         paciente = attrs.get('paciente') or getattr(inst, 'paciente', None)
         request = self.context.get('request')
         if request and paciente and self.instance is None:

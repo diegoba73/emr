@@ -67,7 +67,7 @@ Ver `reglas/documentos-e-imagenes.md`.
 2. `marcar-realizado` → REALIZADO; asociar archivos (`ArchivoMedico` del mismo paciente).
 3. Informe: tras `marcar-realizado`, crear borrador → `emitir` → INFORMADO → `validar` (admin) → VALIDADO → `entregar` → ENTREGADO (visible paciente). No crear/emitir/validar en SOLICITADO (C6.4.1-A).
 4. `anular` desde SOLICITADO/REALIZADO/INFORMADO con motivo.
-5. Rectificación (estudio VALIDADO/ENTREGADO): nuevo borrador no vigente → emitir (INFORMADO) → validar (único vigente).
+5. Rectificación (estudio VALIDADO/ENTREGADO): nuevo borrador no vigente → emitir (INFORMADO; desde ENTREGADO usa reapertura controlada C6.4.1-B) → validar (único vigente) → `entregar` si vuelve a ENTREGADO.
 6. **PATCH:** no cambia `paciente_id` ni `estado`.
 
 No LIMS. No PACS/visor. Frontend: C6.4.2.

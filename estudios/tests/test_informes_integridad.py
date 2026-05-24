@@ -16,6 +16,16 @@ def _estudio_realizado(client, estudio_id):
     return client.post(f'{BASE}{estudio_id}/marcar-realizado/')
 
 
+def _estudio_entregado_con_informe(client, estudio_id):
+    _estudio_realizado(client, estudio_id)
+    r = client.post(f'{BASE}{estudio_id}/informes/', {'texto': 'v1'}, format='json')
+    iid = r.data['id']
+    client.post(f'{BASE}{estudio_id}/informes/{iid}/emitir/')
+    client.post(f'{BASE}{estudio_id}/informes/{iid}/validar/')
+    client.post(f'{BASE}{estudio_id}/entregar/')
+    return iid
+
+
 @pytest.mark.django_db
 def test_medico_no_puede_patch_paciente_id_a_paciente_ajeno(
     client, medico, paciente, otro_paciente, tipo_estudio, atencion_vinculada,
@@ -234,6 +244,132 @@ def test_validar_rectificacion_deja_solo_nueva_version_vigente(
     )
     assert vigentes.count() == 1
     assert vigentes.first().pk == nuevo_id
+
+
+@pytest.mark.django_db
+def test_rectificar_estudio_entregado_puede_emitir_y_reabrir_a_informado(
+    client, admin_user, estudio_solicitado,
+):
+    client.force_authenticate(user=admin_user)
+    eid = estudio_solicitado.id
+    iid = _estudio_entregado_con_informe(client, eid)
+    estudio_solicitado.refresh_from_db()
+    assert estudio_solicitado.estado == EstudioComplementario.Estado.ENTREGADO
+    viejo = InformeEstudioComplementario.objects.get(pk=iid)
+    r = client.post(
+        f'{BASE}{eid}/informes/{iid}/rectificar/',
+        {'motivo_rectificacion': 'Corrección post-entrega', 'texto': 'v2'},
+        format='json',
+    )
+    assert r.status_code == 201
+    nuevo_id = r.data['id']
+    nuevo = InformeEstudioComplementario.objects.get(pk=nuevo_id)
+    viejo.refresh_from_db()
+    assert nuevo.estado == InformeEstudioComplementario.EstadoInforme.BORRADOR
+    assert nuevo.es_vigente is False
+    assert viejo.es_vigente is True
+    r = client.post(f'{BASE}{eid}/informes/{nuevo_id}/emitir/')
+    assert r.status_code == 200
+    nuevo.refresh_from_db()
+    viejo.refresh_from_db()
+    estudio_solicitado.refresh_from_db()
+    assert nuevo.estado == InformeEstudioComplementario.EstadoInforme.EMITIDO
+    assert estudio_solicitado.estado == EstudioComplementario.Estado.INFORMADO
+    assert viejo.es_vigente is True
+    assert InformeEstudioComplementario.objects.filter(
+        estudio_id=eid, es_vigente=True,
+    ).count() == 1
+
+
+@pytest.mark.django_db
+def test_validar_rectificacion_de_estudio_entregado_deja_unico_vigente(
+    client, admin_user, estudio_solicitado,
+):
+    client.force_authenticate(user=admin_user)
+    eid = estudio_solicitado.id
+    iid = _estudio_entregado_con_informe(client, eid)
+    r = client.post(
+        f'{BASE}{eid}/informes/{iid}/rectificar/',
+        {'motivo_rectificacion': 'Corrección', 'texto': 'v2'},
+        format='json',
+    )
+    nuevo_id = r.data['id']
+    client.post(f'{BASE}{eid}/informes/{nuevo_id}/emitir/')
+    client.post(f'{BASE}{eid}/informes/{nuevo_id}/validar/')
+    viejo = InformeEstudioComplementario.objects.get(pk=iid)
+    nuevo = InformeEstudioComplementario.objects.get(pk=nuevo_id)
+    estudio_solicitado.refresh_from_db()
+    assert nuevo.estado == InformeEstudioComplementario.EstadoInforme.VALIDADO
+    assert nuevo.es_vigente is True
+    assert viejo.es_vigente is False
+    assert estudio_solicitado.estado == EstudioComplementario.Estado.VALIDADO
+    assert InformeEstudioComplementario.objects.filter(
+        estudio_id=eid, es_vigente=True, estado=InformeEstudioComplementario.EstadoInforme.VALIDADO,
+    ).count() == 1
+
+
+@pytest.mark.django_db
+def test_estudio_rectificado_validado_puede_entregarse_nuevamente(
+    client, admin_user, paciente, estudio_solicitado,
+):
+    client.force_authenticate(user=admin_user)
+    eid = estudio_solicitado.id
+    iid = _estudio_entregado_con_informe(client, eid)
+    r = client.post(
+        f'{BASE}{eid}/informes/{iid}/rectificar/',
+        {'motivo_rectificacion': 'Corrección', 'texto': 'v2'},
+        format='json',
+    )
+    nuevo_id = r.data['id']
+    client.post(f'{BASE}{eid}/informes/{nuevo_id}/emitir/')
+    client.post(f'{BASE}{eid}/informes/{nuevo_id}/validar/')
+    r = client.post(f'{BASE}{eid}/entregar/')
+    assert r.status_code == 200
+    assert r.data['estado'] == 'ENTREGADO'
+    estudio_solicitado.refresh_from_db()
+    assert estudio_solicitado.estado == EstudioComplementario.Estado.ENTREGADO
+    client.force_authenticate(user=paciente.user)
+    r = client.get(BASE)
+    assert r.status_code == 200
+    items = r.data.get('results', r.data)
+    assert any(i['id'] == eid and i['estado'] == 'ENTREGADO' for i in items)
+
+
+@pytest.mark.django_db
+def test_entregado_no_puede_reabrirse_sin_rectificacion(
+    client, admin_user, estudio_solicitado,
+):
+    client.force_authenticate(user=admin_user)
+    eid = estudio_solicitado.id
+    _estudio_entregado_con_informe(client, eid)
+    r = client.patch(f'{BASE}{eid}/', {'estado': 'INFORMADO'}, format='json')
+    assert r.status_code == 400
+    r = client.post(f'{BASE}{eid}/marcar-realizado/')
+    assert r.status_code in (400, 403)
+    informe = InformeEstudioComplementario.objects.create(
+        estudio=estudio_solicitado,
+        version=99,
+        texto='X',
+        estado=InformeEstudioComplementario.EstadoInforme.BORRADOR,
+        es_vigente=False,
+    )
+    r = client.post(f'{BASE}{eid}/informes/{informe.id}/emitir/')
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_patch_paciente_key_rechaza_payload(
+    client, admin_user, paciente, otro_paciente, estudio_solicitado,
+):
+    client.force_authenticate(user=admin_user)
+    r = client.patch(
+        f'{BASE}{estudio_solicitado.id}/',
+        {'paciente': otro_paciente.id},
+        format='json',
+    )
+    assert r.status_code == 400
+    estudio_solicitado.refresh_from_db()
+    assert estudio_solicitado.paciente_id == paciente.id
 
 
 @pytest.mark.django_db

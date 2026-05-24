@@ -408,6 +408,7 @@ def emitir_informe(informe: InformeEstudioComplementario, *, user, medico=None):
             estudio,
             accion=accion,
             nuevo_estado=EstudioComplementario.Estado.INFORMADO,
+            permitir_reapertura_por_rectificacion=True,
         )
         _auditar_cambio_estado(
             estudio,
@@ -416,6 +417,25 @@ def emitir_informe(informe: InformeEstudioComplementario, *, user, medico=None):
             estado_anterior=anterior,
             estado_nuevo=estudio.estado,
         )
+        if informe.reemplaza_a_id:
+            _safe_audit(
+                log_event,
+                action='UPDATE',
+                actor=user,
+                entity=estudio,
+                after=safe_model_snapshot(estudio),
+                entity_repr=f'estudios.EstudioComplementario:{estudio.pk}',
+                module='estudios',
+                metadata={
+                    'accion': 'estudio_rectificacion_emitir',
+                    'view': 'EstudioComplementarioViewSet.emitir_informe',
+                    'informe_id': informe.pk,
+                    'version_informe': informe.version,
+                    'estado_anterior': anterior,
+                    'estado_nuevo': estudio.estado,
+                    **_estudio_meta(estudio),
+                },
+            )
     _safe_audit(
         log_event,
         action='UPDATE',

@@ -19,6 +19,12 @@ _ALLOWED = frozenset({
     ('informar', EstudioComplementario.Estado.ENTREGADO, EstudioComplementario.Estado.INFORMADO),
 })
 
+# Excepción explícita: reapertura terminal solo vía emitir rectificación (C6.4.1-B).
+_REAPERTURA_RECTIFICACION = frozenset({
+    ('informar', EstudioComplementario.Estado.ENTREGADO, EstudioComplementario.Estado.INFORMADO),
+    ('rectificar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.INFORMADO),
+})
+
 
 class TransicionEstudioNoPermitida(ValidationError):
     pass
@@ -33,10 +39,23 @@ def aplicar_transicion_estudio(
     *,
     accion: str,
     nuevo_estado: str,
+    permitir_reapertura_por_rectificacion: bool = False,
 ) -> str:
-    if estudio.es_terminal and accion != 'anular':
-        raise TransicionEstudioNoPermitida('El estudio no admite cambios en su estado actual.')
     anterior = estudio.estado
+    es_reapertura_rectificacion = (
+        permitir_reapertura_por_rectificacion
+        and (accion, anterior, nuevo_estado) in _REAPERTURA_RECTIFICACION
+    )
+    if (
+        estudio.es_terminal
+        and accion != 'anular'
+        and not es_reapertura_rectificacion
+    ):
+        raise TransicionEstudioNoPermitida('El estudio no admite cambios en su estado actual.')
+    if permitir_reapertura_por_rectificacion and not es_reapertura_rectificacion:
+        raise TransicionEstudioNoPermitida(
+            'La reapertura por rectificación no aplica a esta transición.'
+        )
     if not transicion_permitida(accion, anterior, nuevo_estado):
         raise TransicionEstudioNoPermitida(
             'Transición de estado no permitida para esta acción y estado actual.'

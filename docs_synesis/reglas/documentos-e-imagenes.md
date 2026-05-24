@@ -91,6 +91,8 @@ API: `/api/estudios-complementarios/`. Estados solo por acciones POST, no PATCH.
 
 Validación de informe: **solo admin/superuser** en C6.4.1.
 
+**ENTREGADO (C6.4.1-B):** estado terminal salvo **rectificación** — al emitir informe rectificador, el estudio pasa a INFORMADO (reapertura explícita, no PATCH ni acciones genéricas); el informe anterior sigue vigente hasta validar la nueva versión; luego VALIDADO → `entregar` → ENTREGADO.
+
 Auditoría: `estudio_complementario_*`, `estudio_estado_cambio`, `estudio_archivo_*`, `estudio_informe_*` — sin filename/path/texto completo.
 
 ## Deuda (post C6.4.1)
