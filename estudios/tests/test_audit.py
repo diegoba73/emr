@@ -47,6 +47,7 @@ def test_informe_snapshot_sin_texto_completo(client, admin_user, estudio_solicit
     texto_largo = 'X' * 5000
     eid = estudio_solicitado.id
     with capture_on_commit_callbacks(execute=True):
+        client.post(f'{BASE}{eid}/marcar-realizado/')
         client.post(f'{BASE}{eid}/informes/', {'texto': texto_largo}, format='json')
     evs = [e for e in AuditEvent.objects.filter(module='estudios').order_by('-id')[:20]
            if (e.metadata or {}).get('accion') == 'estudio_informe_create']

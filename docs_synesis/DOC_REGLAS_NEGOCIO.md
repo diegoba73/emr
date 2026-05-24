@@ -195,6 +195,7 @@ Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incl
 - Paciente: turnos y datos acotados a su vínculo; archivos propios; documentos de sus atenciones (lectura/descarga).
 - **C6.2 [IMPLEMENTADO]:** APIs no exponen URL `/media/`; descarga vía `…/download/`; DELETE → 405; auditoría create/update/download. Detalle: `reglas/documentos-e-imagenes.md`.
 - **C6.4.1 [IMPLEMENTADO]:** `estudios.EstudioComplementario` — estados por acciones POST; informes versionados; archivos vía `ArchivoEstudioComplementario` → `ArchivoMedico`; paciente solo ve **ENTREGADO**; sin LIMS.
+- **C6.4.1-A:** `paciente_id` inmutable por PATCH; informes alineados a estados (crear/emitir desde REALIZADO+; validar solo INFORMADO); un informe vigente validado por estudio.
 - Médico — archivos: pacientes vinculados por `Consulta` HC, `Atencion` o `Turno` (no solo HC legacy).
 - Resultados: no editar orden validada vía acción de carga.
 

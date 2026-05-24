@@ -16,6 +16,7 @@ _ALLOWED = frozenset({
     ('anular', EstudioComplementario.Estado.REALIZADO, EstudioComplementario.Estado.ANULADO),
     ('anular', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.ANULADO),
     ('rectificar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.INFORMADO),
+    ('informar', EstudioComplementario.Estado.ENTREGADO, EstudioComplementario.Estado.INFORMADO),
 })
 
 

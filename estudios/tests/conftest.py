@@ -82,6 +82,11 @@ def secretaria(db):
 
 
 @pytest.fixture
+def enfermeria(db):
+    return User.objects.create_user(username=f'enf_{_uid()}', password='x', rol='enfermeria')
+
+
+@pytest.fixture
 def recurso(db):
     return Recurso.objects.create(
         nombre=f'Cons {_uid()}',

@@ -17,7 +17,7 @@ from auditoria.audit_service import log_event
 from auditoria.snapshot import safe_model_snapshot
 
 from .access import usuario_puede_validar_informe
-from .estado import TransicionEstudioNoPermitida, aplicar_transicion_estudio
+from .estado import aplicar_transicion_estudio
 from .models import (
     ArchivoEstudioComplementario,
     EstudioComplementario,
@@ -42,6 +42,21 @@ def _informe_snapshot(informe: InformeEstudioComplementario) -> dict:
     snap = safe_model_snapshot(informe)
     snap.pop('texto', None)
     return snap
+
+
+_ESTADOS_CREAR_EMITIR_INFORME = frozenset({
+    EstudioComplementario.Estado.REALIZADO,
+    EstudioComplementario.Estado.INFORMADO,
+})
+
+
+def _exigir_estado_estudio(
+    estudio: EstudioComplementario,
+    estados_permitidos: frozenset,
+    mensaje: str,
+) -> None:
+    if estudio.estado not in estados_permitidos:
+        raise ValidationError(mensaje)
 
 
 def _siguiente_version_informe(estudio_id: int) -> int:
@@ -306,18 +321,18 @@ def crear_informe(
     texto: str = '',
     tipo: str = InformeEstudioComplementario.TipoInforme.FINAL,
 ) -> InformeEstudioComplementario:
-    if estudio.es_terminal:
-        raise ValidationError('No se pueden crear informes en un estudio terminal.')
+    _exigir_estado_estudio(
+        estudio,
+        _ESTADOS_CREAR_EMITIR_INFORME,
+        'Solo se puede crear un informe cuando el estudio está REALIZADO o INFORMADO.',
+    )
     informe = InformeEstudioComplementario(
         estudio=estudio,
         version=_siguiente_version_informe(estudio.pk),
         texto=texto or '',
         tipo=tipo,
         creado_por=user,
-        es_vigente=True,
-    )
-    InformeEstudioComplementario.objects.filter(estudio=estudio, es_vigente=True).update(
-        es_vigente=False
+        es_vigente=False,
     )
     informe.save()
     _safe_audit(
@@ -341,20 +356,57 @@ def crear_informe(
 
 @transaction.atomic
 def emitir_informe(informe: InformeEstudioComplementario, *, user, medico=None):
+    estudio = informe.estudio
     if informe.estado != InformeEstudioComplementario.EstadoInforme.BORRADOR:
         raise ValidationError('Solo se puede emitir un informe en borrador.')
-    if informe.estudio.es_terminal:
-        raise ValidationError('El estudio no admite informes en su estado actual.')
+    estados_emitir = set(_ESTADOS_CREAR_EMITIR_INFORME)
+    if informe.reemplaza_a_id:
+        estados_emitir |= {
+            EstudioComplementario.Estado.VALIDADO,
+            EstudioComplementario.Estado.ENTREGADO,
+        }
+    _exigir_estado_estudio(
+        estudio,
+        frozenset(estados_emitir),
+        'Solo se puede emitir un informe cuando el estudio está en un estado compatible.',
+    )
+    if estudio.estado in (
+        EstudioComplementario.Estado.ENTREGADO,
+        EstudioComplementario.Estado.VALIDADO,
+    ) and not informe.reemplaza_a_id:
+        raise ValidationError(
+            'No se puede emitir un informe nuevo en un estudio validado/entregado sin rectificación.'
+        )
     informe.estado = InformeEstudioComplementario.EstadoInforme.EMITIDO
     informe.fecha_informe = timezone.now()
     if medico:
         informe.informado_por = medico
     informe.save()
-    estudio = informe.estudio
     if estudio.estado == EstudioComplementario.Estado.REALIZADO:
         anterior = aplicar_transicion_estudio(
             estudio,
             accion='informar',
+            nuevo_estado=EstudioComplementario.Estado.INFORMADO,
+        )
+        _auditar_cambio_estado(
+            estudio,
+            user=user,
+            accion='estudio_estado_cambio',
+            estado_anterior=anterior,
+            estado_nuevo=estudio.estado,
+        )
+    elif estudio.estado in (
+        EstudioComplementario.Estado.ENTREGADO,
+        EstudioComplementario.Estado.VALIDADO,
+    ) and informe.reemplaza_a_id:
+        accion = (
+            'rectificar'
+            if estudio.estado == EstudioComplementario.Estado.VALIDADO
+            else 'informar'
+        )
+        anterior = aplicar_transicion_estudio(
+            estudio,
+            accion=accion,
             nuevo_estado=EstudioComplementario.Estado.INFORMADO,
         )
         _auditar_cambio_estado(
@@ -389,25 +441,47 @@ def validar_informe(informe: InformeEstudioComplementario, *, user):
         raise PermissionDenied('No tiene permiso para validar informes.')
     if informe.estado != InformeEstudioComplementario.EstadoInforme.EMITIDO:
         raise ValidationError('Solo se puede validar un informe emitido.')
+    estudio = informe.estudio
+    if estudio.estado != EstudioComplementario.Estado.INFORMADO:
+        raise ValidationError(
+            'Solo se puede validar un informe cuando el estudio está INFORMADO.'
+        )
+    if informe.estudio_id != estudio.pk:
+        raise ValidationError('El informe no pertenece a este estudio.')
+    otro_vigente_validado = (
+        InformeEstudioComplementario.objects.filter(
+            estudio=estudio,
+            es_vigente=True,
+            estado=InformeEstudioComplementario.EstadoInforme.VALIDADO,
+        )
+        .exclude(pk=informe.pk)
+        .order_by('-version')
+        .first()
+    )
+    if otro_vigente_validado and informe.version < otro_vigente_validado.version:
+        raise ValidationError(
+            'Ya existe un informe validado vigente más reciente; use rectificación.'
+        )
+    InformeEstudioComplementario.objects.filter(estudio=estudio).exclude(
+        pk=informe.pk
+    ).update(es_vigente=False)
     informe.estado = InformeEstudioComplementario.EstadoInforme.VALIDADO
     informe.validado_por = user
     informe.fecha_validacion = timezone.now()
     informe.es_vigente = True
     informe.save()
-    estudio = informe.estudio
-    if estudio.estado == EstudioComplementario.Estado.INFORMADO:
-        anterior = aplicar_transicion_estudio(
-            estudio,
-            accion='validar',
-            nuevo_estado=EstudioComplementario.Estado.VALIDADO,
-        )
-        _auditar_cambio_estado(
-            estudio,
-            user=user,
-            accion='estudio_estado_cambio',
-            estado_anterior=anterior,
-            estado_nuevo=estudio.estado,
-        )
+    anterior = aplicar_transicion_estudio(
+        estudio,
+        accion='validar',
+        nuevo_estado=EstudioComplementario.Estado.VALIDADO,
+    )
+    _auditar_cambio_estado(
+        estudio,
+        user=user,
+        accion='estudio_estado_cambio',
+        estado_anterior=anterior,
+        estado_nuevo=estudio.estado,
+    )
     _safe_audit(
         log_event,
         action='UPDATE',
@@ -432,19 +506,25 @@ def rectificar_informe(
     informe: InformeEstudioComplementario,
     *,
     user,
-    motivo: str,
+    motivo: str | None = None,
+    motivo_rectificacion: str | None = None,
     texto: str = '',
 ):
     if informe.estado != InformeEstudioComplementario.EstadoInforme.VALIDADO:
         raise ValidationError('Solo se puede rectificar un informe validado.')
-    if not motivo or not str(motivo).strip():
+    motivo_final = (motivo_rectificacion or motivo or '').strip()
+    if not motivo_final:
         raise ValidationError({'motivo_rectificacion': 'El motivo de rectificación es obligatorio.'})
     estudio = informe.estudio
-    if estudio.es_terminal:
+    if estudio.estado not in (
+        EstudioComplementario.Estado.VALIDADO,
+        EstudioComplementario.Estado.ENTREGADO,
+    ):
+        raise ValidationError(
+            'La rectificación solo está permitida en estudios VALIDADO o ENTREGADO.'
+        )
+    if estudio.estado == EstudioComplementario.Estado.ANULADO:
         raise ValidationError('El estudio no admite rectificación en su estado actual.')
-
-    informe.es_vigente = False
-    informe.save(update_fields=['es_vigente', 'updated_at'])
 
     nuevo = InformeEstudioComplementario(
         estudio=estudio,
@@ -452,29 +532,12 @@ def rectificar_informe(
         estado=InformeEstudioComplementario.EstadoInforme.BORRADOR,
         tipo=informe.tipo,
         texto=texto or '',
-        es_vigente=True,
+        es_vigente=False,
         reemplaza_a=informe,
-        motivo_rectificacion=motivo.strip(),
+        motivo_rectificacion=motivo_final,
         creado_por=user,
     )
     nuevo.save()
-
-    if estudio.estado == EstudioComplementario.Estado.VALIDADO:
-        try:
-            anterior = aplicar_transicion_estudio(
-                estudio,
-                accion='rectificar',
-                nuevo_estado=EstudioComplementario.Estado.INFORMADO,
-            )
-            _auditar_cambio_estado(
-                estudio,
-                user=user,
-                accion='estudio_estado_cambio',
-                estado_anterior=anterior,
-                estado_nuevo=estudio.estado,
-            )
-        except TransicionEstudioNoPermitida:
-            pass
 
     _safe_audit(
         log_event,

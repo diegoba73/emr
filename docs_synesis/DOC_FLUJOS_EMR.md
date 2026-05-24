@@ -65,9 +65,10 @@ Ver `reglas/documentos-e-imagenes.md`.
 
 1. Crear `EstudioComplementario` (SOLICITADO) vinculado a paciente (+ opcional atención/consulta/solicitud EMR).
 2. `marcar-realizado` → REALIZADO; asociar archivos (`ArchivoMedico` del mismo paciente).
-3. Informe: crear borrador → `emitir` → INFORMADO → `validar` (admin) → VALIDADO → `entregar` → ENTREGADO (visible paciente).
+3. Informe: tras `marcar-realizado`, crear borrador → `emitir` → INFORMADO → `validar` (admin) → VALIDADO → `entregar` → ENTREGADO (visible paciente). No crear/emitir/validar en SOLICITADO (C6.4.1-A).
 4. `anular` desde SOLICITADO/REALIZADO/INFORMADO con motivo.
-5. Rectificación: nuevo informe reemplaza validado; estudio puede volver a INFORMADO.
+5. Rectificación (estudio VALIDADO/ENTREGADO): nuevo borrador no vigente → emitir (INFORMADO) → validar (único vigente).
+6. **PATCH:** no cambia `paciente_id` ni `estado`.
 
 No LIMS. No PACS/visor. Frontend: C6.4.2.
 

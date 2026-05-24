@@ -57,6 +57,11 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
     )
     estado = serializers.CharField(read_only=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields['paciente_id'].read_only = True
+
     class Meta:
         model = EstudioComplementario
         fields = (
@@ -89,14 +94,37 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'estado': 'El estado no se modifica por PATCH; use las acciones dedicadas.'}
             )
-        paciente = attrs.get('paciente') or getattr(self.instance, 'paciente', None)
+        inst = self.instance
+        if inst is not None:
+            nuevo_paciente = attrs.get('paciente')
+            if nuevo_paciente is not None and nuevo_paciente.pk != inst.paciente_id:
+                raise serializers.ValidationError(
+                    {
+                        'paciente_id': (
+                            'No se puede cambiar el paciente del estudio por PATCH.'
+                        ),
+                    }
+                )
+            if 'paciente_id' in self.initial_data:
+                raw = self.initial_data.get('paciente_id')
+                try:
+                    if int(raw) != inst.paciente_id:
+                        raise serializers.ValidationError(
+                            {
+                                'paciente_id': (
+                                    'No se puede cambiar el paciente del estudio por PATCH.'
+                                ),
+                            }
+                        )
+                except (TypeError, ValueError):
+                    pass
+        paciente = attrs.get('paciente') or getattr(inst, 'paciente', None)
         request = self.context.get('request')
         if request and paciente and self.instance is None:
             if not usuario_puede_crear_estudio(request.user, paciente):
                 raise serializers.ValidationError(
                     {'paciente_id': 'No tiene permiso para crear estudios de este paciente.'}
                 )
-        inst = self.instance
         estudio = EstudioComplementario(
             paciente=paciente or (inst.paciente if inst else None),
             modalidad=attrs.get('modalidad', getattr(inst, 'modalidad', '')),

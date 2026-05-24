@@ -78,7 +78,9 @@ Metadata: `entity_id`, `tipo`, `view`, `accion`. **Sin** path absoluto, URL `/me
 | `estudios.InformeEstudioComplementario` | Informe versionado (borrador → emitido → validado; rectificación) |
 | `estudios.TipoEstudioComplementario` | Catálogo EMR (modalidad RX/TC/RM/US/PDF/OTRO) |
 
-API: `/api/estudios-complementarios/`. Estados solo por acciones POST, no PATCH.
+API: `/api/estudios-complementarios/`. Estados solo por acciones POST, no PATCH. **`paciente_id` no se cambia por PATCH** (C6.4.1-A).
+
+**Informes (C6.4.1-A):** crear solo con estudio **REALIZADO** o **INFORMADO**; emitir solo borrador en esos estados (o ENTREGADO si es rectificación); validar solo con estudio **INFORMADO** e informe **EMITIDO**; **un solo informe vigente** (validado) por transacción de validación; rectificación crea borrador no vigente y reemplaza vigencia al validar la nueva versión.
 
 | Rol | Acceso |
 |-----|--------|
