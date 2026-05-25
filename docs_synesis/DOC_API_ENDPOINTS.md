@@ -130,6 +130,9 @@ Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 | POST | `/{id}/informes/{informe_id}/emitir/` | Borrador → emitido; estudio → INFORMADO |
 | POST | `/{id}/informes/{informe_id}/validar/` | Solo admin/superuser |
 | POST | `/{id}/informes/{informe_id}/rectificar/` | Nueva versión; motivo obligatorio |
+| GET | `/{id}/informes/{informe_id}/download-pdf/` | PDF del informe (C6.4.3); sin `/media/`; nombre seguro en `Content-Disposition` |
+
+Informes en listado: `tiene_pdf`, `download_pdf_url` (ruta protegida anterior).
 
 No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 

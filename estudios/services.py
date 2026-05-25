@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import FileResponse
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
@@ -16,7 +16,7 @@ from archivos_medicos.models import ArchivoMedico
 from auditoria.audit_service import log_event
 from auditoria.snapshot import safe_model_snapshot
 
-from .access import usuario_puede_validar_informe
+from .access import usuario_puede_descargar_pdf_informe, usuario_puede_validar_informe
 from .estado import aplicar_transicion_estudio
 from .models import (
     ArchivoEstudioComplementario,
@@ -57,6 +57,10 @@ def _exigir_estado_estudio(
 ) -> None:
     if estudio.estado not in estados_permitidos:
         raise ValidationError(mensaje)
+
+
+def nombre_seguro_pdf_informe(estudio_id: int, version: int) -> str:
+    return f'estudio-complementario-{estudio_id}-informe-v{version}.pdf'
 
 
 def _siguiente_version_informe(estudio_id: int) -> int:
@@ -461,7 +465,20 @@ def validar_informe(informe: InformeEstudioComplementario, *, user):
         raise PermissionDenied('No tiene permiso para validar informes.')
     if informe.estado != InformeEstudioComplementario.EstadoInforme.EMITIDO:
         raise ValidationError('Solo se puede validar un informe emitido.')
-    estudio = informe.estudio
+    estudio = (
+        EstudioComplementario.objects.select_for_update()
+        .filter(pk=informe.estudio_id)
+        .first()
+    )
+    if not estudio:
+        raise ValidationError('Estudio no encontrado.')
+    informe = (
+        InformeEstudioComplementario.objects.select_for_update()
+        .filter(pk=informe.pk, estudio_id=estudio.pk)
+        .first()
+    )
+    if not informe:
+        raise ValidationError('Informe no encontrado.')
     if estudio.estado != EstudioComplementario.Estado.INFORMADO:
         raise ValidationError(
             'Solo se puede validar un informe cuando el estudio está INFORMADO.'
@@ -489,7 +506,12 @@ def validar_informe(informe: InformeEstudioComplementario, *, user):
     informe.validado_por = user
     informe.fecha_validacion = timezone.now()
     informe.es_vigente = True
-    informe.save()
+    try:
+        informe.save()
+    except IntegrityError as exc:
+        raise ValidationError(
+            'No se pudo dejar un único informe vigente; reintente la operación.'
+        ) from exc
     anterior = aplicar_transicion_estudio(
         estudio,
         accion='validar',
@@ -577,3 +599,46 @@ def rectificar_informe(
         },
     )
     return nuevo
+
+
+def servir_descarga_informe_pdf(
+    informe: InformeEstudioComplementario,
+    *,
+    user,
+):
+    estudio = informe.estudio
+    if not usuario_puede_descargar_pdf_informe(user, estudio, informe):
+        raise PermissionDenied('No tiene permiso para descargar este informe.')
+    if not informe.archivo_pdf:
+        raise ValidationError('PDF no disponible para este informe.')
+
+    try:
+        storage_path = informe.archivo_pdf.path
+    except Exception as exc:
+        raise ValidationError('PDF no encontrado en el servidor.') from exc
+
+    if not os.path.exists(storage_path):
+        logger.error('PDF de informe ausente en almacenamiento')
+        raise ValidationError('PDF no encontrado en el servidor.')
+
+    _safe_audit(
+        log_event,
+        action='UPDATE',
+        actor=user,
+        entity=informe,
+        after=_informe_snapshot(informe),
+        entity_repr=f'estudios.InformeEstudioComplementario:{informe.pk}',
+        module='estudios',
+        metadata={
+            'accion': 'estudio_informe_pdf_download',
+            'view': 'EstudioComplementarioViewSet.download_pdf_informe',
+            'informe_id': informe.pk,
+            'version_informe': informe.version,
+            **_estudio_meta(estudio),
+        },
+    )
+
+    response = FileResponse(open(storage_path, 'rb'), content_type='application/pdf')
+    nombre = nombre_seguro_pdf_informe(estudio.pk, informe.version)
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response

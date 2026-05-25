@@ -189,6 +189,8 @@ class AgregarArchivoSerializer(serializers.Serializer):
 class InformeEstudioComplementarioSerializer(serializers.ModelSerializer):
     estado = serializers.CharField(read_only=True)
     version = serializers.IntegerField(read_only=True)
+    tiene_pdf = serializers.SerializerMethodField()
+    download_pdf_url = serializers.SerializerMethodField()
 
     class Meta:
         model = InformeEstudioComplementario
@@ -199,6 +201,8 @@ class InformeEstudioComplementarioSerializer(serializers.ModelSerializer):
             'tipo',
             'texto',
             'es_vigente',
+            'tiene_pdf',
+            'download_pdf_url',
             'informado_por',
             'fecha_informe',
             'validado_por',
@@ -215,6 +219,18 @@ class InformeEstudioComplementarioSerializer(serializers.ModelSerializer):
             'fecha_validacion',
             'reemplaza_a',
             'motivo_rectificacion',
+        )
+
+    def get_tiene_pdf(self, obj) -> bool:
+        return bool(obj.archivo_pdf)
+
+    def get_download_pdf_url(self, obj) -> str:
+        request = self.context.get('request')
+        if not request or not obj.archivo_pdf:
+            return ''
+        estudio_id = obj.estudio_id
+        return request.build_absolute_uri(
+            f'/api/estudios-complementarios/{estudio_id}/informes/{obj.pk}/download-pdf/'
         )
 
     def validate(self, attrs):

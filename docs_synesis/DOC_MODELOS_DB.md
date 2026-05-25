@@ -175,8 +175,9 @@
 
 ### InformeEstudioComplementario
 
-- Versionado; estados BORRADOR/EMITIDO/VALIDADO/ANULADO; `es_vigente`; FK `reemplaza_a` (rectificación)
-- `archivo_pdf` FileField — snapshot auditoría sin path/nombre
+- Versionado; estados BORRADOR/EMITIDO/VALIDADO/ANULADO; `es_vigente` (default False); FK `reemplaza_a` (rectificación)
+- `archivo_pdf` FileField — snapshot auditoría sin path/nombre; descarga vía endpoint protegido (C6.4.3)
+- **Constraint (C6.4.3):** `uniq_informe_vigente_por_estudio` — `UniqueConstraint` parcial: un solo `es_vigente=True` por `estudio`
 
 ---
 

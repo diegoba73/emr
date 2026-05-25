@@ -93,6 +93,35 @@ def usuario_puede_crear_estudio(user, paciente) -> bool:
     return False
 
 
+def usuario_puede_descargar_pdf_informe(user, estudio, informe) -> bool:
+    """Descarga de PDF del informe — sin filename original ni /media/."""
+    if not user.is_authenticated:
+        return False
+    rol = str(getattr(user, 'rol', '') or '').lower()
+    if rol in ('secretaria', 'enfermeria', 'laboratorio'):
+        return False
+    if informe.estudio_id != estudio.pk:
+        return False
+    if rol == 'paciente':
+        try:
+            return (
+                estudio.paciente_id == user.paciente.id
+                and estudio.estado == estudio.Estado.ENTREGADO
+                and informe.estado == informe.EstadoInforme.VALIDADO
+                and informe.es_vigente
+            )
+        except Exception:
+            return False
+    if user.is_superuser or rol == 'admin':
+        return True
+    if rol == 'medico':
+        try:
+            return medico_puede_acceder_paciente(user.medico, estudio.paciente)
+        except Exception:
+            return False
+    return False
+
+
 def usuario_puede_validar_informe(user) -> bool:
     """C6.4.1: validación final solo admin/superuser."""
     if not user.is_authenticated:

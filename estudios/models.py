@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from catalogos.models import EstudioDiagnostico
@@ -252,7 +253,7 @@ class InformeEstudioComplementario(TimestampedModel):
         blank=True,
         null=True,
     )
-    es_vigente = models.BooleanField(default=True)
+    es_vigente = models.BooleanField(default=False)
     informado_por = models.ForeignKey(
         'medicos.Medico',
         on_delete=models.SET_NULL,
@@ -289,6 +290,13 @@ class InformeEstudioComplementario(TimestampedModel):
         verbose_name = 'Informe de estudio complementario'
         verbose_name_plural = 'Informes de estudio complementario'
         ordering = ['-version', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['estudio'],
+                condition=Q(es_vigente=True),
+                name='uniq_informe_vigente_por_estudio',
+            ),
+        ]
 
     def __str__(self) -> str:
         return f'InformeEstudioComplementario:{self.pk}'

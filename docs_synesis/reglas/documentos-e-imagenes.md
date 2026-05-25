@@ -82,6 +82,16 @@ API: `/api/estudios-complementarios/`. Estados solo por acciones POST, no PATCH.
 
 **Informes (C6.4.1-A):** crear solo con estudio **REALIZADO** o **INFORMADO**; emitir solo borrador en esos estados (o ENTREGADO si es rectificación); validar solo con estudio **INFORMADO** e informe **EMITIDO**; **un solo informe vigente** (validado) por transacción de validación; rectificación crea borrador no vigente y reemplaza vigencia al validar la nueva versión.
 
+**Hardening (C6.4.3):**
+
+- Constraint DB PostgreSQL `uniq_informe_vigente_por_estudio`: como máximo un `InformeEstudioComplementario` con `es_vigente=True` por estudio (migración deduplica duplicados conservando validado de mayor versión).
+- Descarga PDF del informe: `GET /api/estudios-complementarios/{id}/informes/{informe_id}/download-pdf/` — `FileResponse`, sin `/media/` ni path en API/auditoría.
+- `Content-Disposition`: nombre generado `estudio-complementario-{estudio_id}-informe-v{version}.pdf` (sin PHI ni filename original).
+- Serializer informe: `tiene_pdf`, `download_pdf_url` (URL protegida); nunca `archivo_pdf.url`.
+- Paciente: descarga PDF solo si estudio **ENTREGADO**, informe **VALIDADO** y **vigente**.
+- Médico/admin: descarga si acceso clínico al paciente; secretaría/enfermería/laboratorio: bloqueado.
+- Auditoría: `estudio_informe_pdf_download` — metadata `estudio_id`, `informe_id`, `version_informe`; sin texto/filename/path.
+
 | Rol | Acceso |
 |-----|--------|
 | admin / superuser | Completo |
@@ -97,14 +107,13 @@ Validación de informe: **solo admin/superuser** en C6.4.1.
 
 **[DEUDA]** Los títulos o nombres visibles de archivos existentes pueden contener PHI si el usuario los cargó así. El sistema evita exponer `/media/` y paths en API/auditoría, pero una fase futura debe normalizar nombres de descarga/visualización o imponer nombres seguros en servidor.
 
-Auditoría: `estudio_complementario_*`, `estudio_estado_cambio`, `estudio_archivo_*`, `estudio_informe_*` — sin filename/path/texto completo.
+Auditoría: `estudio_complementario_*`, `estudio_estado_cambio`, `estudio_archivo_*`, `estudio_informe_*`, `estudio_informe_pdf_download` — sin filename/path/texto completo.
 
-## Deuda (post C6.4.1)
+## Deuda (post C6.4.3)
 
-- Frontend lista/detalle/informe (C6.4.2).
 - Soft-delete / anulación con motivo en `ArchivoMedico`.
 - Hash/checksum e integridad de archivo.
 - Escaneo MIME/malware.
-- Constraint DB único informe vigente por estudio.
+- Nombres seguros en descarga de archivos de estudio (hoy solo PDF de informe usa nombre generado).
 - PACS / DICOMweb / RIS y visor.
 - URLs firmadas de corta duración si se expone storage externo.

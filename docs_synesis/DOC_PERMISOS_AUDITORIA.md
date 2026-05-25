@@ -255,6 +255,7 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - Rectificación desde ENTREGADO: auditoría `estudio_rectificacion_emitir` + `estudio_estado_cambio` (sin PHI).
 
 **Frontend C6.4.2:** Sidebar oculto para secretaría/enfermería/laboratorio; paciente solo ENTREGADO; validar informe solo admin en UI (alineado a backend).
-- **Auditoría:** `estudio_complementario_create|update`, `estudio_estado_cambio`, `estudio_archivo_asociar|download`, `estudio_informe_create|emitir|validar|rectificar`, `estudio_anular|entregar`; `entity_repr` técnico; sin texto completo de informe ni filename/path.
+- **Descarga PDF informe (C6.4.3):** admin/superuser y médico vinculado; paciente solo ENTREGADO + informe validado vigente; secretaría/enfermería/laboratorio → 403.
+- **Auditoría:** `estudio_complementario_create|update`, `estudio_estado_cambio`, `estudio_archivo_asociar|download`, `estudio_informe_create|emitir|validar|rectificar`, `estudio_informe_pdf_download`, `estudio_anular|entregar`; `entity_repr` técnico; sin texto completo de informe ni filename/path.
 - **DELETE:** 405 en ambos viewsets.
 - Regla detallada: `docs_synesis/reglas/documentos-e-imagenes.md`.

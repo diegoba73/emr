@@ -69,8 +69,9 @@ Ver `reglas/documentos-e-imagenes.md`.
 4. `anular` desde SOLICITADO/REALIZADO/INFORMADO con motivo.
 5. Rectificación (estudio VALIDADO/ENTREGADO): nuevo borrador no vigente → emitir (INFORMADO; desde ENTREGADO usa reapertura controlada C6.4.1-B) → validar (único vigente) → `entregar` si vuelve a ENTREGADO.
 6. **PATCH:** no cambia `paciente_id` ni `estado`.
+7. **PDF informe (C6.4.3):** tras validar y entregar, paciente (o clínico autorizado) descarga PDF vía `GET …/informes/{id}/download-pdf/` — nombre seguro, auditoría `estudio_informe_pdf_download`; constraint DB garantiza un solo informe vigente.
 
-No LIMS. No PACS/visor. **Frontend C6.4.2 [IMPLEMENTADO]:** listado, detalle, acciones e informes en `/estudios-complementarios`.
+No LIMS. No PACS/visor. **Frontend C6.4.2 [IMPLEMENTADO]:** listado, detalle, acciones e informes en `/estudios-complementarios` (descarga PDF informe: endpoint backend listo; UI puede adoptar `download_pdf_url` en fase posterior).
 
 ---
 

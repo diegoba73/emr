@@ -17,6 +17,7 @@ from archivos_medicos.access import paciente_ids_vinculados_a_medico
 from .access import (
     usuario_puede_crear_estudio,
     usuario_puede_descargar_archivo_estudio,
+    usuario_puede_descargar_pdf_informe,
     usuario_puede_escribir_estudio,
     usuario_puede_ver_estudio,
     usuario_puede_ver_estudio_clinico,
@@ -246,7 +247,9 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         if request.method == 'GET':
             qs = estudio.informes.all()
             return Response(
-                InformeEstudioComplementarioSerializer(qs, many=True).data
+                InformeEstudioComplementarioSerializer(
+                    qs, many=True, context={'request': request}
+                ).data
             )
         if not usuario_puede_escribir_estudio(request.user):
             raise PermissionDenied()
@@ -257,7 +260,9 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             return self._validation_error_response(exc)
         return Response(
-            InformeEstudioComplementarioSerializer(informe).data,
+            InformeEstudioComplementarioSerializer(
+                informe, context={'request': request}
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -313,6 +318,52 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             return self._validation_error_response(exc)
         return Response(
-            InformeEstudioComplementarioSerializer(nuevo).data,
+            InformeEstudioComplementarioSerializer(
+                nuevo, context={'request': request}
+            ).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path=r'informes/(?P<informe_id>[^/.]+)/download-pdf',
+    )
+    def download_pdf_informe(self, request, pk=None, informe_id=None):
+        estudio = EstudioComplementario.objects.filter(pk=pk).select_related('paciente').first()
+        if not estudio:
+            return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        rol = str(getattr(request.user, 'rol', '') or '').lower()
+        if rol == 'paciente':
+            try:
+                if estudio.paciente_id != request.user.paciente.id:
+                    return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+            except Exception:
+                return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        elif rol in ('secretaria', 'enfermeria', 'laboratorio'):
+            return Response(
+                {'detail': 'No tiene permiso para descargar este informe.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        elif not usuario_puede_ver_estudio_clinico(request.user, estudio) and rol != 'paciente':
+            return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            informe = estudio.informes.get(pk=informe_id)
+        except InformeEstudioComplementario.DoesNotExist:
+            return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if informe.estudio_id != estudio.pk:
+            return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not usuario_puede_descargar_pdf_informe(request.user, estudio, informe):
+            return Response(
+                {'detail': 'No tiene permiso para descargar este informe.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            return services.servir_descarga_informe_pdf(informe, user=request.user)
+        except PermissionDenied:
+            raise
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
