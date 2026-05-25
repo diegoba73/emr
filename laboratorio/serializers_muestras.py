@@ -119,6 +119,7 @@ class MuestraCreateSerializer(serializers.Serializer):
     solicitud_id = serializers.IntegerField()
     tipo_muestra_id = serializers.IntegerField()
     tipo_contenedor_id = serializers.IntegerField(required=False, allow_null=True)
+    codigo_barra = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate(self, attrs):
@@ -127,15 +128,22 @@ class MuestraCreateSerializer(serializers.Serializer):
         except SolicitudExamen.DoesNotExist as exc:
             raise serializers.ValidationError({"solicitud_id": "Solicitud inexistente."}) from exc
         try:
-            TipoMuestra.objects.get(pk=attrs["tipo_muestra_id"])
+            tm = TipoMuestra.objects.get(pk=attrs["tipo_muestra_id"])
         except TipoMuestra.DoesNotExist as exc:
             raise serializers.ValidationError({"tipo_muestra_id": "Tipo de muestra inexistente."}) from exc
+        if not tm.activo:
+            raise serializers.ValidationError({"tipo_muestra_id": "Tipo de muestra inactivo."})
         tc_id = attrs.get("tipo_contenedor_id")
         if tc_id is not None:
             try:
-                TipoContenedor.objects.get(pk=tc_id)
+                tc = TipoContenedor.objects.get(pk=tc_id)
             except TipoContenedor.DoesNotExist as exc:
                 raise serializers.ValidationError({"tipo_contenedor_id": "Tipo de contenedor inexistente."}) from exc
+            if not tc.activo:
+                raise serializers.ValidationError({"tipo_contenedor_id": "Tipo de contenedor inactivo."})
+        cb = (attrs.get("codigo_barra") or "").strip()
+        if cb and Muestra.objects.filter(codigo_barra=cb).exists():
+            raise serializers.ValidationError({"codigo_barra": "Código de barras ya registrado."})
         attrs["_solicitud"] = sol
         return attrs
 
@@ -162,6 +170,16 @@ class MuestraRechazarSerializer(serializers.Serializer):
 class MuestraConservarSerializer(serializers.Serializer):
     ubicacion_actual = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class MuestraCambiarUbicacionSerializer(serializers.Serializer):
+    ubicacion = serializers.CharField()
+    observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_ubicacion(self, value):
+        if not (value or "").strip():
+            raise serializers.ValidationError("La ubicación es obligatoria.")
+        return value.strip()
 
 
 class MuestraDescartarSerializer(serializers.Serializer):

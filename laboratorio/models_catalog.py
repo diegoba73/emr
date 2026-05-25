@@ -233,6 +233,7 @@ class EventoMuestra(models.Model):
         ("CONSERVADA", "Conservada"),
         ("DESCARTADA", "Descartada"),
         ("CANCELADA", "Cancelada"),
+        ("CAMBIO_UBICACION", "Cambio de ubicación"),
         ("ACTUALIZADA", "Actualización administrativa"),
     ]
 

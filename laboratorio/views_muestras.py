@@ -22,6 +22,7 @@ from laboratorio.models_catalog import AreaLaboratorio, Muestra, SeccionLaborato
 from laboratorio.muestra_estado import (
     MuestraAccionError,
     aplicar_cancelar,
+    aplicar_cambiar_ubicacion,
     aplicar_conservar,
     aplicar_descartar,
     aplicar_rechazar,
@@ -32,7 +33,9 @@ from laboratorio.muestra_estado import (
 )
 from laboratorio.serializers_muestras import (
     AreaLaboratorioSerializer,
+    EventoMuestraSerializer,
     MuestraCancelarSerializer,
+    MuestraCambiarUbicacionSerializer,
     MuestraConservarSerializer,
     MuestraCreateSerializer,
     MuestraDescartarSerializer,
@@ -146,6 +149,7 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
                     tipo_muestra_id=vd["tipo_muestra_id"],
                     tipo_contenedor_id=vd.get("tipo_contenedor_id"),
                     observaciones=vd.get("observaciones") or "",
+                    codigo_barra=vd.get("codigo_barra"),
                     actor=request.user,
                     view="MuestraTransaccionalViewSet.create",
                 )
@@ -257,6 +261,25 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
             "MuestraTransaccionalViewSet.descartar",
             observaciones=ser.validated_data.get("observaciones") or "",
         )
+
+    @action(detail=True, methods=["post"], url_path="cambiar-ubicacion")
+    def cambiar_ubicacion(self, request, pk=None):
+        ser = MuestraCambiarUbicacionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        return self._run_accion(
+            request,
+            pk,
+            aplicar_cambiar_ubicacion,
+            "MuestraTransaccionalViewSet.cambiar_ubicacion",
+            ubicacion_actual=ser.validated_data.get("ubicacion") or "",
+            observaciones=ser.validated_data.get("observaciones") or "",
+        )
+
+    @action(detail=True, methods=["get"], url_path="eventos")
+    def eventos(self, request, pk=None):
+        muestra = self.get_object()
+        qs = muestra.eventos.all().order_by("-fecha", "-id")
+        return Response(EventoMuestraSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="cancelar")
     def cancelar(self, request, pk=None):

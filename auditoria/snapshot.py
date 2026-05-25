@@ -29,6 +29,9 @@ _CLINICAL_FILE_MODEL_LABELS = frozenset({
 # Campos de texto clínico no deben persistirse completos en auditoría (C6.4.1).
 _REDACT_LONG_TEXT_FIELDS = frozenset({
     ('estudios.InformeEstudioComplementario', 'texto'),
+    ('laboratorio.Muestra', 'observaciones'),
+    ('laboratorio.Muestra', 'motivo_rechazo'),
+    ('laboratorio.EventoMuestra', 'observaciones'),
 })
 
 

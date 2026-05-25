@@ -39,6 +39,7 @@ def crear_muestra(
     observaciones: str,
     actor: AbstractUser | None,
     view: str,
+    codigo_barra: str | None = None,
 ) -> Muestra:
     """Crea muestra en PENDIENTE_TOMA, evento CREADA y auditoría CREATE."""
     from auditoria.audit_service import log_create
@@ -51,11 +52,12 @@ def crear_muestra(
             tipo_contenedor_id=tipo_contenedor_id,
             observaciones=observaciones or "",
             estado="PENDIENTE_TOMA",
+            codigo_barra=(codigo_barra or "").strip() or None,
         )
         muestra.save()
         meta = _base_metadata(
             muestra,
-            accion="CREADA",
+            accion="muestra_create",
             view=view,
             actor=actor,
             estado_anterior="",
@@ -88,7 +90,6 @@ def _base_metadata(
     meta: dict[str, Any] = {
         "accion": accion,
         "muestra_id": muestra.pk,
-        "codigo_barra": muestra.codigo_barra,
         "solicitud_id": sol.pk,
         "numero_solicitud": sol.numero,
         "estado_anterior": estado_anterior,
@@ -191,7 +192,7 @@ def aplicar_tomar(
         _maybe_coordina_solicitud_toma_muestra(sol, actor=actor, view=view, muestra=muestra)
         meta = _base_metadata(
             muestra,
-            accion="TOMADA",
+            accion="muestra_tomar",
             view=view,
             actor=actor,
             estado_anterior=prev,
@@ -237,7 +238,7 @@ def aplicar_recibir(
         muestra.save()
         meta = _base_metadata(
             muestra,
-            accion="RECIBIDA",
+            accion="muestra_recibir",
             view=view,
             actor=actor,
             estado_anterior=prev,
@@ -333,20 +334,21 @@ def aplicar_rechazar(
         muestra.save()
         meta = _base_metadata(
             muestra,
-            accion="RECHAZADA",
+            accion="muestra_rechazar",
             view=view,
             actor=actor,
             estado_anterior=prev,
             estado_nuevo=muestra.estado,
         )
+        meta["motivo_presente"] = bool(motivo_rechazo.strip())
         _append_evento(
             muestra,
             accion="RECHAZADA",
             estado_anterior=prev,
             estado_nuevo=muestra.estado,
             actor=actor,
-            observaciones=observaciones or motivo_rechazo,
-            metadata=meta,
+            observaciones=observaciones or "",
+            metadata={**meta, "motivo_presente": True},
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
         return muestra
@@ -378,7 +380,7 @@ def aplicar_conservar(
         muestra.save()
         meta = _base_metadata(
             muestra,
-            accion="CONSERVADA",
+            accion="muestra_conservar",
             view=view,
             actor=actor,
             estado_anterior=prev,
@@ -421,7 +423,7 @@ def aplicar_descartar(
         muestra.save()
         meta = _base_metadata(
             muestra,
-            accion="DESCARTADA",
+            accion="muestra_descartar",
             view=view,
             actor=actor,
             estado_anterior=prev,
@@ -479,6 +481,53 @@ def aplicar_cancelar(
             estado_nuevo=muestra.estado,
             actor=actor,
             observaciones=observaciones or motivo,
+            metadata=meta,
+        )
+        _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        return muestra
+
+
+def aplicar_cambiar_ubicacion(
+    muestra_id: int,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+    ubicacion_actual: str,
+    observaciones: str = "",
+) -> Muestra:
+    ubicacion = (ubicacion_actual or "").strip()
+    if not ubicacion:
+        raise MuestraAccionError("La ubicación es obligatoria.")
+    with transaction.atomic():
+        muestra = Muestra.objects.select_for_update().select_related("solicitud").get(pk=muestra_id)
+        prev = muestra.estado
+        if prev in _TERMINAL_NO_OP:
+            raise MuestraAccionError("No se puede cambiar ubicación en estado terminal.")
+        if prev not in ("RECIBIDA", "CONSERVADA"):
+            raise MuestraAccionError(
+                "Solo se puede cambiar ubicación de muestras recibidas o conservadas."
+            )
+        before = safe_model_snapshot(muestra)
+        muestra.ubicacion_actual = ubicacion
+        if observaciones:
+            muestra.observaciones = (muestra.observaciones + "\n" if muestra.observaciones else "") + observaciones
+        muestra.save()
+        meta = _base_metadata(
+            muestra,
+            accion="muestra_cambiar_ubicacion",
+            view=view,
+            actor=actor,
+            estado_anterior=prev,
+            estado_nuevo=muestra.estado,
+        )
+        meta["ubicacion_nueva"] = ubicacion
+        _append_evento(
+            muestra,
+            accion="CAMBIO_UBICACION",
+            estado_anterior=prev,
+            estado_nuevo=muestra.estado,
+            actor=actor,
+            observaciones=observaciones,
             metadata=meta,
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)

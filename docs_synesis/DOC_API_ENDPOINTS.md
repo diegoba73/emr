@@ -295,11 +295,15 @@ Prefijos **`/api/lab/...`** y alias **`/api/laboratorio/...`** (mismos ViewSets)
 | `.../{id}/rechazar/` | POST | admin/lab (`motivo_rechazo` obligatorio) |
 | `.../{id}/conservar/` | POST | admin/lab |
 | `.../{id}/descartar/` | POST | admin/lab |
+| `.../{id}/cambiar-ubicacion/` | POST | admin/lab (`ubicacion` obligatoria; estados `RECIBIDA`/`CONSERVADA`) |
 | `.../{id}/cancelar/` | POST | admin/lab |
+| `.../{id}/eventos/` | GET | admin/lab/médico (médico: solo muestras de órdenes propias) |
 
 **DELETE** en catálogos y muestras: no soportado / 405 u objeto no expuesto a borrado (desactivar catálogos con `activo=false`).
 
-Contrato de creación de muestra (JSON): `solicitud_id`, `tipo_muestra_id`, `tipo_contenedor_id` (opcional), `observaciones` (opcional). El paciente se deriva de la solicitud (no se acepta paciente inconsistente).
+Contrato de creación de muestra (JSON): `solicitud_id`, `tipo_muestra_id`, `tipo_contenedor_id` (opcional), `codigo_barra` (opcional; auto `MUE-YYYY-NNNNNN` si omitido), `observaciones` (opcional). El paciente se deriva de la solicitud (no se acepta paciente inconsistente).
+
+**B1 [IMPLEMENTADO]:** trazabilidad física vía `Muestra` + `EventoMuestra`; `tomar-muestra` de orden (Fase A) coexiste sin crear tubos automáticamente.
 
 ---
 

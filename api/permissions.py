@@ -342,8 +342,11 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
             "conservar",
             "descartar",
             "cancelar",
+            "cambiar_ubicacion",
         ):
             return role in ("admin", "laboratorio")
+        if action == "eventos":
+            return role in ("admin", "laboratorio", "medico")
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -355,7 +358,7 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
         action = getattr(view, "action", None)
         solicitud = getattr(obj, "solicitud", None)
         if role == "medico":
-            if action not in ("retrieve", "list"):
+            if action not in ("retrieve", "list", "eventos"):
                 return False
             mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
             return bool(mi and getattr(mi, "user_id", None) == request.user.id)

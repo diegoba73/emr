@@ -262,3 +262,52 @@ class TestLimsMuestrasB1API(TestCase):
         m = Muestra.objects.get(pk=mid)
         self.assertEqual(m.estado, "PENDIENTE_TOMA")
         self.assertIn("x", m.observaciones)
+
+    def test_cambiar_ubicacion_requiere_ubicacion(self):
+        mid = self._crear_muestra()
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/tomar/", {}, format="json")
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/recibir/", {}, format="json")
+        r = self.client.post(
+            f"/api/lab/muestras-transaccionales/{mid}/cambiar-ubicacion/",
+            {},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cambiar_ubicacion_desde_recibida(self):
+        mid = self._crear_muestra()
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/tomar/", {}, format="json")
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/recibir/", {}, format="json")
+        r = self.client.post(
+            f"/api/lab/muestras-transaccionales/{mid}/cambiar-ubicacion/",
+            {"ubicacion": "Estante B2"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        m = Muestra.objects.get(pk=mid)
+        self.assertEqual(m.ubicacion_actual, "Estante B2")
+        self.assertEqual(m.estado, "RECIBIDA")
+        self.assertTrue(
+            EventoMuestra.objects.filter(muestra_id=mid, accion="CAMBIO_UBICACION").exists()
+        )
+
+    def test_listar_eventos_muestra(self):
+        mid = self._crear_muestra()
+        r = self.client.get(f"/api/lab/muestras-transaccionales/{mid}/eventos/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(r.json()), 1)
+
+    def test_crear_muestra_con_codigo_barra_custom(self):
+        self.client.force_authenticate(self.lab)
+        cb = f"EXT-{self.suf}-001"
+        r = self.client.post(
+            "/api/lab/muestras-transaccionales/",
+            {
+                "solicitud_id": self.solicitud.pk,
+                "tipo_muestra_id": self.tm.pk,
+                "codigo_barra": cb,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertEqual(r.json()["codigo_barra"], cb)
