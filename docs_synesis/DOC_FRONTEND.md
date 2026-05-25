@@ -186,3 +186,29 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | `apiService.ts` | Errores genéricos; `getArchivosPorConsulta` filtra por `consulta` |
 | `DocumentosAdjuntos.tsx` | Descarga vía `apiService.downloadDocumento`; sin URL media directa |
 | `types/index.ts` | `download_url`, `archivo_nombre`, `archivo_size` |
+
+### Estudios complementarios EMR (C6.4.2) [IMPLEMENTADO]
+
+| Ruta | Componente |
+|------|------------|
+| `/estudios-complementarios` | `EstudiosComplementarios.tsx` |
+| `/estudios-complementarios/:id` | `EstudioComplementarioDetalle.tsx` |
+
+**Servicios:** `frontend/src/services/estudiosComplementariosApi.ts` (re-export opcional desde `apiService.ts`).
+
+**Tipos:** `frontend/src/types/estudios.ts`.
+
+**Permisos UI:** `frontend/src/modules/estudios/permissions.ts`.
+
+| Rol | Módulo sidebar | Acciones visibles |
+|-----|----------------|-----------------|
+| admin / superuser | Sí | CRUD metadata, estados, informes, validar, rectificar, archivos |
+| médico | Sí | Crear, marcar realizado, informar, rectificar; **sin validar** |
+| paciente | Sí | Solo estudios **ENTREGADO**; descarga si backend permite |
+| secretaría / enfermería / laboratorio | **No** | — |
+
+**Reglas UI:** estado solo lectura (chip); acciones POST; sin `/media/`; descarga blob; rectificación desde ENTREGADO (emitir → INFORMADO).
+
+**Deuda:** visor/PACS; subida directa de archivo desde estudio (solo asociar `ArchivoMedico` existente); tests E2E dedicados.
+
+**Validación (mayo 2026):** `npm exec -- tsc --noEmit` OK; `npm run build` OK.

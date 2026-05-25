@@ -253,6 +253,8 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - Validación informe: solo admin/superuser; médico puede informar (emitir) pero no validar (C6.4.1-A).
 - PATCH: no permite cambiar `paciente_id` ni clave `paciente` (ningún rol).
 - Rectificación desde ENTREGADO: auditoría `estudio_rectificacion_emitir` + `estudio_estado_cambio` (sin PHI).
+
+**Frontend C6.4.2:** Sidebar oculto para secretaría/enfermería/laboratorio; paciente solo ENTREGADO; validar informe solo admin en UI (alineado a backend).
 - **Auditoría:** `estudio_complementario_create|update`, `estudio_estado_cambio`, `estudio_archivo_asociar|download`, `estudio_informe_create|emitir|validar|rectificar`, `estudio_anular|entregar`; `entity_repr` técnico; sin texto completo de informe ni filename/path.
 - **DELETE:** 405 en ambos viewsets.
 - Regla detallada: `docs_synesis/reglas/documentos-e-imagenes.md`.

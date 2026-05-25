@@ -70,7 +70,7 @@ Ver `reglas/documentos-e-imagenes.md`.
 5. Rectificación (estudio VALIDADO/ENTREGADO): nuevo borrador no vigente → emitir (INFORMADO; desde ENTREGADO usa reapertura controlada C6.4.1-B) → validar (único vigente) → `entregar` si vuelve a ENTREGADO.
 6. **PATCH:** no cambia `paciente_id` ni `estado`.
 
-No LIMS. No PACS/visor. Frontend: C6.4.2.
+No LIMS. No PACS/visor. **Frontend C6.4.2 [IMPLEMENTADO]:** listado, detalle, acciones e informes en `/estudios-complementarios`.
 
 ---
 

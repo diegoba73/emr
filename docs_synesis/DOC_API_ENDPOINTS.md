@@ -133,6 +133,8 @@ Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
 No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
+**Frontend (C6.4.2):** consumido desde `estudiosComplementariosApi.ts` — rutas listadas arriba; descarga `.../archivos/{archivo_estudio_id}/download/` con `responseType: blob`.
+
 ## Documentos EMR (`/api/documentos/`) — C6.2
 
 | Método | Ruta | Notas |
