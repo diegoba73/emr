@@ -95,6 +95,8 @@ Validación de informe: **solo admin/superuser** en C6.4.1.
 
 **Frontend C6.4.2 [IMPLEMENTADO]:** rutas `/estudios-complementarios`, detalle con acciones por estado, informes y descarga protegida (blob). Sin visor ni `/media/`.
 
+**[DEUDA]** Los títulos o nombres visibles de archivos existentes pueden contener PHI si el usuario los cargó así. El sistema evita exponer `/media/` y paths en API/auditoría, pero una fase futura debe normalizar nombres de descarga/visualización o imponer nombres seguros en servidor.
+
 Auditoría: `estudio_complementario_*`, `estudio_estado_cambio`, `estudio_archivo_*`, `estudio_informe_*` — sin filename/path/texto completo.
 
 ## Deuda (post C6.4.1)

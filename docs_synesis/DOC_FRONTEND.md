@@ -1,30 +1,34 @@
 # DOC_FRONTEND — Frontend real del repositorio
 
 **Fecha de generación:** 30 de abril de 2026  
+**Última actualización:** mayo 2026 (C6.4.2 / C6.4.2-A)
 
-**Alcance:** Descripción del frontend **presente en el repositorio**; no se asume código React/Vue fuera del tree.
+> **Nota de actualización:** Las secciones históricas más abajo describían un escaneo previo del repo **sin** SPA en el árbol principal. Hoy el frontend vive en el **submódulo Git `frontend/`** (React + TypeScript + MUI). Las pantallas implementadas hasta **C6.4.2** (estudios complementarios, LIMS microbiología, turnos C5, archivos C6.2, etc.) se documentan en las secciones posteriores de este archivo — no inferir ausencia de UI por el texto legacy.
 
-**Fuentes revisadas:** búsqueda global de `package.json`, `*.tsx`, `*.jsx`, `frontend/src`; `backup_documentacion/*.js`; `synesis/settings.py` (CORS, CSRF para `localhost:3000`).
+**Alcance:** Descripción del frontend en submódulo `frontend/` y contratos API consumidos.
 
----
-
-## Stack frontend
-
-**No detectado en el código actual:** no hay `package.json` en la raíz ni carpeta `frontend/` con aplicación SPA.
-
-El backend está **preparado** para un cliente en `http://localhost:3000` (CORS, `CSRF_TRUSTED_ORIGINS`, comentarios en `REST_FRAMEWORK` sobre sesión/cookies). Eso indica intención de un frontend separado; **no está incluido en este repo**.
+**Fuentes revisadas:** `frontend/package.json`, `frontend/src`, `synesis/settings.py` (CORS/CSRF).
 
 ---
 
-## Estructura de carpetas
+## Stack frontend (submódulo `frontend/`)
 
-- **`backup_documentacion/`:** scripts Node (`axios`, `fetch`) que prueban login, turnos, etc. contra `http://127.0.0.1:8000` u otros puertos — **no son la aplicación de producción**, son artefactos de depuración/documentación histórica.
+**Estado actual:** aplicación SPA en submódulo `frontend/` (no en la raíz del monorepo padre).
+
+El backend está preparado para `http://localhost:3000` (CORS, cookies de sesión). El cliente de producción es el submódulo `frontend/`.
 
 ---
 
-## Rutas / páginas / componentes
+## Estructura de carpetas (histórico + actual)
 
-**No aplicable:** sin árbol `src/` de aplicación.
+- **`frontend/` (submódulo):** aplicación React (`src/pages`, `src/modules`, `src/services`).
+- **`backup_documentacion/`:** scripts Node de prueba API — no son la SPA de producción.
+
+---
+
+## Rutas / páginas / componentes (resumen)
+
+Ver secciones **Frontend EMR+LIMS (submódulo `frontend/`)** y **Estudios complementarios (C6.4.2)** más abajo.
 
 ---
 
@@ -212,3 +216,5 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 **Deuda:** visor/PACS; subida directa de archivo desde estudio (solo asociar `ArchivoMedico` existente); tests E2E dedicados.
 
 **Validación (mayo 2026):** `npm exec -- tsc --noEmit` OK; `npm run build` OK.
+
+**C6.4.2-A:** `UpdateEstudioComplementarioPayload` tipado aparte de create (sin `paciente_id` ni `estado` en PATCH). Jest/E2E dedicados: deuda.
