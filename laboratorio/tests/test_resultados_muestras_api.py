@@ -1,6 +1,7 @@
 """
 Tests API cargar-resultados / validar con muestra_id (LIMS Fase B2).
 """
+import json
 import uuid
 
 import pytest
@@ -428,6 +429,89 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         ).order_by("-id").first()
         assert ev is not None
         assert "codigo_barra" not in (ev.metadata or {})
+
+    def test_cargar_resultados_con_muestra_no_audita_codigo_barra_ni_valor_clinico(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tipo_muestra.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="test",
+            codigo_barra="MUE-SENSIBLE-B2-001",
+        )
+        aplicar_tomar(m.pk, actor=None, view="t")
+        aplicar_recibir(m.pk, actor=None, view="t")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+                {
+                    "resultados": [
+                        {
+                            "id": res.pk,
+                            "valor": "13.5-SENSIBLE",
+                            "valor_numerico": "13.5",
+                            "unidad": "mg/dL",
+                            "muestra_id": m.pk,
+                        }
+                    ]
+                },
+                format="json",
+            )
+
+        acciones = {
+            "cargar_resultados",
+            "resultado_muestra_asociar",
+            "muestra_procesamiento",
+        }
+        events = AuditEvent.objects.filter(module="laboratorio").order_by("-id")
+        relevant = [
+            ev
+            for ev in events
+            if (ev.metadata or {}).get("accion") in acciones
+            or ev.entity_type == ResultadoExamen._meta.label
+        ]
+        assert relevant, "Se esperaban eventos de auditoría B2"
+
+        blob = json.dumps(
+            [
+                {
+                    "metadata": ev.metadata,
+                    "before_state": ev.before_state,
+                    "after_state": ev.after_state,
+                }
+                for ev in relevant
+            ],
+            ensure_ascii=False,
+            default=str,
+        )
+
+        assert "MUE-SENSIBLE-B2-001" not in blob
+        assert "13.5-SENSIBLE" not in blob
+        assert '"valor": "13.5-SENSIBLE"' not in blob
+        assert '"valor_numerico": "13.5"' not in blob
+        assert '"unidad": "mg/dL"' not in blob
+
+        resultado_ev = AuditEvent.objects.filter(
+            entity_type=ResultadoExamen._meta.label,
+            entity_id=str(res.pk),
+            module="laboratorio",
+        ).order_by("-id").first()
+        assert resultado_ev is not None
+        meta = resultado_ev.metadata or {}
+        assert meta.get("valor_presente") is True
+        assert meta.get("muestra_id") == m.pk
+        assert meta.get("solicitud_id") == sol.pk
+        assert meta.get("resultado_id") == res.pk
+        assert meta.get("accion") in ("cargar_resultados", "resultado_muestra_asociar")
+        assert "codigo_barra" not in meta
+        assert "valor" not in meta
+        assert "valor_numerico" not in meta
+
+        if resultado_ev.after_state:
+            assert resultado_ev.after_state.get("valor_obtenido") == "<valor clínico redactado>"
 
     def test_rechazar_muestra_con_resultado_asociado_falla(self):
         sol, res = self._solicitud_en_proceso_con_resultado()

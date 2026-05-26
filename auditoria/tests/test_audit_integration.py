@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 import pytest
@@ -6,6 +7,9 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from auditoria.models import AuditEvent
+from auditoria.snapshot import safe_model_snapshot
+from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
+from laboratorio.muestra_estado import aplicar_recibir, aplicar_tomar, crear_muestra
 from medicos.models import Medico
 from pacientes.models import Paciente
 from solicitudes.models import Solicitud as SolicitudEMR
@@ -122,6 +126,64 @@ def test_solicitud_create_and_state_change_generates_audit_events():
     assert r2.status_code == 200
     ev2 = AuditEvent.objects.filter(entity_type="solicitudes.Solicitud", entity_id=str(sol_id), action="UPDATE").order_by("-id").first()
     assert ev2 is not None
+
+
+@pytest.mark.django_db
+def test_resultado_examen_snapshot_redacta_valor_clinico():
+    pac = Paciente.objects.create(dni="B2A001", nombre="T", apellido="P")
+    tm = TipoMuestra.objects.create(codigo="TM_B2A", nombre="Sangre", activo=True)
+    te = TipoExamen.objects.create(
+        codigo="GLU_B2A",
+        nombre="Glucosa",
+        tipo_muestra_requerida=tm,
+        precio=1,
+        activo=True,
+    )
+    med = Medico.objects.create(matricula="MB2A", nombre="Dr", apellido="X")
+    sol = SolicitudExamen.objects.create(
+        paciente=pac,
+        medico_interno=med,
+        origen_solicitud="EMR",
+        estado="EN_PROCESO",
+    )
+    sol.tipos_examen.add(te)
+    m = crear_muestra(
+        solicitud=sol,
+        tipo_muestra_id=tm.pk,
+        tipo_contenedor_id=None,
+        observaciones="",
+        actor=None,
+        view="test",
+        codigo_barra="MUE-SENSIBLE-B2A-001",
+    )
+    aplicar_tomar(m.pk, actor=None, view="t")
+    aplicar_recibir(m.pk, actor=None, view="t")
+
+    res = ResultadoExamen.objects.create(
+        solicitud=sol,
+        tipo_examen=te,
+        valor_obtenido="VALOR-SENSIBLE-123",
+        valor_numerico="13.5",
+        unidad="mg/dL",
+        rango_referencia_snapshot="70-100",
+        observaciones="Comentario clínico libre",
+        muestra=m,
+        es_patologico=True,
+    )
+
+    snap = safe_model_snapshot(res)
+    raw = json.dumps(snap, ensure_ascii=False, default=str)
+
+    assert "VALOR-SENSIBLE-123" not in raw
+    assert "Comentario clínico libre" not in raw
+    assert "MUE-SENSIBLE-B2A-001" not in raw
+    assert snap.get("valor_obtenido") == "<valor clínico redactado>"
+    assert snap.get("valor_numerico") == "<valor clínico redactado>"
+    assert snap.get("observaciones") == "<valor clínico redactado>"
+    assert snap.get("solicitud_id") == sol.pk
+    assert snap.get("muestra_id") == m.pk
+    assert snap.get("tipo_examen_id") == te.pk
+    assert snap.get("es_patologico") is True
 
 
 @pytest.mark.django_db

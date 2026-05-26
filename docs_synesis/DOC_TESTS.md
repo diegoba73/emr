@@ -153,7 +153,8 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 
 **Fase B0/B1:** `laboratorio/tests/test_muestras_models.py` (catálogos, `crear_muestra`, transiciones y coordinación solicitud); `laboratorio/tests/test_muestras_api.py` (permisos catálogo, CRUD muestra, acciones, PATCH `estado` ignorado, auditoría con `captureOnCommitCallbacks`).
 
-**Fase B2 [IMPLEMENTADO]:** `test_resultados_muestras_models.py` (FK, integridad, `PROTECT`, no rechazar con resultados); `test_resultados_muestras_api.py` (carga con/sin `muestra_id`, CONSERVADA→EN_PROCESO, `PROCESAMIENTO`, auditoría sin `codigo_barra`, rechazo con resultados, resultado validado sin cambio de muestra, permisos).
+**Fase B2 [IMPLEMENTADO]:** `test_resultados_muestras_models.py` (FK, integridad, `PROTECT`, no rechazar con resultados); `test_resultados_muestras_api.py` (carga con/sin `muestra_id`, CONSERVADA→EN_PROCESO, `PROCESAMIENTO`, rechazo con resultados, resultado validado sin cambio de muestra, permisos).
+**Fase B2-A [IMPLEMENTADO]:** `auditoria/tests/test_audit_integration.py` (`test_resultado_examen_snapshot_redacta_valor_clinico`); `test_resultados_muestras_api.py` (`test_cargar_resultados_con_muestra_no_audita_codigo_barra_ni_valor_clinico` — metadata y snapshots sin PHI/codigo_barra).
 
 **Fase B4.1:** `laboratorio/tests/test_resultados_clinicos_models.py` (TipoExamen rangos/críticos/sección; ResultadoExamen numérico, snapshots, patológico/crítico, pendiente); `laboratorio/tests/test_resultados_clinicos_api.py` (payload viejo, `valor_numerico`, unidad default, cálculo patológico/crítico, validar, permisos laboratorio/médico).
 

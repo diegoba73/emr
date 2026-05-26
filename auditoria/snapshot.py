@@ -31,8 +31,24 @@ _REDACT_LONG_TEXT_FIELDS = frozenset({
     ('estudios.InformeEstudioComplementario', 'texto'),
     ('laboratorio.Muestra', 'observaciones'),
     ('laboratorio.Muestra', 'motivo_rechazo'),
+    ('laboratorio.Muestra', 'codigo_barra'),
     ('laboratorio.EventoMuestra', 'observaciones'),
 })
+
+# Resultado de laboratorio: valores y referencias clínicas (LIMS B2-A).
+_REDACT_RESULTADO_EXAMEN_FIELDS = frozenset({
+    'valor_obtenido',
+    'valor_numerico',
+    'unidad',
+    'rango_referencia_snapshot',
+    'rango_min_snapshot',
+    'rango_max_snapshot',
+    'valor_critico_min_snapshot',
+    'valor_critico_max_snapshot',
+    'observaciones',
+})
+
+_CLINICAL_VALUE_PLACEHOLDER = '<valor clínico redactado>'
 
 
 class SnapshotTooLarge(ValidationError):
@@ -139,6 +155,13 @@ def safe_model_snapshot(
         label = getattr(opts, 'label', '')
         if (label, field.name) in _REDACT_LONG_TEXT_FIELDS and value:
             state[field.name] = '<texto clínico omitido>'
+            continue
+
+        if label == 'laboratorio.ResultadoExamen' and field.name in _REDACT_RESULTADO_EXAMEN_FIELDS:
+            if value is not None and value != '':
+                state[field.name] = _CLINICAL_VALUE_PLACEHOLDER
+            elif include_nulls:
+                state[field.name] = None
             continue
 
         state[field.name] = to_jsonable(value)
