@@ -218,7 +218,8 @@ Inferidos por ViewSet en cada app; listados detallados en serializers de `pacien
 
 ## Payload / respuesta
 
-- Crear orden lab: cuerpo con `paciente_id`, `examenes_ids`, `paneles_ids`, etc. → respuesta `SolicitudExamenSerializer` (resultados anidados incluyen **`muestra_id`** lectura, Fase B2).
+- Crear orden lab: cuerpo con `paciente_id`, `examenes_ids`, `paneles_ids`, etc. → respuesta `SolicitudExamenSerializer` (resultados anidados incluyen **`muestra_id`**, **`muestra_estado`**, **`tipo_muestra_nombre`** — Fase B2).
+- **`POST …/solicitudes/{id}/cargar-resultados/`** — cada ítem puede incluir opcionalmente **`muestra_id`** (misma orden; muestra en RECIBIDA/CONSERVADA/EN_PROCESO). Sin `muestra_id` = comportamiento legacy.
 - Actualizar orden lab (`PATCH`/`PUT`): campos editables según serializer; **`estado` ignorado/no escribible** desde API estándar.
 - Acciones `tomar-muestra`, `cancelar`, `marcar-entregado`: cuerpo típico `{}` (JSON vacío aceptable).
 - Crear atención: `{ "turno": <id>, "observaciones_generales": "..." }` → `AtencionSerializer`.

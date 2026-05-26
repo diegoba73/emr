@@ -35,6 +35,7 @@ api/              # agregación de rutas DRF + vistas legacy voluminosas (views.
 | `emr` | Signos vitales, documentos (modelos); parte de vistas en `api/views.py` |
 | `archivos_medicos` | Upload/listado archivos médicos con políticas por rol |
 | `estudios` | Estudios complementarios EMR (C6.4.1–C6.4.3): estados, informes versionados, constraint único vigente, descarga PDF protegida |
+| `laboratorio` | LIMS nativo: órdenes/resultados (Fase A), muestras transaccionales (B1), vínculo `ResultadoExamen.muestra` (B2) |
 | `api` | Router central, permisos compartidos, **archivo `views.py` muy grande** con ViewSets duplicados respecto a apps |
 | `solicitudes` | Solicitudes transversales + integración opcional LIMS |
 | `integracion_lims` | Cliente HTTP stub + modelos espejo; URLs webhook no montadas en raíz |

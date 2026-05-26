@@ -15,8 +15,10 @@ MUESTRA_ESTADOS_TERMINALES_SIN_RESULTADO = frozenset(
     {"RECHAZADA", "DESCARTADA", "CANCELADA"}
 )
 
-# Para cargar resultados vía API: solo material ya en laboratorio y en análisis.
-MUESTRA_ESTADOS_ACEPTADOS_CARGA_RESULTADO = frozenset({"RECIBIDA", "EN_PROCESO"})
+# Para cargar resultados vía API: material en laboratorio listo para procesar.
+MUESTRA_ESTADOS_ACEPTADOS_CARGA_RESULTADO = frozenset(
+    {"RECIBIDA", "CONSERVADA", "EN_PROCESO"}
+)
 
 # Al validar orden: resultado con muestra pendiente/tomada o terminal inválida bloquea.
 MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN = frozenset(
@@ -56,5 +58,5 @@ def assert_muestra_estado_carga_resultado(muestra: Muestra) -> None:
     """Regla operativa: solo RECIBIDA o EN_PROCESO al asignar muestra al cargar valores."""
     if muestra.estado not in MUESTRA_ESTADOS_ACEPTADOS_CARGA_RESULTADO:
         raise ValueError(
-            "La muestra debe estar en estado RECIBIDA o EN_PROCESO para asociar un resultado."
+            "La muestra debe estar en estado RECIBIDA, CONSERVADA o EN_PROCESO para asociar un resultado."
         )

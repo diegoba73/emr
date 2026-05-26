@@ -171,6 +171,28 @@ class TestResultadoExamenMuestra:
                 muestra=m,
             ).save()
 
+    def test_no_rechazar_muestra_con_resultados(self, base):
+        from laboratorio.muestra_estado import MuestraAccionError, aplicar_rechazar
+
+        m = crear_muestra(
+            solicitud=base["sol"],
+            tipo_muestra_id=base["tm"].pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="test",
+        )
+        aplicar_tomar(m.pk, actor=None, view="t")
+        aplicar_recibir(m.pk, actor=None, view="t")
+        ResultadoExamen.objects.create(
+            solicitud=base["sol"],
+            tipo_examen=base["te"],
+            valor_obtenido="10",
+            muestra=m,
+        )
+        with pytest.raises(MuestraAccionError):
+            aplicar_rechazar(m.pk, actor=None, view="t", motivo_rechazo="x")
+
     def test_protect_no_borrar_muestra_con_resultado(self, base):
         m = crear_muestra(
             solicitud=base["sol"],

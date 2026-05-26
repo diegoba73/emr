@@ -229,6 +229,7 @@ class EventoMuestra(models.Model):
         ("TOMADA", "Tomada"),
         ("RECIBIDA", "Recibida"),
         ("EN_PROCESO", "En proceso"),
+        ("PROCESAMIENTO", "Inicio de procesamiento técnico"),
         ("RECHAZADA", "Rechazada"),
         ("CONSERVADA", "Conservada"),
         ("DESCARTADA", "Descartada"),

@@ -262,22 +262,22 @@ def aplicar_iniciar_proceso(
     actor: AbstractUser | None,
     view: str,
     observaciones: str = "",
+    resultado_id: int | None = None,
 ) -> Muestra:
     """
-    Transición controlada RECIBIDA → EN_PROCESO (LIMS Fase B2.1).
+    Transición RECIBIDA/CONSERVADA → EN_PROCESO (LIMS Fase B2).
 
     - Idempotente: si la muestra ya está EN_PROCESO, no genera evento ni auditoría.
-    - Disparada típicamente desde la carga del primer resultado con muestra asociada.
-    - Otros estados → MuestraAccionError.
+    - Disparada desde cargar-resultados al asociar el primer resultado.
     """
     with transaction.atomic():
         muestra = Muestra.objects.select_for_update().select_related("solicitud").get(pk=muestra_id)
         prev = muestra.estado
         if prev == "EN_PROCESO":
             return muestra
-        if prev != "RECIBIDA":
+        if prev not in ("RECIBIDA", "CONSERVADA"):
             raise MuestraAccionError(
-                "Solo se puede iniciar el proceso de una muestra recibida."
+                "Solo se puede iniciar el procesamiento de una muestra recibida o conservada."
             )
         before = safe_model_snapshot(muestra)
         muestra.estado = "EN_PROCESO"
@@ -286,15 +286,17 @@ def aplicar_iniciar_proceso(
         muestra.save()
         meta = _base_metadata(
             muestra,
-            accion="EN_PROCESO",
+            accion="muestra_procesamiento",
             view=view,
             actor=actor,
             estado_anterior=prev,
             estado_nuevo=muestra.estado,
         )
+        if resultado_id is not None:
+            meta["resultado_id"] = resultado_id
         _append_evento(
             muestra,
-            accion="EN_PROCESO",
+            accion="PROCESAMIENTO",
             estado_anterior=prev,
             estado_nuevo=muestra.estado,
             actor=actor,
@@ -317,6 +319,10 @@ def aplicar_rechazar(
         raise MuestraAccionError("El motivo de rechazo es obligatorio.")
     with transaction.atomic():
         muestra = Muestra.objects.select_for_update().select_related("solicitud").get(pk=muestra_id)
+        if muestra.resultados.exists():
+            raise MuestraAccionError(
+                "No se puede rechazar una muestra con resultados asociados."
+            )
         prev = muestra.estado
         if prev in ("DESCARTADA", "CANCELADA"):
             raise MuestraAccionError("No se puede rechazar una muestra descartada o cancelada.")

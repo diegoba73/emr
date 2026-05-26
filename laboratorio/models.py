@@ -465,6 +465,10 @@ class ResultadoExamen(models.Model):
         verbose_name_plural = "Resultados de Examen"
         ordering = ['tipo_examen__nombre']
         unique_together = ['solicitud', 'tipo_examen']  # Un resultado por tipo de examen por solicitud
+        indexes = [
+            models.Index(fields=['muestra']),
+            models.Index(fields=['solicitud', 'muestra']),
+        ]
 
     def __str__(self):
         return f"{self.solicitud.numero} - {self.tipo_examen.nombre}: {self.valor_obtenido}"
@@ -478,6 +482,17 @@ class ResultadoExamen(models.Model):
             raise ValidationError({
                 'solicitud': 'No se pueden cargar resultados en una solicitud cancelada.'
             })
+        if self.pk:
+            prev = (
+                ResultadoExamen.objects.filter(pk=self.pk)
+                .values("muestra_id", "validado_por_id")
+                .first()
+            )
+            if prev and prev.get("validado_por_id"):
+                if prev.get("muestra_id") != self.muestra_id:
+                    raise ValidationError(
+                        {"muestra": "No se puede cambiar la muestra de un resultado validado."}
+                    )
         if self.muestra_id:
             from laboratorio.resultado_muestra_validacion import (
                 validate_muestra_integridad_resultado,

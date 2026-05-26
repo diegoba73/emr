@@ -132,7 +132,19 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
         read_only=True
     )
     muestra_id = serializers.IntegerField(read_only=True, allow_null=True)
-    
+    muestra_estado = serializers.CharField(
+        source="muestra.estado",
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
+    tipo_muestra_nombre = serializers.CharField(
+        source="muestra.tipo_muestra.nombre",
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
+
     class Meta:
         model = ResultadoExamen
         fields = [
@@ -157,6 +169,8 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'fecha_validacion',
             'observaciones',
             'muestra_id',
+            'muestra_estado',
+            'tipo_muestra_nombre',
         ]
         read_only_fields = [
             'id',
@@ -168,6 +182,8 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'validado_por_nombre',
             'fecha_validacion',
             'muestra_id',
+            'muestra_estado',
+            'tipo_muestra_nombre',
         ]
 
 

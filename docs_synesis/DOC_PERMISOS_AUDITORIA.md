@@ -85,7 +85,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 
 - `auditoria/audit_service.py` — `log_create`, `log_update`, `log_delete` (usados en p. ej. turnos, laboratorio, solicitudes).
 
-**LIMS Fase B2 (`cargar_resultados`):** metadata de `log_update` sobre `ResultadoExamen` puede incluir `resultado_id`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, y si cambió la vínculación `muestra_anterior_id` / `muestra_nueva_id` (sin PHI de paciente en texto libre).
+**LIMS Fase B2 (`cargar_resultados`):** metadata de `log_update` sobre `ResultadoExamen` incluye `resultado_id`, `solicitud_id`, `muestra_id`, `muestra_estado_anterior`/`muestra_estado_nuevo` al iniciar procesamiento, `muestra_anterior_id`/`muestra_nueva_id` al asociar (`accion=resultado_muestra_asociar`); **sin `codigo_barra`**, sin valores clínicos del resultado (`valor_presente` booleano). Evento muestra `PROCESAMIENTO` + audit `muestra_procesamiento`.
 
 **LIMS Fase B4.1 (`cargar_resultados`):** metadata adicional: `tipo_examen_id`, `valor_anterior`/`valor_nuevo`, `valor_numerico_anterior`/`valor_numerico_nuevo`, `unidad_anterior`/`unidad_nueva`, `es_patologico_anterior`/`es_patologico_nuevo`, `es_critico_anterior`/`es_critico_nuevo`, `actor_id`. Si `es_critico_nuevo=True`, queda visible en `after_state` del snapshot del resultado.
 

@@ -11,7 +11,9 @@ from rest_framework.test import APITestCase
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from laboratorio.models_catalog import Muestra
 from laboratorio.muestra_estado import (
+    MuestraAccionError,
     aplicar_cancelar,
+    aplicar_conservar,
     aplicar_descartar,
     aplicar_recibir,
     aplicar_rechazar,
@@ -361,12 +363,12 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         m.refresh_from_db()
         assert m.estado == "EN_PROCESO"
         eventos = list(m.eventos.values_list("accion", "estado_anterior", "estado_nuevo"))
-        assert ("EN_PROCESO", "RECIBIDA", "EN_PROCESO") in eventos
+        assert ("PROCESAMIENTO", "RECIBIDA", "EN_PROCESO") in eventos
         assert AuditEvent.objects.filter(
             entity_type="laboratorio.Muestra",
             entity_id=str(m.pk),
             action="UPDATE",
-            metadata__estado_nuevo="EN_PROCESO",
+            metadata__accion="muestra_procesamiento",
         ).exists()
 
     def test_carga_segundo_resultado_misma_muestra_idempotente(self):
@@ -381,7 +383,7 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         assert r1.status_code == status.HTTP_200_OK
         m.refresh_from_db()
         assert m.estado == "EN_PROCESO"
-        eventos_iniciales = m.eventos.filter(accion="EN_PROCESO").count()
+        eventos_iniciales = m.eventos.filter(accion="PROCESAMIENTO").count()
         r2 = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
             {"resultados": [{"id": res.pk, "valor": "11", "muestra_id": m.pk}]},
@@ -391,7 +393,78 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         m.refresh_from_db()
         assert m.estado == "EN_PROCESO"
         # No se duplicó la transición.
-        assert m.eventos.filter(accion="EN_PROCESO").count() == eventos_iniciales
+        assert m.eventos.filter(accion="PROCESAMIENTO").count() == eventos_iniciales
+
+    def test_carga_con_muestra_conservada_pasa_a_en_proceso(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = self._muestra_recibida(sol)
+        aplicar_conservar(m.pk, actor=None, view="t", ubicacion_actual="H1")
+        m.refresh_from_db()
+        assert m.estado == "CONSERVADA"
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+                {"resultados": [{"id": res.pk, "valor": "8", "muestra_id": m.pk}]},
+                format="json",
+            )
+        assert r.status_code == status.HTTP_200_OK
+        m.refresh_from_db()
+        assert m.estado == "EN_PROCESO"
+        assert m.eventos.filter(accion="PROCESAMIENTO").exists()
+
+    def test_carga_auditoria_sin_codigo_barra(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = self._muestra_recibida(sol)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+                {"resultados": [{"id": res.pk, "valor": "7", "muestra_id": m.pk}]},
+                format="json",
+            )
+        ev = AuditEvent.objects.filter(
+            entity_type=ResultadoExamen._meta.label,
+            entity_id=str(res.pk),
+            module="laboratorio",
+        ).order_by("-id").first()
+        assert ev is not None
+        assert "codigo_barra" not in (ev.metadata or {})
+
+    def test_rechazar_muestra_con_resultado_asociado_falla(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m = self._muestra_recibida(sol)
+        res.muestra = m
+        res.save()
+        with pytest.raises(MuestraAccionError):
+            aplicar_rechazar(m.pk, actor=None, view="t", motivo_rechazo="x")
+
+    def test_carga_no_cambia_muestra_en_resultado_validado(self):
+        sol, res = self._solicitud_en_proceso_con_resultado()
+        m1 = self._muestra_recibida(sol)
+        res.muestra = m1
+        res.valor_obtenido = "50"
+        res.validado_por = self.user_admin
+        from django.utils import timezone
+
+        res.fecha_validacion = timezone.now()
+        res.save()
+        m2 = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tipo_muestra.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="test",
+        )
+        aplicar_tomar(m2.pk, actor=None, view="t")
+        aplicar_recibir(m2.pk, actor=None, view="t")
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": res.pk, "valor": "51", "muestra_id": m2.pk}]},
+            format="json",
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        res.refresh_from_db()
+        assert res.muestra_id == m1.pk
 
     def test_carga_muestra_tomada_no_recibida_400(self):
         sol, res = self._solicitud_en_proceso_con_resultado()
@@ -601,12 +674,13 @@ class TestValidarConMuestraAPI(APITestCase):
     def test_validar_releyendo_muestras_con_select_for_update(self):
         """B2.1: confirma que `validar` releyó el estado de las muestras dentro de la
         transacción (no usa el snapshot del momento de carga). Mutamos la muestra a
-        un estado inválido vía servicio justo antes de invocar `validar`.
+        un estado inválido justo antes de invocar `validar` (simula carrera/TOCTOU).
         """
         sol, m = self._solicitud_resultado_con_muestra()
-        # Mutación posterior fuera de cliente (simula otro proceso en otra sesión).
-        from laboratorio.muestra_estado import aplicar_rechazar
-        aplicar_rechazar(m.pk, actor=None, view="t", motivo_rechazo="hemolisis")
+        Muestra.objects.filter(pk=m.pk).update(
+            estado="RECHAZADA",
+            motivo_rechazo="hemolisis",
+        )
         self.client.force_authenticate(user=self.user_admin)
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
         assert r.status_code == status.HTTP_400_BAD_REQUEST
@@ -614,8 +688,6 @@ class TestValidarConMuestraAPI(APITestCase):
         assert sol.estado == "EN_PROCESO"
 
     def test_validar_muestra_rechazada_falla(self):
-        from laboratorio.muestra_estado import aplicar_rechazar
-
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
@@ -639,7 +711,10 @@ class TestValidarConMuestraAPI(APITestCase):
             valor_obtenido="100",
             muestra=m,
         )
-        aplicar_rechazar(m.pk, actor=None, view="t", motivo_rechazo="Calidad")
+        Muestra.objects.filter(pk=m.pk).update(
+            estado="RECHAZADA",
+            motivo_rechazo="Calidad",
+        )
         self.client.force_authenticate(user=self.user_admin)
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
         assert r.status_code == status.HTTP_400_BAD_REQUEST

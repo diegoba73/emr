@@ -238,7 +238,8 @@
 
 ### ResultadoExamen
 
-- FK Solicitud CASCADE; FK TipoExamen PROTECT; FK **`Muestra` opcional** (`null=True`, `blank=True`, `on_delete=PROTECT`, `related_name='resultados'`) — **Fase B2** (`laboratorio` migración `0004_lims_b2_resultado_muestra`).
+- FK Solicitud CASCADE; FK TipoExamen PROTECT; FK **`Muestra` opcional** (`null=True`, `blank=True`, `on_delete=PROTECT`, `related_name='resultados'`) — **Fase B2** (`0004_lims_b2_resultado_muestra`); índices `(muestra)` y `(solicitud, muestra)`.
+- **`EventoMuestra.accion`:** incluye **`PROCESAMIENTO`** (inicio técnico RECIBIDA/CONSERVADA → EN_PROCESO).
 - `valor_obtenido` (**puede estar vacío** mientras el resultado está pendiente: `blank=True`, `default=''` en modelo; migración `laboratorio` 0002+); `es_patologico`; FK User `validado_por`; `fecha_validacion`
 - **B4.1:** `valor_numerico` opcional; `unidad`; snapshots `rango_referencia_snapshot`, `rango_min_snapshot`, `rango_max_snapshot`, `valor_critico_min_snapshot`, `valor_critico_max_snapshot`; `es_critico`. Pendiente si `valor_obtenido` vacío aunque exista `valor_numerico`. Snapshots se fijan al cargar (no se recalculan al cambiar el catálogo).
 - `save()` llama `full_clean()` (incluye coherencia solicitud–paciente–muestra si hay FK muestra); la **validación de orden** en vista `validar` impide cerrar protocolos con valores vacíos y **rechaza** muestras en estado incompatible si el resultado tiene muestra asociada.

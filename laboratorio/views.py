@@ -220,9 +220,18 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         before_res = safe_model_snapshot(resultado)
                         prev_muestra_id = resultado.muestra_id
                         muestra_meta_aplica = False
-                        muestra_asociada_recibida_id: int | None = None
+                        muestra_iniciar_proceso_id: int | None = None
 
                         if "muestra_id" in resultado_item:
+                            if resultado.validado_por_id or resultado.fecha_validacion:
+                                return Response(
+                                    {
+                                        "error": (
+                                            "No se puede cambiar la muestra de un resultado validado."
+                                        )
+                                    },
+                                    status=status.HTTP_400_BAD_REQUEST,
+                                )
                             muestra_meta_aplica = True
                             raw_muestra_id = resultado_item.get("muestra_id")
                             if raw_muestra_id is None:
@@ -259,8 +268,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                                         status=status.HTTP_400_BAD_REQUEST,
                                     )
                                 resultado.muestra = muestra
-                                if muestra.estado == "RECIBIDA":
-                                    muestra_asociada_recibida_id = muestra.pk
+                                if muestra.estado in ("RECIBIDA", "CONSERVADA"):
+                                    muestra_iniciar_proceso_id = muestra.pk
 
                         try:
                             audit_estructurado = aplicar_carga_estructurada(
@@ -268,17 +277,30 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                                 resultado.tipo_examen,
                                 resultado_item,
                             )
+                            for _k in list(audit_estructurado.keys()):
+                                if _k.startswith("valor_") or _k.startswith("unidad_"):
+                                    audit_estructurado.pop(_k, None)
+                            audit_estructurado["valor_presente"] = bool(
+                                (resultado.valor_obtenido or "").strip()
+                            )
                         except ValidationError as exc:
                             msg = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
                             return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
                         resultado.save()
                         muestra_transitioned_en_proceso = False
-                        if muestra_asociada_recibida_id is not None:
+                        muestra_estado_antes_proceso: str | None = None
+                        if muestra_iniciar_proceso_id is not None:
+                            muestra_estado_antes_proceso = (
+                                Muestra.objects.filter(pk=muestra_iniciar_proceso_id)
+                                .values_list("estado", flat=True)
+                                .first()
+                            )
                             try:
                                 aplicar_iniciar_proceso(
-                                    muestra_asociada_recibida_id,
+                                    muestra_iniciar_proceso_id,
                                     actor=request.user,
                                     view="SolicitudExamenViewSet.cargar_resultados",
+                                    resultado_id=resultado.pk,
                                 )
                                 muestra_transitioned_en_proceso = True
                             except MuestraAccionError:
@@ -293,19 +315,13 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                             "actor_id": getattr(request.user, "pk", None),
                             **audit_estructurado,
                         }
-                        if muestra_transitioned_en_proceso:
-                            meta_carga["muestra_estado_anterior"] = "RECIBIDA"
+                        if muestra_transitioned_en_proceso and muestra_estado_antes_proceso:
+                            meta_carga["muestra_estado_anterior"] = muestra_estado_antes_proceso
                             meta_carga["muestra_estado_nuevo"] = "EN_PROCESO"
                         if muestra_meta_aplica:
                             meta_carga["muestra_id"] = resultado.muestra_id
-                            if resultado.muestra_id:
-                                cb = (
-                                    Muestra.objects.filter(pk=resultado.muestra_id)
-                                    .values_list("codigo_barra", flat=True)
-                                    .first()
-                                )
-                                meta_carga["codigo_barra"] = (cb or "")
-                        if prev_muestra_id != resultado.muestra_id:
+                        if prev_muestra_id != resultado.muestra_id and muestra_meta_aplica:
+                            meta_carga["accion"] = "resultado_muestra_asociar"
                             meta_carga["muestra_anterior_id"] = prev_muestra_id
                             meta_carga["muestra_nueva_id"] = resultado.muestra_id
                         log_update(
