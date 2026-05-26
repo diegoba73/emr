@@ -181,9 +181,8 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
                 before=before,
                 module="laboratorio",
                 metadata={
-                    "accion": "ACTUALIZADA",
+                    "accion": "muestra_update",
                     "muestra_id": instance.pk,
-                    "codigo_barra": instance.codigo_barra,
                     "solicitud_id": instance.solicitud_id,
                     "numero_solicitud": instance.solicitud.numero,
                     "view": "MuestraTransaccionalViewSet.partial_update",

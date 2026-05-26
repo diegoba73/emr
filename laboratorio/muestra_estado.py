@@ -161,7 +161,6 @@ def _maybe_coordina_solicitud_toma_muestra(
             view=view,
             extra_metadata={
                 "muestra_id": muestra.pk,
-                "codigo_barra": muestra.codigo_barra or "",
             },
         )
     except SolicitudEstadoTransitionError:

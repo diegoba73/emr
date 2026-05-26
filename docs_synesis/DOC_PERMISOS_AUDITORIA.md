@@ -180,7 +180,7 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 - **`LimsB0CatalogPermission`** (`AreaLaboratorioViewSet`, `SeccionLaboratorioViewSet`, `TipoContenedorViewSet`): métodos seguros con roles `admin`, `laboratorio`, `medico`, `secretaria`, `enfermeria` (+ superuser). POST/PATCH solo **`admin`** (+ superuser). Anónimo denegado.
 - **`LimsMuestraTransaccionalPermission`** (`MuestraTransaccionalViewSet`): list/retrieve/eventos `admin`/`laboratorio`/`medico`; create/update/partial y acciones `tomar`/`recibir`/`rechazar`/`conservar`/`descartar`/`cambiar-ubicacion`/`cancelar` solo **`admin`**/**`laboratorio`**; `medico` solo lectura de muestras cuya solicitud tiene `medico_interno.user` = usuario actual; **paciente** y **secretaría** sin acceso a este endpoint; anónimo denegado; `destroy` denegado en permiso.
-- **Auditoría muestra (B1):** `muestra_create`, `muestra_tomar`, `muestra_recibir`, `muestra_rechazar`, `muestra_conservar`, `muestra_descartar`, `muestra_cambiar_ubicacion` en metadata `accion`; sin `codigo_barra` ni texto completo de `motivo_rechazo`/`observaciones` en snapshots (`auditoria/snapshot.py`).
+- **Auditoría muestra (B1):** `muestra_create`, `muestra_tomar`, `muestra_recibir`, `muestra_rechazar`, `muestra_conservar`, `muestra_descartar`, `muestra_cambiar_ubicacion`, `muestra_update` (PATCH administrativo) en metadata `accion`; **sin `codigo_barra`** en metadata de acciones B1 ni en la coordinación orden↔toma física. Texto completo de `motivo_rechazo`/`observaciones` omitido en snapshots (`auditoria/snapshot.py`). **Excepción documentada:** `cargar-resultados` (B2) y microbiología pueden incluir `muestra_id` / `codigo_barra` en metadata de resultado u orden.
 
 ## LIMS B3.1 (microbiología base)
 

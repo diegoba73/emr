@@ -297,6 +297,36 @@ class TestLimsMuestrasB1API(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(r.json()), 1)
 
+    def test_auditoria_b1_metadata_sin_codigo_barra(self):
+        mid = self._crear_muestra()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/api/lab/muestras-transaccionales/{mid}/tomar/", {}, format="json")
+            self.client.post(
+                f"/api/lab/muestras-transaccionales/{mid}/recibir/",
+                {"ubicacion_actual": "R1"},
+                format="json",
+            )
+            self.client.patch(
+                f"/api/lab/muestras-transaccionales/{mid}/",
+                {"observaciones": "nota admin"},
+                format="json",
+            )
+        evs = AuditEvent.objects.filter(
+            module="laboratorio",
+            entity_type=Muestra._meta.label,
+            entity_id=str(mid),
+        )
+        acciones_b1 = {
+            "muestra_create",
+            "muestra_tomar",
+            "muestra_recibir",
+            "muestra_update",
+        }
+        for ev in evs:
+            meta = ev.metadata or {}
+            if meta.get("accion") in acciones_b1:
+                self.assertNotIn("codigo_barra", meta, meta)
+
     def test_crear_muestra_con_codigo_barra_custom(self):
         self.client.force_authenticate(self.lab)
         cb = f"EXT-{self.suf}-001"
