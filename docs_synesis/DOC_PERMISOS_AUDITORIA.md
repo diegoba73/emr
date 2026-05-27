@@ -87,7 +87,12 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 
 **LIMS Fase B2 (`cargar_resultados`):** metadata de `log_update` sobre `ResultadoExamen` incluye `resultado_id`, `solicitud_id`, `muestra_id`, `muestra_estado_anterior`/`muestra_estado_nuevo` al iniciar procesamiento, `muestra_anterior_id`/`muestra_nueva_id` al asociar (`accion=resultado_muestra_asociar`); **sin `codigo_barra`**, sin valores clínicos del resultado (`valor_presente` booleano). Evento muestra `PROCESAMIENTO` + audit `muestra_procesamiento`.
 
-**LIMS Fase B4.1 (`cargar_resultados`):** metadata adicional: `tipo_examen_id`, `valor_anterior`/`valor_nuevo`, `valor_numerico_anterior`/`valor_numerico_nuevo`, `unidad_anterior`/`unidad_nueva`, `es_patologico_anterior`/`es_patologico_nuevo`, `es_critico_anterior`/`es_critico_nuevo`, `actor_id`. Si `es_critico_nuevo=True`, queda visible en `after_state` del snapshot del resultado.
+**LIMS Fase B4.1 (`cargar_resultados`) — regla de auditoría genérica (SYNESIS):**
+
+- `AuditEvent.metadata` **no** debe registrar valores clínicos crudos ni diffs old/new de `ResultadoExamen`: no `valor_anterior`, `valor_nuevo`, `valor_obtenido`, `valor_numerico`, `unidad`, rangos, ni `observaciones`.
+- La auditoría genérica registra **solo** identificadores y señales técnicas: `resultado_id`, `solicitud_id`, `muestra_id` (si aplica), `tipo_examen_id` (si se requiere para trazabilidad), `accion`, `actor_id`, `view`, `request_id`, y `valor_presente` (booleano).
+- `before_state` / `after_state` usan `safe_model_snapshot` con **redacción** de campos clínicos en `ResultadoExamen` (placeholder), por lo que no deben permitir reconstruir el resultado desde auditoría genérica.
+- Si en el futuro se requiere auditoría legal de old/new de resultados, debe implementarse como **fase separada** con **ACL estricto** y almacenamiento/diseño dedicados (no como `metadata` genérica).
 
 ### API
 
