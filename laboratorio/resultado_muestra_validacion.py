@@ -76,19 +76,22 @@ def assert_tipo_examen_muestra_carga(
     raw_muestra_id,
 ) -> None:
     """
-    Obligatoriedad progresiva (LIMS B2-B) al cargar resultados.
+    Obligatoriedad progresiva (LIMS B2-B / B2-B-A) al cargar resultados.
 
     - ``requiere_muestra``: exige muestra efectiva (payload o FK previa).
-    - ``tipo_muestra_requerida`` (catálogo): si hay muestra, debe coincidir el tipo.
+    - ``tipo_muestra_requerida``: si hay muestra asociada, el tipo físico debe coincidir
+      aunque ``requiere_muestra`` sea False.
     """
-    if not getattr(tipo_examen, "requiere_muestra", False):
-        return
+    requiere_muestra = getattr(tipo_examen, "requiere_muestra", False)
 
-    if muestra_id_en_payload and raw_muestra_id is None:
-        raise ValueError(MSG_REQUIERE_MUESTRA)
+    if requiere_muestra:
+        if muestra_id_en_payload and raw_muestra_id is None:
+            raise ValueError(MSG_REQUIERE_MUESTRA)
+        if resultado_muestra is None:
+            raise ValueError(MSG_REQUIERE_MUESTRA)
 
     if resultado_muestra is None:
-        raise ValueError(MSG_REQUIERE_MUESTRA)
+        return
 
     tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
     if tipo_req_id is not None and resultado_muestra.tipo_muestra_id != tipo_req_id:

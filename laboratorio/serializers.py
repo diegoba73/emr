@@ -74,7 +74,12 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'requiere_muestra',
             'activo',
         ]
-        read_only_fields = ['id', 'tipo_muestra_nombre', 'tipo_muestra_codigo']
+        read_only_fields = [
+            'id',
+            'tipo_muestra_nombre',
+            'tipo_muestra_codigo',
+            'requiere_muestra',
+        ]
 
 
 class PanelExamenSerializer(serializers.ModelSerializer):

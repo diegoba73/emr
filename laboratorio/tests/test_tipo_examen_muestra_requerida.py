@@ -1,5 +1,5 @@
 """
-Tests LIMS B2-B — obligatoriedad progresiva de muestra por TipoExamen.
+Tests LIMS B2-B / B2-B-A — obligatoriedad progresiva de muestra por TipoExamen.
 """
 import json
 import uuid
@@ -29,13 +29,17 @@ class TestTipoExamenMuestraRequerida(APITestCase):
     """cargar-resultados con requiere_muestra en TipoExamen."""
 
     def setUp(self):
-        suf = f"B2B{uuid.uuid4().hex[:6]}"
+        # TipoMuestra.codigo max_length=10 (PostgreSQL); suf corto para fixtures.
+        tag = uuid.uuid4().hex[:4]
+        suf = f"B2B{tag}"
         self.tipo_muestra_a = TipoMuestra.objects.create(
-            codigo=f"SNG{suf}", nombre="Sangre", activo=True
+            codigo=f"SNG{tag}", nombre="Sangre", activo=True
         )
         self.tipo_muestra_b = TipoMuestra.objects.create(
-            codigo=f"ORI{suf}", nombre="Orina", activo=True
+            codigo=f"ORI{tag}", nombre="Orina", activo=True
         )
+        assert len(self.tipo_muestra_a.codigo) <= 10
+        assert len(self.tipo_muestra_b.codigo) <= 10
         self.tipo_examen_legacy = TipoExamen.objects.create(
             codigo=f"GLU{suf}",
             nombre="Glucosa",
@@ -114,9 +118,8 @@ class TestTipoExamenMuestraRequerida(APITestCase):
         )
         assert te.requiere_muestra is False
 
-    def test_cargar_resultado_tipo_no_requiere_muestra_sin_muestra_funciona(self):
+    def test_tipo_no_requiere_muestra_sin_muestra_sigue_funcionando(self):
         sol, res = self._solicitud_con_tipo(self.tipo_examen_legacy)
-        valor_antes = res.valor_obtenido
         r = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
             {"resultados": [{"id": res.pk, "valor": "100"}]},
@@ -126,6 +129,50 @@ class TestTipoExamenMuestraRequerida(APITestCase):
         res.refresh_from_db()
         assert res.valor_obtenido == "100"
         assert res.muestra_id is None
+
+    def test_tipo_no_requiere_muestra_pero_si_se_envia_muestra_debe_coincidir_tipo(self):
+        sol, res = self._solicitud_con_tipo(self.tipo_examen_legacy)
+        valor_antes = res.valor_obtenido
+        m = self._muestra_recibida(sol, tipo_muestra=self.tipo_muestra_b)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+                {
+                    "resultados": [
+                        {"id": res.pk, "valor": "88", "muestra_id": m.pk},
+                    ]
+                },
+                format="json",
+            )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert "tipo requerido" in (r.json().get("error") or "").lower()
+        res.refresh_from_db()
+        assert res.valor_obtenido == valor_antes
+        assert res.muestra_id is None
+        assert not m.eventos.filter(accion="PROCESAMIENTO").exists()
+        assert not AuditEvent.objects.filter(
+            entity_type=ResultadoExamen._meta.label,
+            entity_id=str(res.pk),
+            module="laboratorio",
+            metadata__accion="cargar_resultados",
+        ).exists()
+
+    def test_tipo_no_requiere_muestra_con_muestra_correcta_funciona(self):
+        sol, res = self._solicitud_con_tipo(self.tipo_examen_legacy)
+        m = self._muestra_recibida(sol, tipo_muestra=self.tipo_muestra_a)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res.pk, "valor": "42", "muestra_id": m.pk},
+                ]
+            },
+            format="json",
+        )
+        assert r.status_code == status.HTTP_200_OK
+        res.refresh_from_db()
+        assert res.muestra_id == m.pk
+        assert res.valor_obtenido == "42"
 
     def test_cargar_resultado_tipo_requiere_muestra_sin_muestra_falla(self):
         sol, res = self._solicitud_con_tipo(self.tipo_examen_oblig)
