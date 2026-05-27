@@ -35,6 +35,7 @@
 - **Toma de muestra (Fase A — orden):** `POST .../tomar-muestra/` cambia la orden `PENDIENTE` → `TOMA_MUESTRA` (marcador de flujo); es independiente de la toma física por **`Muestra`** (`aplicar_tomar` en `muestra_estado.py`).
 - **Etiqueta ZPL:** acción `GET .../etiqueta/` devuelve JSON con fragmento ZPL simulado.
 - **Fase B2 [IMPLEMENTADO]:** `cargar-resultados` acepta **`muestra_id`** opcional por ítem (misma solicitud/paciente; estados **`RECIBIDA`**, **`CONSERVADA`**, **`EN_PROCESO`**). Sin muestra = legacy. Al primer vínculo desde RECIBIDA/CONSERVADA → **`EN_PROCESO`** vía `aplicar_iniciar_proceso` + `EventoMuestra.PROCESAMIENTO` + audit `muestra_procesamiento` (idempotente si ya `EN_PROCESO`). Asociación de muestra audita `resultado_muestra_asociar` sin `codigo_barra` ni valor clínico en metadata (`valor_presente` solo). No rechazar muestra con resultados; no cambiar muestra en resultado validado.
+- **Fase B2-B [IMPLEMENTADO]:** `TipoExamen.requiere_muestra` (default `False`). Tipos configurados exigen muestra en carga; validación de tipo físico vs `tipo_muestra_requerida` del catálogo; fallos sin persistir resultado ni auditar éxito. SPA LIMS aún puede no enviar `muestra_id` — esos tipos fallarán hasta UI de selección.
 
 ---
 

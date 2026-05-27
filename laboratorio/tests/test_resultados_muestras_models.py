@@ -212,3 +212,12 @@ class TestResultadoExamenMuestra:
         )
         with pytest.raises(IntegrityError):
             m.delete()
+
+    def test_tipo_examen_requiere_muestra_configurable(self, base):
+        te = base["te"]
+        assert te.requiere_muestra is False
+        te.requiere_muestra = True
+        te.save(update_fields=["requiere_muestra"])
+        te.refresh_from_db()
+        assert te.requiere_muestra is True
+        assert te.tipo_muestra_requerida_id == base["tm"].pk

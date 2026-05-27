@@ -20,6 +20,7 @@ from .models_catalog import Muestra
 from .resultado_muestra_validacion import (
     MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN,
     assert_muestra_estado_carga_resultado,
+    assert_tipo_examen_muestra_carga,
 )
 from .muestra_estado import MuestraAccionError, aplicar_iniciar_proceso
 from .resultados_clinicos import aplicar_carga_estructurada
@@ -270,6 +271,19 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                                 resultado.muestra = muestra
                                 if muestra.estado in ("RECIBIDA", "CONSERVADA"):
                                     muestra_iniciar_proceso_id = muestra.pk
+
+                        try:
+                            assert_tipo_examen_muestra_carga(
+                                tipo_examen=resultado.tipo_examen,
+                                resultado_muestra=resultado.muestra,
+                                muestra_id_en_payload="muestra_id" in resultado_item,
+                                raw_muestra_id=resultado_item.get("muestra_id"),
+                            )
+                        except ValueError as exc:
+                            return Response(
+                                {"error": str(exc)},
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
 
                         try:
                             audit_estructurado = aplicar_carga_estructurada(

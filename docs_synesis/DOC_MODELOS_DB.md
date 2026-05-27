@@ -223,7 +223,8 @@
 
 ### TipoExamen
 
-- `codigo` unique; FK TipoMuestra CASCADE; `precio` decimal; `rango_referencia_texto` (sigue válido para rangos no estructurados)
+- `codigo` unique; FK `tipo_muestra_requerida` → TipoMuestra CASCADE (catálogo / plantilla de orden); `precio` decimal; `rango_referencia_texto` (sigue válido para rangos no estructurados)
+- **B2-B:** `requiere_muestra` (bool, default `False`) — si `True`, `cargar-resultados` exige muestra física trazable en cargas nuevas; no hace obligatoria la FK en `ResultadoExamen` a nivel BD.
 - **B4.1:** FK opcional `seccion` → `SeccionLaboratorio`; `tipo_resultado` (`TEXTO`/`NUMERICO`/`CUALITATIVO`, default `TEXTO`); `unidad_default`; `rango_min`/`rango_max`; `valor_critico_min`/`valor_critico_max`; `permite_resultado_texto` (default True). Validaciones: rangos y críticos coherentes; sección activa si se asigna.
 
 ### PanelExamen

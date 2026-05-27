@@ -60,3 +60,36 @@ def assert_muestra_estado_carga_resultado(muestra: Muestra) -> None:
         raise ValueError(
             "La muestra debe estar en estado RECIBIDA, CONSERVADA o EN_PROCESO para asociar un resultado."
         )
+
+
+MSG_REQUIERE_MUESTRA = "Este tipo de examen requiere una muestra asociada."
+MSG_TIPO_MUESTRA_INCORRECTO = (
+    "La muestra no corresponde al tipo requerido para este examen."
+)
+
+
+def assert_tipo_examen_muestra_carga(
+    *,
+    tipo_examen,
+    resultado_muestra: Muestra | None,
+    muestra_id_en_payload: bool,
+    raw_muestra_id,
+) -> None:
+    """
+    Obligatoriedad progresiva (LIMS B2-B) al cargar resultados.
+
+    - ``requiere_muestra``: exige muestra efectiva (payload o FK previa).
+    - ``tipo_muestra_requerida`` (catálogo): si hay muestra, debe coincidir el tipo.
+    """
+    if not getattr(tipo_examen, "requiere_muestra", False):
+        return
+
+    if muestra_id_en_payload and raw_muestra_id is None:
+        raise ValueError(MSG_REQUIERE_MUESTRA)
+
+    if resultado_muestra is None:
+        raise ValueError(MSG_REQUIERE_MUESTRA)
+
+    tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
+    if tipo_req_id is not None and resultado_muestra.tipo_muestra_id != tipo_req_id:
+        raise ValueError(MSG_TIPO_MUESTRA_INCORRECTO)

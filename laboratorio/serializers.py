@@ -71,6 +71,7 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'valor_critico_min',
             'valor_critico_max',
             'permite_resultado_texto',
+            'requiere_muestra',
             'activo',
         ]
         read_only_fields = ['id', 'tipo_muestra_nombre', 'tipo_muestra_codigo']

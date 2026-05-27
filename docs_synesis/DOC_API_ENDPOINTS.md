@@ -187,7 +187,7 @@ No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 | `/api/pacientes/buscar/` | GET | Búsqueda `q` |
 | `/api/historias-clinicas/{id}/resumen/` | GET | Resumen HC |
 | `/api/lab/solicitudes/{id}/tomar-muestra/` | POST | Marca orden en toma de muestra (`PENDIENTE` → `TOMA_MUESTRA`) |
-| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` con `id`, `valor` (obligatorio para considerar cargado), `es_patologico`, `observaciones`, **`muestra_id`** opcional. **B4.1 (retrocompatible):** por ítem también `valor_numerico`, `unidad`, `es_critico`; si no viene `unidad` y el `TipoExamen` tiene `unidad_default`, se copia; si hay rango/críticos estructurados en catálogo, se calculan `es_patologico`/`es_critico` y snapshots de referencia. Respuesta de lectura incluye campos estructurados en `resultados[]`. |
+| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` con `id`, `valor` (obligatorio para considerar cargado), `es_patologico`, `observaciones`, **`muestra_id`** opcional salvo que `TipoExamen.requiere_muestra=True` (B2-B: entonces obligatorio en payload o FK previa). **B4.1 (retrocompatible):** por ítem también `valor_numerico`, `unidad`, `es_critico`; si no viene `unidad` y el `TipoExamen` tiene `unidad_default`, se copia; si hay rango/críticos estructurados en catálogo, se calculan `es_patologico`/`es_critico` y snapshots de referencia. Respuesta de lectura incluye campos estructurados en `resultados[]`. |
 | `/api/lab/solicitudes/{id}/validar/` | POST | Valida orden (`EN_PROCESO` → `VALIDADO`; solo admin/superuser) |
 | `/api/lab/solicitudes/{id}/cancelar/` | POST | Cancela orden no final (`PENDIENTE` / `TOMA_MUESTRA` / `EN_PROCESO` → `CANCELADO`) |
 | `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
@@ -219,7 +219,7 @@ Inferidos por ViewSet en cada app; listados detallados en serializers de `pacien
 ## Payload / respuesta
 
 - Crear orden lab: cuerpo con `paciente_id`, `examenes_ids`, `paneles_ids`, etc. → respuesta `SolicitudExamenSerializer` (resultados anidados incluyen **`muestra_id`**, **`muestra_estado`**, **`tipo_muestra_nombre`** — Fase B2).
-- **`POST …/solicitudes/{id}/cargar-resultados/`** — cada ítem puede incluir opcionalmente **`muestra_id`** (misma orden; muestra en RECIBIDA/CONSERVADA/EN_PROCESO). Sin `muestra_id` = comportamiento legacy.
+- **`POST …/solicitudes/{id}/cargar-resultados/`** — cada ítem puede incluir opcionalmente **`muestra_id`** (misma orden; muestra en RECIBIDA/CONSERVADA/EN_PROCESO). Sin `muestra_id` = comportamiento legacy **si** `TipoExamen.requiere_muestra=False`. Con `requiere_muestra=True` → 400 sin muestra; la muestra debe coincidir con `tipo_muestra_requerida` del catálogo cuando se asocia.
 - Actualizar orden lab (`PATCH`/`PUT`): campos editables según serializer; **`estado` ignorado/no escribible** desde API estándar.
 - Acciones `tomar-muestra`, `cancelar`, `marcar-entregado`: cuerpo típico `{}` (JSON vacío aceptable).
 - Crear atención: `{ "turno": <id>, "observaciones_generales": "..." }` → `AtencionSerializer`.

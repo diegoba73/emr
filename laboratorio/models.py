@@ -127,6 +127,14 @@ class TipoExamen(models.Model):
         default=True,
         verbose_name="Permite resultado textual",
     )
+    requiere_muestra = models.BooleanField(
+        default=False,
+        verbose_name="Requiere muestra física",
+        help_text=(
+            "Si está activo, cargar-resultados exige muestra_id trazable "
+            "para nuevas cargas/actualizaciones."
+        ),
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
