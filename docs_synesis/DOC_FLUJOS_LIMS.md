@@ -36,6 +36,7 @@
 - **Etiqueta ZPL:** acción `GET .../etiqueta/` devuelve JSON con fragmento ZPL simulado.
 - **Fase B2 [IMPLEMENTADO]:** `cargar-resultados` acepta **`muestra_id`** opcional por ítem (misma solicitud/paciente; estados **`RECIBIDA`**, **`CONSERVADA`**, **`EN_PROCESO`**). Sin muestra = legacy. Al primer vínculo desde RECIBIDA/CONSERVADA → **`EN_PROCESO`** vía `aplicar_iniciar_proceso` + `EventoMuestra.PROCESAMIENTO` + audit `muestra_procesamiento` (idempotente si ya `EN_PROCESO`). Asociación de muestra audita `resultado_muestra_asociar` sin `codigo_barra` ni valor clínico en metadata (`valor_presente` solo). No rechazar muestra con resultados; no cambiar muestra en resultado validado.
 - **Fase B2-B [IMPLEMENTADO]:** `TipoExamen.requiere_muestra` (default `False`; admin/DB). Tipos configurados exigen muestra en carga. **B2-B-A:** si se asocia muestra, siempre se valida `tipo_muestra_requerida` (también con `requiere_muestra=False`). Fallos sin persistir ni auditar éxito. SPA LIMS debe adaptarse para enviar `muestra_id` en tipos obligatorios.
+- **Fase B2-C [IMPLEMENTADO — frontend]:** `OrdenLimsDetalle` / `CargaResultadosLims` cargan muestras de la orden, permiten elegir `muestra_id` por resultado y envían payload extendido; validación UX alineada con backend; tipos sin muestra obligatoria siguen en modo legacy.
 
 ---
 

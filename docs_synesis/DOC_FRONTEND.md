@@ -117,6 +117,18 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 **UI-1 (sin cambios):** `/laboratorio/ordenes`, `/laboratorio/ordenes/:id`. No se modifica `/solicitudes` EMR.
 
+### LIMS B2-C — Carga de resultados con muestra
+
+- **Pantalla:** `OrdenLimsDetalle` → tab **Resultados** → `CargaResultadosLims`.
+- **API:** `GET /lab/muestras-transaccionales/?solicitud=<id>`; `POST …/cargar-resultados/` con `muestra_id` opcional por ítem.
+- **UX:** selector de muestra por determinación; badge **Requiere muestra** y **Tipo requerido** según catálogo `TipoExamen` (`requiere_muestra`, `tipo_muestra_requerida`); solo muestras **RECIBIDA / CONSERVADA / EN_PROCESO**; opciones filtradas al tipo requerido.
+- **Validación frontend (B2-C):** bloquea submit si `requiere_muestra` sin muestra o si la muestra no coincide con `tipo_muestra_requerida`; el backend sigue siendo fuente de verdad.
+- **Payload:** `muestra_id` solo si hay selección (no se envía `null` ni string vacío).
+- **Errores:** `formatLimsHttpError` — 403/404/500 con mensajes genéricos; 400 muestra mensaje DRF (`error`/`detail`) sin loguear respuesta completa.
+- **Privacidad:** etiquetas de muestra por id + tipo + estado (no `console.log` de payload/orden/muestra).
+- **Roles:** carga editable solo con `canOperateLims` (admin/laboratorio), igual que UI-1.
+- **Tests:** `frontend/src/utils/limsCargaMuestra.test.ts` (validación y payload).
+
 ### Componentes principales (UI-2)
 
 - **Páginas:** `MicrobiologiaEstudios`, `MicrobiologiaEstudioDetalle`, `MicrobiologiaCatalogos`, `MicrobiologiaHub`.
