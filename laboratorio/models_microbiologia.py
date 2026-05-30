@@ -9,7 +9,7 @@ aislados, identificación, antibiograma, informes preliminares ni finales.
 Cadena:
 
     SolicitudExamen
-        └── Muestra (RECIBIDA / EN_PROCESO)
+        └── Muestra (RECIBIDA / CONSERVADA / EN_PROCESO)
                  └── EstudioMicrobiologia (B3.1)
                          └── SiembraMicrobiologia (B3.1)
                                  └── LecturaCultivo (B3.1)
@@ -28,7 +28,7 @@ from django.utils import timezone
 from pacientes.models import Paciente
 
 # Reglas reutilizables de estado de muestra (compartido con B2/B2.1).
-MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO = frozenset({"RECIBIDA", "EN_PROCESO"})
+MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO = frozenset({"RECIBIDA", "CONSERVADA", "EN_PROCESO"})
 MUESTRA_ESTADOS_BLOQUEAN_MICRO = frozenset(
     {"PENDIENTE_TOMA", "TOMADA", "RECHAZADA", "DESCARTADA", "CANCELADA"}
 )
@@ -198,7 +198,7 @@ class EstudioMicrobiologia(models.Model):
                 raise ValidationError(
                     {
                         "muestra": (
-                            "Solo se puede iniciar microbiología sobre muestras RECIBIDA o EN_PROCESO."
+                            "Solo se puede iniciar microbiología sobre muestras RECIBIDA, CONSERVADA o EN_PROCESO."
                         )
                     }
                 )
@@ -308,7 +308,7 @@ class SiembraMicrobiologia(models.Model):
                 raise ValidationError(
                     {
                         "muestra": (
-                            "Solo se puede sembrar con muestras RECIBIDA o EN_PROCESO."
+                            "Solo se puede sembrar con muestras RECIBIDA, CONSERVADA o EN_PROCESO."
                         )
                     }
                 )

@@ -163,8 +163,10 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 
 **Fase B3.1 (Microbiología base):**
 
-- `laboratorio/tests/test_microbiologia_models.py`: alta de `MedioCultivo` (incluido `codigo` único), creación de `EstudioMicrobiologia` con muestras `RECIBIDA`/`EN_PROCESO`, rechazo con muestras `PENDIENTE_TOMA`/`TOMADA`/`RECHAZADA`/`DESCARTADA`/`CANCELADA`, consistencia solicitud/paciente, validaciones de `SiembraMicrobiologia` (medio activo, misma muestra que el estudio) y `LecturaCultivo` (siembra y estudio coincidentes, no cancelados, fecha coherente).
+- `laboratorio/tests/test_microbiologia_models.py`: alta de `MedioCultivo` (incluido `codigo` único), creación de `EstudioMicrobiologia` con muestras `RECIBIDA`/`CONSERVADA`/`EN_PROCESO`, rechazo con muestras `PENDIENTE_TOMA`/`TOMADA`/`RECHAZADA`/`DESCARTADA`/`CANCELADA`, consistencia solicitud/paciente, validaciones de `SiembraMicrobiologia` (medio activo, misma muestra que el estudio) y `LecturaCultivo` (siembra y estudio coincidentes, no cancelados, fecha coherente).
 - `laboratorio/tests/test_microbiologia_api.py`: permisos del catálogo medios (admin escribe, laboratorio no), permisos sobre estudios/siembras/lecturas por rol (laboratorio opera, médico solo ve sus estudios, paciente/anónimo bloqueados), creación de estudio con auditoría `CREATE`, fallas con muestras inválidas, idempotencia de `iniciar`, cancelación con/sin motivo, PATCH sin cambio de `estado`, transiciones automáticas `SEMBRADO` / `LECTURA_PRELIMINAR`, bloqueos por estudio/siembra cancelados, aliases `/api/laboratorio/microbiologia/...`. Las aserciones de auditoría usan `captureOnCommitCallbacks(execute=True)` para materializar los eventos `on_commit`.
+
+**Fase B3.1-gap [IMPLEMENTADO]:** tests `test_estudio_microbiologia_permite_muestra_conservada`, `test_siembra_microbiologia_permite_muestra_conservada` (modelos); `test_api_crear_estudio_microbiologia_con_muestra_conservada`, `test_api_crear_siembra_con_muestra_conservada` (API).
 
 **Fase B3.2 (Microorganismos / aislados / identificación):**
 

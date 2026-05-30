@@ -40,6 +40,7 @@ from laboratorio.models_microbiologia import (
 )
 from laboratorio.muestra_estado import (
     aplicar_cancelar,
+    aplicar_conservar,
     aplicar_descartar,
     aplicar_rechazar,
     aplicar_recibir,
@@ -91,6 +92,14 @@ def _muestra_recibida(sol, tm):
     return m
 
 
+def _muestra_conservada(sol, tm):
+    m = _muestra_recibida(sol, tm)
+    aplicar_conservar(m.pk, actor=None, view="t")
+    m.refresh_from_db()
+    assert m.estado == "CONSERVADA"
+    return m
+
+
 def _medio(activo=True, codigo_suf=""):
     return MedioCultivo.objects.create(
         codigo=f"AGS{codigo_suf or uuid.uuid4().hex[:6]}",
@@ -137,6 +146,17 @@ class TestEstudioMicrobiologiaModel:
             tipo_estudio="CULTIVO_RUTINA",
         )
         assert e.estado == "PENDIENTE"
+
+    def test_estudio_microbiologia_permite_muestra_conservada(self, base_data):
+        m = _muestra_conservada(base_data["sol"], base_data["tm"])
+        estudio = EstudioMicrobiologia.objects.create(
+            solicitud=base_data["sol"],
+            muestra=m,
+            paciente=base_data["pac"],
+            tipo_estudio="CULTIVO_RUTINA",
+        )
+        estudio.full_clean()
+        assert estudio.estado == "PENDIENTE"
 
     def test_falla_muestra_pendiente_toma(self, base_data):
         m = crear_muestra(
@@ -266,6 +286,15 @@ class TestSiembraMicrobiologiaModel:
         medio = _medio(activo=False)
         with pytest.raises(DjangoValidationError):
             SiembraMicrobiologia.objects.create(estudio=e, muestra=m, medio=medio)
+
+    def test_siembra_microbiologia_permite_muestra_conservada(self, base_data):
+        m = _muestra_conservada(base_data["sol"], base_data["tm"])
+        e = EstudioMicrobiologia.objects.create(
+            solicitud=base_data["sol"], muestra=m, paciente=base_data["pac"]
+        )
+        s = SiembraMicrobiologia.objects.create(estudio=e, muestra=m, medio=_medio())
+        s.full_clean()
+        assert s.estado == "SEMBRADA"
 
     def test_falla_si_muestra_distinta(self, base_data):
         m1 = _muestra_recibida(base_data["sol"], base_data["tm"])

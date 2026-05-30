@@ -37,6 +37,7 @@ from laboratorio.models_microbiologia import (
 )
 from laboratorio.muestra_estado import (
     aplicar_cancelar,
+    aplicar_conservar,
     aplicar_descartar,
     aplicar_rechazar,
     aplicar_recibir,
@@ -60,6 +61,13 @@ def _muestra_recibida(sol, tm):
     )
     aplicar_tomar(m.pk, actor=None, view="t")
     aplicar_recibir(m.pk, actor=None, view="t")
+    m.refresh_from_db()
+    return m
+
+
+def _muestra_conservada(sol, tm):
+    m = _muestra_recibida(sol, tm)
+    aplicar_conservar(m.pk, actor=None, view="t")
     m.refresh_from_db()
     return m
 
@@ -210,6 +218,29 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             AuditEvent.objects.filter(
                 entity_type=EstudioMicrobiologia._meta.label,
                 entity_id=str(data["id"]),
+                action="CREATE",
+            ).exists()
+        )
+
+    def test_api_crear_estudio_microbiologia_con_muestra_conservada(self):
+        m = _muestra_conservada(self.sol, self.tm)
+        self.client.force_authenticate(self.lab)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/estudios/",
+                {
+                    "solicitud_id": self.sol.pk,
+                    "muestra_id": m.pk,
+                    "tipo_estudio": "CULTIVO_RUTINA",
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertEqual(r.json()["estado"], "PENDIENTE")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                entity_type=EstudioMicrobiologia._meta.label,
+                entity_id=str(r.json()["id"]),
                 action="CREATE",
             ).exists()
         )
@@ -408,6 +439,25 @@ class TestSiembraLecturaAPI(TestCase):
                 metadata__accion="auto_sembrado",
             ).exists()
         )
+
+    def test_api_crear_siembra_con_muestra_conservada(self):
+        m = _muestra_conservada(self.sol, self.tm)
+        estudio = EstudioMicrobiologia.objects.create(
+            solicitud=self.sol, muestra=m, paciente=self.paciente,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/siembras/",
+                {
+                    "estudio_id": estudio.pk,
+                    "medio_id": self.medio.pk,
+                    "atmosfera": "aerobia",
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        estudio.refresh_from_db()
+        self.assertEqual(estudio.estado, "SEMBRADO")
 
     def test_no_sembrar_estudio_cancelado(self):
         EstudioMicrobiologia.objects.filter(pk=self.estudio.pk).update(estado="CANCELADO")

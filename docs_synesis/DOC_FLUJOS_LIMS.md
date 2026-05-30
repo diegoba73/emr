@@ -175,7 +175,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 Cadena operativa (sin microorganismos / aislados / antibiograma / informes en esta fase):
 
 ```
-SolicitudExamen → Muestra (RECIBIDA | EN_PROCESO)
+SolicitudExamen → Muestra (RECIBIDA | CONSERVADA | EN_PROCESO)
                        └── EstudioMicrobiologia (B3.1)
                                └── SiembraMicrobiologia (B3.1)
                                        └── LecturaCultivo (B3.1)
@@ -184,7 +184,7 @@ SolicitudExamen → Muestra (RECIBIDA | EN_PROCESO)
 **Reglas clave:**
 
 - Microbiología **nunca** se serializa en `ResultadoExamen.valor_obtenido`.
-- Sólo se inicia un estudio sobre una muestra `RECIBIDA` o `EN_PROCESO`. Estados de muestra `PENDIENTE_TOMA`, `TOMADA`, `RECHAZADA`, `DESCARTADA`, `CANCELADA` bloquean alta de estudio (modelo `clean` + servicio).
+- Sólo se inicia un estudio sobre una muestra **`RECIBIDA`**, **`CONSERVADA`** o **`EN_PROCESO`**. Estados de muestra `PENDIENTE_TOMA`, `TOMADA`, `RECHAZADA`, `DESCARTADA`, `CANCELADA` bloquean alta de estudio (modelo `clean` + servicio). **B3.1-gap:** `CONSERVADA` alineada con B2 (carga de resultados).
 - La solicitud no puede estar `CANCELADO`, `VALIDADO` ni `ENTREGADO` al crear estudio.
 - Una solicitud puede tener varios estudios microbiológicos (uno por muestra; varios estudios por muestra están permitidos si se justifica).
 - Una siembra pertenece a un estudio y reutiliza la misma muestra del estudio (validación `clean`).
