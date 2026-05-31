@@ -116,7 +116,7 @@ def crear_estudio(
     Valida:
     - muestra y solicitud coinciden;
     - paciente consistente;
-    - muestra en RECIBIDA o EN_PROCESO;
+    - muestra en RECIBIDA, CONSERVADA o EN_PROCESO;
     - solicitud no terminal (CANCELADO / VALIDADO / ENTREGADO).
     """
     if solicitud.estado in ("CANCELADO", "VALIDADO", "ENTREGADO"):
@@ -125,7 +125,7 @@ def crear_estudio(
         )
     if muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
         raise MicrobiologiaAccionError(
-            "Solo se puede iniciar microbiología sobre muestras RECIBIDA o EN_PROCESO."
+            "Solo se puede iniciar microbiología sobre muestras RECIBIDA, CONSERVADA o EN_PROCESO."
         )
     if muestra.solicitud_id != solicitud.pk:
         raise MicrobiologiaAccionError(
@@ -365,7 +365,7 @@ def crear_siembra(
             raise MicrobiologiaAccionError("El medio de cultivo debe estar activo.")
         if estudio.muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
             raise MicrobiologiaAccionError(
-                "La muestra del estudio debe estar RECIBIDA o EN_PROCESO para sembrar."
+                "La muestra del estudio debe estar RECIBIDA, CONSERVADA o EN_PROCESO para sembrar."
             )
 
         siembra = SiembraMicrobiologia(
