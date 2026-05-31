@@ -186,7 +186,7 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - **`LimsB0CatalogPermission`** (`AreaLaboratorioViewSet`, `SeccionLaboratorioViewSet`, `TipoContenedorViewSet`): métodos seguros con roles `admin`, `laboratorio`, `medico`, `secretaria`, `enfermeria` (+ superuser). POST/PATCH solo **`admin`** (+ superuser). Anónimo denegado.
 - **`LimsMuestraTransaccionalPermission`** (`MuestraTransaccionalViewSet`): list/retrieve/eventos `admin`/`laboratorio`/`medico`; create/update/partial y acciones `tomar`/`recibir`/`rechazar`/`conservar`/`descartar`/`cambiar-ubicacion`/`cancelar` solo **`admin`**/**`laboratorio`**; `medico` solo lectura de muestras cuya solicitud tiene `medico_interno.user` = usuario actual; **paciente** y **secretaría** sin acceso a este endpoint; anónimo denegado; `destroy` denegado en permiso.
 - **Auditoría muestra (B1):** `muestra_create`, `muestra_tomar`, `muestra_recibir`, `muestra_rechazar`, `muestra_conservar`, `muestra_descartar`, `muestra_cambiar_ubicacion`, `muestra_update` (PATCH administrativo) en metadata `accion`; **sin `codigo_barra`** en metadata B1/B2 (identificador operativo solo en API de muestra, no en `AuditEvent`). Texto completo de `motivo_rechazo`/`observaciones` omitido en snapshots (`auditoria/snapshot.py`).
-- **Auditoría resultado (B2 / B2-A):** `cargar_resultados`, `resultado_muestra_asociar`, `muestra_procesamiento` — metadata con `muestra_id`, `solicitud_id`, `resultado_id`, `valor_presente`; snapshots de `ResultadoExamen` sin valor clínico crudo. **Excepción documentada:** microbiología (B3+) puede incluir `muestra_id` en metadata técnica; no aplica a auditoría genérica B2 de resultados.
+- **Auditoría resultado (B2 / B2-A / B3-audit):** `cargar_resultados`, `resultado_muestra_asociar`, `muestra_procesamiento` — metadata con `muestra_id`, `solicitud_id`, `resultado_id`, `valor_presente`; snapshots de `ResultadoExamen` sin valor clínico crudo. Microbiología (B3-audit): misma política — **sin** `codigo_barra` ni resultados micro crudos en metadata/snapshots genéricos.
 - **B2-B:** rechazo por muestra obligatoria o tipo incorrecto **no** genera `log_update` de carga exitosa ni `EventoMuestra.PROCESAMIENTO`; permisos sin cambios.
 
 ## LIMS B3.1 (microbiología base)
@@ -198,11 +198,11 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
   - **medico**: solo list/retrieve y únicamente sobre estudios/siembras/lecturas cuya `solicitud.medico_interno.user` = usuario actual (filtrado en `get_queryset` + `has_object_permission`).
   - **secretaria**, **enfermeria**, **paciente**, **anónimo**: sin acceso a operación técnica de microbiología en esta fase.
   - **`destroy`** siempre denegado a nivel permiso.
-- Cancelación de estudio: **motivo obligatorio**; auditado vía `log_update` con `metadata.accion="cancelar"` y `motivo_cancelacion` truncado a 200 chars.
+- Cancelación de estudio: **motivo obligatorio**; auditado vía `log_update` con `metadata.accion="cancelar"` y `motivo_cancelacion_presente` (booleano; sin texto del motivo en metadata).
 - Auditoría de microbiología:
   - `log_create` para `MedioCultivo`, `EstudioMicrobiologia`, `SiembraMicrobiologia`, `LecturaCultivo` al crear.
   - `log_update` en `iniciar`, `cancelar`, transiciones automáticas (`auto_sembrado`, `auto_lectura_preliminar`), PATCH administrativo.
-  - Metadata estable incluye: `accion`, `estudio_id`, `numero_estudio`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `codigo_barra`, `siembra_id` / `lectura_id` cuando aplica, `estado_anterior`, `estado_nuevo`, `actor_id`, `view`, `request_id`. **No** se registra nombre/PHI del paciente en metadata.
+  - Metadata estable incluye: `accion`, `estudio_id`, `numero_estudio`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `siembra_id` / `lectura_id` cuando aplica, `estado_anterior`, `estado_nuevo`, `actor_id`, `view`, `request_id`. **No** se registra `codigo_barra`, nombre/PHI del paciente ni textos/resultados microbiológicos crudos en metadata genérica (B3-audit).
 
 ## LIMS B3.2 (microorganismos / aislados / identificación)
 
@@ -218,7 +218,7 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - Auditoría B3.2:
   - `log_create` para `Microorganismo`, `AisladoMicrobiologico`, `IdentificacionMicroorganismo`.
   - `log_update` para PATCH de microorganismo/aislado y para transiciones automáticas (`auto_identificado` del aislado, `auto_identificacion` del estudio) y para `descartar_aislado`.
-  - Metadata estable agrega: `aislado_id`, `microorganismo_id`, `lectura_id`, `identificacion_id` (cuando aplica), `significancia`, `requiere_antibiograma`, `motivo_descarte` (truncado). Sin PHI del paciente.
+  - Metadata estable agrega: `aislado_id`, `microorganismo_id`, `lectura_id`, `identificacion_id` (cuando aplica), `significancia`, `requiere_antibiograma`, `motivo_descarte_presente` / `resultado_presente` / `observacion_presente` (booleanos). Sin PHI del paciente ni `codigo_barra`.
 
 ## LIMS B3.3 (antibiograma)
 
@@ -234,7 +234,7 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 - Auditoría B3.3:
   - `log_create` para `Antibiotico`, `Antibiograma`, `ResultadoAntibiotico` (acciones: `crear_antibiotico`, `crear_antibiograma`, `crear_resultado_antibiotico`).
   - `log_update` para PATCH de antibiótico (`actualizar_antibiotico`, incluye `activo_nuevo`), PATCH de antibiograma (`actualizar_antibiograma`), PATCH de resultado (`actualizar_resultado_antibiotico`), transiciones (`auto_en_proceso` del antibiograma, `auto_antibiograma` del estudio), `completar_antibiograma`, `cancelar_antibiograma`.
-  - Metadata estable agrega: `antibiograma_id`, `resultado_antibiotico_id`, `antibiotico_id`, `antibiotico_codigo`, `interpretacion`, `motivo_cancelacion` (truncado). Sin PHI del paciente.
+  - Metadata estable agrega: `antibiograma_id`, `resultado_antibiotico_id`, `antibiotico_id`, `sensibilidad_presente` / `resultado_presente` / `observacion_presente` (booleanos; sin CIM/diámetro/interpretación cruda), `motivo_cancelacion_presente`. Sin PHI del paciente ni `codigo_barra`.
 
 ## LIMS B3.4 (informes microbiológicos)
 
@@ -247,7 +247,15 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
   - Cualquier otra `action` no listada arriba cae en `return False` en `has_permission` (p. ej. si se agregara una `@action` nueva habría que extender el permiso).
 - **`LimsMicrobiologiaPermission`**: acción **`marcar_informado`** permitida a **admin** y **laboratorio** (además de `iniciar`, `cancelar`, `descartar`, etc.).
 - **secretaria / enfermeria**: siguen **sin** lectura de informes ni del resto de microbiología LIMS en B3.4 (misma política que B3.1–B3.3).
-- Auditoría B3.4: eventos de creación/actualización/emisión/validación/anulación de informe y de `marcar_informado` (acciones y metadata acotada en `microbiologia_estado.py` — sin PHI del paciente en metadata estable).
+- Auditoría B3.4: eventos de creación/actualización/emisión/validación/anulación de informe y de `marcar_informado` (acciones y metadata acotada en `microbiologia_estado.py` — sin PHI del paciente ni texto de informe en metadata/snapshots genéricos).
+
+## LIMS B3-audit (endurecimiento auditoría microbiología) [IMPLEMENTADO]
+
+- **Alcance:** solo auditoría/snapshots genéricos; **no** cambia API clínica/técnica autorizada, permisos, estados ni modelos.
+- **`AuditEvent.metadata` microbiología:** IDs técnicos (`estudio_id`, `muestra_id`, `solicitud_id`, `siembra_id`, `lectura_id`, `aislado_id`, `identificacion_id`, `antibiograma_id`, `resultado_antibiotico_id`, `microorganismo_id`, `antibiotico_id`, `informe_id`, `accion`, `view`, `estado_anterior`, `estado_nuevo`, `actor_id`, `request_id`). **Sin** `codigo_barra`, CIM/diámetro/interpretación S/I/R, observaciones completas ni textos de informe.
+- **Flags opcionales:** `observacion_presente`, `resultado_presente`, `sensibilidad_presente`, `informe_presente`, `motivo_*_presente` (booleanos; sin contenido).
+- **`safe_model_snapshot`:** redacta campos sensibles de modelos microbiológicos (`EstudioMicrobiologia`, `SiembraMicrobiologia`, `LecturaCultivo`, `AisladoMicrobiologico`, `IdentificacionMicroorganismo`, `Antibiograma`, `ResultadoAntibiotico`, `InformeMicrobiologia`) con placeholders `<texto clínico redactado>` / `<resultado microbiológico redactado>`.
+- **Fuera de alcance:** auditoría legal/especializada con old/new completos de resultados micro (fase futura si se requiere); PDF; frontend.
 
 ## EMR C6.2 — archivos y documentos clínicos [IMPLEMENTADO]
 

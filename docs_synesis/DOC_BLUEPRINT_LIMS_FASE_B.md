@@ -338,7 +338,7 @@ Lista completa en `DOC_API_ENDPOINTS.md` (GET/POST solicitudes, PATCH sin estado
 ## 9. Auditoría
 
 - Reutilizar `log_create`, `log_update`, `log_event` con `safe_model_snapshot` y `metadata` enriquecido (IDs técnicos y acción): `accion`, `estado_anterior`, `estado_nuevo`, `solicitud_id`, `muestra_id`, `resultado_id`, `estudio_micro_id`, `numero_solicitud`.  
-- **Regla SYNESIS (B1/B2):** `codigo_barra` es identificador operativo de `Muestra` para usuarios autorizados, pero **no** se registra en `AuditEvent.metadata` genérica ni se expone en snapshots genéricos. La auditoría usa `muestra_id` / `solicitud_id` / `resultado_id`.
+- **Regla SYNESIS (B1/B2/B3-audit):** `codigo_barra` es identificador operativo de `Muestra` para usuarios autorizados, pero **no** se registra en `AuditEvent.metadata` genérica ni se expone en snapshots genéricos (incluye microbiología B3-audit). La auditoría usa `muestra_id` / `solicitud_id` / IDs técnicos del dominio micro.
 - **EventoMuestra:** duplicación semántica aceptable para consultas rápidas; auditoría canónica sigue en `AuditEvent`.  
 - **Informe final validado:** cualquier corrección futura = nueva fila versión o `reemplaza_a` + anulación auditada (sin `UPDATE` silencioso de texto validado).
 

@@ -69,7 +69,6 @@ def _base_estudio_metadata(
         "solicitud_id": sol.pk,
         "numero_solicitud": sol.numero,
         "muestra_id": muestra.pk,
-        "codigo_barra": muestra.codigo_barra or "",
         "estado_anterior": estado_anterior,
         "estado_nuevo": estado_nuevo,
         "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
@@ -226,7 +225,7 @@ def aplicar_cancelar_estudio(
             estado_anterior=prev,
             estado_nuevo=estudio.estado,
         )
-        meta["motivo_cancelacion"] = estudio.motivo_cancelacion[:200]
+        meta["motivo_cancelacion_presente"] = bool(estudio.motivo_cancelacion)
         _audit_estudio_update(estudio, before=before, actor=actor, metadata=meta)
         return estudio
 
@@ -391,9 +390,8 @@ def crear_siembra(
             "solicitud_id": estudio.solicitud_id,
             "numero_solicitud": estudio.solicitud.numero,
             "muestra_id": estudio.muestra_id,
-            "codigo_barra": estudio.muestra.codigo_barra or "",
             "medio_id": medio.pk,
-            "medio_codigo": medio.codigo,
+            "observacion_presente": bool(siembra.observaciones),
             "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
             "view": view,
         }
@@ -459,9 +457,11 @@ def crear_lectura(
             "solicitud_id": estudio.solicitud_id,
             "numero_solicitud": estudio.solicitud.numero,
             "muestra_id": estudio.muestra_id,
-            "codigo_barra": estudio.muestra.codigo_barra or "",
             "crecimiento": lectura.crecimiento,
             "es_preliminar": lectura.es_preliminar,
+            "resultado_presente": bool(
+                lectura.descripcion_colonias or lectura.tincion_gram or lectura.observaciones
+            ),
             "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
             "view": view,
         }
@@ -500,7 +500,6 @@ def _base_aislado_metadata(
         "solicitud_id": sol.pk,
         "numero_solicitud": sol.numero,
         "muestra_id": muestra.pk,
-        "codigo_barra": muestra.codigo_barra or "",
         "lectura_id": aislado.lectura_origen_id,
         "microorganismo_id": aislado.microorganismo_id,
         "estado_anterior": estado_anterior,
@@ -623,7 +622,7 @@ def aplicar_descartar_aislado(
             estado_anterior=prev,
             estado_nuevo=aislado.estado,
         )
-        meta["motivo_descarte"] = aislado.motivo_descarte[:200]
+        meta["motivo_descarte_presente"] = bool(aislado.motivo_descarte)
         log_update(
             actor=actor,
             entity=aislado,
@@ -690,13 +689,13 @@ def crear_identificacion(
             "identificacion_id": identificacion.pk,
             "aislado_id": aislado.pk,
             "microorganismo_id": microorganismo.pk,
-            "microorganismo_codigo": microorganismo.codigo,
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
             "numero_solicitud": estudio.solicitud.numero,
             "muestra_id": estudio.muestra_id,
-            "codigo_barra": estudio.muestra.codigo_barra or "",
+            "resultado_presente": bool(identificacion.resultado),
+            "observacion_presente": bool(identificacion.observaciones),
             "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
             "view": view,
         }
@@ -764,7 +763,6 @@ def _base_antibiograma_metadata(
         "solicitud_id": sol.pk,
         "numero_solicitud": sol.numero,
         "muestra_id": muestra.pk,
-        "codigo_barra": muestra.codigo_barra or "",
         "estado_anterior": estado_anterior,
         "estado_nuevo": estado_nuevo,
         "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
@@ -933,15 +931,15 @@ def crear_resultado_antibiotico(
             "resultado_antibiotico_id": resultado.pk,
             "antibiograma_id": antibiograma.pk,
             "antibiotico_id": antibiotico.pk,
-            "antibiotico_codigo": antibiotico.codigo,
-            "interpretacion": resultado.interpretacion,
             "aislado_id": antibiograma.aislado_id,
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
             "numero_solicitud": estudio.solicitud.numero,
             "muestra_id": estudio.muestra_id,
-            "codigo_barra": estudio.muestra.codigo_barra or "",
+            "sensibilidad_presente": bool(resultado.interpretacion),
+            "resultado_presente": bool(resultado.mic or resultado.halo_mm is not None),
+            "observacion_presente": bool(resultado.observaciones),
             "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
             "view": view,
         }
@@ -1008,13 +1006,14 @@ def actualizar_resultado_antibiotico(
             "resultado_antibiotico_id": resultado.pk,
             "antibiograma_id": antibiograma.pk,
             "antibiotico_id": resultado.antibiotico_id,
-            "interpretacion": resultado.interpretacion,
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
             "numero_solicitud": estudio.solicitud.numero,
             "muestra_id": estudio.muestra_id,
-            "codigo_barra": estudio.muestra.codigo_barra or "",
+            "sensibilidad_presente": bool(resultado.interpretacion),
+            "resultado_presente": bool(resultado.mic or resultado.halo_mm is not None),
+            "observacion_presente": bool(resultado.observaciones),
             "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
             "view": view,
         }
@@ -1112,7 +1111,7 @@ def aplicar_cancelar_antibiograma(
             estado_anterior=prev,
             estado_nuevo=antibiograma.estado,
         )
-        meta["motivo_cancelacion"] = antibiograma.motivo_cancelacion[:200]
+        meta["motivo_cancelacion_presente"] = bool(antibiograma.motivo_cancelacion)
         log_update(
             actor=actor,
             entity=antibiograma,
@@ -1150,7 +1149,6 @@ def _base_informe_metadata(
         "solicitud_id": sol.pk,
         "numero_solicitud": sol.numero,
         "muestra_id": muestra.pk,
-        "codigo_barra": muestra.codigo_barra or "",
         "estado_anterior": estado_anterior,
         "estado_nuevo": estado_nuevo,
         "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
@@ -1486,7 +1484,7 @@ def aplicar_anular_informe(
             estado_anterior=prev_inf,
             estado_nuevo=informe.estado,
         )
-        meta_inf["motivo_anulacion"] = informe.motivo_anulacion[:200]
+        meta_inf["motivo_anulacion_presente"] = bool(informe.motivo_anulacion)
         log_update(
             actor=actor,
             entity=informe,

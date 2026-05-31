@@ -49,6 +49,40 @@ _REDACT_RESULTADO_EXAMEN_FIELDS = frozenset({
 })
 
 _CLINICAL_VALUE_PLACEHOLDER = '<valor clínico redactado>'
+_CLINICAL_TEXT_REDACTED = '<texto clínico redactado>'
+_MICRO_RESULT_PLACEHOLDER = '<resultado microbiológico redactado>'
+
+# Texto clínico / observaciones microbiológicas — no persistir en snapshot genérico (LIMS B3-audit).
+_REDACT_MICRO_TEXT_FIELDS = frozenset({
+    ('laboratorio.EstudioMicrobiologia', 'observaciones'),
+    ('laboratorio.EstudioMicrobiologia', 'motivo_cancelacion'),
+    ('laboratorio.SiembraMicrobiologia', 'observaciones'),
+    ('laboratorio.LecturaCultivo', 'descripcion_colonias'),
+    ('laboratorio.LecturaCultivo', 'tincion_gram'),
+    ('laboratorio.LecturaCultivo', 'observaciones'),
+    ('laboratorio.AisladoMicrobiologico', 'descripcion'),
+    ('laboratorio.AisladoMicrobiologico', 'cantidad'),
+    ('laboratorio.AisladoMicrobiologico', 'observaciones'),
+    ('laboratorio.AisladoMicrobiologico', 'motivo_descarte'),
+    ('laboratorio.IdentificacionMicroorganismo', 'metodo'),
+    ('laboratorio.IdentificacionMicroorganismo', 'resultado'),
+    ('laboratorio.IdentificacionMicroorganismo', 'observaciones'),
+    ('laboratorio.Antibiograma', 'observaciones'),
+    ('laboratorio.Antibiograma', 'motivo_cancelacion'),
+    ('laboratorio.Antibiograma', 'metodo'),
+    ('laboratorio.ResultadoAntibiotico', 'observaciones'),
+    ('laboratorio.InformeMicrobiologia', 'texto'),
+    ('laboratorio.InformeMicrobiologia', 'observaciones'),
+    ('laboratorio.InformeMicrobiologia', 'motivo_anulacion'),
+})
+
+# CIM/diámetro/interpretación S/I/R y valores numéricos microbiológicos sensibles.
+_REDACT_MICRO_RESULT_FIELDS = frozenset({
+    ('laboratorio.ResultadoAntibiotico', 'halo_mm'),
+    ('laboratorio.ResultadoAntibiotico', 'interpretacion'),
+    ('laboratorio.ResultadoAntibiotico', 'mic'),
+    ('laboratorio.IdentificacionMicroorganismo', 'confianza'),
+})
 
 
 class SnapshotTooLarge(ValidationError):
@@ -155,6 +189,17 @@ def safe_model_snapshot(
         label = getattr(opts, 'label', '')
         if (label, field.name) in _REDACT_LONG_TEXT_FIELDS and value:
             state[field.name] = '<texto clínico omitido>'
+            continue
+
+        if (label, field.name) in _REDACT_MICRO_TEXT_FIELDS and value:
+            state[field.name] = _CLINICAL_TEXT_REDACTED
+            continue
+
+        if (label, field.name) in _REDACT_MICRO_RESULT_FIELDS:
+            if value is not None and value != '':
+                state[field.name] = _MICRO_RESULT_PLACEHOLDER
+            elif include_nulls:
+                state[field.name] = None
             continue
 
         if label == 'laboratorio.ResultadoExamen' and field.name in _REDACT_RESULTADO_EXAMEN_FIELDS:
