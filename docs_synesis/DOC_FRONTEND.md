@@ -160,6 +160,51 @@ CI=true npm test -- --watchAll=false --runInBand
 
 Resultado: TypeScript OK, build OK, **11 suites / 25 tests** OK.
 
+### LIMS B3-frontend-validación [IMPLEMENTADO — jun 2026]
+
+Relevamiento y validación del SPA microbiología existente (UI-2) contra backend B3.x.
+
+**Rutas confirmadas:** `/laboratorio/microbiologia`, `/laboratorio/microbiologia/estudios`, `/laboratorio/microbiologia/estudios/:id` (5 tabs), `/laboratorio/microbiologia/catalogos`.
+
+**Pantallas cubiertas (confirmado por código):**
+
+| Dominio | UI |
+|---------|-----|
+| Estudios | listado + detalle + acciones `iniciar` / `cancelar` / `marcar-informado` |
+| Siembras / lecturas | tab «Siembras y lecturas» |
+| Aislados / identificaciones | tab «Aislados» |
+| Antibiogramas / resultados | tab «Antibiograma» |
+| Informes | tab «Informes» (`emitir`, `validar` admin, `anular`) |
+| Catálogos | medios, microorganismos, antibióticos (escritura admin) |
+
+**Contrato API:** `limsMicroApi.ts` alinea prefijo `/lab/microbiologia/...` con todos los endpoints backend B3.1–B3.4. Re-export vía `limsApi.ts`.
+
+**Correcciones aplicadas (bugs mínimos):**
+
+1. **Crecimiento lectura:** el selector usaba `AUSENTE` (inválido en backend); corregido a `SIN_DESARROLLO` + `MIXTO` (`SiembrasLecturasPanel.tsx`, `types/lims.ts`).
+2. **Estudio cancelado:** tabs operativas ocultan formularios si `estado === CANCELADO` (`MicrobiologiaEstudioDetalle.tsx`).
+
+**Gaps detectados (no implementados — deuda futura):**
+
+- Detalle carga listados globales (`listSiembras`, `listLecturas`, etc.) y filtra en cliente — puede degradar con volumen alto; falta filtro server-side por `estudio_id`.
+- Crear estudio pide `solicitud_id` / `muestra_id` manualmente — sin picker desde orden LIMS ni escaneo de código de barras.
+- Sin tests Jest específicos de microbiología (solo `limsCargaMuestra.test.ts` para B2-C).
+- Sin E2E browser del flujo micro completo.
+- PDF / portal paciente / QC / CLSI-EUCAST: fuera de alcance.
+
+**Seguridad frontend:** sin `console.log`/`console.error` sensibles en componentes LIMS/micro (confirmado por grep). Errores vía `formatDrfError` + toast.
+
+**Validaciones ejecutadas (jun 2026):**
+
+```bash
+cd frontend && npm exec -- tsc --noEmit          # OK
+cd frontend && npm run build                     # OK
+CI=true npm test -- --watchAll=false --runInBand src/utils/limsCargaMuestra.test.ts  # 6/6 OK
+./emr_env/bin/python manage.py check             # OK
+./emr_env/bin/python manage.py makemigrations --check --dry-run  # sin cambios
+./emr_env/bin/pytest laboratorio/tests/test_microbiologia_*.py -q --reuse-db  # 161/161 OK
+```
+
 ### Fuera de alcance UI-2
 
 PDF, firma digital, QC/equipamiento, portal paciente, endpoints legacy `/solicitudes-examen/` y `/resultados-examen/`.

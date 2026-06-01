@@ -159,7 +159,9 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 **Fase B2-C [frontend]:** `frontend/src/utils/limsCargaMuestra.test.ts` (validación requiere_muestra, payload con/sin `muestra_id`, filtro procesables); verificación manual `npm exec tsc --noEmit` y `npm run build` en submódulo `frontend/`.
 **Fase B2-A [IMPLEMENTADO]:** `auditoria/tests/test_audit_integration.py` (`test_resultado_examen_snapshot_redacta_valor_clinico`); `test_resultados_muestras_api.py` (`test_cargar_resultados_con_muestra_no_audita_codigo_barra_ni_valor_clinico` — metadata y snapshots sin PHI/codigo_barra).
 
-**Fase B3-audit [IMPLEMENTADO]:** `laboratorio/tests/test_microbiologia_auditoria.py` — metadata micro sin `codigo_barra`/CIM/diámetro/interpretación/texto de informe; snapshots redactados; conservación de IDs técnicos (`muestra_id`, `solicitud_id`, `estudio_id`, `antibiograma_id`, `resultado_antibiotico_id`, etc.).
+**Fase B3-audit [IMPLEMENTADO]:** `laboratorio/tests/test_microbiologia_auditoria.py` — metadata micro sin `codigo_barra`/CIM/diámetro/interpretación/texto de informe; snapshots redactados; conservación de IDs técnicos.
+
+**Fase B3-frontend-validación [IMPLEMENTADO — jun 2026]:** relevamiento SPA microbiología (UI-2); contrato `limsMicroApi.ts` verificado; `tsc` + `build` + Jest focal `limsCargaMuestra.test.ts` OK; backend micro **161/161** OK. Corrección bug crecimiento `AUSENTE`→`SIN_DESARROLLO`/`MIXTO`. Sin suite Jest micro dedicada (gap documentado en `DOC_FRONTEND.md`).
 
 **Fase B4.1:** `laboratorio/tests/test_resultados_clinicos_models.py` (TipoExamen rangos/críticos/sección; ResultadoExamen numérico, snapshots, patológico/crítico, pendiente); `laboratorio/tests/test_resultados_clinicos_api.py` (payload viejo, `valor_numerico`, unidad default, cálculo patológico/crítico, validar, permisos laboratorio/médico).
 
