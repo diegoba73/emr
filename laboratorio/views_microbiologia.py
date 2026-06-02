@@ -10,6 +10,7 @@ import logging
 
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from api.permissions import (
@@ -22,6 +23,7 @@ from auditoria.audit_service import log_create, log_update
 from auditoria.snapshot import safe_model_snapshot
 from laboratorio.microbiologia_estado import (
     MicrobiologiaAccionError,
+    assert_estudio_micro_operable,
     actualizar_informe_borrador,
     actualizar_resultado_antibiotico,
     aplicar_anular_informe,
@@ -93,6 +95,24 @@ from laboratorio.serializers_microbiologia import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _guard_estudio_micro_operable_entity(entity) -> None:
+    """Bloquea PATCH técnicos si el estudio asociado está cerrado."""
+    if isinstance(entity, EstudioMicrobiologia):
+        estudio = entity
+    elif hasattr(entity, "estudio"):
+        estudio = entity.estudio
+    elif hasattr(entity, "antibiograma"):
+        estudio = entity.antibiograma.aislado.estudio
+    elif hasattr(entity, "aislado"):
+        estudio = entity.aislado.estudio
+    else:
+        return
+    try:
+        assert_estudio_micro_operable(estudio)
+    except MicrobiologiaAccionError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 class MedioCultivoViewSet(viewsets.ModelViewSet):
@@ -201,6 +221,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
+        _guard_estudio_micro_operable_entity(serializer.instance)
         before = safe_model_snapshot(serializer.instance)
         instance = serializer.save()
         log_update(
@@ -333,6 +354,7 @@ class SiembraMicrobiologiaViewSet(viewsets.ModelViewSet):
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
+        _guard_estudio_micro_operable_entity(serializer.instance)
         before = safe_model_snapshot(serializer.instance)
         instance = serializer.save()
         log_update(
@@ -409,6 +431,7 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
+        _guard_estudio_micro_operable_entity(serializer.instance)
         before = safe_model_snapshot(serializer.instance)
         instance = serializer.save()
         log_update(
@@ -543,6 +566,7 @@ class AisladoMicrobiologicoViewSet(viewsets.ModelViewSet):
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
+        _guard_estudio_micro_operable_entity(serializer.instance)
         before = safe_model_snapshot(serializer.instance)
         instance = serializer.save()
         log_update(
@@ -750,6 +774,7 @@ class AntibiogramaViewSet(viewsets.ModelViewSet):
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
+        _guard_estudio_micro_operable_entity(serializer.instance)
         before = safe_model_snapshot(serializer.instance)
         instance = serializer.save()
         log_update(

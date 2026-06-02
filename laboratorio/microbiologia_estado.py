@@ -45,6 +45,27 @@ class MicrobiologiaAccionError(ValueError):
     """Acción o transición no permitida sobre el estudio/siembra/lectura."""
 
 
+# Estados en los que no se admiten mutaciones técnicas (B3-frontend-validación-A).
+# No modifica el modelo: la constante del modelo sigue siendo solo CANCELADO para clean().
+ESTADOS_BLOQUEAN_OPERACION_MICRO = frozenset({"CANCELADO", "VALIDADO", "INFORMADO"})
+
+MSG_ESTUDIO_MICRO_CERRADO = (
+    "No se puede operar un estudio microbiológico cerrado "
+    "(estado CANCELADO, VALIDADO o INFORMADO)."
+)
+
+
+def assert_estudio_micro_operable(
+    estudio: EstudioMicrobiologia,
+    *,
+    accion: str = "operar",
+) -> None:
+    """Bloquea mutaciones técnicas sobre estudios cerrados."""
+    del accion  # reservado para mensajes futuros sin cambiar firma pública
+    if estudio.estado in ESTADOS_BLOQUEAN_OPERACION_MICRO:
+        raise MicrobiologiaAccionError(MSG_ESTUDIO_MICRO_CERRADO)
+
+
 # ---------------------------------------------------------------------------
 # Metadata helpers
 # ---------------------------------------------------------------------------
@@ -354,8 +375,7 @@ def crear_siembra(
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )
-        if estudio.estado in EstudioMicrobiologia.ESTADOS_BLOQUEAN_OPERACION:
-            raise MicrobiologiaAccionError("No se puede sembrar sobre un estudio cancelado.")
+        assert_estudio_micro_operable(estudio)
         try:
             medio = MedioCultivo.objects.get(pk=medio_id)
         except MedioCultivo.DoesNotExist as exc:
@@ -428,8 +448,7 @@ def crear_lectura(
             .get(pk=siembra_id)
         )
         estudio = siembra.estudio
-        if estudio.estado in EstudioMicrobiologia.ESTADOS_BLOQUEAN_OPERACION:
-            raise MicrobiologiaAccionError("No se puede leer sobre un estudio cancelado.")
+        assert_estudio_micro_operable(estudio)
         if siembra.estado == "CANCELADA":
             raise MicrobiologiaAccionError("No se puede leer sobre una siembra cancelada.")
 
@@ -537,8 +556,7 @@ def crear_aislado(
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )
-        if estudio.estado in EstudioMicrobiologia.ESTADOS_BLOQUEAN_OPERACION:
-            raise MicrobiologiaAccionError("No se puede crear aislado sobre un estudio cancelado.")
+        assert_estudio_micro_operable(estudio)
         try:
             lectura = LecturaCultivo.objects.select_related("siembra").get(pk=lectura_id)
         except LecturaCultivo.DoesNotExist as exc:
@@ -604,8 +622,7 @@ def aplicar_descartar_aislado(
         prev = aislado.estado
         if prev == "DESCARTADO":
             raise MicrobiologiaAccionError("El aislado ya está descartado.")
-        if aislado.estudio.estado in EstudioMicrobiologia.ESTADOS_BLOQUEAN_OPERACION:
-            raise MicrobiologiaAccionError("No se puede operar sobre un estudio cancelado.")
+        assert_estudio_micro_operable(aislado.estudio)
         before = safe_model_snapshot(aislado)
         aislado.estado = "DESCARTADO"
         aislado.fecha_descarte = timezone.now()
@@ -662,8 +679,7 @@ def crear_identificacion(
         if aislado.estado in AisladoMicrobiologico.ESTADOS_BLOQUEAN_IDENTIFICACION:
             raise MicrobiologiaAccionError("No se puede identificar un aislado descartado.")
         estudio = aislado.estudio
-        if estudio.estado in EstudioMicrobiologia.ESTADOS_BLOQUEAN_OPERACION:
-            raise MicrobiologiaAccionError("No se puede identificar sobre un estudio cancelado.")
+        assert_estudio_micro_operable(estudio)
         try:
             microorganismo = Microorganismo.objects.get(pk=microorganismo_id)
         except Microorganismo.DoesNotExist as exc:
@@ -809,11 +825,7 @@ def crear_antibiograma(
                 "El aislado debe tener microorganismo asignado para antibiograma."
             )
         estudio = aislado.estudio
-        if estudio.estado in EstudioMicrobiologia.ESTADOS_BLOQUEAN_OPERACION:
-            raise MicrobiologiaAccionError(
-                "No se puede crear antibiograma sobre un estudio cancelado."
-            )
-
+        assert_estudio_micro_operable(estudio)
         antibiograma = Antibiograma(
             aislado=aislado,
             estado="PENDIENTE",
@@ -897,6 +909,7 @@ def crear_resultado_antibiotico(
             )
         except Antibiograma.DoesNotExist as exc:
             raise MicrobiologiaAccionError("El antibiograma no existe.") from exc
+        assert_estudio_micro_operable(antibiograma.aislado.estudio)
         if antibiograma.estado in Antibiograma.ESTADOS_BLOQUEAN_CARGA:
             raise MicrobiologiaAccionError(
                 "No se pueden cargar resultados en un antibiograma COMPLETO o CANCELADO."
@@ -978,6 +991,7 @@ def actualizar_resultado_antibiotico(
             .get(pk=resultado_id)
         )
         antibiograma = resultado.antibiograma
+        assert_estudio_micro_operable(antibiograma.aislado.estudio)
         if antibiograma.estado in Antibiograma.ESTADOS_BLOQUEAN_CARGA:
             raise MicrobiologiaAccionError(
                 "No se pueden modificar resultados en un antibiograma COMPLETO o CANCELADO."
@@ -1042,6 +1056,7 @@ def aplicar_completar_antibiograma(
             .select_related("aislado", "aislado__estudio", "aislado__estudio__solicitud", "aislado__estudio__muestra")
             .get(pk=antibiograma_id)
         )
+        assert_estudio_micro_operable(antibiograma.aislado.estudio)
         prev = antibiograma.estado
         if prev == "COMPLETO":
             raise MicrobiologiaAccionError("El antibiograma ya está COMPLETO.")
@@ -1090,6 +1105,7 @@ def aplicar_cancelar_antibiograma(
             .select_related("aislado", "aislado__estudio", "aislado__estudio__solicitud", "aislado__estudio__muestra")
             .get(pk=antibiograma_id)
         )
+        assert_estudio_micro_operable(antibiograma.aislado.estudio)
         prev = antibiograma.estado
         if prev == "CANCELADO":
             raise MicrobiologiaAccionError("El antibiograma ya está cancelado.")
@@ -1217,12 +1233,7 @@ def crear_informe_borrador(
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )
-        if estudio.estado == "CANCELADO":
-            raise MicrobiologiaAccionError("No se puede crear informe sobre un estudio cancelado.")
-        if estudio.estado in ("VALIDADO", "INFORMADO"):
-            raise MicrobiologiaAccionError(
-                "No se pueden crear informes sobre un estudio ya validado o informado."
-            )
+        assert_estudio_micro_operable(estudio)
         if tipo == "FINAL":
             if InformeMicrobiologia.objects.filter(estudio_id=estudio.pk, tipo="FINAL").exclude(
                 estado="ANULADO"
@@ -1278,8 +1289,7 @@ def actualizar_informe_borrador(
         )
         if informe.estado != "BORRADOR":
             raise MicrobiologiaAccionError("Solo se puede editar un informe en BORRADOR.")
-        if informe.estudio.estado == "CANCELADO":
-            raise MicrobiologiaAccionError("El estudio está cancelado.")
+        assert_estudio_micro_operable(informe.estudio)
         before = safe_model_snapshot(informe)
         if texto is not None:
             informe.texto = texto
@@ -1329,10 +1339,7 @@ def aplicar_emitir_informe(
         if informe.estado != "BORRADOR":
             raise MicrobiologiaAccionError("Solo se puede emitir un informe en BORRADOR.")
         estudio = informe.estudio
-        if estudio.estado == "CANCELADO":
-            raise MicrobiologiaAccionError("El estudio está cancelado.")
-        if estudio.estado in ("VALIDADO", "INFORMADO"):
-            raise MicrobiologiaAccionError("El estudio ya está validado o informado.")
+        assert_estudio_micro_operable(estudio)
         texto_ok = _texto_efectivo_emitir(informe, texto)
         if not texto_ok:
             raise MicrobiologiaAccionError("El texto del informe es obligatorio al emitir.")
@@ -1467,6 +1474,7 @@ def aplicar_anular_informe(
             raise MicrobiologiaAccionError("El informe ya está anulado.")
         if informe.estado == "VALIDADO":
             raise MicrobiologiaAccionError("No se puede anular un informe VALIDADO.")
+        assert_estudio_micro_operable(informe.estudio)
         prev_inf = informe.estado
         before_inf = safe_model_snapshot(informe)
         informe.estado = "ANULADO"

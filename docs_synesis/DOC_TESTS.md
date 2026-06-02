@@ -163,6 +163,8 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 
 **Fase B3-frontend-validación [IMPLEMENTADO — jun 2026]:** relevamiento SPA microbiología (UI-2); contrato `limsMicroApi.ts` verificado; `tsc` + `build` + Jest focal `limsCargaMuestra.test.ts` OK; backend micro **161/161** OK. Corrección bug crecimiento `AUSENTE`→`SIN_DESARROLLO`/`MIXTO`. Sin suite Jest micro dedicada (gap documentado en `DOC_FRONTEND.md`).
 
+**Fase B3-frontend-validación-A [IMPLEMENTADO — jun 2026]:** bloqueo operación técnica micro en estados cerrados `CANCELADO`/`VALIDADO`/`INFORMADO`. Backend: `TestEstudioMicroCerradoOperacionAPI` en `test_microbiologia_api.py` (siembra/aislado/resultado/lectura → 400; `marcar-informado` desde `VALIDADO` OK; sin auditoría de éxito en fallos). Frontend: `limsAccess.test.ts` (`isMicroEstudioCerrado`). Servicio: `assert_estudio_micro_operable` en `microbiologia_estado.py`; guards PATCH en `views_microbiologia.py`.
+
 **Fase B4.1:** `laboratorio/tests/test_resultados_clinicos_models.py` (TipoExamen rangos/críticos/sección; ResultadoExamen numérico, snapshots, patológico/crítico, pendiente); `laboratorio/tests/test_resultados_clinicos_api.py` (payload viejo, `valor_numerico`, unidad default, cálculo patológico/crítico, validar, permisos laboratorio/médico).
 
 **Fase B3.1 (Microbiología base):**

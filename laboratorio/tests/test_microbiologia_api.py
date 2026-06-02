@@ -1490,3 +1490,170 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.client.force_authenticate(self.lab)
         r = self.client.get("/api/laboratorio/microbiologia/informes/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# B3-frontend-validación-A — estudios cerrados bloquean operación técnica
+# ---------------------------------------------------------------------------
+
+
+def _promover_estudio_a_validado(client, lab, admin, estudio_pk):
+    client.force_authenticate(lab)
+    r = client.post(
+        "/api/lab/microbiologia/informes/",
+        {"estudio_id": estudio_pk, "tipo": "FINAL", "texto": "x"},
+        format="json",
+    )
+    assert r.status_code == status.HTTP_201_CREATED, r.content
+    iid = r.json()["id"]
+    client.post(
+        f"/api/lab/microbiologia/informes/{iid}/emitir/",
+        {"texto": "Final."},
+        format="json",
+    )
+    client.force_authenticate(admin)
+    r2 = client.post(f"/api/lab/microbiologia/informes/{iid}/validar/", {}, format="json")
+    assert r2.status_code == status.HTTP_200_OK, r2.content
+    estudio = EstudioMicrobiologia.objects.get(pk=estudio_pk)
+    assert estudio.estado == "VALIDADO"
+    return estudio
+
+
+def _promover_estudio_a_informado(client, lab, admin, estudio_pk):
+    _promover_estudio_a_validado(client, lab, admin, estudio_pk)
+    client.force_authenticate(lab)
+    r = client.post(
+        f"/api/lab/microbiologia/estudios/{estudio_pk}/marcar-informado/",
+        {},
+        format="json",
+    )
+    assert r.status_code == status.HTTP_200_OK, r.content
+    estudio = EstudioMicrobiologia.objects.get(pk=estudio_pk)
+    assert estudio.estado == "INFORMADO"
+    return estudio
+
+
+@pytest.mark.django_db
+class TestEstudioMicroCerradoOperacionAPI(TestCase):
+    """CANCELADO / VALIDADO / INFORMADO bloquean mutaciones técnicas."""
+
+    def setUp(self):
+        self.suf = uuid.uuid4().hex[:8]
+        self.lab = User.objects.create_user(
+            username=f"lab_cerr_{self.suf}", email=f"lc{self.suf}@t.com",
+            password="x", rol="laboratorio", is_staff=True,
+        )
+        self.admin = User.objects.create_user(
+            username=f"adm_cerr_{self.suf}", email=f"ac{self.suf}@t.com",
+            password="x", rol="admin", is_staff=True,
+        )
+        self.med_user = User.objects.create_user(
+            username=f"med_cerr_{self.suf}", email=f"mc{self.suf}@t.com",
+            password="x", rol="medico",
+        )
+        self.ctx = _setup_aislado_identificado(self.suf, self.lab, self.med_user)
+        self.antibiograma = Antibiograma.objects.create(aislado=self.ctx["aislado"])
+        EstudioMicrobiologia.objects.filter(pk=self.ctx["estudio"].pk).update(estado="ANTIBIOGRAMA")
+        self.ctx["estudio"].refresh_from_db()
+        self.ab = Antibiotico.objects.create(codigo=f"AB{self.suf}", nombre="Ampicilina")
+        self.medio = MedioCultivo.objects.get(pk=self.ctx["siembra"].medio_id)
+        self.client = APIClient(enforce_csrf_checks=False)
+        self.client.force_authenticate(self.lab)
+
+    def test_validado_bloquea_operaciones_tecnicas(self):
+        estudio_pk = self.ctx["estudio"].pk
+        _promover_estudio_a_validado(self.client, self.lab, self.admin, estudio_pk)
+        n_siembras = SiembraMicrobiologia.objects.filter(estudio_id=estudio_pk).count()
+        n_audit_siembra = AuditEvent.objects.filter(
+            entity_type=SiembraMicrobiologia._meta.label, action="CREATE"
+        ).count()
+
+        r_siembra = self.client.post(
+            "/api/lab/microbiologia/siembras/",
+            {"estudio_id": estudio_pk, "medio_id": self.medio.pk, "atmosfera": "aerobia"},
+            format="json",
+        )
+        self.assertEqual(r_siembra.status_code, status.HTTP_400_BAD_REQUEST)
+
+        r_aislado = self.client.post(
+            "/api/lab/microbiologia/aislados/",
+            {
+                "estudio_id": estudio_pk,
+                "lectura_id": self.ctx["lectura"].pk,
+            },
+            format="json",
+        )
+        self.assertEqual(r_aislado.status_code, status.HTTP_400_BAD_REQUEST)
+
+        r_resultado = self.client.post(
+            "/api/lab/microbiologia/resultados-antibiotico/",
+            {
+                "antibiograma_id": self.antibiograma.pk,
+                "antibiotico_id": self.ab.pk,
+                "interpretacion": "S",
+            },
+            format="json",
+        )
+        self.assertEqual(r_resultado.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertEqual(
+            SiembraMicrobiologia.objects.filter(estudio_id=estudio_pk).count(),
+            n_siembras,
+        )
+        self.assertEqual(
+            AuditEvent.objects.filter(
+                entity_type=SiembraMicrobiologia._meta.label, action="CREATE"
+            ).count(),
+            n_audit_siembra,
+        )
+
+    def test_informado_bloquea_operaciones_tecnicas(self):
+        estudio_pk = self.ctx["estudio"].pk
+        _promover_estudio_a_informado(self.client, self.lab, self.admin, estudio_pk)
+
+        r_siembra = self.client.post(
+            "/api/lab/microbiologia/siembras/",
+            {"estudio_id": estudio_pk, "medio_id": self.medio.pk},
+            format="json",
+        )
+        self.assertEqual(r_siembra.status_code, status.HTTP_400_BAD_REQUEST)
+
+        r_lectura = self.client.post(
+            "/api/lab/microbiologia/lecturas/",
+            {
+                "siembra_id": self.ctx["siembra"].pk,
+                "crecimiento": "MODERADO",
+            },
+            format="json",
+        )
+        self.assertEqual(r_lectura.status_code, status.HTTP_400_BAD_REQUEST)
+
+        r_aislado = self.client.post(
+            "/api/lab/microbiologia/aislados/",
+            {
+                "estudio_id": estudio_pk,
+                "lectura_id": self.ctx["lectura"].pk,
+            },
+            format="json",
+        )
+        self.assertEqual(r_aislado.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_validado_permite_marcar_informado(self):
+        estudio_pk = self.ctx["estudio"].pk
+        _promover_estudio_a_validado(self.client, self.lab, self.admin, estudio_pk)
+        r = self.client.post(
+            f"/api/lab/microbiologia/estudios/{estudio_pk}/marcar-informado/",
+            {},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["estado"], "INFORMADO")
+
+    def test_cancelado_sigue_bloqueando_siembra(self):
+        EstudioMicrobiologia.objects.filter(pk=self.ctx["estudio"].pk).update(estado="CANCELADO")
+        r = self.client.post(
+            "/api/lab/microbiologia/siembras/",
+            {"estudio_id": self.ctx["estudio"].pk, "medio_id": self.medio.pk},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)

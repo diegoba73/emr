@@ -10,6 +10,7 @@
 **Actualización (Fase B3.3 — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (Frontend UI-2 — consola microbiología):** 17 de mayo de 2026  
+**Actualización (B3-frontend-validación-A — bloqueo operación en estados cerrados):** junio de 2026  
 
 **Alcance:** Flujo LIMS **nativo** (`laboratorio` app) y vínculos con `solicitudes` / `integracion_lims`.
 
@@ -342,6 +343,6 @@ Orden LIMS (SolicitudExamen) → Muestra → EstudioMicrobiologia
 
 **API cliente:** solo `/lab/microbiologia/...` (`limsMicroApi.ts`). No usa alias `/laboratorio/microbiologia/` en cliente ni rutas EMR `/solicitudes`.
 
-**Permisos UI:** ver `DOC_FRONTEND.md` (sección UI-2). Identificaciones: solo alta (append-only). Estados terminales bloquean edición en antibiograma/informe según respuesta del backend.
+**Permisos UI:** ver `DOC_FRONTEND.md` (sección UI-2). Identificaciones: solo alta (append-only). **B3-frontend-validación-A:** estados cerrados `CANCELADO`/`VALIDADO`/`INFORMADO` bloquean formularios operativos; datos históricos visibles; «Marcar informado» solo desde `VALIDADO`. Backend es fuente de verdad.
 
 **Limitaciones conocidas (MVP):** alta de estudio con IDs numéricos de solicitud/muestra; listas relacionadas cargadas globalmente y filtradas por `estudio` en cliente; motivos de cancelación/descarte/anulación vía `prompt()`.

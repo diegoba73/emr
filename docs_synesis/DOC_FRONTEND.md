@@ -182,13 +182,15 @@ Relevamiento y validación del SPA microbiología existente (UI-2) contra backen
 **Correcciones aplicadas (bugs mínimos):**
 
 1. **Crecimiento lectura:** el selector usaba `AUSENTE` (inválido en backend); corregido a `SIN_DESARROLLO` + `MIXTO` (`SiembrasLecturasPanel.tsx`, `types/lims.ts`).
-2. **Estudio cancelado:** tabs operativas ocultan formularios si `estado === CANCELADO` (`MicrobiologiaEstudioDetalle.tsx`).
+2. **Estudio cancelado:** tabs operativas ocultaban formularios solo si `estado === CANCELADO` (corregido en B3-frontend-validación-A).
+
+**B3-frontend-validación-A [IMPLEMENTADO — jun 2026]:** `CANCELADO`, `VALIDADO` e `INFORMADO` bloquean operación técnica en UI. Helpers: `limsAccess.ts` (`isMicroEstudioCerrado`, `canOperateMicroEstudioTecnico`, `canMarcarMicroEstudioInformado`); constante en `types/lims.ts`. Alert en detalle; datos históricos visibles; «Marcar informado» solo desde `VALIDADO`. Backend (`ESTADOS_BLOQUEAN_OPERACION_MICRO` + `assert_estudio_micro_operable`) es fuente de verdad. Test Jest: `limsAccess.test.ts`.
 
 **Gaps detectados (no implementados — deuda futura):**
 
 - Detalle carga listados globales (`listSiembras`, `listLecturas`, etc.) y filtra en cliente — puede degradar con volumen alto; falta filtro server-side por `estudio_id`.
 - Crear estudio pide `solicitud_id` / `muestra_id` manualmente — sin picker desde orden LIMS ni escaneo de código de barras.
-- Sin tests Jest específicos de microbiología (solo `limsCargaMuestra.test.ts` para B2-C).
+- Sin tests Jest específicos de microbiología (solo `limsCargaMuestra.test.ts` para B2-C; **B3-frontend-validación-A** añade `limsAccess.test.ts`).
 - Sin E2E browser del flujo micro completo.
 - PDF / portal paciente / QC / CLSI-EUCAST: fuera de alcance.
 
