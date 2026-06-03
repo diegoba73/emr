@@ -321,7 +321,7 @@ Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiolog
 | `/api/lab/microbiologia/estudios/{id}/` | GET, PATCH | PATCH solo `tipo_estudio` y `observaciones`; **`estado` no se modifica por PATCH**. |
 | `/api/lab/microbiologia/estudios/{id}/iniciar/` | POST | admin/lab. Transición `PENDIENTE→RECIBIDO` (idempotente). |
 | `/api/lab/microbiologia/estudios/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Transición a `CANCELADO`. |
-| `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). |
+| `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). **Sin query `estudio_id`** (solo búsqueda/orden); UI detalle filtra en cliente [GAP B3-UX]. |
 | `/api/lab/microbiologia/siembras/{id}/` | GET, PATCH | PATCH: `condicion_incubacion`, `temperatura_c`, `atmosfera`, `observaciones`. |
 | `/api/lab/microbiologia/lecturas/` | GET, POST | Crear: admin/lab. Si `es_preliminar=True` y el estudio está `SEMBRADO`, lo pasa a `LECTURA_PRELIMINAR`. |
 | `/api/lab/microbiologia/lecturas/{id}/` | GET, PATCH | PATCH: `horas_incubacion`, `crecimiento`, `descripcion_colonias`, `tincion_gram`, `observaciones`, `es_preliminar`. |

@@ -186,12 +186,14 @@ Relevamiento y validación del SPA microbiología existente (UI-2) contra backen
 
 **B3-frontend-validación-A [IMPLEMENTADO — jun 2026]:** `CANCELADO`, `VALIDADO` e `INFORMADO` bloquean operación técnica en UI. Helpers: `limsAccess.ts` (`isMicroEstudioCerrado`, `canOperateMicroEstudioTecnico`, `canMarcarMicroEstudioInformado`); constante en `types/lims.ts`. Alert en detalle; datos históricos visibles; «Marcar informado» solo desde `VALIDADO`. Backend (`ESTADOS_BLOQUEAN_OPERACION_MICRO` + `assert_estudio_micro_operable`) es fuente de verdad. Test Jest: `limsAccess.test.ts`.
 
-**Gaps detectados (no implementados — deuda futura):**
+**B3-frontend-validación-A [VALIDADO — jun 2026]:** revalidado con PostgreSQL: `TestEstudioMicroCerradoOperacionAPI` 4/4; `test_microbiologia_*` 165/165; regresión LIMS 315/315. Paquete Codex: `docs_synesis/B3_VALIDACION_A_CODEX_AUDIT.md`.
 
-- Detalle carga listados globales (`listSiembras`, `listLecturas`, etc.) y filtra en cliente — puede degradar con volumen alto; falta filtro server-side por `estudio_id`.
-- Crear estudio pide `solicitud_id` / `muestra_id` manualmente — sin picker desde orden LIMS ni escaneo de código de barras.
-- Sin tests Jest específicos de microbiología (solo `limsCargaMuestra.test.ts` para B2-C; **B3-frontend-validación-A** añade `limsAccess.test.ts`).
-- Sin E2E browser del flujo micro completo.
+**B3-frontend-UX [PARCIAL — jun 2026]:**
+
+- **[IMPLEMENTADO]** Picker solicitud/muestra al crear estudio (`MicrobiologiaEstudios.tsx`): `listSolicitudesExamen`, `listMuestrasPorSolicitud`, muestras `RECIBIDA`/`CONSERVADA`/`EN_PROCESO` vía `limsMicroUx.ts`; ingreso manual en acordeón avanzado.
+- **[GAP]** Detalle sigue cargando listados micro globales y filtra en cliente — backend micro no expone filtro `estudio_id` (solo `SearchFilter`/`OrderingFilter`).
+- **[GAP]** E2E browser micro: sin Playwright/Cypress en repo.
+- Tests Jest: `limsAccess.test.ts`, `limsMicroUx.test.ts` (además de `limsCargaMuestra.test.ts` B2-C).
 - PDF / portal paciente / QC / CLSI-EUCAST: fuera de alcance.
 
 **Seguridad frontend:** sin `console.log`/`console.error` sensibles en componentes LIMS/micro (confirmado por grep). Errores vía `formatDrfError` + toast.
