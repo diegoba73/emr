@@ -9,6 +9,7 @@
 **Actualización (Fase B3.2 — Microorganismos, aislados, identificación):** 13 de mayo de 2026  
 **Actualización (Fase B3.3 — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
+**Actualización (E2E-1 — validación flujo crítico API):** 4 de junio de 2026  
 **Actualización (Frontend UI-2 — consola microbiología):** 17 de mayo de 2026  
 **Actualización (B3-frontend-validación-A [VALIDADO] + UX parcial):** junio de 2026 — Alta estudio micro: picker solicitud/muestra LIMS (`RECIBIDA`/`CONSERVADA`/`EN_PROCESO`). Detalle micro: listados globales + filtro cliente [GAP filtros API].  
 
@@ -346,3 +347,21 @@ Orden LIMS (SolicitudExamen) → Muestra → EstudioMicrobiologia
 **Permisos UI:** ver `DOC_FRONTEND.md` (sección UI-2). Identificaciones: solo alta (append-only). **B3-frontend-validación-A:** estados cerrados `CANCELADO`/`VALIDADO`/`INFORMADO` bloquean formularios operativos; datos históricos visibles; «Marcar informado» solo desde `VALIDADO`. Backend es fuente de verdad.
 
 **Limitaciones conocidas (MVP):** alta de estudio con IDs numéricos de solicitud/muestra; listas relacionadas cargadas globalmente y filtradas por `estudio` en cliente; motivos de cancelación/descarte/anulación vía `prompt()`.
+
+---
+
+## Validación E2E-1 (flujo crítico reproducible)
+
+**Framework browser:** no configurado (sin Playwright/Cypress en `frontend/package.json`).
+
+**Validación implementada (jun 2026):** test de integración `laboratorio/tests/test_lims_flujo_critico.py::test_flujo_critico_lims_muestra_resultado_microbiologia` recorre por HTTP:
+
+1. `POST /api/lab/solicitudes/` (rol `laboratorio`)
+2. `POST /api/lab/muestras-transaccionales/` → `tomar` → `recibir`
+3. `POST /api/lab/solicitudes/{id}/cargar-resultados/` con `muestra_id` (muestra → `EN_PROCESO`, orden → `EN_PROCESO`)
+4. `POST /api/lab/microbiologia/estudios/` → `iniciar` → `siembras` → `lecturas` (preliminar)
+5. `POST /api/lab/microbiologia/informes/` tipo `PRELIMINAR` (`BORRADOR`)
+
+El cierre con informe **FINAL** validado + estudio `INFORMADO` sigue cubierto por la suite B3.4 (`test_microbiologia_api.py`); E2E-1 no duplica ese camino por dependencias de completitud microbiológica.
+
+**GAP:** E2E navegador sobre rutas `/laboratorio/microbiologia/*` pendiente de framework.

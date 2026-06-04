@@ -19,7 +19,9 @@
 
 **B3-frontend-validación-A (jun 2026) [VALIDADO]** — Bloqueo operación técnica en `CANCELADO`/`VALIDADO`/`INFORMADO`. Commits `35d1edc`/`75d56b2`. Revalidación pytest 165 + regresión 315. Paquete: `B3_VALIDACION_A_CODEX_AUDIT.md`.
 
-**B3-frontend-UX (jun 2026) [PARCIAL]** — Picker solicitud/muestra al alta de estudio (API LIMS existente). **[GAP]** filtros server-side por `estudio_id` en endpoints micro; **[GAP]** E2E.
+**B3-frontend-UX (jun 2026) [PARCIAL]** — Picker solicitud/muestra al alta de estudio (API LIMS existente). **[GAP]** filtros server-side por `estudio_id` en endpoints micro; **[GAP]** E2E browser.
+
+**E2E-1 (jun 2026) [IMPLEMENTADO — API-level]** — Sin instalar Playwright/Cypress: `laboratorio/tests/test_lims_flujo_critico.py` valida solicitud → muestra → resultado con `muestra_id` → micro (iniciar/siembra/lectura/informe preliminar). Ver `DOC_TESTS.md` y `DOC_FLUJOS_LIMS.md`.
 
 **Pendiente (post-B3.4):** PDF, frontend dedicado de informes, rectificación/addendum avanzado, integración externa, QC/equipamiento.
 
