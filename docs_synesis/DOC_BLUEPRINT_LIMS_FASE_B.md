@@ -23,6 +23,8 @@
 
 **E2E-1 (jun 2026) [IMPLEMENTADO — API-level]** — Sin instalar Playwright/Cypress: `laboratorio/tests/test_lims_flujo_critico.py` valida solicitud → muestra → resultado con `muestra_id` → micro (iniciar/siembra/lectura/informe preliminar). Ver `DOC_TESTS.md` y `DOC_FLUJOS_LIMS.md`.
 
+**E2E-1-A (jun 2026) [IMPLEMENTADO — API-level]** — Extiende el test crítico al cierre microbiológico (`FINAL` emitido → `LISTO_PARA_VALIDAR` → admin valida → `VALIDADO` → `marcar-informado` → `INFORMADO`) con completitud (aislado, identificación, antibiograma completo). Refuerza que `403` médico en siembra no crea entidad ni auditoría de éxito. Sin Playwright/Cypress, PDF ni CLSI/EUCAST.
+
 **Pendiente (post-B3.4):** PDF, frontend dedicado de informes, rectificación/addendum avanzado, integración externa, QC/equipamiento.
 
 ---

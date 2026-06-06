@@ -1,6 +1,7 @@
 # DOC_TESTS — Pruebas existentes
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (E2E-1-A LIMS cierre micro API-level):** 6 de junio de 2026  
 **Actualización (E2E-1 LIMS flujo crítico API-level):** 4 de junio de 2026  
 **Actualización (rol laboratorio, tests LIMS API):** 2 de mayo de 2026  
 **Actualización (Fase A LIMS — máquina de estados):** 3 de mayo de 2026  
@@ -48,11 +49,12 @@
 
 La suite vive en el **submódulo** `frontend/` (Create React App + Jest + Testing Library). **No hay** Playwright ni Cypress configurados en el repo (búsqueda `playwright.config.*` / `cypress.config.*` vacía).
 
-**E2E-1 LIMS (jun 2026) — Opción B (sin framework browser):**
+**E2E-1 / E2E-1-A LIMS (jun 2026) — Opción B (sin framework browser):**
 
-- Test crítico API: `laboratorio/tests/test_lims_flujo_critico.py` → `test_flujo_critico_lims_muestra_resultado_microbiologia` (solicitud → muestra tomada/recibida → `cargar-resultados` con `muestra_id` → estudio micro → `iniciar` → siembra → lectura preliminar → informe `PRELIMINAR` en `BORRADOR`; usuario `laboratorio`; sin logs PHI).
+- Test crítico API base: `laboratorio/tests/test_lims_flujo_critico.py` → `test_flujo_critico_lims_muestra_resultado_microbiologia` (solicitud → muestra tomada/recibida → `cargar-resultados` con `muestra_id` → estudio micro → `iniciar` → siembra → lectura preliminar → informe `PRELIMINAR` en `BORRADOR`; intento médico siembra → `403` sin crear siembra ni auditoría `crear_siembra`; usuario `laboratorio`; sin logs PHI).
+- Test crítico cierre micro: `test_flujo_critico_lims_microbiologia_final_validado_informado` (mismo arranque LIMS → aislado → identificación → antibiograma → resultado → completar → informe `FINAL` emitido → `LISTO_PARA_VALIDAR` → admin valida → `VALIDADO` → `marcar-informado` → `INFORMADO`; operación técnica post-cierre → `400`).
 - Helpers frontend reforzados previamente: `limsAccess.test.ts`, `limsMicroUx.test.ts`, `limsCargaMuestra.test.ts`.
-- **GAP pendiente:** E2E browser LIMS/micro (requiere instalar y cablear Playwright o Cypress en CI).
+- **GAP pendiente:** E2E browser LIMS/micro (requiere instalar y cablear Playwright o Cypress en CI). No se implementó PDF ni CLSI/EUCAST.
 
 **Comandos validados (UI-2, commit `d46d276`, mayo 2026):**
 
@@ -172,9 +174,11 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 
 **Fase B3-frontend-validación-A [VALIDADO — jun 2026]:** bloqueo operación técnica micro en estados cerrados `CANCELADO`/`VALIDADO`/`INFORMADO`. Backend: `TestEstudioMicroCerradoOperacionAPI` (4 tests); suite `test_microbiologia_*` 165 passed; regresión LIMS 315 passed (PostgreSQL). Frontend: `limsAccess.test.ts`. Auditoría Codex: `B3_VALIDACION_A_CODEX_AUDIT.md`.
 
-**B3-frontend-UX [PARCIAL — jun 2026]:** `limsMicroUx.test.ts` (muestras procesables, labels, validación crear estudio); ampliación matriz roles en `limsAccess.test.ts`. **[GAP]** E2E browser LIMS micro sin framework (E2E-1 cubre flujo crítico vía pytest API).
+**B3-frontend-UX [PARCIAL — jun 2026]:** `limsMicroUx.test.ts` (muestras procesables, labels, validación crear estudio); ampliación matriz roles en `limsAccess.test.ts`. **[GAP]** E2E browser LIMS micro sin framework (E2E-1/E2E-1-A cubren flujo crítico vía pytest API).
 
 **E2E-1 [IMPLEMENTADO — jun 2026]:** `laboratorio/tests/test_lims_flujo_critico.py` — validación reproducible del flujo operativo crítico LIMS+micro sin dependencias E2E nuevas.
+
+**E2E-1-A [IMPLEMENTADO — jun 2026]:** extiende `test_lims_flujo_critico.py` al cierre microbiológico (`FINAL` → `VALIDADO` → `INFORMADO`) y refuerza side effects del `403` médico (sin crear entidad ni auditoría de éxito). Sin Playwright/Cypress, PDF ni CLSI/EUCAST.
 
 ```bash
 emr_env/bin/pytest laboratorio/tests/test_lims_flujo_critico.py -q --reuse-db

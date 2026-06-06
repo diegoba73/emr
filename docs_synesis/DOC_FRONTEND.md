@@ -192,7 +192,7 @@ Relevamiento y validación del SPA microbiología existente (UI-2) contra backen
 
 - **[IMPLEMENTADO]** Picker solicitud/muestra al crear estudio (`MicrobiologiaEstudios.tsx`): `listSolicitudesExamen`, `listMuestrasPorSolicitud`, muestras `RECIBIDA`/`CONSERVADA`/`EN_PROCESO` vía `limsMicroUx.ts`; ingreso manual en acordeón avanzado.
 - **[GAP]** Detalle sigue cargando listados micro globales y filtra en cliente — backend micro no expone filtro `estudio_id` (solo `SearchFilter`/`OrderingFilter`).
-- **[GAP]** E2E browser micro: sin Playwright/Cypress en repo (E2E-1 jun 2026 valida el flujo crítico en backend: `test_lims_flujo_critico.py`).
+- **[GAP]** E2E browser micro: sin Playwright/Cypress en repo (E2E-1/E2E-1-A jun 2026 validan flujo crítico y cierre micro en backend: `test_lims_flujo_critico.py`).
 - Tests Jest: `limsAccess.test.ts`, `limsMicroUx.test.ts` (además de `limsCargaMuestra.test.ts` B2-C).
 - PDF / portal paciente / QC / CLSI-EUCAST: fuera de alcance.
 
