@@ -78,7 +78,8 @@
 - **PDF-1 (jun 2026) [IMPLEMENTADO — básico]:** `GET /api/lab/solicitudes/{id}/informe-pdf/` genera PDF en memoria (`reportlab`) con número de solicitud, fecha, paciente, médico, estado, resultados, muestras (sin `codigo_barra`), resumen microbiología si aplica, leyenda SYNESIS. No modifica estado; no usa `/media/`. Auditoría `lims_informe_pdf_download` (metadata: `solicitud_id`, `numero_solicitud`, `view`; sin PHI ni valores clínicos). Permisos: admin/laboratorio (operación interna); médico (solo sus solicitudes). Paciente/secretaría/enfermería: bloqueados. Servicio: `laboratorio/services_informes_pdf.py`.
 - La acción `marcar-entregado` solo pone `ENTREGADO` en la orden (no genera PDF automáticamente).
 - Datos en JSON del serializer y acción `etiqueta` (ZPL simulado).
-- **GAP post-PDF-1:** PDF profesional avanzado, firma digital, CLSI/EUCAST, frontend de descarga.
+- **PDF-1-FE (jun 2026) [IMPLEMENTADO — frontend]:** botón en detalle de orden LIMS; descarga blob protegida; roles UI admin/laboratorio/médico; sin `/media/`.
+- **GAP post-PDF-1:** PDF profesional avanzado, firma digital, CLSI/EUCAST, portal paciente.
 
 ---
 

@@ -194,7 +194,8 @@ Relevamiento y validación del SPA microbiología existente (UI-2) contra backen
 - **[GAP]** Detalle sigue cargando listados micro globales y filtra en cliente — backend micro no expone filtro `estudio_id` (solo `SearchFilter`/`OrderingFilter`).
 - **[GAP]** E2E browser micro: sin Playwright/Cypress en repo (E2E-1/E2E-1-A jun 2026 validan flujo crítico y cierre micro en backend: `test_lims_flujo_critico.py`).
 - Tests Jest: `limsAccess.test.ts`, `limsMicroUx.test.ts` (además de `limsCargaMuestra.test.ts` B2-C).
-- PDF / portal paciente / QC / CLSI-EUCAST: fuera de alcance.
+- **PDF-1-FE (jun 2026) [IMPLEMENTADO]:** botón «Descargar informe PDF» en `OrdenLimsDetalle.tsx`; servicio `downloadInformeLimsPdf` / `getInformeLimsPdfBlob` en `limsApi.ts` (`GET /lab/solicitudes/{id}/informe-pdf/`, `responseType: blob`); helpers `limsDownload.ts` (filename seguro, errores 403/404/500); permiso UI `canDownloadInformeLimsPdf` (admin/laboratorio/médico). Sin `/media/`, sin logs sensibles, URL temporal revocada vía `triggerBlobDownload`. Tests: `limsAccess.test.ts`, `limsDownload.test.ts`.
+- Portal paciente / QC / CLSI-EUCAST / PDF profesional: fuera de alcance.
 
 **Seguridad frontend:** sin `console.log`/`console.error` sensibles en componentes LIMS/micro (confirmado por grep). Errores vía `formatDrfError` + toast.
 

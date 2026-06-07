@@ -27,7 +27,9 @@
 
 **PDF-1 (jun 2026) [IMPLEMENTADO — básico]** — `GET /api/lab/solicitudes/{id}/informe-pdf/`; PDF en memoria (`reportlab`); permisos vía `LimsSolicitudExamenPermission.informe_pdf`; auditoría `lims_informe_pdf_download`; tests `test_lims_pdf_informe.py`. Sin frontend, sin firma digital, sin CLSI/EUCAST.
 
-**Pendiente (post-PDF-1):** PDF profesional avanzado, frontend dedicado de informes/descarga, rectificación/addendum avanzado, integración externa, QC/equipamiento.
+**PDF-1-FE (jun 2026) [IMPLEMENTADO — frontend]** — Botón descarga PDF en `OrdenLimsDetalle.tsx`; `limsApi.downloadInformeLimsPdf`; helpers `limsDownload.ts` + `canDownloadInformeLimsPdf`. Sin portal paciente.
+
+**Pendiente (post-PDF-1-FE):** PDF profesional avanzado, descarga desde listado (opcional), rectificación/addendum avanzado, integración externa, QC/equipamiento.
 
 ---
 
