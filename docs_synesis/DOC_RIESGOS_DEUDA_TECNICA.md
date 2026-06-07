@@ -10,6 +10,7 @@
 **Actualización (Fase B3.3 LIMS — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (Fase B4.1 LIMS — Resultados clínicos estructurados):** 16 de mayo de 2026  
+**Actualización (PROD-1-A — SECRET_KEY productiva):** 7 de junio de 2026  
 **Actualización (PROD-1 — hardening configuración):** 7 de junio de 2026  
 **Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
 
@@ -67,7 +68,7 @@
 
 - ~~**`AllowAny` en ViewSets de laboratorio**~~ — **mitigado** (hardening mínimo): permisos `LimsCatalogReadPermission` / `LimsSolicitudExamenPermission`; sin acceso anónimo a operación LIMS.
 - **CORS** permisivo en `DEBUG=True` — **mitigado en producción (PROD-1):** `CORS_ALLOW_ALL_ORIGINS` solo con `DEBUG=True`; orígenes explícitos si `DEBUG=False`.
-- ~~**SECRET_KEY** por defecto en settings~~ — **mitigado (PROD-1):** arranque falla si `DEBUG=False` y clave placeholder; dev mantiene default local.
+- ~~**SECRET_KEY** por defecto en settings~~ — **mitigado (PROD-1 / PROD-1-A):** arranque falla si `DEBUG=False` y clave placeholder o baja entropía; `.env.production.example` no contiene clave usable; usar `get_random_secret_key()` o gestor de secretos.
 - ~~**Browsable API** siempre habilitada~~ — **mitigado (PROD-1):** solo con `DEBUG=True`.
 - **`/media/` directo** — **mitigado (PROD-1):** solo `DEBUG=True`; producción debe usar endpoints protegidos.
 - **Login** `@csrf_exempt` — entender implicancia CSRF en despliegue.

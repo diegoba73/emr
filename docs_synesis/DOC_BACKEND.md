@@ -1,6 +1,7 @@
 # DOC_BACKEND — Arquitectura backend
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-1-A validación SECRET_KEY):** 7 de junio de 2026  
 **Actualización (PROD-1 hardening configuración):** 7 de junio de 2026  
 **Actualización (LIMS permisos / rol laboratorio):** 2 de mayo de 2026  
 
@@ -183,7 +184,7 @@ Ver `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 - **`synesis/env_config.py`:** helpers `resolve_debug`, `resolve_secret_key`, `resolve_allowed_hosts`, `resolve_cors`, `resolve_csrf_trusted_origins`, `resolve_drf_renderers`; validación temprana con `ImproperlyConfigured` si `DEBUG=False` y valores inseguros.
 - **`DEBUG`:** `DJANGO_DEBUG` (default `True` — desarrollo local sin romper).
-- **`SECRET_KEY`:** obligatoria y no placeholder si `DEBUG=False`.
+- **`SECRET_KEY`:** obligatoria y no placeholder si `DEBUG=False`. **PROD-1-A:** longitud ≥50, ≥12 caracteres únicos, ≥3 clases (min/may/dígito/símbolo), sin patrones repetitivos; rechaza placeholders documentados (`generate-a-long-random-secret-key`, etc.); compatible con `get_random_secret_key()`.
 - **`ALLOWED_HOSTS`:** explícitos en producción; sin `*`; defaults localhost en dev.
 - **CORS:** `CORS_ALLOW_ALL_ORIGINS=True` solo si `DEBUG=True`; producción exige `DJANGO_CORS_ALLOWED_ORIGINS`.
 - **CSRF:** `DJANGO_CSRF_TRUSTED_ORIGINS` obligatorio en producción.

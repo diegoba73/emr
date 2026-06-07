@@ -1,6 +1,6 @@
 # PROD_CHECKLIST — Despliegue inicial SYNESIS EMR/LIMS
 
-**Fase:** PROD-1 (jun 2026) — hardening mínimo de configuración  
+**Fase:** PROD-1 / PROD-1-A (jun 2026) — hardening mínimo de configuración  
 **Alcance:** checklist operativo; no sustituye auditoría de seguridad ni despliegue completo.
 
 ---
@@ -10,7 +10,8 @@
 ### Variables de entorno obligatorias (`DEBUG=False`)
 
 - [ ] `DJANGO_DEBUG=False`
-- [ ] `DJANGO_SECRET_KEY` — valor largo aleatorio (no `change-me`, no `django-insecure-*`, no `dev_secret_key_change_me`)
+- [ ] `DJANGO_SECRET_KEY` — generada con `get_random_secret_key()` o gestor de secretos (≥50 chars, ≥12 únicos, ≥3 clases de caracteres; **PROD-1-A** rechaza placeholders y baja entropía)
+- [ ] No usar valores de `.env.production.example` como clave real
 - [ ] `DJANGO_ALLOWED_HOSTS` — hosts explícitos (sin `*`)
 - [ ] `DJANGO_CORS_ALLOWED_ORIGINS` — orígenes HTTPS del frontend
 - [ ] `DJANGO_CSRF_TRUSTED_ORIGINS` — mismos orígenes que consumen la API con cookies

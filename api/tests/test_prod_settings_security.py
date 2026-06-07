@@ -1,5 +1,5 @@
 """
-PROD-1 — tests de configuración mínima de producción.
+PROD-1 / PROD-1-A — tests de configuración mínima de producción.
 """
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import importlib
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.core.management.utils import get_random_secret_key
 from django.test import override_settings
 
 from synesis import env_config
@@ -26,16 +27,43 @@ class TestEnvConfigHelpers:
 
 
 class TestProductionSecretKey:
+    STRONG_KEY = env_config.STRONG_SECRET_TEST_FIXTURE
+
     def test_rejects_placeholder_in_production(self):
         with pytest.raises(ImproperlyConfigured):
             env_config.validate_production_secret_key('dev_secret_key_change_me')
 
-    def test_rejects_django_insecure_prefix(self):
+    def test_prod_rechaza_secret_key_placeholder_env_example(self):
+        with pytest.raises(ImproperlyConfigured):
+            env_config.validate_production_secret_key('generate-a-long-random-secret-key')
+
+    def test_prod_rechaza_secret_key_repetitiva(self):
+        with pytest.raises(ImproperlyConfigured):
+            env_config.validate_production_secret_key('a' * 64)
+        with pytest.raises(ImproperlyConfigured):
+            env_config.validate_production_secret_key('abc' * 22)
+
+    def test_prod_rechaza_secret_key_baja_diversidad(self):
+        with pytest.raises(ImproperlyConfigured):
+            env_config.validate_production_secret_key('1' * 64)
+        with pytest.raises(ImproperlyConfigured):
+            env_config.validate_production_secret_key('Aa1!' * 16)
+
+    def test_prod_rechaza_django_insecure_secret_key(self):
         with pytest.raises(ImproperlyConfigured):
             env_config.validate_production_secret_key('django-insecure-custom-key-here')
 
-    def test_accepts_strong_key(self):
-        env_config.validate_production_secret_key('a' * 64)
+    def test_prod_rechaza_secret_key_con_texto_generate_placeholder(self):
+        with pytest.raises(ImproperlyConfigured):
+            env_config.validate_production_secret_key(
+                'REEMPLAZAR_CON_SECRETO_ALEATORIO_DE_50+_CARACTERES_NO_COMMITEAR'
+            )
+
+    def test_prod_acepta_secret_key_fuerte_sintetica(self):
+        env_config.validate_production_secret_key(self.STRONG_KEY)
+
+    def test_prod_acepta_secret_key_generada_por_django(self):
+        env_config.validate_production_secret_key(get_random_secret_key())
 
 
 class TestProductionAllowedHosts:

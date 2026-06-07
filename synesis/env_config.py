@@ -1,11 +1,13 @@
 """
-Helpers de configuración por entorno — PROD-1.
+Helpers de configuración por entorno — PROD-1 / PROD-1-A.
 
 Validaciones tempranas para producción sin romper desarrollo local (DEBUG=True por defecto).
 """
 from __future__ import annotations
 
 import os
+import re
+import string
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -13,12 +15,66 @@ DEV_SECRET_PLACEHOLDER = (
     'django-insecure-az%_oz9f7vs-radm3ysub408scga8@g@1i7sr0)%*u&jvdlwk3'
 )
 
-INSECURE_SECRET_KEYS = frozenset({
+# Placeholders exactos (comparación case-insensitive).
+PLACEHOLDER_SECRET_KEYS = frozenset({
     '',
     'change-me',
+    'changeme',
+    'replace-me',
+    'replace-this',
+    'secret',
+    'secret-key',
+    'django-secret-key',
+    'your-secret-key',
+    'your-production-secret-key',
+    'generate-a-long-random-secret-key',
+    'generate-long-random-secret-key',
+    'unsafe-secret-key',
+    'insecure-secret-key',
+    'dummy',
+    'example',
+    'placeholder',
     'dev_secret_key_change_me',
     DEV_SECRET_PLACEHOLDER,
 })
+
+# Frases documentales / instruccionales que no deben usarse como clave real.
+PLACEHOLDER_PHRASE_SUBSTRINGS = (
+    'generate-a-long-random-secret-key',
+    'generate-long-random-secret-key',
+    'your-secret-key',
+    'your-production-secret-key',
+    'reemplazar_con_secreto',
+    'reemplazar-con-secreto',
+    'no_commitear',
+    'no-commitear',
+)
+
+OBVIOUS_PLACEHOLDER_TOKENS = frozenset({
+    'change',
+    'changeme',
+    'replace',
+    'replaceme',
+    'placeholder',
+    'example',
+    'dummy',
+    'insecure',
+    'generate',
+    'generated',
+    'reemplazar',
+    'commitear',
+    'secret',
+    'key',
+    'long',
+    'random',
+    'unsafe',
+    'production',
+    'django',
+})
+
+PROD_SECRET_MIN_LENGTH = 50
+PROD_SECRET_MIN_UNIQUE_CHARS = 12
+PROD_SECRET_MIN_CHAR_CLASSES = 3
 
 DEV_ALLOWED_HOSTS = ('localhost', '127.0.0.1', '0.0.0.0')
 
@@ -32,6 +88,10 @@ DEV_CSRF_ORIGINS = (
     'http://127.0.0.1:3000',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
+)
+
+STRONG_SECRET_TEST_FIXTURE = (
+    'Prod-Secret_2026__x9K!mQ#7vL@2pZ$rT%8nB&4yH*6sD?1fG+3wE'
 )
 
 
@@ -63,14 +123,89 @@ def resolve_secret_key(debug: bool) -> str:
     return key
 
 
+def _normalize_secret_key(secret_key: str) -> str:
+    return secret_key.strip().lower()
+
+
+def _is_documented_placeholder(norm: str) -> bool:
+    if norm in PLACEHOLDER_SECRET_KEYS:
+        return True
+    if any(phrase in norm for phrase in PLACEHOLDER_PHRASE_SUBSTRINGS):
+        return True
+    tokens = {t for t in re.split(r'[-_\s.+]+', norm) if t}
+    if tokens and tokens <= OBVIOUS_PLACEHOLDER_TOKENS:
+        return True
+    return False
+
+
+def _char_classes(secret_key: str) -> int:
+    classes = 0
+    if re.search(r'[a-z]', secret_key):
+        classes += 1
+    if re.search(r'[A-Z]', secret_key):
+        classes += 1
+    if re.search(r'\d', secret_key):
+        classes += 1
+    if re.search(r'[^A-Za-z0-9]', secret_key):
+        classes += 1
+    return classes
+
+
+def _is_obvious_repeat_pattern(secret_key: str) -> bool:
+    if not secret_key:
+        return True
+    if len(set(secret_key)) == 1:
+        return True
+    length = len(secret_key)
+    for size in range(1, length // 2 + 1):
+        if length % size == 0 and secret_key == secret_key[:size] * (length // size):
+            return True
+    return False
+
+
 def validate_production_secret_key(secret_key: str) -> None:
-    if not secret_key or secret_key.strip() in INSECURE_SECRET_KEYS:
+    """
+    Valida SECRET_KEY para DEBUG=False.
+
+    No imprime ni registra el valor de la clave.
+    """
+    if not secret_key or not secret_key.strip():
         raise ImproperlyConfigured(
-            'DJANGO_SECRET_KEY debe definirse con un valor seguro cuando DJANGO_DEBUG=False.'
+            'DJANGO_SECRET_KEY debe definirse cuando DJANGO_DEBUG=False.'
         )
-    if secret_key.startswith('django-insecure-'):
+
+    stripped = secret_key.strip()
+    norm = _normalize_secret_key(stripped)
+
+    if stripped.startswith('django-insecure-'):
         raise ImproperlyConfigured(
             'DJANGO_SECRET_KEY no puede usar el prefijo django-insecure- en producción.'
+        )
+
+    if _is_documented_placeholder(norm):
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY no puede ser un placeholder documentado en producción.'
+        )
+
+    if len(stripped) < PROD_SECRET_MIN_LENGTH:
+        raise ImproperlyConfigured(
+            f'DJANGO_SECRET_KEY debe tener al menos {PROD_SECRET_MIN_LENGTH} caracteres en producción.'
+        )
+
+    if len(set(stripped)) < PROD_SECRET_MIN_UNIQUE_CHARS:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY debe tener diversidad mínima de caracteres en producción.'
+        )
+
+    if _char_classes(stripped) < PROD_SECRET_MIN_CHAR_CLASSES:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY debe incluir al menos tres clases de caracteres '
+            '(minúsculas, mayúsculas, dígitos o símbolos) en producción.'
+        )
+
+    if _is_obvious_repeat_pattern(stripped):
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY no puede ser una cadena repetitiva o de baja entropía en producción.'
         )
 
 
