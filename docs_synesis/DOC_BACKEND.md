@@ -1,6 +1,7 @@
 # DOC_BACKEND — Arquitectura backend
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-1 hardening configuración):** 7 de junio de 2026  
 **Actualización (LIMS permisos / rol laboratorio):** 2 de mayo de 2026  
 
 **Alcance:** Estructura del proyecto Django `synesis`, responsabilidades de apps y patrones de implementación observados.
@@ -178,7 +179,25 @@ Ver `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 ---
 
+## PROD-1 — Configuración y producción (jun 2026)
+
+- **`synesis/env_config.py`:** helpers `resolve_debug`, `resolve_secret_key`, `resolve_allowed_hosts`, `resolve_cors`, `resolve_csrf_trusted_origins`, `resolve_drf_renderers`; validación temprana con `ImproperlyConfigured` si `DEBUG=False` y valores inseguros.
+- **`DEBUG`:** `DJANGO_DEBUG` (default `True` — desarrollo local sin romper).
+- **`SECRET_KEY`:** obligatoria y no placeholder si `DEBUG=False`.
+- **`ALLOWED_HOSTS`:** explícitos en producción; sin `*`; defaults localhost en dev.
+- **CORS:** `CORS_ALLOW_ALL_ORIGINS=True` solo si `DEBUG=True`; producción exige `DJANGO_CORS_ALLOWED_ORIGINS`.
+- **CSRF:** `DJANGO_CSRF_TRUSTED_ORIGINS` obligatorio en producción.
+- **Cookies/HTTPS:** `DJANGO_SESSION_COOKIE_SECURE`, `DJANGO_CSRF_COOKIE_SECURE`, `DJANGO_SECURE_SSL_REDIRECT`, HSTS y `DJANGO_USE_PROXY_SSL_HEADER` por env.
+- **DRF:** Browsable API solo con `DEBUG=True`.
+- **Media:** `/media/` montado en `urls.py` solo si `DEBUG=True`; archivos clínicos vía endpoints protegidos.
+- **Plantillas env:** `.env.example`, `.env.production.example`.
+- **Checklist:** `docs_synesis/PROD_CHECKLIST.md`.
+- **Tests:** `api/tests/test_prod_settings_security.py`.
+
+---
+
 ## Pendiente de confirmar
 
-- Proceso de despliegue (Gunicorn, Docker referenciado en comentarios media).
-- Variables de entorno obligatorias en prod.
+- Proceso de despliegue productivo (Gunicorn/uWSGI; entrypoint actual es `runserver` solo dev Docker).
+- Storage object privado para media en producción.
+- Política de backups/restore.

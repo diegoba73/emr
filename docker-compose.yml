@@ -25,6 +25,8 @@ services:
     volumes:
       - .:/app
     environment:
+      # Stack dev: DEBUG explícito; no usar estos valores en producción.
+      DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: dev_secret_key_change_me
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,backend
       DB_ENGINE: django.db.backends.postgresql

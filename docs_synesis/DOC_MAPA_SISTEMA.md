@@ -1,6 +1,7 @@
 # DOC_MAPA_SISTEMA — Resumen ejecutivo SYNESIS
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-1 configuración producción):** 7 de junio de 2026  
 **Actualización (LIMS hardening, rol `laboratorio`):** 2 de mayo de 2026  
 
 **Alcance:** Visión de conjunto del repositorio `emr` (proyecto Django `synesis`): EMR + LIMS embebido en backend, sin asumir despliegue productivo ni frontend en este repo.
@@ -54,7 +55,8 @@ Cliente (React esperado en :3000 según CORS; no presente en repo)
 
 ## Backend
 
-- **Proyecto:** `synesis` (`synesis/settings.py`, `synesis/urls.py`).
+- **Proyecto:** `synesis` (`synesis/settings.py`, `synesis/env_config.py`, `synesis/urls.py`).
+- **PROD-1:** configuración por env; validación producción; checklist `PROD_CHECKLIST.md`.
 - **API principal:** prefijo `/api/` (`api.urls`).
 - **Usuarios/JWT:** `/api/usuarios/` (`usuarios.urls`).
 - **Patrón:** `DefaultRouter` con muchos `ViewSet`; permisos por rol en `get_queryset` y clases en `api/permissions.py`.

@@ -127,15 +127,15 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 ## Datos sensibles
 
 - **PHI:** pacientes, consultas, resultados lab, archivos médicos, documentos EMR.
-- **Credenciales:** sesión y JWT; `SECRET_KEY` por env (default inseguro si no se setea).
-- Archivos: `Media` bajo `/media/` en DEBUG.
+- **Credenciales:** sesión y JWT; `SECRET_KEY` por env; **PROD-1:** falla al arrancar si `DEBUG=False` y clave placeholder/insegura.
+- Archivos: `Media` bajo `/media/` solo en `DEBUG=True`; producción vía endpoints protegidos.
 
 ---
 
 ## Riesgos de exposición
 
 1. ~~**`AllowAny` en laboratorio**~~ — **mitigado** en hardening mínimo: ViewSets LIMS usan `LimsCatalogReadPermission` / `LimsSolicitudExamenPermission`; anónimos no operan LIMS.
-2. **CORS `DEBUG=True`:** `CORS_ALLOW_ALL_ORIGINS = True`.
+2. **CORS `DEBUG=True`:** `CORS_ALLOW_ALL_ORIGINS = True` — **mitigado en producción (PROD-1):** con `DEBUG=False`, CORS cerrado y orígenes explícitos por env.
 3. **BrowsableAPIRenderer** habilitado por defecto — superficie HTML en APIs.
 4. **Secretaría sin acceso** a archivos médicos (`queryset.none()`) pero **puede** tener acceso amplio a solicitudes según comentario “por ahora ven todas”.
 

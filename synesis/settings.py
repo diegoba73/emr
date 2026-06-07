@@ -14,23 +14,28 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
+from synesis.env_config import (
+    env_bool,
+    resolve_allowed_hosts,
+    resolve_cors,
+    resolve_csrf_trusted_origins,
+    resolve_debug,
+    resolve_drf_renderers,
+    resolve_secret_key,
+)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Cargar variables de entorno desde .env si existe
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-az%_oz9f7vs-radm3ysub408scga8@g@1i7sr0)%*u&jvdlwk3')
+# PROD-1: DEBUG y validaciones de producción vía synesis.env_config
+DEBUG = resolve_debug()
+SECRET_KEY = resolve_secret_key(DEBUG)
+ALLOWED_HOSTS = resolve_allowed_hosts(DEBUG)
 
 # Configuraciones de rendimiento
-DEBUG = True
-
-# Configuración de caché para desarrollo
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -48,7 +53,7 @@ STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
 
-# Configuración de logging para desarrollo
+# PROD-1: logging sin formato de datos clínicos; mensajes genéricos en apps
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -67,11 +72,13 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
     },
 }
-
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',') if os.getenv('DJANGO_ALLOWED_HOSTS') else []
-
 
 # Application definition
 
@@ -130,22 +137,12 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
-    ],
+    'DEFAULT_RENDERER_CLASSES': resolve_drf_renderers(DEBUG),
 }
 
-# CORS Configuration for React frontend
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
+# CORS — abierto solo en DEBUG; lista explícita en producción
+CORS_ALLOW_ALL_ORIGINS, CORS_ALLOWED_ORIGINS = resolve_cors(DEBUG)
 CORS_ALLOW_CREDENTIALS = True
-
-# Configuración adicional de CORS para desarrollo
-CORS_ALLOW_ALL_ORIGINS = True  # Solo para desarrollo
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -167,25 +164,35 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # CSRF Configuration for React frontend
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
-
-# Configuración adicional de CSRF para desarrollo
+CSRF_TRUSTED_ORIGINS = resolve_csrf_trusted_origins(DEBUG)
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_HTTPONLY = False  # Permitir acceso desde JavaScript
-CSRF_COOKIE_SECURE = False  # Para desarrollo HTTP
-CSRF_COOKIE_DOMAIN = None  # Permitir cookies en localhost
+CSRF_COOKIE_HTTPONLY = False  # Permitir acceso desde JavaScript (SPA)
+CSRF_COOKIE_SECURE = env_bool('DJANGO_CSRF_COOKIE_SECURE', default=not DEBUG)
+CSRF_COOKIE_DOMAIN = None
 
-# Session Configuration
+# Session / HTTPS — activables por env en producción
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = False  # Para desarrollo HTTP
-SESSION_COOKIE_DOMAIN = None  # Permitir cookies en localhost
+SESSION_COOKIE_SECURE = env_bool('DJANGO_SESSION_COOKIE_SECURE', default=not DEBUG)
+SESSION_COOKIE_DOMAIN = None
 SESSION_COOKIE_PATH = '/'
+
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', default=not DEBUG)
+SECURE_HSTS_SECONDS = int(
+    os.getenv('DJANGO_SECURE_HSTS_SECONDS', '31536000' if (not DEBUG and SECURE_SSL_REDIRECT) else '0')
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+    'DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS',
+    default=not DEBUG and SECURE_SSL_REDIRECT,
+)
+SECURE_HSTS_PRELOAD = env_bool(
+    'DJANGO_SECURE_HSTS_PRELOAD',
+    default=False,
+)
+if env_bool('DJANGO_USE_PROXY_SSL_HEADER', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+else:
+    SECURE_PROXY_SSL_HEADER = None
 
 ROOT_URLCONF = 'synesis.urls'
 
@@ -193,9 +200,9 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            BASE_DIR / 'templates', # <--- ¡ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ AQUÍ!
+            BASE_DIR / 'templates',
         ],
-        'APP_DIRS': True, # Esto sigue siendo True para que también busque plantillas dentro de las apps de Django
+        'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -256,19 +263,19 @@ USE_I18N = True
 USE_TZ = True
 
 DATETIME_INPUT_FORMATS = [
-    '%Y-%m-%dT%H:%M:%S',  # '2006-10-25T14:30:59'
-    '%Y-%m-%dT%H:%M',     # '2006-10-25T14:30'
-    '%Y-%m-%d %H:%M:%S',  # '2006-10-25 14:30:59'
-    '%Y-%m-%d %H:%M',     # '2006-10-25 14:30'
-    # Añade otros formatos que puedas necesitar
+    '%Y-%m-%dT%H:%M:%S',
+    '%Y-%m-%dT%H:%M',
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%d %H:%M',
 ]
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files (Uploaded files)
+# Media files — en producción usar endpoints protegidos; /media/ solo vía Django si DEBUG=True
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
