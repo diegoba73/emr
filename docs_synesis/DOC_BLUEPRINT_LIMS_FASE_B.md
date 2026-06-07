@@ -25,7 +25,9 @@
 
 **E2E-1-A (jun 2026) [IMPLEMENTADO — API-level]** — Extiende el test crítico al cierre microbiológico (`FINAL` emitido → `LISTO_PARA_VALIDAR` → admin valida → `VALIDADO` → `marcar-informado` → `INFORMADO`) con completitud (aislado, identificación, antibiograma completo). Refuerza que `403` médico en siembra no crea entidad ni auditoría de éxito. Sin Playwright/Cypress, PDF ni CLSI/EUCAST.
 
-**Pendiente (post-B3.4):** PDF, frontend dedicado de informes, rectificación/addendum avanzado, integración externa, QC/equipamiento.
+**PDF-1 (jun 2026) [IMPLEMENTADO — básico]** — `GET /api/lab/solicitudes/{id}/informe-pdf/`; PDF en memoria (`reportlab`); permisos vía `LimsSolicitudExamenPermission.informe_pdf`; auditoría `lims_informe_pdf_download`; tests `test_lims_pdf_informe.py`. Sin frontend, sin firma digital, sin CLSI/EUCAST.
+
+**Pendiente (post-PDF-1):** PDF profesional avanzado, frontend dedicado de informes/descarga, rectificación/addendum avanzado, integración externa, QC/equipamiento.
 
 ---
 

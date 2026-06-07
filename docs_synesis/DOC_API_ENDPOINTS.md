@@ -191,6 +191,7 @@ No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 | `/api/lab/solicitudes/{id}/validar/` | POST | Valida orden (`EN_PROCESO` → `VALIDADO`; solo admin/superuser) |
 | `/api/lab/solicitudes/{id}/cancelar/` | POST | Cancela orden no final (`PENDIENTE` / `TOMA_MUESTRA` / `EN_PROCESO` → `CANCELADO`) |
 | `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
+| `/api/lab/solicitudes/{id}/informe-pdf/` | GET | **PDF-1:** informe LIMS básico en PDF (generado en memoria; `Content-Type: application/pdf`; nombre `informe-lims-solicitud-{id}.pdf`; sin `/media/`; auditoría `lims_informe_pdf_download`; no modifica estado) |
 | `/api/lab/solicitudes/{id}/etiqueta/` | GET | JSON ZPL |
 | `/api/atenciones/` | POST | **Compat/deprecated (C5.10.2):** alta idempotente de `Atencion` desde `turno`; no mueve estado del turno; headers `Deprecation`, `X-Synesis-Deprecated-Endpoint`, `X-Synesis-Replacement-Endpoint`, `Warning` |
 | `/api/atenciones/{id}/cerrar/` | POST | Cerrar atención |

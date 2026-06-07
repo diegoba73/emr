@@ -53,7 +53,7 @@ Ubicación: `api/permissions.py`
 | `IsEMRClinicianOrReadOnly` | GET para autenticados; escritura como EMR clinician |
 | `CanUpdatePacienteDemographics` | staff/admin/secretaria; médico cualquier paciente GET/PATCH; paciente solo su ficha |
 | **`LimsCatalogReadPermission`** | Lectura GET de catálogos LIMS (tipos muestra/examen/panel): roles admin, laboratorio, medico, secretaria, enfermeria + superuser; **no** paciente ni anónimos |
-| **`LimsSolicitudExamenPermission`** | `SolicitudExamenViewSet` y acciones `cargar_resultados`, `validar`, `etiqueta`, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`** (`view.action` en snake_case): matriz en `DOC_FLUJOS_LIMS.md`. `validar` solo **admin** (+ superuser); `tomar_muestra`, `cancelar`, `marcar_entregado` y `cargar_resultados`: **admin** y **laboratorio** |
+| **`LimsSolicitudExamenPermission`** | `SolicitudExamenViewSet` y acciones `cargar_resultados`, `validar`, `etiqueta`, **`informe_pdf`**, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`** (`view.action` en snake_case): matriz en `DOC_FLUJOS_LIMS.md`. `validar` solo **admin** (+ superuser); `tomar_muestra`, `cancelar`, `marcar_entregado` y `cargar_resultados`: **admin** y **laboratorio**; **`informe_pdf`**: **admin**, **laboratorio** y **médico** (médico solo solicitudes propias vía `get_queryset`/`has_object_permission`) |
 
 **Nota:** Muchos ViewSets **no usan** estas clases y aplican lógica en `get_queryset` con comparación manual de `user.rol`.
 
@@ -116,7 +116,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 - Alta/edición de turnos (`TurnoViewSet`): `log_create` / `log_update` con actor y snapshot (best-effort). Mutaciones restringidas por rol desde C5.8.1; ver `turnos/tests/test_permissions_mutations.py`.
 - Borrado físico de turnos: **bloqueado** (405); no genera `log_delete`.
 - Transiciones de estado de turno: acciones POST con metadata `accion`, `estado_anterior`, `estado_nuevo`, `motivo`, `view` (C5.9.1–C5.9.2). **C5.10.1 `iniciar_atencion_turno`:** `log_create` solo si alta nueva de `Atencion`; `log_update` de `Turno` solo si cambia a `REALIZADO` (coordina `TurnoViewSet.iniciar_atencion`, no duplica con `AtencionViewSet.create`). **C5.10.2 compat `POST /api/atenciones/`:** headers de deprecación sin evento de auditoría adicional; `log_create` solo en alta real. PATCH/PUT `estado` bloqueado para todos los roles.
-- Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**.
+- Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**, descarga PDF **`lims_informe_pdf_download`** (`metadata`: `accion`, `solicitud_id`, `numero_solicitud`, `view`; sin PHI, sin `codigo_barra`, sin valores clínicos).
 - Transiciones de estado de `SolicitudExamen`: `log_update` con `metadata` que incluye **`accion`**, **`estado_anterior`**, **`estado_nuevo`**, **`solicitud_id`**, **`numero_solicitud`** (vía `laboratorio/solicitud_estado.apply_solicitud_estado_transition`); además `before_state`/`after_state` del snapshot.
 - Solicitudes: `log_create` / `log_update` en flujos del ViewSet.
 

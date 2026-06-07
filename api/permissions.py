@@ -61,6 +61,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role == 'admin'
         if action == 'etiqueta':
             return role in ('admin', 'laboratorio')
+        if action == 'informe_pdf':
+            return role in ('admin', 'laboratorio', 'medico')
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -97,6 +99,14 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
 
         if action == 'etiqueta':
             return role in ('admin', 'laboratorio')
+
+        if action == 'informe_pdf':
+            if role in ('admin', 'laboratorio'):
+                return True
+            if role == 'medico':
+                mi = getattr(obj, 'medico_interno', None)
+                return bool(mi and getattr(mi, 'user_id', None) == request.user.id)
+            return False
 
         return False
 

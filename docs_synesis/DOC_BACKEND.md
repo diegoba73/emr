@@ -168,6 +168,7 @@ api/              # agregación de rutas DRF + vistas legacy voluminosas (views.
 - `integracion_lims` incompleto a nivel URLconf.
 - ~~String **`tecnico`** en EMR~~ — retirado; `laboratorio` permanece para LIMS, no en `IsEMRClinician`.
 - **LIMS (estado actual):** permisos mínimos en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolicitudExamenPermission`) y `laboratorio/views.py`; **sin** `AllowAny` en ViewSets LIMS sensibles.
+- **LIMS PDF-1:** `laboratorio/services_informes_pdf.py` — generación PDF en memoria (`reportlab`); acción `SolicitudExamenViewSet.informe_pdf`; dependencia `reportlab>=4.0` en `requirements.txt`.
 
 ---
 

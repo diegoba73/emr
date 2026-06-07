@@ -2,6 +2,7 @@
 ViewSets para la app laboratorio (LIMS).
 """
 import logging
+from django.http import HttpResponse
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -36,6 +37,11 @@ from auditoria.audit_service import log_create, log_event, log_update
 from auditoria.snapshot import safe_model_snapshot
 from api.permissions import get_normalized_role, LimsCatalogReadPermission, LimsSolicitudExamenPermission
 from .solicitud_estado import SolicitudEstadoTransitionError, apply_solicitud_estado_transition
+from .services_informes_pdf import (
+    auditar_descarga_informe_pdf,
+    generar_informe_lims_pdf_bytes,
+    nombre_archivo_pdf_seguro,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -581,6 +587,30 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
         solicitud = self.get_object()
         return Response(self.get_serializer(solicitud).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='informe-pdf')
+    def informe_pdf(self, request, pk=None):
+        """
+        Descarga informe LIMS básico en PDF (generado en memoria).
+        No modifica estado ni persiste archivos.
+        """
+        solicitud = self.get_object()
+        role = get_normalized_role(request.user)
+        if request.user.is_superuser:
+            role = 'admin'
+        try:
+            pdf_bytes = generar_informe_lims_pdf_bytes(solicitud, role=role)
+        except Exception:
+            logger.error("Error generando informe PDF LIMS")
+            return Response(
+                {'error': 'No se pudo generar el informe PDF.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        auditar_descarga_informe_pdf(actor=request.user, solicitud=solicitud)
+        nombre = nombre_archivo_pdf_seguro(solicitud.pk)
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
 
     @action(detail=True, methods=['get'], url_path='etiqueta')
     def etiqueta(self, request, pk=None):

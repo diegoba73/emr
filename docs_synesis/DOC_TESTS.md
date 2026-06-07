@@ -1,6 +1,7 @@
 # DOC_TESTS — Pruebas existentes
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PDF-1 LIMS informe básico):** 6 de junio de 2026  
 **Actualización (E2E-1-A LIMS cierre micro API-level):** 6 de junio de 2026  
 **Actualización (E2E-1 LIMS flujo crítico API-level):** 4 de junio de 2026  
 **Actualización (rol laboratorio, tests LIMS API):** 2 de mayo de 2026  
@@ -182,6 +183,12 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 
 ```bash
 emr_env/bin/pytest laboratorio/tests/test_lims_flujo_critico.py -q --reuse-db
+```
+
+**PDF-1 [IMPLEMENTADO — jun 2026]:** `laboratorio/tests/test_lims_pdf_informe.py` — descarga PDF (`%PDF`, `Content-Type`, nombre seguro), permisos (lab/admin/médico propio; secretaría/enfermería/paciente bloqueados; médico ajeno → 404), sin `codigo_barra` en bytes, auditoría `lims_informe_pdf_download` sin PHI, descarga idempotente sin cambio de estado, intento bloqueado sin audit de éxito.
+
+```bash
+emr_env/bin/pytest laboratorio/tests/test_lims_pdf_informe.py -q --reuse-db
 ```
 
 **Fase B4.1:** `laboratorio/tests/test_resultados_clinicos_models.py` (TipoExamen rangos/críticos/sección; ResultadoExamen numérico, snapshots, patológico/crítico, pendiente); `laboratorio/tests/test_resultados_clinicos_api.py` (payload viejo, `valor_numerico`, unidad default, cálculo patológico/crítico, validar, permisos laboratorio/médico).

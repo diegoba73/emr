@@ -141,7 +141,8 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **Pendiente de carga:** `valor_obtenido` puede estar **vacío** en modelo (`blank=True`, `default=''`) al crear filas `ResultadoExamen`; eso **no** autoriza validar la orden incompleta: la acción `validar` sigue rechazando si queda algún resultado con valor vacío. Con muestra vinculada, `validar` además rechaza si la muestra quedó en estados incompatibles (listado en `DOC_FLUJOS_LIMS.md`).
 - Carga masiva vía acción `cargar-resultados` con transacción y bloqueo de solicitud; no modificar si orden está en `VALIDADO`, `CANCELADO` o `ENTREGADO`.
 - Validación de orden: solo desde **`EN_PROCESO`**; no permitir validar con valores vacíos; asigna usuario y fecha a resultados. Solo rol **admin** (y superuser) puede ejecutar `validar`; rol **laboratorio** puede tomar muestra, cargar, cancelar y marcar entregado, pero **no** validar.
-- **Entrega:** `marcar-entregado` solo desde **`VALIDADO`**; no genera PDF.
+- **Entrega:** `marcar-entregado` solo desde **`VALIDADO`**; no genera PDF automáticamente.
+- **PDF-1 (jun 2026):** `GET informe-pdf` es vista derivada de solo lectura; no valida ni entrega la orden; no persiste archivo. Incluye resultados según API autorizada; laboratorio/admin ven estados técnicos; médico solo solicitudes propias; paciente sin acceso LIMS. Metadata de auditoría sin `codigo_barra`, DNI ni valores clínicos.
 
 ---
 
@@ -159,7 +160,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 ## Reglas de informes
 
-- **No detectado** generador de informe PDF oficial; etiqueta ZPL como JSON y datos en API.
+- **PDF-1 [IMPLEMENTADO — jun 2026]:** informe LIMS básico descargable vía `SolicitudExamenViewSet.informe_pdf` (`laboratorio/services_informes_pdf.py`); generación en memoria con `reportlab`; nombre seguro `informe-lims-solicitud-{id}.pdf`. No reemplaza informes microbiológicos estructurados (`InformeMicrobiologia`) ni resultados en BD.
+- Etiqueta ZPL como JSON (`etiqueta`) y datos en API serializer siguen disponibles.
+- **Pendiente:** PDF profesional avanzado, plantillas institucionales, firma digital.
 
 ---
 
@@ -169,7 +172,7 @@ Valores de modelo: `PENDIENTE`, `TOMA_MUESTRA`, `EN_PROCESO`, `VALIDADO`, `ENTRE
 
 Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incluye `PENDIENTE`/`TOMA_MUESTRA` → `EN_PROCESO` por carga, `VALIDADO` → `ENTREGADO`, cancelación desde no finales). Terminales: **`CANCELADO`**, **`ENTREGADO`**.
 
-**No implementado (sigue pendiente):** validación técnica vs profesional como estados distintos; informe PDF final; vinculación **obligatoria** `ResultadoExamen`↔`Muestra` para órdenes nuevas; transición automática de muestra `RECIBIDA`→`EN_PROCESO` al cargar resultado; microbiología/QC avanzado.
+**No implementado (sigue pendiente):** validación técnica vs profesional como estados distintos; informe PDF **profesional** avanzado (PDF-1 cubre vista básica); vinculación **obligatoria** `ResultadoExamen`↔`Muestra` para órdenes nuevas; transición automática de muestra `RECIBIDA`→`EN_PROCESO` al cargar resultado; microbiología/QC avanzado.
 
 **Implementado (Fase B1):** entidad **`Muestra`** (material físico) vinculada a `SolicitudExamen` y `TipoMuestra`; **`EventoMuestra`**; catálogos **`AreaLaboratorio`**, **`SeccionLaboratorio`**, **`TipoContenedor`**. Cambios de estado de muestra **solo** por acciones POST dedicadas; `PATCH` no altera `estado`. Recepción solo desde **`TOMADA`** (sin recepción directa desde `PENDIENTE_TOMA` en esta fase). Rechazo exige **motivo**. Auditoría y eventos por acción.
 
