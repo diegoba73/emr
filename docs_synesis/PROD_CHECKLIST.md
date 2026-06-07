@@ -1,6 +1,6 @@
 # PROD_CHECKLIST — Despliegue inicial SYNESIS EMR/LIMS
 
-**Fase:** PROD-1 / PROD-1-A (jun 2026) — hardening mínimo de configuración  
+**Fase:** PROD-1 / PROD-1-A / PROD-2-A (jun 2026) — hardening y runtime  
 **Alcance:** checklist operativo; no sustituye auditoría de seguridad ni despliegue completo.
 
 ---
@@ -53,6 +53,8 @@
 
 - [ ] Imagen sin credenciales dummy de `docker-compose.yml` dev
 - [ ] `docker compose config` revisado
+- [ ] **PROD-2-A:** `DJANGO_RUNTIME=gunicorn` en prod/staging (no `runserver`)
+- [ ] `docker-compose.prod.example.yml` revisado con variables `${...}` (sin secretos en repo)
 - [ ] Volúmenes persistentes para Postgres y media/storage privado
 
 ---
@@ -82,7 +84,7 @@ DJANGO_DEBUG=False DJANGO_SECRET_KEY=... DJANGO_ALLOWED_HOSTS=... \
 - Rotación de secretos
 - Monitoreo y alertas (Sentry/Datadog)
 - Job de backups/restore documentado
-- `gunicorn`/`uvicorn` + workers (entrypoint actual es `runserver` solo dev)
+- ~~`gunicorn` + workers~~ — **mitigado (PROD-2-A):** `entrypoint.sh` soporta `DJANGO_RUNTIME=gunicorn`; dev sigue con `runserver`
 - Storage object privado (S3/MinIO) para media clínica
 - npm audit / dependabot frontend (no ejecutar `npm audit fix` automático en PROD-1)
 

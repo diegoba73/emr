@@ -1,0 +1,59 @@
+# SYNESIS EMR/LIMS — plantilla Docker Compose producción/staging (NO lista sin editar).
+# No commitear secretos reales. Usar gestor de secretos o variables del orquestador.
+#
+# Uso orientativo:
+#   export DJANGO_SECRET_KEY='...'  # generar con get_random_secret_key()
+#   export DJANGO_ALLOWED_HOSTS='app.example.com'
+#   export DJANGO_CORS_ALLOWED_ORIGINS='https://app.example.com'
+#   export DJANGO_CSRF_TRUSTED_ORIGINS='https://app.example.com'
+#   docker compose -f docker-compose.prod.example.yml up -d
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: emr_postgres_prod
+    environment:
+      POSTGRES_DB: synesis_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d synesis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: .
+    container_name: emr_backend_prod
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_RUNTIME: "gunicorn"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY requerido}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS requerido}
+      DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:?DJANGO_CORS_ALLOWED_ORIGINS requerido}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?DJANGO_CSRF_TRUSTED_ORIGINS requerido}
+      DJANGO_SESSION_COOKIE_SECURE: "true"
+      DJANGO_CSRF_COOKIE_SECURE: "true"
+      DJANGO_SECURE_SSL_REDIRECT: "true"
+      DJANGO_USE_PROXY_SSL_HEADER: "true"
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: synesis_db
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido}
+      DB_HOST: db
+      DB_PORT: "5432"
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data_prod:

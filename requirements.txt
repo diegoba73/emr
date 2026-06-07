@@ -8,3 +8,4 @@ djangorestframework_simplejwt
 Faker
 requests
 reportlab>=4.0
+gunicorn>=22,<24

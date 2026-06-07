@@ -1,6 +1,7 @@
 # DOC_TESTS — Pruebas existentes
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-2-A runtime Gunicorn):** 7 de junio de 2026  
 **Actualización (PROD-1-A SECRET_KEY productiva):** 7 de junio de 2026  
 **Actualización (PROD-1 settings seguridad):** 7 de junio de 2026  
 **Actualización (PDF-1-FE frontend descarga LIMS):** 7 de junio de 2026  
@@ -197,6 +198,12 @@ emr_env/bin/pytest laboratorio/tests/test_lims_pdf_informe.py -q --reuse-db
 **PROD-1 [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_settings_security.py` — SECRET_KEY/ALLOWED_HOSTS/CORS en producción, Browsable API solo DEBUG, `/media/` condicionado, helpers `env_config`.
 
 **PROD-1-A [IMPLEMENTADO — jun 2026]:** refuerzo `validate_production_secret_key` — rechaza placeholders documentados, `django-insecure-*`, cadenas repetitivas y baja diversidad; acepta clave sintética fuerte y `get_random_secret_key()`.
+
+**PROD-2-A [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_runtime_config.py` — entrypoint runserver/gunicorn, compose dev/prod, env examples, gunicorn en requirements.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py -q --reuse-db
+```
 
 ```bash
 emr_env/bin/pytest api/tests/test_prod_settings_security.py -q --reuse-db

@@ -1,6 +1,7 @@
 # DOC_BACKEND — Arquitectura backend
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-2-A runtime Gunicorn):** 7 de junio de 2026  
 **Actualización (PROD-1-A validación SECRET_KEY):** 7 de junio de 2026  
 **Actualización (PROD-1 hardening configuración):** 7 de junio de 2026  
 **Actualización (LIMS permisos / rol laboratorio):** 2 de mayo de 2026  
@@ -199,6 +200,7 @@ Ver `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 ## Pendiente de confirmar
 
-- Proceso de despliegue productivo (Gunicorn/uWSGI; entrypoint actual es `runserver` solo dev Docker).
+- **PROD-2-A [IMPLEMENTADO]:** `entrypoint.sh` + `DJANGO_RUNTIME` (`runserver` dev / `gunicorn` prod); `gunicorn>=22,<24` en `requirements.txt`; `docker-compose.yml` dev; `docker-compose.prod.example.yml` plantilla; ver `PROD_RUNTIME.md`.
+- Storage privado object/S3 para media en producción.
 - Storage object privado para media en producción.
 - Política de backups/restore.
