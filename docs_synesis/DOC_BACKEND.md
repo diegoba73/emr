@@ -1,6 +1,11 @@
 # DOC_BACKEND — Arquitectura backend
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-4 CERRADO):** 8 de junio de 2026
+**Actualización (PROD-3 CERRADO):** 7 de junio de 2026
+**Actualización (PROD-3 Nginx reverse proxy):** 7 de junio de 2026
+**Actualización (PROD-2-B CERRADO):** 7 de junio de 2026
+**Actualización (PROD-2-B runtime ejecutable):** 7 de junio de 2026
 **Actualización (PROD-2-A runtime Gunicorn):** 7 de junio de 2026  
 **Actualización (PROD-1-A validación SECRET_KEY):** 7 de junio de 2026  
 **Actualización (PROD-1 hardening configuración):** 7 de junio de 2026  
@@ -153,8 +158,13 @@ api/              # agregación de rutas DRF + vistas legacy voluminosas (views.
 
 ## Integración con archivos / documentos
 
-- `FileField` en documentos EMR, registros quirúrgicos, archivos médicos.
-- Servido `/media/` en DEBUG (`synesis/urls.py`).
+- `FileField` en documentos EMR, registros quirúrgicos/procedimientos, archivos médicos, estudios complementarios.
+- **`MEDIA_ROOT`:** `BASE_DIR / 'media'`; **`MEDIA_URL`:** `/media/`.
+- **PROD-4:** en producción (`DEBUG=False`) `/media/` **no** se sirve por Django (`synesis/urls.py` condiciona a `DEBUG=True`) ni por Nginx (`deploy/nginx/nginx.prod.example.conf` bloquea la ruta).
+- **Descargas seguras:** `ArchivoMedicoViewSet.download`, `DocumentoViewSet.download`, estudios/LIMS vía `FileResponse` autenticado; serializers exponen `download_url` relativo, no `FileField.url`.
+- **PROD-4-A [CERRADO — jun 2026]:** `RegistroProcedimiento.adjunto_resultado` y `RegistroQuirurgico.consentimiento_informado` — `adjunto_resultado` / `consentimiento_informado` son `write_only` en lectura; serializers exponen `*_download_url` y `*_nombre`; descarga vía `GET /api/registros-procedimientos/{id}/download-adjunto-resultado/` y `GET /api/registros-quirurgicos/{id}/download-consentimiento-informado/` con `get_object()` + permisos existentes; sin `/media/` en JSON. Tests: **15 passed** (`test_registro_adjuntos_download_prod4a.py`).
+- **PROD-4-B [CERRADO — jun 2026]:** descargas exitosas auditan vía `_audit_turnos_registro_download()` → `log_event` (`action='UPDATE'` — patrón Documento/ArchivoMedico/LIMS PDF; acción semántica `DOWNLOAD` evaluable a futuro); `module='turnos'`, `after=None`; metadata: `accion`, `field`, `endpoint`, `view`; sin path, `/media/`, filename ni contenido. Tests: **6 passed** (`test_registro_adjuntos_download_audit_prod4b.py`).
+- **Futuro:** S3/MinIO/object storage privado sin implementar en esta fase.
 
 ---
 
@@ -201,6 +211,9 @@ Ver `DOC_RIESGOS_DEUDA_TECNICA.md`.
 ## Pendiente de confirmar
 
 - **PROD-2-A [IMPLEMENTADO]:** `entrypoint.sh` + `DJANGO_RUNTIME` (`runserver` dev / `gunicorn` prod); `gunicorn>=22,<24` en `requirements.txt`; `docker-compose.yml` dev; `docker-compose.prod.example.yml` plantilla; ver `PROD_RUNTIME.md`.
-- Storage privado object/S3 para media en producción.
-- Storage object privado para media en producción.
-- Política de backups/restore.
+- **PROD-2-B [CERRADO — jun 2026]:** tests ejecutables de `entrypoint.sh` (24 tests, stubs, sin DB real); healthcheck HTTP `/api/health/` con `DJANGO_HEALTHCHECK_HOST` en compose prod example; regresión documentada; sin impacto EMR/LIMS. Ver `PROD_RUNTIME.md`, `PROD_CHECKLIST.md`, `DOC_TESTS.md`.
+- **PROD-3 [CERRADO — jun 2026]:** plantilla `deploy/nginx/nginx.prod.example.conf`; servicio `nginx` en compose; proxy Gunicorn con headers; `/media/` bloqueado; `nginx -t` Docker OK; sin impacto EMR/LIMS. Ver `PROD_RUNTIME.md`.
+- **PROD-4 [CERRADO — jun 2026]:** política media privada; tests estáticos + permisos archivos; compose sin media en Nginx; sin S3/MinIO real. Ver `PROD_RUNTIME.md`, `PROD_CHECKLIST.md`.
+- **PROD-5 [CERRADO — jun 2026]:** plantillas `deploy/backup/`; ver `PROD_RUNTIME.md`.
+- **PROD-5-A [IMPLEMENTADO — jun 2026]:** restore drill — `RESTORE_DRILL_STAGING.md`, `verify_restore.example.sh`; tests `test_prod_restore_drill_config.py`.
+- Object storage S3/MinIO productivo (fase posterior).

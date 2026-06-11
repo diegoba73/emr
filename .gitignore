@@ -21,12 +21,22 @@ emr_env/
 logs/
 django.log
 
-# Base de datos / dumps / backups
+# PROD-5-A — Evidencia de drill (no commitear; puede contener metadatos sensibles)
+deploy/backup/drill-evidence/
+
+# Base de datos / dumps / backups (PROD-5)
 *.sql
+*.sql.gz
 *.sqlite3
 *.dump
 *.bak
+*.backup
+*.tar
+*.tar.gz
+*.sha256
 backup_pendrive.sql
+backups/
+deploy/backup/output/
 
 # Media / archivos clínicos locales
 media/

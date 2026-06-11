@@ -1,6 +1,12 @@
 # DOC_TESTS — Pruebas existentes
 
 **Fecha de generación:** 30 de abril de 2026  
+**Actualización (PROD-4 CERRADO):** 8 de junio de 2026
+**Actualización (PROD-3 CERRADO):** 7 de junio de 2026
+**Actualización (PROD-3 Nginx reverse proxy):** 7 de junio de 2026
+**Actualización (PROD-2-B CERRADO):** 7 de junio de 2026
+**Actualización (PROD-2-B healthcheck ALLOWED_HOSTS/SSL):** 7 de junio de 2026
+**Actualización (PROD-2-B runtime ejecutable):** 7 de junio de 2026
 **Actualización (PROD-2-A runtime Gunicorn):** 7 de junio de 2026  
 **Actualización (PROD-1-A SECRET_KEY productiva):** 7 de junio de 2026  
 **Actualización (PROD-1 settings seguridad):** 7 de junio de 2026  
@@ -199,10 +205,66 @@ emr_env/bin/pytest laboratorio/tests/test_lims_pdf_informe.py -q --reuse-db
 
 **PROD-1-A [IMPLEMENTADO — jun 2026]:** refuerzo `validate_production_secret_key` — rechaza placeholders documentados, `django-insecure-*`, cadenas repetitivas y baja diversidad; acepta clave sintética fuerte y `get_random_secret_key()`.
 
-**PROD-2-A [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_runtime_config.py` — entrypoint runserver/gunicorn, compose dev/prod, env examples, gunicorn en requirements.
+**PROD-2-A [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_runtime_config.py` — lectura estática: entrypoint runserver/gunicorn, compose dev/prod, env examples, gunicorn en requirements.
+
+**PROD-2-B [CERRADO — jun 2026]:** extiende `api/tests/test_prod_runtime_config.py` (**24 tests** en suite runtime/healthcheck):
+
+| Clase / área | Tests | Qué valida |
+|--------------|-------|------------|
+| `TestEntrypointRuntime` | 3 | Lectura estática entrypoint (runserver, gunicorn, runtime inválido) |
+| `TestEntrypointExecutable` | 6 | Ejecución real con stubs: runtime inválido, runserver, gunicorn, `BIND_ADDR`, `RUN_MIGRATIONS`, sin secretos |
+| `TestDockerComposeDev` | 1 | Dev usa `runserver` |
+| `TestDockerComposeProdExample` | 3 | Prod usa `gunicorn`; sin secretos reales; healthcheck presente |
+| `TestDockerComposeProdHealthcheck` | 6 | `/api/health/`, `DJANGO_HEALTHCHECK_HOST`, `Host`, `X-Forwarded-Proto`, urllib sin curl/wget, sin secretos hardcodeados |
+| `TestEnvExamples` | 3 | Env dev/prod runtime; `DJANGO_HEALTHCHECK_HOST` en prod example |
+| `TestRequirements` | 1 | `gunicorn` en requirements |
+| `test_doc_runtime_existe` | 1 | `PROD_RUNTIME.md` existe |
+
+Técnica entrypoint: stubs temporales de `nc`, `python`, `gunicorn` y `sleep` en `PATH`; no levanta servidores ni Postgres reales. Healthcheck: validación estática del compose prod (sin contenedores).
+
+**Evidencia de cierre (jun 2026):** 24 passed runtime PROD-2-B; regresión mínima documentada. Sin impacto EMR/LIMS.
+
+**PROD-3 [CERRADO — jun 2026]:** tests estáticos Nginx/compose en `api/tests/test_prod_runtime_config.py` (**39 tests** suite runtime total, incluye PROD-2-B + PROD-3):
+
+| Clase / área | Qué valida |
+|--------------|------------|
+| `TestNginxProdExample` | Plantilla Nginx; proxy `backend:8000`; headers; map `$proxy_x_forwarded_proto`; `/media/` y dotfiles bloqueados |
+| `TestDockerComposeProdExample` | Servicio `nginx`; backend interno; `nginx` → `backend` healthy; healthcheck PROD-2-B |
+
+Validación operativa: `nginx -t` con Docker documentado en `PROD_RUNTIME.md`.
+
+**Evidencia de cierre (jun 2026):** 39 passed runtime; 63 passed regresión mínima. Sin impacto EMR/LIMS.
+
+**PROD-4 [CERRADO — jun 2026]:** storage privado media clínica — **11 archivos** en commit (ver `PROD_RUNTIME.md`; incluye `deploy/nginx/nginx.prod.example.conf` untracked hasta `git add` explícito).
+
+| Clase / área | Qué valida |
+|--------------|------------|
+| `TestNginxProdExample` (ampliado) | Sin `alias` público a media; sin `autoindex` |
+| `TestDockerComposeProdExample` (ampliado) | Nginx sin volumen `media` |
+| `TestProdPrivateMediaStorage` | Compose/env/docs declaran media privada; sin credenciales cloud en `.env.production.example` |
+
+Tests funcionales permisos archivos (`archivos_medicos/tests/` — **33 passed**, incluye C6.2 + modelos):
+
+| Test | Qué valida |
+|------|------------|
+| `test_anonimo_no_lista_archivos` | Listado sin auth → 401/403 |
+| `test_anonimo_no_descarga` | Download sin auth → 401/403 |
+| (C6.2 existentes) | Sin `/media/` en API; paciente ajeno bloqueado; auditoría sin paths |
+
+**Evidencia de cierre (jun 2026):** **49 passed** runtime; **73 passed** regresión mínima; **33 passed** `archivos_medicos/tests/`. Sin impacto EMR/LIMS.
+
+**PROD-4-A adjuntos turnos [CERRADO — jun 2026]:** `api/tests/test_registro_adjuntos_download_prod4a.py` — **15 passed** (PostgreSQL).
+
+**PROD-4-B auditoría download adjuntos turnos [CERRADO — jun 2026]:** `api/tests/test_registro_adjuntos_download_audit_prod4b.py` — **6 passed**; descarga exitosa crea `AuditEvent`; actor/entidad/metadata correctos; sin path/`/media/`/filename; no autorizado/sin archivo no audita. Regresión mínima (+ PROD-4-A): **121 passed**.
+
+**PROD-5 backups/restore [CERRADO — jun 2026]:** `test_prod_backup_config.py` — **31 passed**.
+
+**PROD-5-A restore drill [IMPLEMENTADO — jun 2026]:** `test_prod_restore_drill_config.py` — documento staging, verify script, sin restore real en pytest.
+
+Regresión mínima runtime + seguridad + LIMS crítico:
 
 ```bash
-emr_env/bin/pytest api/tests/test_prod_runtime_config.py -q --reuse-db
+emr_env/bin/pytest api/tests/test_prod_settings_security.py api/tests/test_prod_runtime_config.py laboratorio/tests/test_lims_flujo_critico.py -q --reuse-db
 ```
 
 ```bash

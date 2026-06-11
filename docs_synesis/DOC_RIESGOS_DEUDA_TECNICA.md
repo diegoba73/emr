@@ -10,6 +10,12 @@
 **Actualización (Fase B3.3 LIMS — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (Fase B4.1 LIMS — Resultados clínicos estructurados):** 16 de mayo de 2026  
+**Actualización (PROD-4 CERRADO):** 8 de junio de 2026
+**Actualización (PROD-3 CERRADO):** 7 de junio de 2026
+**Actualización (PROD-3 Nginx reverse proxy):** 7 de junio de 2026
+**Actualización (PROD-2-B CERRADO):** 7 de junio de 2026
+**Actualización (PROD-2-B healthcheck ALLOWED_HOSTS/SSL):** 7 de junio de 2026
+**Actualización (PROD-2-B — verificación ejecutable runtime):** 7 de junio de 2026
 **Actualización (PROD-2-A — runtime Gunicorn):** 7 de junio de 2026  
 **Actualización (PROD-1-A — SECRET_KEY productiva):** 7 de junio de 2026  
 **Actualización (PROD-1 — hardening configuración):** 7 de junio de 2026  
@@ -71,10 +77,17 @@
 - **CORS** permisivo en `DEBUG=True` — **mitigado en producción (PROD-1):** `CORS_ALLOW_ALL_ORIGINS` solo con `DEBUG=True`; orígenes explícitos si `DEBUG=False`.
 - ~~**SECRET_KEY** por defecto en settings~~ — **mitigado (PROD-1 / PROD-1-A):** arranque falla si `DEBUG=False` y clave placeholder o baja entropía; `.env.production.example` no contiene clave usable; usar `get_random_secret_key()` o gestor de secretos.
 - ~~**Browsable API** siempre habilitada~~ — **mitigado (PROD-1):** solo con `DEBUG=True`.
-- **`/media/` directo** — **mitigado (PROD-1):** solo `DEBUG=True`; producción debe usar endpoints protegidos.
+- ~~**`/media/` directo**~~ — **mitigado (PROD-1 + PROD-3 + PROD-4):** Django solo sirve media con `DEBUG=True`; Nginx prod bloquea `/media/`; descargas vía API autenticada. No confiar en `FileField.url` como autorización.
 - **Login** `@csrf_exempt` — entender implicancia CSRF en despliegue.
 - ~~**Gunicorn productivo**~~ — **mitigado (PROD-2-A):** `DJANGO_RUNTIME=gunicorn` en entrypoint; dev mantiene `runserver`.
-- **Pendiente:** WAF, rate limiting, rotación secretos, backups, storage privado, Nginx en compose.
+- ~~**Sin verificación ejecutable del entrypoint**~~ — **mitigado (PROD-2-B):** tests con stubs en `api/tests/test_prod_runtime_config.py`; sin Postgres/servidor real.
+- ~~**Healthcheck HTTP Gunicorn en compose**~~ — **mitigado (PROD-2-B CERRADO):** `GET /api/health/` con `DJANGO_HEALTHCHECK_HOST`, header `Host` alineado a `ALLOWED_HOSTS` y `X-Forwarded-Proto: https` cuando `DJANGO_USE_PROXY_SSL_HEADER=True`.
+- ~~**Sin reverse proxy / Nginx productivo**~~ — **mitigado (PROD-3 CERRADO):** plantilla Nginx + servicio compose; headers proxy; `/media/` bloqueado; `nginx -t` Docker; healthcheck PROD-2-B conservado.
+- ~~**Adjuntos quirúrgicos/procedimiento sin endpoint download**~~ — **CERRADO (PROD-4-A — jun 2026):** endpoints download seguros; serializers sin `/media/`.
+- ~~**Adjuntos turnos sin auditoría de download**~~ — **CERRADO (PROD-4-B — jun 2026):** `log_event` en descargas exitosas; metadata `field` + `endpoint`; sin path/PHI.
+- ~~**Backups/restore sin plantilla versionada**~~ — **CERRADO (PROD-5)**.
+- ~~**Restore drill sin procedimiento versionado**~~ — **mitigado (PROD-5-A):** `RESTORE_DRILL_STAGING.md` + `verify_restore.example.sh`; ejecución en infra staging real: operador.
+- **Pendiente (fuera de alcance PROD-5):** certificados TLS reales/ACME, object storage S3/MinIO productivo, WAF, rate limiting, rotación secretos, monitoreo externo (Sentry/Datadog), jobs cron automatizados en compose, cifrado offsite implementado.
 
 ---
 
