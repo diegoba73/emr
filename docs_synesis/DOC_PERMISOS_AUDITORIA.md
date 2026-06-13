@@ -3,6 +3,7 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (hardening mínimo LIMS):** 2 de mayo de 2026  
 **Actualización (Fase A LIMS — acciones y auditoría de estado):** 3 de mayo de 2026  
+**Actualización (PROD-4 — media privada):** 8 de junio de 2026
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 
 **Alcance:** Autenticación, autorización, auditoría y exposición de datos según código revisado.
@@ -128,7 +129,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 
 - **PHI:** pacientes, consultas, resultados lab, archivos médicos, documentos EMR.
 - **Credenciales:** sesión y JWT; `SECRET_KEY` por env; **PROD-1:** falla al arrancar si `DEBUG=False` y clave placeholder/insegura.
-- Archivos: `Media` bajo `/media/` solo en `DEBUG=True`; producción vía endpoints protegidos.
+- Archivos: `Media` bajo `/media/` solo en `DEBUG=True` (dev); producción: Nginx bloquea `/media/` (PROD-3/PROD-4); descargas vía endpoints `download/` autenticados. No usar `FileField.url` como control de acceso.
 
 ---
 

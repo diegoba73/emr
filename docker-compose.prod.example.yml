@@ -3,10 +3,14 @@
 #
 # Uso orientativo:
 #   export DJANGO_SECRET_KEY='...'  # generar con get_random_secret_key()
-#   export DJANGO_ALLOWED_HOSTS='app.example.com'
+#   export DJANGO_ALLOWED_HOSTS='example.com,localhost'
 #   export DJANGO_CORS_ALLOWED_ORIGINS='https://app.example.com'
 #   export DJANGO_CSRF_TRUSTED_ORIGINS='https://app.example.com'
+#   export DJANGO_HEALTHCHECK_HOST='localhost'
 #   docker compose -f docker-compose.prod.example.yml up -d
+#
+# PROD-3: Nginx actúa como reverse proxy; Gunicorn solo en red interna.
+# PROD-4: MEDIA_ROOT solo en backend (volumen interno opcional); Nginx NO monta ni sirve /media/.
 
 services:
   db:
@@ -28,13 +32,14 @@ services:
   backend:
     build: .
     container_name: emr_backend_prod
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       DJANGO_DEBUG: "False"
       DJANGO_RUNTIME: "gunicorn"
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY requerido}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS requerido}
+      DJANGO_HEALTHCHECK_HOST: ${DJANGO_HEALTHCHECK_HOST:-localhost}
       DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:?DJANGO_CORS_ALLOWED_ORIGINS requerido}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?DJANGO_CSRF_TRUSTED_ORIGINS requerido}
       DJANGO_SESSION_COOKIE_SECURE: "true"
@@ -50,10 +55,36 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
+    # PROD-4: volumen persistente solo en backend (red interna). Nunca montar media en nginx.
+    # volumes:
+    #   - media_data_prod:/app/media
     depends_on:
       db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os, urllib.request; host=os.getenv('DJANGO_HEALTHCHECK_HOST', 'localhost'); req=urllib.request.Request('http://127.0.0.1:8000/api/health/', headers={'Host': host, 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(req, timeout=5)\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: emr_nginx_prod
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/nginx.prod.example.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   postgres_data_prod:
+  # media_data_prod:  # PROD-4 — descomentar junto al volumen del backend si aplica

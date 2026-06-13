@@ -129,6 +129,18 @@ def atencion_vinculada(paciente, medico, recurso):
 
 
 @pytest.mark.django_db
+def test_anonimo_no_lista_archivos(client, archivo_medico):
+    r = client.get('/api/archivos-medicos/archivos/')
+    assert r.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_anonimo_no_descarga(client, archivo_medico):
+    r = client.get(f'/api/archivos-medicos/archivos/{archivo_medico.id}/download/')
+    assert r.status_code in (401, 403)
+
+
+@pytest.mark.django_db
 def test_list_no_expone_media_url(client, archivo_medico, medico, atencion_vinculada):
     client.force_authenticate(user=medico.user)
     r = client.get('/api/archivos-medicos/archivos/')
