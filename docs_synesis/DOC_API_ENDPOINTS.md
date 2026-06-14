@@ -86,8 +86,8 @@ Registros `router.register` (recurso → ViewSet). Convención DRF:
 | `internaciones` | `api.views.InternacionViewSet` | (modelo historias_clinicas.Internacion típico) | — |
 | `dashboard` | `api.views.DashboardViewSet` | ViewSet custom | — |
 | `consultas-ambulatorias` | `api.views.ConsultaAmbulatoriaViewSet` | — | — |
-| `registros-procedimientos` | `api.views.RegistroProcedimientoViewSet` | — | — |
-| `registros-quirurgicos` | `api.views.RegistroQuirurgicoViewSet` | — | — |
+| `registros-procedimientos` | `api.views.RegistroProcedimientoViewSet` | PROD-4-A **CERRADO**: `adjunto_resultado` write-only; `adjunto_resultado_download_url`; `GET {id}/download-adjunto-resultado/` | — |
+| `registros-quirurgicos` | `api.views.RegistroQuirurgicoViewSet` | PROD-4-A **CERRADO**: `consentimiento_informado` write-only; `consentimiento_informado_download_url`; `GET {id}/download-consentimiento-informado/` | — |
 | `estudios-diagnosticos` | `api.views.EstudioDiagnosticoViewSet` | — | — |
 | `procedimientos-catalogo` | `api.views.ProcedimientoCatalogoViewSet` | — | — |
 | `documentos` | `api.views.DocumentoViewSet` | Documentos EMR (C6.2: sin URL `/media/`; `GET {id}/download/`) | — |
@@ -137,6 +137,21 @@ Informes en listado: `tiene_pdf`, `download_pdf_url` (ruta protegida anterior).
 No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
 **Frontend (C6.4.2):** consumido desde `estudiosComplementariosApi.ts` — rutas listadas arriba; descarga `.../archivos/{archivo_estudio_id}/download/` con `responseType: blob`.
+
+## Registros procedimiento / quirúrgico — PROD-4-A [CERRADO — jun 2026]
+
+Descarga segura de adjuntos clínicos vía endpoints autenticados (sin URL `/media/` en JSON).
+
+| Método | Ruta | Notas |
+|--------|------|-------|
+| GET | `registros-procedimientos/{id}/` | Sin URL `/media/`; `adjunto_resultado_download_url` si hay adjunto |
+| GET | `registros-procedimientos/{id}/download-adjunto-resultado/` | Descarga autenticada; permisos vía queryset ViewSet |
+| GET | `registros-quirurgicos/{id}/` | Sin URL `/media/`; `consentimiento_informado_download_url` si hay archivo |
+| GET | `registros-quirurgicos/{id}/download-consentimiento-informado/` | Descarga autenticada; permisos vía queryset ViewSet |
+
+Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` (multipart). Cliente **no** debe usar `/media/` ni `FileField.url`.
+
+---
 
 ## Documentos EMR (`/api/documentos/`) — C6.2
 

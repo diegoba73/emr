@@ -2484,6 +2484,43 @@ class ConsultaAmbulatoriaViewSet(viewsets.ModelViewSet):
         return queryset.none()
 
 
+def _clinical_file_download_response(file_field, default_filename='archivo'):
+    """Sirve un FileField clínico con Content-Disposition seguro; 404 si falta."""
+    if not file_field:
+        return Response(
+            {'detail': 'Archivo no encontrado en el servidor.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    try:
+        storage_path = file_field.path
+    except Exception:
+        return Response(
+            {'detail': 'Archivo no encontrado en el servidor.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if not os.path.exists(storage_path):
+        logger.error('Archivo clínico ausente en almacenamiento')
+        return Response(
+            {'detail': 'Archivo no encontrado en el servidor.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    try:
+        response = FileResponse(
+            open(storage_path, 'rb'),
+            content_type='application/octet-stream',
+        )
+        nombre = os.path.basename(file_field.name) or default_filename
+        nombre = nombre.replace('"', '_')
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
+    except Exception:
+        logger.exception('Error al servir descarga de archivo clínico')
+        return Response(
+            {'detail': 'Error al procesar el archivo.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
 class RegistroProcedimientoViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar registros de procedimientos"""
     queryset = RegistroProcedimiento.objects.select_related('atencion', 'atencion__paciente', 'atencion__medico_principal', 'procedimiento', 'profesional_asistente')
@@ -2515,6 +2552,14 @@ class RegistroProcedimientoViewSet(viewsets.ModelViewSet):
             except Exception:
                 return queryset.none()
         return queryset.none()
+
+    @action(detail=True, methods=['get'], url_path='download-adjunto-resultado')
+    def download_adjunto_resultado(self, request, pk=None):
+        registro = self.get_object()
+        return _clinical_file_download_response(
+            registro.adjunto_resultado,
+            default_filename='adjunto_resultado',
+        )
 
 
 class RegistroQuirurgicoViewSet(viewsets.ModelViewSet):
@@ -2549,6 +2594,14 @@ class RegistroQuirurgicoViewSet(viewsets.ModelViewSet):
             except Exception:
                 return queryset.none()
         return queryset.none()
+
+    @action(detail=True, methods=['get'], url_path='download-consentimiento-informado')
+    def download_consentimiento_informado(self, request, pk=None):
+        registro = self.get_object()
+        return _clinical_file_download_response(
+            registro.consentimiento_informado,
+            default_filename='consentimiento_informado',
+        )
 
 
 def _safe_audit_documento(callable_, *args, **kwargs):

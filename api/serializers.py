@@ -811,8 +811,10 @@ class RegistroProcedimientoSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    adjunto_resultado = serializers.FileField(required=False, allow_null=True)
-    
+    adjunto_resultado = serializers.FileField(required=False, allow_null=True, write_only=True)
+    adjunto_resultado_nombre = serializers.SerializerMethodField()
+    adjunto_resultado_download_url = serializers.SerializerMethodField()
+
     class Meta:
         model = RegistroProcedimiento
         fields = [
@@ -830,7 +832,26 @@ class RegistroProcedimientoSerializer(serializers.ModelSerializer):
             'profesional_asistente_id',
             'complicaciones',
             'adjunto_resultado',
+            'adjunto_resultado_nombre',
+            'adjunto_resultado_download_url',
         ]
+        read_only_fields = [
+            'adjunto_resultado_nombre',
+            'adjunto_resultado_download_url',
+        ]
+
+    def get_adjunto_resultado_nombre(self, obj):
+        if not obj.adjunto_resultado:
+            return None
+        return os.path.basename(obj.adjunto_resultado.name)
+
+    def get_adjunto_resultado_download_url(self, obj):
+        request = self.context.get('request')
+        if not request or not obj.pk or not obj.adjunto_resultado:
+            return None
+        return request.build_absolute_uri(
+            f'/api/registros-procedimientos/{obj.pk}/download-adjunto-resultado/'
+        )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -860,8 +881,10 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
         required=False
     )
     equipo_quirurgico = serializers.JSONField(required=False)
-    consentimiento_informado = serializers.FileField(required=False, allow_null=True)
-    
+    consentimiento_informado = serializers.FileField(required=False, allow_null=True, write_only=True)
+    consentimiento_informado_nombre = serializers.SerializerMethodField()
+    consentimiento_informado_download_url = serializers.SerializerMethodField()
+
     class Meta:
         model = RegistroQuirurgico
         fields = [
@@ -879,9 +902,28 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
             'recuento_instrumental_ok',
             'equipo_quirurgico',
             'consentimiento_informado',
+            'consentimiento_informado_nombre',
+            'consentimiento_informado_download_url',
             'documentos_adjuntos',
             'documentos_adjuntos_ids',
         ]
+        read_only_fields = [
+            'consentimiento_informado_nombre',
+            'consentimiento_informado_download_url',
+        ]
+
+    def get_consentimiento_informado_nombre(self, obj):
+        if not obj.consentimiento_informado:
+            return None
+        return os.path.basename(obj.consentimiento_informado.name)
+
+    def get_consentimiento_informado_download_url(self, obj):
+        request = self.context.get('request')
+        if not request or not obj.pk or not obj.consentimiento_informado:
+            return None
+        return request.build_absolute_uri(
+            f'/api/registros-quirurgicos/{obj.pk}/download-consentimiento-informado/'
+        )
     
     def create(self, validated_data):
         anestesista_id = validated_data.pop('anestesista_id')
