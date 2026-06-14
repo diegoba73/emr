@@ -2484,7 +2484,26 @@ class ConsultaAmbulatoriaViewSet(viewsets.ModelViewSet):
         return queryset.none()
 
 
-def _clinical_file_download_response(file_field, default_filename='archivo'):
+def _audit_turnos_registro_download(*, actor, registro, field, endpoint, view, accion):
+    """Auditoría mínima de descarga de adjunto turnos (PROD-4-B); sin path ni filename."""
+    _safe_audit_documento(
+        log_event,
+        action='UPDATE',
+        actor=actor,
+        entity=registro,
+        after=None,
+        entity_repr=f'{registro._meta.label}:{registro.pk}',
+        module='turnos',
+        metadata={
+            'accion': accion,
+            'field': field,
+            'endpoint': endpoint,
+            'view': view,
+        },
+    )
+
+
+def _clinical_file_download_response(file_field, default_filename='archivo', on_success=None):
     """Sirve un FileField clínico con Content-Disposition seguro; 404 si falta."""
     if not file_field:
         return Response(
@@ -2504,6 +2523,8 @@ def _clinical_file_download_response(file_field, default_filename='archivo'):
             {'detail': 'Archivo no encontrado en el servidor.'},
             status=status.HTTP_404_NOT_FOUND,
         )
+    if on_success is not None:
+        on_success()
     try:
         response = FileResponse(
             open(storage_path, 'rb'),
@@ -2559,6 +2580,14 @@ class RegistroProcedimientoViewSet(viewsets.ModelViewSet):
         return _clinical_file_download_response(
             registro.adjunto_resultado,
             default_filename='adjunto_resultado',
+            on_success=lambda: _audit_turnos_registro_download(
+                actor=request.user,
+                registro=registro,
+                field='adjunto_resultado',
+                endpoint='download-adjunto-resultado',
+                view='RegistroProcedimientoViewSet.download_adjunto_resultado',
+                accion='registro_procedimiento_adjunto_download',
+            ),
         )
 
 
@@ -2601,6 +2630,14 @@ class RegistroQuirurgicoViewSet(viewsets.ModelViewSet):
         return _clinical_file_download_response(
             registro.consentimiento_informado,
             default_filename='consentimiento_informado',
+            on_success=lambda: _audit_turnos_registro_download(
+                actor=request.user,
+                registro=registro,
+                field='consentimiento_informado',
+                endpoint='download-consentimiento-informado',
+                view='RegistroQuirurgicoViewSet.download_consentimiento_informado',
+                accion='registro_quirurgico_consentimiento_download',
+            ),
         )
 
 

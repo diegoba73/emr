@@ -146,7 +146,8 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 
 - Borrado de turnos (sí en turnos).
 - ~~Validación de protocolo lab sin `before_state` por resultado~~ — mitigado en `SolicitudExamenViewSet.validar`; borrado de orden con `before_state` en `perform_destroy` (admin).
-- Descarga de archivos médicos (logging en views — revisar `archivos_medicos/views.py` completo).
+- ~~Descarga de archivos médicos sin auditoría~~ — **mitigado (C6.2):** `archivo_medico_download` en `AuditEvent.metadata`; sin paths ni `/media/`.
+- ~~**Deuda PROD-4 adjuntos procedimiento/quirúrgico**~~ — **CERRADO (PROD-4-A + PROD-4-B — jun 2026):** descarga segura + auditoría `registro_procedimiento_adjunto_download` / `registro_quirurgico_consentimiento_download`; metadata mínima sin path ni `/media/`; tests `test_registro_adjuntos_download_audit_prod4b.py`.
 - Cambios de rol de usuario / registro (`register_*`).
 
 ---

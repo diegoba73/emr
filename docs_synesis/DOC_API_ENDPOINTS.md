@@ -138,16 +138,16 @@ No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
 **Frontend (C6.4.2):** consumido desde `estudiosComplementariosApi.ts` — rutas listadas arriba; descarga `.../archivos/{archivo_estudio_id}/download/` con `responseType: blob`.
 
-## Registros procedimiento / quirúrgico — PROD-4-A [CERRADO — jun 2026]
+## Registros procedimiento / quirúrgico — PROD-4-A + PROD-4-B [CERRADO — jun 2026]
 
-Descarga segura de adjuntos clínicos vía endpoints autenticados (sin URL `/media/` en JSON).
+Descarga segura (PROD-4-A) + auditoría en descarga exitosa (PROD-4-B). `log_event` con `action='UPDATE'`, `after=None`, metadata mínima (sin path/filename/contenido).
 
 | Método | Ruta | Notas |
 |--------|------|-------|
 | GET | `registros-procedimientos/{id}/` | Sin URL `/media/`; `adjunto_resultado_download_url` si hay adjunto |
-| GET | `registros-procedimientos/{id}/download-adjunto-resultado/` | Descarga autenticada; permisos vía queryset ViewSet |
+| GET | `registros-procedimientos/{id}/download-adjunto-resultado/` | Descarga autenticada; auditoría `registro_procedimiento_adjunto_download` (PROD-4-B) |
 | GET | `registros-quirurgicos/{id}/` | Sin URL `/media/`; `consentimiento_informado_download_url` si hay archivo |
-| GET | `registros-quirurgicos/{id}/download-consentimiento-informado/` | Descarga autenticada; permisos vía queryset ViewSet |
+| GET | `registros-quirurgicos/{id}/download-consentimiento-informado/` | Descarga autenticada; auditoría `registro_quirurgico_consentimiento_download` (PROD-4-B) |
 
 Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` (multipart). Cliente **no** debe usar `/media/` ni `FileField.url`.
 
