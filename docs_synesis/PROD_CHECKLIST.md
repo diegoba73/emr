@@ -1,6 +1,6 @@
 # PROD_CHECKLIST — Despliegue inicial SYNESIS EMR/LIMS
 
-**Fase:** PROD-1 / PROD-1-A / PROD-2-A / **PROD-2-B CERRADO** / **PROD-3 CERRADO** / **PROD-4 CERRADO** / **PROD-4-A CERRADO** / **PROD-4-B CERRADO** / **PROD-5 CERRADO** / **PROD-5-A** (jun 2026)
+**Fase:** PROD-1 / PROD-1-A / PROD-2-A / **PROD-2-B CERRADO** / **PROD-3 CERRADO** / **PROD-4 CERRADO** / **PROD-4-A CERRADO** / **PROD-4-B CERRADO** / **PROD-5 CERRADO** / **PROD-5-A CERRADO** / **PROD-6** (jun 2026)
 **Alcance:** checklist operativo; no sustituye auditoría de seguridad ni despliegue completo.
 
 ---
@@ -282,6 +282,20 @@ Plantillas operativas PostgreSQL + media. **Sin restore real ejecutado; sin mode
 - [x] `deploy/backup/verify_restore.example.sh`
 - [x] `api/tests/test_prod_restore_drill_config.py`
 - [ ] Operador: ejecutar drill en staging aislado (fuera del repo)
+
+---
+
+## PROD-6 — Readiness productivo controlado / Smoke E2E (jun 2026)
+
+Piloto técnico backend/API; **no** producción clínica abierta. Ver **`PROD_READINESS_SMOKE.md`**.
+
+- [ ] Documentación readiness + GO/NO-GO + runbook reversión
+- [ ] Matriz roles mínima; solo datos sintéticos en smoke inicial
+- [ ] Script `deploy/smoke/prod_readiness_smoke.example.sh` (parametrizado; sin secretos)
+- [ ] Tests `test_prod_readiness_smoke.py` + regresión mínima OK
+- [ ] Health, auth, media privada, descargas+auditoría (tests existentes)
+- [ ] Backup/restore drill como checklist; **sin restore real** en smoke inicial
+- [ ] Frontend no versionado — validar UI en repo/despliegue real antes de go-live clínico
 
 ---
 

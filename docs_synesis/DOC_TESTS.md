@@ -1,7 +1,7 @@
 # DOC_TESTS — Pruebas existentes
 
 **Fecha de generación:** 30 de abril de 2026  
-**Actualización (PROD-4 CERRADO):** 8 de junio de 2026
+**Actualización (PROD-6 readiness smoke):** junio 2026
 **Actualización (PROD-3 CERRADO):** 7 de junio de 2026
 **Actualización (PROD-3 Nginx reverse proxy):** 7 de junio de 2026
 **Actualización (PROD-2-B CERRADO):** 7 de junio de 2026
@@ -261,7 +261,13 @@ Tests funcionales permisos archivos (`archivos_medicos/tests/` — **33 passed**
 
 **PROD-5-A restore drill [IMPLEMENTADO — jun 2026]:** `test_prod_restore_drill_config.py` — documento staging, verify script, sin restore real en pytest.
 
-Regresión mínima runtime + seguridad + LIMS crítico:
+**PROD-6 readiness smoke [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_readiness_smoke.py` — documentación `PROD_READINESS_SMOKE.md`, script `deploy/smoke/prod_readiness_smoke.example.sh`, rutas críticas URLConf, media bloqueada, descargas+auditoría referenciadas; sin producción real ni servicios externos.
+
+Regresión mínima PROD-6 (incluye readiness si existe):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_settings_security.py api/tests/test_prod_runtime_config.py laboratorio/tests/test_lims_flujo_critico.py archivos_medicos/tests/ api/tests/test_registro_adjuntos_download_prod4a.py api/tests/test_registro_adjuntos_download_audit_prod4b.py api/tests/test_prod_readiness_smoke.py -q --reuse-db
+```
 
 ```bash
 emr_env/bin/pytest api/tests/test_prod_settings_security.py api/tests/test_prod_runtime_config.py laboratorio/tests/test_lims_flujo_critico.py -q --reuse-db
