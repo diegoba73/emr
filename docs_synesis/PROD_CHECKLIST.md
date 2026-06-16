@@ -1,6 +1,6 @@
 # PROD_CHECKLIST — Despliegue inicial SYNESIS EMR/LIMS
 
-**Fase:** PROD-1 / PROD-1-A / PROD-2-A / **PROD-2-B CERRADO** / **PROD-3 CERRADO** / **PROD-4 CERRADO** / **PROD-4-A CERRADO** / **PROD-4-B CERRADO** / **PROD-5 CERRADO** / **PROD-5-A CERRADO** / **PROD-6** (jun 2026)
+**Fase:** PROD-1 / PROD-1-A / PROD-2-A / **PROD-2-B CERRADO** / **PROD-3 CERRADO** / **PROD-4 CERRADO** / **PROD-4-A CERRADO** / **PROD-4-B CERRADO** / **PROD-5 CERRADO** / **PROD-5-A CERRADO** / **PROD-6** / **PROD-7 GO técnico** / **PROD-8** / **PROD-9** / **PROD-10** / **PROD-11** / **PROD-12** / **PROD-13** (jun 2026)
 **Alcance:** checklist operativo; no sustituye auditoría de seguridad ni despliegue completo.
 
 ---
@@ -299,9 +299,141 @@ Piloto técnico backend/API; **no** producción clínica abierta. Ver **`PROD_RE
 
 ---
 
+## PROD-7 — Restore drill real staging (jun 2026)
+
+Restore drill ejecutado en entorno **staging/controlado local**; evidencia sanitizada fuera del repo.
+
+- [x] Backup PostgreSQL + checksum fuera del repo
+- [x] Backup media + checksum (o documentado origen controlado)
+- [x] Restore en DB temporal (`synesis_restore_drill_*`, ≠ `synesis_db`)
+- [x] Restore media en directorio temporal (≠ `MEDIA_ROOT` activo)
+- [x] `verify_restore.example.sh` OK
+- [x] `manage.py check` contra DB temporal
+- [x] GO técnico recuperabilidad; smoke post-restore con stack dedicado: no ejecutado por seguridad operativa
+- [ ] Evidencia: `../synesis_restore_evidence/PROD-7-restore-drill-staging-*.md` (operador)
+
+Ver `deploy/backup/RESTORE_DRILL_STAGING.md`, `api/tests/test_prod_restore_drill_config.py`.
+
+---
+
+## PROD-8 — Checklist pre-piloto productivo (jun 2026)
+
+Decisión **GO / NO-GO** antes de piloto productivo técnico controlado. Ver **`PROD_PREPILOT_CHECKLIST.md`**.
+
+- [x] Documento `PROD_PREPILOT_CHECKLIST.md` — precondiciones, seguridad, usuarios/roles, datos, frontend, rollback, evidencia, GO/NO-GO
+- [x] Tests `api/tests/test_prod_prepilot_checklist.py`
+- [ ] Operador: completar checklist final antes de piloto real
+- [ ] Usuarios internos nominales definidos **fuera del repo**
+- [ ] Backups programados definidos por operador
+- [ ] Restore drill PROD-7 OK o excepción formal
+- [ ] Monitoreo mínimo definido — ver **PROD-9** (`PROD_OBSERVABILITY_MIN.md`)
+- [ ] Frontend validado en repo/despliegue separado si aplica UI
+- [ ] **Producción clínica abierta: FUERA DE ALCANCE**
+
+**No es:** habilitación clínica abierta, cambios EMR/LIMS ni validación UX frontend productiva.
+
+---
+
+## PROD-9 — Observabilidad mínima (jun 2026)
+
+Plan operativo de observabilidad para piloto técnico controlado. Ver **`PROD_OBSERVABILITY_MIN.md`**.
+
+- [x] Documento `PROD_OBSERVABILITY_MIN.md` — logs, health, contenedores, DB, disco, incidentes, GO/NO-GO
+- [x] `deploy/observability/check_observability.example.sh` — checks no destructivos
+- [x] `deploy/observability/README.md`
+- [x] Tests `api/tests/test_prod_observability_min.py`
+- [ ] Operador: definir responsable e incidentes **fuera del repo**
+- [ ] Operador: integrar monitoreo externo (Sentry/Datadog/Prometheus) si aplica
+- [ ] Backups programados verificados periódicamente
+- [ ] Frontend: observabilidad separada si existe UI
+- [ ] **Producción clínica abierta: FUERA DE ALCANCE**
+
+**No es:** habilitación clínica abierta ni despliegue obligatorio de APM externo en esta fase documental.
+
+---
+
+## PROD-10 — Piloto técnico controlado (jun 2026)
+
+Runbook de ejecución del piloto técnico aplicando PROD-8 + PROD-9. Ver **`PROD_TECHNICAL_PILOT_RUNBOOK.md`**.
+
+- [x] Runbook `PROD_TECHNICAL_PILOT_RUNBOOK.md`
+- [x] Plantilla evidencia `PROD_TECHNICAL_PILOT_EVIDENCE_TEMPLATE.md` (completar **fuera del repo**)
+- [x] Smoke `deploy/smoke/prod_technical_pilot.example.sh`
+- [x] Tests `api/tests/test_prod_technical_pilot.py`
+- [ ] Operador: ejecutar ventana piloto real en staging controlado
+- [ ] Evidencia sanitizada en `../synesis_pilot_evidence/` (fuera del repo)
+- [ ] GO/NO-GO final del piloto registrado externamente
+- [ ] Frontend validado por separado si aplica UI
+- [ ] **Producción clínica abierta: FUERA DE ALCANCE**
+
+**No es:** habilitación clínica abierta. Crear runbook ≠ piloto ejecutado hasta que operador complete evidencia externa.
+
+---
+
+## PROD-11 — Revisión post-piloto (jun 2026)
+
+Revisión formal posterior al piloto técnico real. Ver **`PROD_POST_PILOT_REVIEW.md`**.
+
+- [x] Guía `PROD_POST_PILOT_REVIEW.md` — revisión PROD-8/9/10, GO/NO-GO post-piloto, riesgos, datos reales mínimos
+- [x] Plantilla `PROD_POST_PILOT_ACTIONS_TEMPLATE.md` (completar **fuera del repo**)
+- [x] Tests `api/tests/test_prod_post_pilot_review.py`
+- [ ] Operador: revisar evidencia PROD-10 externa y completar acta post-piloto
+- [ ] Acciones correctivas críticas cerradas antes de datos reales mínimos
+- [ ] Autorización institucional formal **fuera del repo** (si aplica)
+- [ ] Frontend revisado por separado si existe UI
+- [ ] **Producción clínica abierta: FUERA DE ALCANCE**
+
+**No es:** habilitación clínica abierta ni inclusión de autorizaciones reales en git.
+
+---
+
+## PROD-12 — Autorización institucional y piloto datos reales mínimos (jun 2026)
+
+Marco documental para evaluar autorización institucional externa y piloto acotado con datos reales mínimos. Ver **`PROD_MIN_REAL_DATA_AUTH.md`**.
+
+- [x] Guía `PROD_MIN_REAL_DATA_AUTH.md` — precondiciones, GO PROD-11, acciones críticas, autorización externa, alcance, datos, GO/NO-GO, suspensión, incidentes, rollback
+- [x] Plantilla `PROD_MIN_REAL_DATA_SCOPE_TEMPLATE.md` (completar **fuera del repo**)
+- [x] Tests `api/tests/test_prod_min_real_data_auth.py`
+- [ ] Operador: GO post-piloto PROD-11 real con evidencia externa sanitizada
+- [ ] Acciones críticas PROD-11 cerradas
+- [ ] Autorización institucional formal **fuera del repo**
+- [ ] Responsables institucional, clínico y técnico designados **fuera del repo**
+- [ ] Alcance funcional limitado completado externamente
+- [ ] Frontend validado por separado si existe UI
+- [ ] **Producción clínica abierta: FUERA DE ALCANCE**
+
+**No es:** habilitación clínica abierta desde el repo. Crear guía PROD-12 ≠ piloto con datos reales ejecutado hasta acta y autorización externa.
+
+---
+
+## PROD-13 — Hardening operativo sostenido (jun 2026)
+
+Marco documental para sostener operación segura posterior a PROD-12. Ver **`PROD_OPERATIONAL_HARDENING.md`**.
+
+- [x] Guía `PROD_OPERATIONAL_HARDENING.md` — monitoreo/APM, alertas, secretos, TLS, WAF/rate limiting, mantenimiento, GO/NO-GO
+- [x] Plantilla `PROD_MONITORING_ALERTS_TEMPLATE.md` (completar **fuera del repo**)
+- [x] Runbook `PROD_SECRET_ROTATION_RUNBOOK.md`
+- [x] Tests `api/tests/test_prod_operational_hardening.py`
+- [ ] Operador: monitoreo externo definido o decisión institucional **fuera del repo**
+- [ ] Alertas críticas configuradas (evidencia externa)
+- [ ] Rotación de secretos ejecutada según runbook
+- [ ] TLS end-to-end y WAF/rate limiting revisados en infra
+- [ ] Frontend monitoreado/validado por separado si existe UI
+- [ ] **Producción clínica abierta: FUERA DE ALCANCE**
+
+**No es:** habilitación clínica abierta ni despliegue real de APM desde el repo. Crear guía PROD-13 ≠ monitoreo externo desplegado.
+
+---
+
 ## Referencias
 
 - `docs_synesis/DOC_BACKEND.md` — configuración PROD-1 / runtime / Nginx
 - `docs_synesis/DOC_PERMISOS_AUDITORIA.md` — permisos y auditoría
 - `docs_synesis/DOC_RIESGOS_DEUDA_TECNICA.md` — riesgos residuales
 - `.env.production.example` — plantilla de variables
+- `docs_synesis/PROD_PREPILOT_CHECKLIST.md` — checklist pre-piloto PROD-8
+- `docs_synesis/PROD_OBSERVABILITY_MIN.md` — observabilidad mínima PROD-9
+- `docs_synesis/PROD_TECHNICAL_PILOT_RUNBOOK.md` — piloto técnico PROD-10
+- `docs_synesis/PROD_POST_PILOT_REVIEW.md` — revisión post-piloto PROD-11
+- `docs_synesis/PROD_MIN_REAL_DATA_AUTH.md` — autorización institucional y piloto datos reales mínimos PROD-12
+- `docs_synesis/PROD_OPERATIONAL_HARDENING.md` — hardening operativo sostenido PROD-13

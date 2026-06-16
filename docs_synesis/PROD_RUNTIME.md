@@ -8,6 +8,12 @@
 **Estado PROD-4-B:** **CERRADO** (jun 2026) — auditoría de descarga adjuntos turnos
 **Estado PROD-5:** **CERRADO** (jun 2026) — plantillas backup/restore PostgreSQL + media
 **Estado PROD-5-A:** **IMPLEMENTADO** (jun 2026) — restore drill staging documentado + verificación no destructiva
+**Estado PROD-8:** **IMPLEMENTADO** (jun 2026) — checklist pre-piloto productivo / GO-NO-GO documental
+**Estado PROD-9:** **IMPLEMENTADO** (jun 2026) — observabilidad mínima documental + checks no destructivos
+**Estado PROD-10:** **IMPLEMENTADO** (jun 2026) — runbook piloto técnico + plantilla evidencia + smoke
+**Estado PROD-11:** **IMPLEMENTADO** (jun 2026) — revisión post-piloto + plantilla acciones correctivas
+**Estado PROD-12:** **IMPLEMENTADO** (jun 2026) — autorización institucional y piloto datos reales mínimos (documental)
+**Estado PROD-13:** **IMPLEMENTADO** (jun 2026) — hardening operativo sostenido (documental)
 **Alcance:** runtime WSGI (dev vs prod), reverse proxy Nginx, política de media/uploads privados; sin S3/MinIO real ni certificados en repo.
 
 ---
@@ -499,6 +505,114 @@ Documentación y verificación **no destructiva**; no se ejecuta restore real en
 
 ---
 
+## PROD-8 — Checklist pre-piloto productivo (jun 2026)
+
+Documentación operativa para decisión **GO / NO-GO** antes de un piloto productivo técnico controlado. **Sin cambios de runtime ejecutable** en esta fase.
+
+| Entregable | Ruta |
+|------------|------|
+| Checklist pre-piloto | `docs_synesis/PROD_PREPILOT_CHECKLIST.md` |
+| Tests documentales | `api/tests/test_prod_prepilot_checklist.py` |
+
+**Cubre:** `DEBUG=False`, secretos fuera del repo, `ALLOWED_HOSTS`, CSRF/CORS, TLS/proxy, `/media/` privada, backups/restore drill, monitoreo mínimo (definición), rollback, usuarios/roles, datos sintéticos, evidencia sanitizada, frontend en despliegue separado.
+
+**No habilita:** producción clínica abierta ni validación UX frontend productiva.
+
+**Siguiente fase recomendada:** **PROD-9** — Observabilidad mínima (completada); luego **PROD-10** runbook piloto.
+
+---
+
+## PROD-9 — Observabilidad mínima (jun 2026)
+
+Plan operativo de observabilidad para piloto técnico controlado. **Sin cambios de runtime ejecutable** obligatorios en esta fase.
+
+| Entregable | Ruta |
+|------------|------|
+| Documentación observabilidad | `docs_synesis/PROD_OBSERVABILITY_MIN.md` |
+| Checks no destructivos | `deploy/observability/check_observability.example.sh` |
+| README operador | `deploy/observability/README.md` |
+| Tests documentales | `api/tests/test_prod_observability_min.py` |
+
+**Cubre:** logs backend/Gunicorn, Nginx, PostgreSQL; errores 4xx/5xx; healthcheck `GET /api/health/`; contenedores; DB; disco; backups; incidentes; evidencia sanitizada.
+
+**No habilita:** producción clínica abierta ni APM externo obligatorio (recomendado al operador).
+
+**Siguiente fase recomendada:** **PROD-10** — Piloto técnico controlado (runbook + evidencia externa).
+
+---
+
+## PROD-10 — Piloto técnico controlado (jun 2026)
+
+Runbook de ejecución del piloto técnico aplicando PROD-8 + PROD-9. **Sin cambios de runtime ejecutable** obligatorios.
+
+| Entregable | Ruta |
+|------------|------|
+| Runbook piloto | `docs_synesis/PROD_TECHNICAL_PILOT_RUNBOOK.md` |
+| Plantilla evidencia | `docs_synesis/PROD_TECHNICAL_PILOT_EVIDENCE_TEMPLATE.md` |
+| Smoke piloto | `deploy/smoke/prod_technical_pilot.example.sh` |
+| Tests documentales | `api/tests/test_prod_technical_pilot.py` |
+
+**Cubre:** ventana piloto, PROD-8/9, smoke anónimo/autenticado, evidencia sanitizada fuera del repo, GO/NO-GO, rollback.
+
+**No habilita:** producción clínica abierta. Ejecución real del piloto = evidencia externa del operador.
+
+**Siguiente fase recomendada:** **PROD-12** — Autorización institucional y piloto datos reales mínimos (documental).
+
+---
+
+## PROD-11 — Revisión post-piloto (jun 2026)
+
+Revisión formal posterior al piloto técnico real (PROD-10). **Sin cambios de runtime ejecutable.**
+
+| Entregable | Ruta |
+|------------|------|
+| Guía revisión | `docs_synesis/PROD_POST_PILOT_REVIEW.md` |
+| Plantilla acciones | `docs_synesis/PROD_POST_PILOT_ACTIONS_TEMPLATE.md` |
+| Tests documentales | `api/tests/test_prod_post_pilot_review.py` |
+
+**Cubre:** evidencia externa, GO/NO-GO post-piloto, PROD-8/9/10, observabilidad, incidentes, acciones correctivas, criterios datos reales mínimos.
+
+**No habilita:** producción clínica abierta ni autorizaciones reales en repo.
+
+**Siguiente fase recomendada:** hardening operativo sostenido y validación frontend/TLS/APM — **producción clínica abierta fuera de alcance**.
+
+---
+
+## PROD-12 — Autorización institucional y piloto datos reales mínimos (jun 2026)
+
+Marco documental para evaluar autorización institucional externa y piloto acotado con datos reales mínimos. **Sin cambios de runtime ejecutable.**
+
+| Entregable | Ruta |
+|------------|------|
+| Guía autorización / piloto mínimo | `docs_synesis/PROD_MIN_REAL_DATA_AUTH.md` |
+| Plantilla alcance | `docs_synesis/PROD_MIN_REAL_DATA_SCOPE_TEMPLATE.md` |
+| Tests documentales | `api/tests/test_prod_min_real_data_auth.py` |
+
+**Cubre:** GO post-piloto PROD-11, acciones críticas cerradas, autorización externa, responsables, alcance funcional limitado, módulos/roles/usuarios, datos permitidos/prohibidos, ventana limitada, suspensión, incidentes, rollback, backups PROD-7, observabilidad PROD-9, `/media/` privado, APIs protegidas, frontend separado.
+
+**No habilita:** producción clínica abierta ni piloto real con datos mínimos hasta acta y autorización **fuera del repo**.
+
+**Siguiente fase recomendada:** **PROD-13** — Hardening operativo sostenido (completada documentalmente); luego evaluación ampliación alcance / object storage — **producción clínica abierta fuera de alcance**.
+
+---
+
+## PROD-13 — Hardening operativo sostenido (jun 2026)
+
+Marco documental para sostener operación segura posterior a PROD-12. **Sin cambios de runtime ejecutable.**
+
+| Entregable | Ruta |
+|------------|------|
+| Guía hardening sostenido | `docs_synesis/PROD_OPERATIONAL_HARDENING.md` |
+| Plantilla alertas | `docs_synesis/PROD_MONITORING_ALERTS_TEMPLATE.md` |
+| Runbook rotación secretos | `docs_synesis/PROD_SECRET_ROTATION_RUNBOOK.md` |
+| Tests documentales | `api/tests/test_prod_operational_hardening.py` |
+
+**Cubre:** monitoreo externo/APM (Sentry, Datadog, Prometheus/Grafana), alertas, señales críticas, rotación secretos, TLS, headers, WAF/rate limiting, mantenimiento recurrente, frontend separado, evidencia sanitizada.
+
+**No habilita:** producción clínica abierta ni despliegue real de APM hasta configuración **fuera del repo**.
+
+---
+
 ## Pendiente post-PROD-5
 
 - ~~Nginx / reverse proxy como servicio compose~~ — **PROD-3**
@@ -507,15 +621,21 @@ Documentación y verificación **no destructiva**; no se ejecuta restore real en
 - Object storage real (S3/MinIO) con credenciales en gestor de secretos
 - ~~Endpoints `download/` para `adjunto_resultado` y `consentimiento_informado`~~ — **PROD-4-A**
 - ~~Backups / restore (plantillas versionadas)~~ — **PROD-5**
-- WAF / rate limiting
-- Monitoreo externo (Sentry/Datadog) más allá del healthcheck de contenedor
-- Rotación de secretos
+- ~~WAF / rate limiting~~ — **PROD-13 documentado**; despliegue/validación real: operador
+- ~~Monitoreo externo (Sentry/Datadog/Prometheus)~~ — **PROD-13 documentado**; despliegue real pendiente operador
+- ~~Rotación de secretos~~ — **PROD-13 runbook documentado**; ejecución real: operador
 
 ---
 
 ## Referencias
 
 - `docs_synesis/PROD_CHECKLIST.md`
+- `docs_synesis/PROD_PREPILOT_CHECKLIST.md` (PROD-8)
+- `docs_synesis/PROD_OBSERVABILITY_MIN.md` (PROD-9)
+- `docs_synesis/PROD_TECHNICAL_PILOT_RUNBOOK.md` (PROD-10)
+- `docs_synesis/PROD_POST_PILOT_REVIEW.md` (PROD-11)
+- `docs_synesis/PROD_MIN_REAL_DATA_AUTH.md` (PROD-12)
+- `docs_synesis/PROD_OPERATIONAL_HARDENING.md` (PROD-13)
 - `entrypoint.sh`
 - `docker-compose.yml` (dev)
 - `deploy/nginx/nginx.prod.example.conf` (plantilla Nginx PROD-3)

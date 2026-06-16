@@ -2,6 +2,10 @@
 
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (PROD-6 readiness smoke):** junio 2026
+**Actualización (PROD-8 pre-piloto checklist):** junio 2026
+**Actualización (PROD-9 observabilidad mínima):** junio 2026
+**Actualización (PROD-10 piloto técnico):** junio 2026
+**Actualización (PROD-13 hardening operativo sostenido):** junio 2026
 **Actualización (PROD-3 CERRADO):** 7 de junio de 2026
 **Actualización (PROD-3 Nginx reverse proxy):** 7 de junio de 2026
 **Actualización (PROD-2-B CERRADO):** 7 de junio de 2026
@@ -262,6 +266,80 @@ Tests funcionales permisos archivos (`archivos_medicos/tests/` — **33 passed**
 **PROD-5-A restore drill [IMPLEMENTADO — jun 2026]:** `test_prod_restore_drill_config.py` — documento staging, verify script, sin restore real en pytest.
 
 **PROD-6 readiness smoke [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_readiness_smoke.py` — documentación `PROD_READINESS_SMOKE.md`, script `deploy/smoke/prod_readiness_smoke.example.sh`, rutas críticas URLConf, media bloqueada, descargas+auditoría referenciadas; sin producción real ni servicios externos.
+
+**PROD-8 pre-piloto checklist [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_prepilot_checklist.py` — documentación `PROD_PREPILOT_CHECKLIST.md`; verifica precondiciones GO/NO-GO (`DEBUG=False`, `SECRET_KEY`, `ALLOWED_HOSTS`, CSRF/CORS, TLS/`X-Forwarded-Proto`, `/media/`, backups, restore drill, monitoreo, rollback, usuarios/roles, datos sintéticos, frontend separado, producción clínica abierta fuera de alcance, evidencia sanitizada, sin PHI/secretos); sin producción real.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_prepilot_checklist.py -q --reuse-db
+```
+
+Regresión mínima productiva (PROD-8):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py api/tests/test_prod_readiness_smoke.py api/tests/test_prod_backup_config.py api/tests/test_prod_restore_drill_config.py api/tests/test_prod_prepilot_checklist.py -q --reuse-db
+```
+
+**PROD-9 observabilidad mínima [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_observability_min.py` — documentación `PROD_OBSERVABILITY_MIN.md`, script `deploy/observability/check_observability.example.sh`; verifica logs, 4xx/5xx, healthcheck, contenedores, DB, disco, backups, incidentes, GO/NO-GO, evidencia sanitizada, sin PHI/secretos; sin producción real.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_observability_min.py -q --reuse-db
+bash -n deploy/observability/check_observability.example.sh
+```
+
+Regresión mínima productiva (PROD-9):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py api/tests/test_prod_readiness_smoke.py api/tests/test_prod_backup_config.py api/tests/test_prod_restore_drill_config.py api/tests/test_prod_prepilot_checklist.py api/tests/test_prod_observability_min.py -q --reuse-db
+```
+
+**PROD-10 piloto técnico [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_technical_pilot.py` — runbook `PROD_TECHNICAL_PILOT_RUNBOOK.md`, plantilla evidencia, script `deploy/smoke/prod_technical_pilot.example.sh`; verifica PROD-8/9, ventana piloto, smoke, GO/NO-GO, evidencia fuera del repo; sin producción real.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_technical_pilot.py -q --reuse-db
+bash -n deploy/smoke/prod_technical_pilot.example.sh
+```
+
+Regresión mínima productiva (PROD-10):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py api/tests/test_prod_readiness_smoke.py api/tests/test_prod_backup_config.py api/tests/test_prod_restore_drill_config.py api/tests/test_prod_prepilot_checklist.py api/tests/test_prod_observability_min.py api/tests/test_prod_technical_pilot.py -q --reuse-db
+```
+
+**PROD-11 revisión post-piloto [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_post_pilot_review.py` — `PROD_POST_PILOT_REVIEW.md`, `PROD_POST_PILOT_ACTIONS_TEMPLATE.md`; revisión evidencia externa, GO/NO-GO post-piloto, acciones correctivas; sin producción real.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_post_pilot_review.py -q --reuse-db
+```
+
+Regresión mínima productiva (PROD-11):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py api/tests/test_prod_readiness_smoke.py api/tests/test_prod_backup_config.py api/tests/test_prod_restore_drill_config.py api/tests/test_prod_prepilot_checklist.py api/tests/test_prod_observability_min.py api/tests/test_prod_technical_pilot.py api/tests/test_prod_post_pilot_review.py -q --reuse-db
+```
+
+**PROD-12 autorización institucional piloto datos reales mínimos [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_min_real_data_auth.py` — `PROD_MIN_REAL_DATA_AUTH.md`, `PROD_MIN_REAL_DATA_SCOPE_TEMPLATE.md`; GO post-piloto PROD-11, autorización externa, alcance limitado, datos mínimos; sin producción real.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_min_real_data_auth.py -q --reuse-db
+```
+
+Regresión mínima productiva (PROD-12):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py api/tests/test_prod_readiness_smoke.py api/tests/test_prod_backup_config.py api/tests/test_prod_restore_drill_config.py api/tests/test_prod_prepilot_checklist.py api/tests/test_prod_observability_min.py api/tests/test_prod_technical_pilot.py api/tests/test_prod_post_pilot_review.py api/tests/test_prod_min_real_data_auth.py -q --reuse-db
+```
+
+**PROD-13 hardening operativo sostenido [IMPLEMENTADO — jun 2026]:** `api/tests/test_prod_operational_hardening.py` — `PROD_OPERATIONAL_HARDENING.md`, `PROD_MONITORING_ALERTS_TEMPLATE.md`, `PROD_SECRET_ROTATION_RUNBOOK.md`; monitoreo/APM, alertas, secretos, TLS, WAF; sin producción real.
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_operational_hardening.py -q --reuse-db
+```
+
+Regresión mínima productiva (PROD-13):
+
+```bash
+emr_env/bin/pytest api/tests/test_prod_runtime_config.py api/tests/test_prod_readiness_smoke.py api/tests/test_prod_backup_config.py api/tests/test_prod_restore_drill_config.py api/tests/test_prod_prepilot_checklist.py api/tests/test_prod_observability_min.py api/tests/test_prod_technical_pilot.py api/tests/test_prod_post_pilot_review.py api/tests/test_prod_min_real_data_auth.py api/tests/test_prod_operational_hardening.py -q --reuse-db
+```
 
 Regresión mínima PROD-6 (incluye readiness si existe):
 

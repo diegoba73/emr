@@ -10,7 +10,7 @@
 **Actualización (Fase B3.3 LIMS — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (Fase B4.1 LIMS — Resultados clínicos estructurados):** 16 de mayo de 2026  
-**Actualización (PROD-4 CERRADO):** 8 de junio de 2026
+**Actualización (PROD-13 hardening operativo sostenido):** junio 2026
 **Actualización (PROD-3 CERRADO):** 7 de junio de 2026
 **Actualización (PROD-3 Nginx reverse proxy):** 7 de junio de 2026
 **Actualización (PROD-2-B CERRADO):** 7 de junio de 2026
@@ -87,7 +87,14 @@
 - ~~**Adjuntos turnos sin auditoría de download**~~ — **CERRADO (PROD-4-B — jun 2026):** `log_event` en descargas exitosas; metadata `field` + `endpoint`; sin path/PHI.
 - ~~**Backups/restore sin plantilla versionada**~~ — **CERRADO (PROD-5)**.
 - ~~**Restore drill sin procedimiento versionado**~~ — **mitigado (PROD-5-A):** `RESTORE_DRILL_STAGING.md` + `verify_restore.example.sh`; ejecución en infra staging real: operador.
-- **Pendiente (fuera de alcance PROD-5):** certificados TLS reales/ACME, object storage S3/MinIO productivo, WAF, rate limiting, rotación secretos, monitoreo externo (Sentry/Datadog), jobs cron automatizados en compose, cifrado offsite implementado.
+- ~~**Restore drill sin ejecución real**~~ — **mitigado (PROD-7 GO técnico):** drill staging controlado documentado fuera del repo; evidencia sanitizada.
+- **Pendiente (fuera de alcance PROD-5):** certificados TLS reales/ACME, object storage S3/MinIO productivo, ~~WAF~~, ~~rate limiting~~, ~~rotación secretos~~, ~~**monitoreo externo desplegado**~~ (PROD-13 documenta marco; despliegue/validación real: operador), jobs cron automatizados en compose, cifrado offsite implementado.
+- **PROD-8 (jun 2026):** checklist pre-piloto documentado (`PROD_PREPILOT_CHECKLIST.md`); **no habilita** producción clínica abierta. Pendientes operativos antes de piloto real: backups programados por operador, frontend validado en despliegue separado, TLS real en infra objetivo, usuarios nominales fuera del repo.
+- **PROD-9 (jun 2026):** observabilidad mínima documentada (`PROD_OBSERVABILITY_MIN.md` + `check_observability.example.sh`); **mitigado documentalmente** el vacío de monitoreo referido en PROD-8. Pendiente: integración real de APM/alertas externas, runbooks operativos ejecutados en ventana piloto, observabilidad frontend separada.
+- **PROD-10 (jun 2026):** runbook piloto técnico (`PROD_TECHNICAL_PILOT_RUNBOOK.md` + plantilla evidencia + smoke); **no habilita** producción clínica abierta. Pendiente: **ejecución real** del piloto por operador con evidencia sanitizada fuera del repo; validación frontend/TLS/autorización clínica si se avanza.
+- **PROD-11 (jun 2026):** mecanismo de revisión post-piloto (`PROD_POST_PILOT_REVIEW.md` + plantilla acciones); **no habilita** producción clínica abierta. Pendiente: **revisión real** con evidencia PROD-10 externa; autorización institucional fuera del repo; cierre acciones correctivas antes de datos reales mínimos.
+- **PROD-12 (jun 2026):** marco documental de autorización institucional y piloto con datos reales mínimos (`PROD_MIN_REAL_DATA_AUTH.md` + plantilla alcance); **no habilita** producción clínica abierta ni piloto real desde el repo. Pendiente: **autorización institucional real** fuera del repo; **ejecución real** del piloto con datos mínimos (decisión externa); frontend real/TLS/APM si no validados; cierre acciones críticas PROD-11 antes de inicio operativo.
+- **PROD-13 (jun 2026):** marco documental de hardening operativo sostenido (`PROD_OPERATIONAL_HARDENING.md` + plantilla alertas + runbook rotación secretos); **no habilita** producción clínica abierta. Pendiente: **despliegue real** de APM/alertas (Sentry/Datadog/Prometheus/Grafana); ejecución rotación secretos; validación TLS end-to-end y WAF/rate limiting en infra; frontend real monitoreado externamente si aplica; evidencia sanitizada fuera del repo.
 
 ---
 
