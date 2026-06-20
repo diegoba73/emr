@@ -1,66 +1,62 @@
 # DOC_FRONTEND — Frontend real del repositorio
 
 **Fecha de generación:** 30 de abril de 2026  
-**Última actualización:** mayo 2026 (C6.4.2 / C6.4.2-A)
+**Última actualización:** junio 2026 (cierre filtro `estudio_id` micro + corrección secciones legacy)
 
-> **Nota de actualización:** Las secciones históricas más abajo describían un escaneo previo del repo **sin** SPA en el árbol principal. Hoy el frontend vive en el **submódulo Git `frontend/`** (React + TypeScript + MUI). Las pantallas implementadas hasta **C6.4.2** (estudios complementarios, LIMS microbiología, turnos C5, archivos C6.2, etc.) se documentan en las secciones posteriores de este archivo — no inferir ausencia de UI por el texto legacy.
+> **Nota de actualización:** Las secciones marcadas **[OBSOLETO — escaneo C0]** describían un estado previo **sin** SPA en el árbol principal. El frontend real vive en **`frontend/`**, un **repositorio Git anidado** referenciado como **gitlink** en el monorepo padre; **no existe `.gitmodules`**, por lo tanto **no está configurado como submódulo Git estándar**. Stack: React + TypeScript + MUI. Pantallas LIMS/micro confirmadas en código (`App.tsx`, `pages/laboratorio/*`, `services/limsMicroApi.ts`).
 
-**Alcance:** Descripción del frontend en submódulo `frontend/` y contratos API consumidos.
+**Alcance:** Descripción del frontend en `frontend/` (repo anidado/gitlink) y contratos API consumidos.
 
 **Fuentes revisadas:** `frontend/package.json`, `frontend/src`, `synesis/settings.py` (CORS/CSRF).
 
 ---
 
-## Stack frontend (submódulo `frontend/`)
+## Stack frontend (`frontend/` — repo anidado / gitlink)
 
-**Estado actual:** aplicación SPA en submódulo `frontend/` (no en la raíz del monorepo padre).
+**Estado actual:** aplicación SPA en `frontend/` (repositorio Git anidado; gitlink en el monorepo padre; sin `.gitmodules`).
 
-El backend está preparado para `http://localhost:3000` (CORS, cookies de sesión). El cliente de producción es el submódulo `frontend/`.
+El backend está preparado para `http://localhost:3000` (CORS, cookies de sesión). El cliente de producción es `frontend/`.
 
 ---
 
 ## Estructura de carpetas (histórico + actual)
 
-- **`frontend/` (submódulo):** aplicación React (`src/pages`, `src/modules`, `src/services`).
+- **`frontend/` (repo anidado):** aplicación React (`src/pages`, `src/modules`, `src/services`).
 - **`backup_documentacion/`:** scripts Node de prueba API — no son la SPA de producción.
 
 ---
 
 ## Rutas / páginas / componentes (resumen)
 
-Ver secciones **Frontend EMR+LIMS (submódulo `frontend/`)** y **Estudios complementarios (C6.4.2)** más abajo.
+Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (C6.4.2)** más abajo.
 
 ---
+
+## [OBSOLETO — escaneo C0] Secciones históricas (no usar como fuente de verdad)
+
+> **Advertencia:** El bloque siguiente refleja un escaneo de abril 2026 cuando no se indexaba `frontend/`. **No refleja el estado actual.** Ver secciones posteriores «Frontend EMR+LIMS» y «UI-2 Microbiología».
 
 ## Layout, módulos EMR/LIMS, formularios, tablas, modales, hooks
 
-**No detectado.**
-
----
+**[OBSOLETO]** ~~No detectado.~~ — **Confirmado jun 2026:** módulos en `frontend/src/pages`, `components`, `services`.
 
 ## Servicios API y estado
 
-Los únicos consumos referenciados en el repo (fuera de tests Django) aparecen en scripts bajo `backup_documentacion/`, por ejemplo:
+**[OBSOLETO]** Los únicos consumos referenciados en el repo (fuera de tests Django) aparecen en scripts bajo `backup_documentacion/`, por ejemplo:
 
 - `POST /api/auth/login/` (sesión/cookies)
 - `GET /api/auth/current-user/`
 - `PUT /api/turnos/{id}/`
 
-**Pendiente de confirmar:** si el frontend real vive en otro repositorio o rama.
-
----
+**[OBSOLETO]** ~~Pendiente de confirmar: si el frontend real vive en otro repositorio o rama.~~ — **Confirmado:** `frontend/` (repo anidado/gitlink) con SPA React; consumo real vía `limsApi.ts`, `limsMicroApi.ts`, `estudiosComplementariosApi.ts`, etc.
 
 ## Validaciones frontend, errores, permisos/guards
 
-**No hay código de aplicación** que auditar.
-
----
+**[OBSOLETO]** ~~No hay código de aplicación que auditar.~~ — **Confirmado:** guards en `utils/limsAccess.ts`, `DataContext`, rutas protegidas en `App.tsx`.
 
 ## Pantallas críticas y flujos de usuario
 
-Inferidos solo desde documentación de backup y comentarios en backend; **no verificables en código frontend**.
-
----
+**[OBSOLETO]** ~~Inferidos solo desde documentación de backup…~~ — **Confirmado en código:** órdenes LIMS, detalle micro por tabs, estudios complementarios.
 
 ## Endpoints consumidos (inferido desde scripts de backup)
 
@@ -75,15 +71,15 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 ## Inconsistencias con backend
 
-- El backend documenta compatibilidad con prefijos `catalogos/` y `archivos-medicos/`; los scripts de backup no cubren todo el contrato.
-- No se puede afirmar qué endpoints usa una SPA inexistente en el repo.
-
----
+**[OBSOLETO parcial]**
+- ~~No se puede afirmar qué endpoints usa una SPA inexistente en el repo.~~ — La SPA existe; ver servicios en `frontend/src/services/`.
+- El backend documenta compatibilidad con prefijos `catalogos/` y `archivos-medicos/`; el frontend consume alias `lab/` (equivalente a `laboratorio/`).
 
 ## Deuda técnica visual o funcional
 
-- **Ausencia total de UI versionada** imposibilita revisión de UX, accesibilidad o coherencia con DRF.
-- Riesgo de **drift** entre un futuro frontend y los múltiples alias de rutas en `api/urls.py` (p. ej. `lab/` vs `laboratorio/`).
+- **[OBSOLETO]** ~~Ausencia total de UI versionada~~ — UI versionada en `frontend/` (repo anidado).
+- Riesgo de **drift** entre frontend y alias `lab/` vs `laboratorio/` (mitigado: backend usa mismas clases ViewSet).
+- **`window.prompt` en cancelación micro** (`MicrobiologiaEstudioDetalle.tsx`) — deuda UX pendiente (fuera de alcance jun 2026).
 
 ---
 
@@ -100,9 +96,9 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 ---
 
-## Frontend EMR+LIMS (submódulo `frontend/`) — actualización UI-2
+## Frontend EMR+LIMS (`frontend/`) — actualización UI-2
 
-> Las secciones anteriores de este documento reflejan un escaneo previo sin SPA. La aplicación React vive en el **submódulo Git** `frontend/` (commit UI-2: `d46d276`). Repo padre referencia ese commit en `4de661d`.
+> Las secciones anteriores de este documento reflejan un escaneo previo sin SPA. La aplicación React vive en **`frontend/`** (repositorio Git anidado / gitlink; sin `.gitmodules`).
 
 **Stack:** React + TypeScript + MUI + React Router; cliente HTTP con sesión/cookies; tests CRA/Jest.
 
@@ -137,7 +133,7 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 ### Servicios API (cliente)
 
-- **`frontend/src/services/limsMicroApi.ts`:** prefijo canónico `/lab/microbiologia/...` (medios, estudios, siembras, lecturas, microorganismos, aislados, identificaciones, antibióticos, antibiogramas, resultados, informes + acciones `iniciar`, `cancelar`, `marcar_informado`, `descartar`, `completar`, `emitir`, `validar`, `anular`).
+- **`frontend/src/services/limsMicroApi.ts`:** prefijo canónico `/lab/microbiologia/...` (medios, estudios, siembras, lecturas, microorganismos, aislados, identificaciones, antibióticos, antibiogramas, resultados, informes + acciones `iniciar`, `cancelar`, `marcar_informado`, `descartar`, `completar`, `emitir`, `validar`, `anular`). Listados relacionados con estudio aceptan **`?estudio_id=<entero positivo>`** server-side; valores inválidos → **HTTP 400** (jun 2026).
 - Re-export desde `limsApi.ts`; errores DRF vía `formatDrfError` (403 → toast, sin logout).
 
 ### Permisos visuales (`frontend/src/utils/limsAccess.ts`)
@@ -191,7 +187,7 @@ Relevamiento y validación del SPA microbiología existente (UI-2) contra backen
 **B3-frontend-UX [PARCIAL — jun 2026]:**
 
 - **[IMPLEMENTADO]** Picker solicitud/muestra al crear estudio (`MicrobiologiaEstudios.tsx`): `listSolicitudesExamen`, `listMuestrasPorSolicitud`, muestras `RECIBIDA`/`CONSERVADA`/`EN_PROCESO` vía `limsMicroUx.ts`; ingreso manual en acordeón avanzado.
-- **[GAP]** Detalle sigue cargando listados micro globales y filtra en cliente — backend micro no expone filtro `estudio_id` (solo `SearchFilter`/`OrderingFilter`).
+- **[IMPLEMENTADO — jun 2026]** Detalle micro (`MicrobiologiaEstudioDetalle.tsx`) envía `?estudio_id=` en listados filtrados vía `limsMicroApi.ts` (backend: `_apply_estudio_id_query_filter` en `views_microbiologia.py`).
 - **[GAP]** E2E browser micro: sin Playwright/Cypress en repo (E2E-1/E2E-1-A jun 2026 validan flujo crítico y cierre micro en backend: `test_lims_flujo_critico.py`).
 - Tests Jest: `limsAccess.test.ts`, `limsMicroUx.test.ts` (además de `limsCargaMuestra.test.ts` B2-C).
 - **PDF-1-FE (jun 2026) [IMPLEMENTADO]:** botón «Descargar informe PDF» en `OrdenLimsDetalle.tsx`; servicio `downloadInformeLimsPdf` / `getInformeLimsPdfBlob` en `limsApi.ts` (`GET /lab/solicitudes/{id}/informe-pdf/`, `responseType: blob`); helpers `limsDownload.ts` (filename seguro, errores 403/404/500); permiso UI `canDownloadInformeLimsPdf` (admin/laboratorio/médico). Sin `/media/`, sin logs sensibles, URL temporal revocada vía `triggerBlobDownload`. Tests: `limsAccess.test.ts`, `limsDownload.test.ts`.
