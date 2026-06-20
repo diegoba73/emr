@@ -22,7 +22,8 @@
 **Actualización (Fase A LIMS — máquina de estados):** 3 de mayo de 2026  
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
-**Actualización (infra tests backend — pytest, SQLite, PostgreSQL):** 20 de junio de 2026
+**Actualización (infra tests backend — pytest, SQLite, PostgreSQL):** 20 de junio de 2026  
+**Actualización (PostgreSQL smoke focal microbiología — CREATEDB validado):** 20 de junio de 2026
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
@@ -88,9 +89,10 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest auditoria/tests/ -q
 
 ### Validación CI / real — PostgreSQL
 
-Con `.env` apuntando a PostgreSQL (p. ej. `DB_USER=synesis_user`), `manage.py test` intenta crear `test_synesis_db`:
+Con `.env` apuntando a PostgreSQL (`DB_USER=synesis_user`, `DB_NAME=synesis_db`, `localhost:5432`), el smoke focal con Django TestRunner crea y destruye `test_synesis_db`:
 
 ```bash
+python manage.py check
 python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2
 ```
 
@@ -100,19 +102,29 @@ Equivalente con pytest (misma BD por defecto, sin vars SQLite):
 pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q
 ```
 
-**Bloqueo documentado (20 jun 2026) — NO validado en PostgreSQL:**
+**Resultado documentado — entorno local actual (20 jun 2026):**
 
 | Campo | Valor |
 |-------|-------|
 | Comando | `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2` |
-| Usuario DB (`.env`) | `synesis_user` |
-| Error exacto | `Got an error creating the test database: permission denied to create database` |
-| Causa | Usuario sin privilegio `CREATEDB` para crear `test_synesis_db` |
-| Solución DBA | `ALTER USER synesis_user CREATEDB;` (sin contraseña en docs) |
+| ENGINE | `django.db.backends.postgresql` |
+| BD productiva | `synesis_db` |
+| Usuario DB | `synesis_user` |
+| Host / puerto | `localhost` / `5432` |
+| `rolcreatedb` | **true** (`rolsuper=false`, `rolcreaterole=false`) |
+| Resultado | **OK** — 12 tests; `test_synesis_db` creada y destruida correctamente (~1.4 s) |
 
-Alternativa operativa: usar usuario con `CREATEDB` solo en entorno de test/CI, o pre-crear `test_synesis_db` y `pytest --reuse-db` / `manage.py test --keepdb` (requiere permisos sobre esa BD).
+**Histórico (20 jun 2026, antes de habilitar `CREATEDB` en local):** el mismo comando fallaba con `Got an error creating the test database: permission denied to create database`.
 
-**Advertencia:** No declarar la suite como validada en PostgreSQL hasta que el comando anterior (o equivalente pytest sin SQLite) pase en el entorno objetivo.
+**En otros entornos:** si reaparece `permission denied to create database`, el DBA debe ejecutar (solo sobre `synesis_user`, sin ampliar a `SUPERUSER`):
+
+```sql
+ALTER USER synesis_user CREATEDB;
+```
+
+Alternativa operativa: usuario con `CREATEDB` solo en entorno de test/CI, o pre-crear `test_synesis_db` y `pytest --reuse-db` / `manage.py test --keepdb` (requiere permisos sobre esa BD).
+
+**Advertencia:** no declarar validada la **suite PostgreSQL completa** hasta ejecutarla en el entorno objetivo. El smoke focal microbiología sí está validado en local; ampliar baseline con `usuarios.tests`, `auditoria.tests` y/o `laboratorio/tests/` completo sigue **opcional**.
 
 ### Deuda frontend (ticket separado)
 

@@ -3,6 +3,7 @@
 **Fecha de verificación inicial:** 20 de junio de 2026  
 **Cierre técnico filtro `?estudio_id=` (fail-closed HTTP 400):** 20 de junio de 2026  
 **Infraestructura tests backend (pytest, SQLite, PostgreSQL):** 20 de junio de 2026  
+**PostgreSQL smoke focal microbiología (CREATEDB validado en local):** 20 de junio de 2026  
 **Método:** Inspección directa del código + ejecución de tests (prevalece sobre documentación histórica).
 
 ---
@@ -14,11 +15,12 @@
 | `pytest` / `pytest-django` declarados | **Sí** — sección *Desarrollo / tests* en `requirements.txt` |
 | `python manage.py check` | **OK** |
 | Tests SQLite in-memory (`laboratorio/`, `usuarios/`, `auditoria/`) | **OK** (ver tabla abajo) |
-| PostgreSQL nativo (`manage.py test`) | **NO VALIDADO** — `synesis_user` sin `CREATEDB` |
+| PostgreSQL nativo — smoke focal (`manage.py test` filtro micro) | **OK** — `synesis_user` con `CREATEDB`; `test_synesis_db` creada/destruida |
+| Suite PostgreSQL completa (`laboratorio/tests/`, `usuarios/`, `auditoria/` vía `manage.py test`) | **NO ejecutada** — opcional ampliar baseline |
 | Migraciones / modelos / permisos / frontend | **Sin cambios** en esta tarea |
 | Deuda Jest (`App.test.tsx` / `react-big-calendar` ESM) | **Ticket separado** — no corregido |
 
-**Estado de la tarea infra tests:** **CERRADA** (dependencias declaradas, comandos documentados, bloqueo PostgreSQL registrado).
+**Estado de la tarea infra tests:** **CERRADA** (dependencias declaradas, SQLite OK, smoke PostgreSQL focal OK en local).
 
 ---
 
@@ -35,7 +37,8 @@
 | Tests frontend alcance (`limsMicroApi` + detalle) | **15 passed** |
 | `npm test -- --watchAll=false` (suite completa) | **FALLÓ** — `App.test.tsx` / `react-big-calendar` ESM (preexistente) |
 | `npm run build` | **OK** |
-| PostgreSQL nativo (`synesis_user`) | **NO VALIDADO** — `permission denied to create database` |
+| PostgreSQL nativo — smoke focal filtro micro (`synesis_user`) | **OK** (20 jun 2026, post-`CREATEDB`) — ver sección PostgreSQL abajo |
+| Suite PostgreSQL completa | **NO ejecutada** |
 | Migraciones / permisos / auditoría mutante | **Sin cambios** |
 
 **Estado de la tarea filtro `estudio_id`:** **CERRADA** en código y tests de alcance.  
@@ -90,7 +93,7 @@ Prefijos: `/api/lab/microbiologia/*` y `/api/laboratorio/microbiologia/*`.
 | `DB_ENGINE=…sqlite3 DB_NAME=:memory: pytest laboratorio/tests/ -q` | **OK** | 328 passed, 96 subtests; ~102 s |
 | `DB_ENGINE=…sqlite3 DB_NAME=:memory: pytest usuarios/tests/ -q` | **OK** | 44 passed; 1 warning paginación |
 | `DB_ENGINE=…sqlite3 DB_NAME=:memory: pytest auditoria/tests/ -q` | **OK** | 14 passed; ~6 s |
-| `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2` | **FALLÓ** | Ver bloqueo PostgreSQL |
+| `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2` (PostgreSQL) | **OK** | 12 tests; `test_synesis_db` creada/destruida; ~1.4 s |
 
 **Dependencias de test:** `pytest` y `pytest-django` añadidos a `requirements.txt` (sección desarrollo/test). Versiones en venv local al verificar: pytest 9.1.1, pytest-django 4.12.0.
 
@@ -103,17 +106,22 @@ Prefijos: `/api/lab/microbiologia/*` y `/api/laboratorio/microbiologia/*`.
 | `pytest laboratorio/tests/ -q` | **OK** | 328 passed, 96 subtests; SQLite |
 | `pytest usuarios/tests/ -q` | **OK** | 44 passed; SQLite |
 | `pytest auditoria/tests/ -q` | **OK** | 14 passed; SQLite |
-| `python manage.py test …` (PostgreSQL default) | **FALLÓ** | `permission denied to create database` |
+| `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2` (PostgreSQL) | **OK** | 12 tests; ver validación PostgreSQL |
 
-**Infra PostgreSQL (sin aprobar como test OK):**
+**Infra PostgreSQL — smoke focal validado (20 jun 2026, entorno local):**
 
-- Usuario: `synesis_user` (desde `.env`, sin exponer credenciales)
+- ENGINE: `django.db.backends.postgresql`
+- BD productiva: `synesis_db` (`localhost:5432`)
+- Usuario: `synesis_user` (`rolcreatedb=true`, `rolsuper=false`, `rolcreaterole=false`)
 - Comando: `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2`
-- Salida relevante: `Creating test database for alias 'default' ('test_synesis_db')...`
-- Error exacto: `Got an error creating the test database: permission denied to create database`
-- Solución DBA: `ALTER USER synesis_user CREATEDB;`
+- Salida relevante: `Creating test database for alias 'default' ('test_synesis_db')...` → migraciones → **12 tests OK** → `Destroying test database ... OK`
+- `python manage.py check`: **OK**
 
-**Workaround validado (env vars ya soportadas por `synesis/settings.py`, sin tocar settings productivos):**
+**Histórico (misma iteración, antes de `CREATEDB` en local):** fallaba con `permission denied to create database`. En otros entornos, DBA: `ALTER USER synesis_user CREATEDB;`
+
+**Pendiente opcional:** ampliar baseline PostgreSQL con `python manage.py test usuarios.tests auditoria.tests -v 2` y/o suite completa `laboratorio/tests/` (no ejecutada en esta verificación).
+
+**Workaround SQLite (sigue siendo smoke rápido útil):**
 
 ```bash
 DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q
@@ -168,7 +176,7 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 
 ## Riesgos pendientes
 
-1. PostgreSQL: `synesis_user` sin `CREATEDB` — `manage.py test` / pytest sin vars SQLite no validados en este entorno.
+1. ~~PostgreSQL: `synesis_user` sin `CREATEDB`~~ — **resuelto en local (20 jun 2026):** smoke focal `manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter` OK. Suite PostgreSQL completa sigue **opcional**.
 2. ~~`pytest` no listado en `requirements.txt`~~ — **resuelto** (sección desarrollo/test).
 3. `npm test` suite completa falla por `App.test.tsx` / `react-big-calendar` (ticket frontend separado).
 4. ~~`frontend/` como repo anidado sin `.gitmodules`~~ — **resuelto (jun 2026):** `frontend/` integrado como carpeta normal del monorepo; repo `emr-frontend` queda como respaldo histórico (`417e9a2`).
@@ -177,6 +185,6 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 
 ## Próxima tarea recomendada
 
-1. DBA: `ALTER USER synesis_user CREATEDB;` y re-ejecutar `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2`.
+1. Ampliar baseline PostgreSQL: `python manage.py test usuarios.tests auditoria.tests -v 2` y/o `laboratorio/tests/` completo (opcional).
 2. Frontend: corregir Jest + `react-big-calendar` ESM en `App.test.tsx` (ticket separado).
-3. CI: pipeline que instale `requirements.txt` y ejecute smoke SQLite (`manage.py check` + suites documentadas).
+3. CI: pipeline que instale `requirements.txt` y ejecute smoke SQLite + smoke PostgreSQL focal documentados.
