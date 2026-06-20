@@ -79,7 +79,7 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 - **[OBSOLETO]** ~~Ausencia total de UI versionada~~ — UI versionada en `frontend/` (repo anidado).
 - Riesgo de **drift** entre frontend y alias `lab/` vs `laboratorio/` (mitigado: backend usa mismas clases ViewSet).
-- **`window.prompt` en cancelación micro** (`MicrobiologiaEstudioDetalle.tsx`) — deuda UX pendiente (fuera de alcance jun 2026).
+- **`window.prompt` en microbiología** — **resuelto (jun 2026):** reemplazado por `MotivoDialog` MUI en `MicrobiologiaEstudioDetalle`, `AntibiogramaPanel`, `AisladosIdentificacionPanel`, `InformesMicrobiologiaPanel`. Prompts en `TurnoModal.tsx` (agenda EMR) siguen pendientes.
 
 ---
 
