@@ -1,0 +1,235 @@
+/* Reset y estilos base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: "Inter", "Roboto", "Helvetica", "Arial", sans-serif;
+  line-height: 1.6;
+  /* background/color: MuiCssBaseline (tema) */
+}
+
+.App {
+  min-height: 100vh;
+  width: 100%;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 0;
+  margin-top: 64px;
+  padding: 24px;
+  background-color: transparent;
+  min-height: calc(100vh - 64px);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 960px) {
+  .main-content {
+    margin-left: 280px;
+    width: calc(100% - 280px);
+  }
+}
+
+/* Mejoras para Material-UI */
+.MuiCard-root {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  transition: all 0.3s ease !important;
+}
+
+.MuiCard-root:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.MuiPaper-root {
+  border-radius: 12px !important;
+}
+
+.MuiButton-root {
+  border-radius: 8px !important;
+  text-transform: none !important;
+  font-weight: 600 !important;
+}
+
+.MuiTextField-root .MuiOutlinedInput-root {
+  border-radius: 8px !important;
+}
+
+.MuiChip-root {
+  border-radius: 16px !important;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+html[data-color-scheme="dark"] ::-webkit-scrollbar-track {
+  background: #1a1f2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+html[data-color-scheme="dark"] ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+html[data-color-scheme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Animaciones suaves */
+* {
+  transition: all 0.2s ease;
+}
+
+/* Mejoras para el layout */
+.container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+/* Animación escalonada para elementos hijos */
+.fade-in > * {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both;
+}
+
+.fade-in > *:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.fade-in > *:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.fade-in > *:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+/* react-big-calendar: la librería fija #fff / #e6e6e6 en varios bloques; alinear con el tema oscuro. */
+html[data-color-scheme="dark"] .rbc-off-range-bg {
+  background: #12171f !important;
+}
+html[data-color-scheme="dark"] .rbc-off-range {
+  color: #6b7280;
+}
+html[data-color-scheme="dark"] .rbc-today {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+html[data-color-scheme="dark"] .rbc-time-view,
+html[data-color-scheme="dark"] .rbc-time-content,
+html[data-color-scheme="dark"] .rbc-time-header,
+html[data-color-scheme="dark"] .rbc-month-view,
+html[data-color-scheme="dark"] .rbc-agenda-view {
+  color: #e2e8f0;
+}
+html[data-color-scheme="dark"] .rbc-time-header-content {
+  background-color: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+html[data-color-scheme="dark"] .rbc-time-gutter,
+html[data-color-scheme="dark"] .rbc-time-header-gutter,
+html[data-color-scheme="dark"] .rbc-time-view-resources .rbc-time-gutter,
+html[data-color-scheme="dark"] .rbc-time-view-resources .rbc-time-header-gutter {
+  background-color: #0f1419 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html[data-color-scheme="dark"] .rbc-day-bg + .rbc-day-bg,
+html[data-color-scheme="dark"] .rbc-header,
+html[data-color-scheme="dark"] .rbc-header + .rbc-header,
+html[data-color-scheme="dark"] .rbc-time-content,
+html[data-color-scheme="dark"] .rbc-time-header,
+html[data-color-scheme="dark"] .rbc-time-slot,
+html[data-color-scheme="dark"] .rbc-day-slot .rbc-time-slot,
+html[data-color-scheme="dark"] .rbc-day-bg,
+html[data-color-scheme="dark"] .rbc-timeslot-group,
+html[data-color-scheme="dark"] .rbc-time-column {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+html[data-color-scheme="dark"] .rbc-day-slot .rbc-time-slot {
+  border-top-color: rgba(255, 255, 255, 0.05) !important;
+}
+html[data-color-scheme="dark"] .rbc-overlay {
+  background-color: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+html[data-color-scheme="dark"] .rbc-agenda-view table.rbc-agenda-table,
+html[data-color-scheme="dark"] .rbc-agenda-view table.rbc-agenda-table tbody > tr > td + td,
+html[data-color-scheme="dark"] .rbc-agenda-view table.rbc-agenda-table tbody > tr + tr,
+html[data-color-scheme="dark"] .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+html[data-color-scheme="dark"] .rbc-time-gutter .rbc-timeslot-group,
+html[data-color-scheme="dark"] .rbc-label {
+  color: #9ca3af;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Estilos para páginas con layout dashboard */
+.dashboard {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.dashboard .container {
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+}

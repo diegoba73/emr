@@ -1,0 +1,626 @@
+.pacientes-container {
+	padding: 2rem;
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+.pacientes-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 2rem;
+	padding-bottom: 20px;
+	border-bottom: 2px solid #e5e7eb;
+	flex-wrap: wrap;
+	gap: 1rem;
+}
+
+.pacientes-header h1 {
+	margin: 0;
+	color: #1f2937;
+	font-size: 2rem;
+	font-weight: 700;
+}
+
+.pacientes-actions {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.search-input {
+	padding: 0.75rem 1rem;
+	border: 2px solid #e5e7eb;
+	border-radius: 0.5rem;
+	font-size: 0.875rem;
+	min-width: 250px;
+	transition: border-color 0.2s;
+}
+
+.search-input:focus {
+	outline: none;
+	border-color: #3b82f6;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select {
+	padding: 0.75rem 1rem;
+	border: 2px solid #e5e7eb;
+	border-radius: 0.5rem;
+	font-size: 0.875rem;
+	background-color: white;
+	cursor: pointer;
+	transition: border-color 0.2s;
+}
+
+.filter-select:focus {
+	outline: none;
+	border-color: #3b82f6;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn-primary {
+	background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+	color: white;
+	border: none;
+	padding: 0.75rem 1.5rem;
+	border-radius: 0.5rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s;
+	box-shadow: 0 4px 6px rgba(59, 130, 246, 0.25);
+}
+
+.btn-primary:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3);
+}
+
+.pacientes-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+	margin-bottom: 2rem;
+}
+
+.stat-card {
+	background: white;
+	border-radius: 1rem;
+	padding: 1.5rem;
+	text-align: center;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+	border: 1px solid #f3f4f6;
+	transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.stat-number {
+	display: block;
+	font-size: 2rem;
+	font-weight: 700;
+	color: #3b82f6;
+	margin-bottom: 0.5rem;
+}
+
+.stat-label {
+	color: #2c3e50;
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+
+.pacientes-list {
+	display: grid;
+	gap: 1.5rem;
+}
+
+.paciente-card {
+	background: white;
+	border-radius: 1rem;
+	padding: 1.5rem;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+	border: 1px solid #f3f4f6;
+	transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.paciente-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.paciente-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 1rem;
+	flex-wrap: wrap;
+	gap: 1rem;
+}
+
+.paciente-info h3 {
+	margin: 0 0 0.5rem 0;
+	color: #1f2937;
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.paciente-details {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.paciente-details span {
+	background: #f3f4f6;
+	padding: 0.25rem 0.75rem;
+	border-radius: 1rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: #6b7280;
+}
+
+.paciente-actions {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.btn-edit, .btn-delete {
+	padding: 0.5rem 1rem;
+	border: none;
+	border-radius: 0.5rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.btn-edit {
+	background: #fbbf24;
+	color: #92400e;
+}
+
+.btn-edit:hover {
+	background: #f59e0b;
+	transform: translateY(-1px);
+}
+
+.btn-delete {
+	background: #ef4444;
+	color: white;
+}
+
+.btn-delete:hover {
+	background: #dc2626;
+	transform: translateY(-1px);
+}
+
+.paciente-contact {
+	margin-bottom: 1rem;
+}
+
+.contact-item {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.contact-item .label {
+	font-weight: 600;
+	color: #6b7280;
+	font-size: 0.875rem;
+	min-width: 80px;
+}
+
+.paciente-obra-social {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+	padding: 0.75rem;
+	background: #f0f9ff;
+	border-radius: 0.5rem;
+	border-left: 4px solid #3b82f6;
+}
+
+.paciente-obra-social .label {
+	font-weight: 600;
+	color: #1e40af;
+	font-size: 0.875rem;
+}
+
+.numero-afiliado {
+	color: #6b7280;
+	font-size: 0.875rem;
+}
+
+.paciente-observaciones {
+	margin-top: 1rem;
+	padding: 1rem;
+	background: #fef3c7;
+	border-radius: 0.5rem;
+	border-left: 4px solid #f59e0b;
+}
+
+.paciente-observaciones .label {
+	font-weight: 600;
+	color: #92400e;
+	font-size: 0.875rem;
+	margin-bottom: 0.5rem;
+	display: block;
+}
+
+.paciente-observaciones p {
+	margin: 0;
+	color: #78350f;
+	font-size: 0.875rem;
+	line-height: 1.5;
+}
+
+.empty-state {
+	text-align: center;
+	padding: 4rem 2rem;
+	background: white;
+	border-radius: 1rem;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+	border: 1px solid #f3f4f6;
+}
+
+.empty-icon {
+	font-size: 4rem;
+	margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+	margin: 0 0 0.5rem 0;
+	color: #1f2937;
+	font-size: 1.5rem;
+	font-weight: 600;
+}
+
+.empty-state p {
+	margin: 0;
+	color: #6b7280;
+	font-size: 1rem;
+}
+
+/* Modal styles */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	padding: 1rem;
+}
+
+.modal {
+	background: white;
+	border-radius: 1rem;
+	width: 100%;
+	max-width: 800px;
+	max-height: 90vh;
+	overflow-y: auto;
+	box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 1.5rem;
+	border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+	margin: 0;
+	color: #1f2937;
+	font-size: 1.5rem;
+	font-weight: 600;
+}
+
+.modal-close {
+	background: none;
+	border: none;
+	font-size: 1.5rem;
+	cursor: pointer;
+	color: #6b7280;
+	padding: 0.5rem;
+	border-radius: 0.5rem;
+	transition: background-color 0.2s;
+}
+
+.modal-close:hover {
+	background: #f3f4f6;
+}
+
+.paciente-form {
+	padding: 1.5rem;
+}
+
+.form-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+	margin-bottom: 1rem;
+}
+
+.form-group {
+	margin-bottom: 1rem;
+}
+
+.form-group label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-weight: 600;
+	color: #374151;
+	font-size: 0.875rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+	width: 100%;
+	padding: 0.75rem;
+	border: 2px solid #e5e7eb;
+	border-radius: 0.5rem;
+	font-size: 0.875rem;
+	transition: border-color 0.2s;
+	box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+	outline: none;
+	border-color: #3b82f6;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group textarea {
+	resize: vertical;
+	min-height: 80px;
+}
+
+/* Estilos para las secciones del formulario */
+.form-section {
+	margin-bottom: 2rem;
+	padding: 1.5rem;
+	background: #f8fafc;
+	border-radius: 0.75rem;
+	border: 1px solid #e2e8f0;
+}
+
+.form-section h3 {
+	margin: 0 0 1rem 0;
+	color: #1e293b;
+	font-size: 1.125rem;
+	font-weight: 600;
+	padding-bottom: 0.5rem;
+	border-bottom: 2px solid #3b82f6;
+}
+
+.form-section:last-child {
+	margin-bottom: 1rem;
+}
+
+.form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 1rem;
+	margin-top: 2rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary {
+	background: #6b7280;
+	color: white;
+	border: none;
+	padding: 0.75rem 1.5rem;
+	border-radius: 0.5rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+	background: #4b5563;
+	transform: translateY(-1px);
+}
+
+.loading {
+	text-align: center;
+	padding: 4rem 2rem;
+	font-size: 1.125rem;
+	color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.pacientes-container {
+		padding: 1rem;
+	}
+	
+	.pacientes-header {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	
+	.pacientes-actions {
+		flex-direction: column;
+	}
+	
+	.search-input {
+		min-width: auto;
+	}
+	
+	.paciente-header {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	
+	.paciente-actions {
+		justify-content: stretch;
+	}
+	
+	.form-row {
+		grid-template-columns: 1fr;
+	}
+	
+	.form-actions {
+		flex-direction: column;
+	}
+}
+
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Estilos de tarjetas de turnos aplicados a pacientes */
+.turnos-list {
+  display: grid;
+  gap: 20px;
+}
+
+.turno-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.turno-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.turno-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.turno-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.time {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.date {
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-transform: capitalize;
+  margin-top: 4px;
+}
+
+.estado-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.turno-content {
+  margin-bottom: 20px;
+}
+
+.turno-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 120px;
+  font-size: 0.875rem;
+}
+
+.value {
+  color: #1f2937;
+  font-size: 0.875rem;
+  flex: 1;
+}
+
+/* Nombres en negrita */
+.turno-card .patient-name {
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+}
+
+.turno-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-edit, .btn-delete {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit {
+  background-color: #fbbf24;
+  color: #92400e;
+}
+
+.btn-edit:hover {
+  background-color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+.btn-delete {
+  background-color: #fecaca;
+  color: #dc2626;
+}
+
+.btn-delete:hover {
+  background-color: #fca5a5;
+  transform: translateY(-1px);
+}

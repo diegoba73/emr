@@ -1,0 +1,970 @@
+/* Turnos Page Styles */
+.turnos-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header */
+.turnos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.turnos-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.turnos-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.filter-select {
+  padding: 10px 15px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-input {
+  padding: 10px 15px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 14px;
+  color: #374151;
+  width: 200px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.2);
+  height: fit-content;
+  line-height: 1;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 18px;
+  color: #6b7280;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 2px dashed #d1d5db;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  color: #374151;
+  margin: 0 0 10px 0;
+}
+
+.empty-state p {
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Turnos List */
+.turnos-list {
+  display: grid;
+  gap: 20px;
+}
+
+/* Turno Card */
+.turno-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.turno-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.turno-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.turno-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.time {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.date {
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-transform: capitalize;
+  margin-top: 4px;
+}
+
+.estado-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.turno-content {
+  margin-bottom: 20px;
+}
+
+.turno-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 120px;
+  font-size: 0.875rem;
+}
+
+.value {
+  color: #1f2937;
+  font-size: 0.875rem;
+  flex: 1;
+}
+
+/* Nombres en negrita */
+.turno-card .patient-name, 
+.turno-card .doctor-name {
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+}
+
+.turno-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-edit, .btn-delete {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit {
+  background-color: #fbbf24;
+  color: #92400e;
+}
+
+.btn-edit:hover {
+  background-color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+.btn-delete {
+  background-color: #fecaca;
+  color: #dc2626;
+}
+
+.btn-delete:hover {
+  background-color: #fca5a5;
+  transform: translateY(-1px);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.modal-close:hover {
+  background-color: #f3f4f6;
+}
+
+/* Form */
+.turno-form {
+  padding: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.disabled-input {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 2px solid #d1d5db;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Responsive Design */
+
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+@media (max-width: 768px) {
+  .turnos-container {
+    padding: 15px;
+  }
+  
+  .turnos-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .turnos-actions {
+    justify-content: space-between;
+  }
+  
+  .turno-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .turno-actions {
+    justify-content: stretch;
+  }
+  
+  .btn-edit, .btn-delete {
+    flex: 1;
+  }
+  
+  .modal {
+    margin: 10px;
+    max-width: none;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .btn-secondary, .btn-primary {
+    width: 100%;
+  }
+}
+
+/* Animation for cards */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.turno-card {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+/* Status colors for better visibility */
+.estado-badge[style*="DISPONIBLE"] {
+  background-color: #10b981 !important;
+}
+
+.estado-badge[style*="RESERVADO"] {
+  background-color: #f59e0b !important;
+}
+
+.estado-badge[style*="CONFIRMADO"] {
+  background-color: #3b82f6 !important;
+}
+
+.estado-badge[style*="REALIZADO"] {
+  background-color: #8b5cf6 !important;
+}
+
+.estado-badge[style*="CANCELADO"] {
+  background-color: #ef4444 !important;
+}
+
+.estado-badge[style*="REAGENDADO"] {
+  background-color: #6b7280 !important;
+}
+
+/* Calendar Styles — sin padding en .rbc-calendar: el padding desplaza el área clickeable
+   respecto de la rejilla de horas y puede provocar selección de slot incorrecta. */
+.rbc-calendar {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.turnos-rbc-shell {
+  padding: 20px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.rbc-header {
+  padding: 12px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.rbc-today {
+  background-color: #eff6ff !important;
+}
+
+.rbc-off-range-bg {
+  background-color: #f9fafb;
+}
+
+.rbc-event {
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.rbc-event:hover {
+  opacity: 0.8;
+}
+
+.rbc-event-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rbc-toolbar {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rbc-toolbar button {
+  padding: 8px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+  color: #374151;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.rbc-toolbar button.rbc-active {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.rbc-time-slot {
+  border-top: 1px solid #e5e7eb;
+  min-height: 24px;
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid #e5e7eb;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid #f3f4f6;
+  min-height: 24px;
+}
+
+/* Grupo de 2 sub-slots (30 min × 2 = 1 h). Altura fija para que cada media hora
+   tenga al menos 24 px y sea clickeable con precisión (evita mismatch entre el
+   pixel clickeado y la hora devuelta por react-big-calendar). */
+.rbc-timeslot-group {
+  min-height: 48px;
+}
+
+.rbc-day-slot .rbc-time-slot:hover {
+  background-color: rgba(59, 130, 246, 0.08);
+  cursor: pointer;
+}
+
+/* CRÍTICO: el contenedor de eventos de react-big-calendar es un overlay absoluto
+   que, por defecto, captura TODOS los clicks (incluso en zonas sin turno). Eso
+   impide que el click llegue al `.rbc-time-slot` que está debajo, y obliga a rbc
+   a calcular el slot por pixel (frágil y causa del bug histórico de "hora mal").
+   Desactivamos pointer-events en el container y los re-activamos en los eventos
+   para que los turnos sigan siendo clickeables individualmente. */
+.rbc-day-slot .rbc-events-container {
+  pointer-events: none;
+}
+.rbc-day-slot .rbc-events-container .rbc-event,
+.rbc-day-slot .rbc-events-container .rbc-background-event {
+  pointer-events: auto;
+}
+
+/* Vista semana: bloque +N (turnos extra colapsados) */
+.rbc-time-view .rbc-event .rbc-event-overflow-chip {
+  letter-spacing: 0.02em;
+}
+.rbc-time-content {
+  border-top: 2px solid #e5e7eb;
+}
+
+.rbc-day-bg {
+  border: 1px solid #e5e7eb;
+}
+
+.rbc-selected-cell {
+  background-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Etiquetas de hora en la gutter bien alineadas al inicio del slot. */
+.rbc-time-gutter .rbc-timeslot-group {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+/* ——— Vista DÍA: franjas más altas, horas más legibles, turnos más diferenciados ——— */
+.turnos-rbc--day .rbc-timeslot-group {
+  min-height: 80px;
+}
+
+.turnos-rbc--day .rbc-time-slot {
+  min-height: 40px;
+}
+
+/* Línea fuerte al inicio de cada hora (cada grupo = 1 h con step 30 + timeslots 2) */
+.turnos-rbc--day .rbc-day-slot .rbc-timeslot-group {
+  border-top: 1px solid #cbd5e1;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.9) 0%,
+    rgba(248, 250, 252, 0.35) 50%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.95) 100%
+  );
+}
+
+.turnos-rbc--day .rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid #e8ecf1;
+}
+
+/* Primera franja (xx:00) con separación un poco más marcada */
+.turnos-rbc--day .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:first-child {
+  border-top-color: #dce3eb;
+}
+
+.turnos-rbc--day .rbc-time-gutter {
+  min-width: 3.75rem;
+}
+
+.turnos-rbc--day .rbc-time-gutter .rbc-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: 0.01em;
+}
+
+.turnos-rbc--day .rbc-time-header-gutter {
+  min-width: 3.75rem;
+}
+
+/* Turnos: más aire, borde y sombra para leer aparte de la grilla */
+.turnos-rbc--day .rbc-day-slot .rbc-event {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  /* Bloque alineado exacto al slot (p. ej. 30 min) sin rebasar la línea siguiente */
+  overflow: hidden;
+  box-sizing: border-box;
+  min-height: 0 !important;
+}
+
+/* showTime=false evita duplicar; por si el layout aún inserta label en algún caso */
+.turnos-rbc--day .rbc-day-slot .rbc-event .rbc-event-label {
+  display: none !important;
+}
+
+.turnos-rbc--day .rbc-day-slot .rbc-event:hover {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+  z-index: 2;
+  opacity: 1;
+}
+
+/* Franja punteada a la derecha (~30%); los turnos viven en el 70% izquierdo (sin solaparse) */
+
+.turnos-rbc--time .turnos-rbc-event-container-wrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.turnos-rbc--time .turnos-rbc-event-container-wrap .turnos-rbc-events-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 70%;
+  max-width: calc(100% - 2.75rem);
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.turnos-rbc--time .turnos-rbc-event-container-wrap .turnos-rbc-events-left .rbc-events-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1;
+  pointer-events: none;
+}
+.turnos-rbc--time
+  .turnos-rbc-event-container-wrap
+  .turnos-rbc-events-left
+  .rbc-events-container
+  .rbc-event,
+.turnos-rbc--time
+  .turnos-rbc-event-container-wrap
+  .turnos-rbc-events-left
+  .rbc-events-container
+  .rbc-background-event {
+  pointer-events: auto;
+  z-index: 2;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.turnos-rbc--time .turnos-rbc-franja-dashed {
+  z-index: 3;
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: copy;
+  border-radius: 6px 0 0 6px;
+  border: 2px dashed rgba(37, 99, 235, 0.65);
+  border-right: 1px solid rgba(37, 99, 235, 0.3);
+  background-color: rgba(219, 234, 254, 0.45);
+  background-image: repeating-linear-gradient(
+    -90deg,
+    transparent 0 5px,
+    rgba(29, 78, 216, 0.12) 5px 6px
+  );
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.turnos-rbc--time .turnos-rbc-franja-dashed:hover {
+  background-color: rgba(191, 219, 254, 0.75);
+  border-color: rgba(29, 78, 216, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset, 0 1px 4px rgba(30, 64, 175, 0.2);
+}
+.turnos-rbc--time .turnos-rbc-franja-dashed:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 1px;
+}
+
+
+/* ——— Modo oscuro (html[data-color-scheme="dark"] desde ThemeModeContext) ——— */
+html[data-color-scheme="dark"] .turnos-header {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-color-scheme="dark"] .turnos-header h1,
+html[data-color-scheme="dark"] .turno-card .time,
+html[data-color-scheme="dark"] .turno-card .value {
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .turno-card .date {
+  color: #9ca3af;
+}
+
+html[data-color-scheme="dark"] .filter-select,
+html[data-color-scheme="dark"] .search-input {
+  background-color: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .empty-state {
+  background: #12171f;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-color-scheme="dark"] .empty-state h3 {
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .empty-state p,
+html[data-color-scheme="dark"] .loading {
+  color: #9ca3af;
+}
+
+html[data-color-scheme="dark"] .turno-card {
+  background: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+html[data-color-scheme="dark"] .turno-card .label {
+  color: #cbd5e1;
+}
+
+html[data-color-scheme="dark"] .turno-card .value {
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .turno-card .patient-name,
+html[data-color-scheme="dark"] .turno-card .doctor-name {
+  color: #e2e8f0 !important;
+}
+
+html[data-color-scheme="dark"] .modal {
+  background: #1a1f2e;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+html[data-color-scheme="dark"] .modal-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-color-scheme="dark"] .modal-header h2 {
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .modal-close {
+  color: #9ca3af;
+}
+
+html[data-color-scheme="dark"] .modal-close:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-color-scheme="dark"] .form-group label {
+  color: #cbd5e1;
+}
+
+html[data-color-scheme="dark"] .form-group input,
+html[data-color-scheme="dark"] .form-group select,
+html[data-color-scheme="dark"] .form-group textarea {
+  background-color: #0f1419;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .disabled-input {
+  background-color: #12171f;
+  color: #6b7280;
+}
+
+html[data-color-scheme="dark"] .form-group small,
+html[data-color-scheme="dark"] .form-group small {
+  color: #9ca3af;
+}
+
+html[data-color-scheme="dark"] .form-actions {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-color-scheme="dark"] .btn-secondary {
+  background-color: #2d3344;
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+html[data-color-scheme="dark"] .btn-secondary:hover {
+  background-color: #3d4558;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Calendario (estilos propios; la librería rbc se corrige además en App.css) */
+html[data-color-scheme="dark"] .rbc-calendar {
+  background: #1a1f2e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+html[data-color-scheme="dark"] .rbc-header {
+  color: #e2e8f0;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-color-scheme="dark"] .rbc-today {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+html[data-color-scheme="dark"] .rbc-off-range-bg {
+  background-color: #12171f;
+}
+
+html[data-color-scheme="dark"] .rbc-toolbar button {
+  background-color: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .rbc-toolbar button:hover {
+  background-color: #2d3344;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-color-scheme="dark"] .rbc-time-slot,
+html[data-color-scheme="dark"] .rbc-time-content {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-color-scheme="dark"] .rbc-day-slot .rbc-time-slot {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-color-scheme="dark"] .rbc-time-gutter .rbc-timeslot-group {
+  color: #9ca3af;
+}
+
+html[data-color-scheme="dark"] .turnos-rbc--day .rbc-day-slot .rbc-timeslot-group {
+  border-top-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.65) 0%,
+    rgba(15, 23, 42, 0.25) 50%,
+    rgba(15, 23, 42, 0.4) 50%,
+    rgba(15, 23, 42, 0.5) 100%
+  );
+}
+
+html[data-color-scheme="dark"] .turnos-rbc--day .rbc-day-slot .rbc-time-slot {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-color-scheme="dark"] .turnos-rbc--day .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:first-child {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-color-scheme="dark"] .turnos-rbc--day .rbc-time-gutter .rbc-label {
+  color: #e2e8f0;
+}
+
+html[data-color-scheme="dark"] .turnos-rbc--day .rbc-day-slot .rbc-event {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+html[data-color-scheme="dark"] .turnos-rbc--time .turnos-rbc-franja-dashed {
+  border-color: rgba(96, 165, 250, 0.7);
+  border-right-color: rgba(59, 130, 246, 0.4);
+  background-color: rgba(30, 58, 138, 0.45);
+  background-image: repeating-linear-gradient(
+    -90deg,
+    transparent 0 5px,
+    rgba(96, 165, 250, 0.14) 5px 6px
+  );
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5) inset;
+}
+html[data-color-scheme="dark"] .turnos-rbc--time .turnos-rbc-franja-dashed:hover {
+  background-color: rgba(30, 64, 175, 0.55);
+  border-color: rgba(147, 197, 253, 0.9);
+}

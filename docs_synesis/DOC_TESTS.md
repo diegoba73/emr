@@ -153,7 +153,7 @@ La suite Jest global (`npm test -- --watchAll=false`) falla por import ESM de `r
 
 ## Tests frontend
 
-La suite vive en el **submódulo** `frontend/` (Create React App + Jest + Testing Library). **No hay** Playwright ni Cypress configurados en el repo (búsqueda `playwright.config.*` / `cypress.config.*` vacía).
+La suite vive en el directorio **`frontend/`** del monorepo (Create React App + Jest + Testing Library). **No hay** Playwright ni Cypress configurados en el repo (búsqueda `playwright.config.*` / `cypress.config.*` vacía).
 
 **E2E-1 / E2E-1-A LIMS (jun 2026) — Opción B (sin framework browser):**
 
@@ -279,7 +279,7 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 **Fase B2 [IMPLEMENTADO]:** `test_resultados_muestras_models.py` (FK, integridad, `PROTECT`, no rechazar con resultados); `test_resultados_muestras_api.py` (carga con/sin `muestra_id`, CONSERVADA→EN_PROCESO, `PROCESAMIENTO`, rechazo con resultados, resultado validado sin cambio de muestra, permisos).
 **Fase B2-B [IMPLEMENTADO]:** `laboratorio/tests/test_tipo_examen_muestra_requerida.py` (legacy sin muestra, obligatoriedad por tipo, tipo de muestra incorrecto/correcto, estados no procesables, auditoría en fallo/éxito); `test_resultados_muestras_models.py` (`requiere_muestra` configurable). Migración `0012_tipo_examen_requiere_muestra`.
 **Fase B2-B-A [IMPLEMENTADO]:** mismos tests con `TipoMuestra.codigo` ≤10 (PostgreSQL); `test_tipo_no_requiere_muestra_pero_si_se_envia_muestra_debe_coincidir_tipo`; validación tipo muestra con `requiere_muestra=False` si hay `muestra_id`.
-**Fase B2-C [frontend]:** `frontend/src/utils/limsCargaMuestra.test.ts` (validación requiere_muestra, payload con/sin `muestra_id`, filtro procesables); verificación manual `npm exec tsc --noEmit` y `npm run build` en submódulo `frontend/`.
+**Fase B2-C [frontend]:** `frontend/src/utils/limsCargaMuestra.test.ts` (validación requiere_muestra, payload con/sin `muestra_id`, filtro procesables); verificación manual `npm exec tsc --noEmit` y `npm run build` en `frontend/`.
 **Fase B2-A [IMPLEMENTADO]:** `auditoria/tests/test_audit_integration.py` (`test_resultado_examen_snapshot_redacta_valor_clinico`); `test_resultados_muestras_api.py` (`test_cargar_resultados_con_muestra_no_audita_codigo_barra_ni_valor_clinico` — metadata y snapshots sin PHI/codigo_barra).
 
 **Fase B3-audit [IMPLEMENTADO]:** `laboratorio/tests/test_microbiologia_auditoria.py` — metadata micro sin `codigo_barra`/CIM/diámetro/interpretación/texto de informe; snapshots redactados; conservación de IDs técnicos.
