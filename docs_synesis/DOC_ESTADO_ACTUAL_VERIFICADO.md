@@ -63,9 +63,10 @@
 
 Prefijos: `/api/lab/microbiologia/*` y `/api/laboratorio/microbiologia/*`.
 
-### Frontend (repositorio anidado `frontend/`)
+### Frontend (`frontend/` — monorepo)
 
-- **Nota:** `frontend/` es un **repositorio Git anidado** (directorio con `.git` propio). En el monorepo padre aparece como **gitlink** (`m frontend` en `git status`); **no hay `.gitmodules`** — no está registrado como submódulo Git configurado.
+- **Nota (jun 2026):** `frontend/` es carpeta normal del repo padre `emr`. Ya no es gitlink ni repo anidado con `.git` propio. SHA histórico del repo separado `emr-frontend`: `417e9a2`.
+- **`frontend/package-lock.json` (estado actual):** versionado como archivo normal del monorepo desde la conversión jun 2026 (contenido importado del SHA histórico `417e9a2`; no regenerado en esa conversión).
 - `limsMicroApi.ts`: 7 funciones `list*` aceptan `{ estudio_id?: number }`.
 - `MicrobiologiaEstudioDetalle.tsx`: envía `estudio_id` server-side.
 
@@ -143,7 +144,7 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 | Archivo | Modificado |
 |---------|------------|
 | `DOC_API_ENDPOINTS.md` | **Sí** — `?estudio_id=` IMPLEMENTADO; validación HTTP 400 |
-| `DOC_FRONTEND.md` | **Sí** — secciones legacy OBSOLETO; aclaración repo anidado |
+| `DOC_FRONTEND.md` | **Sí** — secciones legacy OBSOLETO; nota histórica de estructura frontend (antes repo anidado/gitlink) |
 
 ---
 
@@ -156,9 +157,9 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 
 ---
 
-## Limpieza de repo (esta iteración)
+## Limpieza de repo (iteración histórica — filtro `estudio_id`, jun 2026)
 
-- Revertido `frontend/package-lock.json` (cambio masivo no necesario)
+- Revertido `frontend/package-lock.json` en esa iteración anterior (cambio masivo no necesario para el filtro). **Estado actual (post-monorepo):** el lockfile vuelve a estar trackeado legítimamente como archivo normal; no fue regenerado en la conversión monorepo.
 - Restaurados modos ejecutables de scripts shell revertidos (`backup_documentacion/*`, `deploy/*`, `entrypoint.sh`, `scripts/checkpoint.sh`)
 - Eliminados archivos `._*` del árbol de trabajo
 - Sin commit de archivos `.DS_Store`, `._*`, ni scripts de management no relacionados
@@ -170,7 +171,7 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 1. PostgreSQL: `synesis_user` sin `CREATEDB` — `manage.py test` / pytest sin vars SQLite no validados en este entorno.
 2. ~~`pytest` no listado en `requirements.txt`~~ — **resuelto** (sección desarrollo/test).
 3. `npm test` suite completa falla por `App.test.tsx` / `react-big-calendar` (ticket frontend separado).
-4. `frontend/` como repo anidado sin `.gitmodules` — riesgo de desincronización vs monorepo padre.
+4. ~~`frontend/` como repo anidado sin `.gitmodules`~~ — **resuelto (jun 2026):** `frontend/` integrado como carpeta normal del monorepo; repo `emr-frontend` queda como respaldo histórico (`417e9a2`).
 
 ---
 

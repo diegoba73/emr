@@ -3,17 +3,17 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Última actualización:** junio 2026 (cierre filtro `estudio_id` micro + corrección secciones legacy)
 
-> **Nota de actualización:** Las secciones marcadas **[OBSOLETO — escaneo C0]** describían un estado previo **sin** SPA en el árbol principal. El frontend real vive en **`frontend/`**, un **repositorio Git anidado** referenciado como **gitlink** en el monorepo padre; **no existe `.gitmodules`**, por lo tanto **no está configurado como submódulo Git estándar**. Stack: React + TypeScript + MUI. Pantallas LIMS/micro confirmadas en código (`App.tsx`, `pages/laboratorio/*`, `services/limsMicroApi.ts`).
+> **Nota de actualización:** Las secciones marcadas **[OBSOLETO — escaneo C0]** describían un estado previo **sin** SPA en el árbol principal. El frontend real vive en **`frontend/`**, carpeta normal del monorepo `emr` (desde jun 2026; antes era gitlink/repo anidado sin `.gitmodules`). Último SHA del repo histórico `emr-frontend`: `417e9a2`. Stack: React + TypeScript + MUI. Pantallas LIMS/micro confirmadas en código (`App.tsx`, `pages/laboratorio/*`, `services/limsMicroApi.ts`).
 
-**Alcance:** Descripción del frontend en `frontend/` (repo anidado/gitlink) y contratos API consumidos.
+**Alcance:** Descripción del frontend en `frontend/` (monorepo) y contratos API consumidos.
 
 **Fuentes revisadas:** `frontend/package.json`, `frontend/src`, `synesis/settings.py` (CORS/CSRF).
 
 ---
 
-## Stack frontend (`frontend/` — repo anidado / gitlink)
+## Stack frontend (`frontend/` — monorepo)
 
-**Estado actual:** aplicación SPA en `frontend/` (repositorio Git anidado; gitlink en el monorepo padre; sin `.gitmodules`).
+**Estado actual:** aplicación SPA en `frontend/` versionada directamente en el repo padre `emr` (un solo commit/push/PR). El remoto histórico `https://github.com/diegoba73/emr-frontend.git` queda como respaldo; ya no es dependencia operativa.
 
 El backend está preparado para `http://localhost:3000` (CORS, cookies de sesión). El cliente de producción es `frontend/`.
 
@@ -21,7 +21,7 @@ El backend está preparado para `http://localhost:3000` (CORS, cookies de sesió
 
 ## Estructura de carpetas (histórico + actual)
 
-- **`frontend/` (repo anidado):** aplicación React (`src/pages`, `src/modules`, `src/services`).
+- **`frontend/` (monorepo):** aplicación React (`src/pages`, `src/modules`, `src/services`).
 - **`backup_documentacion/`:** scripts Node de prueba API — no son la SPA de producción.
 
 ---
@@ -48,7 +48,7 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 - `GET /api/auth/current-user/`
 - `PUT /api/turnos/{id}/`
 
-**[OBSOLETO]** ~~Pendiente de confirmar: si el frontend real vive en otro repositorio o rama.~~ — **Confirmado:** `frontend/` (repo anidado/gitlink) con SPA React; consumo real vía `limsApi.ts`, `limsMicroApi.ts`, `estudiosComplementariosApi.ts`, etc.
+**[OBSOLETO]** ~~Pendiente de confirmar: si el frontend real vive en otro repositorio o rama.~~ — **Confirmado:** `frontend/` en monorepo con SPA React; consumo real vía `limsApi.ts`, `limsMicroApi.ts`, `estudiosComplementariosApi.ts`, etc.
 
 ## Validaciones frontend, errores, permisos/guards
 
@@ -77,7 +77,7 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 ## Deuda técnica visual o funcional
 
-- **[OBSOLETO]** ~~Ausencia total de UI versionada~~ — UI versionada en `frontend/` (repo anidado).
+- **[OBSOLETO]** ~~Ausencia total de UI versionada~~ — UI versionada en `frontend/` (monorepo).
 - Riesgo de **drift** entre frontend y alias `lab/` vs `laboratorio/` (mitigado: backend usa mismas clases ViewSet).
 - **`window.prompt` en acciones con motivo** — **resuelto (jun 2026):** reemplazado por `MotivoDialog` MUI (`frontend/src/components/common/MotivoDialog.tsx`) en microbiología (`MicrobiologiaEstudioDetalle`, `AntibiogramaPanel`, `AisladosIdentificacionPanel`, `InformesMicrobiologiaPanel`) y en agenda EMR (`TurnoModal.tsx`: cancelar, no asistió, reprogramar).
 
@@ -98,7 +98,7 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 ## Frontend EMR+LIMS (`frontend/`) — actualización UI-2
 
-> Las secciones anteriores de este documento reflejan un escaneo previo sin SPA. La aplicación React vive en **`frontend/`** (repositorio Git anidado / gitlink; sin `.gitmodules`).
+> Las secciones anteriores de este documento reflejan un escaneo previo sin SPA. La aplicación React vive en **`frontend/`** (carpeta normal del monorepo; antes gitlink `417e9a2` en repo histórico `emr-frontend`).
 
 **Stack:** React + TypeScript + MUI + React Router; cliente HTTP con sesión/cookies; tests CRA/Jest.
 

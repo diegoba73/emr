@@ -1,0 +1,1210 @@
+/* Calendar Styles */
+.calendar-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin: 20px 0;
+}
+
+.calendar-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.calendar-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.calendar-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.refresh-button {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+  height: fit-content;
+  line-height: 1;
+}
+
+.refresh-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.last-update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.update-label {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.update-time {
+  color: #059669;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.view-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.view-label {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.view-value {
+  color: #3b82f6;
+  font-weight: 600;
+  padding: 4px 8px;
+  background-color: #eff6ff;
+  border-radius: 6px;
+  border: 1px solid #dbeafe;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.calendar-wrapper {
+  padding: 20px;
+}
+
+/* Calendar navigation */
+.calendar-navigation {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.nav-btn {
+  padding: 8px 16px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.nav-btn:hover {
+  background: #0056b3;
+}
+
+.nav-btn:active {
+  background: #004085;
+}
+
+/* Loading State */
+.calendar-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  margin-bottom: 15px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.calendar-loading p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+/* Event Modal */
+.event-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.event-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.event-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.event-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.modal-close:hover {
+  background-color: #f3f4f6;
+}
+
+.event-modal-content {
+  padding: 24px;
+}
+
+.event-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.info-row .label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 100px;
+  font-size: 0.875rem;
+}
+
+.info-row .value {
+  color: #1f2937;
+  font-size: 0.875rem;
+  flex: 1;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.event-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Estilos para el modal de consulta */
+.consulta-modal {
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.consulta-info {
+  background: #f8fafc;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.consulta-info h4 {
+  margin: 0 0 10px 0;
+  color: #1e293b;
+  font-size: 1.1rem;
+}
+
+.consulta-info p {
+  margin: 5px 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.consulta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.consulta-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.consulta-form label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.consulta-form textarea {
+  padding: 10px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+}
+
+.consulta-form textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.consulta-form textarea::placeholder {
+  color: #9ca3af;
+}
+
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 2px solid #d1d5db;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-delete-calendar {
+  background: linear-gradient(135deg, #EF4444, #DC2626);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.btn-delete-calendar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+/* React Big Calendar Customization */
+.rbc-calendar {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.rbc-header {
+  background-color: #f8fafc;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 12px 8px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: capitalize;
+}
+
+.rbc-toolbar {
+  margin-bottom: 20px;
+  padding: 0;
+}
+
+.rbc-toolbar button {
+  background-color: white;
+  border: 2px solid #d1d5db;
+  color: #374151;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.rbc-toolbar button.rbc-active {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-color: #3b82f6;
+  color: white;
+}
+
+.rbc-event {
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rbc-event:hover {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.rbc-today {
+  background-color: #eff6ff;
+}
+
+.rbc-off-range-bg {
+  background-color: #f9fafb;
+}
+
+.rbc-off-range {
+  color: #9ca3af;
+}
+
+.rbc-time-view .rbc-header {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.rbc-time-content {
+  border-top: 1px solid #e5e7eb;
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.rbc-time-slot {
+  border-top: 1px solid #f3f4f6;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid #f3f4f6;
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid #e5e7eb;
+}
+
+.rbc-time-content > * + * > * {
+  border-left: 1px solid #e5e7eb;
+}
+
+.rbc-month-view {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 600px;
+}
+
+/* Estilos específicos para vista mensual */
+.rbc-month-view .rbc-month-row {
+  min-height: 80px;
+}
+
+.rbc-month-view .rbc-date-cell {
+  padding: 4px 6px !important;
+  min-height: 60px !important;
+  position: relative !important;
+  overflow: visible !important;
+  cursor: pointer !important;
+  /* Asegurar que toda la celda sea clickeable */
+  pointer-events: auto !important;
+  user-select: none !important;
+  /* Aumentar área clickeable */
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Hacer que el fondo del día sea completamente clickeable */
+.rbc-month-view .rbc-day-bg {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+}
+
+.rbc-month-view .rbc-day-slot {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 60px !important;
+}
+
+/* Asegurar que el contenedor de la celda también sea clickeable */
+.rbc-month-view .rbc-row-content {
+  position: relative !important;
+  pointer-events: auto !important;
+}
+
+.rbc-month-view .rbc-row-segment {
+  position: relative !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Contenido de eventos en vista mensual: mantener dentro del día sin forzar alturas */
+.rbc-month-view .rbc-event,
+.rbc-month-view .rbc-event-content {
+  padding: 1px 3px !important;
+  font-size: 10px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  /* Los eventos deben ser clickeables y estar por encima */
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 10 !important;
+  cursor: pointer !important;
+}
+
+/* Asegurar que los eventos sean clickeables y no bloqueados */
+.rbc-month-view .rbc-date-cell .rbc-event {
+  pointer-events: auto !important;
+  z-index: 10 !important;
+  position: relative !important;
+  cursor: pointer !important;
+}
+
+/* El área vacía del día debe ser completamente clickeable */
+.rbc-month-view .rbc-date-cell:not(.rbc-off-range) {
+  cursor: pointer !important;
+}
+
+/* Wrapper para celdas de día - hacer toda el área clickeable */
+.rbc-day-cell-wrapper {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 60px !important;
+  cursor: pointer !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Crear un overlay invisible con ::before que cubra TODO el área para el hover */
+.rbc-day-cell-wrapper::before {
+  content: '';
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  background-color: transparent !important;
+  transition: background-color 0.2s ease !important;
+}
+
+/* Hover effect - aplicar al pseudo-elemento para cubrir TODO el cuadrado */
+.rbc-day-cell-wrapper:hover::before {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Hover effect para indicar que es clickeable */
+.rbc-day-cell-wrapper:hover::before {
+  background-color: rgba(59, 130, 246, 0.05) !important;
+}
+
+/* Asegurar que el fondo del día cubra TODO el área */
+.rbc-day-cell-wrapper .rbc-day-bg {
+  pointer-events: none !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+}
+
+/* Asegurar que la celda de fecha también cubra todo */
+.rbc-day-cell-wrapper .rbc-date-cell {
+  pointer-events: none !important;
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 60px !important;
+}
+
+/* Asegurar que todos los elementos internos permitan que el wrapper capture clics */
+.rbc-day-cell-wrapper > * {
+  pointer-events: none !important;
+}
+
+/* Pero los eventos sí deben capturar clics */
+.rbc-day-cell-wrapper .rbc-event,
+.rbc-day-cell-wrapper .rbc-event * {
+  pointer-events: auto !important;
+  z-index: 20 !important;
+}
+
+/* CRÍTICO: Permitir que los clics pasen a través de elementos hijos excepto eventos */
+.rbc-day-cell-wrapper > * {
+  pointer-events: none !important;
+}
+
+/* SOLUCIÓN: Asegurar que TODOS los días del mes actual sean clickeables */
+.rbc-day-cell-wrapper {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Los eventos siempre deben ser clickeables */
+.rbc-day-cell-wrapper .rbc-event,
+.rbc-day-cell-wrapper .rbc-event * {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Los eventos deben capturar sus propios clics */
+.rbc-day-cell-wrapper .rbc-event,
+.rbc-day-cell-wrapper .rbc-event * {
+  pointer-events: auto !important;
+  z-index: 10 !important;
+  position: relative !important;
+  cursor: pointer !important;
+}
+
+/* Los eventos deben estar por encima del overlay de hover */
+.rbc-day-cell-wrapper .rbc-event,
+.rbc-day-cell-wrapper .rbc-event * {
+  position: relative !important;
+  z-index: 20 !important;
+}
+
+/* Los eventos deben poder recibir clics */
+.rbc-month-view .rbc-event,
+.rbc-month-view .rbc-event * {
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Asegurar que días del mes actual sean clickeables */
+.rbc-month-view .rbc-date-cell:not(.rbc-off-range) {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Permitir que el wrapper capture clics en días válidos */
+.rbc-day-cell-wrapper:not(.rbc-off-range) {
+  pointer-events: auto !important;
+}
+
+/* Evitar conflictos con días fuera de rango */
+.rbc-off-range .rbc-day-cell-wrapper,
+.rbc-off-range-bg .rbc-day-cell-wrapper {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}
+
+/* Asegurar que el fondo del día sea clickeable */
+.rbc-month-view .rbc-day-bg {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+}
+
+/* Áreas vacías del día - completamente clickeables */
+.rbc-month-view .rbc-day-slot {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 60px !important;
+  z-index: 1 !important;
+}
+
+/* Asegurar que los segmentos de fila sean clickeables */
+.rbc-month-view .rbc-row-segment {
+  position: relative !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 1 !important;
+}
+
+/* Mejorar la legibilidad en vista mensual */
+.rbc-month-view .rbc-date-cell.rbc-now {
+  background-color: #fef3c7;
+  font-weight: 600;
+}
+
+.rbc-month-view .rbc-date-cell.rbc-off-range {
+  color: #d1d5db;
+  background-color: #f9fafb;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  user-select: none !important;
+}
+
+/* Prevenir cualquier interacción con días fuera del mes */
+.rbc-month-view .rbc-off-range * {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}
+
+/* Asegurar que los días off-range no sean clickeables */
+.rbc-month-view .rbc-off-range-bg {
+  pointer-events: none !important;
+}
+
+/* Bloquear completamente los wrappers de días off-range */
+.rbc-off-range-wrapper {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}
+
+.rbc-off-range-wrapper * {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}
+
+/* Bloquear toda la fila si contiene días off-range en la última fila */
+.rbc-month-view .rbc-month-row:last-child .rbc-off-range {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  user-select: none !important;
+}
+
+.rbc-month-view .rbc-month-row:last-child .rbc-off-range * {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  user-select: none !important;
+}
+
+/* Bloquear específicamente la última fila completa si tiene días off-range */
+.rbc-month-view .rbc-month-row:last-child .rbc-date-cell.rbc-off-range,
+.rbc-month-view .rbc-month-row:last-child .rbc-off-range-bg {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+.rbc-month-view .rbc-month-row:last-child .rbc-date-cell.rbc-off-range *,
+.rbc-month-view .rbc-month-row:last-child .rbc-off-range-bg * {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  user-select: none !important;
+}
+
+/* Estilos específicos para eventos en el día actual */
+.rbc-month-view .rbc-date-cell.rbc-now .rbc-event {
+  margin: 1px 2px !important;
+  padding: 2px 4px !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: calc(100% - 4px) !important;
+  box-sizing: border-box !important;
+  /* Asegurar que no se desborde */
+  position: relative !important;
+  z-index: 1 !important;
+  max-height: 20px !important;
+  height: auto !important;
+}
+
+.rbc-month-view .rbc-date-cell.rbc-now .rbc-event-content {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+  max-height: 16px !important;
+  line-height: 1.1 !important;
+  height: auto !important;
+  /* Forzar comportamiento */
+  display: block !important;
+  word-wrap: normal !important;
+  word-break: keep-all !important;
+  /* Asegurar que no se desborde */
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Estilos adicionales para cualquier .rbc-event-content en vista mensual */
+.rbc-month-view div[class*="rbc-event-content"] {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+  max-height: 14px !important;
+  height: 14px !important;
+  line-height: 1.0 !important;
+  display: block !important;
+  word-wrap: normal !important;
+  word-break: keep-all !important;
+  position: relative !important;
+  z-index: 1 !important;
+  font-size: 9px !important;
+  padding: 1px 2px !important;
+  margin: 1px 1px !important;
+}
+
+/* Estilos ULTRA ESPECÍFICOS para forzar el comportamiento */
+.rbc-month-view .rbc-event .rbc-event-content,
+.rbc-month-view .rbc-event-content,
+.rbc-month-view div.rbc-event-content,
+.rbc-month-view [class*="rbc-event-content"] {
+  max-height: 14px !important;
+  height: 14px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  line-height: 1.0 !important;
+  font-size: 9px !important;
+  padding: 1px 2px !important;
+  margin: 1px 1px !important;
+  display: block !important;
+  word-wrap: normal !important;
+  word-break: keep-all !important;
+  position: relative !important;
+  z-index: 1 !important;
+  box-sizing: border-box !important;
+}
+
+.rbc-month-header {
+  background-color: #f8fafc;
+}
+
+.rbc-month-row {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.rbc-month-row:last-child {
+  border-bottom: none;
+}
+
+/* Divisores verticales entre días en el calendario mensual */
+.rbc-month-view .rbc-row {
+  border-right: 1px solid #e5e7eb;
+}
+
+.rbc-month-view .rbc-row:last-child {
+  border-right: none;
+}
+
+.rbc-month-view .rbc-date-cell {
+  border-right: 1px solid #e5e7eb !important;
+  border-left: 1px solid #e5e7eb !important;
+}
+
+.rbc-month-view .rbc-row-content {
+  border-right: 1px solid #e5e7eb;
+}
+
+.rbc-month-view .rbc-date-cell:first-child {
+  border-left: none !important;
+}
+
+.rbc-month-view .rbc-row-content:last-child .rbc-date-cell {
+  border-right: none !important;
+}
+
+/* Divisores más visibles en la vista mensual */
+.rbc-month-view .rbc-day-bg {
+  border-right: 1px solid #d1d5db !important;
+}
+
+.rbc-month-view .rbc-day-bg:last-child {
+  border-right: none !important;
+}
+
+/* Asegurar que los divisores sean visibles */
+.rbc-month-view .rbc-row-segment {
+  border-right: 1px solid #e5e7eb;
+}
+
+.rbc-month-view .rbc-row-segment:last-child {
+  border-right: none;
+}
+
+
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .calendar-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+  
+  .title-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .refresh-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .calendar-legend {
+    justify-content: center;
+  }
+  
+  .calendar-wrapper {
+    padding: 10px;
+  }
+  
+  .event-modal {
+    margin: 10px;
+    max-width: none;
+  }
+  
+  .event-modal-actions {
+    flex-direction: column;
+  }
+  
+  .btn-secondary, .btn-primary {
+    width: 100%;
+  }
+  
+  .info-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .info-row .label {
+    min-width: auto;
+  }
+}
+
+/* ESTILOS GLOBALES ULTRA AGRESIVOS PARA EVENTOS - ESPECIFICIDAD MÁXIMA */
+.rbc-calendar .rbc-month-view .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-event-content,
+.rbc-calendar .rbc-event-content,
+.rbc-calendar .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-event-content,
+.rbc-event-content {
+  max-height: 14px !important;
+  height: 14px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  line-height: 1.0 !important;
+  font-size: 9px !important;
+  padding: 1px 2px !important;
+  margin: 1px 1px !important;
+  display: block !important;
+  word-wrap: normal !important;
+  word-break: keep-all !important;
+  position: relative !important;
+  z-index: 1 !important;
+  box-sizing: border-box !important;
+}
+
+/* Forzar altura máxima en contenedores de eventos - ESPECIFICIDAD MÁXIMA */
+.rbc-calendar .rbc-month-view .rbc-event,
+.rbc-calendar .rbc-event,
+.rbc-event {
+  max-height: 16px !important;
+  height: auto !important;
+  overflow: hidden !important;
+}
+
+/* ESTILOS FINALES ULTRA ESPECÍFICOS - MÁXIMA PRIORIDAD */
+.rbc-calendar .rbc-month-view .rbc-date-cell .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-date-cell .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-event-content,
+.rbc-calendar .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-event-content,
+.rbc-month-view .rbc-date-cell .rbc-event .rbc-event-content,
+.rbc-month-view .rbc-date-cell .rbc-event-content,
+.rbc-month-view .rbc-event .rbc-event-content,
+.rbc-month-view .rbc-event-content,
+.rbc-event .rbc-event-content,
+.rbc-event-content {
+  max-height: 14px !important;
+  height: 14px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  line-height: 1.0 !important;
+  font-size: 9px !important;
+  padding: 1px 2px !important;
+  margin: 1px 1px !important;
+  display: block !important;
+  word-wrap: normal !important;
+  word-break: keep-all !important;
+  position: relative !important;
+  z-index: 1 !important;
+  box-sizing: border-box !important;
+}
+
+/* CONTENEDORES DE EVENTOS - MÁXIMA PRIORIDAD */
+.rbc-calendar .rbc-month-view .rbc-date-cell .rbc-event,
+.rbc-calendar .rbc-month-view .rbc-event,
+.rbc-calendar .rbc-event,
+.rbc-month-view .rbc-date-cell .rbc-event,
+.rbc-month-view .rbc-event,
+.rbc-event {
+  max-height: 16px !important;
+  height: auto !important;
+  overflow: hidden !important;
+}
+
+/* ESTILOS ESPECÍFICOS PARA EL DÍA ACTUAL - ULTRA ESPECÍFICOS */
+.rbc-calendar .rbc-month-view .rbc-date-cell.rbc-now .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-date-cell.rbc-now .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-now .rbc-event .rbc-event-content,
+.rbc-calendar .rbc-month-view .rbc-now .rbc-event-content,
+.rbc-month-view .rbc-date-cell.rbc-now .rbc-event .rbc-event-content,
+.rbc-month-view .rbc-date-cell.rbc-now .rbc-event-content,
+.rbc-month-view .rbc-now .rbc-event .rbc-event-content,
+.rbc-month-view .rbc-now .rbc-event-content,
+.rbc-now .rbc-event .rbc-event-content,
+.rbc-now .rbc-event-content {
+  max-height: 14px !important;
+  height: 14px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  line-height: 1.0 !important;
+  font-size: 9px !important;
+  padding: 1px 2px !important;
+  margin: 1px 1px !important;
+  display: block !important;
+  word-wrap: normal !important;
+  word-break: keep-all !important;
+  position: relative !important;
+  z-index: 1 !important;
+  box-sizing: border-box !important;
+}
+
+/* CONTENEDORES DE EVENTOS DEL DÍA ACTUAL */
+.rbc-calendar .rbc-month-view .rbc-date-cell.rbc-now .rbc-event,
+.rbc-calendar .rbc-month-view .rbc-now .rbc-event,
+.rbc-month-view .rbc-date-cell.rbc-now .rbc-event,
+.rbc-month-view .rbc-now .rbc-event,
+.rbc-now .rbc-event {
+  max-height: 16px !important;
+  height: auto !important;
+  overflow: hidden !important;
+}
+
+/* ============================================================================
+   ESTILOS PARA EL MODAL DE CONSULTA
+   ============================================================================ */
+
+.consulta-modal {
+  max-width: 800px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+.consulta-info {
+  background: #f8fafc !important;
+  padding: 20px !important;
+  border-radius: 8px !important;
+  margin-bottom: 25px !important;
+  border-left: 4px solid #3b82f6 !important;
+}
+
+.consulta-info h4 {
+  margin: 0 0 15px 0 !important;
+  color: #1f2937 !important;
+  font-size: 1.2rem !important;
+}
+
+.consulta-info p {
+  margin: 8px 0 !important;
+  color: #374151 !important;
+}
+
+.consulta-info strong {
+  color: #1f2937 !important;
+}
+
+.consulta-form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+}
+
+.consulta-form .form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.consulta-form label {
+  font-weight: 600 !important;
+  color: #374151 !important;
+  font-size: 14px !important;
+}
+
+.consulta-form textarea {
+  padding: 12px !important;
+  border: 2px solid #d1d5db !important;
+  border-radius: 8px !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  resize: vertical !important;
+  transition: border-color 0.2s !important;
+  min-height: 80px !important;
+}
+
+.consulta-form textarea:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.consulta-form textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Responsive para el modal de consulta */
+@media (max-width: 768px) {
+  .consulta-modal {
+    margin: 20px !important;
+    max-width: calc(100vw - 40px) !important;
+  }
+  
+  .consulta-form {
+    gap: 15px !important;
+  }
+  
+  .consulta-form textarea {
+    min-height: 60px !important;
+  }
+} 
