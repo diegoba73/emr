@@ -22,14 +22,105 @@
 **Actualización (Fase A LIMS — máquina de estados):** 3 de mayo de 2026  
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
+**Actualización (infra tests backend — pytest, SQLite, PostgreSQL):** 20 de junio de 2026
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
-**Fuentes revisadas:** `conftest.py`, `glob **/test*.py`, exclusiones por convención.
+**Fuentes revisadas:** `conftest.py`, `pytest.ini`, `requirements.txt`, `synesis/settings.py`, `glob **/test*.py`, exclusiones por convención.
 
 ---
 
 ## Infraestructura de tests
+
+### Runner y dependencias
+
+| Componente | Ubicación / valor |
+|------------|-------------------|
+| Runner principal | **pytest** (suite backend usa `pytest.mark.django_db`, subtests, etc.) |
+| Runner alternativo | `python manage.py test` (Django TestRunner; crea BD `test_*` en PostgreSQL por defecto) |
+| Config pytest | `pytest.ini` — `DJANGO_SETTINGS_MODULE=synesis.settings`, `--import-mode=importlib` |
+| Bootstrap Django | `conftest.py` (raíz) — `django.setup()` antes de importar modelos |
+| Dependencias test | `requirements.txt` — sección **Desarrollo / tests**: `pytest`, `pytest-django` |
+| Datos sintéticos | **Faker** en `requirements.txt` (producción); no hay `factory_boy` declarado |
+
+**Instalación (desarrollo/CI):**
+
+```bash
+pip install -r requirements.txt
+```
+
+No existe `requirements-dev.txt` ni `pyproject.toml` / `setup.cfg` / `tox.ini` en el repositorio.
+
+### Base de datos de test (`synesis/settings.py`)
+
+`DATABASES['default']` lee variables de entorno (sin modificar settings productivos):
+
+| Variable | Default productivo | Uso en tests |
+|----------|-------------------|--------------|
+| `DB_ENGINE` | `django.db.backends.postgresql` | `django.db.backends.sqlite3` para validación rápida |
+| `DB_NAME` | `synesis_db` | `:memory:` para SQLite in-memory |
+| `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | postgres / localhost / 5432 | Ignorados por SQLite |
+
+### Validación rápida — SQLite in-memory
+
+Recomendado para desarrollo local y smoke sin PostgreSQL. **No sustituye** validación con PostgreSQL (constraints, tipos, `select_for_update`, etc.).
+
+Desde la raíz del repo (con venv activo o `emr_env/bin/`):
+
+```bash
+python manage.py check
+
+DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q
+DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/ -q
+DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest usuarios/tests/ -q
+DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest auditoria/tests/ -q
+```
+
+**Resultado documentado (20 jun 2026):**
+
+| Comando | Resultado |
+|---------|-----------|
+| `python manage.py check` | OK — 0 issues |
+| `pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q` | **12 passed**, 96 subtests (~7 s) |
+| `pytest laboratorio/tests/ -q` | **328 passed**, 96 subtests (~102 s) |
+| `pytest usuarios/tests/ -q` | **44 passed** (~13 s) |
+| `pytest auditoria/tests/ -q` | **14 passed** (~6 s) |
+
+### Validación CI / real — PostgreSQL
+
+Con `.env` apuntando a PostgreSQL (p. ej. `DB_USER=synesis_user`), `manage.py test` intenta crear `test_synesis_db`:
+
+```bash
+python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2
+```
+
+Equivalente con pytest (misma BD por defecto, sin vars SQLite):
+
+```bash
+pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q
+```
+
+**Bloqueo documentado (20 jun 2026) — NO validado en PostgreSQL:**
+
+| Campo | Valor |
+|-------|-------|
+| Comando | `python manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter -v 2` |
+| Usuario DB (`.env`) | `synesis_user` |
+| Error exacto | `Got an error creating the test database: permission denied to create database` |
+| Causa | Usuario sin privilegio `CREATEDB` para crear `test_synesis_db` |
+| Solución DBA | `ALTER USER synesis_user CREATEDB;` (sin contraseña en docs) |
+
+Alternativa operativa: usar usuario con `CREATEDB` solo en entorno de test/CI, o pre-crear `test_synesis_db` y `pytest --reuse-db` / `manage.py test --keepdb` (requiere permisos sobre esa BD).
+
+**Advertencia:** No declarar la suite como validada en PostgreSQL hasta que el comando anterior (o equivalente pytest sin SQLite) pase en el entorno objetivo.
+
+### Deuda frontend (ticket separado)
+
+La suite Jest global (`npm test -- --watchAll=false`) falla por import ESM de `react-big-calendar` vía `App.test.tsx` / `Turnos.tsx`. **Fuera de alcance** de infra backend; ver `DOC_ESTADO_ACTUAL_VERIFICADO.md`.
+
+---
+
+## Infraestructura de tests (detalle histórico)
 
 - **`conftest.py` (raíz):** configura `DJANGO_SETTINGS_MODULE=synesis.settings` y `django.setup()` para pytest.
 - **Fixtures/factories:** uso de **Faker** listado en `requirements.txt`; no hay factory_boy explícito en requirements (pendiente de confirmar si se usa en algún test).
@@ -114,16 +205,24 @@ CI=true npm test -- --watchAll=false --runInBand
 
 ## Comandos para correr tests
 
-Desde la raíz del repo (con entorno virtual y DB configurada):
+Desde la raíz del repo (con entorno virtual y dependencias de `requirements.txt` instaladas).
+
+**Validación rápida (SQLite in-memory — recomendado en local sin PostgreSQL):**
 
 ```bash
-pytest
+DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest
 ```
 
-O por app:
+Por app:
 
 ```bash
-pytest turnos/tests/ laboratorio/tests/ auditoria/tests/
+DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest turnos/tests/ laboratorio/tests/ auditoria/tests/
+```
+
+**Con PostgreSQL** (requiere `CREATEDB` o BD de test preexistente; ver sección Infraestructura):
+
+```bash
+pytest laboratorio/tests/ -q --reuse-db
 ```
 
 **Comandos validados post-hardening LIMS / rol laboratorio:**

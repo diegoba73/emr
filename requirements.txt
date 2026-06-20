@@ -9,3 +9,8 @@ Faker
 requests
 reportlab>=4.0
 gunicorn>=22,<24
+
+# --- Desarrollo / tests (no requeridos en runtime productivo mínimo) ---
+# Instalar solo en entornos de desarrollo/CI: pip install -r requirements.txt
+pytest
+pytest-django
