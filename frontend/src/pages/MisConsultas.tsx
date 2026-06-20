@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Turno, Consulta } from '../types';
+import { Consulta } from '../types';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import './MisConsultas.css';

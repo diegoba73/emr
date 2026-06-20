@@ -4,7 +4,6 @@ import {
   Medico, 
   Consulta, 
   ArchivoMedico,
-  User,
   Solicitud,
   DiagnosticoCIE10,
   EstudioDiagnostico,

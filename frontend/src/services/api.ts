@@ -25,7 +25,7 @@ import {
   TipoExamen,
 } from '../types';
 import { fetchWithCSRF } from '../utils/csrf';
-import { apiClient, API_BASE_URL } from './apiClient';
+import { apiClient } from './apiClient';
 
 /** Mensaje legible desde el JSON de error de Django REST (400/403). */
 function formatDrfErrorBody(data: unknown): string {

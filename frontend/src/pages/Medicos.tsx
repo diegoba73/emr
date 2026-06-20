@@ -26,7 +26,6 @@ import {
   Add,
   Edit,
   Delete,
-  Close,
   Search,
 } from '@mui/icons-material';
 import { useData } from '../contexts/DataContext';

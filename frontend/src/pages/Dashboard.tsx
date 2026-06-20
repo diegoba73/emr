@@ -12,11 +12,9 @@ import {
 } from '@mui/material';
 import {
   CalendarToday,
-  People,
   LocalHospital,
   Add,
   Search,
-  Schedule,
   Folder,
   Hotel,
 } from '@mui/icons-material';
