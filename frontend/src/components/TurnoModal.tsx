@@ -17,7 +17,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useData } from '../contexts/DataContext';
 import { apiService } from '../services/api';
 import { Paciente, Medico, Turno } from '../types';
-import { formatPacienteLabel } from '../utils/pacienteFormat';
 import AsyncAutocomplete from './common/AsyncAutocomplete';
 import { MotivoDialog, useMotivoDialog } from './common/MotivoDialog';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
@@ -35,20 +34,6 @@ import {
   canMarcarNoAsistioTurno,
   shouldLockMedicoField,
 } from '../utils/turnoPermissions';
-
-const mergeUniqueById = <T extends { id?: number | string }>(...lists: Array<T[] | undefined>) => {
-  const map = new Map<number | string, T>();
-  lists.forEach(list => {
-    (list || []).forEach(item => {
-      if (item && item.id !== undefined && !map.has(item.id)) {
-        map.set(item.id, item);
-      }
-    });
-  });
-  return Array.from(map.values());
-};
-
-const getPacienteLabel = (paciente?: Paciente | null) => formatPacienteLabel(paciente);
 
 const getMedicoLabel = (medico?: Medico | null) => {
   if (!medico) return '';
@@ -624,7 +609,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       // No enviar prioridad ya que no existe en el modelo del backend
       // payload.prioridad se omite
 
-      let turnoCreado;
       if (editingTurno) {
         const origMedicoId = editingTurno.medico_id ?? editingTurno.medico?.id;
         const origRecursoId = editingTurno.recurso_id ?? editingTurno.recurso?.id;
@@ -644,20 +628,19 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             initialMotivo: formData.motivo || '',
             onConfirm: async (motivoRep) => {
               try {
-                const { turno } = await apiService.reprogramarTurno(editingTurno.id, {
+                await apiService.reprogramarTurno(editingTurno.id, {
                   fecha_hora_inicio: payload.fecha_hora_inicio,
                   fecha_hora_fin: payload.fecha_hora_fin,
                   motivo: motivoRep,
                   ...(payload.medico_id ? { medico_id: payload.medico_id } : {}),
                   ...(payload.recurso_id ? { recurso_id: payload.recurso_id } : {}),
                 });
-                let turnoActualizado = turno;
                 const patchMotivo: Record<string, unknown> = { motivo_reserva: payload.motivo_reserva };
                 if (payload.paciente_id) {
                   patchMotivo.paciente_id = payload.paciente_id;
                 }
                 if (Object.keys(patchMotivo).length > 0) {
-                  turnoActualizado = await apiService.updateTurno(editingTurno.id, patchMotivo);
+                  await apiService.updateTurno(editingTurno.id, patchMotivo);
                 }
                 onSuccess?.();
                 onClose();
@@ -676,10 +659,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           delete patchPayload.fecha_hora_fin;
           delete patchPayload.medico_id;
           delete patchPayload.recurso_id;
-          turnoCreado = await apiService.updateTurno(editingTurno.id, patchPayload);
+          await apiService.updateTurno(editingTurno.id, patchPayload);
         }
       } else {
-        turnoCreado = await apiService.createTurno(payload);
+        await apiService.createTurno(payload);
       }
 
       onSuccess?.();

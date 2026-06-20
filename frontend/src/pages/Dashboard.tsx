@@ -129,17 +129,6 @@ const Dashboard: React.FC = () => {
     return 'Sr./Sra.';
   };
 
-  // Obtener color del rol
-  const getRoleColor = (): string => {
-    if (!currentUser) return 'default';
-    const role = (currentUser.rol || '').toUpperCase();
-    if (role === 'MEDICO') return 'primary';
-    if (role === 'ADMIN') return 'error';
-    if (role === 'SECRETARIA') return 'secondary';
-    if (role === 'ENFERMERIA') return 'info';
-    return 'default';
-  };
-
   return (
     <Box>
       {/* Header de Bienvenida */}

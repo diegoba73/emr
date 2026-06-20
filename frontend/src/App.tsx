@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box, Alert, CircularProgress } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -106,8 +106,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
 const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated, isLoading } = useData();
-  const location = useLocation();
-  const isLoginRoute = location.pathname === '/login' || location.pathname === '/register';
 
   return (
     <div className="App">

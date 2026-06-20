@@ -55,10 +55,6 @@ function formatDrfErrorBody(data: unknown): string {
 class ApiService {
   private api: AxiosInstance = apiClient;
 
-  constructor() {
-    // Usa apiClient compartido - interceptores ya configurados en apiClient.ts
-  }
-
   // Autenticación
   async getCurrentUser(): Promise<User> {
     const response: AxiosResponse<User> = await this.api.get('/auth/current-user/');

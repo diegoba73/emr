@@ -14,14 +14,11 @@ import {
   Button,
 } from '@mui/material';
 import { Close, LocalHospital, AssignmentTurnedIn } from '@mui/icons-material';
-import { toast } from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { Atencion } from '../../../types';
 import {
   useAtencionQuery,
   useAtencionesQuery,
-  useUpdateAtencionMutation,
-  useCloseAtencionMutation,
 } from '../hooks';
 import DocumentosAdjuntos from './DocumentosAdjuntos';
 import ConsultaAmbulatoriaForm from './forms/ConsultaAmbulatoriaForm';
@@ -62,8 +59,6 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   // ELIMINADO: Refetch automático - React Query maneja el cache automáticamente
   // El backend ahora siempre devuelve IDs explícitos y relaciones completas
   // No necesitamos refetches defensivos que causan loops infinitos
-  const updateAtencion = useUpdateAtencionMutation();
-  const closeAtencion = useCloseAtencionMutation();
   const queryClient = useQueryClient();
   const [tabValue, setTabValue] = useState(0);
   
@@ -156,24 +151,6 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
     }
     return [];
   }, [data, JSON.stringify(data?.documentos)]); // Usar JSON.stringify para detectar cambios profundos
-
-  const handleChangeEstado = async (estado: 'ABIERTA' | 'FINALIZADA' | 'EN_REVISION') => {
-    if (!data) return;
-    try {
-      await updateAtencion.mutateAsync({ id: data.id, data: { estado_clinico: estado } });
-    } catch (error) {
-      // handled in mutation toast
-    }
-  };
-
-  const handleCerrarAtencion = async () => {
-    if (!data) return;
-    try {
-      await closeAtencion.mutateAsync(data.id);
-    } catch (error: any) {
-      toast.error('No se pudo cerrar la atención');
-    }
-  };
 
   // Callback para cerrar el drawer después de guardar exitosamente
   const handleSaveSuccess = async () => {

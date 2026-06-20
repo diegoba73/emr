@@ -23,11 +23,10 @@ import {
   Save,
   Cancel,
 } from '@mui/icons-material';
-import { Cama, InternacionCama, Medico, Paciente, DiagnosticoCIE10 } from '../../types';
+import { Cama, InternacionCama, Paciente, DiagnosticoCIE10 } from '../../types';
 import { darAltaInternacion, getInternaciones, updateInternacion, buscarDiagnosticosCIE10 } from '../../services/apiService';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
-import { formatPacienteLabel } from '../../utils/pacienteFormat';
 
 interface ModalGestionarPacienteProps {
   open: boolean;
@@ -439,9 +438,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   }
 
   const internacionData = cama.internacion_actual;
-  const pacienteId = editedData.paciente !== null && editedData.paciente !== undefined 
-    ? editedData.paciente 
-    : (internacion?.paciente || null);
   const medicoId = editedData.medico !== null && editedData.medico !== undefined
     ? editedData.medico
     : (internacion?.medico || null);

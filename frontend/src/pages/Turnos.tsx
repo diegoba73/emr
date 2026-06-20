@@ -155,12 +155,9 @@ function buildWeekBucketCappedEvents(
 const Turnos: React.FC = () => {
 	const { 
 		turnos, 
-		pacientes, 
 		medicos, 
-		recursos,
 		loading: dataLoading, 
 		currentUser, 
-		setTurnos,
 		refreshTurnos,
 	} = useData();
 	const [showModal, setShowModal] = useState(false);

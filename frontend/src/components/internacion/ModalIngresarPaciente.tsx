@@ -51,19 +51,6 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   const medicoInputReason = useRef<'input' | 'selection' | 'clear'>('input');
   const diagnosticoInputReason = useRef<'input' | 'selection' | 'clear'>('input');
 
-  // Función para mergear arrays únicos por ID
-  const mergeUniqueById = <T extends { id?: number | string }>(...lists: Array<T[] | undefined>) => {
-    const map = new Map<number | string, T>();
-    lists.forEach(list => {
-      (list || []).forEach(item => {
-        if (item && item.id !== undefined && !map.has(item.id)) {
-          map.set(item.id, item);
-        }
-      });
-    });
-    return Array.from(map.values());
-  };
-
   useEffect(() => {
     if (!open) {
       // Reset form when closing

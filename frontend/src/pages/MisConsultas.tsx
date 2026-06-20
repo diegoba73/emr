@@ -14,7 +14,6 @@ const MisConsultas: React.FC = () => {
   const [filterFecha, setFilterFecha] = useState<string>('');
   
   const isMedico = currentUser?.rol?.toUpperCase() === 'MEDICO';
-  const isPaciente = currentUser?.rol?.toUpperCase() === 'PACIENTE';
 
   useEffect(() => {
     loadConsultas();
