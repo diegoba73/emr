@@ -79,7 +79,7 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 
 - **[OBSOLETO]** ~~Ausencia total de UI versionada~~ — UI versionada en `frontend/` (repo anidado).
 - Riesgo de **drift** entre frontend y alias `lab/` vs `laboratorio/` (mitigado: backend usa mismas clases ViewSet).
-- **`window.prompt` en microbiología** — **resuelto (jun 2026):** reemplazado por `MotivoDialog` MUI en `MicrobiologiaEstudioDetalle`, `AntibiogramaPanel`, `AisladosIdentificacionPanel`, `InformesMicrobiologiaPanel`. Prompts en `TurnoModal.tsx` (agenda EMR) siguen pendientes.
+- **`window.prompt` en acciones con motivo** — **resuelto (jun 2026):** reemplazado por `MotivoDialog` MUI (`frontend/src/components/common/MotivoDialog.tsx`) en microbiología (`MicrobiologiaEstudioDetalle`, `AntibiogramaPanel`, `AisladosIdentificacionPanel`, `InformesMicrobiologiaPanel`) y en agenda EMR (`TurnoModal.tsx`: cancelar, no asistió, reprogramar).
 
 ---
 
