@@ -4,6 +4,7 @@
 **Actualización (permisos LIMS):** 2 de mayo de 2026  
 **Actualización (Fase A LIMS — acciones de estado):** 3 de mayo de 2026  
 **Actualización (Fase B3.1 — Microbiología base):** 13 de mayo de 2026  
+**Actualización (query `estudio_id` en listados micro):** 20 de junio de 2026 — **[IMPLEMENTADO]**  
 **Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
 
 **Alcance:** Endpoints definidos por URLconf y routers bajo el prefijo del proyecto; métodos estándar DRF para `ModelViewSet` salvo donde se indica.
@@ -329,17 +330,34 @@ Contrato de creación de muestra (JSON): `solicitud_id`, `tipo_muestra_id`, `tip
 
 Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiologia/...`** (mismas clases ViewSet).
 
+### Query param opcional `?estudio_id=` (jun 2026 — IMPLEMENTADO)
+
+Filtro **opcional** en listados GET. Sin el parámetro se conserva el comportamiento previo (todos los registros visibles al rol). Aplica **después** del `get_queryset()` restringido por permisos.
+
+| Recurso | Lookup interno |
+|---------|----------------|
+| `estudios/` | `pk` |
+| `siembras/`, `lecturas/`, `aislados/`, `informes/` | `estudio_id` |
+| `identificaciones/`, `antibiogramas/` | `aislado__estudio_id` |
+| `resultados-antibiotico/` | `antibiograma__aislado__estudio_id` |
+
+**No aplica** a catálogos sin relación con estudio: `medios/`, `microorganismos/`, `antibioticos/`.
+
+Validación: el parámetro debe ser un **entero positivo**; valores no enteros, vacíos, cero o negativos devuelven **HTTP 400**. ID inexistente o no visible → lista vacía (200), sin revelar existencia de otros estudios.
+
+Implementación: `_apply_estudio_id_query_filter()` en `laboratorio/views_microbiologia.py`. Frontend: `limsMicroApi.ts` + `MicrobiologiaEstudioDetalle.tsx`.
+
 | Ruta | Métodos | Rol típico |
 |------|---------|------------|
 | `/api/lab/microbiologia/medios/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
 | `/api/lab/microbiologia/medios/{id}/` | GET, PATCH | Igual. |
-| `/api/lab/microbiologia/estudios/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico: solo estudios cuya solicitud tiene `medico_interno.user`=usuario actual). |
+| `/api/lab/microbiologia/estudios/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico: solo estudios cuya solicitud tiene `medico_interno.user`=usuario actual). **Query opcional `?estudio_id=`** (filtra por `pk`). |
 | `/api/lab/microbiologia/estudios/{id}/` | GET, PATCH | PATCH solo `tipo_estudio` y `observaciones`; **`estado` no se modifica por PATCH**. |
 | `/api/lab/microbiologia/estudios/{id}/iniciar/` | POST | admin/lab. Transición `PENDIENTE→RECIBIDO` (idempotente). |
 | `/api/lab/microbiologia/estudios/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Transición a `CANCELADO`. |
-| `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). **Sin query `estudio_id`** (solo búsqueda/orden); UI detalle filtra en cliente [GAP B3-UX]. |
+| `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). **Query opcional `?estudio_id=`** [IMPLEMENTADO jun 2026]. |
 | `/api/lab/microbiologia/siembras/{id}/` | GET, PATCH | PATCH: `condicion_incubacion`, `temperatura_c`, `atmosfera`, `observaciones`. |
-| `/api/lab/microbiologia/lecturas/` | GET, POST | Crear: admin/lab. Si `es_preliminar=True` y el estudio está `SEMBRADO`, lo pasa a `LECTURA_PRELIMINAR`. |
+| `/api/lab/microbiologia/lecturas/` | GET, POST | Crear: admin/lab. Si `es_preliminar=True` y el estudio está `SEMBRADO`, lo pasa a `LECTURA_PRELIMINAR`. **Query opcional `?estudio_id=`**. |
 | `/api/lab/microbiologia/lecturas/{id}/` | GET, PATCH | PATCH: `horas_incubacion`, `crecimiento`, `descripcion_colonias`, `tincion_gram`, `observaciones`, `es_preliminar`. |
 
 **DELETE** no soportado (405).
@@ -360,10 +378,10 @@ Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiolog
 |------|---------|------------|
 | `/api/lab/microbiologia/microorganismos/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
 | `/api/lab/microbiologia/microorganismos/{id}/` | GET, PATCH | Igual. Sin DELETE (desactivar con `activo=false`). |
-| `/api/lab/microbiologia/aislados/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). |
+| `/api/lab/microbiologia/aislados/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). **Query opcional `?estudio_id=`**. |
 | `/api/lab/microbiologia/aislados/{id}/` | GET, PATCH | PATCH solo `descripcion`, `cantidad`, `significancia`, `requiere_antibiograma`, `observaciones`; **`estado` y `microorganismo` no se editan**. |
 | `/api/lab/microbiologia/aislados/{id}/descartar/` | POST | admin/lab. Requiere `motivo` no vacío. Aislado → `DESCARTADO`. |
-| `/api/lab/microbiologia/identificaciones/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado). |
+| `/api/lab/microbiologia/identificaciones/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado). **Query opcional `?estudio_id=`** (lookup `aislado__estudio_id`). |
 | `/api/lab/microbiologia/identificaciones/{id}/` | GET | **Append-only**: PATCH/DELETE no soportados (405). |
 
 **DELETE** no soportado en ningún endpoint B3.2 (405).
@@ -382,11 +400,11 @@ Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiolog
 |------|---------|------------|
 | `/api/lab/microbiologia/antibioticos/` | GET, POST | Lectura: lab/médico/secretaría/enfermería/admin. Escritura: **solo admin**. |
 | `/api/lab/microbiologia/antibioticos/{id}/` | GET, PATCH | Igual. Sin DELETE (desactivar con `activo=false`). |
-| `/api/lab/microbiologia/antibiogramas/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). |
+| `/api/lab/microbiologia/antibiogramas/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). **Query opcional `?estudio_id=`**. |
 | `/api/lab/microbiologia/antibiogramas/{id}/` | GET, PATCH | PATCH solo `metodo`, `observaciones`; bloqueado si `COMPLETO` o `CANCELADO`. **`estado`, fechas y motivo se mueven solo por servicio**. |
 | `/api/lab/microbiologia/antibiogramas/{id}/completar/` | POST | admin/lab. Requiere ≥1 `ResultadoAntibiotico`. Antibiograma → `COMPLETO`, setea `fecha_resultado`. |
 | `/api/lab/microbiologia/antibiogramas/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Antibiograma → `CANCELADO`. |
-| `/api/lab/microbiologia/resultados-antibiotico/` | GET, POST | Crear: admin/lab. Bloqueado si antibiograma `COMPLETO`/`CANCELADO` o antibiótico inactivo; antibiótico no se duplica por antibiograma. |
+| `/api/lab/microbiologia/resultados-antibiotico/` | GET, POST | Crear: admin/lab. Bloqueado si antibiograma `COMPLETO`/`CANCELADO` o antibiótico inactivo; antibiótico no se duplica por antibiograma. **Query opcional `?estudio_id=`**. |
 | `/api/lab/microbiologia/resultados-antibiotico/{id}/` | GET, PATCH | PATCH solo `halo_mm`, `mic`, `interpretacion`, `observaciones` (no `antibiograma`/`antibiotico`); bloqueado si antibiograma `COMPLETO`/`CANCELADO`. |
 
 **DELETE** no soportado en ningún endpoint B3.3 (405).
@@ -408,7 +426,7 @@ Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiolog
 
 | Ruta | Métodos | Rol típico |
 |------|---------|------------|
-| `/api/lab/microbiologia/informes/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). |
+| `/api/lab/microbiologia/informes/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). **Query opcional `?estudio_id=`**. |
 | `/api/lab/microbiologia/informes/{id}/` | GET, PATCH | PATCH solo en `BORRADOR` (`texto`, `observaciones`, `version`). |
 | `/api/lab/microbiologia/informes/{id}/emitir/` | POST | admin/lab. Body opcional `texto`; si falta, usa el del borrador. Texto emitido no vacío. |
 | `/api/lab/microbiologia/informes/{id}/validar/` | POST | **Solo admin** (+ superuser). Solo informe `FINAL` en `EMITIDO` y estudio `LISTO_PARA_VALIDAR`. |

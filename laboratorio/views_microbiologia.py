@@ -97,6 +97,27 @@ from laboratorio.serializers_microbiologia import (
 logger = logging.getLogger(__name__)
 
 
+def _apply_estudio_id_query_filter(queryset, request, *, lookup: str = "estudio_id"):
+    """
+    Filtra por query param ``estudio_id`` después del queryset base (permisos).
+
+    Si el parámetro está presente debe ser un entero positivo; caso contrario 400.
+    IDs inexistentes o no visibles devuelven queryset vacío (200).
+    """
+    if "estudio_id" not in request.query_params:
+        return queryset
+    raw = request.query_params.get("estudio_id")
+    if raw is None or str(raw).strip() == "":
+        raise ValidationError({"estudio_id": "Debe ser un entero positivo."})
+    try:
+        estudio_id = int(raw)
+    except (ValueError, TypeError):
+        raise ValidationError({"estudio_id": "Debe ser un entero positivo."})
+    if estudio_id <= 0:
+        raise ValidationError({"estudio_id": "Debe ser un entero positivo."})
+    return queryset.filter(**{lookup: estudio_id})
+
+
 def _guard_estudio_micro_operable_entity(entity) -> None:
     """Bloquea PATCH técnicos si el estudio asociado está cerrado."""
     if isinstance(entity, EstudioMicrobiologia):
@@ -193,14 +214,15 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request, lookup="pk")
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -321,14 +343,15 @@ class SiembraMicrobiologiaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(estudio__solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request)
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -397,14 +420,15 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(estudio__solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request)
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -532,14 +556,15 @@ class AisladoMicrobiologicoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(estudio__solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request)
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -630,14 +655,15 @@ class IdentificacionMicroorganismoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(aislado__estudio__solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(aislado__estudio__solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request, lookup="aislado__estudio_id")
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -746,14 +772,15 @@ class AntibiogramaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(aislado__estudio__solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(aislado__estudio__solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request, lookup="aislado__estudio_id")
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -859,16 +886,19 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(
-                antibiograma__aislado__estudio__solicitud__medico_interno__user=user
-            )
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(
+                    antibiograma__aislado__estudio__solicitud__medico_interno__user=user
+                )
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(
+            qs, self.request, lookup="antibiograma__aislado__estudio_id"
+        )
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -943,14 +973,15 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if user.is_superuser:
-            return qs
-        role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
-            return qs
-        if role == "medico":
-            return qs.filter(estudio__solicitud__medico_interno__user=user)
-        return qs.none()
+        if not user.is_superuser:
+            role = get_normalized_role(user)
+            if role in ("admin", "laboratorio"):
+                pass
+            elif role == "medico":
+                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+            else:
+                return qs.none()
+        return _apply_estudio_id_query_filter(qs, self.request)
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
