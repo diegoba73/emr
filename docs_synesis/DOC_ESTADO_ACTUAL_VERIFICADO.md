@@ -5,6 +5,7 @@
 **Infraestructura tests backend (pytest, SQLite, PostgreSQL):** 20 de junio de 2026  
 **PostgreSQL smoke focal microbiología (CREATEDB validado en local):** 20 de junio de 2026  
 **Cierre deuda Jest global frontend (`react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026  
+**CI/smoke mínimo (`.github/workflows/smoke.yml` + `scripts/smoke_local.sh`):** 21 de junio de 2026
 **Método:** Inspección directa del código + ejecución de tests (prevalece sobre documentación histórica).
 
 ---
@@ -67,6 +68,21 @@
 **Fuera de alcance (no declarado):** producción clínica abierta; E2E browser Playwright/Cypress; suite PostgreSQL completa (no ejecutada).
 
 **Estado de la tarea Jest frontend:** **CERRADA**.
+
+---
+
+## CI / smoke mínimo (21 jun 2026)
+
+| Ítem | Estado |
+|------|--------|
+| GitHub Actions | **`.github/workflows/smoke.yml`** — jobs `backend-checks`, `frontend-checks` |
+| Script local | **`scripts/smoke_local.sh`** — mismos checks; SQLite in-memory |
+| PostgreSQL en CI mínimo | **No requerido** — smoke focal PG sigue manual/opcional |
+| Backend | `manage.py check` + pytest `usuarios/`, `auditoria/`, `test_microbiologia_estudio_id_filter` |
+| Frontend | Jest global + `npm run build` |
+| Producción clínica / E2E browser | **Fuera de alcance** — no declarado |
+
+**Estado CI smoke mínimo:** **IMPLEMENTADO** (pendiente primer run en GitHub tras push).
 
 ---
 
@@ -211,5 +227,6 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 ## Próxima tarea recomendada
 
 1. Ampliar baseline PostgreSQL: `python manage.py test usuarios.tests auditoria.tests -v 2` y/o `laboratorio/tests/` completo (opcional).
-2. CI: pipeline que instale `requirements.txt` y ejecute smoke SQLite + smoke PostgreSQL focal documentados.
+2. ~~CI: pipeline smoke SQLite + frontend~~ — **implementado (21 jun 2026):** `.github/workflows/smoke.yml` + `scripts/smoke_local.sh`.
 3. (Opcional) Tests frontend específicos de agenda/`Turnos` que ejerciten comportamiento calendario fuera del mock Jest global.
+4. (Opcional) Job PostgreSQL focal en CI cuando haya servicio/secrets documentados (no bloqueante).

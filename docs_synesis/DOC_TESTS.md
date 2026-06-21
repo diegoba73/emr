@@ -25,6 +25,7 @@
 **Actualización (infra tests backend — pytest, SQLite, PostgreSQL):** 20 de junio de 2026  
 **Actualización (PostgreSQL smoke focal microbiología — CREATEDB validado):** 20 de junio de 2026
 **Actualización (Jest global frontend — mock `react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026
+**Actualización (CI/smoke mínimo — GitHub Actions + script local):** 21 de junio de 2026
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
@@ -152,6 +153,44 @@ El mock es **exclusivo de Jest**; no entra en el bundle productivo ni altera run
 | `cd frontend && npm run build` | **PASS** — main **419.07 kB** gzip; warnings ESLint `react-hooks/exhaustive-deps` preexistentes (no bloqueantes) |
 
 **Observación futura:** tests específicos de agenda/`Turnos` no deben asumir que la librería `react-big-calendar` real se ejercita bajo la suite Jest global; el mock sustituye el componente calendario en jsdom.
+
+### CI / smoke mínimo reproducible
+
+**Implementación (jun 2026):**
+
+| Artefacto | Rol |
+|-----------|-----|
+| `.github/workflows/smoke.yml` | GitHub Actions — jobs `backend-checks` y `frontend-checks` en push/PR a `master`/`main` y `workflow_dispatch` |
+| `scripts/smoke_local.sh` | Mismo smoke en local (`set -euo pipefail`); usa `emr_env/bin/python` si existe |
+
+**Backend (SQLite in-memory — sin PostgreSQL en CI mínimo):**
+
+```bash
+export DB_ENGINE=django.db.backends.sqlite3
+export DB_NAME=:memory:
+python manage.py check
+pytest usuarios/tests/ auditoria/tests/ -q
+pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q
+```
+
+**Frontend:**
+
+```bash
+cd frontend
+npm ci --legacy-peer-deps
+CI=true npm test -- --watchAll=false
+npm run build
+```
+
+**Local (todo en uno):**
+
+```bash
+bash scripts/smoke_local.sh
+```
+
+**PostgreSQL:** no bloquea el CI mínimo (sin secrets). Smoke focal PostgreSQL (`manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter`) sigue **manual/opcional** en entornos con `CREATEDB`; ver sección *Validación CI / real — PostgreSQL* arriba.
+
+**Stack CI:** Python 3.12, Node 18, `pip install -r requirements.txt`, `npm ci --legacy-peer-deps` en `frontend/`.
 
 ---
 
@@ -282,7 +321,7 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 - **`laboratorio.tests.test_api`:** incluye `TestSolicitudExamenAPI` (flujo crear/cargar/validar/etiqueta), **`TestLimsAuthorization`**, **`TestLimsAuditTrail`**, **`TestSolicitudExamenEstadoAPI`** (transiciones, PATCH de `estado`, permisos médico), **`TestSolicitudExamenEstadoAuditoria`** (metadata `cancelar`), y alias `/api/laboratorio/...`.
 - **`laboratorio.tests.test_models`:** principalmente modelos; suele ejecutarse con **`pytest`** si usas marcadores `pytest.mark.django_db` (`manage.py test` puede no recoger todos los métodos pytest-style según versión).
 
-**Pendiente de confirmar:** si CI ejecuta `manage.py test` vs pytest; no hay `.github/workflows` analizado en este documento.
+**Pendiente de confirmar:** umbral de cobertura. **CI mínimo:** `.github/workflows/smoke.yml` (backend SQLite + frontend Jest/build); ver sección *CI / smoke mínimo reproducible*.
 
 ---
 
