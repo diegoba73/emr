@@ -4,6 +4,7 @@
 **Cierre técnico filtro `?estudio_id=` (fail-closed HTTP 400):** 20 de junio de 2026  
 **Infraestructura tests backend (pytest, SQLite, PostgreSQL):** 20 de junio de 2026  
 **PostgreSQL smoke focal microbiología (CREATEDB validado en local):** 20 de junio de 2026  
+**Cierre deuda Jest global frontend (`react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026  
 **Método:** Inspección directa del código + ejecución de tests (prevalece sobre documentación histórica).
 
 ---
@@ -18,7 +19,7 @@
 | PostgreSQL nativo — smoke focal (`manage.py test` filtro micro) | **OK** — `synesis_user` con `CREATEDB`; `test_synesis_db` creada/destruida |
 | Suite PostgreSQL completa (`laboratorio/tests/`, `usuarios/`, `auditoria/` vía `manage.py test`) | **NO ejecutada** — opcional ampliar baseline |
 | Migraciones / modelos / permisos / frontend | **Sin cambios** en esta tarea |
-| Deuda Jest (`App.test.tsx` / `react-big-calendar` ESM) | **Ticket separado** — no corregido |
+| Deuda Jest (`App.test.tsx` / `react-big-calendar` ESM) | **CERRADA** — commit `30e75d3`; mock Jest en `setupTests.ts` + `__mocks__/react-big-calendar.tsx`; Codex **ACEPTAR CON OBSERVACIONES** (sin bloqueantes) |
 
 **Estado de la tarea infra tests:** **CERRADA** (dependencias declaradas, SQLite OK, smoke PostgreSQL focal OK en local).
 
@@ -35,14 +36,37 @@
 | `pytest usuarios/tests/` | **44 passed** (SQLite in-memory) |
 | `pytest auditoria/tests/` | **14 passed** (SQLite in-memory) |
 | Tests frontend alcance (`limsMicroApi` + detalle) | **15 passed** |
-| `npm test -- --watchAll=false` (suite completa) | **FALLÓ** — `App.test.tsx` / `react-big-calendar` ESM (preexistente) |
+| `npm test -- --watchAll=false` (suite completa) | **OK** (21 jun 2026, post-`30e75d3`) — 19 suites / 82 tests |
 | `npm run build` | **OK** |
 | PostgreSQL nativo — smoke focal filtro micro (`synesis_user`) | **OK** (20 jun 2026, post-`CREATEDB`) — ver sección PostgreSQL abajo |
 | Suite PostgreSQL completa | **NO ejecutada** |
 | Migraciones / permisos / auditoría mutante | **Sin cambios** |
 
 **Estado de la tarea filtro `estudio_id`:** **CERRADA** en código y tests de alcance.  
-**Suite frontend global:** **NO CERRADA** por fallo preexistente ajeno al cambio.
+**Suite frontend global:** **CERRADA** (commit `30e75d3`; ver sección *Cierre deuda Jest global frontend*).
+
+---
+
+## Resultado de cierre — deuda Jest global frontend (21 jun 2026)
+
+| Ítem | Estado |
+|------|--------|
+| Commit | **`30e75d3`** — `test(frontend): mock react-big-calendar for jest` |
+| Archivos tocados | `frontend/src/setupTests.ts`, `frontend/src/__mocks__/react-big-calendar.tsx` |
+| Causa raíz | `App.test.tsx` → `App.tsx` → `Turnos.tsx` → `react-big-calendar` (fallo ESM/CJS `dom-helpers/position` en Jest/jsdom) |
+| Solución | Mock manual localizado solo para Jest; build productivo **sin** el mock |
+| Backend / migraciones / permisos / guards / rutas / API / LIMS / turnos | **Sin cambios** |
+| Auditoría Codex | **ACEPTAR CON OBSERVACIONES** — sin bloqueantes |
+| `npm test -- --watchAll=false src/App.test.tsx` | **OK** — 1 suite / 1 test |
+| `npm test -- --watchAll=false limsMicroApi.test.ts MicrobiologiaEstudioDetalle.test.tsx` | **OK** — 2 suites / 15 tests |
+| `npm test -- --watchAll=false` | **OK** — 19 suites / 82 tests |
+| `npm run build` | **OK** — main 419.07 kB gzip |
+
+**Warnings no bloqueantes (persisten):** React Router v7 future flags; deprecación `punycode` (Node); MUI `TouchRipple` / `act(...)` en algunos tests; ESLint `react-hooks/exhaustive-deps` en archivos fuera del commit.
+
+**Fuera de alcance (no declarado):** producción clínica abierta; E2E browser Playwright/Cypress; suite PostgreSQL completa (no ejecutada).
+
+**Estado de la tarea Jest frontend:** **CERRADA**.
 
 ---
 
@@ -133,9 +157,10 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 
 | Comando | Resultado | Notas |
 |---------|-----------|-------|
-| `npm test -- --watchAll=false limsMicroApi.test.ts MicrobiologiaEstudioDetalle.test.tsx` | **OK** | 15 passed |
-| `npm test -- --watchAll=false` | **FALLÓ** | 16/17 suites OK; `App.test.tsx` falla import ESM `react-big-calendar` vía `Turnos.tsx` — **preexistente**, no causado por filtro `estudio_id` |
-| `npm run build` | **OK** | Warnings ESLint preexistentes en `api.ts` / `apiService.ts` |
+| `npm test -- --watchAll=false src/App.test.tsx` | **OK** | 1 suite / 1 test (post-`30e75d3`) |
+| `npm test -- --watchAll=false limsMicroApi.test.ts MicrobiologiaEstudioDetalle.test.tsx` | **OK** | 2 suites / 15 tests |
+| `npm test -- --watchAll=false` | **OK** | **19 suites / 82 tests** (post-`30e75d3`; mock Jest `react-big-calendar`) |
+| `npm run build` | **OK** | main 419.07 kB gzip; warnings ESLint preexistentes (`react-hooks/exhaustive-deps`, `api.ts` / `apiService.ts`) |
 
 ---
 
@@ -178,7 +203,7 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 
 1. ~~PostgreSQL: `synesis_user` sin `CREATEDB`~~ — **resuelto en local (20 jun 2026):** smoke focal `manage.py test laboratorio.tests.test_microbiologia_estudio_id_filter` OK. Suite PostgreSQL completa sigue **opcional**.
 2. ~~`pytest` no listado en `requirements.txt`~~ — **resuelto** (sección desarrollo/test).
-3. `npm test` suite completa falla por `App.test.tsx` / `react-big-calendar` (ticket frontend separado).
+3. ~~`npm test` suite completa falla por `App.test.tsx` / `react-big-calendar`~~ — **resuelto (21 jun 2026, commit `30e75d3`):** mock Jest localizado; suite global 19/82 PASS. Tests de agenda no deben asumir calendario real bajo Jest global.
 4. ~~`frontend/` como repo anidado sin `.gitmodules`~~ — **resuelto (jun 2026):** `frontend/` integrado como carpeta normal del monorepo; repo `emr-frontend` queda como respaldo histórico (`417e9a2`).
 
 ---
@@ -186,5 +211,5 @@ DB_ENGINE=django.db.backends.sqlite3 DB_NAME=:memory: pytest laboratorio/tests/t
 ## Próxima tarea recomendada
 
 1. Ampliar baseline PostgreSQL: `python manage.py test usuarios.tests auditoria.tests -v 2` y/o `laboratorio/tests/` completo (opcional).
-2. Frontend: corregir Jest + `react-big-calendar` ESM en `App.test.tsx` (ticket separado).
-3. CI: pipeline que instale `requirements.txt` y ejecute smoke SQLite + smoke PostgreSQL focal documentados.
+2. CI: pipeline que instale `requirements.txt` y ejecute smoke SQLite + smoke PostgreSQL focal documentados.
+3. (Opcional) Tests frontend específicos de agenda/`Turnos` que ejerciten comportamiento calendario fuera del mock Jest global.

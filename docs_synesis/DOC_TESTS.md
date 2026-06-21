@@ -24,6 +24,7 @@
 **Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
 **Actualización (infra tests backend — pytest, SQLite, PostgreSQL):** 20 de junio de 2026  
 **Actualización (PostgreSQL smoke focal microbiología — CREATEDB validado):** 20 de junio de 2026
+**Actualización (Jest global frontend — mock `react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
@@ -126,9 +127,31 @@ Alternativa operativa: usuario con `CREATEDB` solo en entorno de test/CI, o pre-
 
 **Advertencia:** no declarar validada la **suite PostgreSQL completa** hasta ejecutarla en el entorno objetivo. El smoke focal microbiología sí está validado en local; ampliar baseline con `usuarios.tests`, `auditoria.tests` y/o `laboratorio/tests/` completo sigue **opcional**.
 
-### Deuda frontend (ticket separado)
+### Frontend Jest global — deuda `react-big-calendar` **CERRADA** (commit `30e75d3`)
 
-La suite Jest global (`npm test -- --watchAll=false`) falla por import ESM de `react-big-calendar` vía `App.test.tsx` / `Turnos.tsx`. **Fuera de alcance** de infra backend; ver `DOC_ESTADO_ACTUAL_VERIFICADO.md`.
+**Causa raíz (histórica):** `App.test.tsx` importaba `App.tsx` → `Turnos.tsx` → `react-big-calendar`, provocando fallo ESM/CJS (`dom-helpers/position`) en Jest/jsdom.
+
+**Corrección (commit `30e75d3` — `test(frontend): mock react-big-calendar for jest`):**
+
+| Archivo | Rol |
+|---------|-----|
+| `frontend/src/setupTests.ts` | Registra `jest.mock('react-big-calendar')` solo en entorno Jest |
+| `frontend/src/__mocks__/react-big-calendar.tsx` | Mock manual con `Calendar`, `dateFnsLocalizer` y `Views` usados por el código |
+
+El mock es **exclusivo de Jest**; no entra en el bundle productivo ni altera runtime/build.
+
+**Auditoría Codex:** veredicto **ACEPTAR CON OBSERVACIONES** (sin bloqueantes).
+
+**Evidencia documentada (21 jun 2026):**
+
+| Comando | Resultado |
+|---------|-----------|
+| `cd frontend && npm test -- --watchAll=false src/App.test.tsx` | **PASS** — 1 suite / 1 test |
+| `cd frontend && npm test -- --watchAll=false limsMicroApi.test.ts MicrobiologiaEstudioDetalle.test.tsx` | **PASS** — 2 suites / 15 tests |
+| `cd frontend && npm test -- --watchAll=false` | **PASS** — **19 suites / 82 tests** |
+| `cd frontend && npm run build` | **PASS** — main **419.07 kB** gzip; warnings ESLint `react-hooks/exhaustive-deps` preexistentes (no bloqueantes) |
+
+**Observación futura:** tests específicos de agenda/`Turnos` no deben asumir que la librería `react-big-calendar` real se ejercita bajo la suite Jest global; el mock sustituye el componente calendario en jsdom.
 
 ---
 
@@ -166,6 +189,8 @@ La suite Jest global (`npm test -- --watchAll=false`) falla por import ESM de `r
 ## Tests frontend
 
 La suite vive en el directorio **`frontend/`** del monorepo (Create React App + Jest + Testing Library). **No hay** Playwright ni Cypress configurados en el repo (búsqueda `playwright.config.*` / `cypress.config.*` vacía).
+
+**Suite Jest global (21 jun 2026, post-`30e75d3`):** `npm test -- --watchAll=false` → **19 suites / 82 tests PASS**. Smoke `App.test.tsx` valida pantalla de login en `/login`. Mock de `react-big-calendar` documentado en sección *Frontend Jest global* arriba.
 
 **E2E-1 / E2E-1-A LIMS (jun 2026) — Opción B (sin framework browser):**
 
