@@ -4,16 +4,6 @@
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
-// Mock de react-big-calendar para evitar incompatibilidad ESM/CJS (dom-helpers) en Jest/jsdom.
-// Las pruebas funcionales de agenda deben cubrirse en tests específicos de Turnos.
-jest.mock('react-big-calendar', () => ({
-  Calendar: () => null,
-  dateFnsLocalizer: () => ({}),
-  Views: {
-    MONTH: 'month',
-    WEEK: 'week',
-    WORK_WEEK: 'work_week',
-    DAY: 'day',
-    AGENDA: 'agenda',
-  },
-}));
+// Mock explícito de react-big-calendar: evita fallo ESM/CJS (dom-helpers/position) en Jest/jsdom
+// cuando App.test.tsx carga App → Turnos. Ver src/__mocks__/react-big-calendar.tsx.
+jest.mock('react-big-calendar');
