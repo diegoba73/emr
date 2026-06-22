@@ -6,6 +6,7 @@
 **PostgreSQL smoke focal microbiología (CREATEDB validado en local):** 20 de junio de 2026  
 **Cierre deuda Jest global frontend (`react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026  
 **CI/smoke mínimo (`.github/workflows/smoke.yml` + `scripts/smoke_local.sh`):** 21 de junio de 2026
+**Corrección smoke remoto frontend build (CRA + CI=true):** 21 de junio de 2026
 **Método:** Inspección directa del código + ejecución de tests (prevalece sobre documentación histórica).
 
 ---
@@ -79,10 +80,14 @@
 | Script local | **`scripts/smoke_local.sh`** — mismos checks; SQLite in-memory |
 | PostgreSQL en CI mínimo | **No requerido** — smoke focal PG sigue manual/opcional |
 | Backend | `manage.py check` + pytest `usuarios/`, `auditoria/`, `test_microbiologia_estudio_id_filter` |
-| Frontend | Jest global + `npm run build` |
+| Frontend | Jest con `CI=true`; build smoke con `CI=false` (warnings `react-hooks/exhaustive-deps` no bloquean) |
 | Producción clínica / E2E browser | **Fuera de alcance** — no declarado |
 
-**Estado CI smoke mínimo:** **IMPLEMENTADO** (pendiente primer run en GitHub tras push).
+**Primer run remoto (GitHub Actions Smoke #1, `820ac5c`):** `backend-checks` **PASS**; `frontend-checks` **FAIL** en build — `CI=true` en runner + warnings ESLint preexistentes → CRA exit 1.
+
+**Corrección:** build smoke con `CI=false`; Jest mantiene `CI=true`. Warnings hooks siguen como **deuda no bloqueante** (sin tocar componentes en este ticket).
+
+**Estado CI smoke mínimo:** **IMPLEMENTADO**; corrección build pendiente de segundo run tras push del fix.
 
 ---
 

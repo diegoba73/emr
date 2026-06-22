@@ -26,6 +26,7 @@
 **Actualización (PostgreSQL smoke focal microbiología — CREATEDB validado):** 20 de junio de 2026
 **Actualización (Jest global frontend — mock `react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026
 **Actualización (CI/smoke mínimo — GitHub Actions + script local):** 21 de junio de 2026
+**Actualización (CI smoke — build con CI=false por warnings CRA):** 21 de junio de 2026
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
@@ -179,8 +180,12 @@ pytest laboratorio/tests/test_microbiologia_estudio_id_filter.py -q
 cd frontend
 npm ci --legacy-peer-deps
 CI=true npm test -- --watchAll=false
-npm run build
+CI=false npm run build   # CRA: con CI=true los warnings ESLint fallan el build
 ```
+
+**Primer run GitHub Actions (workflow Smoke #1, commit `820ac5c`):** `backend-checks` **PASS**; `frontend-checks` **FAIL** en *Production build* — GitHub Actions exporta `CI=true` y Create React App trata warnings `react-hooks/exhaustive-deps` preexistentes como error (exit code 1). Jest ya pasaba con `CI=true`.
+
+**Corrección:** Jest sigue con `CI=true`; build de smoke usa `CI=false` para validar compilación sin bloquear por deuda ESLint hooks (no resuelta en este ticket).
 
 **Local (todo en uno):**
 

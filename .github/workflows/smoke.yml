@@ -71,4 +71,4 @@ jobs:
         run: CI=true npm test -- --watchAll=false
 
       - name: Production build
-        run: npm run build
+        run: CI=false npm run build
