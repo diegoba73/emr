@@ -67,3 +67,4 @@ _GEM_CONTEXT/
 .cursorrules
 .vscode/
 *.code-workspace
+/docs_synesis_gpt_knowledge/
