@@ -29,17 +29,22 @@ deploy/backup/drill-evidence/
 *.sql.gz
 *.sqlite3
 *.dump
+*.pgdump
 *.bak
 *.backup
 *.tar
 *.tar.gz
 *.sha256
 backup_pendrive.sql
+/backups/
 backups/
 deploy/backup/output/
 
 # Media / archivos clínicos locales
+/media/
 media/
+/uploads/
+uploads/
 
 # Cookies / sesiones locales
 cookies.txt
