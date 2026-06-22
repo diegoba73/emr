@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Restore local PostgreSQL SYNESIS — por defecto en base de PRUEBA, no productiva.
 # Uso: bash scripts/restore_postgres_local.sh /ruta/al/archivo.dump
-# Variables opcionales: TARGET_DB PGHOST PGPORT PGUSER
+# Variables opcionales: TARGET_DB PGHOST PGPORT PGUSER DB_USER
+# Usuario PostgreSQL: PGUSER (estándar) o DB_USER (alias Django). Si ambos, gana PGUSER.
 # Restaurar sobre synesis_db requiere: CONFIRM_RESTORE_PROD=YES_I_UNDERSTAND
 
 set -euo pipefail
@@ -19,7 +20,7 @@ BACKUP_FILE="$1"
 TARGET_DB="${TARGET_DB:-synesis_restore_test}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-postgres}"
+PGUSER="${PGUSER:-${DB_USER:-synesis_user}}"
 PROD_DB_NAME="${PROD_DB_NAME:-synesis_db}"
 
 if [[ ! -f "${BACKUP_FILE}" ]]; then

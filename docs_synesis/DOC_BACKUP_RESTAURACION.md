@@ -86,21 +86,36 @@ python3 manage.py check   # con venv activo si aplica
 
 ### Script recomendado (fuera del repo)
 
+**Usuario PostgreSQL:** variable estándar `PGUSER`; alias compatible Django `DB_USER`. Si se definen ambas, **gana `PGUSER`**. Default local: `synesis_user`.
+
 ```bash
 cd /home/diego/proyectos/emr
-BACKUP_DIR="${HOME}/backups_synesis" DB_NAME="synesis_db" bash scripts/backup_postgres_local.sh
+BACKUP_DIR="${HOME}/backups_synesis" \
+DB_NAME="synesis_db" \
+PGUSER="synesis_user" \
+bash scripts/backup_postgres_local.sh
+```
+
+**Ejemplo alternativo** (misma semántica vía `DB_USER`):
+
+```bash
+BACKUP_DIR="${HOME}/backups_synesis" \
+DB_NAME="synesis_db" \
+DB_USER="synesis_user" \
+bash scripts/backup_postgres_local.sh
 ```
 
 **Defaults editables:**
 
-| Variable | Default |
-|----------|---------|
-| `DB_NAME` | `synesis_db` |
-| `BACKUP_DIR` | `$HOME/backups_synesis` |
-| `PGHOST` | `localhost` |
-| `PGPORT` | `5432` |
-| `PGUSER` | `postgres` |
-| `PGPASSWORD` | solo entorno del operador; **no se imprime** |
+| Variable | Default | Notas |
+|----------|---------|-------|
+| `DB_NAME` | `synesis_db` | Nombre de base Django |
+| `BACKUP_DIR` | `$HOME/backups_synesis` | Fuera del repo |
+| `PGHOST` | `localhost` | |
+| `PGPORT` | `5432` | |
+| `PGUSER` | `synesis_user` | Estándar PostgreSQL; prioridad sobre `DB_USER` |
+| `DB_USER` | — | Alias Django; usado si `PGUSER` no está definido |
+| `PGPASSWORD` | solo entorno del operador | **no se imprime** |
 
 **Salida:** `~/backups_synesis/synesis_db_YYYYMMDD_HHMMSS.dump` (+ `.sha256` si disponible).
 
@@ -109,7 +124,7 @@ BACKUP_DIR="${HOME}/backups_synesis" DB_NAME="synesis_db" bash scripts/backup_po
 ```bash
 mkdir -p ~/backups_synesis
 chmod 700 ~/backups_synesis
-pg_dump -Fc -h localhost -U postgres -d synesis_db \
+pg_dump -Fc -h localhost -U synesis_user -d synesis_db \
   -f ~/backups_synesis/synesis_db_$(date +%Y%m%d_%H%M%S).dump
 ```
 
@@ -162,15 +177,26 @@ chmod 600 ~/backups_synesis/env_*.env
 
 ```bash
 TARGET_DB="synesis_restore_test" \
-  bash scripts/restore_postgres_local.sh ~/backups_synesis/synesis_db_YYYYMMDD_HHMMSS.dump
+PGUSER="synesis_user" \
+bash scripts/restore_postgres_local.sh ~/backups_synesis/synesis_db_YYYYMMDD_HHMMSS.dump
+```
+
+Equivalente con `DB_USER`:
+
+```bash
+TARGET_DB="synesis_restore_test" \
+DB_USER="synesis_user" \
+bash scripts/restore_postgres_local.sh ~/backups_synesis/synesis_db_YYYYMMDD_HHMMSS.dump
 ```
 
 **Defaults del script:**
 
-| Variable | Default |
-|----------|---------|
-| `TARGET_DB` | `synesis_restore_test` |
-| `PROD_DB_NAME` | `synesis_db` (nombre bloqueado sin confirmación) |
+| Variable | Default | Notas |
+|----------|---------|-------|
+| `TARGET_DB` | `synesis_restore_test` | Base de prueba |
+| `PROD_DB_NAME` | `synesis_db` | Bloqueado sin `CONFIRM_RESTORE_PROD` |
+| `PGUSER` | `synesis_user` | Prioridad sobre `DB_USER` |
+| `DB_USER` | — | Alias Django si `PGUSER` no está definido |
 
 **Restaurar sobre `synesis_db` (base real):** requiere:
 
@@ -184,8 +210,8 @@ El script **no ejecuta `dropdb`** por defecto. Si la base destino ya existe con 
 ### Comandos manuales equivalentes (prueba)
 
 ```bash
-createdb -h localhost -U postgres synesis_restore_test
-pg_restore -h localhost -U postgres -d synesis_restore_test --no-owner --no-acl \
+createdb -h localhost -U synesis_user synesis_restore_test
+pg_restore -h localhost -U synesis_user -d synesis_restore_test --no-owner --no-acl \
   ~/backups_synesis/<archivo>.dump
 ```
 
