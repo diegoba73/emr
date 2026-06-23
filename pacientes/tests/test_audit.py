@@ -5,6 +5,7 @@ Los eventos se persisten con ``transaction.on_commit`` cuando hay bloque
 en ``laboratorio/tests`` y ``turnos/tests``.
 """
 from datetime import date
+import json
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -102,7 +103,9 @@ class TestPacienteAuditoriaAPI(TestCase):
         self.assertIsNotNone(ev.before_state)
         self.assertIsNotNone(ev.after_state)
         self.assertEqual(ev.metadata.get("view"), "PacienteViewSet.perform_update")
-        self.assertEqual(ev.after_state.get("telefono"), "222")
+        self.assertEqual(ev.after_state.get("telefono"), "<dato sensible redactado>")
+        self.assertNotIn("222", json.dumps(ev.after_state))
+        self.assertNotIn("Cambio auditado", json.dumps(ev.after_state))
 
     def test_put_genera_audit_event_update(self):
         admin = _admin("admin.audit.put")
@@ -139,6 +142,28 @@ class TestPacienteAuditoriaAPI(TestCase):
         )
         self.assertIsNotNone(ev)
         self.assertEqual(ev.metadata.get("view"), "PacienteViewSet.perform_update")
+        self.assertNotIn("333444555", json.dumps(ev.after_state or {}))
+
+    def test_create_entity_repr_sin_phi(self):
+        admin = _admin("admin.audit.repr")
+        client = APIClient()
+        client.force_authenticate(user=admin)
+        payload = _payload_create("REPR-0")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post("/api/pacientes/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        paciente_id = response.data["id"]
+        ev = AuditEvent.objects.filter(
+            entity_type=Paciente._meta.label,
+            entity_id=str(paciente_id),
+            action="CREATE",
+        ).first()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev.entity_repr, f"Paciente #{paciente_id}")
+        self.assertNotIn("Ana", ev.entity_repr)
+        self.assertNotIn("AUD-REPR-0", ev.entity_repr)
 
     def test_create_no_genera_evento_delete(self):
         """DELETE API está bloqueado; no debe existir auditoría DELETE en este flujo."""

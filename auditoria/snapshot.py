@@ -51,6 +51,105 @@ _REDACT_RESULTADO_EXAMEN_FIELDS = frozenset({
 _CLINICAL_VALUE_PLACEHOLDER = '<valor clínico redactado>'
 _CLINICAL_TEXT_REDACTED = '<texto clínico redactado>'
 _MICRO_RESULT_PLACEHOLDER = '<resultado microbiológico redactado>'
+_SENSITIVE_DATA_PLACEHOLDER = '<dato sensible redactado>'
+
+# Campos demográficos / identificadores — redacción global por nombre de campo.
+_GLOBAL_PII_FIELD_NAMES = frozenset({
+    'dni',
+    'documento',
+    'documento_numero',
+    'telefono',
+    'email',
+    'direccion',
+    'fecha_nacimiento',
+    'obra_social',
+    'numero_afiliado',
+    'num_afiliado',
+    'afiliado',
+})
+
+# Campos de texto clínico — redacción global por nombre de campo (modelos clínicos).
+_GLOBAL_CLINICAL_TEXT_FIELD_NAMES = frozenset({
+    'anamnesis',
+    'examen_fisico',
+    'diagnostico_presuntivo',
+    'diagnostico_definitivo',
+    'diagnostico_ingreso',
+    'diagnostico_preoperatorio',
+    'diagnostico_postoperatorio',
+    'plan_manejo',
+    'plan_tratamiento',
+    'notas_medicas',
+    'motivo_consulta_detalle',
+    'motivo_ingreso',
+    'informe_medico',
+    'hallazgos',
+    'hallazgos_operatorios',
+    'protocolo_quirurgico',
+    'medicacion_actual',
+    'alergias',
+    'descripcion_tratamiento',
+    'nombre_diagnostico',
+    'descripcion_diagnostico',
+    'descripcion',
+    'contenido',
+    'texto',
+    'observaciones',
+    'observaciones_generales',
+    'observaciones_medicas',
+    'complicaciones',
+})
+
+# Prefijos de nombre de campo que indican texto clínico libre.
+_CLINICAL_FIELD_NAME_PREFIXES = (
+    'antecedentes_',
+    'motivo_',
+    'diagnostico_',
+    'notas_',
+)
+
+# Redacción por modelo — PII / demografía (incluye nombre/apellido de paciente).
+_REDACT_MODEL_FIELDS_PII: dict[str, frozenset[str]] = {
+    'pacientes.Paciente': frozenset({
+        'nombre',
+        'apellido',
+        'dni',
+        'fecha_nacimiento',
+        'telefono',
+        'email',
+        'direccion',
+        'obra_social',
+        'numero_afiliado',
+        'antecedentes_personales',
+        'antecedentes_familiares',
+        'observaciones',
+    }),
+}
+
+# Redacción por modelo — texto clínico adicional no cubierto por globales.
+_REDACT_MODEL_FIELDS_CLINICAL: dict[str, frozenset[str]] = {
+    'historias_clinicas.Consulta': frozenset({
+        'motivo_consulta_detalle',
+        'anamnesis',
+        'examen_fisico',
+        'diagnostico_presuntivo',
+        'plan_manejo',
+        'notas_medicas',
+    }),
+    'turnos.Atencion': frozenset({'observaciones_generales'}),
+    'turnos.ConsultaAmbulatoria': frozenset({
+        'anamnesis',
+        'examen_fisico',
+        'diagnostico_presuntivo',
+        'plan_manejo',
+        'antecedentes_relevantes',
+        'alergias',
+        'medicacion_actual',
+        'diagnostico_definitivo',
+        'observaciones_medicas',
+    }),
+    'solicitudes.Solicitud': frozenset({'descripcion', 'observaciones'}),
+}
 
 # Texto clínico / observaciones microbiológicas — no persistir en snapshot genérico (LIMS B3-audit).
 _REDACT_MICRO_TEXT_FIELDS = frozenset({
@@ -89,6 +188,63 @@ class SnapshotTooLarge(ValidationError):
     """Snapshot rechazado por superar tamaño tras serialización mínima."""
 
     pass
+
+
+def _snapshot_redaction_placeholder(label: str, field_name: str) -> str | None:
+    """Devuelve placeholder si el campo debe redactarse en auditoría genérica."""
+    if (label, field_name) in _REDACT_LONG_TEXT_FIELDS:
+        return _CLINICAL_TEXT_REDACTED
+    if (label, field_name) in _REDACT_MICRO_TEXT_FIELDS:
+        return _CLINICAL_TEXT_REDACTED
+    if (label, field_name) in _REDACT_MICRO_RESULT_FIELDS:
+        return _MICRO_RESULT_PLACEHOLDER
+
+    model_pii = _REDACT_MODEL_FIELDS_PII.get(label)
+    if model_pii and field_name in model_pii:
+        return _SENSITIVE_DATA_PLACEHOLDER
+
+    model_clinical = _REDACT_MODEL_FIELDS_CLINICAL.get(label)
+    if model_clinical and field_name in model_clinical:
+        return _CLINICAL_TEXT_REDACTED
+
+    if field_name in _GLOBAL_PII_FIELD_NAMES:
+        return _SENSITIVE_DATA_PLACEHOLDER
+
+    if field_name in _GLOBAL_CLINICAL_TEXT_FIELD_NAMES:
+        return _CLINICAL_TEXT_REDACTED
+
+    for prefix in _CLINICAL_FIELD_NAME_PREFIXES:
+        if field_name.startswith(prefix):
+            return _CLINICAL_TEXT_REDACTED
+
+    return None
+
+
+def safe_entity_repr(instance) -> str:
+    """Representación técnica sin PHI para ``AuditEvent.entity_repr``."""
+    if instance is None:
+        return ""
+
+    label = getattr(getattr(instance, '_meta', None), 'label', '')
+    pk = getattr(instance, 'pk', None)
+
+    if label == 'pacientes.Paciente':
+        return f'Paciente #{pk}'[:255]
+    if label == 'historias_clinicas.Consulta':
+        return f'Consulta #{pk}'[:255]
+    if label == 'turnos.Atencion':
+        estado = getattr(instance, 'estado_clinico', '') or ''
+        return f'Atención #{pk} ({estado})'[:255]
+    if label == 'solicitudes.Solicitud':
+        tipo = getattr(instance, 'tipo_solicitud', '') or ''
+        estado = getattr(instance, 'estado', '') or ''
+        return f'Solicitud #{pk} ({tipo}/{estado})'[:255]
+    if label == 'turnos.Turno':
+        estado = getattr(instance, 'estado', '') or ''
+        return f'Turno #{pk} ({estado})'[:255]
+
+    class_name = instance.__class__.__name__
+    return f'{class_name} #{pk}'[:255] if pk is not None else class_name[:255]
 
 
 def _json_bytes(obj: object) -> int:
@@ -187,24 +343,18 @@ def safe_model_snapshot(
             continue
 
         label = getattr(opts, 'label', '')
-        if (label, field.name) in _REDACT_LONG_TEXT_FIELDS and value:
-            state[field.name] = '<texto clínico omitido>'
-            continue
-
-        if (label, field.name) in _REDACT_MICRO_TEXT_FIELDS and value:
-            state[field.name] = _CLINICAL_TEXT_REDACTED
-            continue
-
-        if (label, field.name) in _REDACT_MICRO_RESULT_FIELDS:
-            if value is not None and value != '':
-                state[field.name] = _MICRO_RESULT_PLACEHOLDER
-            elif include_nulls:
-                state[field.name] = None
-            continue
 
         if label == 'laboratorio.ResultadoExamen' and field.name in _REDACT_RESULTADO_EXAMEN_FIELDS:
             if value is not None and value != '':
                 state[field.name] = _CLINICAL_VALUE_PLACEHOLDER
+            elif include_nulls:
+                state[field.name] = None
+            continue
+
+        placeholder = _snapshot_redaction_placeholder(label, field.name)
+        if placeholder is not None:
+            if value is not None and value != '':
+                state[field.name] = placeholder
             elif include_nulls:
                 state[field.name] = None
             continue

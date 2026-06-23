@@ -169,4 +169,4 @@ def test_snapshot_file_placeholder_not_binary_payload():
     )
     snap = safe_model_snapshot(am)
     assert "<file" in str(snap.get("archivo", "")).lower() or snap.get("archivo") is None
-    assert "...<truncado>" in snap.get("descripcion", "")
+    assert snap.get("descripcion") == "<texto clínico redactado>"

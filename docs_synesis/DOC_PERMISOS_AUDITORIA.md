@@ -5,6 +5,7 @@
 **Actualización (Fase A LIMS — acciones y auditoría de estado):** 3 de mayo de 2026  
 **Actualización (PROD-4 — media privada):** 8 de junio de 2026
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
+**Actualización (AUD-01 — redacción PHI auditoría genérica EMR):** 22 de junio de 2026
 
 **Alcance:** Autenticación, autorización, auditoría y exposición de datos según código revisado.
 
@@ -94,6 +95,14 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 - La auditoría genérica registra **solo** identificadores y señales técnicas: `resultado_id`, `solicitud_id`, `muestra_id` (si aplica), `tipo_examen_id` (si se requiere para trazabilidad), `accion`, `actor_id`, `view`, `request_id`, y `valor_presente` (booleano).
 - `before_state` / `after_state` usan `safe_model_snapshot` con **redacción** de campos clínicos en `ResultadoExamen` (placeholder), por lo que no deben permitir reconstruir el resultado desde auditoría genérica.
 - Si en el futuro se requiere auditoría legal de old/new de resultados, debe implementarse como **fase separada** con **ACL estricto** y almacenamiento/diseño dedicados (no como `metadata` genérica).
+
+**AUD-01 — redacción PHI en auditoría genérica EMR (jun 2026):**
+
+- `auditoria/snapshot.py` — `safe_model_snapshot` redacta campos demográficos/clínicos en `Paciente`, `Consulta`, `Atencion`, `ConsultaAmbulatoria`, `Solicitud` y por nombre de campo global (`dni`, `telefono`, `anamnesis`, `observaciones`, etc.).
+- Placeholders: `<dato sensible redactado>`, `<texto clínico redactado>`; LIMS/micro mantiene placeholders previos (`<valor clínico redactado>`, `<resultado microbiológico redactado>`).
+- `safe_entity_repr` (vía `audit_service`) evita `str(instance)` con nombre/DNI/texto clínico; usa identificadores técnicos (`Paciente #id`, `Consulta #id`, etc.).
+- Tests: `auditoria/tests/test_snapshot_phi_redaction.py`, actualización `pacientes/tests/test_audit.py`.
+- **No** elimina auditoría ni relaja permisos; conserva `id`, FKs, estados, timestamps y actor.
 
 ### API
 

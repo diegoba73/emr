@@ -8,7 +8,7 @@ from django.db import models, transaction
 from .context import get_ip_address, get_request_id, get_user_agent
 from .models import AuditEvent
 from .sanitizer import enforce_max_json_payload, sanitize_dict_keys
-from .snapshot import safe_model_snapshot
+from .snapshot import safe_entity_repr, safe_model_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +57,7 @@ def _entity_repr_for(instance: models.Model | None, entity_repr: str | None) -> 
         return entity_repr
     if instance is None:
         return ""
-    try:
-        s = str(instance)
-    except Exception:
-        s = instance.__class__.__name__
-    return (s or "")[:255]
+    return safe_entity_repr(instance)
 
 
 def _sanitize_audit_payload(before: Any, after: Any, metadata: Any) -> tuple[Any, Any, Any]:

@@ -27,6 +27,7 @@
 **Actualización (Jest global frontend — mock `react-big-calendar`, commit `30e75d3`):** 21 de junio de 2026
 **Actualización (CI/smoke mínimo — GitHub Actions + script local):** 21 de junio de 2026
 **Actualización (CI smoke — build con CI=false por warnings CRA):** 21 de junio de 2026
+**Actualización (AUD-01 — redacción PHI snapshots auditoría genérica):** 22 de junio de 2026
 
 **Alcance:** Tests automatizados bajo el repositorio; excluye deliberadamente la carpeta `backup_documentacion/` salvo mención como no-canónica.
 
@@ -216,7 +217,7 @@ bash scripts/smoke_local.sh
 | `historias_clinicas/tests/` | `test_api.py`, `test_models.py` |
 | `laboratorio/tests/` | `test_models.py`, `test_api.py` |
 | `archivos_medicos/tests/` | `test_models.py`, `tests.py` |
-| `auditoria/tests/` | `test_audit_event_model.py`, `test_audit_integration.py`, `test_auditoria_hardening.py` |
+| `auditoria/tests/` | `test_audit_event_model.py`, `test_audit_integration.py`, `test_auditoria_hardening.py`, **`test_snapshot_phi_redaction.py`** (AUD-01: Paciente/Consulta/Atencion/Solicitud sin PHI en snapshots/`entity_repr`) |
 | `integracion_lims/tests.py` | app-level |
 | `solicitudes/tests/` | `test_models.py`, `tests.py` |
 | `internacion/tests/` | `test_infraestructura.py`, `test_admision.py`, `tests.py` |
