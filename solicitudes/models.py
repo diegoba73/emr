@@ -4,7 +4,6 @@ from django.utils import timezone
 from pacientes.models import Paciente
 from medicos.models import Medico
 from integracion_lims import lims_service
-import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -171,21 +170,12 @@ class Solicitud(models.Model):
             })
 
     def save(self, *args, **kwargs):
-        """Override del método save para manejar la integración con LIMS"""
-        is_new = self.pk is None
-        
+        """Valida y persiste; no envía a sistemas externos (LIMS solo vía ViewSet)."""
         # Validar antes de guardar
         self.clean()
-        
-        # Guardar el objeto
+
         super().save(*args, **kwargs)
-        
-        # Si es nueva y es de tipo laboratorio, opcionalmente enviar al LIMS
-        # Controlado por variable de entorno LIMS_AUTO_SEND (por defecto: False)
-        auto_send = os.getenv('LIMS_AUTO_SEND', 'false').lower() == 'true'
-        if is_new and self.tipo_solicitud == 'EXAMEN_LABORATORIO' and auto_send:
-            self._enviar_a_lims()
-        
+
         # Actualizar fecha de completado si el estado cambió a COMPLETADA
         if self.estado == 'COMPLETADA' and not self.fecha_completada:
             self.fecha_completada = timezone.now()

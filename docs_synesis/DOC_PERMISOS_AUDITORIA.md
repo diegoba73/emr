@@ -112,7 +112,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 - **Actualización CRUD:** admin; secretaría/médico limitado en objetos visibles; **`estado` excluido** de `SolicitudUpdateSerializer` (solo acciones dedicadas).
 - **Estados críticos / LIMS externo:** `cambiar_estado`, `reabrir`, `marcar_como_completada`, `enviar_lims`, `sincronizar_lims` — solo **admin/superuser**; `cancelar` también secretaría/médico vinculado.
 - **Destroy:** solo admin/superuser con auditoría `solicitud_destroy`.
-- **Sin auto-envío LIMS** en `perform_create`; `enviar_lims`/`sincronizar_lims` auditados con metadata técnica (`destino=lims_externo`, `success`, `paneles_count`, `tipos_count`, `lims_id_presente`; sin PHI ni payload externo).
+- **Sin auto-envío LIMS** en `perform_create` ni en `Solicitud.save()` (PERM-01-b: `LIMS_AUTO_SEND` ignorado en modelo); envío solo vía `enviar_lims`/`sincronizar_lims` (admin/superuser). Metadata técnica (`destino=lims_externo`, `success`, `paneles_count`, `tipos_count`, `lims_id_presente`; sin PHI ni payload externo).
 - Tests: `solicitudes/tests/test_permissions_api.py`.
 
 ### API

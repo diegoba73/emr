@@ -2,6 +2,7 @@
 Tests PERM-01 / INT-01 — permisos y auditoría de solicitudes genéricas EMR.
 """
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -330,3 +331,23 @@ class TestSolicitudLimsYAuditoria:
         assert ev is not None
         assert ev.metadata.get('accion') == 'solicitud_destroy'
         assert 'Ana' not in (ev.entity_repr or '')
+
+    @patch.dict(os.environ, {'LIMS_AUTO_SEND': 'true'})
+    @patch('integracion_lims.lims_service.enviar_solicitud_a_lims')
+    def test_lims_auto_send_no_dispara_en_create_medico(
+        self, mock_lims, api, medico_profile, paciente_a
+    ):
+        api.force_authenticate(user=medico_profile.user)
+        r = api.post('/api/solicitudes/', _payload(paciente_a.pk), format='json')
+        assert r.status_code in (200, 201)
+        mock_lims.assert_not_called()
+
+    @patch.dict(os.environ, {'LIMS_AUTO_SEND': 'true'})
+    @patch('integracion_lims.lims_service.enviar_solicitud_a_lims')
+    def test_lims_auto_send_no_dispara_en_create_secretaria(
+        self, mock_lims, api, user_secretaria, paciente_a
+    ):
+        api.force_authenticate(user=user_secretaria)
+        r = api.post('/api/solicitudes/', _payload(paciente_a.pk), format='json')
+        assert r.status_code in (200, 201)
+        mock_lims.assert_not_called()

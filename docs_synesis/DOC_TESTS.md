@@ -219,7 +219,7 @@ bash scripts/smoke_local.sh
 | `archivos_medicos/tests/` | `test_models.py`, `tests.py` |
 | `auditoria/tests/` | `test_audit_event_model.py`, `test_audit_integration.py`, `test_auditoria_hardening.py`, **`test_snapshot_phi_redaction.py`** (AUD-01: Paciente/Consulta/Atencion/ConsultaAmbulatoria/Solicitud sin PHI en snapshots/`entity_repr`) |
 | `integracion_lims/tests.py` | app-level |
-| `solicitudes/tests/` | `test_models.py`, **`test_permissions_api.py`** (PERM-01), `conftest.py`, `tests.py` |
+| `solicitudes/tests/` | `test_models.py`, **`test_permissions_api.py`** (PERM-01: permisos por rol, LIMS sin auto-envío con `LIMS_AUTO_SEND=true`), `conftest.py`, `tests.py` |
 | `internacion/tests/` | `test_infraestructura.py`, `test_admision.py`, `tests.py` |
 | `usuarios/tests/` | `test_models.py`, `test_health.py`, **`test_laboratorio_rol.py`** (rol `laboratorio`, login/current-user/JWT) |
 | `api/tests.py` | app api |
