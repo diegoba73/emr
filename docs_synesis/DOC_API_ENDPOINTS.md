@@ -218,6 +218,19 @@ Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` 
 
 **CRUD estándar lab:** `PATCH` / `PUT` sobre `/api/lab/solicitudes/{id}/` usan `SolicitudExamenSerializer` con campo **`estado` en solo lectura** — no se debe usar para cambiar el estado de la orden; los cambios van solo por las acciones `POST` anteriores.
 
+### Solicitudes genéricas EMR (`/api/solicitudes/`) — LIMS externo
+
+**[DOC-01 — jun 2026]** Distinto de LIMS nativo (`/api/lab/solicitudes/`). Permiso: **`SolicitudPermission`** (PERM-01).
+
+| Ruta | Método | Regla |
+|------|--------|-------|
+| `/api/solicitudes/{id}/enviar_lims/` | POST | Envío explícito a LIMS HTTP externo (`integracion_lims.lims_service`). **Solo admin/superuser.** Body opcional: `paneles`, `tipos_examen`. Auditado sin PHI en metadata. **No** se dispara desde `save()` ni `LIMS_AUTO_SEND`. |
+| `/api/solicitudes/{id}/sincronizar_lims/` | POST | Sincronización explícita vía `_enviar_a_lims()`. **Solo admin/superuser.** Auditado sin PHI. |
+
+Roles médico, secretaría, paciente, laboratorio, enfermería → **403**. Frontend puede no reflejar restricción (fase **FE-PERM-01**).
+
+---
+
 ---
 
 ## Serializers usados

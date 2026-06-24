@@ -63,7 +63,7 @@ Endpoints vigentes: listado en `DOC_API_ENDPOINTS.md` y `DOC_FLUJOS_LIMS.md` (in
 
 ### 1.5 EMR vs LIMS nativo
 
-- **`solicitudes.Solicitud`:** flujo EMR (`/api/solicitudes/`, frontend `/solicitudes`); puede intentar `lims_service.enviar_solicitud_a_lims` hacia URL fija **no garantizada** en este proyecto (`integracion_lims/lims_service.py`).
+- **`solicitudes.Solicitud`:** flujo EMR (`/api/solicitudes/`, frontend `/solicitudes`); envío a `lims_service.enviar_solicitud_a_lims` **solo** por acciones explícitas `enviar_lims` / `sincronizar_lims` (admin/superuser). **No** auto-envío en `save()`; `LIMS_AUTO_SEND` legacy sin efecto (DOC-01).
 - **`laboratorio.SolicitudExamen`:** orden LIMS nativa (`/api/lab/solicitudes/`, alias `laboratorio/solicitudes`). **Sin FK obligatoria** entre ambos en modelo actual — riesgo operativo conocido; Fase B **no** debe fusionarlos; opcional futuro: `SolicitudExamen.origen_emr_solicitud_id` nullable (solo diseño futuro, no parte mínima B).
 
 ### 1.6 Frontend (`frontend/src/`)

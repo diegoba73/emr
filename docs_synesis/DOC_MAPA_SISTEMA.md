@@ -3,8 +3,7 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (PROD-1 configuración producción):** 7 de junio de 2026  
 **Actualización (LIMS hardening, rol `laboratorio`):** 2 de mayo de 2026  
-
-**Alcance:** Visión de conjunto del repositorio `emr` (proyecto Django `synesis`): EMR + LIMS embebido en backend, sin asumir despliegue productivo ni frontend en este repo.
+**Actualización (DOC-01 — solicitudes genéricas vs LIMS nativo):** 24 de junio de 2026   Visión de conjunto del repositorio `emr` (proyecto Django `synesis`): EMR + LIMS embebido en backend, sin asumir despliegue productivo ni frontend en este repo.
 
 **Fuentes revisadas:** `synesis/settings.py`, `synesis/urls.py`, `api/urls.py`, apps listadas en `INSTALLED_APPS`, estructura de carpetas, ausencia de `package.json` / `frontend/`.
 
@@ -16,7 +15,7 @@ Backend **Django 5.x** con **Django REST Framework** que modela:
 
 - **EMR:** pacientes, usuarios con roles, médicos y especialidades, turnos y recursos, atenciones clínicas (consulta ambulatoria, procedimiento, quirúrgico), historia clínica y consultas, diagnósticos CIE-10, prescripciones, internación (dos modelados: catálogo `historias_clinicas.Internacion` vs app `internacion`), documentos clínicos y archivos médicos.
 - **LIMS (en el mismo proyecto):** catálogo de tipos de muestra, tipos de examen, paneles; órdenes (`SolicitudExamen`) con estados; resultados por examen; acciones de carga masiva y validación vía API.
-- **Integración:** app `solicitudes` (órdenes genéricas EMR→LIMS externo vía `integracion_lims.lims_service`) y modelos espejo `integracion_lims` para sincronización; **servicio HTTP apunta a URL fija** (posiblemente otro proceso).
+- **Integración:** app `solicitudes` (órdenes genéricas EMR; puente opcional a LIMS HTTP externo vía acciones explícitas admin) y modelos espejo `integracion_lims`; **servicio HTTP apunta a URL fija** (posiblemente otro proceso). **LIMS nativo** = `laboratorio.SolicitudExamen` (sin cambios PERM-01).
 
 ---
 
@@ -81,8 +80,8 @@ Cliente (React esperado en :3000 según CORS; no presente en repo)
 1. **Agenda:** `Turno` (estados) → filtrado por rol; creación con reglas para paciente.
 2. **Atención:** POST `/api/atenciones/` con `turno` → `AtencionService` (modo compat no mueve estado del turno igual que modo servicio interno).
 3. **Historia:** `HistoriaClinica` + `Consulta` + diagnósticos/prescripciones.
-4. **Laboratorio:** POST orden lab → `SolicitudExamen` + filas `ResultadoExamen` vacías → `cargar-resultados` → `validar`.
-5. **Solicitudes EMR:** `solicitudes.Solicitud` con envío opcional a LIMS externo si `LIMS_AUTO_SEND=true`.
+4. **Laboratorio (LIMS nativo):** POST orden lab → `SolicitudExamen` + filas `ResultadoExamen` vacías → `cargar-resultados` → `validar`.
+5. **Solicitudes genéricas EMR:** `solicitudes.Solicitud` en `/api/solicitudes/` — módulo **distinto** de `laboratorio.SolicitudExamen`. Sin auto-envío en `save()`. Envío LIMS externo solo `enviar_lims` / `sincronizar_lims` (admin/superuser). `LIMS_AUTO_SEND` **legacy, sin efecto**.
 
 ---
 
@@ -90,7 +89,7 @@ Cliente (React esperado en :3000 según CORS; no presente en repo)
 
 - LIMS nativo: permisos por rol (`LimsCatalogReadPermission`, `LimsSolicitudExamenPermission`); rol **`laboratorio`** en `User`; sin `AllowAny` en ViewSets LIMS sensibles.
 - ~~Deuda `tecnico` en EMR~~ — retirado de `IsEMRClinician` y `api/views.py`; operador lab formal **`laboratorio`** solo en flujos LIMS.
-- Comparación de roles en `solicitudes` con `.upper()` vs valores en minúsculas en el modelo.
+- ~~Comparación de roles en `solicitudes` con `.upper()` vs valores en minúsculas~~ — **mitigado (PERM-01):** `SolicitudPermission` + `get_normalized_role`.
 - `api/views.py` contiene ViewSets extensos que **pueden solaparse** con los importados desde apps; el router usa explícitamente los de `pacientes.views`, `turnos.views`, etc.
 - Webhooks `integracion_lims/urls.py` **no incluidos** en URLconf raíz.
 

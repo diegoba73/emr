@@ -48,7 +48,7 @@ Paciente
 **[IMPLEMENTADO]** En el repositorio actual existen **dos vías de “orden”** que conviven:
 
 1. **LIMS nativo:** `SolicitudExamen` → `Muestra` → `ResultadoExamen` (+ rama microbiología B3.x).
-2. **Solicitudes EMR genéricas:** `solicitudes.Solicitud` con envío opcional a LIMS HTTP externo (`integracion_lims`).
+2. **Solicitudes EMR genéricas:** `solicitudes.Solicitud` en `/api/solicitudes/` — envío a LIMS HTTP externo **solo** por acciones explícitas admin (`enviar_lims`, `sincronizar_lims`); sin auto-envío en `save()`. `LIMS_AUTO_SEND` legacy sin efecto.
 
 **[DEUDA]** Unificar operativamente EMR ↔ LIMS nativo sin doble carga manual (`DOC_RIESGOS_DEUDA_TECNICA.md`).
 

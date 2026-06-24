@@ -7,6 +7,7 @@
 **Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
 **Actualización (Fase B3.3 — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
+**Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026
 
 **Alcance:** Reglas inferidas de modelos, serializers, vistas y permisos **existentes**; sin extrapolar funcionalidades no implementadas.
 
@@ -16,7 +17,7 @@
 
 ## Resumen general del sistema
 
-Backend clínico con agenda (turnos/recursos), encuentros asistenciales (`Atencion` + registros), historia clínica por paciente (`Consulta` y derivados), catálogos (CIE-10, fármacos, centros, etc.), archivos médicos, internación (dos enfoques en datos), y módulo de laboratorio con órdenes (`SolicitudExamen`), resultados y validación por API. Existe además capa de **solicitudes** genéricas con sincronización opcional a un LIMS HTTP externo.
+Backend clínico con agenda (turnos/recursos), encuentros asistenciales (`Atencion` + registros), historia clínica por paciente (`Consulta` y derivados), catálogos (CIE-10, fármacos, centros, etc.), archivos médicos, internación (dos enfoques en datos), y módulo de laboratorio con órdenes (`SolicitudExamen`), resultados y validación por API. Existe además capa de **solicitudes genéricas** (`solicitudes.Solicitud`) — módulo EMR/legacy distinto del LIMS nativo — con envío a LIMS HTTP externo **solo** por acciones explícitas admin/superuser (PERM-01 / DOC-01).
 
 ---
 
@@ -51,7 +52,19 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 1. **Paciente** buscado/creado → **Turno** asignado a recurso/médico → **Atención** iniciada (POST con turno) → registros clínicos / documentos.
 2. **Consulta** en historia clínica (posible vínculo a turno) → diagnósticos, tratamientos, prescripciones.
 3. **Orden de laboratorio** creada en `PENDIENTE` → filas `ResultadoExamen` vacías → opcional `tomar-muestra` (`TOMA_MUESTRA`) → `cargar-resultados` (`EN_PROCESO`) → `validar` (`VALIDADO`, admin) → `marcar-entregado` (`ENTREGADO`) o `cancelar` (`CANCELADO`) desde estados no finales según `DOC_FLUJOS_LIMS.md`.
-4. **Solicitud** (`solicitudes`) opcionalmente enviada a LIMS externo si `LIMS_AUTO_SEND=true`.
+4. **Solicitud genérica EMR** (`solicitudes.Solicitud`): creación/lectura según `SolicitudPermission` (PERM-01). **No** hay auto-envío a LIMS externo en `save()` ni en `perform_create`. El envío/sincronización externa ocurre **solo** vía `POST …/enviar_lims/` o `POST …/sincronizar_lims/` (**admin/superuser**), auditado sin PHI en metadata. La variable de entorno histórica `LIMS_AUTO_SEND` quedó **sin efecto** (legacy/deshabilitada desde `85636c2`).
+
+---
+
+## Reglas de solicitudes genéricas (`solicitudes.Solicitud`)
+
+**[IMPLEMENTADO — PERM-01 / DOC-01 — jun 2026]**
+
+- **No auto-envío LIMS:** `Solicitud.save()` no llama a `lims_service` ni a `_enviar_a_lims()`. `LIMS_AUTO_SEND=true` **no** dispara envío externo al crear.
+- **Envío externo explícito:** solo `enviar_lims` y `sincronizar_lims` en `SolicitudViewSet`; permiso **admin/superuser**; auditoría con metadata técnica (`destino=lims_externo`, `success`, `paneles_count`, `tipos_count`, `lims_id_presente`) — **sin** payload externo completo, nombre/DNI/descripción/observaciones.
+- **Roles sin envío LIMS externo:** médico, secretaría, paciente, laboratorio, enfermería, sin rol, anónimo → 403 en acciones LIMS.
+- **Separación de LIMS nativo:** `laboratorio.SolicitudExamen` no fue modificado por PERM-01; operación lab sigue en `/api/lab/solicitudes/`.
+- **Frontend:** guards/rutas pueden quedar desalineados (fase posterior **FE-PERM-01**); backend es fuente de verdad (403).
 
 ---
 
@@ -232,7 +245,7 @@ Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incl
 
 - Dos conceptos de consulta: `historias_clinicas.Consulta` vs `ConsultaAmbulatoria` ligada a `Atencion`.
 - Dos internaciones y dos camas (ver `DOC_MODELOS_DB.md`).
-- `solicitudes.Solicitud.get_queryset`: comparación `rol_upper == 'ADMIN'` mientras el modelo usa `'admin'` — riesgo de lógica incorrecta para usuarios que no pasan por `is_superuser`.
+- ~~`solicitudes.Solicitud.get_queryset`: comparación `rol_upper == 'ADMIN'`~~ — **mitigado (PERM-01):** `get_normalized_role` / `is_admin` en `get_queryset` y `SolicitudPermission`.
 - ~~`IsEMRClinician` y string `tecnico`~~ — corregido; ver roles arriba.
 
 ---

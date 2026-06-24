@@ -13,6 +13,7 @@
 **Actualización (E2E-1 — validación flujo crítico API):** 4 de junio de 2026  
 **Actualización (Frontend UI-2 — consola microbiología):** 17 de mayo de 2026  
 **Actualización (B3-frontend-validación-A [VALIDADO] + UX parcial):** junio de 2026 — Alta estudio micro: picker solicitud/muestra LIMS (`RECIBIDA`/`CONSERVADA`/`EN_PROCESO`). Detalle micro: listados globales + filtro cliente [GAP filtros API].  
+**Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026
 
 **Alcance:** Flujo LIMS **nativo** (`laboratorio` app) y vínculos con `solicitudes` / `integracion_lims`.
 
@@ -147,10 +148,18 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 
 ## Integración EMR ↔ LIMS externo
 
-1. **`solicitudes.Solicitud`:** puede disparar `lims_service.enviar_solicitud_a_lims` si `LIMS_AUTO_SEND=true` y tipo `EXAMEN_LABORATORIO`.
-2. **`lims_service`:** POST a `http://localhost:8001/api/laboratorio/solicitudes/ingesta/` — **URL fija**; falla silenciosamente en excepción.
-3. **`integracion_lims` modelos** `SolicitudExamenLims` / `ResultadoExamenLims` para espejo de datos externos.
-4. **URLs** `integracion_lims/urls.py` (webhook, análisis por paciente) **no incluidas** en `synesis/urls.py` — endpoints **no expuestos** por el proyecto raíz tal como está.
+**[DOC-01 — jun 2026]** Política vigente tras PERM-01 / `85636c2`:
+
+1. **`solicitudes.Solicitud` (genérico EMR):** **no** auto-envía en `save()` ni en `perform_create`. La variable histórica `LIMS_AUTO_SEND` quedó **sin efecto** (legacy/deshabilitada). El envío a `lims_service.enviar_solicitud_a_lims` ocurre **solo** por acciones explícitas del ViewSet:
+   - `POST /api/solicitudes/{id}/enviar_lims/` — body opcional `paneles`, `tipos_examen`
+   - `POST /api/solicitudes/{id}/sincronizar_lims/`
+   - Permiso: **admin/superuser** (`SolicitudPermission`). Médico, secretaría, paciente y demás roles → 403.
+   - Auditoría: metadata técnica (`accion=solicitud_lims_enviar` / `solicitud_lims_sincronizar`, `destino=lims_externo`, `success`, conteos, `lims_id_presente`) — **sin** payload externo ni PHI.
+   - El transporte HTTP puede incluir PHI hacia el sistema externo; eso no se persiste en auditoría genérica.
+2. **`laboratorio.SolicitudExamen` (LIMS nativo):** flujo operativo principal en este repositorio (`/api/lab/solicitudes/`). **No modificado** por PERM-01 ni DOC-01.
+3. **`lims_service`:** POST a `http://localhost:8001/api/laboratorio/solicitudes/ingesta/` — **URL fija**; invocado solo desde acciones explícitas autorizadas (no desde `save()`).
+4. **`integracion_lims` modelos** `SolicitudExamenLims` / `ResultadoExamenLims` para espejo de datos externos.
+5. **URLs** `integracion_lims/urls.py` (webhook, análisis por paciente) **no incluidas** en `synesis/urls.py` — endpoints **no expuestos** por el proyecto raíz tal como está.
 
 ---
 
