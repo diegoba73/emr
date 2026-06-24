@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.utils import timezone
+from api.permissions import get_normalized_role
 from .models import Solicitud
 
 class SolicitudSerializer(serializers.ModelSerializer):
@@ -102,11 +103,12 @@ class SolicitudSerializer(serializers.ModelSerializer):
                 nombre = getattr(obj.medico_solicitante, 'nombre', '')
                 apellido = getattr(obj.medico_solicitante, 'apellido', '')
                 nombre_completo = f"{nombre} {apellido}".strip()
+            esp = obj.medico_solicitante.especialidad
             return {
                 'id': obj.medico_solicitante.id,
                 'nombre': obj.medico_solicitante.nombre,
                 'apellido': obj.medico_solicitante.apellido,
-                'especialidad': obj.medico_solicitante.especialidad,
+                'especialidad': getattr(esp, 'nombre', None) if esp else None,
                 'nombre_completo': nombre_completo,
             }
         return None
@@ -124,7 +126,7 @@ class SolicitudSerializer(serializers.ModelSerializer):
                 'id': medico.id,
                 'nombre': medico.nombre,
                 'apellido': medico.apellido,
-                'especialidad': medico.especialidad,
+                'especialidad': getattr(medico.especialidad, 'nombre', None) if medico.especialidad else None,
                 'nombre_completo': nombre_completo,
             })
         return medicos
@@ -167,6 +169,14 @@ class SolicitudCreateSerializer(serializers.ModelSerializer):
         if request and hasattr(request, 'user'):
             validated_data['creado_por'] = request.user
             validated_data['modificado_por'] = request.user
+            role = get_normalized_role(request.user)
+            if role == 'medico':
+                medico = getattr(request.user, 'medico', None)
+                if medico is None:
+                    raise serializers.ValidationError(
+                        'El usuario médico no tiene perfil clínico vinculado.'
+                    )
+                validated_data['medico_solicitante'] = medico
         
         return super().create(validated_data)
 
@@ -182,9 +192,7 @@ class SolicitudUpdateSerializer(serializers.ModelSerializer):
             'descripcion',
             'observaciones',
             'fecha_limite',
-            'estado',
             'prioridad',
-            'fecha_completada',
             'lims_paneles',
             'lims_tipos_examen',
         ]

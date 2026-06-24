@@ -27,14 +27,13 @@ class TestSolicitudModel:
         )
     
     @pytest.fixture
-    def medico_test(self):
+    def medico_test(self, esp_cardiologia):
         """Fixture para crear un médico de prueba"""
-        especialidad = Especialidad.objects.create(nombre='Cardiología')
         return Medico.objects.create(
             matricula='MAT-001',
             nombre='Dr. Carlos',
             apellido='García',
-            especialidad=especialidad
+            especialidad=esp_cardiologia
         )
     
     @pytest.fixture
@@ -125,8 +124,9 @@ class TestSolicitudModel:
             tipo_solicitud='EXAMEN_LABORATORIO',
             descripcion='Test de validación',
             fecha_limite=fecha_pasado,
+            fecha_solicitud=timezone.now(),
             creado_por=usuario_test,
-            modificado_por=usuario_test
+            modificado_por=usuario_test,
         )
         
         # Debe lanzar ValidationError al validar
@@ -214,30 +214,31 @@ class TestSolicitudModel:
         # No debe estar vencida
         assert solicitud_futuro.esta_vencida is False
         
-        # Crear solicitud con fecha_limite en el pasado
-        fecha_pasado = timezone.now() - timedelta(days=1)
+        # Crear solicitud con fecha_limite en el pasado (vía update para no violar clean al crear)
         solicitud_pasado = Solicitud.objects.create(
             paciente=paciente_test,
             medico_solicitante=medico_test,
             tipo_solicitud='EXAMEN_LABORATORIO',
             descripcion='Test vencida - pasado',
             estado='PENDIENTE',
-            fecha_limite=fecha_pasado,
             creado_por=usuario_test,
-            modificado_por=usuario_test
+            modificado_por=usuario_test,
         )
+        fecha_pasado = timezone.now() - timedelta(days=1)
+        Solicitud.objects.filter(pk=solicitud_pasado.pk).update(fecha_limite=fecha_pasado)
+        solicitud_pasado.refresh_from_db()
         
         # Debe estar vencida
         assert solicitud_pasado.esta_vencida is True
         
         # Si está COMPLETADA, no debe estar vencida aunque tenga fecha_limite pasada
-        solicitud_pasado.estado = 'COMPLETADA'
-        solicitud_pasado.save()
+        Solicitud.objects.filter(pk=solicitud_pasado.pk).update(estado='COMPLETADA')
+        solicitud_pasado.refresh_from_db()
         assert solicitud_pasado.esta_vencida is False
-        
+
         # Si está CANCELADA, no debe estar vencida
-        solicitud_pasado.estado = 'CANCELADA'
-        solicitud_pasado.save()
+        Solicitud.objects.filter(pk=solicitud_pasado.pk).update(estado='CANCELADA')
+        solicitud_pasado.refresh_from_db()
         assert solicitud_pasado.esta_vencida is False
     
     def test_solicitud_sin_fecha_limite(self, paciente_test, medico_test, usuario_test):
@@ -258,17 +259,16 @@ class TestSolicitudModel:
         # No debe estar vencida si no tiene fecha_limite
         assert solicitud.esta_vencida is False
     
-    def test_relaciones_solicitud(self, paciente_test, medico_test, usuario_test):
+    def test_relaciones_solicitud(self, paciente_test, medico_test, usuario_test, esp_neurologia):
         """
         Test que las relaciones de Solicitud funcionan correctamente.
         """
         # Crear segundo médico para ManyToMany
-        especialidad2 = Especialidad.objects.create(nombre='Neurología')
         medico2 = Medico.objects.create(
             matricula='MAT-002',
             nombre='Dr. Ana',
             apellido='Rodríguez',
-            especialidad=especialidad2
+            especialidad=esp_neurologia
         )
         
         # Crear solicitud

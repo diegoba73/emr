@@ -71,7 +71,7 @@ Registros `router.register` (recurso → ViewSet). Convención DRF:
 | `atenciones` | `turnos.views.AtencionViewSet` | AtencionSerializer (api) | IsMedicoOrEnfermeriaOrAdmin |
 | `historias-clinicas` | `historias_clinicas.views.HistoriaClinicaViewSet` | HistoriaClinicaSerializer | IsAuthenticated + queryset |
 | `consultas` | `historias_clinicas.views.ConsultaViewSet` | Consulta / Create | IsMedicoOrEnfermeriaOrAdmin |
-| `solicitudes` | `solicitudes.views.SolicitudViewSet` | Solicitud* | IsAuthenticated + queryset |
+| `solicitudes` | `solicitudes.views.SolicitudViewSet` | Solicitud* | **`SolicitudPermission`** (PERM-01) + `get_queryset` por rol |
 | `lab/solicitudes` | `laboratorio.views.SolicitudExamenViewSet` | SolicitudExamen* | **`LimsSolicitudExamenPermission`** (+ `get_queryset` por rol) |
 | `lab/examenes` | `laboratorio.views.TipoExamenViewSet` | TipoExamenSerializer | **`LimsCatalogReadPermission`** |
 | `lab/muestras` | `laboratorio.views.TipoMuestraViewSet` | TipoMuestraSerializer | **`LimsCatalogReadPermission`** |

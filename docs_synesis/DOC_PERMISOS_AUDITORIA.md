@@ -104,6 +104,17 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 - Tests: `auditoria/tests/test_snapshot_phi_redaction.py` (incl. `ConsultaAmbulatoria`), `laboratorio/tests/test_api.py` (DELETE sin PHI en `entity_repr`), `laboratorio/tests/test_resultados_clinicos_api.py` y `test_resultados_clinicos_models.py` (metadata sin valores crudos).
 - **No** elimina auditoría ni relaja permisos; conserva `id`, FKs, estados, timestamps y actor.
 
+**PERM-01 / INT-01 — solicitudes genéricas EMR (jun 2026):**
+
+- `solicitudes/permissions.py` — `SolicitudPermission` por `view.action` (no sustituye LIMS nativo `laboratorio.SolicitudExamen`).
+- **Lectura:** admin/superuser todo; secretaría administrativa; médico solo vinculadas; paciente solo propias; laboratorio/enfermería/sin rol/anónimo denegado.
+- **Creación:** admin, secretaría, médico (médico fuerza `medico_solicitante` propio); paciente/laboratorio/enfermería/sin rol bloqueados.
+- **Actualización CRUD:** admin; secretaría/médico limitado en objetos visibles; **`estado` excluido** de `SolicitudUpdateSerializer` (solo acciones dedicadas).
+- **Estados críticos / LIMS externo:** `cambiar_estado`, `reabrir`, `marcar_como_completada`, `enviar_lims`, `sincronizar_lims` — solo **admin/superuser**; `cancelar` también secretaría/médico vinculado.
+- **Destroy:** solo admin/superuser con auditoría `solicitud_destroy`.
+- **Sin auto-envío LIMS** en `perform_create`; `enviar_lims`/`sincronizar_lims` auditados con metadata técnica (`destino=lims_externo`, `success`, `paneles_count`, `tipos_count`, `lims_id_presente`; sin PHI ni payload externo).
+- Tests: `solicitudes/tests/test_permissions_api.py`.
+
 ### API
 
 - `GET /api/auditoria/events/` — `AuditEventViewSet` **solo lectura**.
@@ -128,7 +139,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 - Transiciones de estado de turno: acciones POST con metadata `accion`, `estado_anterior`, `estado_nuevo`, `motivo`, `view` (C5.9.1–C5.9.2). **C5.10.1 `iniciar_atencion_turno`:** `log_create` solo si alta nueva de `Atencion`; `log_update` de `Turno` solo si cambia a `REALIZADO` (coordina `TurnoViewSet.iniciar_atencion`, no duplica con `AtencionViewSet.create`). **C5.10.2 compat `POST /api/atenciones/`:** headers de deprecación sin evento de auditoría adicional; `log_create` solo en alta real. PATCH/PUT `estado` bloqueado para todos los roles.
 - Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**, descarga PDF **`lims_informe_pdf_download`** (`metadata`: `accion`, `solicitud_id`, `numero_solicitud`, `view`; sin PHI, sin `codigo_barra`, sin valores clínicos).
 - Transiciones de estado de `SolicitudExamen`: `log_update` con `metadata` que incluye **`accion`**, **`estado_anterior`**, **`estado_nuevo`**, **`solicitud_id`**, **`numero_solicitud`** (vía `laboratorio/solicitud_estado.apply_solicitud_estado_transition`); además `before_state`/`after_state` del snapshot.
-- Solicitudes: `log_create` / `log_update` en flujos del ViewSet.
+- Solicitudes genéricas (`solicitudes.Solicitud`): `log_create` / `log_update` / `log_event` con `accion` técnica (`solicitud_create`, `solicitud_estado_cambio`, `solicitud_lims_enviar`, etc.); sin payload LIMS ni PHI en metadata.
 
 **Pendiente de confirmar:** cobertura completa de todas las mutaciones EMR (consultas, pacientes, etc.).
 
@@ -164,7 +175,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 ## Brechas detectadas
 
 - ~~String `tecnico` en EMR~~ — **retirado**; roles EMR alineados con `ROL_CHOICES` (`laboratorio` sigue fuera de `IsEMRClinician` por diseño).
-- `solicitudes.views` compara `rol_upper == 'ADMIN'` pero el modelo usa `'admin'` en minúsculas — riesgo de **denegación incorrecta** para usuarios con rol admin si la comparación falla en otros ramas (el branch ADMIN usa superuser o igualdad estricta).
+- ~~`solicitudes.views` compara `rol_upper == 'ADMIN'`~~ — **mitigado (PERM-01):** `SolicitudPermission` + `get_normalized_role` / `is_admin`.
 - Webhooks LIMS en `integracion_lims/urls.py` **no montados** — no hay superficie documentada para autenticación de webhook.
 
 ---
