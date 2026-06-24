@@ -147,6 +147,29 @@ class TestResultadoExamenClinico:
         assert res.es_critico is True
         assert calcular_es_critico(Decimal("500"), Decimal("40"), Decimal("400")) is True
 
+    def test_audit_metadata_sin_valores_clinicos_crudos(self, setup):
+        te, res = setup
+        res.valor_obtenido = "88"
+        res.valor_numerico = Decimal("88")
+        audit = aplicar_carga_estructurada(
+            res, te, {"valor": "145", "valor_numerico": 145}
+        )
+        for forbidden in (
+            "valor_anterior",
+            "valor_nuevo",
+            "valor_numerico_anterior",
+            "valor_numerico_nuevo",
+            "unidad_anterior",
+            "unidad_nueva",
+        ):
+            assert forbidden not in audit
+        assert audit["valor_anterior_presente"] is True
+        assert audit["valor_nuevo_presente"] is True
+        assert audit["valor_numerico_anterior_presente"] is True
+        assert audit["valor_numerico_nuevo_presente"] is True
+        assert "145" not in str(audit)
+        assert "88" not in str(audit)
+
     def test_pendiente_si_valor_obtenido_vacio(self, setup):
         te, res = setup
         res.valor_numerico = Decimal("99")

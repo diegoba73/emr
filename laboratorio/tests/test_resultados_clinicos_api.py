@@ -1,6 +1,7 @@
 """
 Tests API B4.1 — cargar-resultados estructurados.
 """
+import json
 from decimal import Decimal
 
 import pytest
@@ -8,6 +9,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from auditoria.models import AuditEvent
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from medicos.models import Especialidad, Medico
 from pacientes.models import Paciente
@@ -226,3 +228,42 @@ class TestResultadosClinicosAPI(APITestCase):
         self.assertIn("unidad", resultado)
         self.assertIn("es_critico", resultado)
         self.assertIn("rango_referencia_snapshot", resultado)
+
+    def test_cargar_resultados_metadata_sin_valor_clinico_crudo(self):
+        sol, res = self._sol_y_res()
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+                {
+                    "resultados": [
+                        {"id": res.pk, "valor": "145", "valor_numerico": 145},
+                    ]
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        ev = (
+            AuditEvent.objects.filter(
+                entity_type=ResultadoExamen._meta.label,
+                entity_id=str(res.pk),
+                action="UPDATE",
+                module="laboratorio",
+            )
+            .order_by("-id")
+            .first()
+        )
+        self.assertIsNotNone(ev)
+        meta = ev.metadata or {}
+        meta_raw = json.dumps(meta, ensure_ascii=False, default=str)
+        self.assertNotIn("145", meta_raw)
+        for forbidden in (
+            "valor_anterior",
+            "valor_nuevo",
+            "valor_numerico_anterior",
+            "valor_numerico_nuevo",
+            "unidad_anterior",
+            "unidad_nueva",
+        ):
+            self.assertNotIn(forbidden, meta)
+        self.assertTrue(meta.get("valor_presente"))
+        self.assertTrue(meta.get("valor_nuevo_presente"))

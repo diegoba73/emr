@@ -646,6 +646,31 @@ class TestLimsAuditTrail(APITestCase):
         self.assertIsNotNone(ev)
         self.assertIsNotNone(ev.before_state)
 
+    def test_destroy_entity_repr_sin_nombre_paciente(self):
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud='EMR',
+        )
+        solicitud.tipos_examen.add(self.tipo_examen)
+        sid = solicitud.id
+        self.client.force_authenticate(user=self.user_admin)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(f'/api/lab/solicitudes/{sid}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        ev = AuditEvent.objects.filter(
+            entity_type=SolicitudExamen._meta.label,
+            entity_id=str(sid),
+            action='DELETE',
+            module='laboratorio',
+        ).first()
+        self.assertIsNotNone(ev)
+        self.assertTrue(ev.entity_repr.startswith('laboratorio.SolicitudExamen:'))
+        self.assertNotIn('Pedro', ev.entity_repr)
+        self.assertNotIn('Audit', ev.entity_repr)
+        self.assertNotIn(self.paciente.dni, ev.entity_repr)
+
 
 @pytest.mark.django_db
 class TestSolicitudExamenEstadoAPI(APITestCase):

@@ -92,7 +92,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 **LIMS Fase B4.1 (`cargar_resultados`) — regla de auditoría genérica (SYNESIS):**
 
 - `AuditEvent.metadata` **no** debe registrar valores clínicos crudos ni diffs old/new de `ResultadoExamen`: no `valor_anterior`, `valor_nuevo`, `valor_obtenido`, `valor_numerico`, `unidad`, rangos, ni `observaciones`.
-- La auditoría genérica registra **solo** identificadores y señales técnicas: `resultado_id`, `solicitud_id`, `muestra_id` (si aplica), `tipo_examen_id` (si se requiere para trazabilidad), `accion`, `actor_id`, `view`, `request_id`, y `valor_presente` (booleano).
+- La auditoría genérica registra **solo** identificadores y señales técnicas: `resultado_id`, `solicitud_id`, `muestra_id` (si aplica), `tipo_examen_id` (si se requiere para trazabilidad), `accion`, `actor_id`, `view`, `request_id`, `valor_presente` (booleano) y flags de presencia (`valor_*_presente`, `valor_numerico_*_presente`) sin valores crudos.
 - `before_state` / `after_state` usan `safe_model_snapshot` con **redacción** de campos clínicos en `ResultadoExamen` (placeholder), por lo que no deben permitir reconstruir el resultado desde auditoría genérica.
 - Si en el futuro se requiere auditoría legal de old/new de resultados, debe implementarse como **fase separada** con **ACL estricto** y almacenamiento/diseño dedicados (no como `metadata` genérica).
 
@@ -100,8 +100,8 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 
 - `auditoria/snapshot.py` — `safe_model_snapshot` redacta campos demográficos/clínicos en `Paciente`, `Consulta`, `Atencion`, `ConsultaAmbulatoria`, `Solicitud` y por nombre de campo global (`dni`, `telefono`, `anamnesis`, `observaciones`, etc.).
 - Placeholders: `<dato sensible redactado>`, `<texto clínico redactado>`; LIMS/micro mantiene placeholders previos (`<valor clínico redactado>`, `<resultado microbiológico redactado>`).
-- `safe_entity_repr` (vía `audit_service`) evita `str(instance)` con nombre/DNI/texto clínico; usa identificadores técnicos (`Paciente #id`, `Consulta #id`, etc.).
-- Tests: `auditoria/tests/test_snapshot_phi_redaction.py`, actualización `pacientes/tests/test_audit.py`.
+- `safe_entity_repr` (vía `audit_service`) evita `str(instance)` con nombre/DNI/texto clínico; usa identificadores técnicos (`Paciente #id`, `Consulta #id`, `laboratorio.SolicitudExamen:{id}` en DELETE LIMS, etc.).
+- Tests: `auditoria/tests/test_snapshot_phi_redaction.py` (incl. `ConsultaAmbulatoria`), `laboratorio/tests/test_api.py` (DELETE sin PHI en `entity_repr`), `laboratorio/tests/test_resultados_clinicos_api.py` y `test_resultados_clinicos_models.py` (metadata sin valores crudos).
 - **No** elimina auditoría ni relaja permisos; conserva `id`, FKs, estados, timestamps y actor.
 
 ### API

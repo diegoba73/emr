@@ -93,16 +93,14 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
 
     Retorna metadata de auditoría con valores anterior/nuevo (sin PHI).
     """
+    valor_anterior = (resultado.valor_obtenido or "").strip()
+    valor_numerico_anterior = resultado.valor_numerico
     audit: dict[str, Any] = {
         "tipo_examen_id": tipo_examen.pk,
-        "valor_anterior": resultado.valor_obtenido,
-        "valor_nuevo": None,
-        "valor_numerico_anterior": (
-            str(resultado.valor_numerico) if resultado.valor_numerico is not None else None
-        ),
-        "valor_numerico_nuevo": None,
-        "unidad_anterior": resultado.unidad or "",
-        "unidad_nueva": None,
+        "valor_anterior_presente": bool(valor_anterior),
+        "valor_nuevo_presente": None,
+        "valor_numerico_anterior_presente": valor_numerico_anterior is not None,
+        "valor_numerico_nuevo_presente": None,
         "es_patologico_anterior": resultado.es_patologico,
         "es_patologico_nuevo": None,
         "es_critico_anterior": resultado.es_critico,
@@ -154,11 +152,8 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
     if item.get("observaciones"):
         resultado.observaciones = item["observaciones"]
 
-    audit["valor_nuevo"] = resultado.valor_obtenido
-    audit["valor_numerico_nuevo"] = (
-        str(resultado.valor_numerico) if resultado.valor_numerico is not None else None
-    )
-    audit["unidad_nueva"] = resultado.unidad or ""
+    audit["valor_nuevo_presente"] = bool((resultado.valor_obtenido or "").strip())
+    audit["valor_numerico_nuevo_presente"] = resultado.valor_numerico is not None
     audit["es_patologico_nuevo"] = resultado.es_patologico
     audit["es_critico_nuevo"] = resultado.es_critico
     return audit

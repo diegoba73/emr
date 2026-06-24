@@ -125,7 +125,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         pk = instance.pk
         label = SolicitudExamen._meta.label
-        repr_str = (str(instance) or "")[:255]
+        repr_str = f"{label}:{pk}"[:255]
         before = safe_model_snapshot(instance)
         super().perform_destroy(instance)
         log_event(
@@ -297,9 +297,6 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                                 resultado.tipo_examen,
                                 resultado_item,
                             )
-                            for _k in list(audit_estructurado.keys()):
-                                if _k.startswith("valor_") or _k.startswith("unidad_"):
-                                    audit_estructurado.pop(_k, None)
                             audit_estructurado["valor_presente"] = bool(
                                 (resultado.valor_obtenido or "").strip()
                             )

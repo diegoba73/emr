@@ -1,7 +1,7 @@
 """Tests AUD-01: snapshots y entity_repr sin PHI/PII en auditoría genérica."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from django.utils import timezone
@@ -11,7 +11,7 @@ from historias_clinicas.models import Consulta, HistoriaClinica
 from medicos.models import Medico
 from pacientes.models import Paciente
 from solicitudes.models import Solicitud
-from turnos.models import Atencion, Recurso, Turno
+from turnos.models import Atencion, ConsultaAmbulatoria, Recurso, Turno
 
 
 def _raw(snapshot: dict) -> str:
@@ -113,12 +113,14 @@ class TestAtencionSnapshotRedaction:
         rec = Recurso.objects.create(
             nombre='Box 1', ubicacion='CEHTA', tipo_recurso='CONSULTORIO', activo=True
         )
+        inicio = timezone.now()
+        fin = inicio + timedelta(minutes=30)
         turno = Turno.objects.create(
             paciente=pac,
             medico=med,
             recurso=rec,
-            fecha_hora_inicio=timezone.now(),
-            fecha_hora_fin=timezone.now(),
+            fecha_hora_inicio=inicio,
+            fecha_hora_fin=fin,
             estado='CONFIRMADO',
         )
         atencion = Atencion.objects.create(
@@ -180,3 +182,40 @@ class TestSolicitudSnapshotRedaction:
         repr_str = safe_entity_repr(sol)
         assert f'Solicitud #{sol.pk}' in repr_str
         assert 'Rx' not in repr_str
+
+
+@pytest.mark.django_db
+class TestConsultaAmbulatoriaSnapshotRedaction:
+    def test_snapshot_redacta_texto_clinico_sensible(self):
+        pac = Paciente.objects.create(dni='CA-001', nombre='P', apellido='A')
+        med = Medico.objects.create(matricula='MCA-01', nombre='Dr', apellido='X')
+        atencion = Atencion.objects.create(
+            paciente=pac,
+            medico_principal=med,
+            tipo_atencion='CONSULTORIO',
+        )
+        consulta = ConsultaAmbulatoria.objects.create(
+            atencion=atencion,
+            anamnesis='Dolor precordial irradiado a brazo izquierdo',
+            examen_fisico='Soplo sistólico grado II',
+            diagnostico_presuntivo='Síndrome coronario agudo',
+            plan_manejo='Internación UCO y troponinas seriadas',
+            antecedentes_relevantes='IAM previo 2019',
+            alergias='Penicilina',
+            medicacion_actual='AAS 100mg',
+            diagnostico_definitivo='Angina inestable',
+            observaciones_medicas='Derivar cardiología',
+        )
+        snap = safe_model_snapshot(consulta)
+        raw = _raw(snap)
+
+        assert 'precordial' not in raw
+        assert 'Soplo sistólico' not in raw
+        assert 'coronario' not in raw
+        assert 'Penicilina' not in raw
+        assert snap['anamnesis'] == '<texto clínico redactado>'
+        assert snap['examen_fisico'] == '<texto clínico redactado>'
+        assert snap['diagnostico_presuntivo'] == '<texto clínico redactado>'
+        assert snap['plan_manejo'] == '<texto clínico redactado>'
+        assert snap['alergias'] == '<texto clínico redactado>'
+        assert snap['atencion'] == atencion.pk
