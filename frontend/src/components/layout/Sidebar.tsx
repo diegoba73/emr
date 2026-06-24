@@ -27,6 +27,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
 import { User } from '../../types';
 import Logo from '../Logo';
+import {
+  canAccessArchivosMedicos,
+  canAccessAuditoria,
+  canAccessPacientes,
+  canAccessSolicitudes,
+} from '../../utils/permissions';
+import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
+import { canAccessLimsModule, canAccessMicrobiologia } from '../../utils/limsAccess';
 
 export const SIDEBAR_WIDTH = 260;
 
@@ -34,23 +42,24 @@ export interface NavItem {
   text: string;
   path: string;
   icon: React.ReactElement;
-  roles: string[];
+  /** @deprecated usar canAccessNavItem */
+  roles?: string[];
+  canAccess?: (user: User | null) => boolean;
 }
 
 const navItems: NavItem[] = [
-  { text: 'Dashboard', icon: <HomeIcon />, path: '/dashboard', roles: ['all'] },
-  { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', roles: ['medico', 'admin', 'secretaria', 'enfermeria'] },
+  { text: 'Dashboard', icon: <HomeIcon />, path: '/dashboard', canAccess: () => true },
+  { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
   { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria'] },
-  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos-medicos', roles: ['medico', 'admin', 'paciente'] },
+  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos-medicos', canAccess: canAccessArchivosMedicos },
   {
     text: 'Estudios complementarios',
     icon: <Description />,
     path: '/estudios-complementarios',
-    roles: ['medico', 'admin', 'paciente'],
+    canAccess: canAccessEstudiosModule,
   },
-  { text: 'Solicitudes', icon: <SolicitudIcon />, path: '/solicitudes', roles: ['medico', 'admin', 'secretaria', 'enfermeria', 'paciente'] },
-  // Contexto clínico ampliado
+  { text: 'Solicitudes', icon: <SolicitudIcon />, path: '/solicitudes', canAccess: canAccessSolicitudes },
   { text: 'Mis consultas', icon: <FolderIcon />, path: '/mis-consultas', roles: ['medico', 'paciente'] },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria'] },
 ];
@@ -58,13 +67,13 @@ const navItems: NavItem[] = [
 const adminOnly: NavItem[] = [
   { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios', roles: ['admin'] },
-  { text: 'Auditoría', icon: <AuditIcon />, path: '/auditoria', roles: ['admin'] },
+  { text: 'Auditoría', icon: <AuditIcon />, path: '/auditoria', canAccess: canAccessAuditoria },
 ];
 
 const labItems: NavItem[] = [
-  { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', roles: ['admin', 'laboratorio', 'medico'] },
-  { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', roles: ['admin', 'laboratorio', 'medico'] },
-  { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', roles: ['admin', 'laboratorio', 'medico'] },
+  { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsModule },
+  { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
+  { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', canAccess: canAccessMicrobiologia },
 ];
 
 const catalogItems: NavItem[] = [
@@ -80,6 +89,10 @@ const filterByRole = (items: NavItem[], currentUser: User | null): NavItem[] => 
   const userRole = (currentUser.rol || '').toLowerCase();
   const isAdmin = userRole === 'admin' || currentUser.is_superuser;
   return items.filter((item) => {
+    if (item.canAccess) {
+      return item.canAccess(currentUser);
+    }
+    if (!item.roles) return false;
     if (item.roles.includes('all')) return true;
     if (isAdmin) return true;
     return item.roles.includes(userRole);

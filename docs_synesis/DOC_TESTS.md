@@ -235,13 +235,14 @@ bash scripts/smoke_local.sh
 
 La suite vive en el directorio **`frontend/`** del monorepo (Create React App + Jest + Testing Library). **No hay** Playwright ni Cypress configurados en el repo (búsqueda `playwright.config.*` / `cypress.config.*` vacía).
 
-**Suite Jest global (21 jun 2026, post-`30e75d3`):** `npm test -- --watchAll=false` → **19 suites / 82 tests PASS**. Smoke `App.test.tsx` valida pantalla de login en `/login`. Mock de `react-big-calendar` documentado en sección *Frontend Jest global* arriba.
+**Suite Jest global (24 jun 2026, FE-PERM-01):** `npm test -- --watchAll=false` → **21 suites / 97 tests PASS**. Smoke `App.test.tsx` valida pantalla de login en `/login`. Nuevos: `permissions.test.ts`, `apiError.test.ts` (matriz de roles y mensajes 403/404 seguros).
 
 **E2E-1 / E2E-1-A LIMS (jun 2026) — Opción B (sin framework browser):**
 
 - Test crítico API base: `laboratorio/tests/test_lims_flujo_critico.py` → `test_flujo_critico_lims_muestra_resultado_microbiologia` (solicitud → muestra tomada/recibida → `cargar-resultados` con `muestra_id` → estudio micro → `iniciar` → siembra → lectura preliminar → informe `PRELIMINAR` en `BORRADOR`; intento médico siembra → `403` sin crear siembra ni auditoría `crear_siembra`; usuario `laboratorio`; sin logs PHI).
 - Test crítico cierre micro: `test_flujo_critico_lims_microbiologia_final_validado_informado` (mismo arranque LIMS → aislado → identificación → antibiograma → resultado → completar → informe `FINAL` emitido → `LISTO_PARA_VALIDAR` → admin valida → `VALIDADO` → `marcar-informado` → `INFORMADO`; operación técnica post-cierre → `400`).
 - Helpers frontend reforzados previamente: `limsAccess.test.ts`, `limsMicroUx.test.ts`, `limsCargaMuestra.test.ts`.
+- **FE-PERM-01 (jun 2026):** `permissions.test.ts` (pacientes, solicitudes, archivos, LIMS, auditoría por rol); `apiError.test.ts` (403/404 sin PHI).
 - **GAP pendiente:** E2E browser LIMS/micro (requiere instalar y cablear Playwright o Cypress en CI). No se implementó PDF ni CLSI/EUCAST.
 
 **Comandos validados (UI-2, commit `d46d276`, mayo 2026):**

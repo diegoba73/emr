@@ -183,7 +183,9 @@ const PatientDashboard: React.FC = () => {
   if (!paciente) {
     return (
       <Box sx={{ p: 2 }}>
-        <Alert severity="info">No se encontró el paciente o aún se están cargando los datos.</Alert>
+        <Alert severity="info">
+          No tiene permisos para ver este paciente o el registro no está disponible.
+        </Alert>
         <Button sx={{ mt: 2 }} onClick={() => navigate('/pacientes')}>
           Volver a pacientes
         </Button>

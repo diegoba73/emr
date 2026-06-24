@@ -351,6 +351,9 @@ export const getSolicitud = async (id: number): Promise<Solicitud> => {
   }
 };
 
+// Solicitudes genéricas EMR — lectura vía getSolicitudes/getSolicitud.
+// Mutaciones legacy (create/update/delete/cambiar_estado/cancelar/reabrir/enviar_lims):
+// admin-only o bloqueadas en backend (PERM-01). No invocar desde UI sin verificar rol.
 export const createSolicitud = async (data: Partial<Solicitud>): Promise<Solicitud> => {
   try {
     const response = await api.post('/solicitudes/', data);
@@ -371,6 +374,7 @@ export const updateSolicitud = async (id: number, data: Partial<Solicitud>): Pro
   }
 };
 
+/** Admin-only en backend (PERM-01). */
 export const deleteSolicitud = async (id: number): Promise<void> => {
   try {
     await api.delete(`/solicitudes/${id}/`);
@@ -390,6 +394,7 @@ export const getSolicitudesPendientes = async (): Promise<Solicitud[]> => {
   }
 };
 
+/** Admin-only / bloqueado para roles clínicos (PERM-01). */
 export const cambiarEstadoSolicitud = async (id: number, nuevoEstado: string): Promise<Solicitud> => {
   try {
     const response = await api.patch(`/solicitudes/${id}/cambiar_estado/`, {
@@ -402,6 +407,7 @@ export const cambiarEstadoSolicitud = async (id: number, nuevoEstado: string): P
   }
 };
 
+/** Admin-only en backend (PERM-01). */
 export const marcarSolicitudCompletada = async (id: number): Promise<Solicitud> => {
   try {
     const response = await api.post(`/solicitudes/${id}/marcar_como_completada/`);
@@ -412,6 +418,7 @@ export const marcarSolicitudCompletada = async (id: number): Promise<Solicitud> 
   }
 };
 
+/** Limitado por rol en backend; no expuesto en UI actual. */
 export const cancelarSolicitud = async (id: number): Promise<Solicitud> => {
   try {
     const response = await api.post(`/solicitudes/${id}/cancelar/`);
@@ -422,6 +429,7 @@ export const cancelarSolicitud = async (id: number): Promise<Solicitud> => {
   }
 };
 
+/** Admin-only en backend (PERM-01). */
 export const reabrirSolicitud = async (id: number): Promise<Solicitud> => {
   try {
     const response = await api.post(`/solicitudes/${id}/reabrir/`);
@@ -432,6 +440,7 @@ export const reabrirSolicitud = async (id: number): Promise<Solicitud> => {
   }
 };
 
+/** Admin-only: envío LIMS externo (PERM-01). No usar desde UI estándar. */
 export const enviarSolicitudALims = async (id: number, data: { paneles?: (number|string)[]; tipos_examen?: (number|string)[] }): Promise<{ lims_id: string }> => {
   try {
     const response = await api.post(`/solicitudes/${id}/enviar_lims/`, data);

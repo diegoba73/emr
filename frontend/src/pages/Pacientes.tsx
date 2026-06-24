@@ -35,6 +35,8 @@ import { useData } from '../contexts/DataContext';
 import { Paciente } from '../types';
 import SearchAndFilters from '../components/SearchAndFilters';
 import { createPaciente } from '../services/apiService';
+import { canCreatePaciente } from '../utils/permissions';
+import { getSafeApiErrorMessage } from '../utils/apiError';
 import {
   extractSearchWords,
   pacienteMatchesSearch,
@@ -42,7 +44,7 @@ import {
 } from '../utils/search';
 
 const Pacientes: React.FC = () => {
-  const { pacientes, loading, loadPacientes } = useData();
+  const { pacientes, loading, loadPacientes, currentUser } = useData();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [page, setPage] = useState(0);
@@ -140,6 +142,8 @@ const Pacientes: React.FC = () => {
     return sexo === 'M' ? 'primary' : 'secondary';
   };
 
+  const canCreate = canCreatePaciente(currentUser);
+
   if (loading.pacientes) {
     return (
       <Box sx={{ p: 3 }}>
@@ -172,7 +176,7 @@ const Pacientes: React.FC = () => {
         searchPlaceholder="Buscar por nombre, apellido, DNI o email..."
         filters={{}}
         onRefresh={loadPacientes}
-        onAdd={() => { setCreateError(''); setShowCreateDialog(true); }}
+        onAdd={canCreate ? () => { setCreateError(''); setShowCreateDialog(true); } : undefined}
         addButtonText="Nuevo Paciente"
         totalItems={pacientes.length}
         filteredItems={filteredPacientes.length}
@@ -538,15 +542,15 @@ const Pacientes: React.FC = () => {
               }
               try {
                 setIsCreating(true);
-                const created = await createPaciente(newPaciente as any);
+                await createPaciente(newPaciente as any);
                 setShowCreateDialog(false);
                 setNewPaciente({
                   nombre: '', apellido: '', dni: '', fecha_nacimiento: '', sexo: '', telefono: '', email: '', direccion: '', obra_social: '', numero_afiliado: '', observaciones: ''
                 } as any);
                 await loadPacientes();
-                alert(`Paciente ${created.nombre} ${created.apellido} creado correctamente`);
-              } catch (e: any) {
-                setCreateError(e?.response?.data?.error || 'Error al crear el paciente');
+                alert('Paciente creado correctamente');
+              } catch (e: unknown) {
+                setCreateError(getSafeApiErrorMessage(e, 'Error al crear el paciente'));
               } finally {
                 setIsCreating(false);
               }

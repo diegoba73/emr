@@ -27,6 +27,7 @@ import {
   TableHead,
   TableRow,
   TablePagination,
+  Alert,
 } from '@mui/material';
 import {
   Edit,
@@ -42,6 +43,11 @@ import { ArchivoMedico, Paciente } from '../types';
 import SearchAndFilters from '../components/SearchAndFilters';
 import AsyncAutocomplete from '../components/common/AsyncAutocomplete';
 import { formatPacienteLabel } from '../utils/pacienteFormat';
+import {
+  canDownloadArchivoMedico,
+  canWriteArchivoMedico,
+} from '../utils/permissions';
+import { getSafeApiErrorMessage } from '../utils/apiError';
 import { 
   createArchivoMedico, 
   updateArchivoMedico, 
@@ -51,7 +57,10 @@ import {
 } from '../services/apiService';
 
 const ArchivosMedicos: React.FC = () => {
-  const { archivosMedicos, loadArchivosMedicos, pacientes, loadPacientes } = useData();
+  const { archivosMedicos, loadArchivosMedicos, pacientes, loadPacientes, currentUser } = useData();
+  const canWrite = canWriteArchivoMedico(currentUser);
+  const canDownload = canDownloadArchivoMedico(currentUser);
+  const [downloadError, setDownloadError] = useState('');
   const [consultas, setConsultas] = useState<any[]>([]);
   const [tiposArchivo, setTiposArchivo] = useState<{value: string, label: string}[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,8 +147,8 @@ const ArchivosMedicos: React.FC = () => {
       setEditingArchivo(null);
       resetForm();
       loadArchivosMedicos();
-    } catch {
-      /* el usuario puede reintentar desde el formulario */
+    } catch (err: unknown) {
+      setDownloadError(getSafeApiErrorMessage(err, 'No se pudo guardar el archivo.'));
     } finally {
       setLoading(false);
     }
@@ -176,6 +185,7 @@ const ArchivosMedicos: React.FC = () => {
   };
 
   const handleDownload = async (archivo: ArchivoMedico) => {
+    setDownloadError('');
     try {
       const blob = await downloadArchivoMedico(archivo.id);
       const url = window.URL.createObjectURL(blob);
@@ -186,8 +196,8 @@ const ArchivosMedicos: React.FC = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      /* sin detalle en consola (C6.2) */
+    } catch (err: unknown) {
+      setDownloadError(getSafeApiErrorMessage(err, 'No se pudo descargar el archivo.'));
     }
   };
 
@@ -270,7 +280,11 @@ const ArchivosMedicos: React.FC = () => {
         </Typography>
       </Box>
 
-
+      {downloadError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDownloadError('')}>
+          {downloadError}
+        </Alert>
+      )}
 
       {/* Search and Actions */}
       <SearchAndFilters
@@ -278,11 +292,11 @@ const ArchivosMedicos: React.FC = () => {
         onSearchChange={setSearchTerm}
         searchPlaceholder="Buscar por título, descripción o paciente..."
         onRefresh={loadArchivosMedicos}
-        onAdd={() => {
+        onAdd={canWrite ? () => {
           setShowForm(true);
           setEditingArchivo(null);
           resetForm();
-        }}
+        } : undefined}
         addButtonText="Nuevo Archivo"
         totalItems={archivosMedicos.length}
         filteredItems={filteredArchivos.length}
@@ -358,24 +372,28 @@ const ArchivosMedicos: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Tooltip title="Descargar">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleDownload(archivo)}
-                          >
-                            <Download />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEdit(archivo)}
-                            color="warning"
-                          >
-                            <Edit />
-                          </IconButton>
-                        </Tooltip>
+                        {canDownload && (
+                          <Tooltip title="Descargar">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleDownload(archivo)}
+                            >
+                              <Download />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {canWrite && (
+                          <Tooltip title="Editar">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEdit(archivo)}
+                              color="warning"
+                            >
+                              <Edit />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>

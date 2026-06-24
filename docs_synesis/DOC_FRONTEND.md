@@ -52,7 +52,31 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 ## Validaciones frontend, errores, permisos/guards
 
-**[OBSOLETO]** ~~No hay código de aplicación que auditar.~~ — **Confirmado:** guards en `utils/limsAccess.ts`, `DataContext`, rutas protegidas en `App.tsx`.
+**[OBSOLETO]** ~~No hay código de aplicación que auditar.~~ — **Confirmado:** matriz central en `utils/permissions.ts` (FE-PERM-01, jun 2026), LIMS en `utils/limsAccess.ts`, estudios en `modules/estudios/permissions.ts`, guards en `App.tsx` (`ProtectedRoute` + `canAccess`), sidebar alineado en `Sidebar.tsx`.
+
+### FE-PERM-01 — guards y acciones UI (jun 2026)
+
+**Helper central:** `frontend/src/utils/permissions.ts` — reexporta LIMS desde `limsAccess.ts` y cubre pacientes, solicitudes genéricas, archivos médicos y auditoría.
+
+| Función | Roles permitidos (UI; backend valida) |
+|---------|----------------------------------------|
+| `canAccessPacientes` | admin/staff, secretaría, enfermería, médico, paciente |
+| `canCreatePaciente` | admin/staff, secretaría, enfermería, médico |
+| `canAccessPaciente360` | igual que pacientes |
+| `canAccessSolicitudes` | admin, secretaría, médico, paciente — **no** enfermería/laboratorio |
+| `canAccessArchivosMedicos` | admin, médico, paciente |
+| `canWriteArchivoMedico` | admin, médico, paciente |
+| `canDownloadArchivoMedico` | admin, médico, paciente |
+| `canAccessAuditoria` | superuser, staff, rol admin (`IsAuditAdmin`) |
+| `canAccessLims` / `canAccessMicrobiologia` | admin, laboratorio, médico (lectura) |
+| `canOperateLims` / `canOperateMicrobiologia` | admin, laboratorio |
+| `canValidateLims` / `canValidateMicrobiologia` | admin/superuser |
+
+**Rutas con guard (`App.tsx`):** `/pacientes`, `/paciente/:id`, `/solicitudes`, `/archivos-medicos`, `/estudios-complementarios*`, `/laboratorio/ordenes*`, `/laboratorio/microbiologia*`, `/auditoria`.
+
+**Acciones ocultas por rol:** «Nuevo Paciente» (`Pacientes.tsx`), «Nuevo/Editar archivo» y descarga condicional (`ArchivosMedicos.tsx`). Solicitudes EMR: solo lectura; mutaciones legacy en `apiService.ts` documentadas como admin-only / no usadas en UI.
+
+**Errores seguros:** `utils/apiError.ts` — mensajes genéricos 401/403/404 sin PHI.
 
 ## Pantallas críticas y flujos de usuario
 

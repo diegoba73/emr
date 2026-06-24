@@ -38,6 +38,16 @@ import MicrobiologiaEstudioDetalle from './pages/laboratorio/MicrobiologiaEstudi
 import MicrobiologiaCatalogos from './pages/laboratorio/MicrobiologiaCatalogos';
 import PatientDashboard from './components/patient360/PatientDashboard';
 import AuditEventsPage from './pages/AuditEventsPage';
+import type { User } from './types';
+import {
+  canAccessArchivosMedicos,
+  canAccessAuditoria,
+  canAccessPaciente360,
+  canAccessPacientes,
+  canAccessSolicitudes,
+} from './utils/permissions';
+import { canAccessEstudiosModule } from './modules/estudios/permissions';
+import { canAccessLimsModule, canAccessMicrobiologia } from './utils/limsAccess';
 
 // Create query client
 const queryClient = new QueryClient({
@@ -51,10 +61,11 @@ const queryClient = new QueryClient({
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  currentUser: any;
+  currentUser: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   requiredRole?: string | string[];
+  canAccess?: (user: User | null) => boolean;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
@@ -62,7 +73,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   currentUser, 
   isAuthenticated, 
   isLoading,
-  requiredRole 
+  requiredRole,
+  canAccess,
 }) => {
   // Mostrar loading mientras se verifica la autenticación
   if (isLoading) {
@@ -86,7 +98,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" replace />;
   }
   
-  // Verificar roles si se requiere
+  if (canAccess && !canAccess(currentUser)) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">No tiene permisos para acceder a esta sección.</Alert>
+      </Box>
+    );
+  }
+
+  // Verificar roles si se requiere (legacy; preferir canAccess)
   if (requiredRole) {
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
     const userRole = (currentUser?.rol || '').toUpperCase();
@@ -136,11 +156,29 @@ const AppContent: React.FC = () => {
           />
           <Route
             path="/pacientes"
-            element={<Pacientes />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPacientes}
+              >
+                <Pacientes />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/paciente/:id"
-            element={<PatientDashboard />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPaciente360}
+              >
+                <PatientDashboard />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/turnos"
@@ -169,19 +207,55 @@ const AppContent: React.FC = () => {
           />
           <Route
             path="/solicitudes"
-            element={<Solicitudes />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessSolicitudes}
+              >
+                <Solicitudes />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/archivos-medicos"
-            element={<ArchivosMedicos />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessArchivosMedicos}
+              >
+                <ArchivosMedicos />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/estudios-complementarios"
-            element={<EstudiosComplementarios />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessEstudiosModule}
+              >
+                <EstudiosComplementarios />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/estudios-complementarios/:id"
-            element={<EstudioComplementarioDetalle />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessEstudiosModule}
+              >
+                <EstudioComplementarioDetalle />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/medicos"
@@ -281,6 +355,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessLimsModule}
               >
                 <OrdenLimsDetalle />
               </ProtectedRoute>
@@ -293,6 +368,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessLimsModule}
               >
                 <OrdenesLims />
               </ProtectedRoute>
@@ -305,6 +381,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessLimsModule}
               >
                 <ListaExamenesTest />
               </ProtectedRoute>
@@ -317,6 +394,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessMicrobiologia}
               >
                 <MicrobiologiaEstudioDetalle />
               </ProtectedRoute>
@@ -329,6 +407,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessMicrobiologia}
               >
                 <MicrobiologiaEstudios />
               </ProtectedRoute>
@@ -341,6 +420,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessMicrobiologia}
               >
                 <MicrobiologiaCatalogos />
               </ProtectedRoute>
@@ -353,6 +433,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
+                canAccess={canAccessMicrobiologia}
               >
                 <MicrobiologiaHub />
               </ProtectedRoute>
@@ -365,7 +446,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole="ADMIN"
+                canAccess={canAccessAuditoria}
               >
                 <AuditEventsPage />
               </ProtectedRoute>
