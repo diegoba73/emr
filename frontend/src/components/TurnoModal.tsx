@@ -34,6 +34,10 @@ import {
   canMarcarNoAsistioTurno,
   shouldLockMedicoField,
 } from '../utils/turnoPermissions';
+import {
+  CLINICAL_ACTION_ERRORS,
+  getSafeClinicalActionMessage,
+} from '../utils/apiError';
 
 const getMedicoLabel = (medico?: Medico | null) => {
   if (!medico) return '';
@@ -272,12 +276,12 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     if (!editingTurno?.id) return;
     setLoading(true);
     try {
-      const { turno, message } = await apiService.confirmarTurno(editingTurno.id);
+      const { turno } = await apiService.confirmarTurno(editingTurno.id);
       setTurnoEfectivo(turno);
-      alert(message || 'Turno confirmado');
+      alert('Turno confirmado');
       onSuccess?.();
-    } catch (error: any) {
-      alert(error.message || 'No se pudo confirmar el turno');
+    } catch (error: unknown) {
+      alert(getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoConfirmar));
     } finally {
       setLoading(false);
     }
@@ -291,12 +295,14 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       confirmLabel: 'Cancelar turno',
       onConfirm: async (motivo) => {
         try {
-          const { turno, message } = await apiService.cancelarTurno(editingTurno.id, motivo);
+          const { turno } = await apiService.cancelarTurno(editingTurno.id, motivo);
           setTurnoEfectivo(turno);
-          alert(message || 'Turno cancelado');
+          alert('Turno cancelado');
           onSuccess?.();
-        } catch (error: any) {
-          throw new Error(error.message || 'No se pudo cancelar el turno');
+        } catch (error: unknown) {
+          throw new Error(
+            getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoCancelar)
+          );
         }
       },
     });
@@ -306,12 +312,12 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     if (!editingTurno?.id) return;
     setLoading(true);
     try {
-      const { turno, message } = await apiService.marcarRealizadoTurno(editingTurno.id);
+      const { turno } = await apiService.marcarRealizadoTurno(editingTurno.id);
       setTurnoEfectivo(turno);
-      alert(message || 'Turno marcado como realizado');
+      alert('Turno marcado como realizado');
       onSuccess?.();
-    } catch (error: any) {
-      alert(error.message || 'No se pudo marcar el turno como realizado');
+    } catch (error: unknown) {
+      alert(getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoRealizado));
     } finally {
       setLoading(false);
     }
@@ -326,12 +332,14 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       initialMotivo: 'No asistió',
       onConfirm: async (motivo) => {
         try {
-          const { turno, message } = await apiService.marcarNoAsistioTurno(editingTurno.id, motivo);
+          const { turno } = await apiService.marcarNoAsistioTurno(editingTurno.id, motivo);
           setTurnoEfectivo(turno);
-          alert(message || 'No asistencia registrada');
+          alert('No asistencia registrada');
           onSuccess?.();
-        } catch (error: any) {
-          throw new Error(error.message || 'No se pudo registrar no asistencia');
+        } catch (error: unknown) {
+          throw new Error(
+            getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoNoAsistio)
+          );
         }
       },
     });
@@ -640,10 +648,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 }
                 onSuccess?.();
                 onClose();
-              } catch (error: any) {
-                const errorMessage =
-                  error.message || error.response?.data?.error || 'Error desconocido al guardar el turno';
-                throw new Error(errorMessage);
+              } catch (error: unknown) {
+                throw new Error(
+                  getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoReprogramar)
+                );
               }
             },
           });
@@ -663,9 +671,8 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
 
       onSuccess?.();
       onClose();
-    } catch (error: any) {
-      const errorMessage = error.message || error.response?.data?.error || 'Error desconocido al guardar el turno';
-      alert(`Error al guardar turno: ${errorMessage}`);
+    } catch (error: unknown) {
+      alert(getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoGuardar));
     } finally {
       setLoading(false);
     }
@@ -769,13 +776,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       } else {
         setSelectedAtencionId(atencion.id);
       }
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail ||
-        error.response?.data?.error ||
-        error.message ||
-        'Error al iniciar la atención.';
-      alert(`Error: ${errorMessage}`);
+    } catch (error: unknown) {
+      alert(
+        getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoIniciarAtencion)
+      );
     }
   };
 
@@ -817,12 +821,13 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         try {
           await apiService.iniciarAtencionTurno(editingTurno.id);
           queryClient.invalidateQueries({ queryKey: ['turnos'] });
-        } catch (syncError: any) {
-          const msg =
-            syncError?.response?.data?.detail ||
-            syncError?.message ||
-            'Error al sincronizar el turno con la atención.';
-          alert(`Error: ${msg}`);
+        } catch (syncError: unknown) {
+          alert(
+            getSafeClinicalActionMessage(
+              syncError,
+              CLINICAL_ACTION_ERRORS.turnoSincronizarAtencion
+            )
+          );
           return;
         }
       }

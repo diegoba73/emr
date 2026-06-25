@@ -27,6 +27,7 @@ import { Cama, InternacionCama, Paciente, DiagnosticoCIE10 } from '../../types';
 import { darAltaInternacion, getInternaciones, updateInternacion, buscarDiagnosticosCIE10 } from '../../services/apiService';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
 interface ModalGestionarPacienteProps {
   open: boolean;
@@ -266,8 +267,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           setError('No se encontró la internación');
         }
       }
-    } catch (err: any) {
-      setError('Error al cargar datos de internación: ' + (err.message || 'Error desconocido'));
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.internacionCargar));
     } finally {
       setLoadingData(false);
     }
@@ -368,13 +369,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         await loadInternacion();
         onSuccess();
       }, 500);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 
-                      err.response?.data?.detail || 
-                      err.response?.data?.message ||
-                      err.response?.data ||
-                      'Error al actualizar: ' + (err.message || 'Error desconocido');
-      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.internacionActualizar));
     } finally {
       setLoading(false);
     }
@@ -400,12 +396,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       // Todos estos datos quedan registrados en la base de datos para historial
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error ||
-        err.response?.data?.detail ||
-        'Error al dar de alta: ' + (err.message || 'Error desconocido')
-      );
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.internacionAlta));
       setConfirmAlta(false);
     } finally {
       setLoading(false);

@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Cama } from '../../types';
 import { updateCama } from '../../services/apiService';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
 interface ModalGestionarCamaProps {
   open: boolean;
@@ -57,12 +58,8 @@ const ModalGestionarCama: React.FC<ModalGestionarCamaProps> = ({
       await updateCama(cama.id, { estado });
       onSuccess();
       onClose();
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 
-                      err.response?.data?.detail || 
-                      err.response?.data?.message ||
-                      'Error al actualizar estado: ' + (err.message || 'Error desconocido');
-      setError(errorMsg);
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.camaActualizar));
     } finally {
       setLoading(false);
     }

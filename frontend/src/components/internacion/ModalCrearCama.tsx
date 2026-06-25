@@ -22,6 +22,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { getSectores, createSector, createCama } from '../../services/internacion';
 import { Sector } from '../../types';
 import toast from 'react-hot-toast';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
 interface ModalCrearCamaProps {
   open: boolean;
@@ -116,8 +117,8 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
       resetCama();
       onSuccess();
       onClose();
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.response?.data?.detail || err.message || 'Error al crear la cama';
+    } catch (err: unknown) {
+      const errorMessage = getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.camaCrear);
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -139,8 +140,8 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
       await loadSectores();
       // Cambiar a la pestaña de camas para que el usuario pueda crear una cama en el nuevo sector
       setTabValue(0);
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.response?.data?.detail || err.message || 'Error al crear el sector';
+    } catch (err: unknown) {
+      const errorMessage = getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.sectorCrear);
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {

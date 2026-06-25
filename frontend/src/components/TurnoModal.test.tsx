@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TurnoModal from './TurnoModal';
+import { CLINICAL_ACTION_ERRORS } from '../utils/apiError';
 
 const mockCancelarTurno = jest.fn();
 const mockMarcarNoAsistioTurno = jest.fn();
@@ -161,7 +162,7 @@ describe('TurnoModal motivo dialog', () => {
     expect(mockCancelarTurno).not.toHaveBeenCalled();
   });
 
-  it('muestra error de API al cancelar sin cerrar el modal', async () => {
+  it('muestra error seguro de API al cancelar sin cerrar el modal', async () => {
     mockCancelarTurno.mockRejectedValue(new Error('Error de red'));
     renderTurnoModal();
     await waitFor(() => {
@@ -176,7 +177,7 @@ describe('TurnoModal motivo dialog', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar turno' }));
 
     await waitFor(() => {
-      expect(within(dialog).getByText('Error de red')).toBeInTheDocument();
+      expect(within(dialog).getByText(CLINICAL_ACTION_ERRORS.turnoCancelar)).toBeInTheDocument();
     });
     expect(screen.getByRole('heading', { name: 'Cancelar turno' })).toBeInTheDocument();
   });

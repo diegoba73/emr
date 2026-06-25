@@ -76,7 +76,9 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 **Acciones ocultas por rol:** «Nuevo Paciente» (`Pacientes.tsx`), «Nuevo/Editar archivo» y descarga condicional (`ArchivosMedicos.tsx`). Solicitudes EMR: solo lectura; mutaciones legacy en `apiService.ts` documentadas como admin-only / no usadas en UI.
 
-**Errores seguros:** `utils/apiError.ts` — mensajes genéricos 401/403/404 sin PHI.
+**Errores seguros:** `utils/apiError.ts` — mensajes genéricos 401/403/404 sin PHI; `getSafeClinicalActionMessage` + `CLINICAL_ACTION_ERRORS` para feedback visible por acción.
+
+**Errores visibles (QA-FE-ERR-01):** `TurnoModal.tsx` e `internacion/*` no muestran `error.response.data`, `detail`, `message` ni `error.message` de Axios en `alert`, toast ni `setError`. El usuario recibe mensajes genéricos y accionables sin PHI/PII. Guardrail: `no-raw-clinical-errors-guard.test.ts`.
 
 **Consola (QA-ROLE-01 / QA-FE-LOGS-02 / QA-FE-LOGS-03):** sin `console.*` con PHI/PII en `modules/atenciones/`, `PatientIntegratedView.tsx`, `Turnos.tsx`, `apiService.ts`, `components/internacion/*`, `TurnoModal.tsx`, `Solicitudes.tsx`, `Pacientes.tsx` ni `csrf.ts`. Guardrails: `no-console-guard.test.ts`, `no-console-clinical-views-guard.test.ts`, `no-console-focused-modules-guard.test.ts`.
 

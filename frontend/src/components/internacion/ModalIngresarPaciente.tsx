@@ -16,6 +16,7 @@ import { buscarDiagnosticosCIE10 } from '../../services/apiService';
 import { createInternacion } from '../../services/internacion';
 import { apiService } from '../../services/api';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
 interface ModalIngresarPacienteProps {
   open: boolean;
@@ -238,43 +239,10 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      // Manejar errores de validación del backend
-      let errorMsg = 'Error al ingresar paciente';
-      
-      if (err.response?.data) {
-        const data = err.response.data;
-        
-        // Error de cama no disponible
-        if (data.cama) {
-          errorMsg = Array.isArray(data.cama) ? data.cama[0] : data.cama;
-        }
-        // Error de paciente ya internado
-        else if (data.paciente) {
-          errorMsg = Array.isArray(data.paciente) ? data.paciente[0] : data.paciente;
-        }
-        // Error de diagnóstico
-        else if (data.diagnostico_cie || data.diagnostico_ingreso) {
-          errorMsg = Array.isArray(data.diagnostico_cie) 
-            ? data.diagnostico_cie[0] 
-            : Array.isArray(data.diagnostico_ingreso)
-            ? data.diagnostico_ingreso[0]
-            : 'Debe proporcionar un diagnóstico CIE-10 o un diagnóstico de ingreso';
-        }
-        // Error general
-        else if (data.error || data.detail || data.message) {
-          errorMsg = data.error || data.detail || data.message;
-        }
-        // Errores de validación múltiples
-        else if (typeof data === 'object') {
-          const firstError = Object.values(data)[0];
-          errorMsg = Array.isArray(firstError) ? firstError[0] : String(firstError);
-        }
-      } else if (err.message) {
-        errorMsg = err.message;
-      }
-      
-      setError(errorMsg);
+    } catch (err: unknown) {
+      setError(
+        getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.internacionIngresar)
+      );
     } finally {
       setLoading(false);
     }
