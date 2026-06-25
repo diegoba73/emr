@@ -90,7 +90,7 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 | paciente | Propias | No |
 | secretaría, laboratorio, sin rol | No | No |
 
-**Frontend:** `canAccessAtenciones`, `canOperateAtenciones` en `permissions.ts`; guard en `/atenciones`; sidebar «Consultas» alineado; botón editar oculto sin `canOperateAtenciones`.
+**Frontend:** `canAccessAtenciones`, `canOperateAtenciones` en `permissions.ts`; guard en `/atenciones`; sidebar «Consultas» alineado; botón editar oculto sin `canOperateAtenciones`; `AtencionDetailDrawer` usa `canOperate` / `canOperateAtenciones` (no `rol !== PACIENTE`).
 
 ## Pantallas críticas y flujos de usuario
 

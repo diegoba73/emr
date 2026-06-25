@@ -99,7 +99,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **C5.10.1 `iniciar-atencion`:** estados permitidos `RESERVADO`/`CONFIRMADO`; rechaza `CANCELADO`/`DISPONIBLE`; idempotente si ya existe `Atencion` (200, sin duplicar auditoría de alta); si atención existe y turno sigue `CONFIRMADO`, sincroniza a `REALIZADO` y audita turno. Permisos: médico propio; admin/staff/superuser; no secretaría/paciente/enfermería/laboratorio.
 - **C5.10.2 `POST /api/atenciones/`:** compat/deprecated (headers HTTP); no altera `Turno.estado`; puede dejar turno `CONFIRMADO` con atención abierta — no usar como inicio clínico en UI. Integraciones externas pueden seguir consumiendo el JSON; migrar a `iniciar-atencion`.
 - `marcar-realizado`: no sustituye `iniciar-atencion` (no crea atención).
-- Permisos: `AtencionPermission` (QA-ROLE-01); queryset médico = `medico_principal`; paciente = su paciente; enfermería = lectura global; secretaría bloqueada.
+- Permisos: `AtencionPermission` (QA-ROLE-01); queryset médico = `medico_principal`; paciente = su paciente; enfermería = lectura global sin mutación; secretaría bloqueada.
+- **UI atenciones:** enfermería y paciente ven detalle en solo lectura (`canOperateAtenciones`); no editar, cerrar, registrar ni subir documentos.
+- **POST `/api/atenciones/` (compat):** actor autorizado (médico propio, admin/staff/superuser) con payload inválido (turno inexistente, turno sin médico) → **400** con mensaje genérico del servicio; turno ajeno o actor sin permiso de creación → **403**; no filtrar existencia de turnos a roles no autorizados.
 - Acción **cerrar** para finalizar (detalle en implementación).
 
 ---

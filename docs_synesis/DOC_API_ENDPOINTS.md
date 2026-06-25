@@ -209,7 +209,7 @@ Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` 
 | `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
 | `/api/lab/solicitudes/{id}/informe-pdf/` | GET | **PDF-1:** informe LIMS básico en PDF (generado en memoria; `Content-Type: application/pdf`; nombre `informe-lims-solicitud-{id}.pdf`; sin `/media/`; auditoría `lims_informe_pdf_download`; no modifica estado). **Frontend PDF-1-FE:** consumido desde `limsApi.downloadInformeLimsPdf` en detalle de orden (`OrdenLimsDetalle.tsx`) |
 | `/api/lab/solicitudes/{id}/etiqueta/` | GET | JSON ZPL |
-| `/api/atenciones/` | POST | **Compat/deprecated (C5.10.2):** alta idempotente de `Atencion` desde `turno`; no mueve estado del turno; headers `Deprecation`, `X-Synesis-Deprecated-Endpoint`, `X-Synesis-Replacement-Endpoint`, `Warning` |
+| `/api/atenciones/` | POST | **Compat/deprecated (C5.10.2):** alta idempotente de `Atencion` desde `turno`; no mueve estado del turno; headers `Deprecation`, `X-Synesis-Deprecated-Endpoint`, `X-Synesis-Replacement-Endpoint`, `Warning`. **Errores:** payload inválido con actor autorizado → **400** (turno inexistente, sin médico, etc.); turno ajeno o sin permiso de creación → **403** |
 | `/api/atenciones/{id}/cerrar/` | POST | Cerrar atención |
 | `/api/turnos/{id}/iniciar-atencion/` | POST | **Flujo clínico activo (C5.10.1):** crea/obtiene atención, turno → `REALIZADO`, registro hijo; sin headers deprecated |
 | `/api/turnos/` + query | GET | `start`, `end`, `all` |

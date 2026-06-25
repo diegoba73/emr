@@ -704,7 +704,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
                 turno = Turno.objects.get(pk=turno_raw)
             except (Turno.DoesNotExist, ValueError, TypeError):
                 turno = None
-            if turno is None or turno.medico_id != medico.id:
+            if turno is not None and turno.medico_id is not None and turno.medico_id != medico.id:
                 return Response(
                     {'error': 'No tiene permisos para crear atenciones en este turno.'},
                     status=status.HTTP_403_FORBIDDEN,

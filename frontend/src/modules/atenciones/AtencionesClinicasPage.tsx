@@ -393,7 +393,8 @@ const AtencionesClinicasPage: React.FC = () => {
         atencionId={selectedAtencionId}
         open={Boolean(selectedAtencionId)}
         onClose={handleCloseDetail}
-        currentUserRole={currentUser?.rol}
+        currentUser={currentUser}
+        canOperate={canOperate}
         forceEdit={isEditMode}
       />
     </Box>

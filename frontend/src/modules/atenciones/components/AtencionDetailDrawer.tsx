@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { Close, LocalHospital, AssignmentTurnedIn } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
-import { Atencion } from '../../../types';
+import { Atencion, User } from '../../../types';
 import {
   useAtencionQuery,
   useAtencionesQuery,
@@ -25,12 +25,16 @@ import ConsultaAmbulatoriaForm from './forms/ConsultaAmbulatoriaForm';
 import EstudioDiagnosticoForm from './forms/EstudioDiagnosticoForm';
 import ProcedimientoForm from './forms/ProcedimientoForm';
 import CirugiaForm from './forms/CirugiaForm';
+import { useData } from '../../../contexts/DataContext';
+import { canOperateAtenciones } from '../../../utils/permissions';
 
 interface AtencionDetailDrawerProps {
   atencionId: number | null;
   open: boolean;
   onClose: () => void;
   currentUserRole?: string;
+  currentUser?: User | null;
+  canOperate?: boolean;
   onIntervencionSaved?: () => void | Promise<void>;
   forceEdit?: boolean;
 }
@@ -40,9 +44,14 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   open,
   onClose,
   currentUserRole,
+  currentUser: currentUserProp,
+  canOperate: canOperateProp,
   onIntervencionSaved,
   forceEdit = false,
 }) => {
+  const { currentUser: currentUserFromContext } = useData();
+  const effectiveUser = currentUserProp ?? currentUserFromContext ?? null;
+
   // DEBUG: Log cuando cambian las props del drawer
   useEffect(() => {
     console.log('🔲 [DRAWER] Props actualizadas:', {
@@ -134,9 +143,11 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   }, [data?.consulta_ambulatoria?.id, data?.registro_procedimiento?.id, data?.registro_quirurgico?.id, queryClient, onIntervencionSaved, data]);
 
   const canEdit = useMemo(() => {
-    if (!currentUserRole) return false;
-    return currentUserRole.toUpperCase() !== 'PACIENTE';
-  }, [currentUserRole]);
+    if (canOperateProp !== undefined) {
+      return canOperateProp;
+    }
+    return canOperateAtenciones(effectiveUser);
+  }, [canOperateProp, effectiveUser]);
 
   // Normalizar documentos para pasarlos a los componentes
   const documentosNormalizados = useMemo(() => {

@@ -238,6 +238,38 @@ class TestAtencionPermissionsList:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['count'] >= 2
 
+    def test_staff_ve_todas(self, client, atencion_medico_a, atencion_medico_b):
+        uid = _uid()
+        staff = User.objects.create_user(
+            username=f'staff_{uid}',
+            email=f'staff_{uid}@test.com',
+            password='x',
+            rol='medico',
+            is_staff=True,
+        )
+        client.force_authenticate(user=staff)
+        response = client.get(reverse('atenciones-list'))
+        assert response.status_code == status.HTTP_200_OK
+        ids = {row['id'] for row in response.data['results']}
+        assert atencion_medico_a.id in ids
+        assert atencion_medico_b.id in ids
+
+    def test_superuser_ve_todas(self, client, atencion_medico_a, atencion_medico_b):
+        uid = _uid()
+        superuser = User.objects.create_user(
+            username=f'su_{uid}',
+            email=f'su_{uid}@test.com',
+            password='x',
+            rol='paciente',
+            is_superuser=True,
+        )
+        client.force_authenticate(user=superuser)
+        response = client.get(reverse('atenciones-list'))
+        assert response.status_code == status.HTTP_200_OK
+        ids = {row['id'] for row in response.data['results']}
+        assert atencion_medico_a.id in ids
+        assert atencion_medico_b.id in ids
+
 
 @pytest.mark.django_db
 class TestAtencionPermissionsMutations:
@@ -281,3 +313,59 @@ class TestAtencionPermissionsMutations:
         url = reverse('atenciones-cerrar', args=[atencion_medico_a.id])
         response = client.post(url, {}, format='json')
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_staff_puede_patch_global(self, client, atencion_medico_b):
+        uid = _uid()
+        staff = User.objects.create_user(
+            username=f'staff_{uid}',
+            email=f'staff_{uid}@test.com',
+            password='x',
+            rol='secretaria',
+            is_staff=True,
+        )
+        client.force_authenticate(user=staff)
+        url = reverse('atenciones-detail', args=[atencion_medico_b.id])
+        response = client.patch(url, {'observaciones_generales': 'staff ok'}, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_staff_puede_cerrar_global(self, client, atencion_medico_b):
+        uid = _uid()
+        staff = User.objects.create_user(
+            username=f'staff2_{uid}',
+            email=f'staff2_{uid}@test.com',
+            password='x',
+            rol='enfermeria',
+            is_staff=True,
+        )
+        client.force_authenticate(user=staff)
+        url = reverse('atenciones-cerrar', args=[atencion_medico_b.id])
+        response = client.post(url, {}, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_superuser_puede_patch_global(self, client, atencion_medico_b):
+        uid = _uid()
+        superuser = User.objects.create_user(
+            username=f'su_{uid}',
+            email=f'su_{uid}@test.com',
+            password='x',
+            rol='paciente',
+            is_superuser=True,
+        )
+        client.force_authenticate(user=superuser)
+        url = reverse('atenciones-detail', args=[atencion_medico_b.id])
+        response = client.patch(url, {'observaciones_generales': 'su ok'}, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_superuser_puede_cerrar_global(self, client, atencion_medico_a):
+        uid = _uid()
+        superuser = User.objects.create_user(
+            username=f'su2_{uid}',
+            email=f'su2_{uid}@test.com',
+            password='x',
+            rol='laboratorio',
+            is_superuser=True,
+        )
+        client.force_authenticate(user=superuser)
+        url = reverse('atenciones-cerrar', args=[atencion_medico_a.id])
+        response = client.post(url, {}, format='json')
+        assert response.status_code == status.HTTP_200_OK

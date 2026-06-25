@@ -162,5 +162,7 @@ describe('canAccessAtenciones / canOperateAtenciones (QA-ROLE-01)', () => {
     expect(canOperateAtenciones(user({ rol: 'ENFERMERIA' }))).toBe(false);
     expect(canOperateAtenciones(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canOperateAtenciones(user({ rol: 'SECRETARIA' }))).toBe(false);
+    expect(canOperateAtenciones(user({ is_staff: true, rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canOperateAtenciones(user({ is_superuser: true, rol: 'PACIENTE' }))).toBe(true);
   });
 });

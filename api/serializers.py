@@ -1087,27 +1087,16 @@ class AtencionCreateSerializer(serializers.ModelSerializer):
     
     def to_internal_value(self, data):
         """Sobrescribir para excluir los campos del modelo que no queremos validar"""
-        # Remover los campos del modelo si están presentes
         if isinstance(data, dict):
-            print(f"🔍 AtencionCreateSerializer.to_internal_value - datos recibidos: {data}")
             data = data.copy()
             data.pop('paciente', None)
             data.pop('medico_principal', None)
             data.pop('turno', None)
-            print(f"🔍 Datos después de limpiar: {data}")
         return super().to_internal_value(data)
     
     
     def create(self, validated_data):
-        # Los campos ya están mapeados correctamente por PrimaryKeyRelatedField con source
-        # validated_data ya contiene 'turno', 'paciente', 'medico_principal' como objetos
-        print(f"📝 Creando Atencion - validated_data: {validated_data}")
-        
-        instance = super().create(validated_data)
-        
-        print(f"✅ Atencion {instance.id} creada - paciente_id: {instance.paciente_id}, medico_principal_id: {instance.medico_principal_id}")
-        
-        return instance
+        return super().create(validated_data)
 
 
 # Serializers para estadísticas del panel
