@@ -243,6 +243,7 @@ La suite vive en el directorio **`frontend/`** del monorepo (Create React App + 
 - Test crítico cierre micro: `test_flujo_critico_lims_microbiologia_final_validado_informado` (mismo arranque LIMS → aislado → identificación → antibiograma → resultado → completar → informe `FINAL` emitido → `LISTO_PARA_VALIDAR` → admin valida → `VALIDADO` → `marcar-informado` → `INFORMADO`; operación técnica post-cierre → `400`).
 - Helpers frontend reforzados previamente: `limsAccess.test.ts`, `limsMicroUx.test.ts`, `limsCargaMuestra.test.ts`.
 - **FE-PERM-01 (jun 2026):** `permissions.test.ts` (pacientes, solicitudes, archivos, LIMS, auditoría por rol); `apiError.test.ts` (403/404 sin PHI).
+- **QA-ROLE-01 (jun 2026):** `api/tests/test_atencion_permissions_api.py` (roles en `/api/atenciones/`); `permissions.test.ts` (`canAccessAtenciones`); `Sidebar.test.tsx` (menú Consultas).
 - **GAP pendiente:** E2E browser LIMS/micro (requiere instalar y cablear Playwright o Cypress en CI). No se implementó PDF ni CLSI/EUCAST.
 
 **Comandos validados (UI-2, commit `d46d276`, mayo 2026):**

@@ -68,7 +68,7 @@ Registros `router.register` (recurso → ViewSet). Convención DRF:
 | `tipos-atencion` | `catalogos.views.TipoAtencionViewSet` | — | — |
 | `recursos` | `turnos.views.RecursoViewSet` | RecursoSerializer | IsAuthenticated; escritura IsAdminUser |
 | `turnos` | `turnos.views.TurnoViewSet` | TurnoSerializer | IsAuthenticated + queryset |
-| `atenciones` | `turnos.views.AtencionViewSet` | AtencionSerializer (api) | IsMedicoOrEnfermeriaOrAdmin |
+| `atenciones` | `turnos.views.AtencionViewSet` | AtencionSerializer (api) | `AtencionPermission` (QA-ROLE-01) |
 | `historias-clinicas` | `historias_clinicas.views.HistoriaClinicaViewSet` | HistoriaClinicaSerializer | IsAuthenticated + queryset |
 | `consultas` | `historias_clinicas.views.ConsultaViewSet` | Consulta / Create | IsMedicoOrEnfermeriaOrAdmin |
 | `solicitudes` | `solicitudes.views.SolicitudViewSet` | Solicitud* | **`SolicitudPermission`** (PERM-01) + `get_queryset` por rol |

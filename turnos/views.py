@@ -26,7 +26,12 @@ from .serializers import (
 )
 # Usar el AtencionSerializer completo de api.serializers que incluye documentos
 from api.serializers import AtencionSerializer
-from api.permissions import IsMedicoOrEnfermeriaOrAdmin
+from api.permissions import (
+    AtencionPermission,
+    IsMedicoOrEnfermeriaOrAdmin,
+    filter_atencion_queryset_for_user,
+    get_normalized_role,
+)
 from auditoria.audit_service import log_create, log_delete, log_update
 from auditoria.snapshot import safe_model_snapshot
 
@@ -629,7 +634,7 @@ def _atenciones_compat_deprecation_headers() -> dict[str, str]:
 class AtencionViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestionar Atenciones.
-    Permisos: IsMedicoOrEnfermeriaOrAdmin
+    Permisos: AtencionPermission (QA-ROLE-01).
     """
     queryset = Atencion.objects.select_related(
         'paciente', 'medico_principal', 'turno'
@@ -638,7 +643,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
         'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico'
     ).all()
     serializer_class = AtencionSerializer
-    permission_classes = [IsMedicoOrEnfermeriaOrAdmin]
+    permission_classes = [AtencionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['paciente', 'medico_principal', 'estado_clinico', 'tipo_atencion']
     search_fields = ['paciente__nombre', 'paciente__apellido', 'paciente__dni']
@@ -646,37 +651,11 @@ class AtencionViewSet(viewsets.ModelViewSet):
     ordering = ['-fecha_admision']
 
     def get_queryset(self):
-        """
-        Filtrado por rol según reglas de negocio.
-        - Admin/Enfermería: Ven todo
-        - Médico: Solo ve atenciones donde es el médico principal
-        - Paciente: Solo ve sus propias atenciones
-        """
-        queryset = super().get_queryset()
-        user = self.request.user
-
-        # Superusuarios y staff ven todo
-        if user.is_superuser or user.is_staff:
-            return queryset
-
-        # Médico: solo sus atenciones (acceso seguro: el OneToOne inverso
-        # lanza DoesNotExist si no hay ficha vinculada).
-        try:
-            medico = user.medico
-        except ObjectDoesNotExist:
-            medico = None
-        if medico:
-            return queryset.filter(medico_principal=medico)
-
-        # Paciente: solo sus atenciones
-        try:
-            paciente = user.paciente
-        except ObjectDoesNotExist:
-            paciente = None
-        if paciente:
-            return queryset.filter(paciente=paciente)
-
-        return queryset.none()
+        """Filtrado por rol (QA-ROLE-01): ver ``filter_atencion_queryset_for_user``."""
+        return filter_atencion_queryset_for_user(
+            self.request.user,
+            super().get_queryset(),
+        )
 
     def destroy(self, request, *args, **kwargs):
         """Bloquea el DELETE físico de atenciones.
@@ -705,6 +684,31 @@ class AtencionViewSet(viewsets.ModelViewSet):
                 {"error": "Se requiere el ID del turno para crear una atención."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        user = request.user
+        if not (
+            user.is_superuser
+            or user.is_staff
+            or get_normalized_role(user) == 'admin'
+        ):
+            try:
+                medico = user.medico
+            except ObjectDoesNotExist:
+                medico = None
+            if medico is None:
+                return Response(
+                    {'error': 'No tiene permisos para crear atenciones.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            try:
+                turno = Turno.objects.get(pk=turno_raw)
+            except (Turno.DoesNotExist, ValueError, TypeError):
+                turno = None
+            if turno is None or turno.medico_id != medico.id:
+                return Response(
+                    {'error': 'No tiene permisos para crear atenciones en este turno.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         try:
             outcome = AtencionService.iniciar_atencion_desde_turno(

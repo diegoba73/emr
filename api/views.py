@@ -17,6 +17,8 @@ from .permissions import (
     CanWriteDocumentoClinico,
     IsEMRClinician,
     IsMedicoOrEnfermeriaOrAdmin,
+    AtencionPermission,
+    filter_atencion_queryset_for_user,
 )
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -2170,13 +2172,13 @@ class RecursoViewSet(viewsets.ModelViewSet):
 
 # ViewSets para Atencion y modelos relacionados
 class AtencionViewSet(viewsets.ModelViewSet):
-    """ViewSet para gestionar atenciones clínicas"""
+    """ViewSet legacy (no enrutado en api/urls; activo: turnos.views.AtencionViewSet)."""
     queryset = (
         Atencion.objects
         .select_related('paciente', 'medico_principal', 'turno', 'turno__recurso', 'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico')
         .prefetch_related('documentos')
     )
-    permission_classes = [IsEMRClinicianOrReadOnly]
+    permission_classes = [AtencionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['tipo_intervencion', 'estado_clinico', 'paciente', 'medico_principal', 'turno', 'turno__recurso__tipo_recurso']
     search_fields = [
@@ -2203,137 +2205,69 @@ class AtencionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def create(self, request, *args, **kwargs):
-        """Sobrescribir create para manejar correctamente cuando se retorna una atención existente"""
-        try:
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            
-            # Verificar si ya existe una atención para este turno antes de crear
-            turno_id = serializer.validated_data.get('turno_id')
-            paciente_id = serializer.validated_data.get('paciente_id')
-            medico_principal_id = serializer.validated_data.get('medico_principal_id')
-            
-            print(f"🔍 Verificando atención existente - turno_id: {turno_id}, paciente_id: {paciente_id}, medico_principal_id: {medico_principal_id}")
-            
-            if turno_id:
-                try:
-                    # Cargar la atención con todas sus relaciones
-                    atencion_existente = (
-                        Atencion.objects
-                        .select_related('paciente', 'medico_principal', 'turno', 'turno__recurso', 'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico')
-                        .prefetch_related('documentos')
-                        .get(turno_id=turno_id)
-                    )
-                    print(f"✅ Atención existente encontrada: {atencion_existente.id}")
-                    print(f"   - paciente: {atencion_existente.paciente_id}, medico_principal: {atencion_existente.medico_principal_id}")
-                    # Si existe, retornar usando el serializer completo
-                    response_serializer = AtencionSerializer(atencion_existente)
-                    response_data = response_serializer.data
-                    print(f"   - paciente en respuesta: {'paciente' in response_data}")
-                    return Response(response_data, status=status.HTTP_200_OK)
-                except Atencion.DoesNotExist:
-                    print(f"ℹ️ No existe atención para turno {turno_id}, creando nueva")
-                    pass
-            
-            # Si no existe, crear normalmente
-            self.perform_create(serializer)
-            headers = self.get_success_headers(serializer.data)
-            
-            # Recargar la instancia con todas sus relaciones para la respuesta
-            instance = serializer.instance
-            if not instance:
-                return Response(
-                    {'error': 'No se pudo crear la atención'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            
-            # Verificar que la instancia tenga paciente y medico_principal
-            if not instance.paciente_id or not instance.medico_principal_id:
-                return Response(
-                    {'error': 'La atención debe tener paciente y médico principal asignados'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Recargar con todas las relaciones
+        """Crear u obtener atención por turno (legacy; sin prints con IDs clínicos)."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        turno_id = serializer.validated_data.get('turno_id')
+        if turno_id:
             try:
-                instance = (
+                atencion_existente = (
                     Atencion.objects
-                    .select_related('paciente', 'medico_principal', 'turno', 'turno__recurso', 'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico')
+                    .select_related(
+                        'paciente', 'medico_principal', 'turno', 'turno__recurso',
+                        'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico',
+                    )
                     .prefetch_related('documentos')
-                    .get(pk=instance.pk)
+                    .get(turno_id=turno_id)
                 )
-                
-                # Verificar que las relaciones estén cargadas
-                print(f"✅ Atencion {instance.id} creada - paciente_id: {instance.paciente_id}, medico_principal_id: {instance.medico_principal_id}")
-                print(f"   - paciente cargado: {hasattr(instance, 'paciente') and instance.paciente is not None}")
-                print(f"   - medico_principal cargado: {hasattr(instance, 'medico_principal') and instance.medico_principal is not None}")
-                
+                return Response(
+                    AtencionSerializer(atencion_existente).data,
+                    status=status.HTTP_200_OK,
+                )
             except Atencion.DoesNotExist:
-                return Response(
-                    {'error': 'No se pudo encontrar la atención creada'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            except Exception as reload_error:
-                print(f"❌ Error recargando Atencion {instance.pk if instance else 'None'}: {reload_error}")
-                import traceback
-                print(traceback.format_exc())
-                return Response(
-                    {'error': f'Error al recargar la atención: {str(reload_error)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            
-            # Usar el serializer completo para la respuesta
-            try:
-                response_serializer = AtencionSerializer(instance)
-                response_data = response_serializer.data
-                print(f"✅ Serialización exitosa - paciente en respuesta: {'paciente' in response_data}")
-                return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
-            except Exception as serialize_error:
-                print(f"❌ Error serializando respuesta: {serialize_error}")
-                import traceback
-                print(traceback.format_exc())
-                return Response(
-                    {'error': f'Error al serializar la respuesta: {str(serialize_error)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        except Exception as e:
-            import traceback
-            error_detail = str(e)
-            traceback_str = traceback.format_exc()
-            print(f"Error en AtencionViewSet.create: {error_detail}")
-            print(traceback_str)
+                pass
+
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        instance = serializer.instance
+        if not instance:
             return Response(
-                {'error': f'Error al crear la atención: {error_detail}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {'error': 'No se pudo crear la atención'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        if not instance.paciente_id or not instance.medico_principal_id:
+            return Response(
+                {'error': 'La atención debe tener paciente y médico principal asignados'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            instance = (
+                Atencion.objects
+                .select_related(
+                    'paciente', 'medico_principal', 'turno', 'turno__recurso',
+                    'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico',
+                )
+                .prefetch_related('documentos')
+                .get(pk=instance.pk)
+            )
+        except Atencion.DoesNotExist:
+            return Response(
+                {'error': 'No se pudo encontrar la atención creada'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(
+            AtencionSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
     
     def get_queryset(self):
-        """
-        Filtrar atenciones según el rol del usuario.
-        El queryset base ya incluye select_related para optimizar queries.
-        """
-        queryset = super().get_queryset()
-        user = self.request.user
-        role = str(getattr(user, 'rol', '') or '').lower()
-        
-        if user.is_superuser or role in ['admin', 'secretaria']:
-            return queryset
-        
-        if role == 'medico':
-            try:
-                medico = user.medico
-                return queryset.filter(medico_principal=medico)
-            except Exception:
-                return queryset.none()
-        
-        if role == 'paciente':
-            try:
-                paciente = user.paciente
-                return queryset.filter(paciente=paciente)
-            except Exception:
-                return queryset.none()
-        
-        return queryset.none()
+        """Filtrado por rol (QA-ROLE-01); alineado con turnos.views.AtencionViewSet."""
+        return filter_atencion_queryset_for_user(
+            self.request.user,
+            super().get_queryset(),
+        )
 
     def perform_create(self, serializer):
         validated = serializer.validated_data

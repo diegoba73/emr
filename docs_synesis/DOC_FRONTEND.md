@@ -78,6 +78,20 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 **Errores seguros:** `utils/apiError.ts` — mensajes genéricos 401/403/404 sin PHI.
 
+### QA-ROLE-01 — Atenciones clínicas (jun 2026)
+
+**Backend:** `api/permissions.py` — `AtencionPermission` + `filter_atencion_queryset_for_user` en `turnos.views.AtencionViewSet` (ruta activa `/api/atenciones/`).
+
+| Rol | list/retrieve | create/update/cerrar |
+|-----|---------------|----------------------|
+| admin/staff/superuser | Sí (global) | Sí |
+| médico | Propias (`medico_principal`) | Propias |
+| enfermería | Sí (global, solo lectura) | No |
+| paciente | Propias | No |
+| secretaría, laboratorio, sin rol | No | No |
+
+**Frontend:** `canAccessAtenciones`, `canOperateAtenciones` en `permissions.ts`; guard en `/atenciones`; sidebar «Consultas» alineado; botón editar oculto sin `canOperateAtenciones`.
+
 ## Pantallas críticas y flujos de usuario
 
 **[OBSOLETO]** ~~Inferidos solo desde documentación de backup…~~ — **Confirmado en código:** órdenes LIMS, detalle micro por tabs, estudios complementarios.

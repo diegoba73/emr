@@ -164,6 +164,128 @@ class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
         user_rol = str(user_rol).lower()
         return user_rol in ['medico', 'enfermeria', 'admin']
 
+
+def _atencion_is_staff_or_admin(user) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    return bool(
+        user.is_superuser
+        or user.is_staff
+        or get_normalized_role(user) == 'admin'
+    )
+
+
+def _atencion_user_medico(user):
+    try:
+        return user.medico
+    except Exception:
+        return None
+
+
+def _atencion_user_paciente(user):
+    try:
+        return user.paciente
+    except Exception:
+        return None
+
+
+_ATENCION_READ_ACTIONS = frozenset({'list', 'retrieve'})
+_ATENCION_WRITE_ACTIONS = frozenset({'create', 'update', 'partial_update'})
+_ATENCION_CLINICAL_ACTIONS = frozenset({
+    'cerrar',
+    'registrar_consulta',
+    'crear_registro_ambulatorio',
+    'cerrar_atencion',
+})
+
+
+def filter_atencion_queryset_for_user(user, queryset):
+    """Filtra atenciones según rol (QA-ROLE-01). Usado por AtencionViewSet activo y legacy."""
+    if _atencion_is_staff_or_admin(user):
+        return queryset
+    role = get_normalized_role(user)
+    if role == 'enfermeria':
+        return queryset
+    medico = _atencion_user_medico(user)
+    if medico is not None:
+        return queryset.filter(medico_principal=medico)
+    paciente = _atencion_user_paciente(user)
+    if paciente is not None:
+        return queryset.filter(paciente=paciente)
+    return queryset.none()
+
+
+class AtencionPermission(permissions.BasePermission):
+    """
+    Permisos para atenciones clínicas (QA-ROLE-01).
+
+    - admin/staff/superuser: operación completa (destroy bloqueado en view).
+    - médico: lectura/escritura solo en atenciones donde es médico principal.
+    - enfermería: solo lectura global (coordinación asistencial; sin mutación clínica).
+    - paciente: solo lectura de propias atenciones.
+    - secretaría, laboratorio, sin rol, anónimo: denegado.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if _atencion_is_staff_or_admin(user):
+            return True
+
+        role = get_normalized_role(user)
+        if not role or role in ('secretaria', 'laboratorio'):
+            return False
+
+        action = getattr(view, 'action', None)
+        if action == 'destroy':
+            return False
+
+        if role == 'enfermeria':
+            return action in _ATENCION_READ_ACTIONS
+        if role == 'paciente':
+            return action in _ATENCION_READ_ACTIONS
+        if role == 'medico':
+            return action in (
+                _ATENCION_READ_ACTIONS
+                | _ATENCION_WRITE_ACTIONS
+                | _ATENCION_CLINICAL_ACTIONS
+            )
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if _atencion_is_staff_or_admin(user):
+            return True
+
+        role = get_normalized_role(user)
+        action = getattr(view, 'action', None)
+        if action == 'destroy':
+            return False
+
+        if role == 'enfermeria':
+            return action in _ATENCION_READ_ACTIONS
+
+        if role == 'paciente':
+            if action not in _ATENCION_READ_ACTIONS:
+                return False
+            paciente = _atencion_user_paciente(user)
+            return paciente is not None and obj.paciente_id == paciente.id
+
+        if role == 'medico':
+            medico = _atencion_user_medico(user)
+            if medico is None or obj.medico_principal_id != medico.id:
+                return False
+            return action in (
+                _ATENCION_READ_ACTIONS
+                | _ATENCION_WRITE_ACTIONS
+                | _ATENCION_CLINICAL_ACTIONS
+            )
+
+        return False
+
 class IsPacienteOrStaff(permissions.BasePermission):
     """
     Permiso para pacientes (solo ven sus propios datos) y staff

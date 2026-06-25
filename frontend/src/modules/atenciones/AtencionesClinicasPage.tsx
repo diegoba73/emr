@@ -24,6 +24,7 @@ import { useData } from '../../contexts/DataContext';
 import { AtencionFilters, useAtencionesQuery } from './hooks';
 import { Atencion, Medico } from '../../types';
 import AtencionDetailDrawer from './components/AtencionDetailDrawer';
+import { canOperateAtenciones } from '../../utils/permissions';
 
 const tipoIntervencionOptions = [
   { value: '', label: 'Todos' },
@@ -100,6 +101,7 @@ const AtencionesClinicasPage: React.FC = () => {
 
   const medicoOptions = useMemo(() => mapMedicoOptions(medicos), [medicos]);
   const atenciones = (data && 'results' in data ? data.results : []) as Atencion[];
+  const canOperate = canOperateAtenciones(currentUser);
 
   const handleApplyFilters = () => {
     setFilters(formFilters);
@@ -358,11 +360,13 @@ const AtencionesClinicasPage: React.FC = () => {
                           <Visibility />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Editar">
-                        <IconButton onClick={() => handleOpenEdit(item.id)} color="primary">
-                          <Edit />
-                        </IconButton>
-                      </Tooltip>
+                      {canOperate && (
+                        <Tooltip title="Editar">
+                          <IconButton onClick={() => handleOpenEdit(item.id)} color="primary">
+                            <Edit />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

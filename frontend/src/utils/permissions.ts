@@ -97,3 +97,21 @@ export function canAccessAuditoria(user: User | null | undefined): boolean {
   if (user.is_superuser || user.is_staff) return true;
   return normalizeRol(user) === 'admin';
 }
+
+/**
+ * Módulo /atenciones (QA-ROLE-01): admin/staff, médico, enfermería (lectura), paciente (lectura propia).
+ * Secretaría, laboratorio y sin rol: bloqueados.
+ */
+export function canAccessAtenciones(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (isStaffOrAdmin(user)) return true;
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'enfermeria' || rol === 'paciente';
+}
+
+/** Mutaciones clínicas en atenciones: admin/staff y médico (objeto validado en backend). */
+export function canOperateAtenciones(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (isStaffOrAdmin(user)) return true;
+  return normalizeRol(user) === 'medico';
+}

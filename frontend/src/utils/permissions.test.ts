@@ -1,6 +1,7 @@
 import type { User } from '../types';
 import {
   canAccessArchivosMedicos,
+  canAccessAtenciones,
   canAccessAuditoria,
   canAccessPacientes,
   canAccessSolicitudes,
@@ -11,6 +12,7 @@ import {
   canValidateLims,
   canAccessMicrobiologia,
   canValidateMicrobiologia,
+  canOperateAtenciones,
 } from './permissions';
 
 function user(overrides: Partial<User> & Pick<User, 'rol'>): User {
@@ -138,5 +140,27 @@ describe('canAccessAuditoria', () => {
   it('bloquea médico y laboratorio sin staff', () => {
     expect(canAccessAuditoria(user({ rol: 'MEDICO' }))).toBe(false);
     expect(canAccessAuditoria(user({ rol: 'LABORATORIO' }))).toBe(false);
+  });
+});
+
+describe('canAccessAtenciones / canOperateAtenciones (QA-ROLE-01)', () => {
+  it('permite admin, médico, enfermería y paciente', () => {
+    expect(canAccessAtenciones(user({ rol: 'ADMIN' }))).toBe(true);
+    expect(canAccessAtenciones(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canAccessAtenciones(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canAccessAtenciones(user({ rol: 'PACIENTE' }))).toBe(true);
+  });
+
+  it('bloquea secretaría, laboratorio y anónimo', () => {
+    expect(canAccessAtenciones(user({ rol: 'SECRETARIA' }))).toBe(false);
+    expect(canAccessAtenciones(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canAccessAtenciones(null)).toBe(false);
+  });
+
+  it('operación solo admin/staff y médico', () => {
+    expect(canOperateAtenciones(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canOperateAtenciones(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canOperateAtenciones(user({ rol: 'PACIENTE' }))).toBe(false);
+    expect(canOperateAtenciones(user({ rol: 'SECRETARIA' }))).toBe(false);
   });
 });

@@ -29,6 +29,7 @@ import { User } from '../../types';
 import Logo from '../Logo';
 import {
   canAccessArchivosMedicos,
+  canAccessAtenciones,
   canAccessAuditoria,
   canAccessPacientes,
   canAccessSolicitudes,
@@ -51,7 +52,7 @@ const navItems: NavItem[] = [
   { text: 'Dashboard', icon: <HomeIcon />, path: '/dashboard', canAccess: () => true },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
-  { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria'] },
+  { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos-medicos', canAccess: canAccessArchivosMedicos },
   {
     text: 'Estudios complementarios',

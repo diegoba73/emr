@@ -41,6 +41,7 @@ import AuditEventsPage from './pages/AuditEventsPage';
 import type { User } from './types';
 import {
   canAccessArchivosMedicos,
+  canAccessAtenciones,
   canAccessAuditoria,
   canAccessPaciente360,
   canAccessPacientes,
@@ -186,7 +187,16 @@ const AppContent: React.FC = () => {
           />
           <Route
             path="/atenciones"
-            element={<AtencionesClinicasPage />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessAtenciones}
+              >
+                <AtencionesClinicasPage />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/mis-consultas"
