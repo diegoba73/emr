@@ -50,7 +50,6 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
   const [consentFile, setConsentFile] = useState<File | null>(null);
 
   useEffect(() => {
-    console.log('🔄 CirugiaForm useEffect - registro recibido:', registro);
     if (registro) {
       // Obtener anestesista_id: primero del campo directo, luego del objeto relacionado
       const anestesistaId = registro.anestesista_id 
@@ -64,7 +63,6 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
       
       // Obtener el ID del registro
       const registroId = registro.id || (registro && typeof registro === 'object' && 'id' in registro ? (registro as any).id : undefined);
-      console.log('📋 Registro quirúrgico detectado con ID:', registroId);
       
       setFormState({
         procedimiento_id: procedimientoId ? String(procedimientoId) : '',
@@ -88,8 +86,6 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
       }
       setConsentFile(null);
     } else {
-      console.log('📋 No hay registro quirúrgico, formulario en modo creación');
-      // Resetear el formulario cuando no hay registro
       setFormState({
         procedimiento_id: '',
         anestesista_id: '',
@@ -200,33 +196,18 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
       
       const exists = Boolean(registro && registroId);
       
-      console.log('🔍 Guardando cirugía:', {
-        atencionId,
-        exists,
-        registroId,
-        tieneRegistro: Boolean(registro),
-        tipoRegistro: typeof registro,
-        registroKeys: registro ? Object.keys(registro) : [],
-        registroCompleto: JSON.stringify(registro, null, 2)
-      });
-      
-      const result = await saveMutation.mutateAsync({
+      await saveMutation.mutateAsync({
         atencionId,
         formData,
         exists,
         registroId,
       });
       setConsentFile(null);
-      // El hook ya invalida el query y muestra un toast de éxito
-      // El formulario se actualizará automáticamente cuando el registro cambie en el useEffect
-      console.log('✅ Cirugía guardada exitosamente:', result);
-      // Llamar al callback de éxito para cerrar el modal
       if (onSaveSuccess) {
         onSaveSuccess();
       }
-    } catch (error) {
-      // El error ya se maneja en el hook con un toast
-      console.error('❌ Error guardando cirugía:', error);
+    } catch {
+      // El hook muestra toast vía onError
     }
   };
 

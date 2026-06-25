@@ -43,7 +43,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   atencionId,
   open,
   onClose,
-  currentUserRole,
+  currentUserRole: _currentUserRole,
   currentUser: currentUserProp,
   canOperate: canOperateProp,
   onIntervencionSaved,
@@ -51,15 +51,6 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
 }) => {
   const { currentUser: currentUserFromContext } = useData();
   const effectiveUser = currentUserProp ?? currentUserFromContext ?? null;
-
-  // DEBUG: Log cuando cambian las props del drawer
-  useEffect(() => {
-    console.log('🔲 [DRAWER] Props actualizadas:', {
-      atencionId,
-      open,
-      currentUserRole,
-    });
-  }, [atencionId, open, currentUserRole]);
 
   const queryResult = useAtencionQuery(atencionId ?? undefined);
   const { data, isLoading, error } = queryResult;
@@ -178,11 +169,6 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   const renderDetalle = (atencion: Atencion) => {
     switch (atencion.tipo_intervencion) {
       case 'CONSULTA':
-        // ============================================================
-        // El formulario carga la consulta internamente usando atencionId
-        // forceEdit permite editar aunque la consulta ya exista
-        // ============================================================
-        console.log('📋 Abriendo ConsultaAmbulatoriaForm para atención:', atencion.id, 'forceEdit:', forceEdit);
         return (
           <ConsultaAmbulatoriaForm
             key={`consulta-${atencion.id}-${forceEdit ? 'edit' : 'view'}`}
@@ -212,12 +198,6 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
         );
       case 'CIRUGIA':
         const registroQuirurgico = atencion.registro_quirurgico || undefined;
-        console.log('🏥 AtencionDetailDrawer - Pasando registro quirúrgico al formulario:', {
-          atencionId: atencion.id,
-          tieneRegistro: Boolean(registroQuirurgico),
-          registroId: registroQuirurgico?.id || (registroQuirurgico && typeof registroQuirurgico === 'object' && 'id' in registroQuirurgico ? (registroQuirurgico as any).id : undefined),
-          registroCompleto: registroQuirurgico
-        });
         return (
           <CirugiaForm
             key={`cirugia-${atencion.id}-${atencion.registro_quirurgico?.id || 'new'}`}

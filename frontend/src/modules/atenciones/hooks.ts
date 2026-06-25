@@ -170,16 +170,8 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ atencionId, data, exists, registroId }: SaveConsultaPayload) => {
-      // SIEMPRE verificar primero si existe la consulta antes de crear
-      // Esto previene errores 400 cuando se intenta crear una consulta que ya existe
       try {
-        console.log(`🔍 Verificando si existe consulta ambulatoria para atención ${atencionId}...`);
         const atencion = await apiService.getAtencion(atencionId);
-        console.log(`📋 Atención obtenida:`, {
-          id: atencion.id,
-          tieneConsulta: !!atencion.consulta_ambulatoria,
-          consultaAmbulatoria: atencion.consulta_ambulatoria
-        });
         
         // Extraer el ID de consulta_ambulatoria de diferentes formas posibles
         let consultaId: number | undefined = undefined;
@@ -204,30 +196,19 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
         
         // Si encontramos un ID, usar PATCH para actualizar
         if (consultaId) {
-          console.log(`✅ Consulta ya existe (ID: ${consultaId}), usando PATCH para actualizar`);
           return apiService.updateConsultaAmbulatoria(atencionId, data, consultaId);
         }
-        
-        // Si no existe, usar POST para crear
-        console.log('➕ Consulta no existe, usando POST para crear');
+
         return apiService.createConsultaAmbulatoria(atencionId, data);
       } catch (error: any) {
         // Si el error es que ya existe, intentar obtener el ID y actualizar
         if (error?.response?.status === 400) {
           const errorMessage = error?.response?.data?.error || '';
           if (errorMessage.includes('Ya existe un registro') || errorMessage.includes('ya existe') || errorMessage.toLowerCase().includes('ya existe')) {
-            console.log('⚠️ Backend indica que ya existe, intentando obtener ID y actualizar...');
             try {
-              // Esperar un momento para que el backend procese la creación
               await new Promise(resolve => setTimeout(resolve, 100));
-              
-              // Intentar obtener la atención nuevamente para obtener el ID
+
               const atencion = await apiService.getAtencion(atencionId);
-              console.log('📋 Atención obtenida después del error:', {
-                id: atencion.id,
-                tieneConsulta: !!atencion.consulta_ambulatoria,
-                consultaAmbulatoria: atencion.consulta_ambulatoria
-              });
               
               let consultaId: number | undefined = undefined;
               
@@ -240,18 +221,13 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
               }
               
               if (consultaId) {
-                console.log(`✅ Obtenido ID de consulta (${consultaId}), usando PATCH para actualizar`);
                 return apiService.updateConsultaAmbulatoria(atencionId, data, consultaId);
               } else if (registroId) {
-                console.log(`✅ Usando registroId proporcionado (${registroId}), usando PATCH para actualizar`);
                 return apiService.updateConsultaAmbulatoria(atencionId, data, registroId);
               } else {
-                // Si no tenemos ID, intentar usar updateConsultaAmbulatoria sin ID (que lo obtendrá automáticamente)
-                console.log('🔄 Intentando actualizar sin ID explícito (el método lo obtendrá automáticamente)');
                 return apiService.updateConsultaAmbulatoria(atencionId, data);
               }
             } catch (retryError: any) {
-              console.error('❌ Error al intentar obtener ID de consulta:', retryError);
               // Si updateConsultaAmbulatoria falla porque no existe, relanzar el error original
               if (retryError?.message?.includes('No existe un registro')) {
                 throw error; // Relanzar el error original
@@ -262,14 +238,9 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
         }
         
         // Si falla al obtener la atención o no se pudo resolver, intentar crear/actualizar según registroId
-        console.warn('⚠️ No se pudo verificar si existe consulta:', error);
         if (registroId) {
-          // Si se pasó registroId, intentar actualizar
-          console.log(`📝 Usando registroId (${registroId}) para actualizar`);
           return apiService.updateConsultaAmbulatoria(atencionId, data, registroId);
         }
-        // Si no hay registroId, intentar crear
-        console.log('➕ Intentando crear consulta (último recurso)');
         return apiService.createConsultaAmbulatoria(atencionId, data);
       }
     },
@@ -282,21 +253,12 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
         const atencion = await apiService.getAtencion(variables.atencionId);
         const turnoId = atencion.turno?.id || atencion.turno_id;
         if (turnoId) {
-          // Actualizar el turno a REALIZADO
           await apiService.updateTurno(turnoId, { estado: 'REALIZADO' });
-          console.log(`✅ Turno ${turnoId} actualizado a REALIZADO después de guardar consulta`);
-        } else {
-          console.log('⚠️ La atención no tiene turno asociado, no se puede actualizar estado');
         }
-      } catch (error) {
-        console.error('Error actualizando turno a REALIZADO:', error);
+      } catch {
         // No fallar la operación si no se puede actualizar el turno
       }
-      
-      // CRÍTICO: Invalidar y refrescar TODAS las queries relacionadas para que el botón cambie
-      console.log('🔄 Refrescando todas las queries después de guardar consulta...');
-      
-      // 1. Invalidar queries
+
       await queryClient.invalidateQueries({ queryKey: ['atencion', variables.atencionId] });
       await queryClient.invalidateQueries({ queryKey: ['atenciones'] });
       await queryClient.invalidateQueries({ queryKey: ['turnos'] });
@@ -306,8 +268,6 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
         queryClient.refetchQueries({ queryKey: ['atencion', variables.atencionId] }),
         queryClient.refetchQueries({ queryKey: ['turnos'] })
       ]);
-      
-      console.log('✅ Todas las queries refrescadas después de guardar consulta');
     },
     onError: (error: any) => {
       const errorMessage = error?.response?.data?.error || error?.message || 'No se pudo guardar la consulta';
@@ -355,22 +315,15 @@ export const useSaveRegistroQuirurgicoMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ atencionId, formData, exists, registroId }: SaveCirugiaPayload) => {
-      console.log('🔄 useSaveRegistroQuirurgicoMutation:', { atencionId, exists, registroId });
-      
-      // Si existe un registro o un registroId, intentar actualizar
       if (exists || registroId) {
-        console.log('📝 Intentando actualizar registro quirúrgico...');
         try {
-          // Si no tenemos el registroId, obtenerlo de la atención
           let idToUse = registroId;
           if (!idToUse) {
-            console.log('🔍 Obteniendo ID del registro desde la atención...');
             const atencion = await apiService.getAtencion(atencionId);
             idToUse = atencion.registro_quirurgico?.id || 
                      (atencion.registro_quirurgico && typeof atencion.registro_quirurgico === 'object' && 'id' in atencion.registro_quirurgico 
                        ? (atencion.registro_quirurgico as any).id 
                        : undefined);
-            console.log('✅ ID del registro obtenido:', idToUse);
           }
           
           if (!idToUse) {
@@ -379,16 +332,10 @@ export const useSaveRegistroQuirurgicoMutation = () => {
           
           return await apiService.updateRegistroQuirurgico(atencionId, formData, idToUse);
         } catch (updateError: any) {
-          console.error('❌ Error al actualizar:', updateError);
-          // Si el error es que no existe el registro, intentar crearlo
           if (updateError?.message?.includes('No existe un registro')) {
-            console.log('⚠️ El registro no existe, intentando crear...');
             return await apiService.createRegistroQuirurgico(atencionId, formData);
           }
-          // Si el error es que ya existe, intentar obtenerlo y actualizarlo
           if (updateError?.response?.data?.error?.includes('Ya existe un registro')) {
-            console.log('⚠️ El registro ya existe, obteniendo ID y actualizando...');
-            // Recargar la atención para obtener el ID del registro
             const atencion = await apiService.getAtencion(atencionId);
             const idToUse = atencion.registro_quirurgico?.id || 
                            (atencion.registro_quirurgico && typeof atencion.registro_quirurgico === 'object' && 'id' in atencion.registro_quirurgico 
@@ -401,38 +348,25 @@ export const useSaveRegistroQuirurgicoMutation = () => {
           throw updateError;
         }
       } else {
-        // Si no existe, intentar crear
-        console.log('➕ Intentando crear nuevo registro quirúrgico...');
         try {
           return await apiService.createRegistroQuirurgico(atencionId, formData);
         } catch (createError: any) {
-          console.error('❌ Error al crear:', createError);
-          console.error('❌ Error response data:', createError?.response?.data);
-          // Si el error es que ya existe, obtenerlo y actualizarlo
           const errorMessage = createError?.response?.data?.error || createError?.message || '';
           if (errorMessage.includes('Ya existe un registro') || errorMessage.includes('ya existe')) {
-            console.log('⚠️ El registro ya existe, obteniendo ID y actualizando...');
             try {
               const atencion = await apiService.getAtencion(atencionId);
-              console.log('📋 Atención obtenida:', atencion);
-              console.log('📋 registro_quirurgico:', atencion.registro_quirurgico);
               
               const idToUse = atencion.registro_quirurgico?.id || 
                              (atencion.registro_quirurgico && typeof atencion.registro_quirurgico === 'object' && 'id' in atencion.registro_quirurgico 
                                ? (atencion.registro_quirurgico as any).id 
                                : undefined);
               
-              console.log('🔑 ID del registro a usar para actualizar:', idToUse);
-              
               if (idToUse) {
-                console.log('📝 Actualizando registro quirúrgico con ID:', idToUse);
                 return await apiService.updateRegistroQuirurgico(atencionId, formData, idToUse);
               } else {
-                console.error('❌ No se pudo obtener el ID del registro quirúrgico');
                 throw new Error('No se pudo obtener el ID del registro quirúrgico para actualizar');
               }
             } catch (updateError: any) {
-              console.error('❌ Error al actualizar después de detectar que existe:', updateError);
               throw updateError;
             }
           }

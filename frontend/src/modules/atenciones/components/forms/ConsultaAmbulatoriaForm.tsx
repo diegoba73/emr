@@ -153,9 +153,8 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
       if (onSaveSuccess) {
         onSaveSuccess();
       }
-    } catch (error: any) {
-      const errorMessage = error?.response?.data?.error || error?.message || 'No se pudo guardar la consulta';
-      console.error('Error guardando consulta:', errorMessage);
+    } catch {
+      // El hook muestra toast vía onError
     }
   };
 
