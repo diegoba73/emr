@@ -83,7 +83,6 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
       const data = await getSectores();
       setSectores(data);
     } catch (err: any) {
-      console.error('Error loading sectores:', err);
       toast.error('Error al cargar sectores');
     } finally {
       setLoadingSectores(false);

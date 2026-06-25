@@ -66,7 +66,6 @@ const Pacientes: React.FC = () => {
     if (!loading.pacientes) {
       // Solo cargar si no hay pacientes o si hay muy pocos (posible carga incompleta)
       if (pacientes.length === 0) {
-        console.log('📋 Cargando pacientes al montar el componente...');
         loadPacientes();
       }
     }

@@ -96,7 +96,6 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
           setPacienteOptions(results);
         })
         .catch(error => {
-          console.error('Error buscando pacientes:', error);
           if (active) {
             setPacienteOptions([]);
           }
@@ -138,7 +137,6 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
           setMedicoOptions(results);
         })
         .catch(error => {
-          console.error('Error buscando médicos:', error);
           if (active) {
             setMedicoOptions([]);
           }
@@ -181,11 +179,9 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       buscarDiagnosticosCIE10(query)
         .then(results => {
           if (!active) return;
-          console.log(`✅ Encontrados ${results.length} diagnósticos para "${query}"`);
           setDiagnosticoOptions(results);
         })
         .catch(error => {
-          console.error('❌ Error buscando diagnósticos:', error);
           if (active) {
             setDiagnosticoOptions([]);
             setError('Error al buscar diagnósticos. Por favor intente nuevamente.');
@@ -279,7 +275,6 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       }
       
       setError(errorMsg);
-      console.error('Error al ingresar paciente:', err);
     } finally {
       setLoading(false);
     }

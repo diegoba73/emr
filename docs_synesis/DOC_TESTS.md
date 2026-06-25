@@ -244,7 +244,8 @@ La suite vive en el directorio **`frontend/`** del monorepo (Create React App + 
 - Helpers frontend reforzados previamente: `limsAccess.test.ts`, `limsMicroUx.test.ts`, `limsCargaMuestra.test.ts`.
 - **FE-PERM-01 (jun 2026):** `permissions.test.ts` (pacientes, solicitudes, archivos, LIMS, auditoría por rol); `apiError.test.ts` (403/404 sin PHI).
 - **QA-ROLE-01 (jun 2026):** `api/tests/test_atencion_permissions_api.py` (roles en `/api/atenciones/`, incl. staff/superuser); `permissions.test.ts` (`canAccessAtenciones`, `canOperateAtenciones`); `Sidebar.test.tsx` (menú Consultas); `AtencionDetailDrawer.test.tsx` (enfermería/paciente solo lectura, médico/admin edición); `no-console-guard.test.ts` (sin `console.*` en `modules/atenciones`); `turnos/tests/test_atencion_viewset.py` (contrato 400 payload inválido vs 403 no autorizado en POST compat).
-- **QA-FE-LOGS-02 (jun 2026):** `no-console-clinical-views-guard.test.ts` — sin `console.*` en `PatientIntegratedView.tsx` y `Turnos.tsx` (PHI/IDs/payloads fuera del módulo Atenciones).
+- **QA-FE-LOGS-02 (jun 2026):** `no-console-clinical-views-guard.test.ts` — sin `console.*` en `PatientIntegratedView.tsx` y `Turnos.tsx`.
+- **QA-FE-LOGS-03 (jun 2026):** `no-console-focused-modules-guard.test.ts` — sin `console.*` en `apiService.ts`, `internacion/*`, `TurnoModal.tsx`, `Solicitudes.tsx`, `Pacientes.tsx`, `csrf.ts`.
 - **GAP pendiente:** E2E browser LIMS/micro (requiere instalar y cablear Playwright o Cypress en CI). No se implementó PDF ni CLSI/EUCAST.
 
 **Comandos validados (UI-2, commit `d46d276`, mayo 2026):**

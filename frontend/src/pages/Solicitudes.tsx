@@ -7,16 +7,6 @@ import './Solicitudes.css';
 const Solicitudes: React.FC = () => {
   const { solicitudes, pacientes, medicos, loading, loadSolicitudes, loadPacientes, loadMedicos, currentUser } = useData();
   
-  // Debug: Log del estado de los datos (solo si hay problemas)
-  if (pacientes.length === 0 && !loading.pacientes) {
-    console.log('🔍 Solicitudes - Debug:', { 
-      solicitudes: solicitudes.length, 
-      pacientes: pacientes.length, 
-      medicos: medicos.length,
-      loading: loading,
-      currentUser: !!currentUser
-    });
-  }
   // Variables de formulario eliminadas - ya no se crean solicitudes desde EMR
   const [filterEstado, setFilterEstado] = useState<string>('');
 

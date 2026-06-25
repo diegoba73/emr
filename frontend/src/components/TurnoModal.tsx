@@ -105,7 +105,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           setTurnoEfectivo(t);
         }
       } catch (e) {
-        console.warn('No se pudo recargar el turno.');
       }
     })();
     return () => {
@@ -353,7 +352,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             // Recargar el contexto completo
             await refreshAll();
           } catch (error) {
-            console.error('Error forzando carga de datos.');
           } finally {
             setIsLoadingData(false);
           }
@@ -551,7 +549,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         if (!isNaN(medicoId) && medicoId > 0) {
           payload.medico_id = medicoId;
         } else {
-          console.error('ID de médico inválido.');
           throw new Error('Por favor, seleccione un médico válido');
         }
       } else if (editingTurno && editingTurno.medico_id) {
@@ -567,7 +564,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         if (!isNaN(recursoId) && recursoId > 0) {
           payload.recurso_id = recursoId;
         } else {
-          console.error('ID de recurso inválido.');
           throw new Error('Por favor, seleccione un recurso válido');
         }
       } else if (editingTurno && editingTurno.recurso_id) {
@@ -668,7 +664,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       onSuccess?.();
       onClose();
     } catch (error: any) {
-      console.error('Error al guardar turno.');
       const errorMessage = error.message || error.response?.data?.error || 'Error desconocido al guardar el turno';
       alert(`Error al guardar turno: ${errorMessage}`);
     } finally {
@@ -845,7 +840,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           return;
         }
       } catch {
-        console.error('Error al buscar atención asociada al turno.');
       }
     }
 
@@ -1212,7 +1206,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 onSuccess();
               }
             } catch (error) {
-              console.error('Error recargando turno.');
               if (onSuccess) {
                 onSuccess();
               }
@@ -1230,7 +1223,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 onSuccess();
               }
             } catch (error) {
-              console.error('Error recargando turno después de guardar.');
               if (onSuccess) {
                 onSuccess();
               }

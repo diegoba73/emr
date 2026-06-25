@@ -120,11 +120,9 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       apiService.buscarPacientes(query)
         .then(results => {
           if (!active) return;
-          console.log(`✅ ${results.length} pacientes encontrados para "${query}"`);
           setPacienteOptions(results);
         })
         .catch(error => {
-          console.error('Error buscando pacientes:', error);
           if (active) {
             setPacienteOptions([]);
           }
@@ -170,7 +168,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           setDiagnosticoOptions(results);
         })
         .catch(error => {
-          console.error('Error buscando diagnósticos:', error);
           if (active) {
             setDiagnosticoOptions([]);
           }
@@ -202,10 +199,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       }
       
       // Si no está en las opciones, buscarlo por ID desde la API
-      console.log(`🔍 Cargando paciente ${pacienteId} desde la API...`);
       apiService.getPaciente(pacienteId)
         .then(paciente => {
-          console.log(`✅ Paciente ${pacienteId} cargado:`, paciente);
           setPacienteSeleccionado(paciente);
           // Agregarlo a las opciones si no está
           if (!pacienteOptions.find(p => p.id === paciente.id)) {
@@ -213,7 +208,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           }
         })
         .catch(error => {
-          console.error('Error cargando paciente:', error);
           setPacienteSeleccionado(null);
         });
     } else {
@@ -273,7 +267,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         }
       }
     } catch (err: any) {
-      console.error('Error loading internacion:', err);
       setError('Error al cargar datos de internación: ' + (err.message || 'Error desconocido'));
     } finally {
       setLoadingData(false);
@@ -376,7 +369,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         onSuccess();
       }, 500);
     } catch (err: any) {
-      console.error('Error updating internacion:', err);
       const errorMsg = err.response?.data?.error || 
                       err.response?.data?.detail || 
                       err.response?.data?.message ||
@@ -427,7 +419,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       if (medicoId) {
         const found = medicosContext.find((m) => m.id === medicoId);
         if (found) {
-          console.log('Médico encontrado:', found);
         }
       }
     }
