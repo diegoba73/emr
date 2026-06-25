@@ -78,7 +78,7 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 **Errores seguros:** `utils/apiError.ts` — mensajes genéricos 401/403/404 sin PHI.
 
-**Consola (QA-ROLE-01):** el módulo `frontend/src/modules/atenciones/` no usa `console.log` / `console.error` / `console.warn` con datos clínicos; la trazabilidad corresponde a auditoría backend. Guardrail: `no-console-guard.test.ts`.
+**Consola (QA-ROLE-01 / QA-FE-LOGS-02):** el módulo `frontend/src/modules/atenciones/` y las vistas `PatientIntegratedView.tsx` y `Turnos.tsx` no usan `console.*` con datos clínicos; la trazabilidad corresponde a auditoría backend. Guardrails: `no-console-guard.test.ts` (atenciones), `no-console-clinical-views-guard.test.ts` (vista 360 + agenda).
 
 ### QA-ROLE-01 — Atenciones clínicas (jun 2026)
 

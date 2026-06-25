@@ -118,14 +118,10 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
   const loadAtenciones = useCallback(async () => {
     setLoadingAtenciones(true);
     try {
-      console.log(`Cargando atenciones para paciente ID: ${paciente.id}`);
       const response = await apiService.getAtenciones({ paciente: paciente.id });
       const data = response.results || [];
-      console.log('Atenciones recibidas:', data);
       setAtenciones(data);
-      console.log(`Atenciones cargadas: ${data.length}`);
-    } catch (error) {
-      console.error('Error cargando atenciones:', error);
+    } catch {
       setAtenciones([]);
     } finally {
       setLoadingAtenciones(false);
@@ -135,7 +131,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
   const loadResultadosDetallados = useCallback(async (solicitudId: number, solicitudInfo?: any) => {
     setLoadingResultados(true);
     try {
-      console.log('🔬 Cargando resultados detallados para solicitud:', solicitudId);
       const response = await fetch(`http://localhost:8001/api/laboratorio/resultados/?solicitud=${solicitudId}`, {
         method: 'GET',
         headers: {
@@ -149,7 +144,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
       }
       
       const data = await response.json();
-      console.log('✅ Resultados detallados recibidos:', data);
       
       // Extraer todos los detalles de todos los resultados y aplanar el array
       const resultados = data.results || data || [];
@@ -169,8 +163,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
         }));
       });
       
-      console.log('📊 Detalles planos (sin filtrar):', detallesPlanos);
-      
       // Filtrar resultados duplicados: mantener solo el más reciente por tipo de examen
       const detallesPorExamen = new Map();
       detallesPlanos.forEach((detalle: any) => {
@@ -185,14 +177,11 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
       });
       
       const detallesFiltrados = Array.from(detallesPorExamen.values());
-      console.log('📊 Detalles filtrados (sin duplicados):', detallesFiltrados);
       
       // Filtrar solo los exámenes presentes en la solicitud actual
       // (exámenes individuales + todos los exámenes de los paneles actuales)
       let detallesFinales = detallesFiltrados;
       if (solicitudInfo) {
-        console.log('🔍 Filtrando por exámenes solicitados en la solicitud:', solicitudInfo);
-        
         try {
           // Obtener IDs de exámenes individuales
           const examenesIndividuales = new Set<number>();
@@ -218,8 +207,8 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                     }
                   });
                 }
-              } catch (error) {
-                console.error(`Error cargando componentes del panel ${panel.id}:`, error);
+              } catch {
+                // Panel sin componentes cargables; continuar con el resto
               }
             });
             
@@ -230,25 +219,20 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
           const examenesSolicitados = new Set<number>();
           examenesIndividuales.forEach((id: number) => examenesSolicitados.add(id));
           examenesPaneles.forEach((id: number) => examenesSolicitados.add(id));
-          console.log('📋 Exámenes solicitados (individuales + paneles):', Array.from(examenesSolicitados));
           
           // Filtrar detalles por exámenes solicitados
           detallesFinales = detallesFiltrados.filter((detalle: any) => {
             const examenId = detalle.tipo_examen_detail?.id || detalle.tipo_examen;
             return examenesSolicitados.has(examenId);
           });
-          
-          console.log('✅ Detalles finales (filtrados por solicitud):', detallesFinales);
-        } catch (error) {
-          console.error('Error filtrando exámenes:', error);
+        } catch {
           // Si hay error, usar todos los detalles (comportamiento anterior)
           detallesFinales = detallesFiltrados;
         }
       }
       
       setResultadosDetallados(detallesFinales);
-    } catch (error) {
-      console.error('❌ Error cargando resultados detallados:', error);
+    } catch {
       setResultadosDetallados([]);
     } finally {
       setLoadingResultados(false);
@@ -276,7 +260,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
       if (!response.ok) {
         // Si es un 502, el LIMS no está disponible (esperado si no está corriendo)
         if (response.status === 502) {
-          console.log('ℹ️ Servidor LIMS no disponible. Los análisis de laboratorio no se mostrarán.');
           setAnalisisLims([]);
           return;
         }
@@ -285,13 +268,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
       
       const data = await response.json();
       setAnalisisLims(data.analisis || []);
-    } catch (error: any) {
-      // Solo mostrar error si no es un error de conexión esperado
-      if (error?.message?.includes('502') || error?.message?.includes('Failed to fetch')) {
-        console.log('ℹ️ No se pudo conectar con el servidor LIMS. Los análisis de laboratorio no están disponibles.');
-      } else {
-        console.error('❌ Error cargando análisis del LIMS:', error);
-      }
+    } catch {
       setAnalisisLims([]);
     } finally {
       setLoadingAnalisis(false);
@@ -393,7 +370,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
       // Actualizar el paciente original
       Object.assign(paciente, editedPaciente);
     } catch (error: any) {
-      console.error('Error updating field:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Error desconocido';
       setSnackbarMessage(`Error al actualizar: ${errorMessage}`);
       setShowSnackbar(true);

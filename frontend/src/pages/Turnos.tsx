@@ -254,8 +254,7 @@ const Turnos: React.FC = () => {
 					// Los resultados ya vienen ordenados del backend
 					setMedicoOptions(mergeUniqueById(results, medicosBase));
 				})
-				.catch(error => {
-					console.error('Error buscando médicos:', error);
+				.catch(() => {
 					if (active) {
 						setMedicoOptions(medicosBase);
 					}
@@ -965,17 +964,15 @@ const Turnos: React.FC = () => {
 				}
 				onSuccess={async () => {
 					try {
-						console.log('🔄 Recargando turnos después de crear/editar...');
 						await refreshTurnos();
 						setShowModal(false);
 						setEditingTurno(null);
 						setSelectedDateTime(null);
-					} catch (error) {
-						console.error('❌ Error al recargar turnos:', error);
+					} catch {
+						// El modal ya mostró feedback; no interrumpir el cierre
 					}
 				}}
 				onOpenAtencion={(atencionId) => {
-					console.log('📂 [Turnos.tsx] onOpenAtencion recibido:', atencionId);
 					setSelectedAtencionId(atencionId);
 				}}
 			/>
@@ -985,7 +982,6 @@ const Turnos: React.FC = () => {
 				atencionId={selectedAtencionId}
 				open={Boolean(selectedAtencionId)}
 				onClose={() => {
-					console.log('📂 [Turnos.tsx] Cerrando drawer');
 					setSelectedAtencionId(null);
 				}}
 				currentUserRole={currentUser?.rol}
