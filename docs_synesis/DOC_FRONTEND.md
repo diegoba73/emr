@@ -84,6 +84,8 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 **Errores visibles (QA-FE-ERR-03):** módulos LIMS/micro (`components/lims/*`, `pages/laboratorio/*`) no muestran `formatDrfError` ni `response.data` en toast/snackbar/setError. Los errores visibles usan `getSafeClinicalActionMessage` con acciones LIMS en `CLINICAL_ACTION_ERRORS`. Guardrail: `no-raw-lims-ui-errors-guard.test.ts`.
 
+**Errores visibles (QA-FE-ERR-03A):** descarga PDF LIMS (`formatLimsPdfDownloadError` en `utils/limsDownload.ts`, usado por `OrdenLimsDetalle.tsx`) devuelve mensajes seguros por status HTTP sin parsear `detail`/`error`/`message` backend ni `ax.message`.
+
 **Consola (QA-ROLE-01 / QA-FE-LOGS-02 / QA-FE-LOGS-03):** sin `console.*` con PHI/PII en `modules/atenciones/`, `PatientIntegratedView.tsx`, `Turnos.tsx`, `apiService.ts`, `components/internacion/*`, `TurnoModal.tsx`, `Solicitudes.tsx`, `Pacientes.tsx` ni `csrf.ts`. Guardrails: `no-console-guard.test.ts`, `no-console-clinical-views-guard.test.ts`, `no-console-focused-modules-guard.test.ts`.
 
 ### QA-ROLE-01 — Atenciones clínicas (jun 2026)
@@ -180,7 +182,7 @@ Lista completa de API en `DOC_API_ENDPOINTS.md`.
 ### Servicios API (cliente)
 
 - **`frontend/src/services/limsMicroApi.ts`:** prefijo canónico `/lab/microbiologia/...` (medios, estudios, siembras, lecturas, microorganismos, aislados, identificaciones, antibióticos, antibiogramas, resultados, informes + acciones `iniciar`, `cancelar`, `marcar_informado`, `descartar`, `completar`, `emitir`, `validar`, `anular`). Listados relacionados con estudio aceptan **`?estudio_id=<entero positivo>`** server-side; valores inválidos → **HTTP 400** (jun 2026).
-- Re-export desde `limsApi.ts`; errores DRF vía `formatDrfError` (403 → toast, sin logout).
+- Re-export desde `limsApi.ts`; errores visibles LIMS/micro vía `getSafeClinicalActionMessage` (toasts) o mensajes seguros por status (PDF).
 
 ### Permisos visuales (`frontend/src/utils/limsAccess.ts`)
 
@@ -239,7 +241,7 @@ Relevamiento y validación del SPA microbiología existente (UI-2) contra backen
 - **PDF-1-FE (jun 2026) [IMPLEMENTADO]:** botón «Descargar informe PDF» en `OrdenLimsDetalle.tsx`; servicio `downloadInformeLimsPdf` / `getInformeLimsPdfBlob` en `limsApi.ts` (`GET /lab/solicitudes/{id}/informe-pdf/`, `responseType: blob`); helpers `limsDownload.ts` (filename seguro, errores 403/404/500); permiso UI `canDownloadInformeLimsPdf` (admin/laboratorio/médico). Sin `/media/`, sin logs sensibles, URL temporal revocada vía `triggerBlobDownload`. Tests: `limsAccess.test.ts`, `limsDownload.test.ts`.
 - Portal paciente / QC / CLSI-EUCAST / PDF profesional: fuera de alcance.
 
-**Seguridad frontend:** sin `console.log`/`console.error` sensibles en componentes LIMS/micro (confirmado por grep). Errores vía `formatDrfError` + toast.
+**Seguridad frontend:** sin `console.log`/`console.error` sensibles en componentes LIMS/micro (confirmado por grep). Errores visibles con mensajes seguros por acción (`getSafeClinicalActionMessage`) o por status HTTP (descarga PDF).
 
 **Validaciones ejecutadas (jun 2026):**
 

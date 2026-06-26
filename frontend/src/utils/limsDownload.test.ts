@@ -26,27 +26,46 @@ describe('assertValidSolicitudId', () => {
 });
 
 describe('formatLimsPdfDownloadError', () => {
-  it('mapea 403/404/500 sin exponer payload', () => {
+  it('mapea 401/403/404/500 sin exponer payload', () => {
     const mk = (status: number) => {
       const err = new AxiosError('fail');
       err.response = {
         status,
-        data: { paciente: 'secreto' },
+        data: { detail: 'Paciente Juan Pérez DNI 12345', paciente: 'secreto' },
         statusText: '',
         headers: {},
         config: { headers: {} },
       } as NonNullable<typeof err.response>;
       return err;
     };
+    expect(formatLimsPdfDownloadError(mk(401))).toBe(
+      'La sesión no está activa. Iniciá sesión nuevamente.'
+    );
     expect(formatLimsPdfDownloadError(mk(403))).toBe(
-      'No tenés permisos para descargar el informe.'
+      'No tenés permisos para descargar este informe.'
     );
     expect(formatLimsPdfDownloadError(mk(404))).toBe(
-      'No se encontró la solicitud o no tenés acceso.'
+      'El informe solicitado no está disponible.'
     );
     expect(formatLimsPdfDownloadError(mk(500))).toBe(
       'No se pudo generar el informe. Intentá nuevamente.'
     );
+  });
+
+  it('no expone detail ni ax.message para otros errores', () => {
+    const err = new AxiosError('Network Error');
+    err.response = {
+      status: 400,
+      data: { detail: 'Muestra rechazada por hemólisis' },
+      statusText: '',
+      headers: {},
+      config: { headers: {} },
+    } as NonNullable<typeof err.response>;
+    expect(formatLimsPdfDownloadError(err)).toBe(
+      'No se pudo descargar el informe. Intentá nuevamente.'
+    );
+    expect(formatLimsPdfDownloadError(err)).not.toContain('hemólisis');
+    expect(formatLimsPdfDownloadError(err)).not.toContain('Network Error');
   });
 });
 
