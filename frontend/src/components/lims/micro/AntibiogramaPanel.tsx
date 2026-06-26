@@ -25,6 +25,7 @@ import {
   createResultadoAntibiotico,
   formatDrfError,
 } from '../../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { AntibiogramaEstadoBadge, InterpretacionAntibioticoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 
@@ -115,7 +116,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
           toast.success('Antibiograma cancelado');
           onRefresh();
         } catch (e) {
-          const msg = formatDrfError(e);
+          const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCancelarAntibiograma);
           toast.error(msg);
           throw new Error(msg);
         }

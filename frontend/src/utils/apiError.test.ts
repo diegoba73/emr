@@ -33,4 +33,13 @@ describe('getSafeClinicalActionMessage', () => {
       'No tiene permisos para realizar esta acción.'
     );
   });
+
+  it('devuelve mensaje seguro para acciones LIMS sin exponer detail', () => {
+    const err = {
+      response: { status: 500, data: { detail: 'Paciente Juan Pérez DNI 12345' } },
+    };
+    expect(
+      getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsCancelarEstudioMicro)
+    ).toBe(CLINICAL_ACTION_ERRORS.limsCancelarEstudioMicro);
+  });
 });

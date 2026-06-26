@@ -23,6 +23,7 @@ import {
   updateInformeMicrobiologia,
   validarInformeMicrobiologia,
 } from '../../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { InformeMicrobiologiaEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 
@@ -113,7 +114,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
           toast.success('Informe anulado');
           onRefresh();
         } catch (e) {
-          const msg = formatDrfError(e);
+          const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsAnularInforme);
           toast.error(msg);
           throw new Error(msg);
         }

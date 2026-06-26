@@ -21,6 +21,7 @@ import {
   listSiembrasMicrobiologia,
   marcarEstudioMicrobiologiaInformado,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessMicrobiologia,
   canMarcarMicroEstudioInformado,
@@ -131,7 +132,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           toast.success('Estudio actualizado');
           await loadAll();
         } catch (e) {
-          const msg = formatDrfError(e);
+          const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCancelarEstudioMicro);
           toast.error(msg);
           throw new Error(msg);
         }

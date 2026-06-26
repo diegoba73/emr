@@ -23,6 +23,7 @@ import {
   descartarAisladoMicrobiologico,
   formatDrfError,
 } from '../../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { AisladoEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 
@@ -103,7 +104,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
           toast.success('Aislado descartado');
           onRefresh();
         } catch (e) {
-          const msg = formatDrfError(e);
+          const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsDescartarAislado);
           toast.error(msg);
           throw new Error(msg);
         }

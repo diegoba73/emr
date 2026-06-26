@@ -185,8 +185,7 @@ const Solicitudes: React.FC = () => {
                       <button 
                         className="btn-view"
                         onClick={() => {
-                          // Mostrar detalles de la solicitud
-                          alert(`Solicitud ${solicitud.id}\nPaciente: ${paciente ? `${paciente.nombre} ${paciente.apellido}` : 'N/A'}\nEstado: ${solicitud.estado}\nDescripción: ${solicitud.descripcion || 'Sin descripción'}`);
+                          alert('Los detalles de la solicitud están disponibles en la tabla.');
                         }}
                         title="Ver detalles"
                       >
@@ -197,8 +196,7 @@ const Solicitudes: React.FC = () => {
                         <button 
                           className="btn-success"
                           onClick={() => {
-                            // Mostrar resultados del LIMS
-                            alert(`Resultados disponibles para solicitud ${solicitud.id}\nLos resultados se muestran desde el LIMS.`);
+                            alert('Los resultados se consultan desde el LIMS.');
                           }}
                           title="Ver resultados"
                         >

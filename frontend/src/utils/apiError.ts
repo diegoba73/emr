@@ -54,6 +54,11 @@ export const CLINICAL_ACTION_ERRORS = {
   camaCrear: 'No se pudo crear la cama. Revisá los datos ingresados o intentá nuevamente.',
   sectorCrear: 'No se pudo crear el sector. Revisá los datos ingresados o intentá nuevamente.',
   camaActualizar: 'No se pudo actualizar el estado de la cama. Intentá nuevamente.',
+  limsDescartarAislado: 'No se pudo descartar el aislado. Intent? nuevamente.',
+  limsAnularInforme: 'No se pudo anular el informe. Intent? nuevamente.',
+  limsCancelarAntibiograma: 'No se pudo cancelar el antibiograma. Intent? nuevamente.',
+  limsCancelarEstudioMicro: 'No se pudo cancelar el estudio. Intent? nuevamente.',
+  genericClinicalAction: 'No se pudo completar la operaci?n. Intent? nuevamente.',
 } as const;
 
 /** Mensaje seguro para UI clínica: solo status HTTP conocido + fallback por acción. */
