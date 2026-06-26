@@ -42,4 +42,19 @@ describe('getSafeClinicalActionMessage', () => {
       getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsCancelarEstudioMicro)
     ).toBe(CLINICAL_ACTION_ERRORS.limsCancelarEstudioMicro);
   });
+
+  it('devuelve mensaje seguro para guardar resultado LIMS sin exponer detail', () => {
+    const err = {
+      response: { status: 500, data: { detail: 'Muestra #99 rechazada por hemólisis' } },
+    };
+    expect(
+      getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsGuardarResultado)
+    ).toBe(CLINICAL_ACTION_ERRORS.limsGuardarResultado);
+  });
+
+  it('respeta 401 con mensaje genérico', () => {
+    expect(getSafeClinicalActionMessage({ response: { status: 401 } }, CLINICAL_ACTION_ERRORS.genericClinicalAction)).toBe(
+      'Debe iniciar sesión para continuar.'
+    );
+  });
 });

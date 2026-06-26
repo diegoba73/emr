@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services/api';
 import { TipoExamen, ApiResponse } from '../../types';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import './ListaExamenesTest.css';
 
 const ListaExamenesTest: React.FC = () => {
@@ -30,13 +31,8 @@ const ListaExamenesTest: React.FC = () => {
       );
       setExamenes(response.results || []);
       setTotalCount(response.count || 0);
-    } catch (err: any) {
-      console.error('Error cargando exámenes:', err);
-      setError(
-        err.response?.data?.detail ||
-        err.message ||
-        'Error al cargar los exámenes. Por favor, intenta nuevamente.'
-      );
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsCargarExamenes));
     } finally {
       setLoading(false);
     }

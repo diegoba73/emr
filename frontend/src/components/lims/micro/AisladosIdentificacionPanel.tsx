@@ -21,7 +21,6 @@ import {
   createAisladoMicrobiologico,
   createIdentificacionMicroorganismo,
   descartarAisladoMicrobiologico,
-  formatDrfError,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { AisladoEstadoBadge } from './MicroBadges';
@@ -67,7 +66,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
       toast.success('Aislado creado');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarAislado));
     }
   };
 
@@ -89,7 +88,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
       toast.success('Identificación registrada');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarIdentificacion));
     }
   };
 

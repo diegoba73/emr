@@ -32,13 +32,13 @@ import { useData } from '../../contexts/DataContext';
 import type { EstadoEstudioMicrobiologia, EstudioMicrobiologia } from '../../types/lims';
 import {
   createEstudioMicrobiologia,
-  formatDrfError,
   listContenedoresLims,
   listEstudiosMicrobiologia,
   listMuestrasPorSolicitud,
   listSolicitudesExamen,
   listTiposMuestraLims,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import type { LimsTipoContenedor, LimsTipoMuestra, MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
 import {
   filterMuestrasProcesablesMicro,
@@ -94,7 +94,7 @@ const MicrobiologiaEstudios: React.FC = () => {
       const data = await listEstudiosMicrobiologia(busqueda.trim() ? { search: busqueda.trim() } : undefined);
       setRows(data);
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarEstudiosMicro));
     } finally {
       setLoading(false);
     }
@@ -123,7 +123,7 @@ const MicrobiologiaEstudios: React.FC = () => {
       setTiposMuestraMap(new Map(tipos.map((t) => [t.id, t])));
       setContenedoresMap(new Map(conts.map((c) => [c.id, c])));
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarDatosMicro));
     } finally {
       setPickerLoading(false);
     }
@@ -148,7 +148,7 @@ const MicrobiologiaEstudios: React.FC = () => {
       const muestras = await listMuestrasPorSolicitud(sid, sol?.numero ?? undefined);
       setMuestrasPicker(filterMuestrasProcesablesMicro(muestras));
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarMuestras));
       setMuestrasPicker([]);
     } finally {
       setPickerLoading(false);
@@ -176,7 +176,7 @@ const MicrobiologiaEstudios: React.FC = () => {
       setOpenCreate(false);
       navigate(`/laboratorio/microbiologia/estudios/${est.id}`);
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCrearEstudioMicro));
     }
   };
 

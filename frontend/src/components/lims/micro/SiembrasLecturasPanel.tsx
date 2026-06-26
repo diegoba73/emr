@@ -23,8 +23,8 @@ import type { LecturaCultivo, MedioCultivo, SiembraMicrobiologia } from '../../.
 import {
   createLecturaCultivo,
   createSiembraMicrobiologia,
-  formatDrfError,
 } from '../../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 
 const CRECIMIENTOS = ['PENDIENTE', 'SIN_DESARROLLO', 'ESCASO', 'MODERADO', 'ABUNDANTE', 'MIXTO'];
 
@@ -67,7 +67,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
       setMedioId('');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarSiembra));
     }
   };
 
@@ -89,7 +89,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
       toast.success('Lectura registrada');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarLectura));
     }
   };
 

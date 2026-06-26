@@ -6,7 +6,6 @@ import { useData } from '../../contexts/DataContext';
 import type { EstudioMicrobiologia } from '../../types/lims';
 import {
   cancelarEstudioMicrobiologia,
-  formatDrfError,
   getEstudioMicrobiologia,
   iniciarEstudioMicrobiologia,
   listAisladosMicrobiologicos,
@@ -98,7 +97,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         antibioticos,
       });
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarEstudio));
       setEstudio(null);
     } finally {
       setLoading(false);
@@ -116,7 +115,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       toast.success('Estudio actualizado');
       await loadAll();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarEstudioMicro));
     }
   };
 

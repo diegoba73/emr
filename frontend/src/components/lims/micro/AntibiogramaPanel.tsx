@@ -23,7 +23,6 @@ import {
   completarAntibiograma,
   createAntibiograma,
   createResultadoAntibiotico,
-  formatDrfError,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { AntibiogramaEstadoBadge, InterpretacionAntibioticoBadge } from './MicroBadges';
@@ -67,7 +66,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
       toast.success('Antibiograma creado');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarAntibiograma));
     }
   };
 
@@ -91,7 +90,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
       toast.success('Resultado agregado');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultadoAntibiograma));
     }
   };
 
@@ -101,7 +100,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
       toast.success('Antibiograma completado');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCompletarAntibiograma));
     }
   };
 

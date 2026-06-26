@@ -22,11 +22,11 @@ import {
   createAntibiotico,
   createMedioCultivo,
   createMicroorganismo,
-  formatDrfError,
   listAntibioticos,
   listMediosCultivo,
   listMicroorganismos,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canAccessMicrobiologia, canEditMicroCatalogos } from '../../utils/limsAccess';
 
 const MicrobiologiaCatalogos: React.FC = () => {
@@ -49,7 +49,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
       setMicros(mi);
       setAbs(a);
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
     }
   };
 
@@ -71,7 +71,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
       setNombre('');
       load();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     }
   };
 

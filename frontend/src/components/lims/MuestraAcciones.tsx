@@ -12,7 +12,6 @@ import {
 import toast from 'react-hot-toast';
 import type { MuestraTransaccional } from '../../types/lims';
 import {
-  formatDrfError,
   postMuestraCancelar,
   postMuestraConservar,
   postMuestraDescartar,
@@ -20,6 +19,7 @@ import {
   postMuestraRechazar,
   postMuestraTomar,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
 export interface MuestraAccionesProps {
   muestra: MuestraTransaccional;
@@ -42,7 +42,7 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
       toast.success('Muestra actualizada');
       onUpdated();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarMuestra));
     } finally {
       setBusy(false);
     }

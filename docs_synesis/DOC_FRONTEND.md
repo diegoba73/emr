@@ -82,6 +82,8 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 **Errores visibles (QA-FE-ERR-02):** `Solicitudes.tsx` no muestra ID de solicitud, paciente, descripción clínica, estado sensible ni respuestas backend crudas en `alert` informativos. Los callers de `MotivoDialog` (turnos + LIMS micro) propagan mensajes saneados vía `getSafeClinicalActionMessage` / `CLINICAL_ACTION_ERRORS`. Guardrail: `no-phi-clinical-ui-alerts-guard.test.ts`.
 
+**Errores visibles (QA-FE-ERR-03):** módulos LIMS/micro (`components/lims/*`, `pages/laboratorio/*`) no muestran `formatDrfError` ni `response.data` en toast/snackbar/setError. Los errores visibles usan `getSafeClinicalActionMessage` con acciones LIMS en `CLINICAL_ACTION_ERRORS`. Guardrail: `no-raw-lims-ui-errors-guard.test.ts`.
+
 **Consola (QA-ROLE-01 / QA-FE-LOGS-02 / QA-FE-LOGS-03):** sin `console.*` con PHI/PII en `modules/atenciones/`, `PatientIntegratedView.tsx`, `Turnos.tsx`, `apiService.ts`, `components/internacion/*`, `TurnoModal.tsx`, `Solicitudes.tsx`, `Pacientes.tsx` ni `csrf.ts`. Guardrails: `no-console-guard.test.ts`, `no-console-clinical-views-guard.test.ts`, `no-console-focused-modules-guard.test.ts`.
 
 ### QA-ROLE-01 — Atenciones clínicas (jun 2026)

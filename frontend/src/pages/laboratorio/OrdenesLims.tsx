@@ -22,7 +22,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { EstadoSolicitudLims, SolicitudExamenLims } from '../../types/lims';
-import { formatDrfError, listSolicitudesExamen } from '../../services/limsApi';
+import { listSolicitudesExamen } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canAccessLimsModule } from '../../utils/limsAccess';
 
 const ESTADOS: EstadoSolicitudLims[] = [
@@ -74,7 +75,7 @@ const OrdenesLims: React.FC = () => {
       });
       setRows(data);
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {
       setLoading(false);
     }

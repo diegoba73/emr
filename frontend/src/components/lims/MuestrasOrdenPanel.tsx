@@ -24,11 +24,11 @@ import toast from 'react-hot-toast';
 import type { LimsTipoContenedor, LimsTipoMuestra, MuestraTransaccional } from '../../types/lims';
 import {
   createMuestra,
-  formatDrfError,
   listContenedoresLims,
   listMuestrasPorSolicitud,
   listTiposMuestraLims,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import MuestraEstadoBadge from './MuestraEstadoBadge';
 import MuestraAcciones from './MuestraAcciones';
 
@@ -67,7 +67,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
       setTipos(t);
       setConts(c);
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarMuestras));
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
       setContId('');
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCrearMuestra));
     } finally {
       setSaving(false);
     }

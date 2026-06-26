@@ -16,7 +16,6 @@ import { useData } from '../../contexts/DataContext';
 import type { MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
 import {
   downloadInformeLimsPdf,
-  formatDrfError,
   getSolicitudExamen,
   listMuestrasPorSolicitud,
   postCancelarOrden,
@@ -24,6 +23,7 @@ import {
   postTomarMuestraOrden,
   postValidarOrden,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessLimsModule,
   canDownloadInformeLimsPdf,
@@ -78,7 +78,7 @@ const OrdenLimsDetalle: React.FC = () => {
       setOrden(o);
       setMuestras(m);
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrden));
       setOrden(null);
       setLoadError(true);
     } finally {
@@ -103,7 +103,7 @@ const OrdenLimsDetalle: React.FC = () => {
       await refreshMuestras(o.id, o.numero);
       toast.success('Orden actualizada');
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden));
     }
   };
 

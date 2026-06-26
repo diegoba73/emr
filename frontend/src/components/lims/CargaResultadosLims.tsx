@@ -24,11 +24,11 @@ import {
 import toast from 'react-hot-toast';
 import type { LimsTipoExamen, LimsTipoMuestra, MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
 import {
-  formatLimsHttpError,
   getTiposExamenMap,
   listTiposMuestraLims,
   postCargarResultados,
 } from '../../services/limsApi';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import ResultadoRangoInfo from './ResultadoRangoInfo';
 import ResultadosOrdenLista from './ResultadosOrdenLista';
 import {
@@ -123,7 +123,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({ orden, muestr
       toast.success('Resultados guardados');
       onGuardado(updated);
     } catch (e) {
-      toast.error(formatLimsHttpError(e, 'cargar_resultados'));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado));
     } finally {
       setSaving(false);
     }

@@ -19,7 +19,6 @@ import {
   anularInformeMicrobiologia,
   createInformeMicrobiologia,
   emitirInformeMicrobiologia,
-  formatDrfError,
   updateInformeMicrobiologia,
   validarInformeMicrobiologia,
 } from '../../../services/limsApi';
@@ -68,7 +67,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       setTextoNuevo('');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarInforme));
     }
   };
 
@@ -79,7 +78,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       toast.success('Borrador actualizado');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarInforme));
     }
   };
 
@@ -89,7 +88,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       toast.success('Informe emitido');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsEmitirInforme));
     }
   };
 
@@ -99,7 +98,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       toast.success('Informe final validado');
       onRefresh();
     } catch (e) {
-      toast.error(formatDrfError(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsValidarInforme));
     }
   };
 
