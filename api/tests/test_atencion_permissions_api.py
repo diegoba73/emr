@@ -202,6 +202,26 @@ class TestAtencionPermissionsList:
         response = client.get(reverse('atenciones-list'))
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_laboratorio_is_staff_bloqueado(self, client, atencion_medico_a):
+        """is_staff=True no debe elevar operador LIMS a acceso EMR clínico."""
+        uid = _uid()
+        user = User.objects.create_user(
+            username=f'lab_staff_{uid}',
+            email=f'lab_staff_{uid}@test.com',
+            password='x',
+            rol='laboratorio',
+            is_staff=True,
+        )
+        client.force_authenticate(user=user)
+        assert client.get(reverse('atenciones-list')).status_code == status.HTTP_403_FORBIDDEN
+        detail_url = reverse('atenciones-detail', args=[atencion_medico_a.id])
+        assert client.get(detail_url).status_code == status.HTTP_403_FORBIDDEN
+        assert client.patch(detail_url, {'observaciones_generales': 'x'}, format='json').status_code == (
+            status.HTTP_403_FORBIDDEN
+        )
+        cerrar_url = reverse('atenciones-cerrar', args=[atencion_medico_a.id])
+        assert client.post(cerrar_url, {}, format='json').status_code == status.HTTP_403_FORBIDDEN
+
     def test_secretaria_bloqueada(self, client, atencion_medico_a):
         client.force_authenticate(user=_user('secretaria'))
         response = client.get(reverse('atenciones-list'))

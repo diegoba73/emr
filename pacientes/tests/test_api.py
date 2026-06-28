@@ -282,6 +282,51 @@ class TestPacienteAPIPrivacidad:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["results"] == []
 
+    def test_laboratorio_is_staff_no_lista_pacientes(self):
+        """Operadores LIMS suelen tener is_staff=True; no deben leer PHI EMR global."""
+        Paciente.objects.create(dni="PRIV-LAB-ST-0", nombre="Ana", apellido="Demo")
+        user = User.objects.create_user(
+            username="lab.staff.phi",
+            email="lab.staff@example.com",
+            password="x",
+            rol="laboratorio",
+            is_staff=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.get("/api/pacientes/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["results"] == []
+
+    def test_laboratorio_is_staff_buscar_sin_phi(self):
+        Paciente.objects.create(dni="PRIV-LAB-ST-1", nombre="Juan", apellido="Perez")
+        user = User.objects.create_user(
+            username="lab.staff.busq",
+            email="lab.staff.busq@example.com",
+            password="x",
+            rol="laboratorio",
+            is_staff=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.get("/api/pacientes/buscar/?q=Perez")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["results"] == []
+
+    def test_laboratorio_is_staff_no_retrieve_paciente(self):
+        paciente = Paciente.objects.create(dni="PRIV-LAB-ST-2", nombre="X", apellido="Y")
+        user = User.objects.create_user(
+            username="lab.staff.det",
+            email="lab.staff.det@example.com",
+            password="x",
+            rol="laboratorio",
+            is_staff=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.get(f"/api/pacientes/{paciente.id}/")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
 
 @pytest.mark.django_db
 class TestPacienteAPIDelete:

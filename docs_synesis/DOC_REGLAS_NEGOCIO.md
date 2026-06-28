@@ -71,7 +71,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de pacientes
 
 - DNI **único** en modelo.
-- `PacienteViewSet`: admin/secretaría/enfermería ven todos; médico acotado a relación turno/consulta (`?all=true` no escala); paciente solo su ficha.
+- `PacienteViewSet`: admin/secretaría/enfermería ven todos; médico acotado a relación turno/consulta (`?all=true` no escala); paciente solo su ficha; **laboratorio** (incluso con `is_staff=True` en operadores LIMS) **sin** listado/detalle/búsqueda EMR global — queryset vacío / 404 en detalle (**[IMPLEMENTADO]** jun 2026, fix PHI QA-SMOKE).
 - `buscar`: numérico → DNI icontains; texto → nombre/apellido; orden por prioridad de coincidencia.
 - Actualización demográfica: permiso `CanUpdatePacienteDemographics` (médico puede PATCH cualquier paciente según clase).
 
@@ -99,7 +99,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **C5.10.1 `iniciar-atencion`:** estados permitidos `RESERVADO`/`CONFIRMADO`; rechaza `CANCELADO`/`DISPONIBLE`; idempotente si ya existe `Atencion` (200, sin duplicar auditoría de alta); si atención existe y turno sigue `CONFIRMADO`, sincroniza a `REALIZADO` y audita turno. Permisos: médico propio; admin/staff/superuser; no secretaría/paciente/enfermería/laboratorio.
 - **C5.10.2 `POST /api/atenciones/`:** compat/deprecated (headers HTTP); no altera `Turno.estado`; puede dejar turno `CONFIRMADO` con atención abierta — no usar como inicio clínico en UI. Integraciones externas pueden seguir consumiendo el JSON; migrar a `iniciar-atencion`.
 - `marcar-realizado`: no sustituye `iniciar-atencion` (no crea atención).
-- Permisos: `AtencionPermission` (QA-ROLE-01); queryset médico = `medico_principal`; paciente = su paciente; enfermería = lectura global sin mutación; secretaría bloqueada.
+- Permisos: `AtencionPermission` (QA-ROLE-01); queryset médico = `medico_principal`; paciente = su paciente; enfermería = lectura global sin mutación; secretaría y **laboratorio** bloqueados (403), **incluso si `is_staff=True`** — el flag staff no eleva operadores LIMS a acceso EMR clínico (**[IMPLEMENTADO]** jun 2026).
 - **UI atenciones:** enfermería y paciente ven detalle en solo lectura (`canOperateAtenciones`); no editar, cerrar, registrar ni subir documentos.
 - **POST `/api/atenciones/` (compat):** actor autorizado (médico propio, admin/staff/superuser) con payload inválido (turno inexistente, turno sin médico) → **400** con mensaje genérico del servicio; turno ajeno o actor sin permiso de creación → **403**; no filtrar existencia de turnos a roles no autorizados.
 - Acción **cerrar** para finalizar (detalle en implementación).

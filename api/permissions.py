@@ -168,11 +168,12 @@ class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
 def _atencion_is_staff_or_admin(user) -> bool:
     if not user or not user.is_authenticated:
         return False
-    return bool(
-        user.is_superuser
-        or user.is_staff
-        or get_normalized_role(user) == 'admin'
-    )
+    if user.is_superuser:
+        return True
+    role = get_normalized_role(user)
+    if role == 'laboratorio':
+        return False
+    return bool(user.is_staff or role == 'admin')
 
 
 def _atencion_user_medico(user):

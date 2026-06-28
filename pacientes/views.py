@@ -41,6 +41,7 @@ except Exception:  # pragma: no cover - defensa por si la app no está cargada
 _AUDIT_AVAILABLE = log_create is not None and log_update is not None
 
 _ROLES_LECTURA_GLOBAL = frozenset({"admin", "secretaria", "enfermeria"})
+_ROLES_SIN_PHI_EMR_GLOBAL = frozenset({"laboratorio"})
 
 
 def _user_rol(user) -> str:
@@ -48,7 +49,11 @@ def _user_rol(user) -> str:
 
 
 def _user_tiene_lectura_global(user) -> bool:
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+    if getattr(user, "is_superuser", False):
+        return True
+    if _user_rol(user) in _ROLES_SIN_PHI_EMR_GLOBAL:
+        return False
+    if getattr(user, "is_staff", False):
         return True
     return _user_rol(user) in _ROLES_LECTURA_GLOBAL
 
