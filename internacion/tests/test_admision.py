@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 
 from internacion.models import Sector, Cama, Internacion
-from internacion.tests.helpers import unique_suffix
+from internacion.tests.helpers import unique_cie10_code, unique_suffix
 from pacientes.models import Paciente
 
 User = get_user_model()
@@ -165,9 +165,8 @@ class AdmisionAPITestCase(APITestCase):
         """Admitir con diagnóstico CIE-10 → 201."""
         from catalogos.models import DiagnosticoCIE10
 
-        suffix = unique_suffix()
         diagnostico_cie = DiagnosticoCIE10.objects.create(
-            codigo=f'A00.0-{suffix}',
+            codigo=unique_cie10_code('A'),
             descripcion='Cólera debido a Vibrio cholerae 01, biotipo cholerae',
             categoria='Enfermedades infecciosas',
             capitulo='I',
