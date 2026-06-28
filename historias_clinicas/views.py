@@ -26,7 +26,7 @@ from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from api.permissions import IsMedicoOrEnfermeriaOrAdmin
+from api.permissions import IsMedicoOrEnfermeriaOrAdmin, emr_staff_or_admin_global
 from auditoria.audit_service import log_create, log_update
 from auditoria.snapshot import safe_model_snapshot
 
@@ -91,7 +91,7 @@ class HistoriaClinicaViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
 
-        if user.is_superuser or user.is_staff:
+        if emr_staff_or_admin_global(user):
             return queryset
 
         medico = _resolve_user_medico(user)
@@ -186,7 +186,7 @@ class ConsultaViewSet(viewsets.ModelViewSet):
             except (ValueError, TypeError):
                 pass
 
-        if user.is_superuser or user.is_staff:
+        if emr_staff_or_admin_global(user):
             return queryset
 
         user_rol = (getattr(user, 'rol', '') or '').lower()

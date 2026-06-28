@@ -29,6 +29,7 @@ from api.serializers import AtencionSerializer
 from api.permissions import (
     AtencionPermission,
     IsMedicoOrEnfermeriaOrAdmin,
+    emr_staff_or_admin_global,
     filter_atencion_queryset_for_user,
     get_normalized_role,
 )
@@ -42,7 +43,7 @@ _ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'secretaria', 'enfermeria'})
 
 def _puede_ver_agenda_global_turnos(user) -> bool:
     """Agenda institucional de turnos: staff operativo, no médico estándar."""
-    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+    if emr_staff_or_admin_global(user):
         return True
     return (getattr(user, 'rol', '') or '').lower() in _ROLES_AGENDA_GLOBAL_TURNOS
 
@@ -53,7 +54,7 @@ def _rol_usuario(user) -> str:
 
 def _puede_gestionar_turnos_global(user) -> bool:
     """Crear/modificar turnos en agenda institucional (no incluye enfermería en C5.8.1)."""
-    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+    if emr_staff_or_admin_global(user):
         return True
     return _rol_usuario(user) in {'admin', 'secretaria'}
 
@@ -686,11 +687,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
             )
 
         user = request.user
-        if not (
-            user.is_superuser
-            or user.is_staff
-            or get_normalized_role(user) == 'admin'
-        ):
+        if not emr_staff_or_admin_global(user):
             try:
                 medico = user.medico
             except ObjectDoesNotExist:
@@ -799,7 +796,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
         # check explícito para los casos en que un admin reutilice este action
         # con un usuario médico vinculado a otro Medico distinto del de la
         # atención. No se reporta el detalle para no leakear información.
-        if not (user.is_superuser or user.is_staff):
+        if not emr_staff_or_admin_global(user):
             try:
                 user_medico = user.medico
             except ObjectDoesNotExist:

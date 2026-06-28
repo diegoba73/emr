@@ -357,3 +357,31 @@ class TestHistoriaClinicaAPI(APITestCase):
         ids = {row['paciente'] for row in results}
         assert self.paciente.id in ids
         assert otra_historia.paciente_id not in ids
+
+    def test_laboratorio_is_staff_no_lista_historias(self):
+        lab = User.objects.create_user(
+            username='hc_lab_staff',
+            email='hc_lab_staff@test.com',
+            password='testpass123',
+            rol='laboratorio',
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=lab)
+        response = self.client.get('/api/historias-clinicas/')
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data['results'] if 'results' in response.data else response.data
+        assert results == []
+
+    def test_laboratorio_is_staff_no_resumen_historia(self):
+        lab = User.objects.create_user(
+            username='hc_lab_staff_res',
+            email='hc_lab_staff_res@test.com',
+            password='testpass123',
+            rol='laboratorio',
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=lab)
+        response = self.client.get(
+            f'/api/historias-clinicas/{self.historia_clinica.paciente_id}/resumen/'
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND

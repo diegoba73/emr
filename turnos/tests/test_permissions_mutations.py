@@ -248,6 +248,22 @@ class TestTurnoCreatePermissions(APITestCase):
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_laboratorio_is_staff_no_puede_crear_turno(self):
+        lab = User.objects.create_user(
+            username='ta_mut_lab_staff',
+            email='ta_mut_lab_staff@test.com',
+            password='x',
+            rol='laboratorio',
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=lab)
+        response = self.client.post(
+            '/api/turnos/',
+            _turno_payload(self.paciente_a, self.medico_a, self.recurso, 58),
+            format='json',
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
     def test_usuario_sin_rol_no_puede_crear_turno(self):
         user = User.objects.create_user(
             username='ta_mut_norol',

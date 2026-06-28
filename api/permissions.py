@@ -165,15 +165,26 @@ class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
         return user_rol in ['medico', 'enfermeria', 'admin']
 
 
-def _atencion_is_staff_or_admin(user) -> bool:
+_ROLES_SIN_ACCESO_EMR_STAFF = frozenset({'laboratorio'})
+
+
+def emr_staff_or_admin_global(user) -> bool:
+    """Bypass staff/superuser para operaciones EMR globales.
+
+    Operadores LIMS suelen tener ``is_staff=True``; no deben leer PHI EMR general.
+    """
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
         return True
     role = get_normalized_role(user)
-    if role == 'laboratorio':
+    if role in _ROLES_SIN_ACCESO_EMR_STAFF:
         return False
     return bool(user.is_staff or role == 'admin')
+
+
+def _atencion_is_staff_or_admin(user) -> bool:
+    return emr_staff_or_admin_global(user)
 
 
 def _atencion_user_medico(user):
@@ -295,8 +306,8 @@ class IsPacienteOrStaff(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
         
-        # Los staff siempre tienen acceso
-        if request.user.is_staff:
+        # Staff operativo EMR (excluye operadores LIMS con is_staff=True)
+        if emr_staff_or_admin_global(request.user):
             return True
         
         # Verificar si el usuario está en el grupo Pacientes o es paciente
@@ -304,8 +315,7 @@ class IsPacienteOrStaff(permissions.BasePermission):
                 request.user.rol == 'paciente')
     
     def has_object_permission(self, request, view, obj):
-        # Los staff pueden ver todos los objetos
-        if request.user.is_staff:
+        if emr_staff_or_admin_global(request.user):
             return True
         
         # Los pacientes solo pueden ver sus propios datos
@@ -650,8 +660,11 @@ class CanUpdatePacienteDemographics(permissions.BasePermission):
         return True
     
     def has_object_permission(self, request, view, obj):
-        # Admin o Secretaria pueden editar siempre
-        if request.user.is_staff or request.user.rol in ['admin', 'secretaria'] or request.user.is_superuser:
+        # Admin, secretaría o staff EMR autorizado
+        if (
+            emr_staff_or_admin_global(request.user)
+            or request.user.rol in ['admin', 'secretaria']
+        ):
             return True
         
         # Médicos pueden leer y actualizar datos demográficos de CUALQUIER paciente

@@ -59,7 +59,7 @@ Ubicación: `api/permissions.py`
 
 **Nota:** Muchos ViewSets **no usan** estas clases y aplican lógica en `get_queryset` con comparación manual de `user.rol`.
 
-**EMR PHI — rol `laboratorio` (jun 2026):** operadores LIMS suelen tener `is_staff=True` (p. ej. seed `laboratorio1`) para acceder al admin Django/LIMS, pero **no** deben leer PHI EMR general. `_user_tiene_lectura_global` (`pacientes/views.py`) y `_atencion_is_staff_or_admin` (`api/permissions.py`) excluyen explícitamente `rol=laboratorio` del bypass por `is_staff`; superuser sigue teniendo acceso global. LIMS nativo (`/api/lab/...`) no se modifica.
+**EMR PHI — rol `laboratorio` (jun 2026):** operadores LIMS suelen tener `is_staff=True` (p. ej. seed `laboratorio1`) para acceder al admin Django/LIMS, pero **no** deben leer PHI EMR general. Helper compartido `emr_staff_or_admin_global` (`api/permissions.py`) excluye `rol=laboratorio` del bypass por `is_staff`; aplicado en pacientes, atenciones, turnos/agenda, historias clínicas y permisos demográficos legacy. Superuser sigue teniendo acceso global. LIMS nativo (`/api/lab/...`) no se modifica.
 
 ---
 

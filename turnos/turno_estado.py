@@ -12,6 +12,7 @@ from django.utils.dateparse import parse_datetime
 
 from auditoria.audit_service import log_update
 from auditoria.snapshot import safe_model_snapshot
+from api.permissions import emr_staff_or_admin_global
 from medicos.models import Medico
 from pacientes.services import ensure_paciente_linked_to_user
 
@@ -39,7 +40,7 @@ def _rol_usuario(user) -> str:
 
 
 def puede_gestionar_turnos_global(user) -> bool:
-    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+    if emr_staff_or_admin_global(user):
         return True
     return _rol_usuario(user) in {'admin', 'secretaria'}
 
@@ -108,7 +109,7 @@ def puede_iniciar_atencion_turno(user, turno: Turno) -> bool:
     rol = _rol_usuario(user)
     if rol in {'enfermeria', 'laboratorio', 'paciente', 'secretaria'}:
         return False
-    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+    if emr_staff_or_admin_global(user):
         return True
     if rol == 'admin':
         return True

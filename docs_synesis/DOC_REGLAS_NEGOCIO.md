@@ -81,7 +81,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 - Estados: DISPONIBLE, RESERVADO, CONFIRMADO, CANCELADO, REALIZADO.
 - Validación: `fecha_hora_fin` > inicio si ambas presentes.
-- **Lectura** (`GET`): admin/staff/superuser/secretaría/enfermería agenda global; médico solo propios; paciente solo propios; laboratorio/otros vacío (**[IMPLEMENTADO]** C5.7.1).
+- **Lectura** (`GET`): admin/staff/superuser/secretaría/enfermería agenda global; médico solo propios; paciente solo propios; laboratorio/otros vacío (**[IMPLEMENTADO]** C5.7.1; reforzado jun 2026: `is_staff` no eleva `rol=laboratorio`).
 - **Creación** (`POST`): admin/staff/secretaría global; médico solo con su `Medico` forzado; paciente solo con su ficha forzada; enfermería/laboratorio/rol desconocido → 403 (**[IMPLEMENTADO]** C5.8.1).
 - **Modificación** (`PATCH`/`PUT`): misma matriz; médico/paciente no reasignan `medico_id`/`paciente_id` ajenos; enfermería/laboratorio → 403 (**[IMPLEMENTADO]** C5.8.1).
 - Paciente: ficha vía `ensure_paciente_linked_to_user`; sin ficha → 403 en mutaciones.
