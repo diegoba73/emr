@@ -193,6 +193,8 @@ if [ "$RUN_SEED" = "true" ]; then
   echo "   medico1 / medico123"
   echo "   paciente1 / paciente123"
   echo "   laboratorio1 / laboratorio123"
+  echo "   enfermeria1 / enfermeria123"
+  echo "   secretaria1 / secretaria123"
   echo ""
 fi
 echo "📋 Logs:"

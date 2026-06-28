@@ -128,6 +128,21 @@ Paciente, médico, secretaría, enfermería, admin (+ staff/superuser en varios 
 
 ---
 
+## Datos demo QA (`seed_data`, jun 2026)
+
+Comando: `python manage.py seed_data` (idempotente; solo desarrollo). Ver `docs/dev-start.md`.
+
+| Artefacto | Clave | Roles útiles |
+|-----------|-------|--------------|
+| Paciente Demo Uno | `paciente1` | paciente / turno / LIMS |
+| Paciente Demo Ajeno | DNI `QA-DEMO-AJENO-01` | aislamiento médico/paciente |
+| Turno demo | motivo `QA DEMO TURNO MEDICO1-PACIENTE1` | medico1, admin, secretaria, paciente1 |
+| Atención demo | vinculada al turno QA | medico1, admin, enfermeria (lectura) |
+
+Sin PHI real. No ejecutar en producción con datos clínicos.
+
+---
+
 ## Pendiente de confirmar
 
 - Uso real del `DashboardViewSet` y métricas expuestas.

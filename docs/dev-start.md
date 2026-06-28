@@ -57,8 +57,24 @@ Creados por `core/management/commands/seed_data.py`:
 |---------|------------|-----|
 | `admin` | `admin123` | superuser |
 | `medico1` | `medico123` | médico |
-| `paciente1` | `paciente123` | paciente |
+| `paciente1` | `paciente123` | paciente (Paciente Demo Uno) |
 | `laboratorio1` | `laboratorio123` | laboratorio (LIMS) |
+| `enfermeria1` | `enfermeria123` | enfermería |
+| `secretaria1` | `secretaria123` | secretaría |
+
+### Datos sintéticos QA (`seed_data`, idempotente)
+
+Solo desarrollo/staging. **No usar datos reales.** Reejecutar: `python manage.py seed_data`.
+
+| Artefacto | Clave estable | Uso |
+|-----------|---------------|-----|
+| Paciente Demo Uno | usuario `paciente1` | Portal paciente / turno LIMS |
+| Paciente Demo Ajeno | DNI `QA-DEMO-AJENO-01` | Aislamiento 404/bloqueo |
+| Turno demo | motivo `QA DEMO TURNO MEDICO1-PACIENTE1` | medico1 / paciente1 / agenda |
+| Atención demo | vinculada al turno QA | smoke atenciones |
+| Orden LIMS | `LAB-DEMO-QA-00001` | laboratorio1 / pantallas LIMS |
+| Muestra LIMS | `MUE-DEMO-QA-00001` | trazabilidad demo |
+| Resultado LIMS | Glucosa, valor demo no clínico | sin validar |
 
 ## URLs
 

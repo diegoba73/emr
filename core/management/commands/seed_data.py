@@ -2,14 +2,25 @@
 Comando de gestión Django para poblar la base de datos con datos iniciales.
 Idempotente: usa get_or_create para no duplicar datos si se corre dos veces.
 """
+from datetime import timedelta
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from catalogos.models import CentroFisico, TipoAtencion
 from medicos.models import Especialidad, Medico
-from laboratorio.models import TipoMuestra, TipoExamen
+from laboratorio.models import TipoMuestra, TipoExamen, SolicitudExamen, ResultadoExamen
+from laboratorio.models_catalog import Muestra
 from pacientes.models import Paciente
+from turnos.models import Turno, Atencion, Recurso
 
 User = get_user_model()
+
+# Claves estables para datos QA demo (desarrollo/staging; no PHI real).
+QA_TURNO_MOTIVO = 'QA DEMO TURNO MEDICO1-PACIENTE1'
+QA_LIMS_NUMERO = 'LAB-DEMO-QA-00001'
+QA_MUESTRA_CODIGO = 'MUE-DEMO-QA-00001'
+QA_PACIENTE_AJENO_DNI = 'QA-DEMO-AJENO-01'
 
 
 class Command(BaseCommand):
@@ -17,6 +28,119 @@ class Command(BaseCommand):
     
     help = 'Pobla la base de datos con datos iniciales (idempotente)'
     
+    def _ensure_user(self, username, password, defaults):
+        """Crea usuario demo si no existe; no resetea contraseña en corridas posteriores."""
+        user, created = User.objects.get_or_create(username=username, defaults=defaults)
+        if created:
+            user.set_password(password)
+            user.save()
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {username} (password: {password})'))
+        else:
+            self.stdout.write(f'  → Ya existe: {username}')
+        return user, created
+
+    def _seed_qa_demo_emr_lims(
+        self,
+        medico_obj,
+        paciente_uno,
+        tipo_glu,
+        muestra_sangre,
+    ):
+        """Datos sintéticos mínimos para smoke QA por rol (idempotente)."""
+        self.stdout.write('Creando datos demo QA (EMR + LIMS)...')
+
+        paciente_ajeno, created = Paciente.objects.get_or_create(
+            dni=QA_PACIENTE_AJENO_DNI,
+            defaults={
+                'nombre': 'Paciente Demo',
+                'apellido': 'Ajeno',
+                'observaciones': 'QA DEMO - paciente ajeno para pruebas de aislamiento',
+            },
+        )
+        if created:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Paciente ajeno demo: {paciente_ajeno.dni}'))
+        else:
+            self.stdout.write(f'  → Ya existe paciente ajeno: {paciente_ajeno.dni}')
+
+        turno = Turno.objects.filter(motivo_reserva=QA_TURNO_MOTIVO).first()
+        if not turno:
+            inicio = timezone.now() + timedelta(days=7)
+            fin = inicio + timedelta(minutes=30)
+            turno = Turno.objects.create(
+                paciente=paciente_uno,
+                medico=medico_obj,
+                fecha_hora_inicio=inicio,
+                fecha_hora_fin=fin,
+                estado=Turno.Estado.CONFIRMADO,
+                motivo_reserva=QA_TURNO_MOTIVO,
+            )
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Turno demo QA #{turno.id}'))
+        else:
+            self.stdout.write(f'  → Ya existe turno demo QA #{turno.id}')
+
+        atencion = Atencion.objects.filter(turno=turno).first()
+        if not atencion:
+            atencion = Atencion.objects.create(
+                turno=turno,
+                paciente=paciente_uno,
+                medico_principal=medico_obj,
+                tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
+                tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
+                estado_clinico=Atencion.EstadoClinico.ABIERTA,
+                observaciones_generales='QA DEMO - atención sintética para smoke',
+            )
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Atención demo QA #{atencion.id}'))
+        else:
+            self.stdout.write(f'  → Ya existe atención demo QA #{atencion.id}')
+
+        solicitud, created = SolicitudExamen.objects.get_or_create(
+            numero=QA_LIMS_NUMERO,
+            defaults={
+                'paciente': paciente_uno,
+                'medico_interno': medico_obj,
+                'origen_solicitud': 'EMR',
+                'estado': 'EN_PROCESO',
+                'observaciones': 'QA DEMO - orden LIMS sintética para smoke',
+            },
+        )
+        if not solicitud.tipos_examen.filter(pk=tipo_glu.pk).exists():
+            solicitud.tipos_examen.add(tipo_glu)
+        if created:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Orden LIMS demo: {solicitud.numero}'))
+        else:
+            self.stdout.write(f'  → Ya existe orden LIMS demo: {solicitud.numero}')
+
+        resultado, res_created = ResultadoExamen.objects.get_or_create(
+            solicitud=solicitud,
+            tipo_examen=tipo_glu,
+            defaults={
+                'valor_obtenido': 'Resultado demo no clínico',
+                'es_patologico': False,
+            },
+        )
+        if not res_created and not resultado.valor_obtenido:
+            resultado.valor_obtenido = 'Resultado demo no clínico'
+            resultado.save(update_fields=['valor_obtenido'])
+        if res_created:
+            self.stdout.write(self.style.SUCCESS('  ✓ Resultado LIMS demo (no validado)'))
+        else:
+            self.stdout.write('  → Ya existe resultado LIMS demo')
+
+        muestra, muestra_created = Muestra.objects.get_or_create(
+            codigo_barra=QA_MUESTRA_CODIGO,
+            defaults={
+                'solicitud': solicitud,
+                'paciente': paciente_uno,
+                'tipo_muestra': muestra_sangre,
+                'estado': 'TOMADA',
+                'observaciones': 'QA DEMO - Muestra Demo',
+            },
+        )
+        if muestra_created:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Muestra LIMS demo: {muestra.codigo_barra}'))
+        else:
+            self.stdout.write(f'  → Ya existe muestra LIMS demo: {muestra.codigo_barra}')
+
     def handle(self, *args, **options):
         """Ejecuta el comando."""
         self.stdout.write(self.style.SUCCESS('Iniciando seeding de datos...'))
@@ -179,115 +303,137 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {examen}'))
             else:
                 self.stdout.write(f'  → Ya existe: {examen}')
+
+        tipo_glu = TipoExamen.objects.get(codigo='GLU')
         
         # ========================================================================
         # 3. USUARIOS DE PRUEBA
         # ========================================================================
         self.stdout.write('Creando Usuarios de Prueba...')
         
-        # Admin (Superuser)
-        admin_user, created = User.objects.get_or_create(
-            username='admin',
-            defaults={
+        admin_user, _ = self._ensure_user(
+            'admin',
+            'admin123',
+            {
                 'email': 'admin@example.com',
                 'rol': 'admin',
                 'is_staff': True,
                 'is_superuser': True,
-            }
+            },
         )
-        if created:
-            admin_user.set_password('admin123')
-            admin_user.save()
-            self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {admin_user.username} (password: admin123)'))
-        else:
-            self.stdout.write(f'  → Ya existe: {admin_user.username}')
         
-        # Médico 1
         especialidad_cardio = Especialidad.objects.get(nombre='Cardiología')
-        medico_user, created = User.objects.get_or_create(
-            username='medico1',
-            defaults={
+        medico_user, _ = self._ensure_user(
+            'medico1',
+            'medico123',
+            {
                 'email': 'medico1@example.com',
                 'rol': 'medico',
                 'first_name': 'Juan',
                 'last_name': 'Médico',
                 'is_staff': False,
-            }
+            },
         )
-        if created:
-            medico_user.set_password('medico123')
-            medico_user.save()
-            # Crear el objeto Medico asociado
-            medico_obj, medico_created = Medico.objects.get_or_create(
-                user=medico_user,
-                defaults={
-                    'nombre': 'Juan',
-                    'apellido': 'Médico',
-                    'matricula': 'MAT-001',
-                    'especialidad': especialidad_cardio,
-                }
-            )
-            if medico_created:
-                self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {medico_user.username} (password: medico123)'))
-            else:
-                self.stdout.write(self.style.SUCCESS(f'  ✓ Creado usuario: {medico_user.username} (Medico ya existía)'))
-        else:
-            self.stdout.write(f'  → Ya existe: {medico_user.username}')
-        
-        # Paciente 1
-        paciente_user, created = User.objects.get_or_create(
-            username='paciente1',
+        medico_obj, medico_created = Medico.objects.get_or_create(
+            user=medico_user,
             defaults={
+                'nombre': 'Juan',
+                'apellido': 'Médico',
+                'matricula': 'MAT-001',
+                'especialidad': especialidad_cardio,
+            },
+        )
+        if medico_created:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Perfil médico: {medico_user.username}'))
+
+        paciente_user, _ = self._ensure_user(
+            'paciente1',
+            'paciente123',
+            {
                 'email': 'paciente1@example.com',
                 'rol': 'paciente',
-                'first_name': 'María',
-                'last_name': 'Paciente',
+                'first_name': 'Paciente',
+                'last_name': 'Demo Uno',
                 'is_staff': False,
-            }
+            },
         )
-        if created:
-            paciente_user.set_password('paciente123')
-            paciente_user.save()
-            # Crear el objeto Paciente asociado
-            paciente_obj, paciente_created = Paciente.objects.get_or_create(
-                user=paciente_user,
-                defaults={
-                    'nombre': 'María',
-                    'apellido': 'Paciente',
-                    'dni': '12345678',
-                }
-            )
-            if paciente_created:
-                self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {paciente_user.username} (password: paciente123)'))
-            else:
-                self.stdout.write(self.style.SUCCESS(f'  ✓ Creado usuario: {paciente_user.username} (Paciente ya existía)'))
-        else:
-            self.stdout.write(f'  → Ya existe: {paciente_user.username}')
-        
-        # Operador laboratorio (rol formal `laboratorio`; LIMS, fuera del alcance IsEMRClinician)
-        laboratorio_user, created = User.objects.get_or_create(
-            username='laboratorio1',
+        paciente_uno, paciente_created = Paciente.objects.get_or_create(
+            user=paciente_user,
             defaults={
+                'nombre': 'Paciente Demo',
+                'apellido': 'Uno',
+                'dni': 'QA-DEMO-00001',
+                'observaciones': 'QA DEMO - paciente propio portal paciente1',
+            },
+        )
+        if not paciente_created:
+            Paciente.objects.filter(pk=paciente_uno.pk).update(
+                nombre='Paciente Demo',
+                apellido='Uno',
+            )
+            paciente_uno.refresh_from_db()
+        if paciente_created:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Ficha paciente demo: {paciente_user.username}'))
+        
+        laboratorio_user, _ = self._ensure_user(
+            'laboratorio1',
+            'laboratorio123',
+            {
                 'email': 'laboratorio1@example.com',
                 'rol': 'laboratorio',
                 'first_name': 'Carlos',
                 'last_name': 'Operador',
                 'is_staff': True,
-            }
+            },
         )
-        if created:
-            laboratorio_user.set_password('laboratorio123')
-            laboratorio_user.save()
-            self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {laboratorio_user.username} (password: laboratorio123)'))
-        else:
-            self.stdout.write(f'  → Ya existe: {laboratorio_user.username}')
+
+        enfermeria_user, _ = self._ensure_user(
+            'enfermeria1',
+            'enfermeria123',
+            {
+                'email': 'enfermeria1@example.com',
+                'rol': 'enfermeria',
+                'first_name': 'Ana',
+                'last_name': 'Enfermera',
+                'is_staff': False,
+            },
+        )
+
+        secretaria_user, _ = self._ensure_user(
+            'secretaria1',
+            'secretaria123',
+            {
+                'email': 'secretaria1@example.com',
+                'rol': 'secretaria',
+                'first_name': 'Laura',
+                'last_name': 'Secretaria',
+                'is_staff': False,
+            },
+        )
+
+        # ========================================================================
+        # 4. DATOS DEMO QA (EMR + LIMS)
+        # ========================================================================
+        self._seed_qa_demo_emr_lims(
+            medico_obj=medico_obj,
+            paciente_uno=paciente_uno,
+            tipo_glu=tipo_glu,
+            muestra_sangre=muestra_sangre,
+        )
         
         self.stdout.write(self.style.SUCCESS('\n✓ Seeding completado exitosamente!'))
-        self.stdout.write(self.style.WARNING('\nUsuarios creados:'))
+        self.stdout.write(self.style.WARNING('\nUsuarios demo (solo desarrollo):'))
         self.stdout.write('  - admin / admin123 (Superuser)')
         self.stdout.write('  - medico1 / medico123 (Médico - Cardiología)')
-        self.stdout.write('  - paciente1 / paciente123 (Paciente)')
+        self.stdout.write('  - paciente1 / paciente123 (Paciente Demo Uno)')
         self.stdout.write('  - laboratorio1 / laboratorio123 (Operador laboratorio / LIMS)')
+        self.stdout.write('  - enfermeria1 / enfermeria123 (Enfermería)')
+        self.stdout.write('  - secretaria1 / secretaria123 (Secretaría)')
+        self.stdout.write(self.style.WARNING('\nDatos QA sintéticos:'))
+        self.stdout.write(f'  - Paciente ajeno DNI {QA_PACIENTE_AJENO_DNI}')
+        self.stdout.write(f'  - Turno demo ({QA_TURNO_MOTIVO})')
+        self.stdout.write(f'  - Orden LIMS {QA_LIMS_NUMERO} + muestra {QA_MUESTRA_CODIGO}')
+        self.stdout.write(self.style.WARNING('\nReejecutar: python manage.py seed_data (idempotente)'))
 
 
 

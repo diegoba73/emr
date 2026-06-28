@@ -388,3 +388,17 @@ Orden LIMS (SolicitudExamen) → Muestra → EstudioMicrobiologia
 Complementa (no reemplaza) la suite B3.4 (`test_microbiologia_api.py`) con un único camino integrado desde solicitud LIMS. No PDF, no CLSI/EUCAST.
 
 **GAP:** E2E navegador sobre rutas `/laboratorio/microbiologia/*` pendiente de framework.
+
+---
+
+## Datos demo QA LIMS (`seed_data`, jun 2026)
+
+Comando: `python manage.py seed_data` (idempotente). Solo desarrollo/staging.
+
+| Artefacto | Clave | Estado | Notas |
+|-----------|-------|--------|-------|
+| Orden LIMS | `LAB-DEMO-QA-00001` | `EN_PROCESO` | paciente Demo Uno; médico medico1 |
+| Muestra | `MUE-DEMO-QA-00001` | `TOMADA` | tipo sangre catálogo |
+| Resultado Glucosa | fila por orden+examen | valor demo no clínico | **no validado** |
+
+No crea informes finales ni microbiología demo (flujo complejo). Rol `laboratorio1` puede listar la orden en smoke UI.
