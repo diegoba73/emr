@@ -58,16 +58,18 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 
 **Helper central:** `frontend/src/utils/permissions.ts` — reexporta LIMS desde `limsAccess.ts` y cubre pacientes, solicitudes genéricas, archivos médicos y auditoría.
 
+**PERM-FE-LAB-01 (jun 2026):** `isEmrStaffOrAdmin` / `isLaboratorioRole` — el bypass por `is_staff` en permisos EMR **excluye** `rol=laboratorio` (espejo de backend `emr_staff_or_admin_global`). Operadores LIMS con `is_staff=true` (p. ej. `laboratorio1`) no ven menú ni pasan guards de Pacientes, Atenciones ni Auditoría; conservan LIMS vía `limsAccess.ts`. Turnos: `turnoPermissions.ts` usa el mismo criterio; pantalla `/turnos` además bloquea por `isLaboratorioRole`.
+
 | Función | Roles permitidos (UI; backend valida) |
 |---------|----------------------------------------|
-| `canAccessPacientes` | admin/staff, secretaría, enfermería, médico, paciente |
+| `canAccessPacientes` | admin/staff **no laboratorio**, secretaría, enfermería, médico, paciente |
 | `canCreatePaciente` | admin/staff, secretaría, enfermería, médico |
 | `canAccessPaciente360` | igual que pacientes |
 | `canAccessSolicitudes` | admin, secretaría, médico, paciente — **no** enfermería/laboratorio |
 | `canAccessArchivosMedicos` | admin, médico, paciente |
 | `canWriteArchivoMedico` | admin, médico, paciente |
 | `canDownloadArchivoMedico` | admin, médico, paciente |
-| `canAccessAuditoria` | superuser, staff, rol admin (`IsAuditAdmin`) |
+| `canAccessAuditoria` | superuser, staff **no laboratorio**, rol admin (`IsAuditAdmin`) |
 | `canAccessLims` / `canAccessMicrobiologia` | admin, laboratorio, médico (lectura) |
 | `canOperateLims` / `canOperateMicrobiologia` | admin, laboratorio |
 | `canValidateLims` / `canValidateMicrobiologia` | admin/superuser |

@@ -28,10 +28,24 @@ export type NormalizedAppRole =
   | 'paciente'
   | 'sin_rol';
 
-/** Superuser, Django staff o rol admin (alineado con backend). */
-export function isStaffOrAdmin(user: User | null | undefined): boolean {
+/** Rol operador LIMS (puede tener `is_staff` para Django admin sin acceso EMR PHI). */
+export function isLaboratorioRole(user: User | null | undefined): boolean {
   if (!user) return false;
+  return normalizeRol(user) === 'laboratorio';
+}
+
+/**
+ * Staff/admin con bypass EMR global. Excluye `rol=laboratorio` aunque `is_staff=true`.
+ * Alineado con backend `emr_staff_or_admin_global`.
+ */
+export function isEmrStaffOrAdmin(user: User | null | undefined): boolean {
+  if (!user || isLaboratorioRole(user)) return false;
   return Boolean(user.is_superuser || user.is_staff || normalizeRol(user) === 'admin');
+}
+
+/** Alias de `isEmrStaffOrAdmin` para permisos EMR (no usar para LIMS). */
+export function isStaffOrAdmin(user: User | null | undefined): boolean {
+  return isEmrStaffOrAdmin(user);
 }
 
 /** Lectura global de pacientes (admin/staff/secretaría/enfermería). */
@@ -91,9 +105,9 @@ export function canDownloadArchivoMedico(user: User | null | undefined): boolean
   return canAccessArchivosMedicos(user);
 }
 
-/** Auditoría (IsAuditAdmin): superuser, staff o rol admin. */
+/** Auditoría (IsAuditAdmin): superuser, staff o rol admin; laboratorio excluido. */
 export function canAccessAuditoria(user: User | null | undefined): boolean {
-  if (!user) return false;
+  if (!user || isLaboratorioRole(user)) return false;
   if (user.is_superuser || user.is_staff) return true;
   return normalizeRol(user) === 'admin';
 }

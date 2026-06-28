@@ -2,6 +2,7 @@
  * Permisos de UI para turnos — reflejan C5.8.1 (backend es fuente de verdad).
  */
 import { Turno, User } from '../types';
+import { isEmrStaffOrAdmin } from './permissions';
 
 export function normalizeRol(user?: User | null): string {
   return (user?.rol || '').toUpperCase();
@@ -9,7 +10,7 @@ export function normalizeRol(user?: User | null): string {
 
 export function canMutateTurnosGlobally(user?: User | null): boolean {
   if (!user) return false;
-  if (user.is_staff || user.is_superuser) return true;
+  if (isEmrStaffOrAdmin(user)) return true;
   const r = normalizeRol(user);
   return r === 'ADMIN' || r === 'SECRETARIA';
 }
@@ -17,7 +18,7 @@ export function canMutateTurnosGlobally(user?: User | null): boolean {
 /** Lectura de agenda en pantalla /turnos (enfermería incluida). */
 export function canViewTurnosAgenda(user?: User | null): boolean {
   if (!user) return false;
-  if (user.is_staff || user.is_superuser) return true;
+  if (isEmrStaffOrAdmin(user)) return true;
   const r = normalizeRol(user);
   return ['ADMIN', 'SECRETARIA', 'MEDICO', 'PACIENTE', 'ENFERMERIA'].includes(r);
 }
@@ -32,7 +33,7 @@ export function canCreateTurno(user?: User | null): boolean {
 export function canEditTurno(user?: User | null, turno?: Turno | null): boolean {
   if (!user) return false;
   if (isAgendaReadOnlyRole(user)) return false;
-  if (canMutateTurnosGlobally(user) || user.is_staff || user.is_superuser) {
+  if (canMutateTurnosGlobally(user) || isEmrStaffOrAdmin(user)) {
     return true;
   }
   const r = normalizeRol(user);
@@ -154,7 +155,7 @@ export function canIniciarAtencionTurno(user?: User | null, turno?: Turno | null
   if (normalizeRol(user) === 'PACIENTE' || normalizeRol(user) === 'SECRETARIA') return false;
   const st = (turno.estado || '').toUpperCase();
   if (st === 'CANCELADO' || st === 'DISPONIBLE') return false;
-  if (user.is_staff || user.is_superuser || normalizeRol(user) === 'ADMIN') return true;
+  if (isEmrStaffOrAdmin(user)) return true;
   if (normalizeRol(user) === 'MEDICO') {
     const medicoId = user.medico?.id;
     return Boolean(

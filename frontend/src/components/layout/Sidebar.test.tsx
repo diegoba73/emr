@@ -69,3 +69,34 @@ describe('Sidebar Consultas (/atenciones)', () => {
     expect(screen.queryByText('Consultas')).not.toBeInTheDocument();
   });
 });
+
+describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
+  const labStaff = mockUser({ rol: 'LABORATORIO', is_staff: true });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useData.mockReturnValue({ currentUser: labStaff });
+  });
+
+  it('no muestra enlaces EMR generales', () => {
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.queryByText('Pacientes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Consultas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Auditoría')).not.toBeInTheDocument();
+    expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
+  });
+
+  it('muestra enlaces LIMS', () => {
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Órdenes LIMS')).toBeInTheDocument();
+    expect(screen.getByText('Microbiología')).toBeInTheDocument();
+  });
+});

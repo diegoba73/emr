@@ -61,6 +61,8 @@ Ubicación: `api/permissions.py`
 
 **EMR PHI — rol `laboratorio` (jun 2026):** operadores LIMS suelen tener `is_staff=True` (p. ej. seed `laboratorio1`) para acceder al admin Django/LIMS, pero **no** deben leer PHI EMR general. Helper compartido `emr_staff_or_admin_global` (`api/permissions.py`) excluye `rol=laboratorio` del bypass por `is_staff`; aplicado en pacientes, atenciones, turnos/agenda, historias clínicas y permisos demográficos legacy. Superuser sigue teniendo acceso global. LIMS nativo (`/api/lab/...`) no se modifica.
 
+**Frontend (PERM-FE-LAB-01, jun 2026):** `isEmrStaffOrAdmin` en `frontend/src/utils/permissions.ts` replica la exclusión de laboratorio; `turnoPermissions.ts` delega en el mismo helper para agenda/turnos. Guards `App.tsx` + `Sidebar.tsx` usan `canAccess*` actualizados; tests en `permissions.test.ts` y `Sidebar.test.tsx` (`laboratorio + is_staff`).
+
 ---
 
 ## Permisos frontend
@@ -71,7 +73,8 @@ Guards visuales relevantes (ejemplos):
 
 | Área | Archivo | Notas |
 |------|---------|--------|
-| Turnos agenda | `frontend/src/utils/turnoPermissions.ts` | C5.8.2: crear/editar; C5.9.2: acciones de estado; **C5.10.1:** `canIniciarAtencionTurno`; **C5.10.2:** `createAtencion` deprecated en `api.ts`; sin PATCH `estado` en UI |
+| Turnos agenda | `frontend/src/utils/turnoPermissions.ts` | C5.8.2: crear/editar; C5.9.2: acciones de estado; **C5.10.1:** `canIniciarAtencionTurno`; **C5.10.2:** `createAtencion` deprecated en `api.ts`; sin PATCH `estado` en UI; **PERM-FE-LAB-01:** `isEmrStaffOrAdmin` (sin bypass laboratorio+staff) |
+| EMR guards | `frontend/src/utils/permissions.ts` | `isEmrStaffOrAdmin`, `isLaboratorioRole`; pacientes, atenciones, auditoría |
 | LIMS | `frontend/src/utils/limsAccess.ts` | Lectura vs operación vs validar |
 
 Ocultar botones o campos en UI **no sustituye** controles de API; un cliente malicioso puede llamar endpoints directamente.

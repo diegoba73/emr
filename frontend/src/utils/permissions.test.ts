@@ -13,7 +13,10 @@ import {
   canAccessMicrobiologia,
   canValidateMicrobiologia,
   canOperateAtenciones,
+  isEmrStaffOrAdmin,
+  isLaboratorioRole,
 } from './permissions';
+import { canViewTurnosAgenda, canMutateTurnosGlobally } from './turnoPermissions';
 
 function user(overrides: Partial<User> & Pick<User, 'rol'>): User {
   return {
@@ -164,5 +167,45 @@ describe('canAccessAtenciones / canOperateAtenciones (QA-ROLE-01)', () => {
     expect(canOperateAtenciones(user({ rol: 'SECRETARIA' }))).toBe(false);
     expect(canOperateAtenciones(user({ is_staff: true, rol: 'ENFERMERIA' }))).toBe(true);
     expect(canOperateAtenciones(user({ is_superuser: true, rol: 'PACIENTE' }))).toBe(true);
+  });
+});
+
+/** laboratorio1 seed: rol LABORATORIO + is_staff (PERM-FE-LAB-01 / QA-SMOKE-02 N1). */
+describe('laboratorio + is_staff — sin bypass EMR', () => {
+  const labStaff = user({ rol: 'LABORATORIO', is_staff: true });
+
+  it('identifica rol laboratorio', () => {
+    expect(isLaboratorioRole(labStaff)).toBe(true);
+    expect(isEmrStaffOrAdmin(labStaff)).toBe(false);
+  });
+
+  it('bloquea módulos EMR PHI', () => {
+    expect(canAccessPacientes(labStaff)).toBe(false);
+    expect(canAccessAtenciones(labStaff)).toBe(false);
+    expect(canOperateAtenciones(labStaff)).toBe(false);
+    expect(canAccessAuditoria(labStaff)).toBe(false);
+    expect(canCreatePaciente(labStaff)).toBe(false);
+    expect(canAccessSolicitudes(labStaff)).toBe(false);
+    expect(canAccessArchivosMedicos(labStaff)).toBe(false);
+  });
+
+  it('bloquea agenda/turnos globales por is_staff', () => {
+    expect(canViewTurnosAgenda(labStaff)).toBe(false);
+    expect(canMutateTurnosGlobally(labStaff)).toBe(false);
+  });
+
+  it('conserva acceso LIMS', () => {
+    expect(canAccessLims(labStaff)).toBe(true);
+    expect(canAccessMicrobiologia(labStaff)).toBe(true);
+    expect(canValidateLims(labStaff)).toBe(false);
+    expect(canValidateMicrobiologia(labStaff)).toBe(false);
+  });
+
+  it('staff no laboratorio sigue con bypass EMR', () => {
+    const enfStaff = user({ rol: 'ENFERMERIA', is_staff: true });
+    expect(isEmrStaffOrAdmin(enfStaff)).toBe(true);
+    expect(canAccessPacientes(enfStaff)).toBe(true);
+    expect(canAccessAtenciones(enfStaff)).toBe(true);
+    expect(canAccessAuditoria(enfStaff)).toBe(true);
   });
 });
