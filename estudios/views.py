@@ -13,8 +13,10 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from archivos_medicos.access import paciente_ids_vinculados_a_medico
+from usuarios.roles import ROLES_ESTUDIO_COMPLEMENTARIO
 
 from .access import (
+    usuario_puede_asignar_turno_estudio,
     usuario_puede_crear_estudio,
     usuario_puede_descargar_archivo_estudio,
     usuario_puede_descargar_pdf_informe,
@@ -22,23 +24,43 @@ from .access import (
     usuario_puede_ver_estudio,
     usuario_puede_ver_estudio_clinico,
 )
-from .models import ArchivoEstudioComplementario, EstudioComplementario, InformeEstudioComplementario
+from .models import (
+    ArchivoEstudioComplementario,
+    EstudioComplementario,
+    InformeEstudioComplementario,
+    TipoEstudioComplementario,
+)
 from .permissions import EstudioComplementarioPermission
 from .serializers import (
     AgregarArchivoSerializer,
     AnularEstudioSerializer,
+    AgendarTurnoEstudioDesdeAgendaSerializer,
+    AsignarTurnoEstudioSerializer,
     ArchivoEstudioComplementarioSerializer,
     CrearInformeSerializer,
     EstudioComplementarioDetailSerializer,
     EstudioComplementarioListSerializer,
     InformeEstudioComplementarioSerializer,
     RectificarInformeSerializer,
+    TipoEstudioComplementarioSerializer,
 )
 from . import services
 
 logger = logging.getLogger(__name__)
 
 _DELETE_BLOCKED_DETAIL = 'La eliminación física de estudios complementarios no está permitida.'
+
+
+class TipoEstudioComplementarioViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catálogo de tipos de estudio complementario (búsqueda desde EMR)."""
+
+    queryset = TipoEstudioComplementario.objects.filter(activo=True)
+    serializer_class = TipoEstudioComplementarioSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nombre', 'codigo', 'descripcion']
+    ordering_fields = ['nombre', 'modalidad']
+    ordering = ['nombre']
 
 
 class EstudioComplementarioViewSet(viewsets.ModelViewSet):
@@ -48,11 +70,19 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         'atencion',
         'consulta_hc',
         'medico_solicitante',
+        'turno',
+        'turno__recurso',
     ).all()
     permission_classes = [IsAuthenticated, EstudioComplementarioPermission]
     authentication_classes = [JWTAuthentication, SessionAuthentication]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['paciente', 'estado', 'modalidad', 'atencion', 'consulta_hc']
+    search_fields = [
+        'paciente__nombre',
+        'paciente__apellido',
+        'paciente__dni',
+        'tipo_estudio__nombre',
+    ]
     ordering_fields = ['created_at', 'fecha_solicitud', 'fecha_realizacion']
     ordering = ['-created_at']
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
@@ -72,7 +102,13 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         if user.is_superuser or rol == 'admin':
             return qs
 
-        if rol in ('secretaria', 'enfermeria', 'laboratorio'):
+        if rol in ROLES_ESTUDIO_COMPLEMENTARIO:
+            return qs
+
+        if rol == 'secretaria':
+            return qs
+
+        if rol in ('enfermeria', 'laboratorio'):
             return qs.none()
 
         if rol == 'medico':
@@ -145,6 +181,42 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         if hasattr(exc, 'message_dict'):
             return Response(exc.message_dict, status=status.HTTP_400_BAD_REQUEST)
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], url_path='agendar-turno')
+    def agendar_turno(self, request):
+        """Turnera: crea estudio (p. ej. externo) y/o asigna turno de sala."""
+        if not usuario_puede_asignar_turno_estudio(request.user):
+            raise PermissionDenied('No tiene permiso para agendar turnos de estudio.')
+        ser = AgendarTurnoEstudioDesdeAgendaSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            estudio = services.agendar_turno_estudio_desde_agenda(
+                user=request.user,
+                **ser.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        estudio.refresh_from_db()
+        return Response(
+            EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['post'], url_path='asignar-turno')
+    def asignar_turno(self, request, pk=None):
+        estudio = self.get_object()
+        if not usuario_puede_asignar_turno_estudio(request.user):
+            raise PermissionDenied('No tiene permiso para asignar turnos a estudios.')
+        if not usuario_puede_ver_estudio_clinico(request.user, estudio):
+            raise PermissionDenied()
+        ser = AsignarTurnoEstudioSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            services.asignar_turno_estudio(estudio, user=request.user, **ser.validated_data)
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        estudio.refresh_from_db()
+        return Response(EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data)
 
     @action(detail=True, methods=['post'], url_path='marcar-realizado')
     def marcar_realizado(self, request, pk=None):

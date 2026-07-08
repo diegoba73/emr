@@ -3,6 +3,8 @@ import { Box, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar, { SIDEBAR_WIDTH } from './Sidebar';
 import Header from './Header';
+import { useData } from '../../contexts/DataContext';
+import { getAppSegmentTitle } from '../../utils/navLabels';
 
 /**
  * Layout principal: barra lateral fija, header superior, área de contenido con scroll.
@@ -12,30 +14,15 @@ const AppLayout: React.FC = () => {
   const location = useLocation();
   const theme = useTheme();
   const isMd = useMediaQuery(theme.breakpoints.up('md'));
+  const { currentUser } = useData();
 
-  const segmentTitle = (() => {
-    const p = location.pathname;
-    if (p.startsWith('/paciente/')) return 'Paciente 360';
-    if (p.startsWith('/dashboard')) return 'Inicio';
-    if (p.startsWith('/pacientes')) return 'Pacientes';
-    if (p.startsWith('/turnos')) return 'Turnos';
-    if (p.startsWith('/atenciones')) return 'Consultas clínicas';
-    if (p.startsWith('/archivos-medicos')) return 'Archivos médicos';
-    if (p.startsWith('/solicitudes')) return 'Solicitudes';
-    if (p.startsWith('/mis-consultas')) return 'Mis consultas';
-    if (p.startsWith('/internacion')) return 'Internación';
-    if (p.startsWith('/medicos')) return 'Médicos';
-    if (p.startsWith('/usuarios')) return 'Usuarios';
-    if (p.startsWith('/catalogos')) return 'Catálogos';
-    return 'Synesis EMR';
-  })();
+  const segmentTitle = getAppSegmentTitle(location.pathname, currentUser);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <Header
         title={isMd ? segmentTitle : 'Synesis EMR'}
         onOpenMobileNav={() => setMobileOpen(true)}
-        showGlobalSearch
       />
       <Sidebar
         mobileOpen={mobileOpen}

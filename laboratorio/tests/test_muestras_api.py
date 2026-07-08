@@ -146,7 +146,7 @@ class TestLimsMuestrasB1API(TestCase):
         self.solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         self.solicitud.tipos_examen.add(self.te)
@@ -185,7 +185,7 @@ class TestLimsMuestrasB1API(TestCase):
         self.assertEqual(r1.status_code, status.HTTP_200_OK)
         self.assertEqual(r1.json()["estado"], "TOMADA")
         self.solicitud.refresh_from_db()
-        self.assertEqual(self.solicitud.estado, "TOMA_MUESTRA")
+        self.assertEqual(self.solicitud.estado, "EN_PROCESO")
 
         with self.captureOnCommitCallbacks(execute=True):
             r2 = self.client.post(

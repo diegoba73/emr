@@ -1,10 +1,14 @@
 import { apiClient as api } from './apiClient';
+import type { AxiosResponse } from 'axios';
 import type {
   AgregarArchivoEstudioPayload,
+  AgendarTurnoEstudioDesdeAgendaPayload,
+  AsignarTurnoEstudioPayload,
   ArchivoEstudioComplementario,
   CreateEstudioComplementarioPayload,
   EstudioComplementario,
   InformeEstudioComplementario,
+  TipoEstudioComplementario,
   UpdateEstudioComplementarioPayload,
 } from '../types/estudios';
 import type { ApiResponse } from '../types';
@@ -14,6 +18,7 @@ export interface ListEstudiosParams {
   paciente_id?: number;
   estado?: string;
   modalidad?: string;
+  search?: string;
   page?: number;
 }
 
@@ -23,6 +28,42 @@ function unwrapList<T>(data: T[] | ApiResponse<T>): T[] {
   }
   return data.results ?? [];
 }
+
+async function fetchAllPages<T>(initialPath: string, params?: Record<string, string | number>): Promise<T[]> {
+  const qs = new URLSearchParams();
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== '') qs.append(k, String(v));
+    }
+  }
+  const q = qs.toString();
+  let path: string | null = `${initialPath}${q ? `?${q}` : ''}`;
+  const out: T[] = [];
+  while (path) {
+    const response: AxiosResponse<ApiResponse<T> | T[]> = await api.get(path);
+    const body = response.data;
+    if (Array.isArray(body)) {
+      out.push(...body);
+      break;
+    }
+    if (body?.results) out.push(...body.results);
+    const next = body?.next;
+    if (!next) break;
+    try {
+      const u = new URL(next, api.defaults.baseURL || undefined);
+      path = u.pathname.replace(/^\/api/, '') + u.search;
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
+export const listTiposEstudioComplementario = async (): Promise<TipoEstudioComplementario[]> => {
+  return fetchAllPages<TipoEstudioComplementario>('/estudios-complementarios/tipos/', {
+    page_size: 200,
+  });
+};
 
 export const listEstudiosComplementarios = async (
   params?: ListEstudiosParams
@@ -55,6 +96,22 @@ export const updateEstudioComplementario = async (
 
 export const marcarRealizadoEstudio = async (id: number): Promise<EstudioComplementario> => {
   const response = await api.post(`/estudios-complementarios/${id}/marcar-realizado/`);
+  return response.data;
+};
+
+export const asignarTurnoEstudio = async (
+  id: number,
+  payload: AsignarTurnoEstudioPayload
+): Promise<EstudioComplementario> => {
+  const response = await api.post(`/estudios-complementarios/${id}/asignar-turno/`, payload);
+  return response.data;
+};
+
+/** Crea estudio (si hace falta) y asigna turno de sala en un paso — turnera. */
+export const agendarTurnoEstudioDesdeAgenda = async (
+  payload: AgendarTurnoEstudioDesdeAgendaPayload
+): Promise<EstudioComplementario> => {
+  const response = await api.post('/estudios-complementarios/agendar-turno/', payload);
   return response.data;
 };
 

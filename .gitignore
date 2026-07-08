@@ -45,6 +45,7 @@ deploy/backup/output/
 media/
 /uploads/
 uploads/
+data/icpl/*.csv
 
 # Cookies / sesiones locales
 cookies.txt
@@ -68,8 +69,11 @@ backup_documentacion/
 synesis_db
 DB_GAP_REPORT.txt
 _GEM_CONTEXT/
+.cursor/
 .cursor_setup.sh
 .cursorrules
 .vscode/
+_tmp_*
+emr_test_write
 *.code-workspace
 /docs_synesis_gpt_knowledge/

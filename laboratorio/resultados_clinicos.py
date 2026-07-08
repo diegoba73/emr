@@ -14,12 +14,18 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 
+from laboratorio.entrada_resultados import (
+    aplicar_valor_ticket_si_corresponde,
+    quantize_valor_numerico,
+)
+from laboratorio.sysmex_hemograma import get_sysmex_unidad
+
 
 def _to_decimal(value: Any) -> Decimal | None:
     if value is None or value == "":
         return None
     try:
-        return Decimal(str(value))
+        return quantize_valor_numerico(Decimal(str(value)))
     except (InvalidOperation, ValueError, TypeError):
         raise ValidationError(f"Valor numérico inválido: {value!r}")
 
@@ -107,27 +113,46 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
         "es_critico_nuevo": None,
     }
 
-    valor_texto = item.get("valor")
-    if valor_texto is None and "valor_obtenido" in item:
-        valor_texto = item.get("valor_obtenido")
-    if valor_texto is not None:
-        resultado.valor_obtenido = str(valor_texto)
+    aplicar_valor_ticket_si_corresponde(resultado, tipo_examen, item)
 
-    valor_numerico_raw = item.get("valor_numerico")
-    valor_numerico: Decimal | None = None
-    if valor_numerico_raw is not None and valor_numerico_raw != "":
-        valor_numerico = _to_decimal(valor_numerico_raw)
-        resultado.valor_numerico = valor_numerico
-        if not (resultado.valor_obtenido or "").strip():
-            resultado.valor_obtenido = str(valor_numerico)
-    elif "valor_numerico" in item and valor_numerico_raw in (None, ""):
-        resultado.valor_numerico = None
+    ticket_aplicado = aplicar_valor_ticket_si_corresponde(resultado, tipo_examen, item)
+
+    if ticket_aplicado:
+        valor_informe = item.get("valor_obtenido") or item.get("valor")
+        if valor_informe is not None:
+            resultado.valor_obtenido = str(valor_informe)
+        vn_raw = item.get("valor_numerico")
+        if vn_raw is not None and vn_raw != "":
+            resultado.valor_numerico = _to_decimal(vn_raw)
+        valor_numerico = resultado.valor_numerico
+    else:
+        valor_texto = item.get("valor")
+        if valor_texto is None:
+            valor_texto = item.get("valor_obtenido")
+        if valor_texto is not None:
+            resultado.valor_obtenido = str(valor_texto)
+
+        valor_numerico_raw = item.get("valor_numerico")
+        valor_numerico: Decimal | None = None
+        if valor_numerico_raw is not None and valor_numerico_raw != "":
+            valor_numerico = _to_decimal(valor_numerico_raw)
+            resultado.valor_numerico = valor_numerico
+            if not (resultado.valor_obtenido or "").strip():
+                resultado.valor_obtenido = str(valor_numerico)
+        elif "valor_numerico" in item and valor_numerico_raw in (None, ""):
+            resultado.valor_numerico = None
+            valor_numerico = None
 
     unidad_payload = item.get("unidad")
     if unidad_payload is not None and str(unidad_payload).strip():
         resultado.unidad = str(unidad_payload).strip()
-    elif not (resultado.unidad or "").strip() and (tipo_examen.unidad_default or "").strip():
-        resultado.unidad = tipo_examen.unidad_default.strip()
+    elif not (resultado.unidad or "").strip():
+        codigo = getattr(tipo_examen, "codigo", None) or ""
+        sysmex_u = get_sysmex_unidad(codigo)
+        if sysmex_u:
+            resultado.unidad = sysmex_u
+        elif (tipo_examen.unidad_default or "").strip():
+            resultado.unidad = tipo_examen.unidad_default.strip()
 
     aplicar_snapshots_desde_tipo_examen(resultado, tipo_examen)
 

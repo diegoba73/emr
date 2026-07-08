@@ -97,6 +97,16 @@ def recurso(db):
 
 
 @pytest.fixture
+def recurso_sala(db):
+    return Recurso.objects.create(
+        nombre=f'Sala est {_uid()}',
+        ubicacion='CEHTA',
+        tipo_recurso='SALA_PROCEDIMIENTO',
+        activo=True,
+    )
+
+
+@pytest.fixture
 def atencion_vinculada(paciente, medico, recurso):
     turno = Turno.objects.create(
         paciente=paciente,

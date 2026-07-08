@@ -5,6 +5,7 @@ import pytest
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from laboratorio.models import (
     TipoMuestra,
     TipoExamen,
@@ -12,6 +13,7 @@ from laboratorio.models import (
     SolicitudExamen,
     ResultadoExamen,
 )
+from laboratorio.models_catalog import Muestra
 from pacientes.models import Paciente
 from medicos.models import Medico, Especialidad
 from auditoria.models import AuditEvent
@@ -99,7 +101,7 @@ class TestSolicitudExamenAPI(APITestCase):
         data = {
             'paciente_id': self.paciente.id,
             'medico_externo_nombre': 'Dr. Externo',
-            'origen_solicitud': 'EXTERNO_PAPEL',
+            'origen_solicitud': 'EXTERNO_CEHTA',
             'examenes_ids': [self.tipo_examen_1.id],
         }
         
@@ -114,7 +116,7 @@ class TestSolicitudExamenAPI(APITestCase):
         
         assert solicitud.medico_externo_nombre == 'Dr. Externo'
         assert solicitud.medico_interno is None
-        assert solicitud.origen_solicitud == 'EXTERNO_PAPEL'
+        assert solicitud.origen_solicitud == 'EXTERNO_CEHTA'
         
         # Verificar que se crearon los ResultadoExamen vacíos automáticamente
         assert solicitud.resultados.count() == 1
@@ -122,6 +124,29 @@ class TestSolicitudExamenAPI(APITestCase):
         assert resultado.tipo_examen == self.tipo_examen_1
         assert resultado.valor_obtenido == ''
         assert resultado.es_patologico is False
+
+    def test_creacion_externo_requiere_medico(self):
+        data = {
+            'paciente_id': self.paciente.id,
+            'origen_solicitud': 'EXTERNO_ICPL',
+            'examenes_ids': [self.tipo_examen_1.id],
+        }
+        response = self.client.post('/api/lab/solicitudes/', data, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'medico_externo_nombre' in response.data
+
+    def test_creacion_externo_icpl(self):
+        data = {
+            'paciente_id': self.paciente.id,
+            'medico_externo_nombre': 'Dra. López',
+            'origen_solicitud': 'EXTERNO_ICPL',
+            'examenes_ids': [self.tipo_examen_1.id],
+        }
+        response = self.client.post('/api/lab/solicitudes/', data, format='json')
+        assert response.status_code == status.HTTP_201_CREATED
+        solicitud = SolicitudExamen.objects.get(id=response.data['id'])
+        assert solicitud.origen_solicitud == 'EXTERNO_ICPL'
+        assert solicitud.medico_externo_nombre == 'Dra. López'
     
     def test_creacion_con_paneles(self):
         """
@@ -131,7 +156,7 @@ class TestSolicitudExamenAPI(APITestCase):
         data = {
             'paciente_id': self.paciente.id,
             'medico_id': self.medico.id,
-            'origen_solicitud': 'EMR',
+            'origen_solicitud': 'AMBULATORIO_CEHTA',
             'paneles_ids': [self.panel.id],
         }
         
@@ -157,7 +182,7 @@ class TestSolicitudExamenAPI(APITestCase):
         data = {
             'paciente_id': self.paciente.id,
             'medico_id': self.medico.id,
-            'origen_solicitud': 'EMR',
+            'origen_solicitud': 'AMBULATORIO_CEHTA',
             'examenes_ids': [self.tipo_examen_2.id],  # Mismo examen que está en el panel
             'paneles_ids': [self.panel.id],
         }
@@ -183,7 +208,7 @@ class TestSolicitudExamenAPI(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR'
+            origen_solicitud='AMBULATORIO_CEHTA'
         )
         solicitud.tipos_examen.add(self.tipo_examen_1)
         
@@ -236,7 +261,7 @@ class TestSolicitudExamenAPI(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='EN_PROCESO'
         )
         solicitud.tipos_examen.add(self.tipo_examen_1)
@@ -285,7 +310,7 @@ class TestSolicitudExamenAPI(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='EN_PROCESO'
         )
         solicitud.tipos_examen.add(self.tipo_examen_1)
@@ -316,7 +341,7 @@ class TestSolicitudExamenAPI(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR'
+            origen_solicitud='AMBULATORIO_CEHTA'
         )
         
         response = self.client.get(
@@ -336,7 +361,7 @@ class TestSolicitudExamenAPI(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR'
+            origen_solicitud='AMBULATORIO_CEHTA'
         )
         
         # Buscar por número
@@ -406,7 +431,7 @@ class TestLimsAuthorization(APITestCase):
         self.sol_medico = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
         )
         self.sol_medico.tipos_examen.add(self.tipo_examen)
 
@@ -427,7 +452,7 @@ class TestLimsAuthorization(APITestCase):
         SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=otro,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
         )
         self.client.force_authenticate(user=self.user_medico)
         r = self.client.get('/api/lab/solicitudes/')
@@ -535,15 +560,29 @@ class TestLimsAuthorization(APITestCase):
         self.client.logout()
         assert self.client.get('/api/laboratorio/solicitudes/').status_code == status.HTTP_403_FORBIDDEN
 
-    def test_paciente_sin_acceso_lims(self):
+    def test_paciente_lista_sus_ordenes_lims(self):
         pac_user = User.objects.create_user(
             username='pac_lims',
             email='pac@test.com',
             password='x',
             rol='paciente',
         )
+        paciente = Paciente.objects.create(
+            user=pac_user,
+            nombre='Ana',
+            apellido='Test',
+            dni='99111222',
+            fecha_nacimiento='1990-01-01',
+        )
+        SolicitudExamen.objects.create(
+            paciente=paciente,
+            origen_solicitud='AMBULATORIO_CEHTA',
+            estado='PENDIENTE',
+        )
         self.client.force_authenticate(user=pac_user)
-        assert self.client.get('/api/lab/solicitudes/').status_code == status.HTTP_403_FORBIDDEN
+        r = self.client.get('/api/lab/solicitudes/')
+        assert r.status_code == status.HTTP_200_OK
+        assert r.data['count'] >= 1
         assert self.client.get('/api/lab/muestras/').status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -595,7 +634,7 @@ class TestLimsAuditTrail(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='EN_PROCESO',
         )
         solicitud.tipos_examen.add(self.tipo_examen)
@@ -628,7 +667,7 @@ class TestLimsAuditTrail(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
         )
         solicitud.tipos_examen.add(self.tipo_examen)
         sid = solicitud.id
@@ -650,7 +689,7 @@ class TestLimsAuditTrail(APITestCase):
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
         )
         solicitud.tipos_examen.add(self.tipo_examen)
         sid = solicitud.id
@@ -741,7 +780,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             {
                 'paciente_id': self.paciente.id,
                 'medico_id': self.medico.id,
-                'origen_solicitud': 'EMR',
+                'origen_solicitud': 'AMBULATORIO_CEHTA',
                 'examenes_ids': examenes_ids,
             },
             format='json',
@@ -755,7 +794,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
 
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json').status_code == 200
         sol.refresh_from_db()
-        assert sol.estado == 'TOMA_MUESTRA'
+        assert sol.estado == 'EN_PROCESO'
 
         ra = sol.resultados.get(tipo_examen=self.tipo_examen_a)
         rb = sol.resultados.get(tipo_examen=self.tipo_examen_b)
@@ -768,40 +807,25 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         sol.refresh_from_db()
         assert sol.estado == 'EN_PROCESO'
 
-        self.client.force_authenticate(user=self.user_admin)
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 400
-        self.client.force_authenticate(user=self.user_lab)
-
         assert self.client.post(
             f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
             {'resultados': [{'id': rb.id, 'valor': '12'}]},
             format='json',
         ).status_code == 200
-
-        self.client.force_authenticate(user=self.user_admin)
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
         sol.refresh_from_db()
-        assert sol.estado == 'VALIDADO'
+        assert sol.estado == 'FINALIZADO'
 
         assert self.client.post(
             f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
             {'resultados': [{'id': ra.id, 'valor': '95'}]},
             format='json',
-        ).status_code == 400
-
-        self.client.force_authenticate(user=self.user_lab)
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/marcar-entregado/', {}, format='json').status_code == 200
+        ).status_code == 200
         sol.refresh_from_db()
-        assert sol.estado == 'ENTREGADO'
+        assert sol.estado == 'FINALIZADO'
+        ra.refresh_from_db()
+        assert ra.valor_obtenido == '95'
 
-        self.client.force_authenticate(user=self.user_admin)
-        assert self.client.post(
-            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
-            {'resultados': [{'id': ra.id, 'valor': '99'}]},
-            format='json',
-        ).status_code == 400
-
-    def test_cargar_desde_pendiente_sin_toma_pasa_a_en_proceso(self):
+    def test_cargar_desde_pendiente_requiere_toma_muestra(self):
         sol = self._crear_solicitud_api()
         res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
         r = self.client.post(
@@ -809,9 +833,9 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             {'resultados': [{'id': res.id, 'valor': '88'}]},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
         sol.refresh_from_db()
-        assert sol.estado == 'EN_PROCESO'
+        assert sol.estado == 'PENDIENTE'
 
     def test_tomar_muestra_dos_veces_400(self):
         sol = self._crear_solicitud_api()
@@ -819,127 +843,150 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         r = self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cancelar_pendiente_toma_en_proceso(self):
-        sol_p = self._crear_solicitud_api()
-        assert self.client.post(f'/api/lab/solicitudes/{sol_p.id}/cancelar/', {}, format='json').status_code == 200
-        sol_p.refresh_from_db()
-        assert sol_p.estado == 'CANCELADO'
-
-        sol_t = self._crear_solicitud_api()
-        self.client.post(f'/api/lab/solicitudes/{sol_t.id}/tomar-muestra/', {}, format='json')
-        assert self.client.post(f'/api/lab/solicitudes/{sol_t.id}/cancelar/', {}, format='json').status_code == 200
-        sol_t.refresh_from_db()
-        assert sol_t.estado == 'CANCELADO'
-
-        sol_e = self._crear_solicitud_api()
-        res = sol_e.resultados.get(tipo_examen=self.tipo_examen_a)
-        self.client.post(
-            f'/api/lab/solicitudes/{sol_e.id}/cargar-resultados/',
-            {'resultados': [{'id': res.id, 'valor': '7'}]},
+    def test_tomar_muestra_con_payload_crea_muestras_tomadas(self):
+        sol = self._crear_solicitud_api()
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/tomar-muestra/',
+            {'muestras': [{'tipo_muestra_id': self.tipo_muestra.id}]},
             format='json',
         )
-        assert self.client.post(f'/api/lab/solicitudes/{sol_e.id}/cancelar/', {}, format='json').status_code == 200
-        sol_e.refresh_from_db()
-        assert sol_e.estado == 'CANCELADO'
+        assert r.status_code == status.HTTP_200_OK, r.data
+        sol.refresh_from_db()
+        assert sol.estado == 'EN_PROCESO'
+        muestras = Muestra.objects.filter(solicitud=sol)
+        assert muestras.count() == 1
+        assert muestras.get().estado == 'RECIBIDA'
+        assert muestras.get().tipo_muestra_id == self.tipo_muestra.id
 
-    def test_cargar_cancelado_validado_entregado_400(self):
+    def test_tomar_muestra_varios_tipos_en_un_paso(self):
+        tm_orina = TipoMuestra.objects.create(
+            codigo='ORI_TMS',
+            nombre='Orina',
+            color_tubo='Amarillo',
+            activo=True,
+        )
+        te_orina = TipoExamen.objects.create(
+            codigo='URO_TMS',
+            nombre='Urocultivo',
+            tipo_muestra_requerida=tm_orina,
+            precio=200.00,
+            activo=True,
+        )
+        sol = self._crear_solicitud_api(examenes_ids=[self.tipo_examen_a.id, te_orina.id])
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/tomar-muestra/',
+            {
+                'muestras': [
+                    {'tipo_muestra_id': self.tipo_muestra.id},
+                    {'tipo_muestra_id': tm_orina.id},
+                ]
+            },
+            format='json',
+        )
+        assert r.status_code == status.HTTP_200_OK, r.data
+        sol.refresh_from_db()
+        assert sol.estado == 'EN_PROCESO'
+        assert Muestra.objects.filter(solicitud=sol, estado='RECIBIDA').count() == 2
+
+    def test_tomar_muestra_tipo_inactivo_400(self):
+        tm_extra = TipoMuestra.objects.create(
+            codigo='EXT_TMS',
+            nombre='Extra',
+            color_tubo='Verde',
+            activo=False,
+        )
+        sol = self._crear_solicitud_api()
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/tomar-muestra/',
+            {'muestras': [{'tipo_muestra_id': tm_extra.id}]},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_crear_tipo_muestra_api(self):
+        r = self.client.post(
+            '/api/lab/muestras/',
+            {'codigo': 'LCR_TMS', 'nombre': 'LCR', 'color_tubo': 'Transparente', 'activo': True},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_201_CREATED, r.data
+        assert r.data['codigo'] == 'LCR_TMS'
+        assert TipoMuestra.objects.filter(codigo='LCR_TMS').exists()
+
+    def test_fecha_muestra_excluye_pendientes(self):
+        sol_p = self._crear_solicitud_api()
+        assert sol_p.estado == 'PENDIENTE'
+        hoy = timezone.now().date().isoformat()
+        r_pend = self.client.get('/api/lab/solicitudes/', {'fecha_muestra': hoy}, format='json')
+        assert r_pend.status_code == 200
+        ids_pend = {x['id'] for x in r_pend.data.get('results', r_pend.data)}
+        assert sol_p.id not in ids_pend
+
+        sol_t = self._crear_solicitud_api()
+        assert self.client.post(
+            f'/api/lab/solicitudes/{sol_t.id}/tomar-muestra/',
+            {'muestras': [{'tipo_muestra_id': self.tipo_muestra.id}]},
+            format='json',
+        ).status_code == 200
+        r_toma = self.client.get('/api/lab/solicitudes/', {'fecha_muestra': hoy}, format='json')
+        ids_toma = {x['id'] for x in r_toma.data.get('results', r_toma.data)}
+        assert sol_t.id in ids_toma
+
+        r_estado = self.client.get('/api/lab/solicitudes/', {'estado': 'PENDIENTE'}, format='json')
+        ids_est = {x['id'] for x in r_estado.data.get('results', r_estado.data)}
+        assert sol_p.id in ids_est
+        assert sol_t.id not in ids_est
+
+    def test_acciones_cancelar_y_entregado_eliminadas(self):
+        sol = self._crear_solicitud_api()
+        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json').status_code == 404
+        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/marcar-entregado/', {}, format='json').status_code == 404
+
+    def test_cargar_finalizado_permite_corregir(self):
         sol = self._crear_solicitud_api()
         res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
-        self.client.post(f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json')
-        r = self.client.post(
+        self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
+        self.client.post(
             f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
             {'resultados': [{'id': res.id, 'valor': '1'}]},
             format='json',
         )
-        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        sol.refresh_from_db()
+        assert sol.estado == 'FINALIZADO'
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': res.id, 'valor': '2'}]},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_200_OK
+        res.refresh_from_db()
+        assert res.valor_obtenido == '2'
 
-        sol2 = self._crear_solicitud_api()
-        r2 = sol2.resultados.get(tipo_examen=self.tipo_examen_a)
-        self.client.post(
-            f'/api/lab/solicitudes/{sol2.id}/cargar-resultados/',
-            {'resultados': [{'id': r2.id, 'valor': '2'}]},
-            format='json',
-        )
-        self.client.force_authenticate(user=self.user_admin)
-        self.client.post(f'/api/lab/solicitudes/{sol2.id}/validar/', {}, format='json')
-        self.client.force_authenticate(user=self.user_lab)
-        r_bad = self.client.post(
-            f'/api/lab/solicitudes/{sol2.id}/cargar-resultados/',
-            {'resultados': [{'id': r2.id, 'valor': '3'}]},
-            format='json',
-        )
-        assert r_bad.status_code == status.HTTP_400_BAD_REQUEST
-
-        sol3 = self._crear_solicitud_api()
-        r3 = sol3.resultados.get(tipo_examen=self.tipo_examen_a)
-        self.client.post(
-            f'/api/lab/solicitudes/{sol3.id}/cargar-resultados/',
-            {'resultados': [{'id': r3.id, 'valor': '4'}]},
-            format='json',
-        )
-        self.client.force_authenticate(user=self.user_admin)
-        self.client.post(f'/api/lab/solicitudes/{sol3.id}/validar/', {}, format='json')
-        self.client.force_authenticate(user=self.user_lab)
-        self.client.post(f'/api/lab/solicitudes/{sol3.id}/marcar-entregado/', {}, format='json')
-        r_ent = self.client.post(
-            f'/api/lab/solicitudes/{sol3.id}/cargar-resultados/',
-            {'resultados': [{'id': r3.id, 'valor': '5'}]},
-            format='json',
-        )
-        assert r_ent.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_validar_sin_en_proceso_o_cancelada(self):
+    def test_finalizar_sin_en_proceso(self):
         sol_p = self._crear_solicitud_api()
         rp = sol_p.resultados.get(tipo_examen=self.tipo_examen_a)
         rp.valor_obtenido = '8'
         rp.save()
-        self.client.force_authenticate(user=self.user_admin)
-        r_pend = self.client.post(f'/api/lab/solicitudes/{sol_p.id}/validar/', {}, format='json')
+        r_pend = self.client.post(f'/api/lab/solicitudes/{sol_p.id}/finalizar/', {}, format='json')
         assert r_pend.status_code == status.HTTP_400_BAD_REQUEST
 
-        sol_c = self._crear_solicitud_api()
-        self.client.force_authenticate(user=self.user_lab)
-        self.client.post(f'/api/lab/solicitudes/{sol_c.id}/cancelar/', {}, format='json')
-        self.client.force_authenticate(user=self.user_admin)
-        r_c = self.client.post(f'/api/lab/solicitudes/{sol_c.id}/validar/', {}, format='json')
-        assert r_c.status_code == status.HTTP_400_BAD_REQUEST
-
-    def test_cancelar_validado_o_entregado_400(self):
-        sol = self._crear_solicitud_api()
-        r = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        sol_ok = self._crear_solicitud_api()
+        r_ok = sol_ok.resultados.get(tipo_examen=self.tipo_examen_a)
+        self.client.post(f'/api/lab/solicitudes/{sol_ok.id}/tomar-muestra/', {}, format='json')
         self.client.post(
-            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
-            {'resultados': [{'id': r.id, 'valor': '6'}]},
+            f'/api/lab/solicitudes/{sol_ok.id}/cargar-resultados/',
+            {'resultados': [{'id': r_ok.id, 'valor': '9'}]},
             format='json',
         )
-        self.client.force_authenticate(user=self.user_admin)
-        self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json')
-        self.client.force_authenticate(user=self.user_lab)
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json').status_code == 400
-
-        sol2 = self._crear_solicitud_api()
-        r2 = sol2.resultados.get(tipo_examen=self.tipo_examen_a)
-        self.client.post(
-            f'/api/lab/solicitudes/{sol2.id}/cargar-resultados/',
-            {'resultados': [{'id': r2.id, 'valor': '6'}]},
-            format='json',
-        )
-        self.client.force_authenticate(user=self.user_admin)
-        self.client.post(f'/api/lab/solicitudes/{sol2.id}/validar/', {}, format='json')
-        self.client.force_authenticate(user=self.user_lab)
-        self.client.post(f'/api/lab/solicitudes/{sol2.id}/marcar-entregado/', {}, format='json')
-        assert self.client.post(f'/api/lab/solicitudes/{sol2.id}/cancelar/', {}, format='json').status_code == 400
-
-    def test_marcar_entregado_sin_validar_400(self):
-        sol = self._crear_solicitud_api()
-        r = self.client.post(f'/api/lab/solicitudes/{sol.id}/marcar-entregado/', {}, format='json')
-        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        sol_ok.refresh_from_db()
+        assert sol_ok.estado == 'FINALIZADO'
+        assert self.client.post(f'/api/lab/solicitudes/{sol_ok.id}/finalizar/', {}, format='json').status_code == 400
 
     def test_patch_no_cambia_estado(self):
         sol = self._crear_solicitud_api()
         r = self.client.patch(
             f'/api/lab/solicitudes/{sol.id}/',
-            {'estado': 'VALIDADO', 'observaciones': 'nota fsm'},
+            {'estado': 'FINALIZADO', 'observaciones': 'nota fsm'},
             format='json',
         )
         assert r.status_code == status.HTTP_200_OK
@@ -947,18 +994,106 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         assert sol.estado == 'PENDIENTE'
         assert sol.observaciones == 'nota fsm'
 
-    def test_alias_laboratorio_cancelar(self):
+    def test_auto_finalizar_al_cargar_resultados(self):
         sol = self._crear_solicitud_api()
-        r = self.client.post(f'/api/laboratorio/solicitudes/{sol.id}/cancelar/', {}, format='json')
+        res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': res.id, 'valor': '5'}]},
+            format='json',
+        )
         assert r.status_code == status.HTTP_200_OK
         sol.refresh_from_db()
-        assert sol.estado == 'CANCELADO'
+        assert sol.estado == 'FINALIZADO'
 
-    def test_medico_no_puede_tomar_muestra_ni_cancelar(self):
+    def test_finalizar_con_muestra_tomada_vinculada(self):
+        """Al completar resultados, recepciona muestras TOMADA antes de finalizar."""
+        from laboratorio.muestra_estado import aplicar_tomar, crear_muestra
+
+        sol = self._crear_solicitud_api()
+        res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
+        muestra = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tipo_muestra.id,
+            tipo_contenedor_id=None,
+            observaciones='',
+            actor=self.user_lab,
+            view='test',
+        )
+        aplicar_tomar(muestra.pk, actor=self.user_lab, view='test')
+        muestra.refresh_from_db()
+        assert muestra.estado == 'TOMADA'
+        res.muestra = muestra
+        res.save(update_fields=['muestra'])
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': res.id, 'valor': '7.2'}]},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_200_OK, r.data
+        sol.refresh_from_db()
+        assert sol.estado == 'FINALIZADO'
+        muestra.refresh_from_db()
+        assert muestra.estado in ('RECIBIDA', 'EN_PROCESO', 'CONSERVADA')
+
+    def test_carga_parcial_informar_parcial_estado(self):
+        sol = self._crear_solicitud_api(examenes_ids=[self.tipo_examen_a.id, self.tipo_examen_b.id])
+        ra = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        rb = sol.resultados.get(tipo_examen=self.tipo_examen_b)
+        self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
+
+        r_avance = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': ra.id, 'valor': '90'}]},
+            format='json',
+        )
+        assert r_avance.status_code == status.HTTP_200_OK
+        sol.refresh_from_db()
+        assert sol.estado == 'EN_PROCESO'
+        rb.refresh_from_db()
+        assert rb.valor_obtenido == ''
+
+        r_parcial = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {
+                'informar_parcial': True,
+                'resultados': [{'id': ra.id, 'valor': '91'}],
+            },
+            format='json',
+        )
+        assert r_parcial.status_code == status.HTTP_200_OK
+        sol.refresh_from_db()
+        assert sol.estado == 'INFORMADO_PARCIAL'
+        ra.refresh_from_db()
+        assert ra.valor_obtenido == '91'
+
+        r_completo = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': rb.id, 'valor': '12'}]},
+            format='json',
+        )
+        assert r_completo.status_code == status.HTTP_200_OK
+        sol.refresh_from_db()
+        assert sol.estado == 'FINALIZADO'
+
+    def test_carga_sin_valores_rechazada(self):
+        sol = self._crear_solicitud_api()
+        res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': res.id, 'valor': ''}]},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_medico_no_puede_tomar_muestra_ni_finalizar(self):
         sol = self._crear_solicitud_api()
         self.client.force_authenticate(user=self.user_medico)
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json').status_code == 403
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json').status_code == 403
+        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/finalizar/', {}, format='json').status_code == 403
 
 
 @pytest.mark.django_db
@@ -994,22 +1129,30 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
         )
         self.paciente = Paciente.objects.create(dni='11112222', nombre='A', apellido='B')
 
-    def test_cancelar_audit_event_metadata(self):
+    def test_finalizar_audit_event_metadata(self):
         self.client.force_authenticate(user=self.user_lab)
         r = self.client.post(
             '/api/lab/solicitudes/',
             {
                 'paciente_id': self.paciente.id,
                 'medico_id': self.medico.id,
-                'origen_solicitud': 'EMR',
+                'origen_solicitud': 'AMBULATORIO_CEHTA',
                 'examenes_ids': [self.tipo_examen.id],
             },
             format='json',
         )
         sid = r.data['id']
+        res = ResultadoExamen.objects.get(solicitud_id=sid)
+        self.client.post(f'/api/lab/solicitudes/{sid}/tomar-muestra/', {}, format='json')
         with self.captureOnCommitCallbacks(execute=True):
-            r2 = self.client.post(f'/api/lab/solicitudes/{sid}/cancelar/', {}, format='json')
+            r2 = self.client.post(
+                f'/api/lab/solicitudes/{sid}/cargar-resultados/',
+                {'resultados': [{'id': res.id, 'valor': '7'}]},
+                format='json',
+            )
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        sol = SolicitudExamen.objects.get(pk=sid)
+        self.assertEqual(sol.estado, 'FINALIZADO')
 
         ev = (
             AuditEvent.objects.filter(
@@ -1017,14 +1160,15 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
                 entity_id=str(sid),
                 action='UPDATE',
                 module='laboratorio',
+                metadata__accion='finalizar_auto',
             )
             .order_by('-timestamp', '-id')
             .first()
         )
         self.assertIsNotNone(ev)
         self.assertIsNotNone(ev.metadata)
-        self.assertEqual(ev.metadata.get('accion'), 'cancelar')
-        self.assertEqual(ev.metadata.get('estado_anterior'), 'PENDIENTE')
-        self.assertEqual(ev.metadata.get('estado_nuevo'), 'CANCELADO')
+        self.assertEqual(ev.metadata.get('accion'), 'finalizar_auto')
+        self.assertEqual(ev.metadata.get('estado_anterior'), 'EN_PROCESO')
+        self.assertEqual(ev.metadata.get('estado_nuevo'), 'FINALIZADO')
 
 

@@ -320,6 +320,18 @@ def test_laboratorio_no_puede_crear_archivo_medico(client, paciente):
 
 
 @pytest.mark.django_db
+def test_paciente_no_puede_crear_archivo_propio(client, paciente):
+    client.force_authenticate(user=paciente.user)
+    f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {'titulo': 'X', 'tipo_archivo': 'PDF', 'paciente_id': paciente.id, 'archivo': f},
+        format='multipart',
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.django_db
 def test_paciente_no_puede_crear_archivo_para_otro_paciente(client, paciente, otro_paciente):
     client.force_authenticate(user=otro_paciente.user)
     f = SimpleUploadedFile('x.pdf', b'pdf', content_type='application/pdf')

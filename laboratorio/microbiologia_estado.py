@@ -137,11 +137,11 @@ def crear_estudio(
     - muestra y solicitud coinciden;
     - paciente consistente;
     - muestra en RECIBIDA, CONSERVADA o EN_PROCESO;
-    - solicitud no terminal (CANCELADO / VALIDADO / ENTREGADO).
+    - solicitud no finalizada.
     """
-    if solicitud.estado in ("CANCELADO", "VALIDADO", "ENTREGADO"):
+    if solicitud.estado == "FINALIZADO":
         raise MicrobiologiaAccionError(
-            "No se puede crear un estudio sobre una solicitud cancelada, validada o entregada."
+            "No se puede crear un estudio sobre una solicitud finalizada."
         )
     if muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
         raise MicrobiologiaAccionError(

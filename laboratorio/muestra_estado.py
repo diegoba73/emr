@@ -155,7 +155,7 @@ def _maybe_coordina_solicitud_toma_muestra(
     try:
         apply_solicitud_estado_transition(
             solicitud,
-            "TOMA_MUESTRA",
+            "EN_PROCESO",
             actor=actor,
             accion="tomar_muestra",
             view=view,
@@ -208,6 +208,104 @@ def aplicar_tomar(
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
         return muestra
+
+
+_MUESTRA_ESTADOS_TERMINALES = frozenset({"RECHAZADA", "DESCARTADA", "CANCELADA"})
+
+
+def _tipos_muestra_requeridos_por_solicitud(solicitud: SolicitudExamen) -> set[int]:
+    return set(
+        solicitud.tipos_examen.filter(activo=True).values_list(
+            "tipo_muestra_requerida_id", flat=True
+        )
+    )
+
+
+def tomar_muestras_en_solicitud(
+    solicitud_id: int,
+    *,
+    items: list[dict[str, Any]],
+    actor: AbstractUser | None,
+    view: str,
+) -> SolicitudExamen:
+    """
+    Crea muestras físicas, las marca TOMADA y coordina PENDIENTE → EN_PROCESO.
+    Sin ítems, solo transiciona la orden (compatibilidad legacy).
+    """
+    with transaction.atomic():
+        solicitud = (
+            SolicitudExamen.objects.select_for_update()
+            .prefetch_related("tipos_examen")
+            .get(pk=solicitud_id)
+        )
+        if solicitud.estado != "PENDIENTE":
+            raise SolicitudEstadoTransitionError(
+                "Solo se puede tomar muestra cuando la solicitud está pendiente."
+            )
+
+        if not items:
+            apply_solicitud_estado_transition(
+                solicitud,
+                "EN_PROCESO",
+                actor=actor,
+                accion="tomar_muestra",
+                view=view,
+            )
+            return solicitud
+
+        vistos: set[int] = set()
+        for item in items:
+            tm_id = int(item["tipo_muestra_id"])
+            if tm_id in vistos:
+                raise MuestraAccionError("No se puede repetir el mismo tipo de muestra.")
+            vistos.add(tm_id)
+            from laboratorio.models import TipoMuestra
+
+            try:
+                tm = TipoMuestra.objects.get(pk=tm_id)
+            except TipoMuestra.DoesNotExist as exc:
+                raise MuestraAccionError("Tipo de muestra inexistente.") from exc
+            if not tm.activo:
+                raise MuestraAccionError("El tipo de muestra seleccionado está inactivo.")
+            if Muestra.objects.filter(
+                solicitud_id=solicitud.pk,
+                tipo_muestra_id=tm_id,
+            ).exclude(estado__in=_MUESTRA_ESTADOS_TERMINALES).exists():
+                raise MuestraAccionError(
+                    "Ya existe una muestra activa de ese tipo para esta orden."
+                )
+            muestra = crear_muestra(
+                solicitud=solicitud,
+                tipo_muestra_id=tm_id,
+                tipo_contenedor_id=item.get("tipo_contenedor_id"),
+                observaciones=item.get("observaciones") or "",
+                actor=actor,
+                view=view,
+            )
+            aplicar_tomar(
+                muestra.pk,
+                actor=actor,
+                view=view,
+                observaciones=item.get("observaciones") or "",
+            )
+            aplicar_recibir(
+                muestra.pk,
+                actor=actor,
+                view=view,
+                observaciones="Recepción automática al tomar muestra en la orden.",
+                ubicacion_actual=item.get("ubicacion_actual") or "Laboratorio",
+            )
+
+        solicitud.refresh_from_db()
+        if solicitud.estado == "PENDIENTE":
+            apply_solicitud_estado_transition(
+                solicitud,
+                "EN_PROCESO",
+                actor=actor,
+                accion="tomar_muestra",
+                view=view,
+            )
+        return solicitud
 
 
 def aplicar_recibir(

@@ -44,7 +44,7 @@ class ArchivoMedico(models.Model):
         verbose_name="Paciente"
     )
 
-    # Relación opcional con consulta específica
+    # Relación opcional con consulta HC (historias_clinicas)
     consulta = models.ForeignKey(
         'historias_clinicas.Consulta',
         on_delete=models.SET_NULL,
@@ -52,6 +52,16 @@ class ArchivoMedico(models.Model):
         blank=True,
         related_name='archivos',
         verbose_name="Consulta Asociada"
+    )
+
+    # Relación opcional con atención moderna (turnos.Atencion)
+    atencion = models.ForeignKey(
+        'turnos.Atencion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='archivos_medicos',
+        verbose_name="Atención Asociada",
     )
 
     # Metadatos

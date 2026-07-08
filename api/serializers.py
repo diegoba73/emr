@@ -987,10 +987,23 @@ class AtencionSerializer(serializers.ModelSerializer):
     turno = TurnoAtencionNestedSerializer(read_only=True, allow_null=True)
     turno_id = serializers.IntegerField(read_only=True, allow_null=True)
     consulta_ambulatoria = ConsultaAmbulatoriaSerializer(read_only=True, allow_null=True)
+    consulta_hc_id = serializers.SerializerMethodField()
     registro_procedimiento = RegistroProcedimientoSerializer(read_only=True, allow_null=True)
     registro_quirurgico = RegistroQuirurgicoSerializer(read_only=True, allow_null=True)
     tipo_atencion_display = serializers.CharField(source='get_tipo_atencion_display', read_only=True)
     documentos = DocumentoSerializer(many=True, read_only=True)
+
+    def get_consulta_hc_id(self, instance):
+        from historias_clinicas.services import consulta_hc_id_para_atencion, ensure_consulta_hc_desde_atencion
+        cid = consulta_hc_id_para_atencion(instance)
+        if cid:
+            return cid
+        if instance.tipo_intervencion == 'CONSULTA':
+            try:
+                return ensure_consulta_hc_desde_atencion(instance).pk
+            except Exception:
+                return None
+        return None
     
     def to_representation(self, instance):
         """Sobrescribir para asegurar que los IDs siempre estén presentes"""
@@ -1030,6 +1043,7 @@ class AtencionSerializer(serializers.ModelSerializer):
             'estado_clinico',
             'observaciones_generales',
             'consulta_ambulatoria',
+            'consulta_hc_id',
             'registro_procedimiento',
             'registro_quirurgico',
             'documentos',

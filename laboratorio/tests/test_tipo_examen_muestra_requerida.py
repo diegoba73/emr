@@ -83,7 +83,7 @@ class TestTipoExamenMuestraRequerida(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(tipo_examen)
@@ -245,7 +245,7 @@ class TestTipoExamenMuestraRequerida(APITestCase):
         res.refresh_from_db()
         assert res.muestra_id == m.pk
 
-    def test_requiere_muestra_muestra_tomada_400(self):
+    def test_requiere_muestra_muestra_tomada_auto_recibe(self):
         sol, res = self._solicitud_con_tipo(self.tipo_examen_oblig)
         m = crear_muestra(
             solicitud=sol,
@@ -263,7 +263,9 @@ class TestTipoExamenMuestraRequerida(APITestCase):
             {"resultados": [{"id": res.pk, "valor": "1", "muestra_id": m.pk}]},
             format="json",
         )
-        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert r.status_code == status.HTTP_200_OK
+        m.refresh_from_db()
+        assert m.estado in ("RECIBIDA", "EN_PROCESO")
 
     def test_requiere_muestra_muestra_rechazada_400(self):
         sol, res = self._solicitud_con_tipo(self.tipo_examen_oblig)

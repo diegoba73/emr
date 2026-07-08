@@ -9,11 +9,9 @@ import type { LimsTipoExamen, MuestraTransaccional, ResultadoExamenLims } from '
 
 const draftRow = (muestra_id: number | null): DraftCargaRow => ({
   valor: '10',
+  valor_sysmex: '',
   valor_numerico: '',
   unidad: '',
-  es_patologico: false,
-  es_critico: false,
-  observaciones: '',
   muestra_id,
 });
 
@@ -53,7 +51,7 @@ describe('limsCargaMuestra', () => {
       muestra(3, 1, 'CONSERVADA'),
       muestra(4, 1, 'EN_PROCESO'),
     ];
-    expect(filterMuestrasProcesables(list).map((m) => m.id)).toEqual([1, 3, 4]);
+    expect(filterMuestrasProcesables(list).map((m) => m.id)).toEqual([1, 2, 3, 4]);
   });
 
   it('requiere_muestra sin muestra bloquea validación', () => {
@@ -94,6 +92,36 @@ describe('limsCargaMuestra', () => {
       [muestra(99, 2, 'RECIBIDA')]
     );
     expect(err).toMatch(/no corresponde al tipo requerido/i);
+  });
+
+  it('payload sysmex convierte ticket hemograma', () => {
+    const row: DraftCargaRow = {
+      ...draftRow(null),
+      valor: '',
+      valor_sysmex: '93',
+    };
+    const payload = buildCargarResultadoPayload(1, row, { id: 0, codigo: 'LEU', nombre: 'LEU', tipo_muestra_requerida: 0, modo_entrada: 'ESTANDAR' }, 'LEU');
+    expect(payload.valor_sysmex).toBe('93');
+    expect(payload.valor).toBe('9300');
+    expect(payload.valor_numerico).toBe(9300);
+    expect(payload.unidad).toBe('/mm³');
+  });
+
+  it('payload sysmex fórmula cayados 70 queda 70', () => {
+    const row: DraftCargaRow = {
+      ...draftRow(null),
+      valor: '',
+      valor_sysmex: '70',
+    };
+    const payload = buildCargarResultadoPayload(
+      1,
+      row,
+      { id: 0, codigo: 'NEUT_CAY', nombre: 'NEUT_CAY', tipo_muestra_requerida: 0, modo_entrada: 'ESTANDAR' },
+      'NEUT_CAY'
+    );
+    expect(payload.valor).toBe('70');
+    expect(payload.valor_numerico).toBe(70);
+    expect(payload.unidad).toBe('%');
   });
 
   it('prefiltra muestras por tipo requerido', () => {

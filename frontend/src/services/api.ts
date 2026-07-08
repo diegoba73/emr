@@ -484,13 +484,23 @@ class ApiService {
     turno_estado: string;
     message: string;
   }> {
-    const response = await this.api.post<{
-      atencion: Atencion;
-      created_new: boolean;
-      turno_estado: string;
-      message: string;
-    }>(`/turnos/${turnoId}/iniciar-atencion/`, {});
-    return response.data;
+    try {
+      const response = await this.api.post<{
+        atencion: Atencion;
+        created_new: boolean;
+        turno_estado: string;
+        message: string;
+      }>(`/turnos/${turnoId}/iniciar-atencion/`, {});
+      return response.data;
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string; detail?: string } }; message?: string };
+      const errorMessage =
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Error al iniciar la atención';
+      throw new Error(errorMessage);
+    }
   }
 
   /**

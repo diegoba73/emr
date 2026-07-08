@@ -1,5 +1,9 @@
 import type { User } from '../types';
 import {
+  isLecturaOperativaRole,
+  isProfesionalEstudioRole,
+} from './roles';
+import {
   canAccessLimsModule,
   canAccessMicrobiologia,
   canOperateLims,
@@ -25,8 +29,14 @@ export type NormalizedAppRole =
   | 'secretaria'
   | 'enfermeria'
   | 'laboratorio'
+  | 'kinesiologo'
+  | 'radiologo'
+  | 'ecografista'
+  | 'fonoaudiologo'
   | 'paciente'
   | 'sin_rol';
+
+export { isProfesionalEstudioRole, isLecturaOperativaRole } from './roles';
 
 /** Rol operador LIMS (puede tener `is_staff` para Django admin sin acceso EMR PHI). */
 export function isLaboratorioRole(user: User | null | undefined): boolean {
@@ -48,32 +58,37 @@ export function isStaffOrAdmin(user: User | null | undefined): boolean {
   return isEmrStaffOrAdmin(user);
 }
 
-/** Lectura global de pacientes (admin/staff/secretaría/enfermería). */
+/** Lectura global de pacientes (admin/staff/secretaría/enfermería/operativos). */
 function hasPacientesLecturaGlobal(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'enfermeria';
+  return rol === 'secretaria' || rol === 'enfermeria' || isLecturaOperativaRole(rol);
 }
 
-/** Lista / módulo pacientes (no laboratorio ni sin rol). */
+/** Lista / módulo pacientes (médico, operativos y roles administrativos; no paciente). */
 export function canAccessPacientes(user: User | null | undefined): boolean {
-  if (!user) return false;
-  if (hasPacientesLecturaGlobal(user)) return true;
-  const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'paciente';
-}
-
-/** Alta de paciente: roles con permiso de creación en backend. */
-export function canCreatePaciente(user: User | null | undefined): boolean {
   if (!user) return false;
   if (hasPacientesLecturaGlobal(user)) return true;
   return normalizeRol(user) === 'medico';
 }
 
-/** Vista 360 / detalle de paciente (validación final en backend). */
+/** Alta de paciente: secretaría, enfermería, médico y admin (no operativos solo lectura). */
+export function canCreatePaciente(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (isStaffOrAdmin(user)) return true;
+  const rol = normalizeRol(user);
+  if (isLecturaOperativaRole(rol)) return false;
+  return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico';
+}
+
+/** Vista 360 / detalle de paciente (médico/admin o paciente sobre su ficha). */
 export function canAccessPaciente360(user: User | null | undefined): boolean {
-  return canAccessPacientes(user);
+  if (!user) return false;
+  if (hasPacientesLecturaGlobal(user)) return true;
+  if (isStaffOrAdmin(user)) return true;
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'paciente';
 }
 
 /** Solicitudes genéricas EMR (PERM-01): no enfermería/laboratorio/sin rol. */
@@ -92,12 +107,19 @@ export function canAccessArchivosMedicos(user: User | null | undefined): boolean
   return rol === 'medico' || rol === 'paciente';
 }
 
-/** Crear/editar archivo médico (CanWriteArchivoMedico). */
+/** Crear/editar archivo médico (CanWriteArchivoMedico). Paciente: solo lectura. */
 export function canWriteArchivoMedico(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  return normalizeRol(user) === 'medico';
+}
+
+/** Actualización demográfica de pacientes. Paciente: solo lectura. */
+export function canUpdatePacienteDemographics(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'paciente';
+  return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico';
 }
 
 /** Descarga de archivo (misma política de módulo; objeto validado en backend). */
@@ -125,6 +147,21 @@ export function canAccessAtenciones(user: User | null | undefined): boolean {
 
 /** Mutaciones clínicas en atenciones: admin/staff y médico (objeto validado en backend). */
 export function canOperateAtenciones(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (isStaffOrAdmin(user)) return true;
+  return normalizeRol(user) === 'medico';
+}
+
+/** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico/secretaría. */
+export function canAccessCatalogosClinicos(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (isStaffOrAdmin(user)) return true;
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'secretaria';
+}
+
+/** Edición de catálogos clínicos (secretaría: solo lectura). */
+export function canEditCatalogosClinicos(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
   return normalizeRol(user) === 'medico';

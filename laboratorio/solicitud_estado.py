@@ -1,5 +1,6 @@
 """
 Transiciones de estado controladas para SolicitudExamen (LIMS nativo).
+Estados: PENDIENTE → EN_PROCESO (toma de muestra) → INFORMADO_PARCIAL (informe parcial) → FINALIZADO.
 """
 from __future__ import annotations
 
@@ -21,16 +22,19 @@ class SolicitudEstadoTransitionError(ValueError):
 # (accion, estado_origen, estado_destino)
 _ALLOWED_TRANSITIONS: frozenset[tuple[str, str, str]] = frozenset(
     {
-        ("tomar_muestra", "PENDIENTE", "TOMA_MUESTRA"),
-        ("cargar_resultados", "PENDIENTE", "EN_PROCESO"),
-        ("cargar_resultados", "TOMA_MUESTRA", "EN_PROCESO"),
-        ("validar", "EN_PROCESO", "VALIDADO"),
-        ("marcar_entregado", "VALIDADO", "ENTREGADO"),
-        ("cancelar", "PENDIENTE", "CANCELADO"),
-        ("cancelar", "TOMA_MUESTRA", "CANCELADO"),
-        ("cancelar", "EN_PROCESO", "CANCELADO"),
+        ("tomar_muestra", "PENDIENTE", "EN_PROCESO"),
+        ("informar_parcial", "EN_PROCESO", "INFORMADO_PARCIAL"),
+        ("finalizar", "EN_PROCESO", "FINALIZADO"),
+        ("finalizar", "INFORMADO_PARCIAL", "FINALIZADO"),
+        ("finalizar_auto", "EN_PROCESO", "FINALIZADO"),
+        ("finalizar_auto", "INFORMADO_PARCIAL", "FINALIZADO"),
+        # Alias legacy API
+        ("validar", "EN_PROCESO", "FINALIZADO"),
+        ("validar", "INFORMADO_PARCIAL", "FINALIZADO"),
     }
 )
+
+ESTADOS_SOLICITUD_TERMINALES = frozenset({"FINALIZADO"})
 
 
 def transicion_permitida(accion: str, estado_origen: str, estado_destino: str) -> bool:

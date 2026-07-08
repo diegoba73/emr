@@ -129,9 +129,22 @@ export const createCama = async (camaData: {
 /**
  * Actualiza una cama existente
  */
-export const updateCama = async (id: number, camaData: Partial<Cama>): Promise<Cama> => {
+export const updateCama = async (
+  id: number,
+  camaData: {
+    nombre?: string;
+    sector?: number;
+    estado?: 'DISPONIBLE' | 'OCUPADA' | 'LIMPIEZA' | 'MANTENIMIENTO';
+    aislada?: boolean;
+  }
+): Promise<Cama> => {
   try {
-    const response = await api.patch<Cama>(`/internacion/camas/${id}/`, camaData);
+    const payload: Record<string, unknown> = { ...camaData };
+    if (camaData.sector !== undefined) {
+      payload.sector_id = camaData.sector;
+      delete payload.sector;
+    }
+    const response = await api.patch<Cama>(`/internacion/camas/${id}/`, payload);
     return response.data;
   } catch (error) {
     console.error('Error updating cama:', error);

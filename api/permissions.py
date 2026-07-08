@@ -1,5 +1,7 @@
 from rest_framework import permissions
 
+from usuarios.roles import ROLES_SIN_BYPASS_EMR_STAFF
+
 
 def get_normalized_role(user):
     """Normaliza `User.rol` a minúsculas; cadena vacía si no hay usuario autenticado."""
@@ -27,6 +29,88 @@ class LimsCatalogReadPermission(permissions.BasePermission):
         return False
 
 
+class LimsTipoMuestraCatalogPermission(permissions.BasePermission):
+    """
+    Catálogo de tipos de muestra LIMS (sangre, orina, etc.).
+    Lectura: roles clínicos con acceso LIMS. Escritura: admin y laboratorio.
+    """
+
+    _roles_read = frozenset({'admin', 'laboratorio', 'medico', 'secretaria', 'enfermeria'})
+    _roles_write = frozenset({'admin', 'laboratorio'})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            return role in self._roles_read
+        if request.method in ('POST', 'PUT', 'PATCH'):
+            return role in self._roles_write
+        return False
+
+
+class LimsTipoExamenCatalogPermission(permissions.BasePermission):
+    """
+    Catálogo de tipos de examen LIMS.
+    Lectura: roles clínicos con acceso LIMS. Escritura: admin y laboratorio.
+    """
+
+    _roles_read = frozenset({'admin', 'laboratorio', 'medico', 'secretaria', 'enfermeria'})
+    _roles_write = frozenset({'admin', 'laboratorio'})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            return role in self._roles_read
+        if request.method in ('POST', 'PUT', 'PATCH'):
+            return role in self._roles_write
+        return False
+
+
+def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
+    """True si el usuario puede leer la orden LIMS (list/retrieve)."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+
+    role = get_normalized_role(user)
+    if role in ('admin', 'laboratorio', 'secretaria'):
+        return True
+
+    if role == 'medico':
+        medico = getattr(solicitud, 'medico_interno', None)
+        return bool(medico and getattr(medico, 'user_id', None) == user.id)
+
+    if role == 'paciente':
+        try:
+            return solicitud.paciente_id == user.paciente.id
+        except Exception:
+            return False
+
+    return False
+
+
+def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
+    """PDF clínico: propias órdenes con resultados informados."""
+    if not usuario_puede_ver_solicitud_lims(user, solicitud):
+        return False
+    if user.is_superuser:
+        return True
+    role = get_normalized_role(user)
+    if role in ('admin', 'laboratorio', 'secretaria'):
+        return True
+    if role in ('medico', 'paciente'):
+        return solicitud.estado in ('INFORMADO_PARCIAL', 'FINALIZADO')
+    return False
+
+
 class LimsSolicitudExamenPermission(permissions.BasePermission):
     """
     Permisos provisionales para SolicitudExamenViewSet y acciones custom LIMS.
@@ -42,11 +126,17 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         action = getattr(view, 'action', None)
 
         if action == 'list':
-            return role in ('admin', 'laboratorio', 'medico')
+            return role in ('admin', 'laboratorio', 'medico', 'secretaria', 'paciente')
         if action == 'create':
             return role in ('admin', 'laboratorio', 'medico')
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):
-            if action in ('retrieve',) and role in ('admin', 'laboratorio', 'medico'):
+            if action == 'retrieve' and role in (
+                'admin',
+                'laboratorio',
+                'medico',
+                'secretaria',
+                'paciente',
+            ):
                 return True
             if action in ('update', 'partial_update') and role in ('admin', 'laboratorio'):
                 return True
@@ -55,14 +145,14 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return False
         if action == 'cargar_resultados':
             return role in ('admin', 'laboratorio')
-        if action in ('tomar_muestra', 'cancelar', 'marcar_entregado'):
+        if action in ('tomar_muestra', 'finalizar', 'validar', 'enviar_informe'):
             return role in ('admin', 'laboratorio')
-        if action == 'validar':
-            return role == 'admin'
         if action == 'etiqueta':
             return role in ('admin', 'laboratorio')
         if action == 'informe_pdf':
-            return role in ('admin', 'laboratorio', 'medico')
+            return role in ('admin', 'laboratorio', 'medico', 'secretaria', 'paciente')
+        if action == 'analisis_longitudinal':
+            return role in ('admin', 'laboratorio', 'medico', 'secretaria', 'paciente')
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -75,12 +165,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         action = getattr(view, 'action', None)
 
         if action == 'retrieve':
-            if role in ('admin', 'laboratorio'):
-                return True
-            if role == 'medico':
-                mi = getattr(obj, 'medico_interno', None)
-                return bool(mi and getattr(mi, 'user_id', None) == request.user.id)
-            return False
+            return usuario_puede_ver_solicitud_lims(request.user, obj)
 
         if action in ('update', 'partial_update'):
             return role in ('admin', 'laboratorio')
@@ -91,22 +176,17 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'cargar_resultados':
             return role in ('admin', 'laboratorio')
 
-        if action in ('tomar_muestra', 'cancelar', 'marcar_entregado'):
+        if action in ('tomar_muestra', 'finalizar', 'validar', 'enviar_informe'):
             return role in ('admin', 'laboratorio')
-
-        if action == 'validar':
-            return role == 'admin'
 
         if action == 'etiqueta':
             return role in ('admin', 'laboratorio')
 
         if action == 'informe_pdf':
-            if role in ('admin', 'laboratorio'):
-                return True
-            if role == 'medico':
-                mi = getattr(obj, 'medico_interno', None)
-                return bool(mi and getattr(mi, 'user_id', None) == request.user.id)
-            return False
+            return usuario_puede_descargar_informe_lims(request.user, obj)
+
+        if action == 'analisis_longitudinal':
+            return usuario_puede_ver_solicitud_lims(request.user, obj)
 
         return False
 
@@ -165,7 +245,21 @@ class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
         return user_rol in ['medico', 'enfermeria', 'admin']
 
 
-_ROLES_SIN_ACCESO_EMR_STAFF = frozenset({'laboratorio'})
+class ConsultaPermission(permissions.BasePermission):
+    """Lectura de consultas: cualquier usuario autenticado (filtrado en queryset).
+    Escritura: médico, enfermería o admin.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        checker = IsMedicoOrEnfermeriaOrAdmin()
+        return checker.has_permission(request, view)
+
+
+_ROLES_SIN_ACCESO_EMR_STAFF = ROLES_SIN_BYPASS_EMR_STAFF
 
 
 def emr_staff_or_admin_global(user) -> bool:
@@ -405,8 +499,8 @@ class IsEMRClinicianOrReadOnly(permissions.BasePermission):
 
 class CanWriteArchivoMedico(permissions.BasePermission):
     """
-    Alta/actualización de ArchivoMedico: admin, médico (vínculo validado en view) o paciente (propio).
-    Secretaría, enfermería y laboratorio no pueden subir archivos clínicos (C6.2).
+    Alta/actualización de ArchivoMedico: admin y médico (vínculo validado en view).
+    Paciente, secretaría, enfermería y laboratorio: solo lectura/descarga (C6.2).
     """
 
     def has_permission(self, request, view):
@@ -415,7 +509,7 @@ class CanWriteArchivoMedico(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         role = get_normalized_role(request.user)
-        return role in {'admin', 'medico', 'paciente'}
+        return role in {'admin', 'medico'}
 
 
 class CanWriteDocumentoClinico(permissions.BasePermission):
@@ -652,7 +746,7 @@ class CanUpdatePacienteDemographics(permissions.BasePermission):
     Permiso para actualizar datos demográficos de pacientes.
     - Admin/Secretaria: pueden actualizar cualquier paciente
     - Médicos: pueden actualizar datos demográficos de CUALQUIER paciente
-    - Pacientes: solo pueden actualizar su propio perfil
+    - Pacientes: solo lectura (no pueden modificar su ficha)
     """
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -672,10 +766,9 @@ class CanUpdatePacienteDemographics(permissions.BasePermission):
             if request.method in ('GET', 'PATCH', 'PUT', 'HEAD', 'OPTIONS'):
                 return True
         
-        # Pacientes solo pueden actualizar su propio perfil
+        # Pacientes: solo lectura de su ficha demográfica
         if request.user.rol == 'paciente':
-            if hasattr(obj, 'user'):
-                return obj.user == request.user
+            return False
         
         # Para otras operaciones, usar la lógica por defecto
         return False

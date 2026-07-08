@@ -71,7 +71,7 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -240,7 +240,7 @@ class TestCargarResultadosMuestraAPI(APITestCase):
         sol2 = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol2.tipos_examen.add(self.tipo_examen)
@@ -642,7 +642,7 @@ class TestValidarConMuestraAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -659,7 +659,7 @@ class TestValidarConMuestraAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -676,7 +676,7 @@ class TestValidarConMuestraAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -709,7 +709,7 @@ class TestValidarConMuestraAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -775,7 +775,7 @@ class TestValidarConMuestraAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -828,7 +828,7 @@ class TestCargarMuestraPermisosAPI(APITestCase):
         self.sol = SolicitudExamen.objects.create(
             paciente=self.pac,
             medico_interno=self.med,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         self.sol.tipos_examen.add(self.te)

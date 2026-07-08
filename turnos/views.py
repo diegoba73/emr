@@ -11,12 +11,15 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Q
 from datetime import datetime
+from archivos_medicos.access import paciente_ids_vinculados_a_medico
 from pacientes.services import ensure_paciente_linked_to_user
 
 from medicos.models import Medico
 from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria
 from . import turno_estado
+from .access import medico_es_dueno_turno
 from .services import AtencionService, BusinessLogicError
 from .serializers import (
     TurnoSerializer,
@@ -38,7 +41,10 @@ from auditoria.snapshot import safe_model_snapshot
 
 logger = logging.getLogger(__name__)
 
-_ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'secretaria', 'enfermeria'})
+from usuarios.roles import ROLES_AGENDA_TURNOS_LECTURA, ROLES_ESTUDIO_COMPLEMENTARIO
+
+_ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'secretaria', 'enfermeria'}) | ROLES_AGENDA_TURNOS_LECTURA
+_TIPOS_RECURSO_ESTUDIO_TURNOS = ('SALA_PROCEDIMIENTO', 'SALA_HEMODINAMIA')
 
 
 def _puede_ver_agenda_global_turnos(user) -> bool:
@@ -65,6 +71,13 @@ def _es_enfermeria(user) -> bool:
 
 def _es_laboratorio(user) -> bool:
     return _rol_usuario(user) == 'laboratorio'
+
+
+def _es_rol_agenda_solo_lectura(user) -> bool:
+    """Enfermería, laboratorio y profesionales de estudio: agenda sin mutación."""
+    if _es_enfermeria(user) or _es_laboratorio(user):
+        return True
+    return _rol_usuario(user) in ROLES_ESTUDIO_COMPLEMENTARIO
 
 
 def _reject_foreign_medico_assignment(serializer, medico) -> None:
@@ -187,6 +200,9 @@ class TurnoViewSet(viewsets.ModelViewSet):
             'atencion__consulta_ambulatoria',
             'atencion__registro_procedimiento',
             'atencion__registro_quirurgico',
+            'estudio_complementario',
+            'estudio_complementario__tipo_estudio',
+            'estudio_complementario__medico_solicitante',
         )
         .all()
     )
@@ -218,7 +234,16 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 med = user.medico
             except ObjectDoesNotExist:
                 return queryset.none()
-            return queryset.filter(medico=med)
+            ids_pac = paciente_ids_vinculados_a_medico(med)
+            return queryset.filter(
+                Q(medico=med)
+                | Q(estudio_complementario__medico_solicitante=med)
+                | Q(
+                    medico__isnull=True,
+                    recurso__tipo_recurso__in=_TIPOS_RECURSO_ESTUDIO_TURNOS,
+                    paciente_id__in=ids_pac,
+                )
+            ).distinct()
 
         pac = ensure_paciente_linked_to_user(user)
         if not pac:
@@ -228,7 +253,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
     def _deny_readonly_roles_on_write(self) -> None:
         """Enfermería y laboratorio: lectura global sin mutación (C5.8.1)."""
         user = self.request.user
-        if _es_enfermeria(user) or _es_laboratorio(user):
+        if _es_rol_agenda_solo_lectura(user):
             raise PermissionDenied('No tiene permiso para modificar turnos.')
         if not _puede_gestionar_turnos_global(user) and _rol_usuario(user) not in {
             'medico',
@@ -263,7 +288,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             if _puede_gestionar_turnos_global(user):
                 instance = serializer.save()
-            elif _es_enfermeria(user) or _es_laboratorio(user):
+            elif _es_rol_agenda_solo_lectura(user):
                 raise PermissionDenied('No tiene permiso para crear turnos.')
             elif rol == 'medico':
                 try:
@@ -313,7 +338,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             if _puede_gestionar_turnos_global(user):
                 instance = serializer.save()
-            elif _es_enfermeria(user) or _es_laboratorio(user):
+            elif _es_rol_agenda_solo_lectura(user):
                 raise PermissionDenied('No tiene permiso para modificar turnos.')
             elif rol == 'medico':
                 try:
@@ -322,10 +347,10 @@ class TurnoViewSet(viewsets.ModelViewSet):
                     raise PermissionDenied(
                         'El usuario médico no tiene ficha profesional vinculada.'
                     )
-                if instance.medico_id != med.id:
+                if not medico_es_dueno_turno(med, instance):
                     raise PermissionDenied('No puede modificar turnos de otro médico.')
                 _reject_foreign_medico_assignment(serializer, med)
-                instance = serializer.save(medico=med)
+                instance = serializer.save(medico=instance.medico or med)
             elif rol == 'paciente':
                 pac = ensure_paciente_linked_to_user(user)
                 if not pac:
@@ -334,6 +359,12 @@ class TurnoViewSet(viewsets.ModelViewSet):
                     )
                 if instance.paciente_id != pac.id:
                     raise PermissionDenied('No puede modificar turnos de otro paciente.')
+                if instance.estado in (Turno.Estado.REALIZADO, Turno.Estado.CANCELADO):
+                    raise PermissionDenied('No puede modificar un turno finalizado.')
+                if Atencion.objects.filter(turno_id=instance.pk).exists():
+                    raise PermissionDenied(
+                        'No puede modificar un turno con atención clínica iniciada.'
+                    )
                 _reject_foreign_paciente_assignment(serializer, pac)
                 instance = serializer.save(paciente=pac)
             else:
@@ -748,6 +779,21 @@ class AtencionViewSet(viewsets.ModelViewSet):
         atencion.estado_clinico = Atencion.EstadoClinico.FINALIZADA
         atencion.fecha_cierre = timezone.now()
         atencion.save(update_fields=['estado_clinico', 'fecha_cierre', 'updated_at'])
+
+        if atencion.turno_id:
+            turno = atencion.turno
+            before_turno = safe_model_snapshot(turno)
+            if turno.estado != Turno.Estado.REALIZADO:
+                turno.estado = Turno.Estado.REALIZADO
+                turno.save(update_fields=['estado', 'updated_at'])
+                _safe_audit(
+                    log_update,
+                    actor=request.user,
+                    entity=turno,
+                    before=before_turno,
+                    module="turnos",
+                    metadata={"action": "auto_realizado_por_cierre", "view": "AtencionViewSet.cerrar"},
+                )
 
         _safe_audit(
             log_update,

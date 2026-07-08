@@ -34,6 +34,16 @@ else
   echo "Migraciones omitidas (RUN_MIGRATIONS no es 'true')."
 fi
 
+RUN_SEED="${RUN_SEED:-false}"
+if [ "${RUN_SEED}" = "true" ]; then
+  echo "Ejecutando seed_data (RUN_SEED=true, idempotente)..."
+  python manage.py seed_data
+  echo "Cargando catálogo solicitud en papel..."
+  python manage.py seed_catalogo_solicitud_papel
+else
+  echo "Seed omitido (RUN_SEED no es 'true')."
+fi
+
 case "${DJANGO_RUNTIME}" in
   runserver)
     echo "Iniciando runtime de desarrollo (runserver)."

@@ -79,7 +79,7 @@ class TestSolicitudExamenModel:
         solicitud = SolicitudExamen.objects.create(
             paciente=paciente_test,
             medico_externo_nombre='Dr. Juan Pérez (Externo)',
-            origen_solicitud='EXTERNO_PAPEL',
+            origen_solicitud='EXTERNO_CEHTA',
             estado='PENDIENTE'
         )
         
@@ -90,7 +90,7 @@ class TestSolicitudExamenModel:
         assert solicitud.paciente == paciente_test
         assert solicitud.medico_externo_nombre == 'Dr. Juan Pérez (Externo)'
         assert solicitud.medico_interno is None
-        assert solicitud.origen_solicitud == 'EXTERNO_PAPEL'
+        assert solicitud.origen_solicitud == 'EXTERNO_CEHTA'
         assert solicitud.numero is not None
         assert solicitud.numero.startswith('LAB-')
         assert tipo_examen_glucosa in solicitud.tipos_examen.all()
@@ -103,7 +103,7 @@ class TestSolicitudExamenModel:
         solicitud = SolicitudExamen.objects.create(
             paciente=paciente_test,
             medico_interno=medico_test,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='PENDIENTE'
         )
         
@@ -114,7 +114,7 @@ class TestSolicitudExamenModel:
         assert solicitud.paciente == paciente_test
         assert solicitud.medico_interno == medico_test
         assert solicitud.medico_externo_nombre is None or solicitud.medico_externo_nombre == ''
-        assert solicitud.origen_solicitud == 'EMR'
+        assert solicitud.origen_solicitud == 'AMBULATORIO_CEHTA'
         assert solicitud.numero is not None
         assert solicitud.numero.startswith('LAB-')
         assert tipo_examen_glucosa in solicitud.tipos_examen.all()
@@ -127,7 +127,7 @@ class TestSolicitudExamenModel:
         # Crear primera solicitud
         solicitud1 = SolicitudExamen.objects.create(
             paciente=paciente_test,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='PENDIENTE'
         )
         solicitud1.tipos_examen.add(tipo_examen_glucosa)
@@ -139,7 +139,7 @@ class TestSolicitudExamenModel:
         # Crear segunda solicitud
         solicitud2 = SolicitudExamen.objects.create(
             paciente=paciente_test,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='PENDIENTE'
         )
         solicitud2.tipos_examen.add(tipo_examen_glucosa)
@@ -161,7 +161,7 @@ class TestSolicitudExamenModel:
         # Crear solicitud y resultado
         solicitud = SolicitudExamen.objects.create(
             paciente=paciente_test,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='EN_PROCESO'
         )
         solicitud.tipos_examen.add(tipo_examen_glucosa)
@@ -191,13 +191,13 @@ class TestSolicitudExamenModel:
         assert ResultadoExamen.objects.filter(id=resultado_id).exists()
         assert tipo_examen_glucosa.id is not None  # El tipo de examen no se borró
     
-    def test_cancelar_solicitud_con_resultados_vacios_persiste(self, paciente_test, tipo_muestra_sangre):
+    def test_finalizar_solicitud_con_resultados_vacios_persiste(self, paciente_test, tipo_muestra_sangre):
         """
-        Una orden con ResultadoExamen autogenerado vacío puede pasar a CANCELADO
-        (regresión: SolicitudExamen.clean no debe impedirlo).
+        Una orden con ResultadoExamen autogenerado vacío puede pasar a FINALIZADO
+        (regresión: SolicitudExamen.clean no debe impedirlo a nivel modelo).
         """
         tipo = TipoExamen.objects.create(
-            codigo='GLU-CANCEL-CLEAN',
+            codigo='GLU-FIN-CLEAN',
             nombre='Glucosa',
             tipo_muestra_requerida=tipo_muestra_sangre,
             precio=1.0,
@@ -205,7 +205,7 @@ class TestSolicitudExamenModel:
         )
         solicitud = SolicitudExamen.objects.create(
             paciente=paciente_test,
-            origen_solicitud='EMR',
+            origen_solicitud='AMBULATORIO_CEHTA',
             estado='PENDIENTE',
         )
         solicitud.tipos_examen.add(tipo)
@@ -214,20 +214,19 @@ class TestSolicitudExamenModel:
             tipo_examen=tipo,
             valor_obtenido='',
         )
-        solicitud.estado = 'CANCELADO'
+        solicitud.estado = 'FINALIZADO'
         solicitud.save(update_fields=['estado'])
         solicitud.refresh_from_db()
-        assert solicitud.estado == 'CANCELADO'
+        assert solicitud.estado == 'FINALIZADO'
 
-    def test_resultado_no_cargar_solicitud_cancelada(self, paciente_test, tipo_examen_glucosa):
+    def test_resultado_no_cargar_solicitud_finalizada(self, paciente_test, tipo_examen_glucosa):
         """
-        Test Validación: Un resultado no puede cargarse si la solicitud está cancelada.
+        Test Validación: Un resultado no puede cargarse si la solicitud está finalizada.
         """
-        # Crear solicitud cancelada
         solicitud = SolicitudExamen.objects.create(
             paciente=paciente_test,
-            origen_solicitud='EMR',
-            estado='CANCELADO'
+            origen_solicitud='AMBULATORIO_CEHTA',
+            estado='FINALIZADO'
         )
         
         usuario = User.objects.create_user(
@@ -247,7 +246,7 @@ class TestSolicitudExamenModel:
                 validado_por=usuario
             )
         
-        assert 'cancelada' in str(exc_info.value).lower()
+        assert 'finalizada' in str(exc_info.value).lower()
     
     def test_propiedad_medico_display(self, paciente_test, medico_test):
         """
@@ -257,7 +256,7 @@ class TestSolicitudExamenModel:
         solicitud_interno = SolicitudExamen.objects.create(
             paciente=paciente_test,
             medico_interno=medico_test,
-            origen_solicitud='EMR'
+            origen_solicitud='AMBULATORIO_CEHTA'
         )
         assert solicitud_interno.medico_display == medico_test.nombre_completo
         
@@ -265,7 +264,7 @@ class TestSolicitudExamenModel:
         solicitud_externo = SolicitudExamen.objects.create(
             paciente=paciente_test,
             medico_externo_nombre='Dr. Externo',
-            origen_solicitud='EXTERNO_PAPEL'
+            origen_solicitud='EXTERNO_ICPL'
         )
         assert solicitud_externo.medico_display == 'Dr. Externo'
         
@@ -330,7 +329,7 @@ class TestSolicitudExamenModel:
         # Crear solicitud con panel
         solicitud = SolicitudExamen.objects.create(
             paciente=paciente_test,
-            origen_solicitud='EMR'
+            origen_solicitud='AMBULATORIO_CEHTA'
         )
         solicitud.paneles.add(panel)
         

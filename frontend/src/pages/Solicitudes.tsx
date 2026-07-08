@@ -1,249 +1,167 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
-import SearchAndFilters from '../components/SearchAndFilters';
-// Material-UI imports removidos - ya no se necesita el formulario
-import './Solicitudes.css';
+import OrdenesLimsTabla from '../components/lims/OrdenesLimsTabla';
+import { listSolicitudesExamen } from '../services/limsApi';
+import type { SolicitudExamenLims } from '../types/lims';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/apiError';
+import { canAccessAnalisisClinicoLab } from '../utils/limsAccess';
+import { ESTADOS_ORDEN_LIMS, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import { isPacienteRole } from '../utils/navLabels';
 
 const Solicitudes: React.FC = () => {
-  const { solicitudes, pacientes, medicos, loading, loadSolicitudes, loadPacientes, loadMedicos, currentUser } = useData();
-  
-  // Variables de formulario eliminadas - ya no se crean solicitudes desde EMR
-  const [filterEstado, setFilterEstado] = useState<string>('');
+  const navigate = useNavigate();
+  const { currentUser } = useData();
+  const [ordenes, setOrdenes] = useState<SolicitudExamenLims[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const allowed = canAccessAnalisisClinicoLab(currentUser);
+  const esPaciente = isPacienteRole(currentUser);
 
-  // Eliminado: efecto que recargaba continuamente cuando las listas estaban vacías
+  useEffect(() => {
+    const timer = window.setTimeout(() => setBusquedaDebounced(busqueda), 400);
+    return () => window.clearTimeout(timer);
+  }, [busqueda]);
 
-  // Catálogo LIMS eliminado - ya no se seleccionan exámenes desde EMR
-
-  // Funciones de formulario eliminadas - ya no se crean solicitudes desde EMR
-
-  const filteredSolicitudes = solicitudes.filter(solicitud => {
-    const matchesEstado = !filterEstado || solicitud.estado === filterEstado;
-    
-    const paciente = pacientes.find(p => p.id === solicitud.paciente);
-    const medico = medicos.find(m => m.id === solicitud.medico_solicitante);
-    
-    const matchesSearch = !searchTerm || 
-      (paciente && (paciente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                   paciente.apellido.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-      (medico && (medico.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                 medico.apellido.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-      solicitud.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    return matchesEstado && matchesSearch;
-  });
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case 'PENDIENTE': return '#ff9800';
-      case 'EN_PROCESO': return '#2196f3';
-      case 'COMPLETADA': return '#4caf50';
-      case 'CANCELADA': return '#f44336';
-      case 'ERROR': return '#9c27b0';
-      default: return '#757575';
+  const load = useCallback(async () => {
+    if (!allowed) {
+      setLoading(false);
+      return;
     }
-  };
+    setLoading(true);
+    setError(null);
+    try {
+      const params: Parameters<typeof listSolicitudesExamen>[0] = {};
+      if (filtroEstado) params.estado = filtroEstado;
+      if (busquedaDebounced.trim()) params.search = busquedaDebounced.trim();
+      const data = await listSolicitudesExamen(params);
+      setOrdenes(data);
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
+      setOrdenes([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [allowed, filtroEstado, busquedaDebounced]);
 
-  // Prioridad removida
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES');
-  };
+  const stats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const st of ESTADOS_ORDEN_LIMS) counts[st] = 0;
+    for (const o of ordenes) {
+      if (counts[o.estado] !== undefined) counts[o.estado] += 1;
+    }
+    return counts;
+  }, [ordenes]);
 
-  if (loading.solicitudes) {
+  if (!allowed) {
     return (
-      <div className="solicitudes-container">
-        <div className="loading">Cargando solicitudes...</div>
-      </div>
+      <Box sx={{ p: 3 }}>
+        <Alert severity="warning">No tiene acceso a análisis clínicos.</Alert>
+      </Box>
     );
   }
 
+  const pageTitle = esPaciente ? 'Mis análisis clínico' : 'Análisis de laboratorio';
+  const pageDescription = esPaciente
+    ? 'Pedidos de laboratorio realizados desde consultas y sus resultados.'
+    : 'Órdenes de laboratorio generadas por médicos al cerrar consultas.';
+
   return (
-    <div className="solicitudes-container fade-in">
-      {!currentUser ? (
-        <div className="auth-message">
-          <h2>🔐 Autenticación Requerida</h2>
-          <p>Debes iniciar sesión para acceder a la gestión de solicitudes.</p>
-        </div>
-      ) : (
-        <>
-          <div className="solicitudes-header">
-            <h1>📋 Consulta de Solicitudes y Resultados</h1>
-            <p className="header-description">
-              Las solicitudes se crean desde el LIMS. Aquí puedes consultar el estado y resultados.
-            </p>
-        
-        <button 
-          className="btn-secondary" 
-          onClick={() => {
-            loadSolicitudes();
-            loadPacientes();
-            loadMedicos();
-          }}
-          style={{ marginLeft: '10px' }}
-        >
-          🔄 Recargar Datos
-        </button>
-      </div>
+    <Box sx={{ p: 3 }} className="fade-in">
+      <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
+        {pageTitle}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {pageDescription}
+      </Typography>
 
-
-
-      {/* Search and Filters */}
-      <SearchAndFilters
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        searchPlaceholder="Buscar por paciente, médico o descripción..."
-        filters={{
-          estado: {
-            value: filterEstado,
-            label: 'Estado',
-            options: [
-              { value: 'PENDIENTE', label: 'Pendiente' },
-              { value: 'EN_PROCESO', label: 'En Proceso' },
-              { value: 'COMPLETADA', label: 'Completada' },
-              { value: 'CANCELADA', label: 'Cancelada' },
-              { value: 'ERROR', label: 'Error' },
-            ],
-            onChange: setFilterEstado,
-          },
-        }}
-        onRefresh={() => {
-          loadSolicitudes();
-          loadPacientes();
-          loadMedicos();
-        }}
-        onAdd={undefined}
-        addButtonText=""
-        totalItems={solicitudes.length}
-        filteredItems={filteredSolicitudes.length}
-      />
-
-      {/* Formulario eliminado - Las solicitudes se crean desde el LIMS */}
-
-      {/* Tabla de Solicitudes */}
-
-      {/* Tabla de Solicitudes */}
-      <div className="table-container">
-        <table className="solicitudes-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Paciente</th>
-              <th>Médico</th>
-              <th>Tipo</th>
-              <th>Estado</th>
-              {/* Prioridad removida */}
-              <th>Fecha Solicitud</th>
-              <th>Fecha Límite</th>
-              <th>Días Pendiente</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSolicitudes.map(solicitud => {
-              const paciente = pacientes.find(p => p.id === solicitud.paciente);
-              const medico = medicos.find(m => m.id === solicitud.medico_solicitante);
-              
-              return (
-                <tr key={solicitud.id} className={solicitud.esta_vencida ? 'vencida' : ''}>
-                  <td>{solicitud.id}</td>
-                  <td>
-                    {paciente ? `${paciente.nombre} ${paciente.apellido}` : 'N/A'}
-                    <br />
-                    <small>{paciente?.dni}</small>
-                  </td>
-                  <td>
-                    {medico ? `${medico.nombre} ${medico.apellido}` : 'N/A'}
-                    <br />
-                                         <small>{typeof medico?.especialidad === 'string' ? medico.especialidad : medico?.especialidad?.nombre}</small>
-                  </td>
-                  <td>{solicitud.tipo_solicitud.replace('_', ' ')}</td>
-                  <td>
-                    <span 
-                      className="estado-badge"
-                      style={{ backgroundColor: getEstadoColor(solicitud.estado) }}
-                    >
-                      {solicitud.estado}
-                    </span>
-                  </td>
-                  {/* Prioridad removida */}
-                  <td>{formatDate(solicitud.fecha_solicitud)}</td>
-                  <td>
-                    {solicitud.fecha_limite ? formatDate(solicitud.fecha_limite) : 'N/A'}
-                    {solicitud.esta_vencida && <span className="vencida-indicator">⚠️</span>}
-                  </td>
-                  <td>
-                    {solicitud.dias_pendiente !== undefined ? (
-                      <span className={solicitud.dias_pendiente > 7 ? 'dias-alto' : ''}>
-                        {solicitud.dias_pendiente} días
-                      </span>
-                    ) : 'N/A'}
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button 
-                        className="btn-view"
-                        onClick={() => {
-                          alert('Los detalles de la solicitud están disponibles en la tabla.');
-                        }}
-                        title="Ver detalles"
-                      >
-                        👁️
-                      </button>
-                      
-                      {solicitud.estado === 'COMPLETADA' && (
-                        <button 
-                          className="btn-success"
-                          onClick={() => {
-                            alert('Los resultados se consultan desde el LIMS.');
-                          }}
-                          title="Ver resultados"
-                        >
-                          📊
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        
-        {filteredSolicitudes.length === 0 && (
-          <div className="no-data">
-            <p>No se encontraron solicitudes con los filtros aplicados.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Estadísticas */}
-      <div className="stats-section">
-        <div className="stat-card">
-          <h3>Total</h3>
-          <span className="stat-number">{solicitudes.length}</span>
-        </div>
-        <div className="stat-card">
-          <h3>Pendientes</h3>
-          <span className="stat-number">{solicitudes.filter(s => s.estado === 'PENDIENTE').length}</span>
-        </div>
-        <div className="stat-card">
-          <h3>En Proceso</h3>
-          <span className="stat-number">{solicitudes.filter(s => s.estado === 'EN_PROCESO').length}</span>
-        </div>
-        <div className="stat-card">
-          <h3>Completadas</h3>
-          <span className="stat-number">{solicitudes.filter(s => s.estado === 'COMPLETADA').length}</span>
-        </div>
-        <div className="stat-card">
-          <h3>Vencidas</h3>
-          <span className="stat-number">{solicitudes.filter(s => s.esta_vencida).length}</span>
-        </div>
-      </div>
-        </>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
       )}
-    </div>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Paciente, DNI o protocolo"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            sx={{ minWidth: 240 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel>Estado</InputLabel>
+            <Select
+              label="Estado"
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {ESTADOS_ORDEN_LIMS.map((st) => (
+                <MenuItem key={st} value={st}>
+                  {labelEstadoOrdenLims(st)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" onClick={load} disabled={loading}>
+            Actualizar
+          </Button>
+        </Stack>
+      </Paper>
+
+      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2, gap: 1 }}>
+        <Chip label={`Total: ${ordenes.length}`} />
+        {ESTADOS_ORDEN_LIMS.map((st) => (
+          <Chip
+            key={st}
+            size="small"
+            variant="outlined"
+            label={`${labelEstadoOrdenLims(st)}: ${stats[st] ?? 0}`}
+          />
+        ))}
+      </Stack>
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <Paper sx={{ p: 1 }}>
+          <OrdenesLimsTabla
+            rows={ordenes}
+            emptyMessage="No hay órdenes de laboratorio para los filtros seleccionados."
+            onVer={(id) => navigate(`/solicitudes/${id}`)}
+            accionLabel="Ver detalle"
+          />
+        </Paper>
+      )}
+    </Box>
   );
 };
 

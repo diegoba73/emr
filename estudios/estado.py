@@ -7,12 +7,15 @@ from django.core.exceptions import ValidationError
 from .models import EstudioComplementario
 
 _ALLOWED = frozenset({
+    ('asignar_turno', EstudioComplementario.Estado.SOLICITADO, EstudioComplementario.Estado.CONFIRMADO),
     ('marcar_realizado', EstudioComplementario.Estado.SOLICITADO, EstudioComplementario.Estado.REALIZADO),
+    ('marcar_realizado', EstudioComplementario.Estado.CONFIRMADO, EstudioComplementario.Estado.REALIZADO),
     ('informar', EstudioComplementario.Estado.REALIZADO, EstudioComplementario.Estado.INFORMADO),
     ('informar', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.INFORMADO),
     ('validar', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.VALIDADO),
     ('entregar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.ENTREGADO),
     ('anular', EstudioComplementario.Estado.SOLICITADO, EstudioComplementario.Estado.ANULADO),
+    ('anular', EstudioComplementario.Estado.CONFIRMADO, EstudioComplementario.Estado.ANULADO),
     ('anular', EstudioComplementario.Estado.REALIZADO, EstudioComplementario.Estado.ANULADO),
     ('anular', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.ANULADO),
     ('rectificar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.INFORMADO),

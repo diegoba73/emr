@@ -118,7 +118,7 @@ const MicrobiologiaEstudios: React.FC = () => {
         listContenedoresLims(),
       ]);
       setSolicitudesPicker(
-        sols.filter((s) => s.estado !== 'CANCELADO' && s.estado !== 'ENTREGADO').slice(0, 200)
+        sols.filter((s) => s.estado !== 'PENDIENTE').slice(0, 200)
       );
       setTiposMuestraMap(new Map(tipos.map((t) => [t.id, t])));
       setContenedoresMap(new Map(conts.map((c) => [c.id, c])));

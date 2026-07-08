@@ -177,7 +177,7 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         self.sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         self.sol.tipos_examen.add(self.te)
@@ -396,7 +396,7 @@ class TestSiembraLecturaAPI(TestCase):
         self.sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         self.sol.tipos_examen.add(self.te)
@@ -628,7 +628,7 @@ def _setup_estudio_con_lectura(suf, lab_user, med_user=None):
     )
     sol = SolicitudExamen.objects.create(
         paciente=paciente, medico_interno=medico,
-        origen_solicitud="EMR", estado="PENDIENTE",
+        origen_solicitud="AMBULATORIO_CEHTA", estado="PENDIENTE",
     )
     sol.tipos_examen.add(te)
     muestra = _muestra_recibida(sol, tm)

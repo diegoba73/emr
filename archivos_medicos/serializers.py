@@ -3,9 +3,12 @@ import os
 from rest_framework import serializers
 
 from historias_clinicas.models import Consulta
+from turnos.models import Atencion
 
 from .access import (
+    resolver_atencion_para_paciente,
     resolver_consulta_para_paciente,
+    validar_atencion_archivo_para_usuario,
     validar_consulta_archivo_para_usuario,
 )
 from .models import ArchivoMedico
@@ -22,6 +25,7 @@ def _archivo_download_path(obj, request) -> str | None:
 class ArchivoMedicoSerializer(serializers.ModelSerializer):
     paciente_id = serializers.IntegerField()
     consulta_id = serializers.IntegerField(required=False, allow_null=True)
+    atencion_id = serializers.IntegerField(required=False, allow_null=True)
     subido_por = serializers.ReadOnlyField(source='subido_por.username')
     paciente_nombre = serializers.ReadOnlyField(source='paciente.nombre_completo')
     archivo = serializers.FileField(write_only=True, required=False, allow_null=True)
@@ -34,7 +38,7 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'titulo', 'descripcion', 'tipo_archivo', 'archivo',
             'archivo_nombre', 'archivo_size', 'download_url',
-            'paciente_id', 'consulta_id', 'paciente_nombre',
+            'paciente_id', 'consulta_id', 'atencion_id', 'paciente_nombre',
             'fecha_subida', 'fecha_estudio', 'subido_por',
             'es_urgente',
         ]
@@ -87,9 +91,17 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
             return self.instance.consulta_id
         return None
 
+    def _atencion_id_efectivo(self, attrs):
+        if 'atencion_id' in attrs:
+            return attrs['atencion_id']
+        if self.instance:
+            return self.instance.atencion_id
+        return None
+
     def validate(self, attrs):
         paciente_id = self._paciente_id_efectivo(attrs)
         consulta_id = self._consulta_id_efectivo(attrs)
+        atencion_id = self._atencion_id_efectivo(attrs)
         request = self.context.get('request')
 
         if (
@@ -116,17 +128,33 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
             except ValueError as exc:
                 raise serializers.ValidationError({'consulta_id': str(exc)}) from exc
 
+        if atencion_id is not None:
+            if not request or not request.user.is_authenticated:
+                raise serializers.ValidationError({
+                    'atencion_id': 'Se requiere autenticación para asociar una atención.',
+                })
+            try:
+                atencion = resolver_atencion_para_paciente(atencion_id, paciente_id)
+                validar_atencion_archivo_para_usuario(request.user, atencion, paciente_id)
+            except ValueError as exc:
+                raise serializers.ValidationError({'atencion_id': str(exc)}) from exc
+
         return attrs
 
     def create(self, validated_data):
         paciente_id = validated_data.pop('paciente_id')
         consulta_id = validated_data.pop('consulta_id', None)
+        atencion_id = validated_data.pop('atencion_id', None)
         consulta = None
+        atencion = None
         if consulta_id is not None:
             consulta = Consulta.objects.get(pk=consulta_id)
+        if atencion_id is not None:
+            atencion = Atencion.objects.get(pk=atencion_id)
         return ArchivoMedico.objects.create(
             paciente_id=paciente_id,
             consulta=consulta,
+            atencion=atencion,
             **validated_data,
         )
 
@@ -136,6 +164,9 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
         if 'consulta_id' in validated_data:
             cid = validated_data.pop('consulta_id')
             instance.consulta = Consulta.objects.get(pk=cid) if cid else None
+        if 'atencion_id' in validated_data:
+            aid = validated_data.pop('atencion_id')
+            instance.atencion = Atencion.objects.get(pk=aid) if aid else None
         return super().update(instance, validated_data)
 
 
@@ -143,6 +174,7 @@ class ArchivoMedicoListSerializer(serializers.ModelSerializer):
     paciente_nombre = serializers.ReadOnlyField(source='paciente.nombre_completo')
     paciente_id = serializers.IntegerField(read_only=True)
     consulta_id = serializers.IntegerField(read_only=True)
+    atencion_id = serializers.IntegerField(read_only=True)
     archivo_nombre = serializers.SerializerMethodField()
     archivo_size = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
@@ -151,7 +183,7 @@ class ArchivoMedicoListSerializer(serializers.ModelSerializer):
         model = ArchivoMedico
         fields = [
             'id', 'titulo', 'descripcion', 'tipo_archivo', 'paciente_nombre',
-            'paciente_id', 'consulta_id', 'archivo_nombre', 'archivo_size',
+            'paciente_id', 'consulta_id', 'atencion_id', 'archivo_nombre', 'archivo_size',
             'download_url', 'fecha_subida', 'fecha_estudio', 'es_urgente',
         ]
 

@@ -70,7 +70,7 @@ def base_data(db):
     sol = SolicitudExamen.objects.create(
         paciente=pac,
         medico_interno=med,
-        origen_solicitud="EMR",
+        origen_solicitud="AMBULATORIO_CEHTA",
         estado="PENDIENTE",
     )
     sol.tipos_examen.add(te)
@@ -245,7 +245,7 @@ class TestEstudioMicrobiologiaModel:
         sol2 = SolicitudExamen.objects.create(
             paciente=base_data["pac"],
             medico_interno=base_data["med"],
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         m_otra = _muestra_recibida(sol2, base_data["tm"])

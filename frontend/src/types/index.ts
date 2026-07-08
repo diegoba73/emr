@@ -12,7 +12,7 @@ export interface User extends BaseModel {
   first_name: string;
   last_name: string;
   nombre_completo?: string; // Nombre completo calculado (first_name + last_name)
-  rol: 'ADMIN' | 'SECRETARIA' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO';
+  rol: 'ADMIN' | 'SECRETARIA' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO' | 'KINESIOLOGO' | 'RADIOLOGO' | 'ECOGRAFISTA' | 'FONOAUDIOLOGO';
   telefono?: string;
   is_active: boolean;
   is_staff?: boolean;
@@ -22,6 +22,8 @@ export interface User extends BaseModel {
   medico?: {
     id: number;
     matricula: string;
+    nombre?: string;
+    apellido?: string;
     especialidad?: {
       id: number;
       nombre: string;
@@ -130,6 +132,7 @@ export interface ArchivoMedico extends BaseModel {
   paciente_id: number;
   paciente_nombre?: string; // Agregado para mostrar el nombre del paciente
   consulta_id?: number;
+  atencion_id?: number;
   fecha_subida: string;
   fecha_estudio?: string;
   subido_por: string;
@@ -307,6 +310,7 @@ export interface Atencion extends BaseModel {
   estado_clinico: EstadoClinico;
   observaciones_generales?: string | null;
   consulta_ambulatoria?: ConsultaAmbulatoriaRecord | null;
+  consulta_hc_id?: number | null;
   registro_procedimiento?: RegistroProcedimientoRecord | null;
   registro_quirurgico?: RegistroQuirurgicoRecord | null;
   documentos: Documento[];
@@ -340,6 +344,13 @@ export interface Turno extends BaseModel {
   fecha_creacion?: string;
   ultima_modificacion?: string;
   atencion?: AtencionSummary | null;
+  estudio_complementario?: {
+    id: number;
+    estado: string;
+    modalidad?: string;
+    tipo_estudio_nombre?: string | null;
+    medico_solicitante_id?: number | null;
+  } | null;
 }
 
 // Historias Clínicas
@@ -368,6 +379,50 @@ export interface Consulta extends BaseModel {
   paciente_apellido?: string;
   paciente_dni?: string;
   paciente_id?: number;
+}
+
+export interface ConsultaArchivoResumen {
+  id: number;
+  titulo: string;
+  tipo_archivo: string;
+  descripcion?: string | null;
+  fecha_subida: string;
+  archivo_nombre?: string | null;
+  download_url?: string | null;
+}
+
+export interface ConsultaEstudioResumen {
+  id: number;
+  modalidad: string;
+  estado: string;
+  tipo_estudio_nombre?: string | null;
+  fecha_solicitud?: string | null;
+  descripcion_clinica?: string;
+}
+
+export interface ConsultaResultadoLabResumen {
+  id: number;
+  tipo_examen_nombre?: string | null;
+  valor_obtenido?: string | null;
+  unidad?: string | null;
+  estado?: string | null;
+  es_patologico?: boolean | null;
+}
+
+export interface ConsultaSolicitudLabResumen {
+  id: number;
+  numero?: string | null;
+  estado: string;
+  fecha_solicitud: string;
+  tipos_examen_nombres: string[];
+  paneles_nombres: string[];
+  resultados: ConsultaResultadoLabResumen[];
+}
+
+export interface ConsultaDetalle extends Consulta {
+  archivos?: ConsultaArchivoResumen[];
+  estudios_complementarios?: ConsultaEstudioResumen[];
+  solicitudes_laboratorio?: ConsultaSolicitudLabResumen[];
 }
 
 export interface DiagnosticoCIE10 extends BaseModel {

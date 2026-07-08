@@ -21,6 +21,7 @@ QA_TURNO_MOTIVO = 'QA DEMO TURNO MEDICO1-PACIENTE1'
 QA_LIMS_NUMERO = 'LAB-DEMO-QA-00001'
 QA_MUESTRA_CODIGO = 'MUE-DEMO-QA-00001'
 QA_PACIENTE_AJENO_DNI = 'QA-DEMO-AJENO-01'
+QA_RECURSO_NOMBRE = 'QA DEMO Consultorio 1'
 
 
 class Command(BaseCommand):
@@ -62,6 +63,19 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f'  → Ya existe paciente ajeno: {paciente_ajeno.dni}')
 
+        recurso_demo, recurso_created = Recurso.objects.get_or_create(
+            nombre=QA_RECURSO_NOMBRE,
+            defaults={
+                'ubicacion': Recurso.Ubicacion.ICPL,
+                'tipo_recurso': Recurso.TipoRecurso.CONSULTORIO,
+                'activo': True,
+            },
+        )
+        if recurso_created:
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Recurso demo QA: {recurso_demo.nombre}'))
+        else:
+            self.stdout.write(f'  → Ya existe recurso demo QA: {recurso_demo.nombre}')
+
         turno = Turno.objects.filter(motivo_reserva=QA_TURNO_MOTIVO).first()
         if not turno:
             inicio = timezone.now() + timedelta(days=7)
@@ -69,6 +83,7 @@ class Command(BaseCommand):
             turno = Turno.objects.create(
                 paciente=paciente_uno,
                 medico=medico_obj,
+                recurso=recurso_demo,
                 fecha_hora_inicio=inicio,
                 fecha_hora_fin=fin,
                 estado=Turno.Estado.CONFIRMADO,
@@ -76,7 +91,12 @@ class Command(BaseCommand):
             )
             self.stdout.write(self.style.SUCCESS(f'  ✓ Turno demo QA #{turno.id}'))
         else:
-            self.stdout.write(f'  → Ya existe turno demo QA #{turno.id}')
+            if turno.recurso_id is None:
+                turno.recurso = recurso_demo
+                turno.save(update_fields=['recurso'])
+                self.stdout.write(self.style.SUCCESS(f'  ✓ Turno demo QA #{turno.id} vinculado a recurso'))
+            else:
+                self.stdout.write(f'  → Ya existe turno demo QA #{turno.id}')
 
         atencion = Atencion.objects.filter(turno=turno).first()
         if not atencion:
@@ -98,7 +118,7 @@ class Command(BaseCommand):
             defaults={
                 'paciente': paciente_uno,
                 'medico_interno': medico_obj,
-                'origen_solicitud': 'EMR',
+                'origen_solicitud': 'AMBULATORIO_CEHTA',
                 'estado': 'EN_PROCESO',
                 'observaciones': 'QA DEMO - orden LIMS sintética para smoke',
             },
@@ -208,7 +228,36 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {tipo_guardia}'))
         else:
             self.stdout.write(f'  → Ya existe: {tipo_guardia}')
-        
+
+        # Recursos agendables (consultorios) — requeridos para crear turnos en la UI
+        self.stdout.write('Creando Recursos (consultorios)...')
+
+        recursos_infra = [
+            {
+                'nombre': 'Consultorio CEHTA 1',
+                'ubicacion': Recurso.Ubicacion.CEHTA,
+                'tipo_recurso': Recurso.TipoRecurso.CONSULTORIO,
+            },
+            {
+                'nombre': 'Consultorio ICPL 1',
+                'ubicacion': Recurso.Ubicacion.ICPL,
+                'tipo_recurso': Recurso.TipoRecurso.CONSULTORIO,
+            },
+        ]
+        for recurso_data in recursos_infra:
+            recurso, created = Recurso.objects.get_or_create(
+                nombre=recurso_data['nombre'],
+                defaults={
+                    'ubicacion': recurso_data['ubicacion'],
+                    'tipo_recurso': recurso_data['tipo_recurso'],
+                    'activo': True,
+                },
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f'  ✓ Creado: {recurso}'))
+            else:
+                self.stdout.write(f'  → Ya existe: {recurso}')
+
         # Nota: No hay "Laboratorio" como TipoAtencion en el modelo actual
         # Si se necesita, se puede agregar después
         

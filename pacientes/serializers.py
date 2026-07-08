@@ -41,6 +41,9 @@ class PacienteLightSerializer(serializers.ModelSerializer):
             "sexo",
             "telefono",
             "email",
+            "direccion",
+            "obra_social",
+            "numero_afiliado",
         ]
         read_only_fields = fields
 

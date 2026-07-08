@@ -2,6 +2,8 @@
 Serializers para la app laboratorio (LIMS).
 """
 import logging
+from decimal import Decimal
+
 from rest_framework import serializers
 from django.db import transaction
 from .models import (
@@ -13,6 +15,15 @@ from .models import (
 )
 from pacientes.models import Paciente
 from medicos.models import Medico
+from historias_clinicas.models import Consulta
+from laboratorio.panel_componentes_orden import ordenar_ids_por_panel, ordenar_queryset_panel
+from laboratorio.procedencia_display import resolver_procedencia_solicitud
+from laboratorio.origen_solicitud import (
+    es_origen_ambulatorio_externo,
+    inferir_origen_solicitud,
+    label_origen_solicitud,
+    normalizar_origen_solicitud,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class TipoMuestraSerializer(serializers.ModelSerializer):
     """Serializer para TipoMuestra."""
-    
+
     class Meta:
         model = TipoMuestra
         fields = [
@@ -35,9 +46,37 @@ class TipoMuestraSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id']
 
+    def validate_codigo(self, value):
+        codigo = (value or '').strip().upper()
+        if not codigo:
+            raise serializers.ValidationError('El código es obligatorio.')
+        if len(codigo) > 10:
+            raise serializers.ValidationError('Máximo 10 caracteres.')
+        qs = TipoMuestra.objects.filter(codigo__iexact=codigo)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('Ya existe un tipo de muestra con ese código.')
+        return codigo
+
+    def validate_nombre(self, value):
+        nombre = (value or '').strip()
+        if not nombre:
+            raise serializers.ValidationError('El nombre es obligatorio.')
+        return nombre
+
+
+class NullableDecimalField(serializers.DecimalField):
+    """DecimalField que trata '' como null (PATCH parcial desde UI)."""
+
+    def to_internal_value(self, data):
+        if data in ('', None):
+            return None
+        return super().to_internal_value(data)
+
 
 class TipoExamenSerializer(serializers.ModelSerializer):
-    """Serializer para TipoExamen."""
+    """Serializer para TipoExamen (catálogo LIMS)."""
     tipo_muestra_nombre = serializers.CharField(
         source='tipo_muestra_requerida.nombre',
         read_only=True
@@ -50,7 +89,17 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         queryset=TipoMuestra.objects.all(),
         help_text="ID del tipo de muestra requerida"
     )
-    
+    metodo = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    unidad_default = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    abreviatura = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    formato_informe_entrada = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    multiplicador_clinico = NullableDecimalField(
+        max_digits=16,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = TipoExamen
         fields = [
@@ -63,6 +112,7 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'tipo_muestra_codigo',
             'seccion',
             'tipo_resultado',
+            'metodo',
             'unidad_default',
             'precio',
             'rango_referencia_texto',
@@ -72,14 +122,93 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'valor_critico_max',
             'permite_resultado_texto',
             'requiere_muestra',
+            'modo_entrada',
+            'ticket_decimales',
+            'multiplicador_clinico',
+            'formato_informe_entrada',
             'activo',
         ]
         read_only_fields = [
             'id',
             'tipo_muestra_nombre',
             'tipo_muestra_codigo',
-            'requiere_muestra',
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields['codigo'].read_only = True
+
+    def validate_codigo(self, value):
+        codigo = (value or '').strip().upper()
+        if not codigo:
+            raise serializers.ValidationError('El código es obligatorio.')
+        return codigo
+
+    def validate_nombre(self, value):
+        nombre = (value or '').strip()
+        if not nombre:
+            raise serializers.ValidationError('El nombre es obligatorio.')
+        return nombre
+
+    def validate_metodo(self, value):
+        if value is None:
+            return ''
+        return (value or '').strip()
+
+    def validate_unidad_default(self, value):
+        if value is None:
+            return ''
+        return (value or '').strip()
+
+    def validate_multiplicador_clinico(self, value):
+        if value in (None, ''):
+            return Decimal('1')
+        return value
+
+    def validate(self, attrs):
+        for field in ('formato_informe_entrada', 'abreviatura', 'rango_referencia_texto'):
+            if field in attrs and attrs[field] is None:
+                attrs[field] = ''
+
+        modo = attrs.get(
+            'modo_entrada',
+            getattr(self.instance, 'modo_entrada', TipoExamen.ModoEntradaResultado.ESTANDAR),
+        )
+        if modo == TipoExamen.ModoEntradaResultado.ESTANDAR:
+            attrs['ticket_decimales'] = 0
+            attrs['multiplicador_clinico'] = Decimal('1')
+            attrs['formato_informe_entrada'] = ''
+
+        ticket_dec = attrs.get(
+            'ticket_decimales',
+            getattr(self.instance, 'ticket_decimales', 0),
+        )
+        formato = attrs.get(
+            'formato_informe_entrada',
+            getattr(self.instance, 'formato_informe_entrada', ''),
+        )
+        if modo in (
+            TipoExamen.ModoEntradaResultado.TICKET_ENTERO,
+            TipoExamen.ModoEntradaResultado.FORMULA_PORCENTAJE,
+        ):
+            if not (formato or '').strip():
+                raise serializers.ValidationError(
+                    {
+                        'formato_informe_entrada': (
+                            'Obligatorio cuando el modo de entrada es ticket o fórmula.'
+                        )
+                    }
+                )
+            if ticket_dec > 4:
+                raise serializers.ValidationError(
+                    {'ticket_decimales': 'Máximo 4 decimales implícitos.'}
+                )
+        elif modo == TipoExamen.ModoEntradaResultado.ESTANDAR and ticket_dec != 0:
+            raise serializers.ValidationError(
+                {'ticket_decimales': 'Debe ser 0 en modo estándar.'}
+            )
+        return attrs
 
 
 class PanelExamenSerializer(serializers.ModelSerializer):
@@ -107,8 +236,8 @@ class PanelExamenSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'tipos_examen_nombres']
     
     def get_tipos_examen_nombres(self, obj):
-        """Retorna los nombres de los tipos de examen del panel."""
-        return [te.nombre for te in obj.tipos_examen.all()]
+        """Retorna los nombres de los tipos de examen del panel (orden clínico)."""
+        return [te.nombre for te in ordenar_queryset_panel(obj)]
 
 
 # ============================================================================
@@ -150,6 +279,12 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
         allow_null=True,
         default=None,
     )
+    tipo_examen_muestra_codigo = serializers.CharField(
+        source="tipo_examen.tipo_muestra_requerida.codigo",
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
 
     class Meta:
         model = ResultadoExamen
@@ -177,6 +312,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'muestra_id',
             'muestra_estado',
             'tipo_muestra_nombre',
+            'tipo_examen_muestra_codigo',
         ]
         read_only_fields = [
             'id',
@@ -190,6 +326,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'muestra_id',
             'muestra_estado',
             'tipo_muestra_nombre',
+            'tipo_examen_muestra_codigo',
         ]
 
 
@@ -210,6 +347,14 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         source='paciente.dni',
         read_only=True
     )
+    paciente_email = serializers.EmailField(
+        source='paciente.email',
+        read_only=True,
+    )
+    paciente_telefono = serializers.CharField(
+        source='paciente.telefono',
+        read_only=True,
+    )
     medico_display = serializers.CharField(read_only=True)
     medico_interno_nombre = serializers.CharField(
         source='medico_interno.nombre_completo',
@@ -218,6 +363,11 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     resultados = ResultadoExamenSerializer(many=True, read_only=True)
     tipos_examen_nombres = serializers.SerializerMethodField()
     paneles_nombres = serializers.SerializerMethodField()
+    paneles_resumen = serializers.SerializerMethodField()
+    procedencia_tipo = serializers.SerializerMethodField()
+    procedencia_display = serializers.SerializerMethodField()
+    origen_solicitud_display = serializers.SerializerMethodField()
+    fecha_toma_muestra = serializers.DateTimeField(read_only=True, required=False)
     
     class Meta:
         model = SolicitudExamen
@@ -227,20 +377,32 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'paciente',
             'paciente_nombre',
             'paciente_dni',
+            'paciente_email',
+            'paciente_telefono',
             'medico_interno',
             'medico_interno_nombre',
             'medico_externo_nombre',
             'medico_display',
             'origen_solicitud',
+            'origen_solicitud_display',
             'tipos_examen',
             'tipos_examen_nombres',
             'paneles',
             'paneles_nombres',
+            'paneles_resumen',
+            'procedencia_tipo',
+            'procedencia_display',
             'estado',
             'fecha_solicitud',
+            'fecha_toma_muestra',
             'fecha_entrega_prometida',
             'observaciones',
+            'fecha_informe_enviado',
+            'informe_enviado_email',
+            'informe_enviado_whatsapp',
+            'consulta_hc',
             'resultados',
+            'orden_grupos_informe',
         ]
         read_only_fields = [
             'id',
@@ -249,6 +411,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'estado',
             'paciente_nombre',
             'paciente_dni',
+            'paciente_email',
+            'paciente_telefono',
             'medico_display',
             'medico_interno_nombre',
             'tipos_examen_nombres',
@@ -262,6 +426,37 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     def get_paneles_nombres(self, obj):
         """Retorna los nombres de los paneles."""
         return [p.nombre for p in obj.paneles.all()]
+
+    def get_paneles_resumen(self, obj):
+        """Paneles de la orden con ids de exámenes componentes (agrupación en UI)."""
+        out = []
+        for p in obj.paneles.all():
+            pares = list(p.tipos_examen.values_list("id", "codigo"))
+            out.append(
+                {
+                    "id": p.id,
+                    "codigo": p.codigo,
+                    "nombre": p.nombre,
+                    "tipos_examen_ids": ordenar_ids_por_panel(p.codigo, pares),
+                }
+            )
+        return out
+
+    def _procedencia(self, obj):
+        cached = getattr(obj, "_cached_procedencia", None)
+        if cached is None:
+            cached = resolver_procedencia_solicitud(obj)
+            obj._cached_procedencia = cached
+        return cached
+
+    def get_procedencia_tipo(self, obj):
+        return self._procedencia(obj).get("procedencia_tipo")
+
+    def get_procedencia_display(self, obj):
+        return self._procedencia(obj).get("procedencia_display")
+
+    def get_origen_solicitud_display(self, obj):
+        return label_origen_solicitud(getattr(obj, 'origen_solicitud', None))
 
 
 class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
@@ -297,6 +492,13 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True
     )
+    consulta_hc_id = serializers.PrimaryKeyRelatedField(
+        queryset=Consulta.objects.all(),
+        source='consulta_hc',
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     
     class Meta:
         model = SolicitudExamen
@@ -308,11 +510,36 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             'origen_solicitud',
             'examenes_ids',
             'paneles_ids',
+            'consulta_hc_id',
             'fecha_entrega_prometida',
             'observaciones',
         ]
         read_only_fields = ['id']
     
+    def validate_origen_solicitud(self, value):
+        normalizado = normalizar_origen_solicitud(value)
+        if value and not normalizado:
+            raise serializers.ValidationError('Origen clínico no válido.')
+        return normalizado or value
+
+    def validate(self, attrs):
+        origen = normalizar_origen_solicitud(attrs.get('origen_solicitud')) or attrs.get('origen_solicitud')
+        consulta = attrs.get('consulta_hc')
+        medico_ext = (attrs.get('medico_externo_nombre') or '').strip()
+        medico_int = attrs.get('medico_interno')
+
+        if consulta and es_origen_ambulatorio_externo(origen):
+            raise serializers.ValidationError(
+                {'origen_solicitud': 'Una orden vinculada a consulta no puede ser ambulatorio externo.'}
+            )
+        if es_origen_ambulatorio_externo(origen) and not medico_ext and not medico_int:
+            raise serializers.ValidationError(
+                {'medico_externo_nombre': 'Indique el médico solicitante de la receta externa.'}
+            )
+        if es_origen_ambulatorio_externo(origen):
+            attrs['medico_interno'] = None
+        return attrs
+
     @transaction.atomic
     def create(self, validated_data):
         """
@@ -325,6 +552,14 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         # Extraer datos anidados
         examenes_ids = validated_data.pop('examenes_ids', [])
         paneles_ids = validated_data.pop('paneles_ids', [])
+        origen_explicito = validated_data.pop('origen_solicitud', None)
+        paciente = validated_data.get('paciente')
+        consulta_hc = validated_data.get('consulta_hc')
+        validated_data['origen_solicitud'] = inferir_origen_solicitud(
+            paciente_id=paciente.pk,
+            consulta_hc=consulta_hc,
+            origen_explicito=origen_explicito,
+        )
         
         # Crear la Solicitud
         solicitud = SolicitudExamen.objects.create(**validated_data)
@@ -355,7 +590,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         for panel_id in paneles_ids:
             try:
                 panel = PanelExamen.objects.get(id=panel_id)
-                tipos_examen_panel = panel.tipos_examen.all()
+                tipos_examen_panel = ordenar_queryset_panel(panel)
                 
                 for tipo_examen in tipos_examen_panel:
                     # Evitar duplicados: si ya se creó un resultado para este tipo_examen, no crear otro
@@ -373,4 +608,30 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         return solicitud
 
 
+class TomarMuestraItemSerializer(serializers.Serializer):
+    """Ítem de toma física al marcar la orden en etapa de muestra."""
+
+    tipo_muestra_id = serializers.IntegerField()
+    tipo_contenedor_id = serializers.IntegerField(required=False, allow_null=True)
+    observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class TomarMuestraOrdenSerializer(serializers.Serializer):
+    """Payload opcional para POST …/tomar-muestra/ (crear + tomar muestras físicas)."""
+
+    muestras = TomarMuestraItemSerializer(many=True, required=False, allow_empty=True)
+
+
+class EnviarInformeOrdenSerializer(serializers.Serializer):
+    """POST …/enviar-informe/ — canales de entrega al paciente."""
+
+    email = serializers.BooleanField(required=False, default=False)
+    whatsapp = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if not attrs.get("email") and not attrs.get("whatsapp"):
+            raise serializers.ValidationError(
+                "Indique al menos un canal: email o whatsapp."
+            )
+        return attrs
 

@@ -25,7 +25,7 @@ describe('limsMicroUx', () => {
       muestra(3, 'CONSERVADA'),
       muestra(4, 'EN_PROCESO'),
     ];
-    expect(filterMuestrasProcesablesMicro(list).map((m) => m.id)).toEqual([1, 3, 4]);
+    expect(filterMuestrasProcesablesMicro(list).map((m) => m.id)).toEqual([1, 2, 3, 4]);
   });
 
   it('formatSolicitudMicroLabel without codigo_barra', () => {
@@ -36,7 +36,7 @@ describe('limsMicroUx', () => {
       paciente_nombre: 'Paciente Test',
       estado: 'EN_PROCESO',
       fecha_solicitud: '2026-01-01',
-      origen_solicitud: 'EMR',
+      origen_solicitud: 'AMBULATORIO_CEHTA',
       medico_interno: null,
     } as SolicitudExamenLims;
     expect(formatSolicitudMicroLabel(s)).toBe('#42 · SOL-001 · Paciente Test · EN_PROCESO');

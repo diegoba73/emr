@@ -143,3 +143,13 @@ class TestPacienteSerializerCamposDerivados:
         paciente = Paciente.objects.create(dni="SER-DRV-1")
         data = PacienteLightSerializer(paciente).data
         assert data["nombre_completo"] == "Paciente SER-DRV-1"
+
+    def test_light_serializer_expone_obra_social(self):
+        paciente = Paciente.objects.create(
+            dni="SER-DRV-2",
+            obra_social="PAMI",
+            numero_afiliado="150823406404-00",
+        )
+        data = PacienteLightSerializer(paciente).data
+        assert data["obra_social"] == "PAMI"
+        assert data["numero_afiliado"] == "150823406404-00"

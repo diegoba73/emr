@@ -3,9 +3,45 @@
  */
 import { Turno, User } from '../types';
 import { isEmrStaffOrAdmin } from './permissions';
+import { isProfesionalEstudioRole, ROLES_ESTUDIO_COMPLEMENTARIO } from './roles';
+import { isTurnoEstudio } from './recursosEstudio';
 
 export function normalizeRol(user?: User | null): string {
   return (user?.rol || '').toUpperCase();
+}
+
+/** True si el médico ya inició la atención clínica vinculada al turno. */
+export function turnoTieneAtencionClinica(turno?: Turno | null): boolean {
+  if (!turno) return false;
+  return Boolean(turno.atencion?.id);
+}
+
+/** Paciente puede mutar turno propio solo antes de finalizar (consulta o estudio). */
+export function pacientePuedeMutarTurno(user?: User | null, turno?: Turno | null): boolean {
+  if (!user || normalizeRol(user) !== 'PACIENTE') return true;
+  if (!turno) return true;
+  const pacienteId = user.paciente?.id;
+  if (!pacienteId) return false;
+  const ownsTurno =
+    turno.paciente?.id === pacienteId || turno.paciente_id === pacienteId;
+  if (!ownsTurno) return false;
+  const st = (turno.estado || '').toUpperCase();
+  if (st === 'REALIZADO' || st === 'CANCELADO') return false;
+  if (turnoTieneAtencionClinica(turno)) return false;
+  return true;
+}
+
+/** True si el médico puede operar el turno (consulta propia o estudio vinculado). */
+export function medicoEsDuenoTurno(user?: User | null, turno?: Turno | null): boolean {
+  if (!user || !turno) return false;
+  const medicoId = user.medico?.id;
+  if (!medicoId) return false;
+  if (turno.medico?.id === medicoId || turno.medico_id === medicoId) return true;
+  if (turno.estudio_complementario?.medico_solicitante_id === medicoId) return true;
+  if (isTurnoEstudio(turno) && !turno.medico && !turno.medico_id) {
+    return true;
+  }
+  return false;
 }
 
 export function canMutateTurnosGlobally(user?: User | null): boolean {
@@ -15,13 +51,24 @@ export function canMutateTurnosGlobally(user?: User | null): boolean {
   return r === 'ADMIN' || r === 'SECRETARIA';
 }
 
-/** Lectura de agenda en pantalla /turnos (enfermería incluida). */
+/** Lectura de agenda en pantalla /turnos. */
 export function canViewTurnosAgenda(user?: User | null): boolean {
   if (!user) return false;
   if (isEmrStaffOrAdmin(user)) return true;
   const r = normalizeRol(user);
-  return ['ADMIN', 'SECRETARIA', 'MEDICO', 'PACIENTE', 'ENFERMERIA'].includes(r);
+  return [
+    'ADMIN',
+    'SECRETARIA',
+    'MEDICO',
+    'PACIENTE',
+    'ENFERMERIA',
+    'LABORATORIO',
+    ...ROLES_ESTUDIO_COMPLEMENTARIO.map((rol) => rol.toUpperCase()),
+  ].includes(r);
 }
+
+/** Alias para navegación / rutas. */
+export const canAccessTurnosAgenda = canViewTurnosAgenda;
 
 export function canCreateTurno(user?: User | null): boolean {
   if (!user) return false;
@@ -38,24 +85,21 @@ export function canEditTurno(user?: User | null, turno?: Turno | null): boolean 
   }
   const r = normalizeRol(user);
   if (r === 'MEDICO') {
-    const medicoId = user.medico?.id;
-    if (!medicoId) return false;
+    if (!user.medico?.id) return false;
     if (!turno) return true;
-    return turno.medico?.id === medicoId || turno.medico_id === medicoId;
+    return medicoEsDuenoTurno(user, turno);
   }
   if (r === 'PACIENTE') {
-    const pacienteId = user.paciente?.id;
-    if (!pacienteId) return false;
-    if (!turno) return true;
-    return turno.paciente?.id === pacienteId || turno.paciente_id === pacienteId;
+    return pacientePuedeMutarTurno(user, turno);
   }
   return false;
 }
 
-/** Enfermería: ver agenda global sin crear/editar. Laboratorio: sin pantalla operativa. */
+/** Enfermería, laboratorio y profesionales de estudio: ver agenda global sin crear/editar. */
 export function isAgendaReadOnlyRole(user?: User | null): boolean {
   const r = normalizeRol(user);
-  return r === 'ENFERMERIA';
+  if (r === 'ENFERMERIA' || r === 'LABORATORIO') return true;
+  return isProfesionalEstudioRole(r.toLowerCase());
 }
 
 export function isLaboratorioRole(user?: User | null): boolean {
@@ -85,7 +129,7 @@ export function getCurrentPacienteId(user?: User | null): number | undefined {
 
 /** POST /api/turnos/{id}/confirmar/ — RESERVADO → CONFIRMADO */
 export function canConfirmarTurno(user?: User | null, turno?: Turno | null): boolean {
-  if (!user || !turno || isAgendaReadOnlyRole(user) || isLaboratorioRole(user)) return false;
+  if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   if (normalizeRol(user) === 'PACIENTE') return false;
   if (!canEditTurno(user, turno)) return false;
   const st = (turno.estado || '').toUpperCase();
@@ -94,18 +138,16 @@ export function canConfirmarTurno(user?: User | null, turno?: Turno | null): boo
 
 /** POST /api/turnos/{id}/cancelar/ — motivo obligatorio en API */
 export function canCancelarTurnoAccion(user?: User | null, turno?: Turno | null): boolean {
-  if (!user || !turno || isAgendaReadOnlyRole(user) || isLaboratorioRole(user)) return false;
+  if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   const st = (turno.estado || '').toUpperCase();
   if (st === 'REALIZADO' || st === 'CANCELADO') return false;
   if (canMutateTurnosGlobally(user)) return true;
   const r = normalizeRol(user);
   if (r === 'MEDICO') {
-    const medicoId = user.medico?.id;
-    return Boolean(medicoId && (turno.medico?.id === medicoId || turno.medico_id === medicoId));
+    return medicoEsDuenoTurno(user, turno);
   }
   if (r === 'PACIENTE') {
-    const pacienteId = user.paciente?.id;
-    return Boolean(pacienteId && (turno.paciente?.id === pacienteId || turno.paciente_id === pacienteId));
+    return pacientePuedeMutarTurno(user, turno);
   }
   return false;
 }
@@ -116,52 +158,43 @@ export function canPatchEstadoEnFormulario(_user?: User | null): boolean {
 }
 
 export function canReprogramarTurno(user?: User | null, turno?: Turno | null): boolean {
-  if (!user || !turno || isAgendaReadOnlyRole(user) || isLaboratorioRole(user)) return false;
+  if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   const st = (turno.estado || '').toUpperCase();
   if (st === 'CANCELADO' || st === 'REALIZADO') return false;
   if (canMutateTurnosGlobally(user)) return true;
   const r = normalizeRol(user);
   if (r === 'MEDICO') {
-    const medicoId = user.medico?.id;
-    return Boolean(medicoId && (turno.medico?.id === medicoId || turno.medico_id === medicoId));
+    return medicoEsDuenoTurno(user, turno);
   }
   if (r === 'PACIENTE') {
-    const pacienteId = user.paciente?.id;
-    return Boolean(pacienteId && (turno.paciente?.id === pacienteId || turno.paciente_id === pacienteId));
+    return pacientePuedeMutarTurno(user, turno);
   }
   return false;
 }
 
 /** POST marcar-realizado — médico solo si CONFIRMADO; admin/secretaría también desde RESERVADO. */
 export function canMarcarRealizadoTurno(user?: User | null, turno?: Turno | null): boolean {
-  if (!user || !turno || isAgendaReadOnlyRole(user) || isLaboratorioRole(user)) return false;
+  if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   const st = (turno.estado || '').toUpperCase();
   if (st === 'REALIZADO' || st === 'CANCELADO' || st === 'DISPONIBLE') return false;
   if (canMutateTurnosGlobally(user)) return st === 'RESERVADO' || st === 'CONFIRMADO';
   if (normalizeRol(user) === 'MEDICO') {
-    const medicoId = user.medico?.id;
-    return Boolean(
-      medicoId &&
-        (turno.medico?.id === medicoId || turno.medico_id === medicoId) &&
-        st === 'CONFIRMADO',
-    );
+    return medicoEsDuenoTurno(user, turno) && st === 'CONFIRMADO';
   }
   return false;
 }
 
 /** POST iniciar-atencion — flujo clínico C5.10.1 (médico propio; admin/staff; no secretaría). */
 export function canIniciarAtencionTurno(user?: User | null, turno?: Turno | null): boolean {
-  if (!user || !turno || isAgendaReadOnlyRole(user) || isLaboratorioRole(user)) return false;
+  if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   if (normalizeRol(user) === 'PACIENTE' || normalizeRol(user) === 'SECRETARIA') return false;
   const st = (turno.estado || '').toUpperCase();
   if (st === 'CANCELADO' || st === 'DISPONIBLE') return false;
   if (isEmrStaffOrAdmin(user)) return true;
   if (normalizeRol(user) === 'MEDICO') {
-    const medicoId = user.medico?.id;
-    return Boolean(
-      medicoId &&
-        (turno.medico?.id === medicoId || turno.medico_id === medicoId) &&
-        (st === 'CONFIRMADO' || st === 'RESERVADO' || st === 'REALIZADO'),
+    return (
+      medicoEsDuenoTurno(user, turno) &&
+      (st === 'CONFIRMADO' || st === 'RESERVADO' || st === 'REALIZADO')
     );
   }
   return false;
@@ -169,14 +202,13 @@ export function canIniciarAtencionTurno(user?: User | null, turno?: Turno | null
 
 /** POST marcar-no-asistio — RESERVADO/CONFIRMADO → CANCELADO con metadata diferenciada. */
 export function canMarcarNoAsistioTurno(user?: User | null, turno?: Turno | null): boolean {
-  if (!user || !turno || isAgendaReadOnlyRole(user) || isLaboratorioRole(user)) return false;
+  if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   if (normalizeRol(user) === 'PACIENTE') return false;
   const st = (turno.estado || '').toUpperCase();
   if (st !== 'RESERVADO' && st !== 'CONFIRMADO') return false;
   if (canMutateTurnosGlobally(user)) return true;
   if (normalizeRol(user) === 'MEDICO') {
-    const medicoId = user.medico?.id;
-    return Boolean(medicoId && (turno.medico?.id === medicoId || turno.medico_id === medicoId));
+    return medicoEsDuenoTurno(user, turno);
   }
   return false;
 }

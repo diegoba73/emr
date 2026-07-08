@@ -274,16 +274,16 @@ class TestPacienteAPIPrivacidad:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["results"] == []
 
-    def test_laboratorio_no_lista_pacientes(self):
+    def test_laboratorio_lista_pacientes(self):
         Paciente.objects.create(dni="PRIV-LAB-0", nombre="A", apellido="B")
         client = APIClient()
         client.force_authenticate(user=_laboratorio_user("lab.priv.list"))
         response = client.get("/api/pacientes/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["results"] == []
+        assert len(response.data["results"]) == 1
 
-    def test_laboratorio_is_staff_no_lista_pacientes(self):
-        """Operadores LIMS suelen tener is_staff=True; no deben leer PHI EMR global."""
+    def test_laboratorio_is_staff_lista_pacientes_sin_bypass_emr(self):
+        """Operadores LIMS con is_staff no escalan a PHI vía staff; lectura operativa por rol."""
         Paciente.objects.create(dni="PRIV-LAB-ST-0", nombre="Ana", apellido="Demo")
         user = User.objects.create_user(
             username="lab.staff.phi",
@@ -296,9 +296,9 @@ class TestPacienteAPIPrivacidad:
         client.force_authenticate(user=user)
         response = client.get("/api/pacientes/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["results"] == []
+        assert len(response.data["results"]) == 1
 
-    def test_laboratorio_is_staff_buscar_sin_phi(self):
+    def test_laboratorio_is_staff_buscar_pacientes(self):
         Paciente.objects.create(dni="PRIV-LAB-ST-1", nombre="Juan", apellido="Perez")
         user = User.objects.create_user(
             username="lab.staff.busq",
@@ -311,9 +311,9 @@ class TestPacienteAPIPrivacidad:
         client.force_authenticate(user=user)
         response = client.get("/api/pacientes/buscar/?q=Perez")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["results"] == []
+        assert len(response.data["results"]) == 1
 
-    def test_laboratorio_is_staff_no_retrieve_paciente(self):
+    def test_laboratorio_is_staff_retrieve_paciente(self):
         paciente = Paciente.objects.create(dni="PRIV-LAB-ST-2", nombre="X", apellido="Y")
         user = User.objects.create_user(
             username="lab.staff.det",
@@ -325,7 +325,8 @@ class TestPacienteAPIPrivacidad:
         client = APIClient()
         client.force_authenticate(user=user)
         response = client.get(f"/api/pacientes/{paciente.id}/")
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["id"] == paciente.id
 
 
 @pytest.mark.django_db
@@ -351,3 +352,32 @@ class TestPacienteAPIDelete:
 
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
         assert Paciente.objects.filter(pk=paciente.pk).exists()
+
+
+@pytest.mark.django_db
+class TestPacienteAPIReadOnlyDemographics:
+    def test_paciente_no_puede_patch_propio_perfil(self):
+        user = _paciente_user("pac.readonly.patch")
+        paciente = Paciente.objects.create(
+            dni="PAC-RO-1",
+            nombre="Ana",
+            apellido="Paciente",
+            user=user,
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.patch(
+            f"/api/pacientes/{paciente.id}/",
+            {"telefono": "1111111111"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        paciente.refresh_from_db()
+        assert paciente.telefono != "1111111111"
+
+    def test_paciente_no_puede_crear_paciente(self):
+        user = _paciente_user("pac.readonly.create")
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.post("/api/pacientes/", _payload_create(dni="PAC-RO-2"), format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN

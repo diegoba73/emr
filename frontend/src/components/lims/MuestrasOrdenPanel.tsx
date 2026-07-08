@@ -35,6 +35,8 @@ import MuestraAcciones from './MuestraAcciones';
 export interface MuestrasOrdenPanelProps {
   solicitudId: number;
   solicitudNumero?: string | null;
+  /** Oculta alta manual mientras la orden está pendiente (toma desde acciones de orden). */
+  ordenEstado?: string;
   canOperate: boolean;
   /** Incrementar para forzar recarga tras cambios externos (ej. carga de resultados). */
   reloadToken?: number;
@@ -43,6 +45,7 @@ export interface MuestrasOrdenPanelProps {
 const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   solicitudId,
   solicitudNumero,
+  ordenEstado,
   canOperate,
   reloadToken = 0,
 }) => {
@@ -60,7 +63,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
     try {
       const [m, t, c] = await Promise.all([
         listMuestrasPorSolicitud(solicitudId, solicitudNumero),
-        listTiposMuestraLims(),
+        listTiposMuestraLims({ activo: true }),
         listContenedoresLims(),
       ]);
       setRows(m);
@@ -110,16 +113,23 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
     );
   }
 
+  const showAlta = canOperate && ordenEstado !== 'PENDIENTE';
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Muestras</Typography>
-        {canOperate && (
+        {showAlta && (
           <Button variant="contained" size="small" onClick={() => setOpenAlta(true)}>
             Registrar muestra
           </Button>
         )}
       </Box>
+      {canOperate && ordenEstado === 'PENDIENTE' && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Usá el botón <strong>Tomar muestra</strong> en acciones de orden para registrar la toma física.
+        </Typography>
+      )}
 
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">

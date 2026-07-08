@@ -349,6 +349,8 @@ class AtencionService:
         if tipo_atencion == Recurso.TipoRecurso.CONSULTORIO:
             # Crear ConsultaAmbulatoria
             ConsultaAmbulatoria.objects.create(atencion=atencion)
+            from historias_clinicas.services import ensure_consulta_hc_desde_atencion
+            ensure_consulta_hc_desde_atencion(atencion)
             logger.info("ConsultaAmbulatoria creada.")
             
         elif tipo_atencion == Recurso.TipoRecurso.SALA_PROCEDIMIENTO:

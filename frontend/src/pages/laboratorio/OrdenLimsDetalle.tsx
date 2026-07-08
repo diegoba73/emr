@@ -8,7 +8,6 @@ import {
   Tabs,
   Typography,
   CircularProgress,
-  Divider,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -18,22 +17,27 @@ import {
   downloadInformeLimsPdf,
   getSolicitudExamen,
   listMuestrasPorSolicitud,
-  postCancelarOrden,
-  postMarcarEntregado,
-  postTomarMuestraOrden,
-  postValidarOrden,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessLimsModule,
   canDownloadInformeLimsPdf,
+  canEnviarInformeLims,
   canOperateLims,
-  canValidarOrdenLims,
 } from '../../utils/limsAccess';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
-import MuestrasOrdenPanel from '../../components/lims/MuestrasOrdenPanel';
+import {
+  estadoOrdenColor,
+  labelEstadoOrdenLims,
+  ordenPuedeCargarResultados,
+  ordenPuedeCorregirResultados,
+  ordenPuedeEnviarInforme,
+} from '../../utils/limsEstadosOrden';
+import { countResultadosConValor, ordenResultadosCompletos } from '../../utils/limsOrdenResultados';
 import CargaResultadosLims from '../../components/lims/CargaResultadosLims';
-import ResultadosOrdenLista from '../../components/lims/ResultadosOrdenLista';
+import OrdenLimsResumenPanel from '../../components/lims/OrdenLimsResumenPanel';
+import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
+import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDialog';
 
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,15 +48,20 @@ const OrdenLimsDetalle: React.FC = () => {
   const [muestras, setMuestras] = useState<MuestraTransaccional[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [reloadToken, setReloadToken] = useState(0);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [openTomarMuestra, setOpenTomarMuestra] = useState(false);
+  const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
+  const [editandoResultados, setEditandoResultados] = useState(false);
 
   const allowed = canAccessLimsModule(currentUser);
   const canOp = canOperateLims(currentUser);
-  const canVal = canValidarOrdenLims(currentUser);
+  const canEnviar = canEnviarInformeLims(currentUser);
   const canPdf = canDownloadInformeLimsPdf(currentUser);
 
-  const bump = () => setReloadToken((x) => x + 1);
+  const refreshMuestras = async (oid: number, numero?: string | null) => {
+    const m = await listMuestrasPorSolicitud(oid, numero ?? undefined);
+    setMuestras(m);
+  };
 
   const loadAll = useCallback(async () => {
     if (!allowed) {
@@ -89,23 +98,6 @@ const OrdenLimsDetalle: React.FC = () => {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
-
-  const refreshMuestras = async (oid: number, numero?: string | null) => {
-    const m = await listMuestrasPorSolicitud(oid, numero ?? undefined);
-    setMuestras(m);
-    bump();
-  };
-
-  const runOrden = async (fn: () => Promise<SolicitudExamenLims>) => {
-    try {
-      const o = await fn();
-      setOrden(o);
-      await refreshMuestras(o.id, o.numero);
-      toast.success('Orden actualizada');
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden));
-    }
-  };
 
   const handleDownloadPdf = async () => {
     if (!orden) return;
@@ -148,18 +140,38 @@ const OrdenLimsDetalle: React.FC = () => {
   }
 
   const e = orden.estado;
+  const resultadosCompletos = ordenResultadosCompletos(orden);
+  const progreso = countResultadosConValor(orden);
+  const enProceso = ordenPuedeCargarResultados(e);
+  const informadoParcial = e === 'INFORMADO_PARCIAL';
+  const finalizada = e === 'FINALIZADO';
+  const puedeCorregir = ordenPuedeCorregirResultados(e);
+  const puedeEnviarInforme = ordenPuedeEnviarInforme(e) && progreso.conValor > 0;
+  const informeEnviado = Boolean(orden.fecha_informe_enviado);
 
   return (
     <Box sx={{ p: 2 }}>
-      <Button size="small" onClick={() => navigate('/laboratorio/ordenes')} sx={{ mb: 1 }}>
-        ← Volver al listado
+      <Button size="small" onClick={() => navigate(-1)} sx={{ mb: 1 }}>
+        ← Volver
       </Button>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h5">Orden {orden.numero || orden.id}</Typography>
-        <Chip label={orden.estado} color="primary" />
-        <Typography variant="body2" color="text.secondary">
-          Origen: {orden.origen_solicitud}
-        </Typography>
+        <Chip label={labelEstadoOrdenLims(e)} color={estadoOrdenColor(e)} />
+        {!resultadosCompletos && progreso.conValor > 0 && (
+          <Chip
+            size="small"
+            label={`${progreso.conValor}/${progreso.total} resultados`}
+            variant="outlined"
+          />
+        )}
+        {informeEnviado && (
+          <Chip size="small" label="Informe enviado" color="info" variant="outlined" />
+        )}
+        {orden.procedencia_display && (
+          <Typography variant="body2" color="text.secondary">
+            {orden.procedencia_display}
+          </Typography>
+        )}
       </Box>
 
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -168,38 +180,78 @@ const OrdenLimsDetalle: React.FC = () => {
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {canOp && e === 'PENDIENTE' && (
-            <Button variant="outlined" onClick={() => runOrden(() => postTomarMuestraOrden(orden.id))}>
-              Tomar muestra (orden)
+            <Button variant="outlined" onClick={() => setOpenTomarMuestra(true)}>
+              Tomar muestra
             </Button>
           )}
-          {canOp && ['PENDIENTE', 'TOMA_MUESTRA', 'EN_PROCESO'].includes(e) && (
-            <Button color="error" variant="outlined" onClick={() => runOrden(() => postCancelarOrden(orden.id))}>
-              Cancelar orden
+          {(enProceso || informadoParcial) && canOp && !resultadosCompletos && (
+            <Button variant="contained" onClick={() => setTab(1)}>
+              Cargar resultados
             </Button>
           )}
-          {canVal && e === 'EN_PROCESO' && (
-            <Button color="success" variant="contained" onClick={() => runOrden(() => postValidarOrden(orden.id))}>
-              Validar orden
+          {puedeEnviarInforme && resultadosCompletos && canEnviar && (
+            <Button variant="contained" color="primary" onClick={() => setOpenEnviarInforme(true)}>
+              Enviar informe
             </Button>
           )}
-          {canOp && e === 'VALIDADO' && (
-            <Button variant="contained" onClick={() => runOrden(() => postMarcarEntregado(orden.id))}>
-              Marcar entregado
+          {puedeEnviarInforme && !resultadosCompletos && canEnviar && (
+            <Button variant="contained" color="info" onClick={() => setOpenEnviarInforme(true)}>
+              Enviar informe parcial
             </Button>
           )}
-          {canPdf && (
+          {puedeEnviarInforme && canPdf && (
+            <Button variant="outlined" disabled={downloadingPdf} onClick={handleDownloadPdf}>
+              {downloadingPdf
+                ? 'Descargando…'
+                : informadoParcial
+                  ? 'Descargar informe parcial PDF'
+                  : 'Descargar informe PDF'}
+            </Button>
+          )}
+          {puedeCorregir && resultadosCompletos && canOp && !editandoResultados && (
             <Button
               variant="outlined"
-              disabled={downloadingPdf}
-              onClick={handleDownloadPdf}
+              onClick={() => {
+                setEditandoResultados(true);
+                setTab(1);
+              }}
             >
-              {downloadingPdf ? 'Descargando…' : 'Descargar informe PDF'}
+              Modificar resultados
+            </Button>
+          )}
+          {editandoResultados && (
+            <Button variant="outlined" onClick={() => setEditandoResultados(false)}>
+              Cancelar edición
             </Button>
           )}
         </Box>
-        {canPdf && !['VALIDADO', 'ENTREGADO'].includes(e) && (
+        {canOp && e === 'PENDIENTE' && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            Informe PDF básico (vista derivada; puede incluir resultados en curso).
+            Pendiente de extracción. Al tomar muestra registrás los tipos de tubo y la orden pasa a{' '}
+            <strong>En proceso</strong>.
+          </Typography>
+        )}
+        {(enProceso || informadoParcial) && !resultadosCompletos && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+            {informadoParcial ? (
+              <>
+                Orden <strong>informada parcialmente</strong> ({progreso.conValor} de {progreso.total}{' '}
+                resultados). El PDF refleja solo lo cargado. Seguí completando en Resultados; al cerrar
+                todos los valores la orden pasa a <strong>Finalizado</strong>.
+              </>
+            ) : (
+              <>
+                Podés guardar resultados de a poco en Resultados. Si el médico solicita anticipar la
+                entrega, usá <strong>Guardar e informar parcialmente</strong> y luego{' '}
+                <strong>Enviar informe parcial</strong>.
+              </>
+            )}
+          </Typography>
+        )}
+        {finalizada && resultadosCompletos && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+            Resultados completos. Usá <strong>Enviar informe</strong> para entregar el PDF por email o
+            WhatsApp. Podés corregir valores con <strong>Modificar resultados</strong> si hace falta.
           </Typography>
         )}
         {!canOp && (
@@ -211,65 +263,54 @@ const OrdenLimsDetalle: React.FC = () => {
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Resumen" />
-        <Tab label="Muestras" />
         <Tab label="Resultados" />
       </Tabs>
 
-      {tab === 0 && (
-        <Paper sx={{ p: 2 }}>
-          <Typography>
-            <strong>Paciente:</strong> {orden.paciente_nombre || orden.paciente}{' '}
-            {orden.paciente_dni ? `(DNI ${orden.paciente_dni})` : ''}
-          </Typography>
-          <Typography sx={{ mt: 1 }}>
-            <strong>Médico:</strong> {orden.medico_display || orden.medico_interno_nombre || '—'}
-          </Typography>
-          <Typography sx={{ mt: 1 }}>
-            <strong>Tipos:</strong> {(orden.tipos_examen_nombres || []).join(', ') || '—'}
-          </Typography>
-          <Typography sx={{ mt: 1 }}>
-            <strong>Paneles:</strong> {(orden.paneles_nombres || []).join(', ') || '—'}
-          </Typography>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="body2" color="text.secondary">
-            {orden.observaciones || 'Sin observaciones.'}
-          </Typography>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle1" gutterBottom>
-            Resultados
-          </Typography>
-          <ResultadosOrdenLista resultados={orden.resultados || []} muestras={muestras} />
-        </Paper>
-      )}
+      {tab === 0 && <OrdenLimsResumenPanel orden={orden} />}
 
       {tab === 1 && (
-        <MuestrasOrdenPanel
-          solicitudId={orden.id}
-          solicitudNumero={orden.numero}
+        <CargaResultadosLims
+          orden={orden}
+          muestras={muestras}
           canOperate={canOp}
-          reloadToken={reloadToken}
+          permitirEdicion={
+            ((enProceso || informadoParcial) && !resultadosCompletos) ||
+            (puedeCorregir && resultadosCompletos && editandoResultados)
+          }
+          onGuardado={async (o) => {
+            setOrden(o);
+            await refreshMuestras(o.id, o.numero);
+            try {
+              const fresh = await getSolicitudExamen(o.id);
+              setOrden(fresh);
+              if (fresh.estado === 'FINALIZADO' && ordenResultadosCompletos(fresh)) {
+                setEditandoResultados(false);
+              }
+            } catch {
+              if (ordenResultadosCompletos(o)) {
+                setEditandoResultados(false);
+              }
+            }
+          }}
         />
       )}
 
-      {tab === 2 && (
-        <Box>
-          <CargaResultadosLims
-            orden={orden}
-            muestras={muestras}
-            canOperate={canOp}
-            onGuardado={async (o) => {
-              setOrden(o);
-              await refreshMuestras(o.id, o.numero);
-              try {
-                const fresh = await getSolicitudExamen(o.id);
-                setOrden(fresh);
-              } catch {
-                /* respuesta de cargar-resultados ya trae snapshots */
-              }
-            }}
-          />
-        </Box>
-      )}
+      <TomarMuestraOrdenDialog
+        open={openTomarMuestra}
+        orden={orden}
+        muestrasExistentes={muestras}
+        onClose={() => setOpenTomarMuestra(false)}
+        onSuccess={async (o) => {
+          setOrden(o);
+          await refreshMuestras(o.id, o.numero);
+        }}
+      />
+      <EnviarInformeOrdenDialog
+        open={openEnviarInforme}
+        orden={orden}
+        onClose={() => setOpenEnviarInforme(false)}
+        onSuccess={(o) => setOrden(o)}
+      />
     </Box>
   );
 };

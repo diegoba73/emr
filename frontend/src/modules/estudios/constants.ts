@@ -11,6 +11,7 @@ export const MODALIDAD_OPTIONS: { value: EstudioModalidad; label: string }[] = [
 
 export const ESTADO_LABELS: Record<EstudioEstado, string> = {
   SOLICITADO: 'Solicitado',
+  CONFIRMADO: 'Confirmado',
   REALIZADO: 'Realizado',
   INFORMADO: 'Informado',
   VALIDADO: 'Validado',
@@ -23,6 +24,7 @@ export const ESTADO_CHIP_COLOR: Record<
   'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'secondary'
 > = {
   SOLICITADO: 'info',
+  CONFIRMADO: 'success',
   REALIZADO: 'primary',
   INFORMADO: 'warning',
   VALIDADO: 'secondary',

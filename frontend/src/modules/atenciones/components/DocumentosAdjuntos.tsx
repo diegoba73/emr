@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -16,80 +16,122 @@ import {
   TextField,
   MenuItem,
   Chip,
+  CircularProgress,
+  Alert,
+  ThemeProvider,
 } from '@mui/material';
 import { CloudUpload, Download } from '@mui/icons-material';
-import { Documento, TipoDocumento } from '../../../types';
-import { useUploadDocumentoMutation } from '../hooks';
-import { getTiposDocumento } from '../../../services/apiService';
-import { apiService } from '../../../services/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { ArchivoMedico } from '../../../types';
+import {
+  createArchivoMedico,
+  downloadArchivoMedico,
+  getArchivosPorAtencion,
+  getArchivosPorConsulta,
+  getTiposArchivo,
+} from '../../../services/apiService';
+import { getSafeApiErrorMessage } from '../../../utils/apiError';
+import {
+  clinicalDrawerDialogProps,
+  clinicalDrawerDialogContentSx,
+  useClinicalDrawerDialogTheme,
+} from '../../../utils/layerZIndex';
+import ArchivoMedicoPreviewDialog from '../../../components/archivos/ArchivoMedicoPreviewDialog';
 
 interface DocumentosAdjuntosProps {
   atencionId: number;
-  documentos: Documento[] | { results: Documento[] } | null | undefined;
+  pacienteId: number;
+  consultaHcId?: number | null;
   canEdit: boolean;
 }
 
-interface TipoDocumentoOption {
-  value: TipoDocumento;
+type CategoriaArchivo = {
+  value: ArchivoMedico['tipo_archivo'];
   label: string;
-}
+};
 
-const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, documentos, canEdit }) => {
+const CATEGORIAS_ARCHIVO: CategoriaArchivo[] = [
+  { value: 'PDF', label: 'Informe / PDF' },
+  { value: 'FOTO_CLINICA', label: 'Imagen clínica' },
+  { value: 'RAYOS_X', label: 'Rayos X' },
+  { value: 'TOMOGRAFIA', label: 'Tomografía' },
+  { value: 'RESONANCIA', label: 'Resonancia' },
+  { value: 'ULTRASONIDO', label: 'Ultrasonido' },
+  { value: 'OTRO', label: 'Otro' },
+];
+
+const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
+  atencionId,
+  pacienteId,
+  consultaHcId,
+  canEdit,
+}) => {
+  const queryClient = useQueryClient();
+  const dialogTheme = useClinicalDrawerDialogTheme();
+  const [archivos, setArchivos] = useState<ArchivoMedico[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
-  const [tipoDocumentoOptions, setTipoDocumentoOptions] = useState<TipoDocumentoOption[]>([
-    { value: 'INFORME', label: 'Informe' },
-    { value: 'ESTUDIO', label: 'Estudio' },
-    { value: 'ANALISIS', label: 'Análisis' },
-    { value: 'DIAGNOSTICO', label: 'Diagnóstico' },
-    { value: 'IMAGEN', label: 'Imagen' },
-    { value: 'CONSENTIMIENTO', label: 'Consentimiento informado' },
-    { value: 'OTRO', label: 'Otro' },
-  ]);
+  const [tipoOptions, setTipoOptions] = useState<CategoriaArchivo[]>(CATEGORIAS_ARCHIVO);
   const [formState, setFormState] = useState({
-    tipo_documento: 'INFORME' as TipoDocumento,
+    titulo: '',
+    tipo_archivo: 'PDF' as ArchivoMedico['tipo_archivo'],
     descripcion: '',
     archivo: null as File | null,
   });
+  const [previewArchivo, setPreviewArchivo] = useState<ArchivoMedico | null>(null);
 
-  const uploadDocumento = useUploadDocumentoMutation();
+  const reloadArchivos = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const items = consultaHcId
+        ? await getArchivosPorConsulta(consultaHcId)
+        : await getArchivosPorAtencion(atencionId);
+      setArchivos(items);
+    } catch (err) {
+      setLoadError(getSafeApiErrorMessage(err, 'No se pudieron cargar los archivos.'));
+      setArchivos([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Cargar tipos de documento dinámicamente desde el backend
   useEffect(() => {
-    const loadTiposDocumento = async () => {
-      try {
-        const tipos = await getTiposDocumento();
-        if (tipos && Array.isArray(tipos) && tipos.length > 0) {
-          setTipoDocumentoOptions(tipos as TipoDocumentoOption[]);
+    void reloadArchivos();
+  }, [atencionId, consultaHcId]);
+
+  useEffect(() => {
+    void getTiposArchivo()
+      .then((tipos) => {
+        if (tipos?.length) {
+          setTipoOptions(
+            tipos.map((t: { value: string; label: string }) => ({
+              value: t.value as ArchivoMedico['tipo_archivo'],
+              label: t.label,
+            }))
+          );
         }
-      } catch {
-        /* tipos por defecto */
-      }
-    };
-    loadTiposDocumento();
+      })
+      .catch(() => {
+        /* categorías por defecto */
+      });
   }, []);
 
-  // OPTIMIZACIÓN: Validar que documentos sea un array antes de iterar
-  const documentosArray = React.useMemo((): Documento[] => {
-    if (!documentos) {
-      return [];
-    }
-    if (Array.isArray(documentos)) {
-      return documentos;
-    }
-    if (typeof documentos === 'object' && documentos !== null && 'results' in documentos) {
-      const results = (documentos as { results?: Documento[] }).results;
-      if (Array.isArray(results)) {
-        return results;
-      }
-    }
-    return [];
-  }, [documentos]);
+  const tipoLabel = useMemo(() => {
+    const map = new Map(tipoOptions.map((t) => [t.value, t.label]));
+    return (tipo: string) => map.get(tipo as ArchivoMedico['tipo_archivo']) || tipo;
+  }, [tipoOptions]);
 
   const handleOpenDialog = () => setOpenDialog(true);
   const handleCloseDialog = () => {
     setOpenDialog(false);
+    setUploadError('');
     setFormState({
-      tipo_documento: 'INFORME',
+      titulo: '',
+      tipo_archivo: 'PDF',
       descripcion: '',
       archivo: null,
     });
@@ -97,51 +139,73 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, doc
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    setFormState((prev) => ({ ...prev, archivo: file }));
+    setFormState((prev) => ({
+      ...prev,
+      archivo: file,
+      titulo: prev.titulo || (file ? file.name.replace(/\.[^.]+$/, '') : ''),
+    }));
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!formState.archivo) {
+    if (!formState.archivo || !formState.titulo.trim()) {
       return;
     }
-    const formData = new FormData();
-    formData.append('atencion_id', String(atencionId));
-    formData.append('tipo_documento', formState.tipo_documento);
-    if (formState.descripcion) {
-      formData.append('descripcion', formState.descripcion);
-    }
-    formData.append('archivo', formState.archivo);
+    setUploading(true);
+    setUploadError('');
     try {
-      await uploadDocumento.mutateAsync(formData);
+      const formData = new FormData();
+      formData.append('paciente_id', String(pacienteId));
+      formData.append('atencion_id', String(atencionId));
+      if (consultaHcId) {
+        formData.append('consulta_id', String(consultaHcId));
+      }
+      formData.append('titulo', formState.titulo.trim());
+      formData.append('tipo_archivo', formState.tipo_archivo);
+      if (formState.descripcion.trim()) {
+        formData.append('descripcion', formState.descripcion.trim());
+      }
+      formData.append('archivo', formState.archivo);
+      await createArchivoMedico(formData);
+      await reloadArchivos();
+      await queryClient.invalidateQueries({ queryKey: ['archivosMedicos'] });
       handleCloseDialog();
-    } catch {
-      /* toast en hook */
+    } catch (err) {
+      setUploadError(getSafeApiErrorMessage(err, 'No se pudo subir el archivo.'));
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleDownload = async (documento: Documento) => {
+  const handleDownload = async (archivo: ArchivoMedico) => {
     try {
-      const blob = await apiService.downloadDocumento(documento.id);
+      const blob = await downloadArchivoMedico(archivo.id);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = documento.archivo_nombre || 'documento';
+      link.download = archivo.archivo_nombre || archivo.titulo || 'archivo';
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch {
-      /* sin log de detalle (C6.2) */
+      /* sin log de detalle */
     }
   };
 
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="subtitle1" fontWeight={600}>
-          Documentos adjuntos
-        </Typography>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            {consultaHcId ? 'Documentación de la consulta' : 'Archivos del paciente'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {consultaHcId
+              ? 'Estudios previos u otra información que el paciente trae a la consulta.'
+              : 'Los adjuntos de esta atención también aparecen en el menú Archivos.'}
+          </Typography>
+        </Box>
         {canEdit && (
           <Button
             variant="contained"
@@ -149,40 +213,62 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, doc
             startIcon={<CloudUpload />}
             onClick={handleOpenDialog}
           >
-            Subir documento
+            Subir archivo
           </Button>
         )}
       </Stack>
 
-      {documentosArray.length === 0 ? (
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      )}
+
+      {loading ? (
+        <Box display="flex" alignItems="center" gap={1} py={2}>
+          <CircularProgress size={20} />
+          <Typography variant="body2" color="text.secondary">
+            Cargando archivos...
+          </Typography>
+        </Box>
+      ) : archivos.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
-          No se adjuntaron documentos a esta atención.
+          No hay archivos adjuntos a esta atención.
         </Typography>
       ) : (
         <List dense>
-          {documentosArray.map((documento) => (
-            <ListItem key={documento.id} divider>
+          {archivos.map((archivo) => (
+            <ListItem
+              key={archivo.id}
+              divider
+              onClick={() => setPreviewArchivo(archivo)}
+              sx={{ cursor: 'pointer' }}
+            >
               <ListItemText
                 primary={
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip
-                      label={tipoDocumentoOptions.find((opt) => opt.value === documento.tipo_documento)?.label ?? documento.tipo_documento}
-                      size="small"
-                      color={documento.tipo_documento === 'CONSENTIMIENTO' ? 'warning' : 'default'}
-                    />
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Chip label={tipoLabel(archivo.tipo_archivo)} size="small" />
                     <Typography variant="body2" fontWeight={600}>
-                      {documento.descripcion || 'Sin descripción'}
+                      {archivo.titulo}
                     </Typography>
                   </Stack>
                 }
                 secondary={
                   <Typography variant="caption" color="text.secondary">
-                    Subido el {new Date(documento.fecha_subida).toLocaleString()} por {documento.usuario_cargador_nombre ?? 'Usuario desconocido'}
+                    {archivo.descripcion || 'Sin descripción'} ·{' '}
+                    {new Date(archivo.fecha_subida).toLocaleString()}
                   </Typography>
                 }
               />
               <ListItemSecondaryAction>
-                <IconButton size="small" onClick={() => handleDownload(documento)} title="Descargar">
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleDownload(archivo);
+                  }}
+                  title="Descargar"
+                >
                   <Download fontSize="small" />
                 </IconButton>
               </ListItemSecondaryAction>
@@ -191,27 +277,39 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, doc
         </List>
       )}
 
-      <Dialog 
-        open={openDialog} 
-        onClose={handleCloseDialog} 
-        maxWidth="sm" 
+      <ArchivoMedicoPreviewDialog
+        open={Boolean(previewArchivo)}
+        archivo={previewArchivo}
+        onClose={() => setPreviewArchivo(null)}
+      />
+
+      <ThemeProvider theme={dialogTheme}>
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
         fullWidth
-        sx={{ zIndex: 1500 }}
-        PaperProps={{ sx: { zIndex: 1500 } }}
-        slotProps={{ backdrop: { sx: { zIndex: 1500 } } }}
+        {...clinicalDrawerDialogProps}
       >
         <form onSubmit={handleSubmit}>
-          <DialogTitle>Subir documento clínico</DialogTitle>
-          <DialogContent dividers>
+          <DialogTitle>Subir archivo del paciente</DialogTitle>
+          <DialogContent dividers sx={clinicalDrawerDialogContentSx}>
             <Stack spacing={2} mt={0.5}>
+              {uploadError && <Alert severity="error">{uploadError}</Alert>}
+              <TextField
+                label="Título"
+                required
+                value={formState.titulo}
+                onChange={(e) => setFormState((prev) => ({ ...prev, titulo: e.target.value }))}
+              />
               <TextField
                 select
-                label="Tipo de documento"
-                value={formState.tipo_documento}
+                label="Tipo de archivo"
+                value={formState.tipo_archivo}
                 onChange={(event) =>
                   setFormState((prev) => ({
                     ...prev,
-                    tipo_documento: event.target.value as TipoDocumento,
+                    tipo_archivo: event.target.value as ArchivoMedico['tipo_archivo'],
                   }))
                 }
                 SelectProps={{
@@ -221,7 +319,7 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, doc
                   },
                 }}
               >
-                {tipoDocumentoOptions.map((option) => (
+                {tipoOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
                     {option.label}
                   </MenuItem>
@@ -238,11 +336,7 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, doc
               />
               <Button variant="outlined" component="label">
                 Seleccionar archivo
-                <input
-                  type="file"
-                  hidden
-                  onChange={handleFileChange}
-                />
+                <input type="file" hidden onChange={handleFileChange} />
               </Button>
               {formState.archivo && (
                 <Typography variant="caption" color="text.secondary">
@@ -256,16 +350,16 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({ atencionId, doc
             <Button
               type="submit"
               variant="contained"
-              disabled={!formState.archivo || uploadDocumento.isPending}
+              disabled={!formState.archivo || !formState.titulo.trim() || uploading}
             >
-              Subir
+              {uploading ? 'Subiendo...' : 'Subir'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
+      </ThemeProvider>
     </Box>
   );
 };
 
 export default DocumentosAdjuntos;
-

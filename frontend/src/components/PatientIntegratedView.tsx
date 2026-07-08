@@ -56,6 +56,7 @@ import { Paciente, Atencion } from '../types';
 import { updatePaciente } from '../services/apiService';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
+import { canUpdatePacienteDemographics } from '../utils/permissions';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 
 interface TabPanelProps {
@@ -95,6 +96,7 @@ interface PatientIntegratedViewProps {
 const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente, onClose, variant = 'dialog' }) => {
   const isPage = variant === 'page';
   const { currentUser } = useData();
+  const canEditDemographics = canUpdatePacienteDemographics(currentUser);
   const [tabValue, setTabValue] = useState(0);
   const [atenciones, setAtenciones] = useState<Atencion[]>([]);
   const [loadingAtenciones, setLoadingAtenciones] = useState(false);
@@ -350,6 +352,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
   };
 
   const handleFieldEdit = (field: string) => {
+    if (!canEditDemographics) return;
     if (!isEditing) {
       setSnackbarMessage('Activa el modo edición para poder editar campos');
       setShowSnackbar(true);
@@ -439,15 +442,15 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
       <Box
         component="span"
         sx={{ 
-          cursor: 'pointer',
-          '&:hover': { backgroundColor: 'action.hover' },
+          cursor: canEditDemographics ? 'pointer' : 'default',
+          '&:hover': canEditDemographics ? { backgroundColor: 'action.hover' } : undefined,
           borderRadius: 1,
           p: 0.5,
           display: 'inline-flex',
           alignItems: 'center',
-          opacity: 0.7
+          opacity: canEditDemographics ? 0.7 : 1,
         }}
-        onDoubleClick={() => handleFieldEdit(field)}
+        onDoubleClick={() => canEditDemographics && handleFieldEdit(field)}
       >
         <Typography component="span" variant="body2">
           {value || 'No especificado'}
@@ -487,6 +490,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
         <TabPanel value={tabValue} index={0}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Botón de modo edición */}
+            {canEditDemographics && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Button
                 variant={isEditing ? "contained" : "outlined"}
@@ -497,6 +501,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                 {isEditing ? 'Finalizar Edición' : 'Modo Edición'}
               </Button>
             </Box>
+            )}
 
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
               <Box sx={{ flex: 1 }}>
@@ -587,8 +592,8 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                                     'default'
                                   }
                                   size="small"
-                                  onClick={() => isEditing && handleFieldEdit('sexo')}
-                                  sx={{ cursor: isEditing ? 'pointer' : 'default' }}
+                                  onClick={() => canEditDemographics && isEditing && handleFieldEdit('sexo')}
+                                  sx={{ cursor: canEditDemographics && isEditing ? 'pointer' : 'default' }}
                                 />
                               </Box>
                             ) : null

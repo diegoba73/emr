@@ -36,6 +36,7 @@ import {
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import Logo from './Logo';
+import { getHomeNavLabel, getSolicitudesModuleLabel } from '../utils/navLabels';
 
 const drawerWidth = 240;
 
@@ -47,11 +48,13 @@ interface MenuItemConfig {
 }
 
 const menuItems: MenuItemConfig[] = [
-  { text: 'Dashboard', icon: <HomeIcon />, path: '/dashboard', roles: ['all'] },
-  { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria'] },
+  { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', roles: ['all'] },
+  { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria', 'paciente'] },
+  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', roles: ['medico', 'admin', 'paciente'] },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
+  { text: 'Estudios complementarios', icon: <MedicalServices />, path: '/estudios-complementarios', roles: ['medico', 'admin', 'paciente', 'secretaria'] },
+  { text: 'Laboratorio', icon: <Schedule />, path: '/solicitudes', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', roles: ['medico', 'admin', 'secretaria', 'enfermeria'] },
-  { text: 'Mis Consultas', icon: <FolderIcon />, path: '/mis-consultas', roles: ['medico', 'paciente'] },
   { text: 'Internación', icon: <Hotel />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria'] },
   { text: 'Médicos', icon: <Person />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <Person />, path: '/usuarios', roles: ['admin'] },
@@ -193,7 +196,13 @@ const Navigation: React.FC<NavigationProps> = ({ children }) => {
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
-                  primary={item.text}
+                  primary={
+                    item.path === '/dashboard'
+                      ? getHomeNavLabel()
+                      : item.path === '/solicitudes'
+                        ? getSolicitudesModuleLabel(currentUser)
+                        : item.text
+                  }
                   primaryTypographyProps={{
                     fontWeight: isSelected ? 600 : 400,
                   }}

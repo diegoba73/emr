@@ -2,15 +2,16 @@
  * Tipos LIMS nativo (/api/lab/...). No mezclar con solicitudes EMR (solicitudes.Solicitud).
  */
 
-export type EstadoSolicitudLims =
-  | 'PENDIENTE'
-  | 'TOMA_MUESTRA'
-  | 'EN_PROCESO'
-  | 'VALIDADO'
-  | 'ENTREGADO'
-  | 'CANCELADO';
+export type EstadoSolicitudLims = 'PENDIENTE' | 'EN_PROCESO' | 'INFORMADO_PARCIAL' | 'FINALIZADO';
 
-export type OrigenSolicitudLims = 'EMR' | 'GUARDIA' | 'EXTERNO_PAPEL';
+export type OrigenSolicitudLims =
+  | 'INTERNACION_UCO'
+  | 'INTERNACION_UCE'
+  | 'GUARDIA'
+  | 'AMBULATORIO_CEHTA'
+  | 'AMBULATORIO_ICPL'
+  | 'EXTERNO_CEHTA'
+  | 'EXTERNO_ICPL';
 
 export type EstadoMuestraLims =
   | 'PENDIENTE_TOMA'
@@ -49,12 +50,49 @@ export interface LimsTipoExamen {
   tipo_muestra_codigo?: string;
   /** B2-B: obligatoriedad progresiva en carga de resultados (lectura API catálogo). */
   requiere_muestra?: boolean;
+  metodo?: string;
+  unidad_default?: string;
+  tipo_resultado?: 'TEXTO' | 'NUMERICO' | 'CUALITATIVO';
+  modo_entrada?: 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE';
+  ticket_decimales?: number;
+  multiplicador_clinico?: string | number;
+  formato_informe_entrada?: 'decimal1' | 'integer' | 'absolute_int' | 'absolute_millions' | '';
   precio?: string;
   rango_referencia_texto?: string;
+  rango_min?: string | null;
+  rango_max?: string | null;
   activo?: boolean;
 }
 
-/** Catálogo panel (GET /lab/paneles/) */
+/** Body POST/PATCH catálogo exámenes LIMS */
+export type TipoExamenLimsWriteBody = {
+  codigo?: string;
+  nombre?: string;
+  abreviatura?: string;
+  tipo_muestra_requerida?: number;
+  tipo_resultado?: 'TEXTO' | 'NUMERICO' | 'CUALITATIVO';
+  metodo?: string;
+  unidad_default?: string;
+  modo_entrada?: 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE';
+  ticket_decimales?: number;
+  multiplicador_clinico?: string | number;
+  formato_informe_entrada?: LimsTipoExamen['formato_informe_entrada'];
+  rango_referencia_texto?: string;
+  rango_min?: string | number | null;
+  rango_max?: string | number | null;
+  requiere_muestra?: boolean;
+  activo?: boolean;
+};
+
+/** Resumen de panel en lectura de orden (agrupación de resultados). */
+export interface LimsPanelResumen {
+  id: number;
+  codigo: string;
+  nombre: string;
+  tipos_examen_ids: number[];
+}
+
+export type ProcedenciaOrdenLims = 'RECURSO' | 'INTERNACION' | null;
 export interface LimsPanelExamen {
   id: number;
   codigo: string;
@@ -100,6 +138,8 @@ export interface ResultadoExamenLims {
   muestra_id?: number | null;
   muestra_estado?: string | null;
   tipo_muestra_nombre?: string | null;
+  /** Código del tipo de muestra requerida por el examen (catálogo). */
+  tipo_examen_muestra_codigo?: string | null;
 }
 
 export interface SolicitudExamenLims {
@@ -108,20 +148,49 @@ export interface SolicitudExamenLims {
   paciente: number;
   paciente_nombre?: string;
   paciente_dni?: string;
+  paciente_email?: string | null;
+  paciente_telefono?: string | null;
   medico_interno: number | null;
   medico_interno_nombre?: string | null;
   medico_externo_nombre?: string | null;
   medico_display?: string;
   origen_solicitud: OrigenSolicitudLims;
+  origen_solicitud_display?: string;
   tipos_examen?: number[];
   tipos_examen_nombres?: string[];
   paneles?: number[];
   paneles_nombres?: string[];
+  paneles_resumen?: LimsPanelResumen[];
+  /** Claves panel-{id} / resultado-{id} para orden en informe PDF. */
+  orden_grupos_informe?: string[];
+  procedencia_tipo?: ProcedenciaOrdenLims;
+  procedencia_display?: string | null;
   estado: EstadoSolicitudLims;
   fecha_solicitud: string;
+  /** Última fecha de toma física (anotación en listado). */
+  fecha_toma_muestra?: string | null;
   fecha_entrega_prometida?: string | null;
   observaciones?: string;
+  fecha_informe_enviado?: string | null;
+  informe_enviado_email?: boolean;
+  informe_enviado_whatsapp?: boolean;
   resultados?: ResultadoExamenLims[];
+}
+
+export interface EnvioInformeLimsResultado {
+  email_enviado: boolean;
+  email_destino?: string | null;
+  email_adjunto_pdf?: boolean;
+  whatsapp_enviado: boolean;
+  whatsapp_telefono?: string | null;
+  whatsapp_enlace?: string | null;
+  whatsapp_pdf_adjunto?: boolean;
+  informe_enlace_descarga?: string | null;
+  advertencias?: string[];
+}
+
+export interface EnviarInformeOrdenResponse extends SolicitudExamenLims {
+  envio?: EnvioInformeLimsResultado;
 }
 
 export interface MuestraEventoLims {
@@ -157,6 +226,8 @@ export interface MuestraTransaccional {
 export interface CargarResultadoPayload {
   id: number;
   valor: string;
+  /** Entero del ticket Sysmex (sin decimal); el backend convierte a valor clínico. */
+  valor_sysmex?: string;
   muestra_id?: number | null;
   valor_numerico?: number | string | null;
   unidad?: string;
@@ -387,4 +458,68 @@ export interface InformeMicrobiologia {
   fecha_anulacion?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+/** Análisis longitudinal Fase 1 — referencia + historial del paciente (sin IA). */
+export type VariacionHistorialLims =
+  | 'sin_historial'
+  | 'estable'
+  | 'moderada'
+  | 'significativa'
+  | 'brusca'
+  | 'cambio_cualitativo'
+  | 'cambio_valor'
+  | 'sin_comparacion_numerica';
+
+export interface AnalisisReferenciaLims {
+  tiene_rango: boolean;
+  en_rango: boolean | null;
+  es_patologico: boolean;
+  es_critico: boolean;
+  desviacion: 'bajo' | 'alto' | 'normal' | null;
+  rango_texto: string;
+  rango_min: string | null;
+  rango_max: string | null;
+}
+
+export interface AnalisisHistorialLims {
+  tiene_historial: boolean;
+  valor_anterior: string | null;
+  valor_numerico_anterior: string | null;
+  unidad_anterior: string | null;
+  fecha_anterior: string | null;
+  solicitud_anterior_id: number | null;
+  solicitud_anterior_numero: string | null;
+  dias_desde_anterior: number | null;
+  delta_absoluto: string | null;
+  delta_porcentual: string | null;
+  cambio_cualitativo: boolean | null;
+  variacion: VariacionHistorialLims;
+}
+
+export interface AnalisisResultadoLongitudinalLims {
+  resultado_id: number;
+  tipo_examen_id: number;
+  tipo_examen_codigo: string;
+  tipo_examen_nombre: string;
+  tipo_resultado: string | null;
+  valor_actual: string;
+  valor_numerico_actual: string | null;
+  unidad: string | null;
+  referencia: AnalisisReferenciaLims;
+  historial: AnalisisHistorialLims;
+  alertas: string[];
+}
+
+export interface AnalisisLongitudinalOrden {
+  solicitud_id: number;
+  solicitud_numero: string | null;
+  paciente_id: number;
+  fecha_solicitud: string | null;
+  estado_solicitud: EstadoSolicitudLims;
+  resultados: AnalisisResultadoLongitudinalLims[];
+  resumen_alertas: string[];
+  total_analizados: number;
+  total_con_historial: number;
+  total_cambios_significativos: number;
 }

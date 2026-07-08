@@ -5,13 +5,9 @@ from rest_framework import serializers
 from .models import (
     CentroFisico,
     TipoAtencion,
-    Procedimiento,
     AreaInternacion,
     CamaInternacion,
 )
-from medicos.models import Especialidad
-
-
 class CentroFisicoSerializer(serializers.ModelSerializer):
     """Serializer para CentroFisico."""
     
@@ -50,33 +46,6 @@ class TipoAtencionSerializer(serializers.ModelSerializer):
             'activo',
         ]
         read_only_fields = ['id', 'centro_fisico_nombre']
-
-
-class ProcedimientoSerializer(serializers.ModelSerializer):
-    """Serializer para Procedimiento."""
-    especialidad_nombre = serializers.CharField(
-        source='especialidad.nombre',
-        read_only=True
-    )
-    especialidad = serializers.PrimaryKeyRelatedField(
-        queryset=Especialidad.objects.all(),
-        help_text="ID de la especialidad"
-    )
-    
-    class Meta:
-        model = Procedimiento
-        fields = [
-            'id',
-            'codigo',
-            'nombre',
-            'descripcion',
-            'especialidad',
-            'especialidad_nombre',
-            'duracion_estimada',
-            'requiere_anestesia',
-            'activo',
-        ]
-        read_only_fields = ['id', 'especialidad_nombre']
 
 
 class AreaInternacionSerializer(serializers.ModelSerializer):

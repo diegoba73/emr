@@ -1,0 +1,85 @@
+codigo,nombre,tipo,descripcion
+BA,Agar sangre (5%),Agar sólido,Medio enriquecido no selectivo; crecimiento de la mayoría de bacterias. Referencia CLSI M41.
+SBA,Agar sangre de carnero,Agar sólido,Variante con sangre de carnero; estándar en hemocultivos y cultivos de rutina.
+CHOC,Agar chocolate,Agar sólido,Medio enriquecido para organismos fastidiosos (Neisseria, Haemophilus). Sangre calentada.
+MH,Ágar Mueller-Hinton,Agar sólido,Medio estándar EUCAST/CLSI para antibiograma por difusión en disco y dilución en agar.
+MH-F,Ágar Mueller-Hinton fastidiosos (MH-F),Agar sólido,EUCAST: MH + 5% sangre de caballo desfibrinada mecánicamente + 20 mg/L β-NAD.
+MH-S,Ágar Mueller-Hinton sangre de carnero,Agar sólido,Alternativa EUCAST a MH-F con sangre de carnero (excepto Haemophilus spp.).
+MCK,Agar MacConkey,Agar sólido,Medio selectivo y diferencial para enterobacterias; detecta fermentación de lactosa.
+EMB,Agar azul de metileno-eosina,Agar sólido,Selectivo/diferencial para enterobacterias; diferencia E. coli de otras GNB lactosa+.
+HE,Agar Hektoen enterico,Agar sólido,Selectivo para Salmonella y Shigella; diferencial enterobacterias patógenas.
+SS,Agar Salmonella-Shigella,Agar sólido,Medio altamente selectivo para Salmonella y Shigella.
+XLD,Agar xilosa-lisina-desoxicolato,Agar sólido,Selectivo/diferencial para enterobacterias patógenas.
+CLED,Agar CLED (cistina-lactosa-electrolitos deficientes),Agar sólido,Medio para urocultivo; inhibe Proteus swarming.
+TSA,Agar tripticasa soja (TSA),Agar sólido,Medio de uso general no selectivo para bacterias no fastidiosas.
+BHI,Agar infusión cerebro-corazón (BHI),Agar sólido,Medio enriquecido para organismos fastidiosos (Streptococcus, Corynebacterium).
+CNA,Agar colistina-ácido nalidíxico (CNA),Agar sólido,Selectivo para Gram positivos; inhibe la mayoría de GNB.
+PEA,Agar alcohol feniletil (PEA),Agar sólido,Selectivo para Gram positivos anaerobios facultativos y aerobios.
+SDA,Agar Sabouraud dextrosa,Agar sólido,Medio estándar para hongos filamentosos y levaduras (pH ácido).
+SAB,Agar Sabouraud,Agar sólido,Medio micológico; variantes con cloranfenicol/gentamicina para selectividad.
+BCYE,Ágar carbón-yeast extract (BCYE),Agar sólido,Medio selectivo para Legionella pneumophila (BCYE + suplementos).
+LJ,Medio Lowenstein-Jensen,Agar sólido,Medio selectivo para Mycobacterium tuberculosis y otras micobacterias.
+7H10,Medio Middlebrook 7H10,Agar sólido,Medio selectivo para micobacterias; base para susceptibilidad.
+7H11,Medio Middlebrook 7H11,Agar sólido,Variante Middlebrook con OADC para micobacterias.
+OGW,Medio Ogawa,Agar sólido,Medio selectivo micobacterias; uso en diagnóstico de TB.
+TM,Ágar Thayer-Martin (GC),Agar sólido,Medio selectivo para Neisseria gonorrhoeae y N. meningitidis.
+ML,Ágar Martin-Lewis,Agar sólido,Medio selectivo mejorado para gonococo y meningococo.
+MTM,Ágar Thayer-Martin modificado,Agar sólido,Variante con vancomicina, colistina, trimetoprim y anfotericina B.
+CAMP,Ágar Campy-BAP,Agar sólido,Medio enriquecido con sangre para Campylobacter jejuni/coli (microaerófilo).
+SKIR,Ágar Skirrow,Agar sólido,Medio selectivo para Campylobacter spp.
+BBE,Ágar BBE (Bacteroides bile esculin),Agar sólido,Selectivo para Bacteroides fragilis y anaerobios Gram negativos.
+KVLB,Ágar KVLB (kanamicina-vancomicina-sangre lisada),Agar sólido,Selectivo para Bacteroides y anaerobios Gram negativos.
+CDC,Ágar anaerobio CDC con sangre,Agar sólido,Medio no selectivo para anaerobios; base CDC.
+BRU,Ágar Brucella con sangre y hemina,Agar sólido,Medio enriquecido para anaerobios.
+LOEF,Medio Loeffler,Agar sólido,Medio enriquecido para Corynebacterium diphtheriae.
+TINS,Ágar Tinsdale,Agar sólido,Medio selectivo/diferencial para Corynebacterium diphtheriae.
+TCBS,Ágar TCBS (tiosulfato-citrato-bilis-sacarosa),Agar sólido,Selectivo para Vibrio cholerae y otras especies de Vibrio.
+CEA,Ágar cetrimida,Agar sólido,Selectivo para Pseudomonas aeruginosa.
+BCSA,Ágar selectivo Burkholderia cepacia,Agar sólido,Selectivo para Burkholderia cepacia complex.
+BG,Ágar Bordet-Gengou,Agar sólido,Medio enriquecido para Bordetella pertussis.
+RL,Ágar Regan-Lowe,Agar sólido,Medio enriquecido con carbón para Bordetella pertussis.
+BEA,Ágar bilis-esculina (BEA),Agar sólido,Diferencial para enterococos y estreptococos grupo D; hidrólisis de esculina.
+MRS,Medio MRS (de Man Rogosa Sharpe),Agar sólido,Selectivo para lactobacilos y otros Gram positivos.
+ROG,Medio Rogosa SL,Agar sólido,Selectivo para lactobacilos.
+TSB,Caldo tripticasa soja (TSB),Caldo,Medio líquido de enriquecimiento general para bacterias.
+BHI-B,Caldo infusión cerebro-corazón,Caldo,Medio líquido enriquecido para organismos fastidiosos.
+GN,Caldo GN (Gram negativo),Caldo enriquecimiento,Medio de enriquecimiento para enterobacterias patógenas.
+SF,Caldo SF (selenito-F),Caldo enriquecimiento,Enriquecimiento selectivo para Salmonella y Shigella.
+SEL,Caldo selenito,Caldo enriquecimiento,Enriquecimiento para Salmonella spp.
+THIO,Caldo tioglicolato,Caldo,Medio para anaerobios y aerobios; reducción de oxígeno.
+CO2,Caldo CO2 (hemocultivo),Caldo enriquecimiento,Medio comercial para hemocultivo con suplemento CO2/saponina.
+BACTEC,Medio BACTEC hemocultivo,Caldo enriquecimiento,Medio radiométrico/detector para hemocultivo automatizado.
+MGIT,Medio MGIT (micobacterias),Caldo,Medio líquido para detección de micobacterias (BD MGIT).
+OF,Medio OF (oxidación-fermentación),Caldo diferencial,Determina metabolismo de carbohidratos (oxidativo vs fermentativo).
+CHR,Medio urea Christensen,Caldo diferencial,Detección de ureasa; Proteus, Klebsiella, Helicobacter.
+SIM,Medio SIM (Sulfur Indole Motility),Caldo diferencial,Detección de indol, H2S y movilidad.
+MIO,Medio MIO (movilidad-indol-ornitina),Caldo diferencial,Combinado para enterobacterias.
+KIA,Medio Kligler hierro (KIA),Caldo diferencial,Triple azúcar hierro; fermentación y H2S.
+TSI,Medio triple azúcar hierro (TSI),Caldo diferencial,Similar a KIA; screening enterobacterias.
+CIT,Medio citrato Simmons,Caldo diferencial,Utilización de citrato como única fuente de carbono.
+MR-VP,Medios MR-VP (Rojo de metilo-Voges Proskauer),Caldo diferencial,Diferenciación enterobacterias (E. coli vs Enterobacter).
+LIA,Medio LIA (lisina-hierro),Caldo diferencial,Detección de descarboxilasa de lisina y H2S.
+MHA,Ágar Mueller-Hinton cation-adjusted,Caldo/Agar AST,Variante con cationes ajustados para MIC por microdilución en caldo (ISO 20776).
+CAMHB,Caldo Mueller-Hinton cation-adjusted (CAMHB),Caldo AST,Medio líquido estándar ISO/EUCAST para MIC por microdilución.
+CAMHA,Ágar Mueller-Hinton cation-adjusted (CAMHA),Agar AST,Medio sólido para dilución en agar (mecillinam, fosfomicina).
+HTM,Medio HTM (Haemophilus Test Medium),Agar AST,Medio EUCAST específico para susceptibilidad de Haemophilus influenzae.
+MHB-F,Caldo Mueller-Hinton fastidiosos (MHB-F),Caldo AST,Caldo EUCAST para MIC de organismos fastidiosos (MH + sangre + NAD).
+NYC,Ágar NYC (New York City),Agar sólido,Medio selectivo para Neisseria gonorrhoeae.
+GVPC,Ágar GVPC (glicina-vancomicina-polimixina B-cicloserina),Agar sólido,Selectivo para Clostridioides difficile.
+CCFA,Ágar cicloserina-cefoxitina-fructosa agar,Agar sólido,Selectivo alternativo para C. difficile.
+CBA,Ágar carbón-sangre (CBA),Agar sólido,Medio enriquecido con carbón activado; anaerobios y fastidiosos.
+PDA,Ágar papa-dextrosa,Agar sólido,Medio micológico general para hongos filamentosos.
+CHROM,Cromogénico Candida spp.,Agar sólido,Medio cromogénico para identificación presuntiva de levaduras.
+CHROM-EC,Cromogénico E. coli O157,Agar sólido,Detección de E. coli enterohemorrágica O157:H7.
+SMAC,Ágar Sorbitol-MacConkey,Agar sólido,Detección de E. coli O157 (no fermenta sorbitol).
+VRBA,Ágar rojo violeta bilis (VRBA),Agar sólido,Selectivo para enterobacterias coliformes en agua/alimentos.
+ENDO,Ágar Endo,Agar sólido,Selectivo/diferencial para coliformes; confirmación de agua potable.
+VRBG,Ágar VRBG (violeta rojo bilis glucosa),Agar sólido,Selectivo para Enterobacteriaceae en alimentos.
+BCP,Ágar lactosa BCP (púrpura bromocresol),Agar sólido,Medio diferencial lactosa para enterobacterias.
+DCL,Ágar DCL (dextrosa-citrato-lauril sulfato),Agar sólido,Selectivo para coliformes fecales.
+BGA,Ágar bilis verde brillante,Agar sólido,Selectivo para Salmonella en alimentos.
+MSA,Ágar sal manitol (MSA),Agar sólido,Selectivo/diferencial para Staphylococcus aureus.
+SCA,Ágar sal cloranfenicol (SCA),Agar sólido,Selectivo para levaduras en muestras contaminadas.
+BIGGY,Ágar BIGGY (bilis-iris-verde-glicina-yeast extract),Agar sólido,Selectivo para Candida albicans.
+R2A,Ágar R2A,Agar sólido,Medio de bajo nutriente para bacterias heterotróficas en agua.
+ISP2,Ágar ISP2 (International Streptomyces Project),Agar sólido,Medio para actinomicetos y Streptomyces.

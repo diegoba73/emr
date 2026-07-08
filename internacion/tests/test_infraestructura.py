@@ -207,3 +207,70 @@ class InfraestructuraAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('estado', response.data)
+
+    def test_editar_cama_disponible(self):
+        """Admin puede editar nombre, sector y aislada de cama disponible."""
+        self.client.force_authenticate(user=self.user_admin)
+        nuevo_nombre = f'Cama-edit-{unique_suffix()}'
+
+        response = self.client.patch(
+            f'/api/internacion/camas/{self.cama_disponible.id}/',
+            {
+                'nombre': nuevo_nombre,
+                'sector_id': self.sector_uce.id,
+                'aislada': True,
+                'estado': 'LIMPIEZA',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.cama_disponible.refresh_from_db()
+        self.assertEqual(self.cama_disponible.nombre, nuevo_nombre)
+        self.assertEqual(self.cama_disponible.sector, self.sector_uce)
+        self.assertTrue(self.cama_disponible.aislada)
+        self.assertEqual(self.cama_disponible.estado, 'LIMPIEZA')
+
+    def test_editar_cama_ocupada_solo_nombre_y_aislada(self):
+        """En cama ocupada solo se permite editar nombre y aislada."""
+        self.client.force_authenticate(user=self.user_admin)
+        nuevo_nombre = f'Cama-ocup-edit-{unique_suffix()}'
+
+        response = self.client.patch(
+            f'/api/internacion/camas/{self.cama_ocupada.id}/',
+            {'nombre': nuevo_nombre, 'aislada': True},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.cama_ocupada.refresh_from_db()
+        self.assertEqual(self.cama_ocupada.nombre, nuevo_nombre)
+        self.assertTrue(self.cama_ocupada.aislada)
+
+    def test_editar_cama_ocupada_sector_falla(self):
+        """No se puede cambiar sector en cama ocupada."""
+        self.client.force_authenticate(user=self.user_admin)
+
+        response = self.client.patch(
+            f'/api/internacion/camas/{self.cama_ocupada.id}/',
+            {'sector_id': self.sector_uce.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    def test_enfermeria_puede_editar_cama(self):
+        """Enfermería puede editar cama disponible."""
+        self.client.force_authenticate(user=self.user_enfermeria)
+        nuevo_nombre = f'Cama-enf-edit-{unique_suffix()}'
+
+        response = self.client.patch(
+            f'/api/internacion/camas/{self.cama_disponible.id}/',
+            {'nombre': nuevo_nombre},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.cama_disponible.refresh_from_db()
+        self.assertEqual(self.cama_disponible.nombre, nuevo_nombre)

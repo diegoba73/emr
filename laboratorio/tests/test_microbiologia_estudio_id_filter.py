@@ -149,7 +149,7 @@ class TestMicroEstudioIdFilter(TestCase):
         cls.sol = SolicitudExamen.objects.create(
             paciente=cls.paciente,
             medico_interno=cls.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         cls.sol.tipos_examen.add(cls.te)
@@ -158,7 +158,7 @@ class TestMicroEstudioIdFilter(TestCase):
         cls.sol_ajena = SolicitudExamen.objects.create(
             paciente=cls.paciente,
             medico_interno=cls.medico_ajeno,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         cls.sol_ajena.tipos_examen.add(cls.te)

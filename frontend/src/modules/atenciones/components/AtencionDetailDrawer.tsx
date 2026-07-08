@@ -22,11 +22,13 @@ import {
 } from '../hooks';
 import DocumentosAdjuntos from './DocumentosAdjuntos';
 import ConsultaAmbulatoriaForm from './forms/ConsultaAmbulatoriaForm';
+import ConsultaPedidosPanel from './ConsultaPedidosPanel';
 import EstudioDiagnosticoForm from './forms/EstudioDiagnosticoForm';
 import ProcedimientoForm from './forms/ProcedimientoForm';
 import CirugiaForm from './forms/CirugiaForm';
 import { useData } from '../../../contexts/DataContext';
 import { canOperateAtenciones } from '../../../utils/permissions';
+import { Z_CLINICAL_DRAWER } from '../../../utils/layerZIndex';
 
 interface AtencionDetailDrawerProps {
   atencionId: number | null;
@@ -140,19 +142,16 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
     return canOperateAtenciones(effectiveUser);
   }, [canOperateProp, effectiveUser]);
 
-  // Normalizar documentos para pasarlos a los componentes
-  const documentosNormalizados = useMemo(() => {
-    if (!data) {
-      return [];
-    }
-    if (Array.isArray(data.documentos)) {
-      return data.documentos;
-    }
-    if (data.documentos && typeof data.documentos === 'object' && 'results' in data.documentos) {
-      return (data.documentos as any).results || [];
-    }
-    return [];
-  }, [data, JSON.stringify(data?.documentos)]); // Usar JSON.stringify para detectar cambios profundos
+  const atencionAbierta = data?.estado_clinico === 'ABIERTA' && !data?.fecha_cierre;
+  const canEditClinical = canEdit && Boolean(atencionAbierta);
+
+  const pedidosTabVisible =
+    data?.tipo_intervencion === 'CONSULTA' && Boolean(data?.consulta_hc_id);
+  const detalleTabIndex = pedidosTabVisible ? 3 : 2;
+
+  const showTabPanel = (index: number) => ({
+    display: tabValue === index ? 'block' : 'none',
+  });
 
   // Callback para cerrar el drawer después de guardar exitosamente
   const handleSaveSuccess = async () => {
@@ -173,7 +172,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
           <ConsultaAmbulatoriaForm
             key={`consulta-${atencion.id}-${forceEdit ? 'edit' : 'view'}`}
             atencionId={atencion.id}
-            canEdit={canEdit}
+            canEdit={canEditClinical}
             forceEdit={forceEdit}
             onSaveSuccess={handleSaveSuccess}
           />
@@ -183,7 +182,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
           <EstudioDiagnosticoForm
             atencionId={atencion.id}
             registro={atencion.registro_procedimiento || undefined}
-            canEdit={canEdit}
+            canEdit={canEditClinical}
             onSaveSuccess={handleSaveSuccess}
           />
         );
@@ -192,7 +191,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
           <ProcedimientoForm
             atencionId={atencion.id}
             registro={atencion.registro_procedimiento || undefined}
-            canEdit={canEdit}
+            canEdit={canEditClinical}
             onSaveSuccess={handleSaveSuccess}
           />
         );
@@ -203,7 +202,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
             key={`cirugia-${atencion.id}-${atencion.registro_quirurgico?.id || 'new'}`}
             atencionId={atencion.id}
             registro={registroQuirurgico}
-            canEdit={canEdit}
+            canEdit={canEditClinical}
             onSaveSuccess={handleSaveSuccess}
           />
         );
@@ -223,12 +222,13 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
       onClose={onClose}
       PaperProps={{
         sx: { 
-          width: { xs: '100%', md: 520 },
-          zIndex: 1400, // Asegurar que esté por encima del Dialog (z-index 1300)
+          width: { xs: '100%', md: 640 },
+          zIndex: Z_CLINICAL_DRAWER,
         },
       }}
       ModalProps={{
-        style: { zIndex: 1400 }, // También en ModalProps para asegurar que funcione
+        style: { zIndex: Z_CLINICAL_DRAWER },
+        disableEnforceFocus: true,
       }}
     >
       <Box display="flex" alignItems="center" justifyContent="space-between" px={2} py={1}>
@@ -388,16 +388,20 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
           <Tabs
             value={tabValue}
             onChange={(_event, newValue) => setTabValue(newValue)}
-            variant="fullWidth"
+            variant="scrollable"
+            scrollButtons="auto"
             sx={{ mb: 2 }}
           >
             <Tab label="Resumen" />
-            <Tab label="Documentos" />
+            <Tab label="Archivos" />
+            {data.tipo_intervencion === 'CONSULTA' && data.consulta_hc_id ? (
+              <Tab label="Pedidos y resultados" />
+            ) : null}
             <Tab label="Detalle clínico" />
           </Tabs>
 
           <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }}>
-            {tabValue === 0 && (
+            <Box sx={showTabPanel(0)}>
               <Stack spacing={3}>
                 <Typography variant="subtitle1" fontWeight={600}>
                   Información general
@@ -575,18 +579,32 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
                   </Box>
                 )}
               </Stack>
-            )}
+            </Box>
 
-            {tabValue === 1 && (
+            <Box sx={showTabPanel(1)}>
+              {data.paciente?.id && (
               <DocumentosAdjuntos
-                key={`docs-${data.id}-${documentosNormalizados.length}-${JSON.stringify(documentosNormalizados.map((d: any) => d.id))}`}
+                key={`archivos-${data.id}-${data.consulta_hc_id ?? 'sin-hc'}`}
                 atencionId={data.id}
-                documentos={documentosNormalizados}
-                canEdit={canEdit}
+                pacienteId={data.paciente.id}
+                consultaHcId={data.consulta_hc_id}
+                canEdit={canEditClinical}
               />
+              )}
+            </Box>
+
+            {pedidosTabVisible && data.paciente?.id && (
+              <Box sx={showTabPanel(2)}>
+                <ConsultaPedidosPanel
+                  consultaHcId={data.consulta_hc_id!}
+                  canEdit={canEditClinical}
+                />
+              </Box>
             )}
 
-            {tabValue === 2 && renderDetalle(data)}
+            <Box sx={showTabPanel(detalleTabIndex)}>
+              {renderDetalle(data)}
+            </Box>
           </Box>
         </Box>
       )}

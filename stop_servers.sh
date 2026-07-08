@@ -1,38 +1,18 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Detener stack EMR (Docker + procesos locales huérfanos).
 
-# ===============================
-# Script para detener EMR
-# ===============================
+set -euo pipefail
 
-echo "🛑 Deteniendo servicios del EMR..."
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ===============================
-# Django
-# ===============================
-echo "🐍 Deteniendo Django..."
-pkill -f "manage.py runserver" 2>/dev/null
-lsof -ti :8000 | xargs kill -9 2>/dev/null
+echo "🛑 Deteniendo EMR..."
 
-# ===============================
-# React
-# ===============================
-echo "⚛️  Deteniendo React..."
-pkill -f "react-scripts start" 2>/dev/null
-lsof -ti :3000 | xargs kill -9 2>/dev/null
-
-sleep 2
-
-# ===============================
-# Verificación
-# ===============================
-echo ""
-echo "📊 Verificando puertos..."
-if lsof -i :8000 -i :3000 2>/dev/null | grep -q LISTEN; then
-    echo "⚠️  Aún hay procesos activos:"
-    lsof -i :8000 -i :3000 | grep LISTEN
+if [ -x "$BASE_DIR/emrctl" ]; then
+  "$BASE_DIR/emrctl" down
 else
-    echo "✅ Puertos 8000 y 3000 liberados correctamente."
+  pkill -f "manage.py runserver" 2>/dev/null || true
+  pkill -f "react-scripts start" 2>/dev/null || true
+  lsof -ti :8000 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  lsof -ti :3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  echo "✅ Procesos locales detenidos."
 fi
-
-echo ""
-echo "🧹 EMR detenido."

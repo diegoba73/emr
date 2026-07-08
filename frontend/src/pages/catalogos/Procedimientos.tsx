@@ -8,14 +8,15 @@ import {
   deleteProcedimientoCatalogo,
 } from '../../services/apiService';
 import CatalogoBase from './CatalogoBase';
+import { canAccessCatalogosClinicos, canEditCatalogosClinicos } from '../../utils/permissions';
 
 const Procedimientos: React.FC = () => {
   const { currentUser } = useData();
   const [items, setItems] = useState<ProcedimientoCatalogo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Verificar permisos - médicos y admin
-  const canEdit = currentUser?.rol === 'MEDICO' || currentUser?.rol === 'ADMIN' || currentUser?.is_superuser;
+  const canView = canAccessCatalogosClinicos(currentUser);
+  const canEdit = canEditCatalogosClinicos(currentUser);
 
   const loadData = useCallback(async () => {
     try {
@@ -29,7 +30,7 @@ const Procedimientos: React.FC = () => {
     }
   }, []);
 
-  if (!canEdit) {
+  if (!canView) {
     return (
       <div style={{ padding: '20px' }}>
         <p>No tiene permisos para acceder a esta sección.</p>
@@ -46,6 +47,7 @@ const Procedimientos: React.FC = () => {
       onCreate={createProcedimientoCatalogo}
       onUpdate={updateProcedimientoCatalogo}
       onDelete={deleteProcedimientoCatalogo}
+      readOnly={!canEdit}
       fields={[
         { key: 'nombre', label: 'Nombre', type: 'text', required: true },
         { key: 'descripcion', label: 'Descripción', type: 'textarea' },

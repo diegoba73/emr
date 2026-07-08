@@ -69,7 +69,7 @@ class SolicitudPermission(permissions.BasePermission):
 
     - admin/superuser: operación completa salvo PHI en auditoría.
     - médico: lectura/escritura limitada solo en solicitudes vinculadas; sin LIMS ni estados críticos.
-    - secretaría: lectura/creación/actualización administrativa y cancelación; sin LIMS ni cambio de estado.
+    - secretaría: solo lectura (listado/detalle); sin LIMS ni cambio de estado.
     - paciente: solo lectura de propias solicitudes.
     - laboratorio/enfermería/sin rol/anónimo: sin acceso.
     """
@@ -91,16 +91,16 @@ class SolicitudPermission(permissions.BasePermission):
             return role in ('admin', 'secretaria', 'medico', 'paciente')
 
         if action == 'create':
-            return role in ('admin', 'secretaria', 'medico')
+            return role in ('admin', 'medico')
 
         if action in _WRITE_ACTIONS:
-            return role in ('admin', 'secretaria', 'medico')
+            return role in ('admin', 'medico')
 
         if action in _ADMIN_ONLY_ACTIONS:
             return False
 
         if action == 'cancelar':
-            return role in ('admin', 'secretaria', 'medico')
+            return role in ('admin', 'medico')
 
         return False
 
@@ -115,9 +115,7 @@ class SolicitudPermission(permissions.BasePermission):
         action = getattr(view, 'action', None)
 
         if role == 'secretaria':
-            if action in _ADMIN_ONLY_ACTIONS:
-                return False
-            return True
+            return action in _READ_ACTIONS
 
         if role == 'medico':
             if not medico_linked_to_solicitud(user, obj):

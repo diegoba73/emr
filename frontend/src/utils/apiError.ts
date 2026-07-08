@@ -9,6 +9,11 @@ export function getSafeApiErrorMessage(
   error: unknown,
   fallback = 'No se pudo completar la operación.'
 ): string {
+  const code = (error as { code?: string })?.code;
+  if (code === 'ECONNABORTED') {
+    return 'El servidor tardó demasiado en responder. Si estaba enviando un correo, verificá la configuración SMTP o usá solo WhatsApp.';
+  }
+
   const status = responseStatus(error);
   if (status === 403) {
     return 'No tiene permisos para realizar esta acción.';
@@ -18,6 +23,27 @@ export function getSafeApiErrorMessage(
   }
   if (status === 401) {
     return 'Debe iniciar sesión para continuar.';
+  }
+  if (status === 400 || status === 500) {
+    const data = (error as { response?: { data?: unknown } })?.response?.data;
+    if (data && typeof data === 'object') {
+      const o = data as Record<string, unknown>;
+      if (typeof o.detail === 'string' && o.detail.trim()) {
+        return o.detail;
+      }
+      if (typeof o.error === 'string' && o.error.trim()) {
+        return o.error;
+      }
+    }
+  }
+  const message = (error as { message?: string })?.message;
+  if (
+    message &&
+    message !== 'Request failed with status code 400' &&
+    message !== 'Request failed with status code 500' &&
+    message !== 'Network Error'
+  ) {
+    return message;
   }
   return fallback;
 }
@@ -53,7 +79,7 @@ export const CLINICAL_ACTION_ERRORS = {
   internacionCargar: 'No se pudieron cargar los datos de internación. Intentá nuevamente.',
   camaCrear: 'No se pudo crear la cama. Revisá los datos ingresados o intentá nuevamente.',
   sectorCrear: 'No se pudo crear el sector. Revisá los datos ingresados o intentá nuevamente.',
-  camaActualizar: 'No se pudo actualizar el estado de la cama. Intentá nuevamente.',
+  camaActualizar: 'No se pudo actualizar la cama. Revisá los datos ingresados o intentá nuevamente.',
   limsDescartarAislado: 'No se pudo descartar el aislado. Intentá nuevamente.',
   limsAnularInforme: 'No se pudo anular el informe. Intentá nuevamente.',
   limsCancelarAntibiograma: 'No se pudo cancelar el antibiograma. Intentá nuevamente.',
@@ -76,6 +102,8 @@ export const CLINICAL_ACTION_ERRORS = {
   limsActualizarMuestra: 'No se pudo actualizar la muestra. Intentá nuevamente.',
   limsCargarOrden: 'No se pudo cargar la orden. Intentá nuevamente.',
   limsActualizarOrden: 'No se pudo actualizar la orden. Intentá nuevamente.',
+  limsEnviarInforme:
+    'No se pudo enviar el informe. Verificá SMTP o intentá solo WhatsApp / descarga manual del PDF.',
   limsCargarOrdenes: 'No se pudieron cargar las órdenes. Intentá nuevamente.',
   limsCargarCatalogo: 'No se pudo cargar el catálogo. Intentá nuevamente.',
   limsGuardarCatalogo: 'No se pudo guardar en el catálogo. Intentá nuevamente.',

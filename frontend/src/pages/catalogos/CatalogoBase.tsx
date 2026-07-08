@@ -56,6 +56,8 @@ interface CatalogoBaseProps<T extends CatalogoItem> {
     required?: boolean;
   }>;
   getDisplayValue?: (item: T) => string;
+  /** Solo lectura (p. ej. secretaría). */
+  readOnly?: boolean;
 }
 
 function CatalogoBase<T extends CatalogoItem>({
@@ -72,6 +74,7 @@ function CatalogoBase<T extends CatalogoItem>({
     { key: 'descripcion', label: 'Descripción', type: 'textarea' },
   ],
   getDisplayValue,
+  readOnly = false,
 }: CatalogoBaseProps<T>) {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -178,13 +181,15 @@ function CatalogoBase<T extends CatalogoItem>({
         <Typography variant="h4" fontWeight={600}>
           {title}
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => handleOpenDialog()}
-        >
-          Nuevo
-        </Button>
+        {!readOnly && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => handleOpenDialog()}
+          >
+            Nuevo
+          </Button>
+        )}
       </Box>
 
       <Paper sx={{ mb: 2 }}>
@@ -211,7 +216,7 @@ function CatalogoBase<T extends CatalogoItem>({
                 <TableCell key={field.key}><strong>{field.label}</strong></TableCell>
               ))}
               <TableCell><strong>Estado</strong></TableCell>
-              <TableCell><strong>Acciones</strong></TableCell>
+              {!readOnly && <TableCell><strong>Acciones</strong></TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -241,6 +246,7 @@ function CatalogoBase<T extends CatalogoItem>({
                       size="small"
                     />
                   </TableCell>
+                  {!readOnly && (
                   <TableCell>
                     <IconButton
                       size="small"
@@ -257,6 +263,7 @@ function CatalogoBase<T extends CatalogoItem>({
                       <Delete />
                     </IconButton>
                   </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

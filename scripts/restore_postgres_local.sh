@@ -20,7 +20,7 @@ BACKUP_FILE="$1"
 TARGET_DB="${TARGET_DB:-synesis_restore_test}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-${DB_USER:-synesis_user}}"
+PGUSER="${PGUSER:-${DB_USER:-postgres}}"
 PROD_DB_NAME="${PROD_DB_NAME:-synesis_db}"
 
 if [[ ! -f "${BACKUP_FILE}" ]]; then

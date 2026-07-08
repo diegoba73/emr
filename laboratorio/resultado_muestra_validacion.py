@@ -67,6 +67,30 @@ MSG_TIPO_MUESTRA_INCORRECTO = (
     "La muestra no corresponde al tipo requerido para este examen."
 )
 
+from laboratorio.muestra_estado import aplicar_recibir
+
+
+def asegurar_muestra_lista_para_carga(
+    muestra: Muestra,
+    *,
+    actor,
+    view: str,
+) -> Muestra:
+    """
+    Tras tomar muestra en la orden (sin pestaña Muestras), el tubo puede quedar TOMADA.
+    Al cargar resultados se recepciona automáticamente si hace falta.
+    """
+    if muestra.estado == "TOMADA":
+        aplicar_recibir(
+            muestra.pk,
+            actor=actor,
+            view=view,
+            ubicacion_actual=muestra.ubicacion_actual or "Laboratorio",
+            observaciones="Recepción automática al cargar resultados.",
+        )
+        muestra.refresh_from_db()
+    return muestra
+
 
 def assert_tipo_examen_muestra_carga(
     *,

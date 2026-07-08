@@ -11,7 +11,6 @@ from catalogos.views import (
     AreaInternacionViewSet,
     CamaInternacionViewSet,
     CentroFisicoViewSet,
-    ProcedimientoViewSet,
     TipoAtencionViewSet,
 )
 
@@ -60,20 +59,3 @@ class TestCatalogosViewSetsAuthenticated:
         view = CamaInternacionViewSet.as_view({"get": "list"})
         response = view(request)
         assert response.status_code == 200
-
-    def test_procedimientos_list_200_when_authenticated(self, api_rf, authenticated_user):
-        request = api_rf.get("/fake/")
-        force_authenticate(request, user=authenticated_user)
-        view = ProcedimientoViewSet.as_view({"get": "list"})
-        response = view(request)
-        assert response.status_code == 200
-
-
-@pytest.mark.django_db
-class TestProcedimientoViewSetUnauthenticated:
-    def test_procedimientos_list_not_200_without_auth(self, api_rf):
-        request = api_rf.get("/fake/")
-        view = ProcedimientoViewSet.as_view({"get": "list"})
-        response = view(request)
-        assert response.status_code != 200
-        assert response.status_code in (401, 403)

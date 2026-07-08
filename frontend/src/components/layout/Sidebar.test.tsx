@@ -70,6 +70,32 @@ describe('Sidebar Consultas (/atenciones)', () => {
   });
 });
 
+describe('Sidebar paciente', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useData.mockReturnValue({
+      currentUser: mockUser({ rol: 'PACIENTE', paciente: { id: 1, dni: '12345678' } }),
+    });
+  });
+
+  it('muestra Inicio, Turnos y módulos propios sin Pacientes', () => {
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Inicio')).toBeInTheDocument();
+    expect(screen.getByText('Turnos')).toBeInTheDocument();
+    expect(screen.getByText('Consultas')).toBeInTheDocument();
+    expect(screen.getByText('Archivos')).toBeInTheDocument();
+    expect(screen.getByText('Estudios complementarios')).toBeInTheDocument();
+    expect(screen.getByText('Análisis Clínico')).toBeInTheDocument();
+    expect(screen.queryByText('Pacientes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
+  });
+});
+
 describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
   const labStaff = mockUser({ rol: 'LABORATORIO', is_staff: true });
 

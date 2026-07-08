@@ -88,7 +88,7 @@ class TestLimsPdfInforme(TestCase):
         self.sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         self.sol.tipos_examen.add(self.te)

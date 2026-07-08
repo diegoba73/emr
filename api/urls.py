@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from pacientes.views import PacienteViewSet
 from medicos.views import MedicoViewSet, EspecialidadViewSet
-from catalogos.views import CentroFisicoViewSet, TipoAtencionViewSet, ProcedimientoViewSet
+from catalogos.views import CentroFisicoViewSet, TipoAtencionViewSet
 from turnos.views import TurnoViewSet, RecursoViewSet, AtencionViewSet
 from historias_clinicas.views import HistoriaClinicaViewSet, ConsultaViewSet
 from solicitudes.views import SolicitudViewSet
@@ -46,7 +46,6 @@ router.register(r'tipos-atencion', TipoAtencionViewSet, basename='tipos-atencion
 catalogos_router = DefaultRouter()
 catalogos_router.register(r'tipos-atencion', TipoAtencionViewSet, basename='catalogos-tipos-atencion')
 catalogos_router.register(r'centros-fisicos', CentroFisicoViewSet, basename='catalogos-centros-fisicos')
-catalogos_router.register(r'procedimientos', ProcedimientoViewSet, basename='catalogos-procedimientos')
 router.register(r'recursos', RecursoViewSet, basename='recursos')
 router.register(r'turnos', TurnoViewSet, basename='turnos')
 router.register(r'atenciones', AtencionViewSet, basename='atenciones')

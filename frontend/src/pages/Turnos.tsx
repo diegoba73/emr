@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Calendar as BigCalendarBase } from 'react-big-calendar';
 import { localizer } from '../utils/calendarLocalizer';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -20,8 +21,9 @@ import {
   Chip,
   IconButton,
 	Tooltip,
+	Alert,
 } from '@mui/material';
-import { Add, Clear, FilterList } from '@mui/icons-material';
+import { Add, Clear, FilterList, Close } from '@mui/icons-material';
 import './Turnos.css';
 import {
 	extractSearchWords,
@@ -32,10 +34,25 @@ import { isSelectableSlotAction } from '../utils/calendarSlotSelection';
 import {
 	canCreateTurno,
 	canEditTurno,
+	canViewTurnosAgenda,
 	isAgendaReadOnlyRole,
-	isLaboratorioRole,
 } from '../utils/turnoPermissions';
-
+import { isTurnoEstudio } from '../utils/recursosEstudio';
+import {
+	formatTurnoCalendarTitle,
+	getTurnoAgendaKind,
+	getTurnoKindMeta,
+	TURNO_KIND_META,
+	type TurnoAgendaKind,
+} from '../utils/turnoKind';
+import {
+	getTurnoEstadoColor,
+	TURNO_ESTADOS_CALENDARIO,
+} from '../utils/turnoEstadoColors';
+import { canAsignarTurnoEstudio } from '../modules/estudios/permissions';
+import { getEstudioComplementario } from '../services/estudiosComplementariosApi';
+import { AGENDAR_ESTUDIO_QUERY } from '../utils/agendarEstudioNavigation';
+import type { EstudioComplementario } from '../types/estudios';
 // Los tipos locales de `react-big-calendar` en este proyecto no incluyen props
 // como `min/max/scrollToTime` (aunque la librería sí las soporta). Casteamos el
 // componente para mantener comportamiento sin ensuciar el resto del archivo.
@@ -58,12 +75,12 @@ function isOverflowResource(
 	return (r as TurnosCalendarOverflowResource).isOverflow === true;
 }
 
-type WeekCalendarTurnoEvent = {
+type CalendarEvent = {
 	id: number | string;
 	title: string;
 	start: Date;
 	end: Date;
-	resource: Turno;
+	resource: Turno | TurnosCalendarOverflowResource;
 };
 
 function thirtyMinSlotKey(d: Date): string {
@@ -71,7 +88,7 @@ function thirtyMinSlotKey(d: Date): string {
 }
 
 /** Slots de 30 min (clave local) en los que hay al menos un turno — para mostrar franja punteada. */
-function buildSlotKeysConTurno(events: WeekCalendarTurnoEvent[]): Set<string> {
+function buildSlotKeysConTurno(events: CalendarEvent[]): Set<string> {
 	const s = new Set<string>();
 	for (const e of events) {
 		const endMs = e.end.getTime();
@@ -94,27 +111,15 @@ function buildSlotKeysConTurno(events: WeekCalendarTurnoEvent[]): Set<string> {
  * - 2 o más: un solo bloque +N (N = total) y la franja; al clic +N se abre el día a esa hora.
  */
 function buildWeekBucketCappedEvents(
-	events: WeekCalendarTurnoEvent[]
-): Array<{
-	id: number | string;
-	title: string;
-	start: Date;
-	end: Date;
-	resource: Turno | TurnosCalendarOverflowResource;
-}> {
-	const by = new Map<string, WeekCalendarTurnoEvent[]>();
+	events: CalendarEvent[]
+): CalendarEvent[] {
+	const by = new Map<string, CalendarEvent[]>();
 	for (const e of events) {
 		const k = turnoHourBucketKey(e.start);
 		if (!by.has(k)) by.set(k, []);
 		by.get(k)!.push(e);
 	}
-	const out: Array<{
-		id: number | string;
-		title: string;
-		start: Date;
-		end: Date;
-		resource: Turno | TurnosCalendarOverflowResource;
-	}> = [];
+	const out: CalendarEvent[] = [];
 	let synth = 0;
 	by.forEach((list, k) => {
 		if (list.length === 0) {
@@ -161,11 +166,33 @@ const Turnos: React.FC = () => {
 		refreshTurnos,
 	} = useData();
 	const [showModal, setShowModal] = useState(false);
+	/** Evita reemplazar toda la página al refrescar catálogos en segundo plano (p. ej. al abrir el modal). */
+	const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+	useEffect(() => {
+		if (
+			!dataLoading.turnos &&
+			!dataLoading.pacientes &&
+			!dataLoading.medicos &&
+			!dataLoading.especialidades &&
+			!dataLoading.centrosFisicos &&
+			!dataLoading.tiposAtencion
+		) {
+			setHasLoadedOnce(true);
+		}
+	}, [
+		dataLoading.turnos,
+		dataLoading.pacientes,
+		dataLoading.medicos,
+		dataLoading.especialidades,
+		dataLoading.centrosFisicos,
+		dataLoading.tiposAtencion,
+	]);
 	const [editingTurno, setEditingTurno] = useState<Turno | null>(null);
 	const [filterEstado, setFilterEstado] = useState<string>('');
 	const [filterPaciente, setFilterPaciente] = useState<string>('');
 	const [filterMedico, setFilterMedico] = useState<string>('');
 	const [filterTipoRecurso, setFilterTipoRecurso] = useState<string>('');
+	const [filterAgendaKind, setFilterAgendaKind] = useState<'all' | TurnoAgendaKind>('all');
 	const [medicoInputValue, setMedicoInputValue] = useState<string>('');
 	const [medicoOptions, setMedicoOptions] = useState<Medico[]>([]);
 	const [searchingMedicos, setSearchingMedicos] = useState(false);
@@ -177,12 +204,51 @@ const Turnos: React.FC = () => {
 	/** Tras clic en +N (vista semana): scroll a esta hora en vista día; se limpia a ~2 s */
 	const [forcedScrollToTime, setForcedScrollToTime] = useState<Date | null>(null);
 	const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [estudioAgendaPendiente, setEstudioAgendaPendiente] = useState<EstudioComplementario | null>(null);
 
 	const userCanCreateTurno = useMemo(() => canCreateTurno(currentUser), [currentUser]);
+	const userCanAgendarEstudio = useMemo(() => canAsignarTurnoEstudio(currentUser), [currentUser]);
+	const enModoAgendarEstudio = Boolean(estudioAgendaPendiente && userCanAgendarEstudio);
+	const puedeAgendarEnCalendario = userCanCreateTurno || enModoAgendarEstudio;
 	const agendaReadOnly = useMemo(() => isAgendaReadOnlyRole(currentUser), [currentUser]);
-	const laboratorioSinAcceso = useMemo(() => isLaboratorioRole(currentUser), [currentUser]);
+	const puedeVerAgenda = useMemo(() => canViewTurnosAgenda(currentUser), [currentUser]);
 
-	// Ventana horaria visible: horas laborales para que cada slot sea visiblemente
+	const clearEstudioAgendaPendiente = useCallback(() => {
+		setEstudioAgendaPendiente(null);
+		if (searchParams.has(AGENDAR_ESTUDIO_QUERY)) {
+			const next = new URLSearchParams(searchParams);
+			next.delete(AGENDAR_ESTUDIO_QUERY);
+			setSearchParams(next, { replace: true });
+		}
+	}, [searchParams, setSearchParams]);
+
+	useEffect(() => {
+		const raw = searchParams.get(AGENDAR_ESTUDIO_QUERY);
+		if (!raw) {
+			setEstudioAgendaPendiente(null);
+			return;
+		}
+		const id = Number(raw);
+		if (!Number.isFinite(id) || id <= 0) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const est = await getEstudioComplementario(id);
+				if (!cancelled) {
+					setEstudioAgendaPendiente(est);
+					setFilterAgendaKind('estudio');
+				}
+			} catch {
+				if (!cancelled) setEstudioAgendaPendiente(null);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [searchParams]);
+
+	// Ventana horaria visible:
 	// clickeable y no haya mismatch perceptivo entre pixel clickeado y slot.
 	// (Default de react-big-calendar es 00:00-23:59 => cada slot ~20px => imposible acertar).
 	const calendarMinTime = useMemo(() => {
@@ -275,15 +341,6 @@ const Turnos: React.FC = () => {
 		return medicosBase.find(m => m.id === id) || null;
 	}, [filterMedico, medicosBase]);
 
-	const getEstadoColor = (estado: string) => {
-		const colors = {
-			'RESERVADO': '#F59E0B',
-			'CONFIRMADO': '#3B82F6',
-			'REALIZADO': '#8B5CF6',
-			'CANCELADO': '#EF4444',
-		};
-		return colors[estado as keyof typeof colors] || '#6B7280';
-	};
 
 	const filteredTurnos = turnos.filter(turno => {
 		// Filtro por estado
@@ -293,52 +350,26 @@ const Turnos: React.FC = () => {
 		const pacienteMatch = pacienteSearchWords.length === 0 ||
 			(turno.paciente ? pacienteMatchesSearch(turno.paciente, pacienteSearchWords) : false);
 		
-		// Filtro por médico
-		const medicoMatch = !filterMedico || 
-			(turno.medico && turno.medico.id === Number(filterMedico));
+		// Filtro por médico: turnos de estudio en sala no tienen médico asignado al turno
+		const medicoMatch = !filterMedico ||
+			(turno.medico && turno.medico.id === Number(filterMedico)) ||
+			(isTurnoEstudio(turno) &&
+				turno.estudio_complementario?.medico_solicitante_id === Number(filterMedico)) ||
+			(isTurnoEstudio(turno) && !turno.medico);
 
 		const tipoMatch = !filterTipoRecurso ||
 			(turno.recurso && turno.recurso.tipo_recurso === filterTipoRecurso);
+
+		const agendaKindMatch =
+			filterAgendaKind === 'all' || getTurnoAgendaKind(turno) === filterAgendaKind;
 		
-		return estadoMatch && pacienteMatch && medicoMatch && tipoMatch;
+		return estadoMatch && pacienteMatch && medicoMatch && tipoMatch && agendaKindMatch;
 	});
 
 	// Mapear turnos a eventos del calendario
-	interface CalendarEvent {
-		id: number | string;
-		title: string;
-		start: Date;
-		end: Date;
-		resource: Turno | TurnosCalendarOverflowResource;
-	}
-
-	const calendarEvents = useMemo(() => {
+	const calendarEvents = useMemo((): CalendarEvent[] => {
 		return filteredTurnos.map(turno => {
-			// Generar título del evento
-			let title = 'Disponible';
-			if (turno.paciente && turno.medico) {
-				const pacienteNombre = turno.paciente.apellido 
-					? `${turno.paciente.apellido}, ${turno.paciente.nombre || ''}`.trim()
-					: turno.paciente.nombre || 'Sin nombre';
-				const medicoNombre = turno.medico.apellido 
-					? `Dr. ${turno.medico.apellido}`
-					: turno.medico.nombre 
-						? `Dr. ${turno.medico.nombre}`
-						: 'Sin médico';
-				title = `${pacienteNombre} (${medicoNombre})`;
-			} else if (turno.paciente) {
-				const pacienteNombre = turno.paciente.apellido 
-					? `${turno.paciente.apellido}, ${turno.paciente.nombre || ''}`.trim()
-					: turno.paciente.nombre || 'Sin nombre';
-				title = `${pacienteNombre}`;
-			} else if (turno.medico) {
-				const medicoNombre = turno.medico.apellido 
-					? `Dr. ${turno.medico.apellido}`
-					: turno.medico.nombre 
-						? `Dr. ${turno.medico.nombre}`
-						: 'Sin médico';
-				title = `Disponible (${medicoNombre})`;
-			}
+			const title = formatTurnoCalendarTitle(turno);
 
 			return {
 				id: turno.id,
@@ -370,11 +401,17 @@ const Turnos: React.FC = () => {
 	// "click en calendario → nuevo turno", independientemente del camino (slot wrapper,
 	// onSelectSlot por drag, o Month view).
 	const openNewTurnoAt = useCallback((when: Date) => {
+		if (enModoAgendarEstudio && estudioAgendaPendiente) {
+			setSelectedDateTime(new Date(when.getTime()));
+			setEditingTurno(null);
+			setShowModal(true);
+			return;
+		}
 		if (!canCreateTurno(currentUser)) return;
 		setSelectedDateTime(new Date(when.getTime()));
 		setEditingTurno(null);
 		setShowModal(true);
-	}, [currentUser]);
+	}, [currentUser, enModoAgendarEstudio, estudioAgendaPendiente]);
 
 	// `onSelectSlot` de react-big-calendar calcula el slot por pixel, lo cual es
 	// frágil (depende de `pageYOffset`, containers con overflow, CSS, etc.).
@@ -383,7 +420,7 @@ const Turnos: React.FC = () => {
 	//   - 'select' (drag-to-select en day/week): usa el inicio del rango.
 	//   - 'click' en view month: la hora no tiene sentido, usamos la fecha.
 	const handleSelectSlot = (slotInfo: { start: Date; end: Date; action: string; slots?: Date[] }) => {
-		if (!userCanCreateTurno) return;
+		if (!puedeAgendarEnCalendario) return;
 		if (!isSelectableSlotAction(slotInfo.action)) return;
 		// En day/week los clicks los maneja TimeSlotWrapper (hora exacta).
 		if (currentView !== 'month' && slotInfo.action === 'click') return;
@@ -412,7 +449,7 @@ const Turnos: React.FC = () => {
 			};
 		}) {
 			if (!slotMetrics?.groups) return <>{children}</>;
-			if (!userCanCreateTurno) return <>{children}</>;
+			if (!puedeAgendarEnCalendario) return <>{children}</>;
 			const strips: React.ReactNode[] = [];
 			for (const grp of slotMetrics.groups) {
 				for (const slotValue of grp) {
@@ -466,7 +503,7 @@ const Turnos: React.FC = () => {
 				</div>
 			);
 		};
-	}, [slotKeysConTurno, openNewTurnoAt, currentView, userCanCreateTurno]);
+	}, [slotKeysConTurno, openNewTurnoAt, currentView, puedeAgendarEnCalendario]);
 
 	// Wrapper que react-big-calendar usa para cada sub-slot de 30 min en day/week.
 	// Nos pasa `value` con la Date exacta del slot, así el click abre el modal
@@ -475,7 +512,7 @@ const Turnos: React.FC = () => {
 		return ({ value, children }: { value: Date; children: React.ReactElement }) => {
 			const child = React.Children.only(children) as React.ReactElement<any>;
 			const inTimeGrid = currentView === 'day' || currentView === 'week';
-			if (!userCanCreateTurno) {
+			if (!puedeAgendarEnCalendario) {
 				return child;
 			}
 			return React.cloneElement(child, {
@@ -484,13 +521,15 @@ const Turnos: React.FC = () => {
 					openNewTurnoAt(value);
 				},
 				title: inTimeGrid
-					? `Nuevo turno — ${formatHoraCorta(value)}. Clic en la grilla o en la franja punteada (si hay turnos en esta franja).`
+					? enModoAgendarEstudio
+						? `Asignar estudio — ${formatHoraCorta(value)}`
+						: `Nuevo turno — ${formatHoraCorta(value)}. Clic en la grilla o en la franja punteada (si hay turnos en esta franja).`
 					: undefined,
 				style: { ...(child.props?.style || {}), cursor: 'pointer' },
 			});
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentView, openNewTurnoAt, userCanCreateTurno]);
+	}, [currentView, openNewTurnoAt, puedeAgendarEnCalendario, enModoAgendarEstudio]);
 
 	const RbcEventWithTooltip = useCallback(
 		(p: { event: CalendarEvent; title?: React.ReactNode }) => {
@@ -521,7 +560,9 @@ const Turnos: React.FC = () => {
 				);
 			}
 			const t = r;
+			const kindMeta = getTurnoKindMeta(t);
 			const parts = [
+				`Tipo: ${kindMeta.label}`,
 				`Estado: ${t.estado}`,
 				t.recurso?.nombre ? `Recurso: ${t.recurso.nombre}` : '',
 				t.motivo_reserva || t.motivo_consulta || '',
@@ -653,7 +694,14 @@ const Turnos: React.FC = () => {
 				},
 			};
 		}
-		const color = getEstadoColor(event.resource.estado);
+		const color = getTurnoEstadoColor(event.resource.estado);
+		const kind = getTurnoAgendaKind(event.resource);
+		const kindAccent =
+			kind === 'estudio'
+				? { boxShadow: 'inset 4px 0 0 rgba(255,255,255,0.55)' }
+				: kind === 'procedimiento'
+					? { boxShadow: 'inset 4px 0 0 rgba(0,0,0,0.2)' }
+					: {};
 		const dayExtras =
 			currentView === 'day'
 				? {
@@ -671,12 +719,21 @@ const Turnos: React.FC = () => {
 				border: 'none',
 				display: 'block',
 				cursor: 'pointer',
+				...kindAccent,
 				...dayExtras,
 			},
 		};
 	};
 
-	if (dataLoading.turnos || dataLoading.pacientes || dataLoading.medicos || dataLoading.especialidades || dataLoading.centrosFisicos || dataLoading.tiposAtencion) {
+	const isInitialCatalogLoading =
+		dataLoading.turnos ||
+		dataLoading.pacientes ||
+		dataLoading.medicos ||
+		dataLoading.especialidades ||
+		dataLoading.centrosFisicos ||
+		dataLoading.tiposAtencion;
+
+	if (!hasLoadedOnce && isInitialCatalogLoading) {
 		return (
 			<div className="dashboard">
 				<div className="container">
@@ -686,14 +743,14 @@ const Turnos: React.FC = () => {
 		);
 	}
 
-	if (laboratorioSinAcceso) {
+	if (!puedeVerAgenda) {
 		return (
 			<Box className="dashboard" sx={{ p: 3 }}>
 				<Typography variant="h5" gutterBottom>
 					Agenda de turnos
 				</Typography>
 				<Typography variant="body1" color="text.secondary">
-					Tu rol no tiene acceso a la gestión de turnos. El backend no expone turnos para laboratorio.
+					Tu rol no tiene acceso a la agenda de turnos.
 				</Typography>
 			</Box>
 		);
@@ -768,17 +825,17 @@ const Turnos: React.FC = () => {
           />
 
           <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Tipo de turno</InputLabel>
+            <InputLabel>Recurso / sala</InputLabel>
             <Select
               value={filterTipoRecurso}
-              label="Tipo de turno"
+              label="Recurso / sala"
               onChange={(e) => setFilterTipoRecurso(e.target.value)}
             >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="CONSULTORIO">Consulta ambulatoria</MenuItem>
-              <MenuItem value="SALA_PROCEDIMIENTO">Procedimiento</MenuItem>
+              <MenuItem value="">Todos los recursos</MenuItem>
+              <MenuItem value="CONSULTORIO">Consultorios</MenuItem>
+              <MenuItem value="SALA_PROCEDIMIENTO">Salas de estudio</MenuItem>
               <MenuItem value="SALA_HEMODINAMIA">Hemodinamia</MenuItem>
-              <MenuItem value="QUIROFANO">Cirugía</MenuItem>
+              <MenuItem value="QUIROFANO">Quirófano</MenuItem>
             </Select>
           </FormControl>
 
@@ -798,7 +855,7 @@ const Turnos: React.FC = () => {
           </FormControl>
 
           <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-            {(filterPaciente || filterMedico || filterEstado || filterTipoRecurso) && (
+            {(filterPaciente || filterMedico || filterEstado || filterTipoRecurso || filterAgendaKind !== 'all') && (
               <Tooltip title="Limpiar filtros">
                 <IconButton
                   size="small"
@@ -808,6 +865,7 @@ const Turnos: React.FC = () => {
                     setFilterMedico('');
                     setFilterEstado('');
                     setFilterTipoRecurso('');
+                    setFilterAgendaKind('all');
                     setMedicoInputValue('');
                     setMedicoOptions(medicosBase);
                   }}
@@ -828,22 +886,103 @@ const Turnos: React.FC = () => {
                   setShowModal(true);
                 }}
               >
-                Nuevo Turno
+                Nuevo turno
               </Button>
             )}
           </Box>
         </Box>
 
-        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+            Ver:
+          </Typography>
+          {(['all', 'consulta', 'estudio'] as const).map((kind) => {
+            const label =
+              kind === 'all' ? 'Todos' : TURNO_KIND_META[kind].shortLabel + 's';
+            const selected = filterAgendaKind === kind;
+            return (
+              <Chip
+                key={kind}
+                label={label}
+                size="small"
+                clickable
+                color={selected ? 'primary' : 'default'}
+                variant={selected ? 'filled' : 'outlined'}
+                onClick={() => setFilterAgendaKind(kind === 'all' ? 'all' : kind)}
+              />
+            );
+          })}
+        </Box>
+
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <FilterList sx={{ fontSize: 18, color: 'text.secondary' }} />
           <Typography variant="body2" color="text.secondary">
             Mostrando {filteredTurnos.length} de {turnos.length} turnos
           </Typography>
-          {(filterPaciente || filterMedico || filterEstado || filterTipoRecurso) && (
+          {(filterPaciente || filterMedico || filterEstado || filterTipoRecurso || filterAgendaKind !== 'all') && (
             <Chip label="Filtros activos" size="small" color="primary" variant="outlined" />
           )}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', ml: { sm: 'auto' }, alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+              Estado:
+            </Typography>
+            {TURNO_ESTADOS_CALENDARIO.map((est) => {
+              const selected = filterEstado === est.value;
+              return (
+                <Chip
+                  key={est.value}
+                  size="small"
+                  clickable
+                  variant={selected ? 'filled' : 'outlined'}
+                  label={est.label}
+                  onClick={() => setFilterEstado(selected ? '' : est.value)}
+                  sx={{
+                    borderColor: est.color,
+                    ...(selected
+                      ? { bgcolor: est.color, color: '#fff', '&:hover': { bgcolor: est.color, opacity: 0.92 } }
+                      : {
+                          '& .MuiChip-label': { display: 'flex', alignItems: 'center', gap: 0.75 },
+                        }),
+                  }}
+                  icon={
+                    !selected ? (
+                      <Box
+                        component="span"
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          bgcolor: est.color,
+                          ml: 0.5,
+                        }}
+                      />
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </Box>
         </Box>
       </Box>
+
+			{enModoAgendarEstudio && estudioAgendaPendiente && (
+				<Alert
+					severity="info"
+					sx={{ mt: 2 }}
+					action={
+						<Button color="inherit" size="small" startIcon={<Close />} onClick={clearEstudioAgendaPendiente}>
+							Cancelar
+						</Button>
+					}
+				>
+					<strong>Asignar turno de estudio:</strong> elegí día y hora en el calendario para el estudio #
+					{estudioAgendaPendiente.id}
+					{estudioAgendaPendiente.tipo_estudio_nombre
+						? ` (${estudioAgendaPendiente.tipo_estudio_nombre})`
+						: ''}
+					. Al hacer clic en una franja horaria se abrirá el formulario con los datos cargados.
+				</Alert>
+			)}
 
 			{agendaReadOnly && (
 				<Box
@@ -864,7 +1003,7 @@ const Turnos: React.FC = () => {
 				</Box>
 			)}
 
-			{currentView === 'day' && userCanCreateTurno && (
+			{currentView === 'day' && puedeAgendarEnCalendario && (
 				<Box
 					role="note"
 					sx={{
@@ -921,9 +1060,9 @@ const Turnos: React.FC = () => {
 					onNavigate={(date: Date) => setCurrentDate(date)}
 					views={['month', 'week', 'day']}
 					defaultView="week"
-					onSelectSlot={userCanCreateTurno ? handleSelectSlot : undefined}
+					onSelectSlot={puedeAgendarEnCalendario ? handleSelectSlot : undefined}
 					onSelectEvent={handleSelectEvent}
-					selectable={userCanCreateTurno}
+					selectable={puedeAgendarEnCalendario}
 					step={30}
 					timeslots={2}
 					min={calendarMinTime}
@@ -947,7 +1086,13 @@ const Turnos: React.FC = () => {
 
 			{/* Modal Turno */}
 			<TurnoDrawer
-				key={editingTurno ? `edit-${editingTurno.id}` : 'new'}
+				key={
+					editingTurno
+						? `edit-${editingTurno.id}`
+						: estudioAgendaPendiente
+							? `estudio-${estudioAgendaPendiente.id}-${selectedDateTime?.getTime() ?? 'slot'}`
+							: 'new'
+				}
 				open={showModal}
 				onClose={() => {
 					setShowModal(false);
@@ -956,11 +1101,15 @@ const Turnos: React.FC = () => {
 				}}
 				editingTurno={editingTurno}
 				selectedDateTime={selectedDateTime}
+				initialAgendaTipo={estudioAgendaPendiente ? 'estudio' : undefined}
+				initialEstudio={estudioAgendaPendiente}
 				forceReadOnly={
 					agendaReadOnly ||
 					(editingTurno
 						? !canEditTurno(currentUser, editingTurno)
-						: !userCanCreateTurno)
+						: enModoAgendarEstudio
+							? false
+							: !userCanCreateTurno)
 				}
 				onSuccess={async () => {
 					try {
@@ -968,6 +1117,7 @@ const Turnos: React.FC = () => {
 						setShowModal(false);
 						setEditingTurno(null);
 						setSelectedDateTime(null);
+						clearEstudioAgendaPendiente();
 					} catch {
 						// El modal ya mostró feedback; no interrumpir el cierre
 					}
@@ -985,6 +1135,7 @@ const Turnos: React.FC = () => {
 					setSelectedAtencionId(null);
 				}}
 				currentUserRole={currentUser?.rol}
+				onIntervencionSaved={refreshTurnos}
 			/>
 		</div>
 		</div>

@@ -96,7 +96,7 @@ class TestResultadoExamenClinico:
         )
         pac = Paciente.objects.create(dni="99887766", nombre="P", apellido="B41")
         sol = SolicitudExamen.objects.create(
-            paciente=pac, origen_solicitud="EMR", estado="EN_PROCESO"
+            paciente=pac, origen_solicitud="AMBULATORIO_CEHTA", estado="EN_PROCESO"
         )
         res = ResultadoExamen.objects.create(
             solicitud=sol, tipo_examen=te, valor_obtenido=""

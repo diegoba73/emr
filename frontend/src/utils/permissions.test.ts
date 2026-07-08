@@ -4,6 +4,7 @@ import {
   canAccessAtenciones,
   canAccessAuditoria,
   canAccessPacientes,
+  canAccessPaciente360,
   canAccessSolicitudes,
   canCreatePaciente,
   canDownloadArchivoMedico,
@@ -33,16 +34,25 @@ function user(overrides: Partial<User> & Pick<User, 'rol'>): User {
 }
 
 describe('canAccessPacientes', () => {
-  it('permite roles clínicos/administrativos y paciente', () => {
+  it('permite roles clínicos/administrativos y médico en listado', () => {
     expect(canAccessPacientes(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canAccessPacientes(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canAccessPacientes(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canAccessPacientes(user({ rol: 'MEDICO' }))).toBe(true);
-    expect(canAccessPacientes(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('bloquea laboratorio y sin rol', () => {
-    expect(canAccessPacientes(user({ rol: 'LABORATORIO' }))).toBe(false);
+  it('no permite paciente en listado /pacientes', () => {
+    expect(canAccessPacientes(user({ rol: 'PACIENTE' }))).toBe(false);
+  });
+
+  it('permite paciente en vista 360 propia', () => {
+    expect(canAccessPaciente360(user({ rol: 'PACIENTE' }))).toBe(true);
+  });
+
+  it('permite laboratorio y profesionales de estudio en listado operativo', () => {
+    expect(canAccessPacientes(user({ rol: 'LABORATORIO' }))).toBe(true);
+    expect(canAccessPacientes(user({ rol: 'RADIOLOGO' }))).toBe(true);
+    expect(canAccessPacientes(user({ rol: 'KINESIOLOGO' }))).toBe(true);
     expect(canAccessPacientes(null)).toBe(false);
   });
 
@@ -95,9 +105,11 @@ describe('canAccessArchivosMedicos', () => {
 });
 
 describe('canWriteArchivoMedico / canDownloadArchivoMedico', () => {
-  it('escritura solo admin, médico y paciente', () => {
+  it('escritura solo admin y médico; paciente solo descarga', () => {
     expect(canWriteArchivoMedico(user({ rol: 'SECRETARIA' }))).toBe(false);
     expect(canWriteArchivoMedico(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canWriteArchivoMedico(user({ rol: 'PACIENTE' }))).toBe(false);
+    expect(canDownloadArchivoMedico(user({ rol: 'PACIENTE' }))).toBe(true);
     expect(canDownloadArchivoMedico(user({ rol: 'MEDICO' }))).toBe(true);
   });
 });
@@ -119,9 +131,9 @@ describe('LIMS permissions (re-export)', () => {
     expect(canAccessLims(enf)).toBe(false);
   });
 
-  it('validar LIMS solo admin/superuser', () => {
+  it('finalizar LIMS admin y laboratorio', () => {
     expect(canValidateLims(adm)).toBe(true);
-    expect(canValidateLims(lab)).toBe(false);
+    expect(canValidateLims(lab)).toBe(true);
     expect(canValidateLims(med)).toBe(false);
   });
 
@@ -179,8 +191,10 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(isEmrStaffOrAdmin(labStaff)).toBe(false);
   });
 
-  it('bloquea módulos EMR PHI', () => {
-    expect(canAccessPacientes(labStaff)).toBe(false);
+  it('lectura operativa de pacientes y turnos; sin módulos clínicos EMR', () => {
+    expect(canAccessPacientes(labStaff)).toBe(true);
+    expect(canViewTurnosAgenda(labStaff)).toBe(true);
+    expect(canMutateTurnosGlobally(labStaff)).toBe(false);
     expect(canAccessAtenciones(labStaff)).toBe(false);
     expect(canOperateAtenciones(labStaff)).toBe(false);
     expect(canAccessAuditoria(labStaff)).toBe(false);
@@ -189,15 +203,10 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(canAccessArchivosMedicos(labStaff)).toBe(false);
   });
 
-  it('bloquea agenda/turnos globales por is_staff', () => {
-    expect(canViewTurnosAgenda(labStaff)).toBe(false);
-    expect(canMutateTurnosGlobally(labStaff)).toBe(false);
-  });
-
   it('conserva acceso LIMS', () => {
     expect(canAccessLims(labStaff)).toBe(true);
     expect(canAccessMicrobiologia(labStaff)).toBe(true);
-    expect(canValidateLims(labStaff)).toBe(false);
+    expect(canValidateLims(labStaff)).toBe(true);
     expect(canValidateMicrobiologia(labStaff)).toBe(false);
   });
 

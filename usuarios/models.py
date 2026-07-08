@@ -11,6 +11,10 @@ class User(AbstractUser):
         ('secretaria', 'Secretaria'),
         ('enfermeria', 'Enfermería'),
         ('laboratorio', 'Laboratorio'),
+        ('kinesiologo', 'Kinesiólogo'),
+        ('radiologo', 'Radiólogo'),
+        ('ecografista', 'Ecografista'),
+        ('fonoaudiologo', 'Fonoaudiólogo'),
         ('admin', 'Administrador'),
     ]
     
@@ -52,10 +56,16 @@ class User(AbstractUser):
     @property
     def es_enfermeria(self):
         return self.rol == 'enfermeria'
+
+    @property
+    def es_profesional_estudio(self):
+        from usuarios.roles import es_rol_estudio_complementario
+        return es_rol_estudio_complementario(self.rol)
     
     def puede_ver_todos_los_turnos(self):
         """Determina si el usuario puede ver todos los turnos"""
-        return self.rol in ['secretaria', 'admin']
+        from usuarios.roles import es_agenda_turnos_lectura
+        return self.rol in ['secretaria', 'admin'] or es_agenda_turnos_lectura(self.rol)
     
     def puede_gestionar_turnos(self):
         """Determina si el usuario puede gestionar turnos"""

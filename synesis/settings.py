@@ -284,5 +284,25 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Correo (informes LIMS). En desarrollo usa consola si no hay SMTP.
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in ('1', 'true', 'yes')
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'laboratorio@localhost')
+
+# URL pública del API (HTTPS) para que Twilio/WhatsApp descarguen el PDF del informe.
+# Ej: https://emr.midominio.com
+PUBLIC_API_BASE_URL = os.getenv('PUBLIC_API_BASE_URL', '').strip().rstrip('/')
+
 # Configuración del modelo de usuario personalizado
 AUTH_USER_MODEL = 'usuarios.User'
+
+# Comprobaciones de BD única local (synesis/db_checks.py)
+import synesis.db_checks  # noqa: F401, E402

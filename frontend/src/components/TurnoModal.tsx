@@ -11,6 +11,8 @@ import {
   Typography,
   IconButton,
   Chip,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,12 +34,31 @@ import {
   canReprogramarTurno,
   canMarcarRealizadoTurno,
   canMarcarNoAsistioTurno,
+  canMutateTurnosGlobally,
+  pacientePuedeMutarTurno,
+  getCurrentMedicoId,
   shouldLockMedicoField,
 } from '../utils/turnoPermissions';
 import {
   CLINICAL_ACTION_ERRORS,
   getSafeClinicalActionMessage,
 } from '../utils/apiError';
+import { isTurnoEstudio, listRecursosEstudioAgenda } from '../utils/recursosEstudio';
+import { getTurnoAgendaKind, TURNO_KIND_META } from '../utils/turnoKind';
+import { Link as RouterLink } from 'react-router-dom';
+import AgendaTipoSelector, { type AgendaTipo } from './turnos/AgendaTipoSelector';
+import { asignarTurnoEstudio, agendarTurnoEstudioDesdeAgenda, listTiposEstudioComplementario } from '../services/estudiosComplementariosApi';
+import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
+import { canAsignarTurnoEstudio } from '../modules/estudios/permissions';
+import type { EstudioComplementario, TipoEstudioComplementario } from '../types/estudios';
+import { ORIGEN_OPTIONS } from '../modules/estudios/constants';
+import { pacienteLabelFromList } from '../utils/estudioAgendaFormat';
+import {
+  buildEstudioTipoCatalogOptions,
+  isEstudioTipoCatalogFallbackId,
+  resolveEstudioModalidadFromTipoId,
+} from '../utils/estudioTipoCatalog';
+import type { Recurso } from '../types';
 
 const getMedicoLabel = (medico?: Medico | null) => {
   if (!medico) return '';
@@ -69,6 +90,10 @@ interface TurnoModalProps {
   onOpenAtencion?: (atencionId: number) => void;
   /** Solo lectura por rol (enfermería, turno ajeno, etc.). Backend sigue siendo SoT. */
   forceReadOnly?: boolean;
+  /** Al crear: tipo inicial (consulta o estudio). */
+  initialAgendaTipo?: AgendaTipo;
+  /** Estudio preseleccionado (p. ej. desde módulo Estudios). */
+  initialEstudio?: EstudioComplementario | null;
 }
 
 const TurnoModal: React.FC<TurnoModalProps> = ({
@@ -79,12 +104,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   selectedDateTime = null,
   onOpenAtencion,
   forceReadOnly = false,
+  initialAgendaTipo = 'consulta',
+  initialEstudio = null,
 }) => {
   const {
     recursos,
     currentUser,
-    refreshAll,
-    refreshTurnos
+    loadRecursos,
+    refreshTurnos,
+    pacientes,
+    loadPacientes,
   } = useData();
   const queryClient = useQueryClient();
   const { openMotivoDialog, dialogProps: motivoDialogProps } = useMotivoDialog();
@@ -263,11 +292,25 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
 
   const [loading, setLoading] = useState(false);
 
+  const puedeAgendarEstudio = canAsignarTurnoEstudio(currentUser);
+  const lockEstudioSelection = Boolean(initialEstudio?.id);
+  const [agendaTipo, setAgendaTipo] = useState<AgendaTipo>('consulta');
+  const [recursosEstudio, setRecursosEstudio] = useState<Recurso[]>([]);
+  const [tiposEstudio, setTiposEstudio] = useState<TipoEstudioComplementario[]>([]);
+  const [tipoEstudioId, setTipoEstudioId] = useState('');
+  const [estudioOrigen, setEstudioOrigen] = useState('EXTERNO');
+  const [loadingEstudioForm, setLoadingEstudioForm] = useState(false);
+  const [estudioFormError, setEstudioFormError] = useState<string | null>(null);
+
+  const isModoEstudio = !editingTurno && agendaTipo === 'estudio';
+  const isModoConsulta = !editingTurno && agendaTipo === 'consulta';
+
   const canMutateByRole = useMemo(() => {
     if (forceReadOnly || !currentUser) return false;
     if (editingTurno) return canEditTurnoByRole(currentUser, turnoVista);
+    if (initialEstudio || agendaTipo === 'estudio') return puedeAgendarEstudio;
     return canCreateTurno(currentUser);
-  }, [forceReadOnly, currentUser, editingTurno, turnoVista]);
+  }, [forceReadOnly, currentUser, editingTurno, turnoVista, initialEstudio, agendaTipo, puedeAgendarEstudio]);
 
   const lockMedicoField = shouldLockMedicoField(currentUser);
   const turnoParaAcciones = (turnoVista as Turno | undefined) ?? editingTurno;
@@ -345,32 +388,144 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     });
   };
 
-  // Forzar carga de datos cuando se abre el modal
+  const recursosLoadAttemptedRef = useRef(false);
+
+  // Cargar recursos bajo demanda al abrir (sin refreshAll: evita bloquear la página Turnos).
   useEffect(() => {
-    if (open) {
-      // Si faltan datos críticos, intentar cargarlos inmediatamente
-      const faltanDatosCriticos = recursos.length === 0;
-
-      if (faltanDatosCriticos) {
-        setIsLoadingData(true);
-
-        // Forzar recarga inmediata
-        const loadData = async () => {
-          try {
-            // Recargar el contexto completo
-            await refreshAll();
-          } catch (error) {
-          } finally {
-            setIsLoadingData(false);
-          }
-        };
-
-        loadData();
-      } else {
+    if (!open) {
+      recursosLoadAttemptedRef.current = false;
+      setIsLoadingData(false);
+      return;
+    }
+    if (recursos.length > 0) {
+      setIsLoadingData(false);
+      return;
+    }
+    if (recursosLoadAttemptedRef.current) {
+      return;
+    }
+    recursosLoadAttemptedRef.current = true;
+    setIsLoadingData(true);
+    void (async () => {
+      try {
+        await loadRecursos();
+      } finally {
         setIsLoadingData(false);
       }
+    })();
+  }, [open, recursos.length, loadRecursos]);
+
+  useEffect(() => {
+    if (!open || editingTurno) return;
+    const tipo: AgendaTipo =
+      initialAgendaTipo === 'estudio' && puedeAgendarEstudio ? 'estudio' : 'consulta';
+    setAgendaTipo(tipo);
+    setEstudioFormError(null);
+    if (initialEstudio?.paciente_id) {
+      setFormData((prev) => ({
+        ...prev,
+        paciente: String(initialEstudio.paciente_id),
+      }));
+      const p = pacientes.find((x) => x.id === initialEstudio.paciente_id);
+      if (p) setSelectedPaciente(p);
     }
-  }, [open, recursos.length, refreshAll]);
+    if (initialEstudio?.tipo_estudio) {
+      setTipoEstudioId(String(initialEstudio.tipo_estudio));
+    }
+  }, [open, editingTurno, initialAgendaTipo, initialEstudio, puedeAgendarEstudio, pacientes]);
+
+  useEffect(() => {
+    if (open) return;
+    setTiposEstudio([]);
+    setTipoEstudioId('');
+    setRecursosEstudio([]);
+    setEstudioFormError(null);
+    setLoadingEstudioForm(false);
+  }, [open]);
+
+  const estudioFormActivo =
+    open && !editingTurno && agendaTipo === 'estudio' && puedeAgendarEstudio;
+
+  useEffect(() => {
+    if (!estudioFormActivo) return;
+    if (pacientes.length === 0) {
+      void loadPacientes();
+    }
+    let cancelled = false;
+    setLoadingEstudioForm(true);
+    setEstudioFormError(null);
+    (async () => {
+      const errors: string[] = [];
+      try {
+        const [salasResult, tiposResult] = await Promise.allSettled([
+          listRecursosEstudioAgenda(),
+          listTiposEstudioComplementario(),
+        ]);
+
+        if (cancelled) return;
+
+        if (salasResult.status === 'fulfilled') {
+          const salas = salasResult.value;
+          setRecursosEstudio(salas);
+          setFormData((prev) => {
+            const salaValida =
+              prev.recurso && salas.some((s) => String(s.id) === prev.recurso);
+            if (salaValida || salas.length === 0) return prev;
+            return { ...prev, recurso: String(salas[0].id) };
+          });
+        } else {
+          errors.push('salas');
+          setRecursosEstudio([]);
+        }
+
+        if (tiposResult.status === 'fulfilled') {
+          const catalog = buildEstudioTipoCatalogOptions(tiposResult.value);
+          setTiposEstudio(catalog);
+          setTipoEstudioId((prev) => {
+            if (prev && catalog.some((t) => String(t.id) === prev)) return prev;
+            if (initialEstudio?.tipo_estudio) {
+              const match = catalog.find((t) => t.id === initialEstudio.tipo_estudio);
+              if (match) return String(match.id);
+            }
+            return catalog[0] ? String(catalog[0].id) : '';
+          });
+        } else {
+          errors.push('tipos de estudio');
+          setTiposEstudio(buildEstudioTipoCatalogOptions([]));
+        }
+
+        if (errors.length > 0) {
+          setEstudioFormError(
+            `No se pudieron cargar: ${errors.join(' y ')}. ${errors.includes('tipos de estudio') ? 'Se muestran modalidades genéricas.' : ''}`.trim()
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingEstudioForm(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [estudioFormActivo, loadPacientes, pacientes.length, initialEstudio?.tipo_estudio, initialEstudio?.id]);
+
+  // Si el perfil médico llega después de abrir el modal (p. ej. post-login), sincronizar el formulario.
+  useEffect(() => {
+    if (!open || !lockMedicoField) return;
+    const medicoId = getCurrentMedicoId(currentUser);
+    if (!medicoId) return;
+    setFormData((prev) => (prev.medico ? prev : { ...prev, medico: String(medicoId) }));
+    setSelectedMedico((prev) => {
+      if (prev?.id === medicoId) return prev;
+      const m = currentUser?.medico;
+      if (!m) return prev;
+      return {
+        id: m.id,
+        nombre: (m as Medico).nombre || currentUser?.first_name || '',
+        apellido: (m as Medico).apellido || currentUser?.last_name || '',
+        matricula: m.matricula || '',
+      } as Medico;
+    });
+  }, [open, lockMedicoField, currentUser, currentUser?.medico?.id]);
 
   // Efecto para actualizar el estado del formulario cuando cambia el estado del turno
   useEffect(() => {
@@ -514,7 +669,78 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canMutateByRole) return;
+    if (!canMutateByRole && !(agendaTipo === 'estudio' && puedeAgendarEstudio && !editingTurno)) return;
+
+    if (!editingTurno && agendaTipo === 'estudio') {
+      setLoading(true);
+      setEstudioFormError(null);
+      try {
+        if (!formData.fecha || !formData.horaInicio) {
+          setEstudioFormError('Indique fecha y hora del turno.');
+          return;
+        }
+        const pacienteId =
+          lockEstudioSelection && initialEstudio?.paciente_id
+            ? initialEstudio.paciente_id
+            : Number(formData.paciente);
+        if (!pacienteId || Number.isNaN(pacienteId)) {
+          setEstudioFormError('Seleccione el paciente.');
+          return;
+        }
+        if (!formData.recurso) {
+          setEstudioFormError('Seleccione la sala de estudio.');
+          return;
+        }
+        if (!lockEstudioSelection && !tipoEstudioId) {
+          setEstudioFormError('Indique el tipo de estudio a realizar.');
+          return;
+        }
+        if (
+          !lockEstudioSelection &&
+          isEstudioTipoCatalogFallbackId(tipoEstudioId) &&
+          !resolveEstudioModalidadFromTipoId(tipoEstudioId, tiposEstudio)
+        ) {
+          setEstudioFormError('Seleccione un tipo de estudio válido.');
+          return;
+        }
+        const inicio = new Date(`${formData.fecha}T${formData.horaInicio}:00`);
+        if (Number.isNaN(inicio.getTime())) {
+          setEstudioFormError('Fecha u hora inválida.');
+          return;
+        }
+        const fin = new Date(inicio.getTime() + formData.duracionMin * 60_000);
+        const turnoPayload = {
+          recurso_id: Number(formData.recurso),
+          fecha_hora_inicio: inicio.toISOString(),
+          fecha_hora_fin: fin.toISOString(),
+        };
+
+        if (lockEstudioSelection && initialEstudio?.id) {
+          await asignarTurnoEstudio(initialEstudio.id, turnoPayload);
+        } else {
+          await agendarTurnoEstudioDesdeAgenda({
+            paciente_id: pacienteId,
+            ...(isEstudioTipoCatalogFallbackId(tipoEstudioId)
+              ? {
+                  modalidad: resolveEstudioModalidadFromTipoId(tipoEstudioId, tiposEstudio)!,
+                }
+              : { tipo_estudio: Number(tipoEstudioId) }),
+            origen: estudioOrigen,
+            descripcion_clinica: formData.motivo || '',
+            ...turnoPayload,
+          });
+        }
+        await refreshTurnos();
+        onSuccess?.();
+        onClose();
+      } catch (err) {
+        setEstudioFormError(parseEstudiosApiError(err, 'No se pudo asignar el turno de estudio.'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -525,7 +751,13 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         return;
       }
 
-      if (!formData.medico) {
+      const resolvedMedicoId = lockMedicoField
+        ? getCurrentMedicoId(currentUser)
+        : formData.medico
+          ? Number(formData.medico)
+          : undefined;
+
+      if (!resolvedMedicoId || Number.isNaN(resolvedMedicoId) || resolvedMedicoId <= 0) {
         alert('Por favor, seleccione un médico');
         setLoading(false);
         return;
@@ -535,6 +767,18 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         alert('Por favor, seleccione un recurso');
         setLoading(false);
         return;
+      }
+
+      if (!isPaciente()) {
+        const pacienteIdRaw = formData.paciente?.trim();
+        const pacienteId = pacienteIdRaw ? Number(pacienteIdRaw) : NaN;
+        const tienePacienteValido = !Number.isNaN(pacienteId) && pacienteId > 0;
+        const pacienteEnEdicion = editingTurno?.paciente_id ?? editingTurno?.paciente?.id;
+        if (!tienePacienteValido && !pacienteEnEdicion) {
+          alert('Por favor, seleccione un paciente');
+          setLoading(false);
+          return;
+        }
       }
 
       // Construir payload - en modo edición, enviar todos los campos necesarios
@@ -551,20 +795,8 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         payload.paciente_id = editingTurno.paciente_id;
       }
       
-      // Médico - validar que sea un número válido
-      if (formData.medico && formData.medico.trim() !== '') {
-        const medicoId = Number(formData.medico);
-        if (!isNaN(medicoId) && medicoId > 0) {
-          payload.medico_id = medicoId;
-        } else {
-          throw new Error('Por favor, seleccione un médico válido');
-        }
-      } else if (editingTurno && editingTurno.medico_id) {
-        // Si estamos editando y no hay médico en el form, mantener el original
-        payload.medico_id = editingTurno.medico_id;
-      } else {
-        throw new Error('Por favor, seleccione un médico');
-      }
+      // Médico (ya validado arriba)
+      payload.medico_id = resolvedMedicoId;
       
       // Recurso - validar que sea un número válido
       if (formData.recurso && formData.recurso.trim() !== '') {
@@ -604,10 +836,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       // backend (ensure_paciente_linked_to_user) resuelve o devuelve error claro.
       if (currentUser?.rol === 'PACIENTE' && currentUser.paciente?.id) {
         payload.paciente_id = Number(currentUser.paciente.id);
-      }
-
-      if (lockMedicoField && currentUser?.medico?.id) {
-        payload.medico_id = Number(currentUser.medico.id);
       }
 
       // No enviar prioridad ya que no existe en el modelo del backend
@@ -681,16 +909,29 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   const isPaciente = () => currentUser?.rol === 'PACIENTE';
   const isMedico = () => currentUser?.rol === 'MEDICO';
   
-  // REALIZADO o consulta ambulatoria ya cargada con contenido → no editar turno ni crear otra atención
+  // Turno bloqueado: paciente hasta finalizar; staff/médico por atención cerrada
   const isTurnoBloqueado = () => {
     const t = turnoVista;
     if (!t) return false;
-    if (t.estado === 'REALIZADO') return true;
-    if (t.atencion?.consulta_cargada) return true;
+    if (isPaciente()) return !pacientePuedeMutarTurno(currentUser, t);
+    const atencionCerrada =
+      t.atencion?.estado_clinico === 'FINALIZADA' || Boolean(t.atencion?.fecha_cierre);
+    if (atencionCerrada) return true;
+    if (t.estado === 'REALIZADO' && t.atencion?.consulta_cargada) return true;
     return false;
   };
   const isTurnoRealizado = () => isTurnoBloqueado();
-  const canEditFormFields = () => canMutateByRole && !isTurnoBloqueado();
+  const isTurnoDeEstudio = Boolean(editingTurno && isTurnoEstudio(editingTurno));
+  const canEditFormFields = () => {
+    if (!canMutateByRole || isTurnoBloqueado()) return false;
+    if (isTurnoDeEstudio) {
+      if (canMutateTurnosGlobally(currentUser)) return true;
+      if (isMedico() && canEditTurnoByRole(currentUser, turnoVista)) return true;
+      if (isPaciente() && pacientePuedeMutarTurno(currentUser, turnoVista)) return true;
+      return false;
+    }
+    return true;
+  };
 
   // Resolver el nombre completo del paciente actual
   const getCurrentPacienteNombre = () => {
@@ -751,6 +992,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   const handleVerConsulta = (atencionId: number) => {
     if (onOpenAtencion) {
       onOpenAtencion(atencionId);
+      onClose();
     } else {
       setSelectedAtencionId(atencionId);
     }
@@ -773,6 +1015,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
 
       if (onOpenAtencion) {
         onOpenAtencion(atencion.id);
+        onClose();
       } else {
         setSelectedAtencionId(atencion.id);
       }
@@ -876,7 +1119,22 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   };
 
   // Verificar si tenemos datos críticos disponibles
-  const hasCriticalData = recursos.length > 0;
+  const recursosActivos = useMemo(() => {
+    const activos = recursos.filter((r) => r.activo);
+    if (isModoConsulta || (!editingTurno && agendaTipo === 'consulta')) {
+      return activos.filter((r) => r.tipo_recurso === 'CONSULTORIO');
+    }
+    if (isModoEstudio) {
+      return recursosEstudio;
+    }
+    return activos;
+  }, [recursos, recursosEstudio, editingTurno, agendaTipo, isModoConsulta, isModoEstudio]);
+
+  const sinRecursosConsultorio =
+    !isLoadingData && recursos.filter((r) => r.activo && r.tipo_recurso === 'CONSULTORIO').length === 0;
+  const sinRecursosEstudio =
+    !loadingEstudioForm && isModoEstudio && recursosEstudio.length === 0;
+  const sinRecursosDisponibles = isModoEstudio ? sinRecursosEstudio : sinRecursosConsultorio;
 
   return (
   <>
@@ -906,12 +1164,14 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       >
         <Typography variant="h6" component="div">
           {editingTurno
-            ? forceReadOnly || !canMutateByRole
-              ? '👁️ Ver turno (solo lectura)'
-              : isTurnoRealizado()
-                ? '✅ Turno Realizado (Solo Lectura)'
-                : '✏️ Editar Turno'
-            : '➕ Nuevo Turno'}
+            ? isTurnoDeEstudio
+              ? '📊 Turno de estudio complementario'
+              : forceReadOnly || !canMutateByRole
+                ? '👁️ Ver turno (solo lectura)'
+                : isTurnoRealizado()
+                  ? '✅ Turno Realizado (Solo Lectura)'
+                  : `✏️ Editar ${TURNO_KIND_META[getTurnoAgendaKind(editingTurno)].label.toLowerCase()}`
+            : '📅 Nuevo turno'}
         </Typography>
         <IconButton onClick={onClose} sx={{ color: 'grey.500' }} aria-label="Cerrar panel de turno">
           <Close />
@@ -919,17 +1179,167 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 0 }}>
-        {isLoadingData || !hasCriticalData ? (
+        {isLoadingData ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 4 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Cargando datos...
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {isLoadingData ? 'Cargando datos desde el servidor...' : 'Esperando a que se carguen los datos necesarios...'}
+              Cargando datos desde el servidor...
             </Typography>
           </Box>
         ) : (
         <Box id="turno-form" component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+          {!editingTurno && !lockEstudioSelection && (
+            <AgendaTipoSelector
+              value={agendaTipo}
+              onChange={(next) => {
+                setAgendaTipo(next);
+                setEstudioFormError(null);
+                setFormData((prev) => ({ ...prev, recurso: '' }));
+              }}
+              showEstudio={puedeAgendarEstudio}
+            />
+          )}
+          {isTurnoDeEstudio && editingTurno?.estudio_complementario?.id && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Este horario corresponde a un <strong>estudio complementario</strong> en sala (no a una
+              consulta con médico). Para cambiar fecha o sala, abrí el estudio en{' '}
+              <RouterLink
+                to={`/estudios-complementarios/${editingTurno.estudio_complementario.id}`}
+              >
+                Estudios complementarios
+              </RouterLink>
+              .
+            </Alert>
+          )}
+          {estudioFormError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {estudioFormError}
+            </Alert>
+          )}
+          {isModoEstudio && loadingEstudioForm && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={28} />
+            </Box>
+          )}
+          {sinRecursosConsultorio && isModoConsulta && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              No hay consultorios configurados. Un administrador debe crear al menos un consultorio
+              en Recursos o ejecutar <strong>python manage.py crear_recursos_iniciales</strong>.
+            </Alert>
+          )}
+          {isModoEstudio && !loadingEstudioForm && sinRecursosEstudio && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              No hay salas de estudio activas. Creá recursos tipo sala de procedimiento o hemodinamia.
+            </Alert>
+          )}
+
+          {/* ——— Estudio complementario (nuevo) ——— */}
+          {isModoEstudio && !loadingEstudioForm && (
+            <>
+              {lockEstudioSelection && initialEstudio && (
+                <Alert severity="success" variant="outlined" sx={{ mb: 2 }}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    Estudio #{initialEstudio.id}
+                    {initialEstudio.tipo_estudio_nombre
+                      ? ` — ${initialEstudio.tipo_estudio_nombre}`
+                      : ''}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Paciente: {pacienteLabelFromList(initialEstudio.paciente_id, pacientes)}
+                  </Typography>
+                  {initialEstudio.descripcion_clinica && (
+                    <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                      {initialEstudio.descripcion_clinica}
+                    </Typography>
+                  )}
+                </Alert>
+              )}
+              {!lockEstudioSelection && (
+                <>
+                  <AsyncAutocomplete<Paciente>
+                    label="👤 Paciente"
+                    endpoint="/pacientes/"
+                    getOptionLabel={(option) =>
+                      `${option.nombre || ''} ${option.apellido || ''} (${option.dni || 'Sin DNI'})`.trim()
+                    }
+                    onChange={(newValue) => {
+                      setSelectedPaciente(newValue);
+                      setFormData({ ...formData, paciente: newValue ? String(newValue.id) : '' });
+                    }}
+                    value={selectedPaciente}
+                    required
+                    placeholder="Buscar paciente por nombre, apellido o DNI"
+                    debounceMs={300}
+                    minSearchLength={2}
+                    sx={{ mb: 2 }}
+                  />
+                  <FormControl fullWidth sx={{ mb: 2 }} required disabled={tiposEstudio.length === 0}>
+                    <InputLabel>Tipo de estudio</InputLabel>
+                    <Select
+                      value={tipoEstudioId}
+                      label="Tipo de estudio"
+                      onChange={(e) => setTipoEstudioId(String(e.target.value))}
+                    >
+                      {tiposEstudio.length === 0 ? (
+                        <MenuItem disabled value="">
+                          Cargando tipos…
+                        </MenuItem>
+                      ) : (
+                        tiposEstudio.map((t) => (
+                          <MenuItem key={t.id} value={String(t.id)}>
+                            {t.nombre}
+                          </MenuItem>
+                        ))
+                      )}
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>Origen del pedido</InputLabel>
+                    <Select
+                      value={estudioOrigen}
+                      label="Origen del pedido"
+                      onChange={(e) => setEstudioOrigen(String(e.target.value))}
+                    >
+                      {ORIGEN_OPTIONS.filter((o) => o.value !== 'IMPORTADO_HISTORICO').map((o) => (
+                        <MenuItem key={o.value} value={o.value}>
+                          {o.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    label="Notas / indicación clínica (opcional)"
+                    value={formData.motivo}
+                    onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+                    sx={{ mb: 2 }}
+                  />
+                </>
+              )}
+              <FormControl fullWidth sx={{ mb: 2 }} required disabled={recursosEstudio.length === 0}>
+                <InputLabel>Sala de estudio</InputLabel>
+                <Select
+                  value={formData.recurso}
+                  label="Sala de estudio"
+                  onChange={(e) => setFormData({ ...formData, recurso: String(e.target.value) })}
+                >
+                  {recursosEstudio.map((r) => (
+                    <MenuItem key={r.id} value={String(r.id)}>
+                      {r.nombre} ({r.ubicacion})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </>
+          )}
+
+          {/* ——— Consulta médica ——— */}
+          {(isModoConsulta || editingTurno) && !isTurnoDeEstudio && (
+            <>
           {/* Campo Paciente - Solo mostrar selector si NO es paciente */}
           {!isPaciente() && (
             <AsyncAutocomplete<Paciente>
@@ -941,7 +1351,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 setFormData({ ...formData, paciente: newValue ? String(newValue.id) : '' });
               }}
               value={selectedPaciente}
-              required={!selectedDateTime}
+              required
               placeholder="Escriba al menos 2 caracteres para buscar por nombre, apellido o DNI..."
               helperText={isTurnoRealizado() ? "Turno realizado - No se puede editar" : "Búsqueda asíncrona en servidor"}
               debounceMs={300}
@@ -967,7 +1377,12 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             <TextField
               fullWidth
               label="👨‍⚕️ Médico"
-              value={getMedicoLabel(selectedMedico) || 'Médico asignado'}
+              value={
+                getMedicoLabel(selectedMedico) ||
+                (currentUser?.medico
+                  ? `Dr. ${currentUser.medico.nombre || currentUser.first_name || ''} ${currentUser.medico.apellido || currentUser.last_name || ''}`.trim()
+                  : 'Médico asignado')
+              }
               disabled
               sx={{ mb: 2 }}
               helperText="Solo podés gestionar turnos con tu ficha médica"
@@ -998,23 +1413,33 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           )}
 
           <FormControl fullWidth sx={{ mb: 2 }} disabled={!canEditFormFields()}>
-            <InputLabel>🏥 Recurso</InputLabel>
+            <InputLabel>{editingTurno ? '🏥 Recurso' : '🏥 Consultorio'}</InputLabel>
             <Select
               value={formData.recurso}
-              label="🏥 Recurso"
+              label={editingTurno ? '🏥 Recurso' : '🏥 Consultorio'}
               onChange={(e) => setFormData({...formData, recurso: String(e.target.value)})}
               required
               disabled={!canEditFormFields()}
             >
-              {recursos.filter(r => r.activo).map(recurso => (
+              {recursosActivos.map(recurso => (
                 <MenuItem key={recurso.id} value={String(recurso.id)}>
-                  {recurso.nombre} ({recurso.tipo_recurso_display || recurso.tipo_recurso})
+                  {recurso.nombre}
+                  {editingTurno
+                    ? ` (${recurso.tipo_recurso_display || recurso.tipo_recurso})`
+                    : ''}
                 </MenuItem>
               ))}
+              {recursosActivos.length === 0 && (
+                <MenuItem disabled value="">
+                  {editingTurno ? 'Sin recursos disponibles' : 'Sin consultorios disponibles'}
+                </MenuItem>
+              )}
             </Select>
           </FormControl>
+            </>
+          )}
 
-
+          {(isModoEstudio || isModoConsulta || (editingTurno && !isTurnoDeEstudio)) && (
           <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
             <TextField
               fullWidth
@@ -1049,7 +1474,29 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               disabled={!canEditFormFields()}
             />
           </Box>
+          )}
 
+          {isTurnoDeEstudio && editingTurno && (
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <TextField
+                fullWidth
+                label="📅 Fecha"
+                value={formData.fecha}
+                disabled
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                fullWidth
+                label="🕐 Hora"
+                value={formData.horaInicio}
+                disabled
+                InputLabelProps={{ shrink: true }}
+              />
+            </Box>
+          )}
+
+          {((isModoConsulta || editingTurno) && !isTurnoDeEstudio) && (
+          <>
           <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Box sx={{ flex: '1 1 200px', mb: 1 }}>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
@@ -1107,6 +1554,8 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 {getButtonText((turnoVista as Turno) ?? null)}
               </Button>
             </Box>
+          )}
+          </>
           )}
         </Box>
         )}
@@ -1167,14 +1616,21 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             No asistió
           </Button>
         )}
-        {canEditFormFields() && (
+        {(canEditFormFields() || (isModoEstudio && puedeAgendarEstudio && !editingTurno)) && (
           <Button
             type="submit"
             form="turno-form"
             variant="contained"
-            disabled={loading}
+            disabled={loading || sinRecursosDisponibles || (isModoEstudio && loadingEstudioForm)}
+            color={isModoEstudio ? 'success' : 'primary'}
           >
-            {loading ? 'Guardando...' : (editingTurno ? 'Actualizar Turno' : 'Crear Turno')}
+            {loading
+              ? 'Guardando...'
+              : editingTurno
+                ? 'Actualizar turno'
+                : isModoEstudio
+                  ? 'Confirmar turno de estudio'
+                  : 'Crear consulta'}
           </Button>
         )}
         {(forceReadOnly || (editingTurno && !canMutateByRole)) && (

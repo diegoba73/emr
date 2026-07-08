@@ -109,7 +109,7 @@ class TestLimsFlujoCriticoAPI(TestCase):
                 {
                     "paciente_id": self.paciente.pk,
                     "medico_id": self.medico.pk,
-                    "origen_solicitud": "EMR",
+                    "origen_solicitud": "AMBULATORIO_CEHTA",
                     "examenes_ids": [self.te.pk],
                 },
                 format="json",

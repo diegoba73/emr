@@ -62,7 +62,7 @@ class TipoMuestraAdmin(admin.ModelAdmin):
 
 @admin.register(TipoExamen)
 class TipoExamenAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'precio', 'activo')
+    list_display = ('codigo', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'metodo', 'unidad_default', 'precio', 'activo')
     list_filter = ('activo', 'tipo_muestra_requerida')
     search_fields = ('codigo', 'nombre', 'abreviatura')
     ordering = ('nombre',)

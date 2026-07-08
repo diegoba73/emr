@@ -76,7 +76,7 @@ class TestResultadosClinicosAPI(APITestCase):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(self.tipo_examen)
@@ -168,9 +168,9 @@ class TestResultadosClinicosAPI(APITestCase):
         res.refresh_from_db()
         self.assertEqual(res.unidad, "mmol/L")
 
-    def test_validar_con_resultados_estructurados(self):
+    def test_finalizar_con_resultados_estructurados(self):
         sol, res = self._sol_y_res()
-        self.client.post(
+        r = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
             {
                 "resultados": [
@@ -179,27 +179,25 @@ class TestResultadosClinicosAPI(APITestCase):
             },
             format="json",
         )
-        self.client.force_authenticate(user=self.user_admin)
-        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         sol.refresh_from_db()
-        self.assertEqual(sol.estado, "VALIDADO")
+        self.assertEqual(sol.estado, "FINALIZADO")
 
-    def test_validar_falla_con_vacio(self):
+    def test_finalizar_falla_con_vacio(self):
         sol, res = self._sol_y_res()
-        self.client.force_authenticate(user=self.user_admin)
-        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
+        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/finalizar/", {}, format="json")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_laboratorio_no_puede_validar(self):
+    def test_laboratorio_puede_finalizar_auto_al_cargar(self):
         sol, res = self._sol_y_res()
-        self.client.post(
+        r = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
             {"resultados": [{"id": res.pk, "valor": "90", "valor_numerico": 90}]},
             format="json",
         )
-        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "FINALIZADO")
 
     def test_medico_no_puede_cargar(self):
         sol, res = self._sol_y_res()

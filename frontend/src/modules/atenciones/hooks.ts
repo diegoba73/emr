@@ -105,9 +105,10 @@ export const useCloseAtencionMutation = () => {
   return useMutation({
     mutationFn: (id: number) => apiService.closeAtencion(id),
     onSuccess: (data) => {
-      toast.success('Atención cerrada correctamente');
+      toast.success('Consulta guardada y atención cerrada');
       queryClient.invalidateQueries({ queryKey: ['atencion', data.id] });
       queryClient.invalidateQueries({ queryKey: ['atenciones'] });
+      queryClient.invalidateQueries({ queryKey: ['turnos'] });
     },
     onError: () => toast.error('No se pudo cerrar la atención'),
   });
@@ -245,8 +246,7 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
       }
     },
     onSuccess: async (_data, variables) => {
-      toast.success('Consulta guardada');
-      
+      // El toast final lo muestra useCloseAtencionMutation al cerrar la atención.
       // SIEMPRE actualizar el turno a REALIZADO después de guardar la consulta
       try {
         // Obtener la atención para acceder al turno asociado

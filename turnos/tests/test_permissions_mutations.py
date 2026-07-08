@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 
 from medicos.models import Especialidad, Medico
 from pacientes.models import Paciente
-from turnos.models import Recurso, Turno
+from turnos.models import Atencion, Recurso, Turno
 
 User = get_user_model()
 
@@ -170,6 +170,23 @@ class TestTurnoCreatePermissions(APITestCase):
         )
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['medico']['id'] == self.medico_a.id
+
+    def test_medico_no_puede_crear_turno_confirmado_sin_paciente(self):
+        user = User.objects.create_user(
+            username='ta_mut_med_sin_pac',
+            email='ta_mut_med_sin_pac@test.com',
+            password='x',
+            rol='medico',
+        )
+        self.medico_a.user = user
+        self.medico_a.save()
+        self.client.force_authenticate(user=user)
+        payload = _turno_payload(self.paciente_a, self.medico_a, self.recurso, 53)
+        del payload['paciente_id']
+        payload['estado'] = Turno.Estado.CONFIRMADO
+        response = self.client.post('/api/turnos/', payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'paciente_id' in response.data
 
     def test_medico_no_puede_crear_turno_para_otro_medico(self):
         user = User.objects.create_user(
@@ -480,6 +497,31 @@ class TestTurnoPatchPermissions(APITestCase):
         response = self.client.patch(
             f'/api/turnos/{turno.id}/',
             {'motivo_reserva': 'Lab'},
+            format='json',
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_paciente_no_puede_patch_turno_con_atencion(self):
+        user = User.objects.create_user(
+            username='ta_mut_patch_pac_atencion',
+            email='ta_mut_patch_pac_atencion@test.com',
+            password='x',
+            rol='paciente',
+        )
+        self.paciente_a.user = user
+        self.paciente_a.save()
+        turno = self._turno(self.paciente_a, self.medico_a, 10)
+        Atencion.objects.create(
+            turno=turno,
+            paciente=self.paciente_a,
+            medico_principal=self.medico_a,
+            tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
+            tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
+        )
+        self.client.force_authenticate(user=user)
+        response = self.client.patch(
+            f'/api/turnos/{turno.id}/',
+            {'motivo_reserva': 'Intento post atención'},
             format='json',
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN

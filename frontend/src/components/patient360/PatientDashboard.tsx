@@ -13,11 +13,15 @@ import {
   ListItemText,
   Divider,
 } from '@mui/material';
-import { ArrowBack, PersonOutline, WarningAmber } from '@mui/icons-material';
+import { ArrowBack, Edit, PersonOutline, WarningAmber } from '@mui/icons-material';
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
-import { Atencion, ArchivoMedico, Consulta, Paciente, Solicitud, Turno } from '../../types';
+import { listSolicitudesExamen } from '../../services/limsApi';
+import { Atencion, ArchivoMedico, Consulta, Paciente, Turno } from '../../types';
+import type { SolicitudExamenLims } from '../../types/lims';
 import PatientIntegratedView from '../PatientIntegratedView';
+import PacienteFormDialog from '../PacienteFormDialog';
+import { canUpdatePacienteDemographics } from '../../utils/permissions';
 import SectionCard from './SectionCard';
 import InfoCard from './InfoCard';
 import Timeline, { TimelineItem } from './Timeline';
@@ -31,15 +35,17 @@ const PatientDashboard: React.FC = () => {
     loadPacientes,
     loading,
     turnos,
-    solicitudes,
     archivosMedicos,
     loadArchivosMedicos,
     consultas,
     loadConsultas,
+    currentUser,
   } = useData();
 
   const [atenciones, setAtenciones] = useState<Atencion[]>([]);
+  const [ordenesLab, setOrdenesLab] = useState<SolicitudExamenLims[]>([]);
   const [loadingAte, setLoadingAte] = useState(false);
+  const [showEditPaciente, setShowEditPaciente] = useState(false);
 
   const pid = Number(id);
   const paciente: Paciente | undefined = useMemo(
@@ -77,14 +83,18 @@ const PatientDashboard: React.FC = () => {
     loadAtenciones();
   }, [loadAtenciones]);
 
+  useEffect(() => {
+    if (!paciente?.id) return;
+    listSolicitudesExamen({ paciente: paciente.id })
+      .then(setOrdenesLab)
+      .catch(() => setOrdenesLab([]));
+  }, [paciente?.id]);
+
   const turnosPx: Turno[] = useMemo(
     () => turnos.filter((t) => t.paciente?.id === pid || t.paciente_id === pid),
     [turnos, pid]
   );
-  const solicitudesPx: Solicitud[] = useMemo(
-    () => solicitudes.filter((s) => s.paciente === pid),
-    [solicitudes, pid]
-  );
+  const ordenesLabPx = ordenesLab;
   const archivosPx: ArchivoMedico[] = useMemo(
     () => archivosMedicos.filter((a) => a.paciente_id === pid),
     [archivosMedicos, pid]
@@ -134,17 +144,17 @@ const PatientDashboard: React.FC = () => {
         },
       });
     }
-    for (const s of solicitudesPx) {
+    for (const s of ordenesLabPx) {
       const d = s.fecha_solicitud ? new Date(s.fecha_solicitud) : new Date(0);
       if (Number.isNaN(d.getTime())) continue;
       out.push({
         id: `sol-${s.id}`,
         type: 'solicitud',
-        title: s.descripcion || s.tipo_solicitud,
+        title: s.numero ? `Lab ${s.numero}` : 'Análisis de laboratorio',
         subtitle: s.estado,
         date: d,
-        critical: s.prioridad === 'URGENTE' || s.estado === 'ERROR',
-        onClick: () => navigate('/solicitudes'),
+        critical: s.estado === 'PENDIENTE',
+        onClick: () => navigate(`/solicitudes/${s.id}`),
       });
     }
     for (const c of consultasPx) {
@@ -155,11 +165,11 @@ const PatientDashboard: React.FC = () => {
         type: 'consulta',
         title: c.motivo_consulta_detalle?.slice(0, 80) || 'Consulta',
         date: d,
-        onClick: () => navigate('/mis-consultas'),
+        onClick: () => navigate('/atenciones'),
       });
     }
     return out;
-  }, [atenciones, consultasPx, navigate, solicitudesPx, turnosPx]);
+  }, [atenciones, consultasPx, navigate, ordenesLabPx, turnosPx]);
 
   if (!id || Number.isNaN(pid)) {
     return (
@@ -196,6 +206,7 @@ const PatientDashboard: React.FC = () => {
   const edad = patientAgeYears(paciente.fecha_nacimiento);
   const alergias = (paciente.alergias || '').trim();
   const riesgo = [paciente.grupo_sanguineo, paciente.antecedentes].filter(Boolean).join(' · ');
+  const canEditDemographics = canUpdatePacienteDemographics(currentUser);
 
   return (
     <Box className="fade-in">
@@ -229,6 +240,18 @@ const PatientDashboard: React.FC = () => {
               <Chip size="small" label={`${edad} años`} sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' }} />
             </Stack>
           </Box>
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            {canEditDemographics && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<Edit />}
+                onClick={() => setShowEditPaciente(true)}
+                sx={{ bgcolor: 'rgba(255,255,255,0.95)', color: 'primary.main', '&:hover': { bgcolor: '#fff' } }}
+              >
+                Editar datos
+              </Button>
+            )}
           <Box sx={{ maxWidth: 480 }}>
             {alergias ? (
               <Alert
@@ -249,8 +272,17 @@ const PatientDashboard: React.FC = () => {
               </Typography>
             )}
           </Box>
+          </Stack>
         </Stack>
       </Box>
+
+      <PacienteFormDialog
+        open={showEditPaciente}
+        mode="edit"
+        paciente={paciente}
+        onClose={() => setShowEditPaciente(false)}
+        onSaved={loadPacientes}
+      />
 
       <Box
         sx={{
@@ -315,7 +347,7 @@ const PatientDashboard: React.FC = () => {
               )}
             </InfoCard>
             <InfoCard
-              title="Solicitudes"
+              title="Análisis de laboratorio"
               dense
               action={
                 <Button size="small" onClick={() => navigate('/solicitudes')}>
@@ -323,14 +355,20 @@ const PatientDashboard: React.FC = () => {
                 </Button>
               }
             >
-              {solicitudesPx.length === 0 ? (
+              {ordenesLabPx.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  Sin solicitudes
+                  Sin órdenes de laboratorio
                 </Typography>
               ) : (
                 <Stack direction="row" flexWrap="wrap" gap={0.5}>
-                  {solicitudesPx.slice(0, 6).map((s) => (
-                    <Chip key={s.id} size="small" label={s.estado} variant="outlined" />
+                  {ordenesLabPx.slice(0, 6).map((s) => (
+                    <Chip
+                      key={s.id}
+                      size="small"
+                      label={s.numero ? `${s.numero} · ${s.estado}` : s.estado}
+                      variant="outlined"
+                      onClick={() => navigate(`/solicitudes/${s.id}`)}
+                    />
                   ))}
                 </Stack>
               )}

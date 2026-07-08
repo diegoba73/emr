@@ -1,99 +1,125 @@
 # Arranque local EMR + LIMS (desarrollo)
 
-`docs_synesis/` documenta el sistema en producción/diseño. Para trabajo con IA (SYNESIS, Cursor, Codex), ver `docs_synesis/DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md`. Este archivo describe **cómo levantar el stack en tu máquina** para probar con distintos usuarios.
+## Modo recomendado: todo en Docker
 
-## Requisitos
+Misma arquitectura que producción (Postgres + Gunicorn/runserver en contenedor + Nginx en prod).
+Una sola base de datos: contenedor `emr_postgres` → `synesis_db`.
 
-- Python virtualenv en `emr_env/` (raíz del repo)
-- Node.js y `npm` en `PATH` (sin rutas absolutas; nvm u otro gestor es válido), **solo si** vas a levantar cliente en `frontend/`
-- PostgreSQL en `:5432` (instalación local **o** contenedor Docker)
+Requisito: **Docker Desktop** (o Docker Engine) corriendo.
 
-### Frontend local (contrastar con SoT)
-
-Según **`docs_synesis/DOC_FRONTEND.md`**, una SPA React/Vue **no está confirmada como aplicación versionada** en este repositorio. Si existe la carpeta `frontend/` en tu checkout, tratala como **artefacto local o rama no alineada** hasta validar contra `DOC_FRONTEND.md` y el diff actual (`git status`, `package.json`, `frontend/src/`).
-
-- Antes de `cd frontend && npm install` o asumir http://localhost:3000 como UI de producción: leer `DOC_FRONTEND.md`.
-- Backend solo (API en :8000): omitir Node y `frontend/`.
-- Si el frontend real está en **otro repo o rama**, indicarlo en tareas SYNESIS/Cursor (ver `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md`).
-
-## Comandos
+### Primera vez
 
 ```bash
-# Backend (+ frontend en :3000 solo si existe y está alineado con DOC_FRONTEND.md)
-./emr-start
-
-# Levantar solo la DB con Docker Compose
-START_DB=true ./emr-start
-
-# Migraciones (default) + usuarios/catálogos demo idempotentes
-RUN_SEED=true ./emr-start
-
-# Stack completo desde cero (DB + migrate + seed + servidores)
-START_DB=true RUN_SEED=true ./emr-start
-
-# Sin migraciones
-RUN_MIGRATIONS=false ./emr-start
-
-# Detener backend (:8000) y frontend (:3000)
-./stop_servers.sh
-
-# Diagnóstico (solo lectura)
-./diagnose.sh
+cp .env.example .env
+./emrctl up --seed          # db + backend + datos demo + catálogo LIMS
+./emrctl up --full --seed   # incluye frontend React en Docker
 ```
 
-## Variables de entorno
+### Cada día
 
-| Variable | Default | Descripción |
-|----------|---------|-------------|
-| `START_DB` | `false` | `docker compose up -d db` (solo Postgres, no el backend en Docker) |
-| `RUN_MIGRATIONS` | `true` | `manage.py migrate --noinput` |
-| `RUN_SEED` | `false` | `manage.py seed_data` (idempotente; **no** `poblar_db`) |
+```bash
+./emrctl up                 # db + backend
+./emrctl up --full            # db + backend + frontend
+```
 
-## Usuarios demo (`RUN_SEED=true`)
+### URLs
 
-Creados por `core/management/commands/seed_data.py`:
+- Frontend: http://localhost:3000 (con `--full`, o `cd frontend && npm start`)
+- API: http://localhost:8000
+- Admin: http://localhost:8000/admin/
+
+## Recuperar datos desde backup
+
+Si tenés un dump en `~/backups_synesis/` (p. ej. del 22/jun/2026):
+
+```bash
+bash scripts/restore_docker_db.sh ~/backups_synesis/synesis_db_20260622_233218.dump
+./emrctl up
+./emrctl seed               # repone catálogo LIMS completo si hace falta
+```
+
+El script hace backup de seguridad de la BD actual antes de restaurar.
+
+## Variables de `.env`
+
+Para desarrollo con Docker, el backend en contenedor usa `DB_HOST=db` (definido en `docker-compose.yml`).
+Si corrés comandos `manage.py` **desde tu terminal** contra la misma BD:
+
+```env
+DB_HOST=localhost
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=synesis_db
+DB_PORT=5432
+```
+
+**No uses** `synesis_user` ni Postgres nativo en WSL.
+
+## Comandos útiles
+
+```bash
+./emrctl status
+./emrctl seed                 # datos demo + catálogo LIMS + salas estudio (idempotente)
+./emrctl logs backend
+./emrctl down                 # apaga todo (datos persisten en volumen)
+bash scripts/backup_postgres_local.sh   # backup manual
+```
+
+## Usuarios demo
 
 | Usuario | Contraseña | Rol |
 |---------|------------|-----|
 | `admin` | `admin123` | superuser |
 | `medico1` | `medico123` | médico |
-| `paciente1` | `paciente123` | paciente (Paciente Demo Uno) |
-| `laboratorio1` | `laboratorio123` | laboratorio (LIMS) |
-| `enfermeria1` | `enfermeria123` | enfermería |
 | `secretaria1` | `secretaria123` | secretaría |
+| `laboratorio1` | `laboratorio123` | laboratorio |
 
-### Datos sintéticos QA (`seed_data`, idempotente)
+Orden LIMS demo: `LAB-DEMO-QA-00001`
 
-Solo desarrollo/staging. **No usar datos reales.** Reejecutar: `python manage.py seed_data`.
+## Permisos por rol (EMR)
 
-| Artefacto | Clave estable | Uso |
-|-----------|---------------|-----|
-| Paciente Demo Uno | usuario `paciente1` | Portal paciente / turno LIMS |
-| Paciente Demo Ajeno | DNI `QA-DEMO-AJENO-01` | Aislamiento 404/bloqueo |
-| Turno demo | motivo `QA DEMO TURNO MEDICO1-PACIENTE1` | medico1 / paciente1 / agenda |
-| Atención demo | vinculada al turno QA | smoke atenciones |
-| Orden LIMS | `LAB-DEMO-QA-00001` | laboratorio1 / pantallas LIMS |
-| Muestra LIMS | `MUE-DEMO-QA-00001` | trazabilidad demo |
-| Resultado LIMS | Glucosa, valor demo no clínico | sin validar |
+Matriz acordada para desarrollo y QA manual. El **backend** es fuente de verdad; el frontend refleja la misma lógica para habilitar/deshabilitar UI.
 
-## URLs
+| Rol | Ver | Editar |
+|-----|-----|--------|
+| **Médico** | Turnos asignados a él (consulta propia + estudios de sus pacientes vinculados) | Todo en esos turnos (campos, confirmar, cancelar, reprogramar) |
+| **Paciente** | Sus turnos (consulta y estudio) | Crear y editar hasta que el turno quede `REALIZADO`, `CANCELADO` o tenga atención clínica iniciada |
+| **Secretaría** | Pacientes, turnos, estudios complementarios, laboratorio/LIMS, catálogos clínicos | Solo **pacientes** y **turnos**; estudios, laboratorio y catálogos son **solo lectura** |
 
-- Frontend (solo si levantaste cliente local y `DOC_FRONTEND.md` lo confirma en tu tree): http://localhost:3000
-- API / Django: http://localhost:8000
-- Admin: http://localhost:8000/admin/
+### Detalle por módulo
 
-## Logs
+- **Turnos** (`/turnos`): médico filtrado por propiedad; paciente solo los propios; secretaría agenda global con edición.
+- **Estudios complementarios**: secretaría lista y asigna turnos de sala (`agendar-turno` / `asignar-turno`) pero no crea ni modifica fichas de estudio.
+- **Laboratorio / LIMS** (`/solicitudes`, `/laboratorio/*`): secretaría navega y consulta; operaciones técnicas solo `admin` y `laboratorio`.
+- **Catálogos clínicos** (CIE-10, medicamentos, etc.): secretaría lectura; edición admin/médico.
 
-- `logs/backend.log`
-- `logs/frontend.log` (solo si `./emr-start` levantó cliente en `frontend/`)
+### Tests automatizados
 
-## Seguridad
+```bash
+# Permisos turnos estudio + secretaría estudios
+python manage.py test turnos.tests.test_medico_estudio_turnos
 
-- Solo para **desarrollo local**.
-- No apuntar a bases con **datos reales** sin backup.
-- `RUN_SEED` no se ejecuta salvo que lo actives explícitamente.
-- No se invocan comandos destructivos (`poblar_db`, etc.).
+# Permisos solicitudes (secretaría solo lectura)
+python manage.py test solicitudes.tests.test_permissions_api
 
-## Scripts locales (no versionados)
+# Frontend (vitest/jest según proyecto)
+cd frontend && npm test -- turnoPermissions.test.ts
+```
 
-`start_servers.sh` y `setup_node.sh` en la raíz pueden existir en tu máquina con rutas personales; el flujo portable del repo es **`./emr-start`**. Si Node no está en PATH, instalá Node o cargá nvm — `diagnose.sh` indica qué falta.
+Archivos clave: `turnos/access.py`, `turnos/turno_estado.py`, `frontend/src/utils/turnoPermissions.ts`, `frontend/src/utils/limsAccess.ts`, `estudios/access.py`.
+
+## Modo híbrido (opcional)
+
+Solo si necesitás depurar con `runserver` en el IDE:
+
+```bash
+./emrctl up --hybrid
+source emr_env/bin/activate && python manage.py runserver 8000
+```
+
+**No** corras `runserver` si `emr_backend` ya está activo (puerto 8000 ocupado).
+
+## Datos
+
+- Persisten en volumen Docker `emr_postgres_data`.
+- **No** ejecutes `docker compose down -v` salvo que quieras borrar todo.

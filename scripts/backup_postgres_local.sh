@@ -14,7 +14,7 @@ DB_NAME="${DB_NAME:-synesis_db}"
 BACKUP_DIR="${BACKUP_DIR:-${HOME}/backups_synesis}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-${DB_USER:-synesis_user}}"
+PGUSER="${PGUSER:-${DB_USER:-postgres}}"
 
 if ! command -v pg_dump >/dev/null 2>&1; then
   echo "ERROR: pg_dump no encontrado. Instale cliente PostgreSQL." >&2

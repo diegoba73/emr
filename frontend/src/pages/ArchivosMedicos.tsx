@@ -55,6 +55,7 @@ import {
   getTiposArchivo,
   getConsultas 
 } from '../services/apiService';
+import ArchivoMedicoPreviewDialog from '../components/archivos/ArchivoMedicoPreviewDialog';
 
 const ArchivosMedicos: React.FC = () => {
   const { archivosMedicos, loadArchivosMedicos, pacientes, loadPacientes, currentUser } = useData();
@@ -81,6 +82,7 @@ const ArchivosMedicos: React.FC = () => {
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [existingFileName, setExistingFileName] = useState<string | null>(null);
+  const [previewArchivo, setPreviewArchivo] = useState<ArchivoMedico | null>(null);
 
   useEffect(() => {
     loadArchivosMedicos();
@@ -184,6 +186,11 @@ const ArchivosMedicos: React.FC = () => {
     setShowForm(true);
   };
 
+  const handleView = (archivo: ArchivoMedico) => {
+    if (!canDownload) return;
+    setPreviewArchivo(archivo);
+  };
+
   const handleDownload = async (archivo: ArchivoMedico) => {
     setDownloadError('');
     try {
@@ -273,10 +280,10 @@ const ArchivosMedicos: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
-          Archivos Médicos
+          Archivos
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Gestiona los archivos médicos y documentos del sistema
+          Repositorio unificado de archivos del paciente (incluye adjuntos de atenciones, estudios e imágenes).
         </Typography>
       </Box>
 
@@ -327,7 +334,12 @@ const ArchivosMedicos: React.FC = () => {
                 </TableRow>
               ) : (
                 paginatedArchivos.map((archivo) => (
-                  <TableRow key={archivo.id} hover>
+                  <TableRow
+                    key={archivo.id}
+                    hover
+                    onClick={() => handleView(archivo)}
+                    sx={{ cursor: canDownload ? 'pointer' : 'default' }}
+                  >
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -370,7 +382,7 @@ const ArchivosMedicos: React.FC = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
                         {canDownload && (
                           <Tooltip title="Descargar">
@@ -548,6 +560,12 @@ const ArchivosMedicos: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ArchivoMedicoPreviewDialog
+        open={Boolean(previewArchivo)}
+        archivo={previewArchivo}
+        onClose={() => setPreviewArchivo(null)}
+      />
     </Box>
   );
 };

@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import {
   ArrowBack,
+  CalendarMonth,
   CheckCircle,
   Download,
   Link as LinkIcon,
@@ -32,6 +33,7 @@ import {
   Undo,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
+import { turnosAgendarEstudioPath } from '../utils/agendarEstudioNavigation';
 import { useData } from '../contexts/DataContext';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import {
@@ -43,6 +45,7 @@ import {
 import {
   canAccessEstudiosModule,
   canAnularEstudio,
+  canAsignarTurnoEstudio,
   canAsociarArchivo,
   canCrearInforme,
   canDownloadArchivoEstudio,
@@ -103,6 +106,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
   const [archivoRol, setArchivoRol] = useState('OTRO');
 
   const writeAccess = canWriteEstudio(currentUser);
+  const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
 
   const refresh = useCallback(async () => {
     if (!estudioId || Number.isNaN(estudioId)) return;
@@ -246,6 +250,17 @@ const EstudioComplementarioDetalle: React.FC = () => {
         <Divider sx={{ my: 2 }} />
 
         <Stack direction="row" flexWrap="wrap" gap={1}>
+          {puedeAsignarTurno && estudio.estado === 'SOLICITADO' && (
+            <Button
+              variant="contained"
+              color="info"
+              size="small"
+              startIcon={<CalendarMonth />}
+              onClick={() => estudio && navigate(turnosAgendarEstudioPath(estudio.id))}
+            >
+              Asignar turno
+            </Button>
+          )}
           {writeAccess && canMarcarRealizado(estudio) && (
             <Button
               variant="contained"
@@ -299,6 +314,14 @@ const EstudioComplementarioDetalle: React.FC = () => {
           <Typography variant="body2">
             <strong>F. solicitud:</strong>{' '}
             {estudio.fecha_solicitud ? new Date(estudio.fecha_solicitud).toLocaleString() : '—'}
+          </Typography>
+          <Typography variant="body2">
+            <strong>Turno:</strong>{' '}
+            {estudio.turno_fecha_hora_inicio
+              ? `${new Date(estudio.turno_fecha_hora_inicio).toLocaleString()}${
+                  estudio.turno_recurso_nombre ? ` · ${estudio.turno_recurso_nombre}` : ''
+                }`
+              : '—'}
           </Typography>
           <Typography variant="body2">
             <strong>F. realización:</strong>{' '}
@@ -572,6 +595,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
     </Box>
   );
 };

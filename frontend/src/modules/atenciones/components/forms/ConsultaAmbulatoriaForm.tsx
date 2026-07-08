@@ -8,9 +8,14 @@ import {
   CircularProgress,
   Tabs,
   Tab,
+  Alert,
 } from '@mui/material';
 import { ConsultaAmbulatoriaRecord } from '../../../../types';
-import { useSaveConsultaAmbulatoriaMutation, useAtencionQuery } from '../../hooks';
+import toast from 'react-hot-toast';
+import { useSaveConsultaAmbulatoriaMutation, useAtencionQuery, useCloseAtencionMutation } from '../../hooks';
+import {
+  flushConsultaPedidosDrafts,
+} from '../../consultaPedidosDraft';
 
 interface ConsultaAmbulatoriaFormProps {
   atencionId: number;
@@ -25,7 +30,7 @@ function ConsultaFormTabPanel(props: { value: number; index: number; children: R
   return <Box sx={{ pt: 2 }} role="tabpanel">{children}</Box>;
 }
 
-const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atencionId, canEdit, forceEdit = false, onSaveSuccess }) => {
+const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atencionId, canEdit, onSaveSuccess }) => {
   const { data: atencion, isLoading } = useAtencionQuery(atencionId);
   const [consulta, setConsulta] = useState<ConsultaAmbulatoriaRecord | null>(null);
   const initializedRef = useRef(false);
@@ -43,7 +48,36 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
     observaciones_medicas: '',
   });
   const saveMutation = useSaveConsultaAmbulatoriaMutation();
+  const closeMutation = useCloseAtencionMutation();
   const draftKey = `consulta-amb-borrador-${atencionId}`;
+  const formStateRef = useRef(formState);
+  formStateRef.current = formState;
+
+  const readDraft = useCallback((): Partial<typeof formState> | null => {
+    try {
+      const raw = sessionStorage.getItem(draftKey);
+      if (!raw) return null;
+      return JSON.parse(raw) as Partial<typeof formState>;
+    } catch {
+      return null;
+    }
+  }, [draftKey]);
+
+  const persistDraft = useCallback(
+    (state: typeof formState) => {
+      try {
+        sessionStorage.setItem(draftKey, JSON.stringify(state));
+      } catch {
+        /* lleno o privado */
+      }
+    },
+    [draftKey]
+  );
+
+  useEffect(() => {
+    initializedRef.current = false;
+    setConsulta(null);
+  }, [atencionId]);
 
   useEffect(() => {
     if (!atencion || initializedRef.current) return;
@@ -55,56 +89,59 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
         'anamnesis' in consultaData ||
         'diagnostico_presuntivo' in consultaData;
 
+      const fromServer = {
+        anamnesis: (consultaData as any).anamnesis ?? '',
+        examen_fisico: (consultaData as any).examen_fisico ?? '',
+        diagnostico_presuntivo: (consultaData as any).diagnostico_presuntivo ?? '',
+        plan_manejo: (consultaData as any).plan_manejo ?? '',
+        antecedentes_relevantes: (consultaData as any).antecedentes_relevantes ?? '',
+        alergias: (consultaData as any).alergias ?? '',
+        medicacion_actual: (consultaData as any).medicacion_actual ?? '',
+        diagnostico_definitivo: (consultaData as any).diagnostico_definitivo ?? '',
+        observaciones_medicas: (consultaData as any).observaciones_medicas ?? '',
+      };
+      const draft = readDraft();
+      const merged = draft ? { ...fromServer, ...draft } : fromServer;
+
       if (hasFields) {
         setConsulta(consultaData as ConsultaAmbulatoriaRecord);
-        setFormState({
-          anamnesis: (consultaData as any).anamnesis ?? '',
-          examen_fisico: (consultaData as any).examen_fisico ?? '',
-          diagnostico_presuntivo: (consultaData as any).diagnostico_presuntivo ?? '',
-          plan_manejo: (consultaData as any).plan_manejo ?? '',
-          antecedentes_relevantes: (consultaData as any).antecedentes_relevantes ?? '',
-          alergias: (consultaData as any).alergias ?? '',
-          medicacion_actual: (consultaData as any).medicacion_actual ?? '',
-          diagnostico_definitivo: (consultaData as any).diagnostico_definitivo ?? '',
-          observaciones_medicas: (consultaData as any).observaciones_medicas ?? '',
-        });
+        setFormState(merged);
         initializedRef.current = true;
       } else {
         setConsulta({ id: (consultaData as any).id } as ConsultaAmbulatoriaRecord);
-        try {
-          const raw = sessionStorage.getItem(draftKey);
-          if (raw) {
-            const d = JSON.parse(raw);
-            setFormState((prev) => ({ ...prev, ...d }));
-          }
-        } catch { /* vacío */ }
+        setFormState((prev) => ({ ...prev, ...merged }));
         initializedRef.current = true;
       }
     } else {
       setConsulta(null);
-      try {
-        const raw = sessionStorage.getItem(draftKey);
-        if (raw) {
-          const d = JSON.parse(raw);
-          setFormState((prev) => ({ ...prev, ...d }));
-        }
-      } catch { /* vacío */ }
+      const draft = readDraft();
+      if (draft) {
+        setFormState((prev) => ({ ...prev, ...draft }));
+      }
       initializedRef.current = true;
     }
-  }, [atencion, atencionId, draftKey]);
+  }, [atencion, atencionId, readDraft]);
 
-  const isReadOnly = !!consulta && !forceEdit;
-  const canSave = canEdit && !isReadOnly;
+  const atencionCerrada =
+    atencion?.estado_clinico === 'FINALIZADA' || Boolean(atencion?.fecha_cierre);
+  const isReadOnly = !canEdit || atencionCerrada;
+  const canSave = canEdit && !atencionCerrada;
 
   useEffect(() => {
     if (!initializedRef.current || isReadOnly || !canSave) return;
     const t = setTimeout(() => {
-      try {
-        sessionStorage.setItem(draftKey, JSON.stringify(formState));
-      } catch { /* lleno o privado */ }
-    }, 1000);
+      persistDraft(formState);
+    }, 300);
     return () => clearTimeout(t);
-  }, [formState, draftKey, isReadOnly, canSave]);
+  }, [formState, isReadOnly, canSave, persistDraft]);
+
+  useEffect(() => {
+    return () => {
+      if (initializedRef.current && canSave) {
+        persistDraft(formStateRef.current);
+      }
+    };
+  }, [canSave, persistDraft]);
 
   const handleChange = useCallback(
     (field: keyof typeof formState) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -149,6 +186,37 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
         exists: Boolean(registroId),
         registroId,
       });
+
+      const consultaHcId = atencion?.consulta_hc_id;
+      const pacienteId =
+        atencion?.paciente && typeof atencion.paciente === 'object'
+          ? atencion.paciente.id
+          : typeof atencion?.paciente === 'number'
+            ? atencion.paciente
+            : undefined;
+      const medicoId =
+        atencion?.medico_principal && typeof atencion.medico_principal === 'object'
+          ? atencion.medico_principal.id
+          : atencion?.medico_principal_id;
+
+      if (consultaHcId && pacienteId) {
+        try {
+          await flushConsultaPedidosDrafts({
+            consultaHcId,
+            pacienteId,
+            medicoId,
+          });
+        } catch (flushError) {
+          const message =
+            flushError instanceof Error
+              ? flushError.message
+              : 'No se pudieron registrar los pedidos de la consulta.';
+          toast.error(message);
+          return;
+        }
+      }
+
+      await closeMutation.mutateAsync(atencionId);
       try { sessionStorage.removeItem(draftKey); } catch { /* nada */ }
       if (onSaveSuccess) {
         onSaveSuccess();
@@ -173,7 +241,7 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
     <Box component="form" onSubmit={handleSubmit}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
         <Typography variant="subtitle1" fontWeight={600}>
-          {!consulta ? 'Nueva consulta ambulatoria' : (forceEdit ? 'Editar consulta ambulatoria' : 'Consulta ambulatoria')}
+          {!consulta?.id ? 'Nueva consulta ambulatoria' : 'Consulta ambulatoria'}
         </Typography>
         {canSave && (
           <Typography variant="caption" color="text.secondary">
@@ -181,6 +249,16 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
           </Typography>
         )}
       </Box>
+      {atencionCerrada && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Atención finalizada: la consulta es de solo lectura.
+        </Alert>
+      )}
+      {!canEdit && !atencionCerrada && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Tu rol no puede modificar el detalle clínico de esta atención.
+        </Alert>
+      )}
       <Tabs
         value={tab}
         onChange={(_e, v) => setTab(v)}
@@ -221,8 +299,12 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
 
       {canSave && (
         <Box display="flex" justifyContent="flex-end" sx={{ mt: 2 }}>
-          <Button type="submit" variant="contained" disabled={saveMutation.isPending}>
-            Guardar
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={saveMutation.isPending || closeMutation.isPending}
+          >
+            {saveMutation.isPending || closeMutation.isPending ? 'Guardando…' : 'Guardar y cerrar consulta'}
           </Button>
         </Box>
       )}

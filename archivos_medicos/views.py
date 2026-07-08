@@ -45,13 +45,13 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
     """Archivos médicos: descarga autenticada, sin URL /media/ en API, DELETE bloqueado."""
 
     queryset = ArchivoMedico.objects.select_related(
-        'paciente', 'consulta', 'subido_por'
+        'paciente', 'consulta', 'atencion', 'subido_por'
     ).all()
     serializer_class = ArchivoMedicoSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication, SessionAuthentication]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['paciente', 'consulta', 'tipo_archivo', 'es_urgente', 'fecha_estudio']
+    filterset_fields = ['paciente', 'consulta', 'atencion', 'tipo_archivo', 'es_urgente', 'fecha_estudio']
     search_fields = ['titulo', 'descripcion', 'paciente__nombre', 'paciente__apellido']
     ordering_fields = ['fecha_subida', 'fecha_estudio', 'titulo']
     ordering = ['-fecha_subida']
@@ -59,9 +59,15 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         paciente_id = self.request.query_params.get('paciente_id')
+        atencion_id = self.request.query_params.get('atencion_id')
         if paciente_id:
             try:
                 queryset = queryset.filter(paciente_id=int(paciente_id))
+            except (ValueError, TypeError):
+                pass
+        if atencion_id:
+            try:
+                queryset = queryset.filter(atencion_id=int(atencion_id))
             except (ValueError, TypeError):
                 pass
 

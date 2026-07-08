@@ -3,6 +3,8 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from pacientes.models import Paciente
+from medicos.models import Medico
+from turnos.models import Recurso
 
 from .access import usuario_puede_crear_estudio
 from .models import (
@@ -29,13 +31,32 @@ class TipoEstudioComplementarioSerializer(serializers.ModelSerializer):
 
 class EstudioComplementarioListSerializer(serializers.ModelSerializer):
     paciente_id = serializers.IntegerField(read_only=True)
+    paciente_nombre = serializers.SerializerMethodField()
     tipo_estudio_nombre = serializers.CharField(source='tipo_estudio.nombre', read_only=True, default=None)
+    turno_id = serializers.IntegerField(source='turno.id', read_only=True, default=None)
+    turno_fecha_hora_inicio = serializers.DateTimeField(
+        source='turno.fecha_hora_inicio', read_only=True, default=None
+    )
+    turno_recurso_nombre = serializers.CharField(
+        source='turno.recurso.nombre', read_only=True, default=None
+    )
+
+    def get_paciente_nombre(self, obj):
+        paciente = getattr(obj, 'paciente', None)
+        if not paciente:
+            return None
+        apellido = (paciente.apellido or '').strip()
+        nombre = (paciente.nombre or '').strip()
+        if apellido and nombre:
+            return f'{apellido}, {nombre}'
+        return apellido or nombre or None
 
     class Meta:
         model = EstudioComplementario
         fields = (
             'id',
             'paciente_id',
+            'paciente_nombre',
             'tipo_estudio',
             'tipo_estudio_nombre',
             'estudio_diagnostico',
@@ -45,6 +66,9 @@ class EstudioComplementarioListSerializer(serializers.ModelSerializer):
             'fecha_realizacion',
             'centro_realizador',
             'origen',
+            'turno_id',
+            'turno_fecha_hora_inicio',
+            'turno_recurso_nombre',
             'created_at',
             'updated_at',
         )
@@ -55,7 +79,21 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
         queryset=Paciente.objects.all(),
         source='paciente',
     )
+    tipo_estudio_nombre = serializers.CharField(
+        source='tipo_estudio.nombre', read_only=True, default=None
+    )
     estado = serializers.CharField(read_only=True)
+    turno_id = serializers.IntegerField(source='turno.id', read_only=True, default=None)
+    turno_fecha_hora_inicio = serializers.DateTimeField(
+        source='turno.fecha_hora_inicio', read_only=True, default=None
+    )
+    turno_fecha_hora_fin = serializers.DateTimeField(
+        source='turno.fecha_hora_fin', read_only=True, default=None
+    )
+    turno_recurso_nombre = serializers.CharField(
+        source='turno.recurso.nombre', read_only=True, default=None
+    )
+    turno_estado = serializers.CharField(source='turno.estado', read_only=True, default=None)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -68,6 +106,7 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
             'id',
             'paciente_id',
             'tipo_estudio',
+            'tipo_estudio_nombre',
             'estudio_diagnostico',
             'modalidad',
             'estado',
@@ -84,6 +123,11 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
             'study_instance_uid',
             'pacs_metadata',
             'motivo_anulacion',
+            'turno_id',
+            'turno_fecha_hora_inicio',
+            'turno_fecha_hora_fin',
+            'turno_recurso_nombre',
+            'turno_estado',
             'created_at',
             'updated_at',
         )
@@ -252,6 +296,76 @@ class CrearInformeSerializer(serializers.Serializer):
 
 class AnularEstudioSerializer(serializers.Serializer):
     motivo_anulacion = serializers.CharField()
+
+
+class AsignarTurnoEstudioSerializer(serializers.Serializer):
+    recurso_id = serializers.PrimaryKeyRelatedField(
+        queryset=Recurso.objects.filter(activo=True),
+        source='recurso',
+    )
+    fecha_hora_inicio = serializers.DateTimeField()
+    fecha_hora_fin = serializers.DateTimeField()
+    medico_id = serializers.PrimaryKeyRelatedField(
+        queryset=Medico.objects.all(),
+        source='medico',
+        required=False,
+        allow_null=True,
+    )
+
+
+class AgendarTurnoEstudioDesdeAgendaSerializer(serializers.Serializer):
+    """Crea estudio (si hace falta) y asigna turno de sala en un solo paso."""
+
+    paciente_id = serializers.PrimaryKeyRelatedField(
+        queryset=Paciente.objects.all(),
+        source='paciente',
+    )
+    recurso_id = serializers.PrimaryKeyRelatedField(
+        queryset=Recurso.objects.filter(activo=True),
+        source='recurso',
+    )
+    fecha_hora_inicio = serializers.DateTimeField()
+    fecha_hora_fin = serializers.DateTimeField()
+    estudio_id = serializers.PrimaryKeyRelatedField(
+        queryset=EstudioComplementario.objects.filter(
+            estado=EstudioComplementario.Estado.SOLICITADO,
+            turno__isnull=True,
+        ),
+        source='estudio',
+        required=False,
+        allow_null=True,
+    )
+    tipo_estudio = serializers.PrimaryKeyRelatedField(
+        queryset=TipoEstudioComplementario.objects.filter(activo=True),
+        required=False,
+        allow_null=True,
+    )
+    modalidad = serializers.ChoiceField(
+        choices=TipoEstudioComplementario.Modalidad.choices,
+        required=False,
+        allow_blank=True,
+    )
+    origen = serializers.ChoiceField(
+        choices=EstudioComplementario.Origen.choices,
+        required=False,
+        default=EstudioComplementario.Origen.EXTERNO,
+    )
+    descripcion_clinica = serializers.CharField(required=False, allow_blank=True, default='')
+    medico_id = serializers.PrimaryKeyRelatedField(
+        queryset=Medico.objects.all(),
+        source='medico',
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, attrs):
+        if attrs.get('estudio'):
+            return attrs
+        if not attrs.get('tipo_estudio') and not attrs.get('modalidad'):
+            raise serializers.ValidationError(
+                'Indique tipo_estudio o modalidad para registrar el estudio.'
+            )
+        return attrs
 
 
 class RectificarInformeSerializer(serializers.Serializer):

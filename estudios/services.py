@@ -153,6 +153,165 @@ def _auditar_cambio_estado(
     )
 
 
+_TIPOS_RECURSO_ESTUDIO = frozenset({'SALA_PROCEDIMIENTO', 'SALA_HEMODINAMIA'})
+
+
+def _motivo_turno_desde_estudio(estudio: EstudioComplementario) -> str:
+    nombre = ''
+    if estudio.tipo_estudio_id and estudio.tipo_estudio:
+        nombre = estudio.tipo_estudio.nombre
+    if not nombre:
+        nombre = estudio.get_modalidad_display()
+    return f'Estudio: {nombre}'[:255]
+
+
+@transaction.atomic
+def asignar_turno_estudio(
+    estudio: EstudioComplementario,
+    *,
+    user,
+    recurso,
+    fecha_hora_inicio,
+    fecha_hora_fin,
+    medico=None,
+):
+    from turnos.models import Turno
+
+    if estudio.estado != EstudioComplementario.Estado.SOLICITADO:
+        raise ValidationError('Solo se puede asignar turno a estudios en estado Solicitado.')
+    if estudio.turno_id:
+        raise ValidationError('El estudio ya tiene un turno asignado.')
+    if recurso.tipo_recurso not in _TIPOS_RECURSO_ESTUDIO:
+        raise ValidationError(
+            {'recurso_id': 'El recurso debe ser sala de procedimiento o hemodinamia.'}
+        )
+    if fecha_hora_fin and fecha_hora_fin <= fecha_hora_inicio:
+        raise ValidationError(
+            {'fecha_hora_fin': 'La fecha/hora de fin debe ser posterior al inicio.'}
+        )
+
+    from turnos.validacion_sala import validar_disponibilidad_sala_estudio
+
+    validar_disponibilidad_sala_estudio(
+        recurso=recurso,
+        fecha_hora_inicio=fecha_hora_inicio,
+        fecha_hora_fin=fecha_hora_fin,
+    )
+
+    turno = Turno(
+        paciente=estudio.paciente,
+        medico=medico,
+        recurso=recurso,
+        fecha_hora_inicio=fecha_hora_inicio,
+        fecha_hora_fin=fecha_hora_fin,
+        estado=Turno.Estado.CONFIRMADO,
+        motivo_reserva=_motivo_turno_desde_estudio(estudio),
+    )
+    turno.full_clean()
+    turno.save()
+
+    estudio.turno = turno
+    estudio.modificado_por = user
+    anterior = aplicar_transicion_estudio(
+        estudio,
+        accion='asignar_turno',
+        nuevo_estado=EstudioComplementario.Estado.CONFIRMADO,
+    )
+    estudio.save(update_fields=['turno', 'modificado_por', 'updated_at'])
+    _auditar_cambio_estado(
+        estudio,
+        user=user,
+        accion='estudio_asignar_turno',
+        estado_anterior=anterior,
+        estado_nuevo=estudio.estado,
+    )
+    _safe_audit(
+        log_event,
+        action='UPDATE',
+        actor=user,
+        entity=estudio,
+        after=safe_model_snapshot(estudio),
+        entity_repr=f'estudios.EstudioComplementario:{estudio.pk}',
+        module='estudios',
+        metadata={
+            'accion': 'estudio_asignar_turno',
+            'turno_id': turno.pk,
+            **_estudio_meta(estudio),
+        },
+    )
+    return estudio
+
+
+def _resolver_modalidad_estudio(*, tipo_estudio=None, modalidad=None) -> str:
+    if tipo_estudio is not None:
+        return tipo_estudio.modalidad
+    if modalidad:
+        return modalidad
+    raise ValidationError(
+        {'tipo_estudio': 'Indique el tipo de estudio o la modalidad.'}
+    )
+
+
+@transaction.atomic
+def agendar_turno_estudio_desde_agenda(
+    *,
+    user,
+    paciente,
+    recurso,
+    fecha_hora_inicio,
+    fecha_hora_fin,
+    estudio=None,
+    tipo_estudio=None,
+    modalidad=None,
+    origen=None,
+    descripcion_clinica='',
+    medico=None,
+):
+    """
+    Turnera: asigna turno a un estudio ya solicitado o crea uno nuevo
+    (p. ej. pedido externo) y lo confirma en la misma operación.
+    """
+    if estudio is not None:
+        if estudio.paciente_id != paciente.id:
+            raise ValidationError(
+                {'estudio_id': 'El estudio seleccionado no corresponde al paciente.'}
+            )
+        return asignar_turno_estudio(
+            estudio,
+            user=user,
+            recurso=recurso,
+            fecha_hora_inicio=fecha_hora_inicio,
+            fecha_hora_fin=fecha_hora_fin,
+            medico=medico,
+        )
+
+    modalidad_resuelta = _resolver_modalidad_estudio(
+        tipo_estudio=tipo_estudio,
+        modalidad=modalidad,
+    )
+    if origen is None:
+        origen = EstudioComplementario.Origen.EXTERNO
+
+    nuevo = crear_estudio(
+        {
+            'paciente': paciente,
+            'tipo_estudio': tipo_estudio,
+            'modalidad': modalidad_resuelta,
+            'origen': origen,
+            'descripcion_clinica': descripcion_clinica or '',
+        },
+        user=user,
+    )
+    return asignar_turno_estudio(
+        nuevo,
+        user=user,
+        recurso=recurso,
+        fecha_hora_inicio=fecha_hora_inicio,
+        fecha_hora_fin=fecha_hora_fin,
+        medico=medico,
+    )
+
+
 @transaction.atomic
 def marcar_realizado(estudio: EstudioComplementario, *, user, fecha_realizacion=None):
     estudio.fecha_realizacion = fecha_realizacion or timezone.now()

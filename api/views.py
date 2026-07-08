@@ -274,15 +274,9 @@ class PacienteViewSet(viewsets.ModelViewSet):
             serializer.save()
             return
         
-        # Paciente solo puede actualizar su propio perfil
+        # Paciente: solo lectura de su ficha demográfica
         elif user.rol == 'paciente':
-            try:
-                if paciente.user == user:
-                    serializer.save()
-                else:
-                    raise PermissionDenied("Solo puede actualizar su propio perfil")
-            except Exception as e:
-                raise ValidationError({'error': f'No se pudo actualizar el paciente: {str(e)}'})
+            raise PermissionDenied("Los pacientes no pueden modificar datos demográficos.")
         
         else:
             raise PermissionDenied("No tiene permisos para actualizar pacientes")

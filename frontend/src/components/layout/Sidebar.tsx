@@ -21,6 +21,7 @@ import {
   FactCheck as AuditIcon,
   Science as ScienceIcon,
   Biotech as BiotechIcon,
+  HourglassEmpty as PendientesIcon,
   Description,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -31,11 +32,14 @@ import {
   canAccessArchivosMedicos,
   canAccessAtenciones,
   canAccessAuditoria,
+  canAccessCatalogosClinicos,
   canAccessPacientes,
   canAccessSolicitudes,
 } from '../../utils/permissions';
 import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
 import { canAccessLimsModule, canAccessMicrobiologia } from '../../utils/limsAccess';
+import { canAccessTurnosAgenda } from '../../utils/turnoPermissions';
+import { getHomeNavLabel, getSolicitudesModuleLabel } from '../../utils/navLabels';
 
 export const SIDEBAR_WIDTH = 260;
 
@@ -46,22 +50,29 @@ export interface NavItem {
   /** @deprecated usar canAccessNavItem */
   roles?: string[];
   canAccess?: (user: User | null) => boolean;
+  /** Resuelve etiqueta según rol (p. ej. Laboratorio / Análisis Clínico). */
+  resolveLabel?: (user: User | null) => string;
 }
 
 const navItems: NavItem[] = [
-  { text: 'Dashboard', icon: <HomeIcon />, path: '/dashboard', canAccess: () => true },
+  { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: () => true, resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
-  { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
+  { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
   { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
-  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos-medicos', canAccess: canAccessArchivosMedicos },
+  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
   {
     text: 'Estudios complementarios',
     icon: <Description />,
     path: '/estudios-complementarios',
     canAccess: canAccessEstudiosModule,
   },
-  { text: 'Solicitudes', icon: <SolicitudIcon />, path: '/solicitudes', canAccess: canAccessSolicitudes },
-  { text: 'Mis consultas', icon: <FolderIcon />, path: '/mis-consultas', roles: ['medico', 'paciente'] },
+  {
+    text: 'Laboratorio',
+    icon: <SolicitudIcon />,
+    path: '/solicitudes',
+    canAccess: canAccessSolicitudes,
+    resolveLabel: getSolicitudesModuleLabel,
+  },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria'] },
 ];
 
@@ -72,17 +83,20 @@ const adminOnly: NavItem[] = [
 ];
 
 const labItems: NavItem[] = [
+  { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsModule },
   { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsModule },
+  { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsModule },
+  { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsModule },
   { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
   { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', canAccess: canAccessMicrobiologia },
 ];
 
 const catalogItems: NavItem[] = [
-  { text: 'CIE-10', icon: <CatalogIcon />, path: '/catalogos/diagnosticos', roles: ['admin', 'medico'] },
-  { text: 'Estudios', icon: <CatalogIcon />, path: '/catalogos/estudios', roles: ['admin', 'medico'] },
-  { text: 'Procedimientos', icon: <CatalogIcon />, path: '/catalogos/procedimientos', roles: ['admin', 'medico'] },
-  { text: 'Medicamentos', icon: <CatalogIcon />, path: '/catalogos/medicamentos', roles: ['admin', 'medico'] },
-  { text: 'Especialidades', icon: <CatalogIcon />, path: '/catalogos/especialidades', roles: ['admin', 'medico'] },
+  { text: 'CIE-10', icon: <CatalogIcon />, path: '/catalogos/diagnosticos', canAccess: canAccessCatalogosClinicos },
+  { text: 'Estudios', icon: <CatalogIcon />, path: '/catalogos/estudios', canAccess: canAccessCatalogosClinicos },
+  { text: 'Procedimientos', icon: <CatalogIcon />, path: '/catalogos/procedimientos', canAccess: canAccessCatalogosClinicos },
+  { text: 'Medicamentos', icon: <CatalogIcon />, path: '/catalogos/medicamentos', canAccess: canAccessCatalogosClinicos },
+  { text: 'Especialidades', icon: <CatalogIcon />, path: '/catalogos/especialidades', canAccess: canAccessCatalogosClinicos },
 ];
 
 const filterByRole = (items: NavItem[], currentUser: User | null): NavItem[] => {
@@ -157,7 +171,10 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }} />
+                <ListItemText
+                  primary={item.resolveLabel ? item.resolveLabel(currentUser) : item.text}
+                  primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }}
+                />
               </ListItemButton>
             </ListItem>
           );
@@ -173,7 +190,13 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
             {labNav.map((item) => {
               const selected =
                 location.pathname === item.path ||
+                (item.path === '/laboratorio/pendientes' &&
+                  location.pathname.startsWith('/laboratorio/pendientes')) ||
                 (item.path === '/laboratorio/ordenes' && location.pathname.startsWith('/laboratorio/ordenes')) ||
+                (item.path === '/laboratorio/catalogos/examenes' &&
+                  location.pathname.startsWith('/laboratorio/catalogos/examenes')) ||
+                (item.path === '/laboratorio/catalogos/tipos-muestra' &&
+                  location.pathname.startsWith('/laboratorio/catalogos/tipos-muestra')) ||
                 (item.path === '/laboratorio/microbiologia/estudios' &&
                   location.pathname.startsWith('/laboratorio/microbiologia')) ||
                 (item.path === '/laboratorio/microbiologia/catalogos' &&

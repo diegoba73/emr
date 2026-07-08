@@ -11,11 +11,9 @@ from catalogos.models import (
     CamaInternacion,
     CentroFisico,
     EstudioDiagnostico,
-    Procedimiento,
     ProcedimientoCatalogo,
     TipoAtencion,
 )
-from medicos.models import Especialidad
 
 
 @pytest.mark.django_db
@@ -85,18 +83,3 @@ class TestCatalogosModels:
         ProcedimientoCatalogo.objects.create(nombre=nombre, activo=True)
         with pytest.raises(IntegrityError):
             ProcedimientoCatalogo.objects.create(nombre=nombre, activo=True)
-
-    def test_procedimiento_requires_especialidad(self):
-        esp = Especialidad.objects.create(
-            nombre=f"Esp Catalog Test {uuid.uuid4().hex[:8]}",
-            descripcion="test",
-        )
-        proc = Procedimiento.objects.create(
-            codigo=f"P-{uuid.uuid4().hex[:8]}",
-            nombre="Procedimiento test cat",
-            descripcion="desc",
-            especialidad=esp,
-            duracion_estimada=30,
-            activo=True,
-        )
-        assert proc.especialidad_id == esp.id

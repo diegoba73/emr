@@ -23,6 +23,13 @@ from api.serializers import MedicoSerializer
 
 logger = logging.getLogger(__name__)
 
+# Turnos agendados a un paciente; DISPONIBLE puede existir sin paciente (slot libre).
+_ESTADOS_REQUIEREN_PACIENTE = frozenset({
+    Turno.Estado.RESERVADO,
+    Turno.Estado.CONFIRMADO,
+    Turno.Estado.REALIZADO,
+})
+
 # Campos de texto de consulta que cuentan como "cargada" (no vacía) para el turno
 _CONSULTA_CONTENIDO_FIELDS = (
     "anamnesis",
@@ -84,7 +91,11 @@ def _mismo_momento(a, b) -> bool:
 
 class RecursoSerializer(serializers.ModelSerializer):
     """Serializer para Recurso."""
-    
+    tipo_recurso_display = serializers.CharField(
+        source='get_tipo_recurso_display',
+        read_only=True,
+    )
+
     class Meta:
         model = Recurso
         fields = [
@@ -92,6 +103,7 @@ class RecursoSerializer(serializers.ModelSerializer):
             'nombre',
             'ubicacion',
             'tipo_recurso',
+            'tipo_recurso_display',
             'activo',
             'created_at',
             'updated_at',
@@ -175,6 +187,10 @@ class TurnoSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="Resumen de la atención vinculada (si existe), para el calendario y el modal de turno",
     )
+    estudio_complementario = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Estudio complementario vinculado al turno (agenda de estudios)",
+    )
 
     class Meta:
         model = Turno
@@ -189,6 +205,7 @@ class TurnoSerializer(serializers.ModelSerializer):
             'medico_nombre',
             'recurso_nombre',
             'atencion',
+            'estudio_complementario',
             # Campos de escritura (IDs)
             'paciente_id',
             'medico_id',
@@ -210,6 +227,7 @@ class TurnoSerializer(serializers.ModelSerializer):
             'medico_nombre',
             'recurso_nombre',
             'atencion',
+            'estudio_complementario',
             'created_at',
             'updated_at',
         ]
@@ -251,6 +269,25 @@ class TurnoSerializer(serializers.ModelSerializer):
             pass
         return result
 
+    def get_estudio_complementario(self, obj: Turno):
+        try:
+            ec = obj.estudio_complementario
+        except Exception:
+            return None
+        if ec is None:
+            return None
+        tipo_nombre = None
+        if ec.tipo_estudio_id:
+            tipo_nombre = getattr(ec.tipo_estudio, 'nombre', None)
+        med_sol_id = ec.medico_solicitante_id
+        return {
+            'id': ec.id,
+            'estado': ec.estado,
+            'modalidad': ec.modalidad,
+            'tipo_estudio_nombre': tipo_nombre,
+            'medico_solicitante_id': med_sol_id,
+        }
+
     def validate(self, attrs):
         """
         Validación crítica:
@@ -272,6 +309,13 @@ class TurnoSerializer(serializers.ModelSerializer):
         if fin and inicio and fin <= inicio:
             raise serializers.ValidationError({
                 "fecha_hora_fin": "La fecha/hora de fin debe ser posterior a la fecha/hora de inicio."
+            })
+
+        if estado in _ESTADOS_REQUIEREN_PACIENTE and not paciente:
+            raise serializers.ValidationError({
+                "paciente_id": (
+                    "El paciente es obligatorio para turnos reservados, confirmados o realizados."
+                ),
             })
 
         if inst is not None and (
@@ -401,6 +445,11 @@ class AtencionSerializer(serializers.ModelSerializer):
         ]
 
 
+def _sync_hc_after_ambulatoria_save(instance: ConsultaAmbulatoria) -> None:
+    from historias_clinicas.services import sync_consulta_hc_desde_ambulatoria
+    sync_consulta_hc_desde_ambulatoria(instance)
+
+
 class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
     """
     Serializer para ConsultaAmbulatoria.
@@ -478,5 +527,7 @@ class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
                     'atencion': 'No se puede cambiar la atención asociada a una consulta existente.'
                 })
         
-        return super().save(**kwargs)
+        instance = super().save(**kwargs)
+        _sync_hc_after_ambulatoria_save(instance)
+        return instance
 

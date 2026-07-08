@@ -8,12 +8,9 @@ import {
   MenuItem,
   Paper,
   Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   CircularProgress,
@@ -21,38 +18,25 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { EstadoSolicitudLims, SolicitudExamenLims } from '../../types/lims';
+import type { SolicitudExamenLims } from '../../types/lims';
 import { listSolicitudesExamen } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canAccessLimsModule } from '../../utils/limsAccess';
+import {
+  buildDiasLaboratorio,
+  diasVisiblesParaIncluir,
+  formatFechaLocal,
+  labelDiaOrden,
+  parseFechaLocal,
+  startOfLocalDay,
+} from '../../utils/limsOrdenesFecha';
+import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
+import { ESTADOS_ORDEN_LIMS } from '../../utils/limsEstadosOrden';
 
-const ESTADOS: EstadoSolicitudLims[] = [
-  'PENDIENTE',
-  'TOMA_MUESTRA',
-  'EN_PROCESO',
-  'VALIDADO',
-  'ENTREGADO',
-  'CANCELADO',
-];
+/** Estados en bandeja diaria (muestra ya tomada). */
+const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
 
-const estadoColor = (e: EstadoSolicitudLims) => {
-  switch (e) {
-    case 'PENDIENTE':
-      return 'default';
-    case 'TOMA_MUESTRA':
-      return 'primary';
-    case 'EN_PROCESO':
-      return 'primary';
-    case 'VALIDADO':
-      return 'success';
-    case 'ENTREGADO':
-      return 'success';
-    case 'CANCELADO':
-      return 'error';
-    default:
-      return 'default';
-  }
-};
+const DIAS_PESTANAS_INICIAL = 7;
 
 const OrdenesLims: React.FC = () => {
   const navigate = useNavigate();
@@ -62,16 +46,24 @@ const OrdenesLims: React.FC = () => {
   const [estadoFiltro, setEstadoFiltro] = useState<string>('');
   const [numeroFiltro, setNumeroFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
+  const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
 
   const allowed = canAccessLimsModule(currentUser);
+
+  const fechaApi = formatFechaLocal(diaSeleccionado);
+  const buscarPorNumero = numeroFiltro.trim().length > 0;
+
+  const diasTabs = useMemo(() => buildDiasLaboratorio(diasPestanas), [diasPestanas]);
 
   const load = useCallback(async () => {
     if (!allowed) return;
     setLoading(true);
     try {
       const data = await listSolicitudesExamen({
-        estado: estadoFiltro || undefined,
-        numero: numeroFiltro.trim() || undefined,
+        estado: buscarPorNumero ? undefined : estadoFiltro || undefined,
+        numero: buscarPorNumero ? numeroFiltro.trim() : undefined,
+        fecha_muestra: buscarPorNumero ? undefined : fechaApi,
       });
       setRows(data);
     } catch (e) {
@@ -79,7 +71,7 @@ const OrdenesLims: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [allowed, estadoFiltro, numeroFiltro]);
+  }, [allowed, estadoFiltro, numeroFiltro, buscarPorNumero, fechaApi]);
 
   useEffect(() => {
     load();
@@ -96,6 +88,17 @@ const OrdenesLims: React.FC = () => {
     });
   }, [rows, busqueda]);
 
+  const handleCambioDia = (iso: string) => {
+    setDiaSeleccionado(parseFechaLocal(iso));
+  };
+
+  const handleFechaManual = (iso: string) => {
+    if (!iso) return;
+    const d = parseFechaLocal(iso);
+    setDiaSeleccionado(d);
+    setDiasPestanas((n) => diasVisiblesParaIncluir(d, n));
+  };
+
   if (!allowed) {
     return (
       <Box sx={{ p: 3 }}>
@@ -106,13 +109,71 @@ const OrdenesLims: React.FC = () => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Typography variant="h5" gutterBottom>
-        Órdenes LIMS
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Órdenes nativas de laboratorio (<strong>SolicitudExamen</strong>). No confundir con Solicitudes EMR (
-        <code>/solicitudes</code>).
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h5" gutterBottom>
+            Órdenes LIMS
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {buscarPorNumero
+              ? 'Búsqueda por número en todo el historial.'
+              : `Muestras tomadas el ${labelDiaOrden(diaSeleccionado)}. Las órdenes pendientes de extracción están en `}
+            {!buscarPorNumero && (
+              <Button size="small" sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }} onClick={() => navigate('/laboratorio/pendientes')}>
+                Pendientes
+              </Button>
+            )}
+            {!buscarPorNumero && '.'}
+          </Typography>
+        </Box>
+      </Stack>
+
+      <Paper sx={{ mb: 2 }}>
+        <Box
+          sx={{
+            px: 2,
+            pt: 1.5,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+          }}
+        >
+          <Typography variant="subtitle2">Día de toma de muestra</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+            <TextField
+              type="date"
+              size="small"
+              label="Ir a fecha"
+              value={fechaApi}
+              onChange={(e) => handleFechaManual(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              disabled={buscarPorNumero}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={buscarPorNumero}
+              onClick={() => setDiasPestanas((n) => n + 7)}
+            >
+              Ver más días
+            </Button>
+          </Box>
+        </Box>
+        <Tabs
+          value={fechaApi}
+          onChange={(_, v) => handleCambioDia(String(v))}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ px: 1 }}
+        >
+          {diasTabs.map((d) => {
+            const key = formatFechaLocal(d);
+            return <Tab key={key} value={key} label={labelDiaOrden(d)} disabled={buscarPorNumero} />;
+          })}
+        </Tabs>
+      </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
@@ -124,14 +185,14 @@ const OrdenesLims: React.FC = () => {
             sx={{ minWidth: 220 }}
           />
           <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Estado (API)</InputLabel>
+            <InputLabel>Estado</InputLabel>
             <Select
-              label="Estado (API)"
+              label="Estado"
               value={estadoFiltro}
               onChange={(e) => setEstadoFiltro(e.target.value as string)}
             >
-              <MenuItem value="">Todos</MenuItem>
-              {ESTADOS.map((s) => (
+              <MenuItem value="">Todos (con muestra)</MenuItem>
+              {ESTADOS_BANDEJA.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
                 </MenuItem>
@@ -144,10 +205,14 @@ const OrdenesLims: React.FC = () => {
             value={numeroFiltro}
             onChange={(e) => setNumeroFiltro(e.target.value)}
             sx={{ width: 160 }}
+            helperText={buscarPorNumero ? 'Ignora filtro por día' : undefined}
           />
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
+          {!buscarPorNumero && (
+            <Chip size="small" label={`${filtradas.length} orden(es)`} variant="outlined" />
+          )}
         </Box>
       </Paper>
 
@@ -156,57 +221,18 @@ const OrdenesLims: React.FC = () => {
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Número</TableCell>
-                <TableCell>Paciente</TableCell>
-                <TableCell>Médico</TableCell>
-                <TableCell>Origen</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Fecha</TableCell>
-                <TableCell align="right">Acción</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtradas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <Typography color="text.secondary">Sin órdenes.</Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtradas.map((r) => (
-                  <TableRow key={r.id} hover>
-                    <TableCell>{r.numero || r.id}</TableCell>
-                    <TableCell>
-                      {r.paciente_nombre || r.paciente}
-                      {r.paciente_dni ? (
-                        <Typography variant="caption" display="block" color="text.secondary">
-                          DNI {r.paciente_dni}
-                        </Typography>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{r.medico_display || r.medico_interno_nombre || '—'}</TableCell>
-                    <TableCell>{r.origen_solicitud}</TableCell>
-                    <TableCell>
-                      <Chip size="small" label={r.estado} color={estadoColor(r.estado)} />
-                    </TableCell>
-                    <TableCell>
-                      {r.fecha_solicitud ? new Date(r.fecha_solicitud).toLocaleString() : '—'}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button size="small" variant="contained" onClick={() => navigate(`/laboratorio/ordenes/${r.id}`)}>
-                        Ver
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Paper>
+          <OrdenesLimsTabla
+            rows={filtradas}
+            emptyMessage={
+              buscarPorNumero
+                ? 'Sin órdenes con ese número.'
+                : `Sin muestras tomadas el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
+            }
+            columnaFecha="toma"
+            onVer={(id) => navigate(`/laboratorio/ordenes/${id}`)}
+          />
+        </Paper>
       )}
     </Box>
   );

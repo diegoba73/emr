@@ -2,6 +2,7 @@
 
 export type EstudioEstado =
   | 'SOLICITADO'
+  | 'CONFIRMADO'
   | 'REALIZADO'
   | 'INFORMADO'
   | 'VALIDADO'
@@ -18,9 +19,20 @@ export type EstudioModalidad =
   | 'PDF_INFORME_EXTERNO'
   | 'OTRO';
 
+export interface TipoEstudioComplementario {
+  id: number;
+  codigo?: string | null;
+  nombre: string;
+  descripcion?: string;
+  modalidad: EstudioModalidad;
+  requiere_informe?: boolean;
+  activo?: boolean;
+}
+
 export interface EstudioComplementario {
   id: number;
   paciente_id: number;
+  paciente_nombre?: string | null;
   tipo_estudio?: number | null;
   tipo_estudio_nombre?: string | null;
   estudio_diagnostico?: number | null;
@@ -39,6 +51,11 @@ export interface EstudioComplementario {
   study_instance_uid?: string | null;
   pacs_metadata?: Record<string, unknown>;
   motivo_anulacion?: string;
+  turno_id?: number | null;
+  turno_fecha_hora_inicio?: string | null;
+  turno_fecha_hora_fin?: string | null;
+  turno_recurso_nombre?: string | null;
+  turno_estado?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -108,6 +125,26 @@ export interface UpdateEstudioComplementarioPayload {
   accession_number?: string | null;
   study_instance_uid?: string | null;
   pacs_metadata?: Record<string, unknown>;
+}
+
+export interface AgendarTurnoEstudioDesdeAgendaPayload {
+  paciente_id: number;
+  recurso_id: number;
+  fecha_hora_inicio: string;
+  fecha_hora_fin: string;
+  estudio_id?: number | null;
+  tipo_estudio?: number | null;
+  modalidad?: EstudioModalidad;
+  origen?: string;
+  descripcion_clinica?: string;
+  medico_id?: number | null;
+}
+
+export interface AsignarTurnoEstudioPayload {
+  recurso_id: number;
+  fecha_hora_inicio: string;
+  fecha_hora_fin: string;
+  medico_id?: number | null;
 }
 
 export interface AgregarArchivoEstudioPayload {

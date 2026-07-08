@@ -1,22 +1,40 @@
 import type { User } from '../../types';
 import type { EstudioComplementario, InformeEstudioComplementario } from '../../types/estudios';
+import { isProfesionalEstudioRole } from '../../utils/roles';
 
 function normalizedRol(user: User | null | undefined): string {
   return (user?.rol || '').toLowerCase();
+}
+
+function puedeOperarEstudios(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const rol = normalizedRol(user);
+  return rol === 'admin' || rol === 'medico' || isProfesionalEstudioRole(rol);
 }
 
 export function canAccessEstudiosModule(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const rol = normalizedRol(user);
-  return rol === 'admin' || rol === 'medico' || rol === 'paciente';
+  return (
+    rol === 'admin' ||
+    rol === 'medico' ||
+    rol === 'paciente' ||
+    rol === 'secretaria' ||
+    isProfesionalEstudioRole(rol)
+  );
 }
 
-export function canWriteEstudio(user: User | null | undefined): boolean {
+export function canAsignarTurnoEstudio(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const rol = normalizedRol(user);
-  return rol === 'admin' || rol === 'medico';
+  return rol === 'admin' || rol === 'secretaria';
+}
+
+export function canWriteEstudio(user: User | null | undefined): boolean {
+  return puedeOperarEstudios(user);
 }
 
 export function canValidateInforme(user: User | null | undefined): boolean {
@@ -76,11 +94,11 @@ export function canRectificarInforme(
 }
 
 export function canMarcarRealizado(estudio: EstudioComplementario): boolean {
-  return estudio.estado === 'SOLICITADO';
+  return estudio.estado === 'SOLICITADO' || estudio.estado === 'CONFIRMADO';
 }
 
 export function canAnularEstudio(estudio: EstudioComplementario): boolean {
-  return ['SOLICITADO', 'REALIZADO', 'INFORMADO'].includes(estudio.estado);
+  return ['SOLICITADO', 'CONFIRMADO', 'REALIZADO', 'INFORMADO'].includes(estudio.estado);
 }
 
 export function canEntregarEstudio(estudio: EstudioComplementario): boolean {

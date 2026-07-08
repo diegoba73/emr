@@ -21,7 +21,8 @@ import { getPaginatedAll } from './limsApi';
 const MICRO = '/lab/microbiologia';
 
 // --- Medios ---
-export const listMediosCultivo = () => getPaginatedAll<MedioCultivo>(`${MICRO}/medios/`, { page_size: 500 });
+export const listMediosCultivo = (params?: { search?: string }) =>
+  getPaginatedAll<MedioCultivo>(`${MICRO}/medios/`, { page_size: 500, ...params });
 export const createMedioCultivo = (body: Partial<MedioCultivo>) =>
   apiClient.post<MedioCultivo>(`${MICRO}/medios/`, body).then((r) => r.data);
 export const updateMedioCultivo = (id: number, body: Partial<MedioCultivo>) =>
@@ -90,8 +91,8 @@ export const updateLecturaCultivo = (
 ) => apiClient.patch<LecturaCultivo>(`${MICRO}/lecturas/${id}/`, body).then((r) => r.data);
 
 // --- Microorganismos ---
-export const listMicroorganismos = () =>
-  getPaginatedAll<Microorganismo>(`${MICRO}/microorganismos/`, { page_size: 500 });
+export const listMicroorganismos = (params?: { search?: string }) =>
+  getPaginatedAll<Microorganismo>(`${MICRO}/microorganismos/`, { page_size: 500, ...params });
 export const createMicroorganismo = (body: Partial<Microorganismo>) =>
   apiClient.post<Microorganismo>(`${MICRO}/microorganismos/`, body).then((r) => r.data);
 export const updateMicroorganismo = (id: number, body: Partial<Microorganismo>) =>
@@ -138,8 +139,8 @@ export const createIdentificacionMicroorganismo = (body: {
 }) => apiClient.post<IdentificacionMicroorganismo>(`${MICRO}/identificaciones/`, body).then((r) => r.data);
 
 // --- Antibióticos ---
-export const listAntibioticos = () =>
-  getPaginatedAll<Antibiotico>(`${MICRO}/antibioticos/`, { page_size: 500 });
+export const listAntibioticos = (params?: { search?: string }) =>
+  getPaginatedAll<Antibiotico>(`${MICRO}/antibioticos/`, { page_size: 500, ...params });
 export const createAntibiotico = (body: Partial<Antibiotico>) =>
   apiClient.post<Antibiotico>(`${MICRO}/antibioticos/`, body).then((r) => r.data);
 export const updateAntibiotico = (id: number, body: Partial<Antibiotico>) =>

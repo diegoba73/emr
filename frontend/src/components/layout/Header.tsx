@@ -5,23 +5,17 @@ import {
   Box,
   Typography,
   IconButton,
-  TextField,
-  InputAdornment,
   Menu,
   MenuItem,
   ListItemIcon,
   Divider,
   Avatar,
-  Tooltip,
-  Button,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import {
-  Search as SearchIcon,
   AccountCircle,
   Logout,
-  EventNote,
   Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -33,15 +27,12 @@ const drawerWidth = 260;
 export interface AppHeaderProps {
   onOpenMobileNav?: () => void;
   title?: string;
-  /** Sincroniza búsqueda con /pacientes?q= */
-  showGlobalSearch?: boolean;
 }
 
-const Header: React.FC<AppHeaderProps> = ({ onOpenMobileNav, title, showGlobalSearch = true }) => {
+const Header: React.FC<AppHeaderProps> = ({ onOpenMobileNav, title }) => {
   const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [search, setSearch] = useState('');
   const navigate = useNavigate();
   const { currentUser, logout } = useData();
 
@@ -60,16 +51,6 @@ const Header: React.FC<AppHeaderProps> = ({ onOpenMobileNav, title, showGlobalSe
       return `${user.first_name} ${user.last_name}`;
     }
     return user.username || 'Usuario';
-  };
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = search.trim();
-    if (q) {
-      navigate(`/pacientes?q=${encodeURIComponent(q)}`);
-    } else {
-      navigate('/pacientes');
-    }
   };
 
   return (
@@ -100,52 +81,16 @@ const Header: React.FC<AppHeaderProps> = ({ onOpenMobileNav, title, showGlobalSe
 
         <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexShrink: 0 }}>
           {title && (
-            <Typography variant="subtitle1" noWrap fontWeight={600} sx={{ maxWidth: { xs: 120, sm: 240 } }}>
+            <Typography variant="subtitle1" noWrap fontWeight={600} sx={{ maxWidth: { xs: 160, sm: 320 } }}>
               {title}
             </Typography>
           )}
         </Box>
 
-        {showGlobalSearch && (
-          <Box
-            component="form"
-            onSubmit={handleSearchSubmit}
-            sx={{ flex: 1, maxWidth: 520, display: { xs: 'none', sm: 'block' } }}
-          >
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Buscar paciente, DNI…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Box>
-        )}
+        <Box sx={{ flexGrow: 1 }} />
 
-        <Box sx={{ flex: 1, display: { xs: 'block', sm: 'none' } }} />
-
-        <Tooltip title="Nuevo turno (calendario)">
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<EventNote />}
-            onClick={() => navigate('/turnos')}
-            sx={{ display: { xs: 'none', md: 'inline-flex' } }}
-          >
-            Turnos
-          </Button>
-        </Tooltip>
-
-        <ThemeModeToggle />
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
+          <ThemeModeToggle />
           <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }} noWrap>
             {getUserDisplayName(currentUser)}
           </Typography>
@@ -161,30 +106,6 @@ const Header: React.FC<AppHeaderProps> = ({ onOpenMobileNav, title, showGlobalSe
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
-          <MenuItem
-            onClick={() => {
-              setAnchorEl(null);
-              navigate('/pacientes');
-            }}
-            sx={{ display: { sm: 'none' } }}
-          >
-            <ListItemIcon>
-              <SearchIcon fontSize="small" />
-            </ListItemIcon>
-            Buscar pacientes
-          </MenuItem>
-          <Divider sx={{ display: { sm: 'none' } }} />
-          <MenuItem
-            onClick={() => {
-              setAnchorEl(null);
-              navigate('/turnos');
-            }}
-          >
-            <ListItemIcon>
-              <EventNote fontSize="small" />
-            </ListItemIcon>
-            Ir a turnos
-          </MenuItem>
           <MenuItem
             onClick={() => {
               setAnchorEl(null);

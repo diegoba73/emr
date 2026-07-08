@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Pacientes from './pages/Pacientes';
 import Turnos from './pages/Turnos';
 import Solicitudes from './pages/Solicitudes';
+import SolicitudLabDetalle from './pages/SolicitudLabDetalle';
 import ArchivosMedicos from './pages/ArchivosMedicos';
 import EstudiosComplementarios from './pages/EstudiosComplementarios';
 import EstudioComplementarioDetalle from './pages/EstudioComplementarioDetalle';
@@ -28,10 +29,12 @@ import { ThemeModeProvider, useThemeMode } from './contexts/ThemeModeContext';
 import { buildAppTheme } from './theme/buildAppTheme';
 import AtencionesClinicasPage from './modules/atenciones/AtencionesClinicasPage';
 import InternacionDashboard from './pages/InternacionDashboard';
-import MisConsultas from './pages/MisConsultas';
 import ListaExamenesTest from './pages/laboratorio/ListaExamenesTest';
 import OrdenesLims from './pages/laboratorio/OrdenesLims';
+import OrdenesLimsPendientes from './pages/laboratorio/OrdenesLimsPendientes';
 import OrdenLimsDetalle from './pages/laboratorio/OrdenLimsDetalle';
+import TiposMuestraCatalogo from './pages/laboratorio/TiposMuestraCatalogo';
+import ExamenesCatalogo from './pages/laboratorio/ExamenesCatalogo';
 import MicrobiologiaHub from './pages/laboratorio/MicrobiologiaHub';
 import MicrobiologiaEstudios from './pages/laboratorio/MicrobiologiaEstudios';
 import MicrobiologiaEstudioDetalle from './pages/laboratorio/MicrobiologiaEstudioDetalle';
@@ -43,12 +46,14 @@ import {
   canAccessArchivosMedicos,
   canAccessAtenciones,
   canAccessAuditoria,
+  canAccessCatalogosClinicos,
   canAccessPaciente360,
   canAccessPacientes,
   canAccessSolicitudes,
 } from './utils/permissions';
 import { canAccessEstudiosModule } from './modules/estudios/permissions';
 import { canAccessLimsModule, canAccessMicrobiologia } from './utils/limsAccess';
+import { canAccessTurnosAgenda } from './utils/turnoPermissions';
 
 // Create query client
 const queryClient = new QueryClient({
@@ -183,7 +188,16 @@ const AppContent: React.FC = () => {
           />
           <Route
             path="/turnos"
-            element={<Turnos />}
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessTurnosAgenda}
+              >
+                <Turnos />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/atenciones"
@@ -198,10 +212,7 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/mis-consultas"
-            element={<MisConsultas />}
-          />
+          <Route path="/mis-consultas" element={<Navigate to="/atenciones" replace />} />
           <Route
             path="/internacion"
             element={
@@ -229,7 +240,20 @@ const AppContent: React.FC = () => {
             }
           />
           <Route
-            path="/archivos-medicos"
+            path="/solicitudes/:id"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessSolicitudes}
+              >
+                <SolicitudLabDetalle />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/archivos"
             element={
               <ProtectedRoute
                 currentUser={currentUser}
@@ -241,6 +265,7 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/archivos-medicos" element={<Navigate to="/archivos" replace />} />
           <Route
             path="/estudios-complementarios"
             element={
@@ -300,7 +325,8 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO']}
+                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                canAccess={canAccessCatalogosClinicos}
               >
                 <DiagnosticosCIE10 />
               </ProtectedRoute>
@@ -313,7 +339,8 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO']}
+                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                canAccess={canAccessCatalogosClinicos}
               >
                 <EstudiosDiagnostico />
               </ProtectedRoute>
@@ -326,7 +353,8 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO']}
+                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                canAccess={canAccessCatalogosClinicos}
               >
                 <Procedimientos />
               </ProtectedRoute>
@@ -339,7 +367,8 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO']}
+                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                canAccess={canAccessCatalogosClinicos}
               >
                 <Medicamentos />
               </ProtectedRoute>
@@ -352,9 +381,23 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO']}
+                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                canAccess={canAccessCatalogosClinicos}
               >
                 <Especialidades />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/pendientes"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <OrdenesLimsPendientes />
               </ProtectedRoute>
             }
           />
@@ -420,6 +463,32 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessMicrobiologia}
               >
                 <MicrobiologiaEstudios />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/catalogos/examenes"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <ExamenesCatalogo />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/catalogos/tipos-muestra"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <TiposMuestraCatalogo />
               </ProtectedRoute>
             }
           />

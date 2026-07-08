@@ -6,14 +6,12 @@ from rest_framework.permissions import IsAuthenticated
 from .models import (
     CentroFisico,
     TipoAtencion,
-    Procedimiento,
     AreaInternacion,
     CamaInternacion,
 )
 from .serializers import (
     CentroFisicoSerializer,
     TipoAtencionSerializer,
-    ProcedimientoSerializer,
     AreaInternacionSerializer,
     CamaInternacionSerializer,
 )
@@ -91,17 +89,3 @@ class CamaInternacionViewSet(viewsets.ReadOnlyModelViewSet):
         if estado:
             queryset = queryset.filter(estado=estado)
         return queryset
-
-
-class ProcedimientoViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet de solo lectura para Procedimientos.
-    Expone el catálogo de procedimientos médicos.
-    """
-    queryset = Procedimiento.objects.filter(activo=True).select_related('especialidad')
-    serializer_class = ProcedimientoSerializer
-    permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['codigo', 'nombre', 'descripcion']
-    ordering_fields = ['nombre', 'codigo', 'duracion_estimada']
-    ordering = ['nombre']

@@ -6,12 +6,28 @@ export function normalizeRol(user: User | null): NormalizedRol {
   return String(user?.rol || '').toLowerCase();
 }
 
-/** Puede listar órdenes LIMS (backend: admin, laboratorio, médico). */
+/** Puede listar órdenes LIMS (lectura: admin, laboratorio, médico, secretaría). */
 export function canAccessLimsModule(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'laboratorio' || r === 'medico';
+  return r === 'admin' || r === 'laboratorio' || r === 'medico' || r === 'secretaria';
+}
+
+/** Consulta clínica de análisis (módulo Solicitudes / Análisis clínico). */
+export function canAccessAnalisisClinicoLab(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  return r === 'admin' || r === 'secretaria' || r === 'medico' || r === 'paciente';
+}
+
+/** Descargar informe PDF desde el portal clínico (médico/paciente). */
+export function canDownloadInformeClinicoPdf(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  return r === 'admin' || r === 'medico' || r === 'paciente';
 }
 
 /** Operaciones de laboratorio sobre orden/muestra/resultados (admin + laboratorio). */
@@ -22,11 +38,19 @@ export function canOperateLims(user: User | null): boolean {
   return r === 'admin' || r === 'laboratorio';
 }
 
-/** Validar orden LIMS (solo admin en backend). */
+/** Enviar informe al paciente (admin y laboratorio). */
+export function canEnviarInformeLims(user: User | null): boolean {
+  return canOperateLims(user);
+}
+
+/** @deprecated Usar canEnviarInformeLims */
+export function canFinalizarOrdenLims(user: User | null): boolean {
+  return canEnviarInformeLims(user);
+}
+
+/** @deprecated Usar canFinalizarOrdenLims */
 export function canValidarOrdenLims(user: User | null): boolean {
-  if (!user) return false;
-  if (user.is_superuser) return true;
-  return normalizeRol(user) === 'admin';
+  return canFinalizarOrdenLims(user);
 }
 
 /** Descargar informe PDF LIMS (PDF-1-FE): admin, laboratorio y médico con acceso al módulo. */
@@ -72,6 +96,11 @@ export function canMarcarMicroEstudioInformado(
   estadoEstudio: string | null | undefined
 ): boolean {
   return canOperateMicrobiologia(user) && estadoEstudio === 'VALIDADO';
+}
+
+/** Catálogos LIMS generales (tipos de muestra): escritura admin y laboratorio. */
+export function canEditLimsCatalogos(user: User | null): boolean {
+  return canOperateLims(user);
 }
 
 /** Catálogos micro: escritura solo admin. */

@@ -8,6 +8,7 @@ djangorestframework_simplejwt
 Faker
 requests
 reportlab>=4.0
+openpyxl>=3.1
 gunicorn>=22,<24
 
 # --- Desarrollo / tests (no requeridos en runtime productivo mínimo) ---

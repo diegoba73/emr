@@ -39,14 +39,14 @@ class TestResultadoExamenMuestra:
         sol = SolicitudExamen.objects.create(
             paciente=pac,
             medico_interno=med,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol.tipos_examen.add(te)
         sol_otra = SolicitudExamen.objects.create(
             paciente=pac,
             medico_interno=med,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
         )
         sol_otra.tipos_examen.add(te)

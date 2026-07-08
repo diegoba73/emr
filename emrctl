@@ -1,0 +1,395 @@
+#!/usr/bin/env bash
+# Control del stack EMR en Docker (Docker Desktop / CLI).
+#
+# Desarrollo local recomendado (todo Docker — mismo camino que producción):
+#   ./emrctl up              db + backend en Docker
+#   ./emrctl up --full       db + backend + frontend en Docker
+#   ./emrctl up --seed       primera vez con datos demo + catálogo LIMS
+#   ./emrctl seed            recargar demo/catálogo LIMS
+#
+# Modo híbrido (solo si necesitás runserver en terminal):
+#   ./emrctl up --hybrid     solo Postgres en Docker
+#
+# Otros:
+#   ./emrctl down            Apaga contenedores (+ procesos locales en :8000/:3000)
+#   ./emrctl status
+#   ./emrctl logs backend
+
+set -euo pipefail
+
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$BASE_DIR"
+
+SERVICES=(db backend frontend)
+
+die() {
+  echo "❌ $*" >&2
+  exit 1
+}
+
+info() {
+  echo "ℹ️  $*"
+}
+
+ok() {
+  echo "✅ $*"
+}
+
+docker_compose() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+  else
+    die "Docker Compose no está instalado."
+  fi
+}
+
+wait_for_docker() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  die "Docker no está corriendo. Abrí Docker Desktop y reintentá."
+}
+
+wait_for_db() {
+  local i
+  for i in $(seq 1 30); do
+    if docker_compose exec -T db pg_isready -U postgres -d synesis_db >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  die "Postgres no respondió a tiempo (contenedor emr_postgres)."
+}
+
+verify_local_db() {
+  if [ -x "${BASE_DIR}/scripts/verify_local_db.sh" ]; then
+    bash "${BASE_DIR}/scripts/verify_local_db.sh"
+  fi
+}
+
+check_forbidden_env() {
+  if [ -f "${BASE_DIR}/.env" ] && grep -qE '^[[:space:]]*DB_USER=synesis_user' "${BASE_DIR}/.env"; then
+    die "DB_USER=synesis_user en .env está PROHIBIDO. Usá postgres. Ver docs/dev-start.md"
+  fi
+}
+
+kill_local_conflicts() {
+  pkill -f "manage.py runserver" 2>/dev/null || true
+  pkill -f "react-scripts start" 2>/dev/null || true
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -ti :8000 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    lsof -ti :3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  fi
+}
+
+resolve_python() {
+  if [ -x "${BASE_DIR}/emr_env/bin/python" ]; then
+    echo "${BASE_DIR}/emr_env/bin/python"
+  elif command -v python3 >/dev/null 2>&1; then
+    command -v python3
+  elif command -v python >/dev/null 2>&1; then
+    command -v python
+  else
+    die "No se encontró Python. Creá el venv: python -m venv emr_env && pip install -r requirements.txt"
+  fi
+}
+
+resolve_services() {
+  local arg="${1:-all}"
+  case "$arg" in
+    all) printf '%s\n' db backend ;;
+    db|postgres|database) echo db ;;
+    backend|api|django) echo backend ;;
+    frontend|ui|react) echo frontend ;;
+    *) die "Servicio desconocido: $arg (usá: db, backend, frontend)" ;;
+  esac
+}
+
+compose_for_service() {
+  local svc="$1"
+  if [ "$svc" = frontend ]; then
+    docker_compose --profile frontend
+  else
+    docker_compose
+  fi
+}
+
+backend_running_in_docker() {
+  docker_compose ps --status running --services 2>/dev/null | grep -qx backend
+}
+
+db_running_in_docker() {
+  docker_compose ps --status running --services 2>/dev/null | grep -qx db
+}
+
+print_hybrid_instructions() {
+  echo ""
+  ok "Postgres listo (BD única: emr_postgres → localhost:5432, synesis_db)"
+  echo ""
+  echo "   Siguiente paso — backend y frontend en terminal:"
+  echo "     source emr_env/bin/activate"
+  echo "     python manage.py runserver 8000"
+  echo "     cd frontend && npm start"
+  echo ""
+  echo "   .env debe usar: DB_HOST=localhost DB_USER=postgres DB_PASSWORD=postgres"
+  echo "   Datos demo: ./emrctl seed"
+  echo "   Admin:      http://localhost:8000/admin/"
+  echo ""
+}
+
+run_seed_local() {
+  local py
+  py="$(resolve_python)"
+  if ! db_running_in_docker; then
+    die "Postgres no está corriendo. Ejecutá: ./emrctl up"
+  fi
+  wait_for_db
+  info "Ejecutando seed_data (idempotente, venv local)..."
+  "$py" manage.py seed_data
+  info "Salas de estudio y consultorios (idempotente)..."
+  "$py" manage.py crear_recursos_iniciales
+  info "Cargando catálogo completo de solicitud en papel..."
+  "$py" manage.py seed_catalogo_solicitud_papel
+  ok "Datos demo + catálogo LIMS listos (medico1/medico123, laboratorio1/laboratorio123, …)."
+}
+
+run_seed_docker() {
+  info "Ejecutando seed_data (idempotente, contenedor backend)..."
+  docker_compose exec -T backend python manage.py seed_data
+  info "Salas de estudio y consultorios (idempotente)..."
+  docker_compose exec -T backend python manage.py crear_recursos_iniciales
+  info "Cargando catálogo completo de solicitud en papel..."
+  docker_compose exec -T backend python manage.py seed_catalogo_solicitud_papel
+  ok "Datos demo + catálogo LIMS listos (medico1/medico123, laboratorio1/laboratorio123, …)."
+}
+
+cmd_up_db_only() {
+  local with_seed=false
+  for arg in "$@"; do
+    case "$arg" in
+      --seed) with_seed=true ;;
+      *) die "Opción desconocida en modo híbrido: $arg (usá --seed)" ;;
+    esac
+  done
+
+  wait_for_docker
+  check_forbidden_env
+  info "Modo híbrido: solo Postgres en Docker (backend/frontend en terminal)..."
+  docker_compose stop backend 2>/dev/null || true
+  docker_compose --profile frontend stop frontend 2>/dev/null || true
+  docker_compose up -d db
+  wait_for_db
+  verify_local_db
+
+  if [ "$with_seed" = true ]; then
+    run_seed_local
+  fi
+
+  print_hybrid_instructions
+  cmd_status
+}
+
+cmd_up_docker() {
+  local with_seed=false
+  local with_frontend=false
+  for arg in "$@"; do
+    case "$arg" in
+      --seed) with_seed=true ;;
+      --full|--frontend) with_frontend=true ;;
+      *) die "Opción desconocida: $arg (usá --seed, --full)" ;;
+    esac
+  done
+
+  wait_for_docker
+  check_forbidden_env
+  kill_local_conflicts
+
+  local compose_args=(up -d --build db backend)
+  if [ "$with_frontend" = true ]; then
+    compose_args=(--profile frontend up -d --build)
+  fi
+
+  if [ "$with_seed" = true ]; then
+    info "Levantando stack EMR en Docker con seed demo..."
+    RUN_SEED=true docker_compose "${compose_args[@]}"
+  else
+    info "Levantando stack EMR en Docker (db + backend)..."
+    docker_compose "${compose_args[@]}"
+  fi
+
+  wait_for_db
+  verify_local_db
+
+  echo ""
+  ok "Stack EMR activo (todo en Docker)"
+  if [ "$with_frontend" = true ]; then
+    echo "   Frontend:  http://localhost:3000"
+  else
+    echo "   Frontend:  cd frontend && npm start  (o ./emrctl up --full)"
+  fi
+  echo "   Backend:   http://localhost:8000"
+  echo "   Admin:     http://localhost:8000/admin/"
+  echo ""
+  if [ "$with_seed" = false ]; then
+    echo "   Usuarios demo: ./emrctl seed"
+  else
+    echo "   Usuarios demo: medico1/medico123 · laboratorio1/laboratorio123 · admin/admin123"
+  fi
+  echo ""
+  cmd_status
+}
+
+cmd_up() {
+  local mode="docker"
+  local args=()
+  for arg in "$@"; do
+    case "$arg" in
+      --docker) mode="docker" ;;
+      --hybrid|--db-only) mode="hybrid" ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+
+  if [ "$mode" = hybrid ]; then
+    cmd_up_db_only "${args[@]}"
+  else
+    cmd_up_docker "${args[@]}"
+  fi
+}
+
+cmd_down() {
+  wait_for_docker
+  info "Apagando stack EMR..."
+  docker_compose --profile frontend down
+  kill_local_conflicts
+  ok "Stack EMR apagado (datos de Postgres persisten en volumen postgres_data)."
+}
+
+cmd_stop() {
+  wait_for_docker
+  local arg="${1:-all}"
+  if [ "$arg" = all ]; then
+    info "Deteniendo: db backend (+ frontend si existe)"
+    docker_compose stop db backend
+    docker_compose --profile frontend stop frontend 2>/dev/null || true
+  else
+    local svc
+    svc="$(resolve_services "$arg")"
+    info "Deteniendo: $svc"
+    compose_for_service "$svc" stop "$svc"
+  fi
+  ok "Servicio(s) detenido(s)."
+  cmd_status
+}
+
+cmd_start() {
+  wait_for_docker
+  local arg="${1:-all}"
+  if [ "$arg" = all ]; then
+    info "Iniciando: db + backend"
+    kill_local_conflicts
+    docker_compose start db backend
+    docker_compose --profile frontend start frontend 2>/dev/null || true
+  else
+    local svc
+    svc="$(resolve_services "$arg")"
+    if [ "$svc" = backend ]; then
+      kill_local_conflicts
+    fi
+    info "Iniciando: $svc"
+    compose_for_service "$svc" start "$svc"
+  fi
+  ok "Servicio(s) iniciado(s)."
+  cmd_status
+}
+
+cmd_restart() {
+  wait_for_docker
+  local arg="${1:-all}"
+  if [ "$arg" = all ]; then
+    info "Reiniciando: db + backend"
+    kill_local_conflicts
+    docker_compose restart db backend
+    docker_compose --profile frontend restart frontend 2>/dev/null || true
+  else
+    local svc
+    svc="$(resolve_services "$arg")"
+    if [ "$svc" = backend ]; then
+      kill_local_conflicts
+    fi
+    info "Reiniciando: $svc"
+    compose_for_service "$svc" restart "$svc"
+  fi
+  ok "Servicio(s) reiniciado(s)."
+  cmd_status
+}
+
+cmd_status() {
+  wait_for_docker
+  echo ""
+  echo "📊 Estado (proyecto emr)"
+  echo "------------------------"
+  docker_compose --profile frontend ps -a
+  echo ""
+  if db_running_in_docker; then
+    echo "   BD única: localhost:5432 → synesis_db (usuario postgres)"
+  else
+    echo "   BD: Postgres NO está corriendo → ./emrctl up"
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    local be fe
+    be="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/health/ 2>/dev/null || echo '---')"
+    fe="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ 2>/dev/null || echo '---')"
+    echo "   Backend  :8000 → HTTP $be"
+    echo "   Frontend :3000 → HTTP $fe"
+  fi
+}
+
+cmd_logs() {
+  wait_for_docker
+  local svc="${1:-db}"
+  resolve_services "$svc" >/dev/null
+  docker_compose logs -f --tail=100 "$svc"
+}
+
+cmd_seed() {
+  wait_for_docker
+  if backend_running_in_docker; then
+    run_seed_docker
+  else
+    run_seed_local
+  fi
+}
+
+cmd_help() {
+  sed -n '3,21p' "$0" | sed 's/^# \?//'
+  echo ""
+  echo "Ejemplos:"
+  echo "  ./emrctl up --seed       # Docker: db + backend + datos demo"
+  echo "  ./emrctl up --full       # incluye frontend React"
+  echo "  ./emrctl up --hybrid     # solo Postgres (runserver manual)"
+}
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    up) cmd_up "$@" ;;
+    down|stop-all) cmd_down ;;
+    stop) cmd_stop "${1:-all}" ;;
+    start) cmd_start "${1:-all}" ;;
+    restart) cmd_restart "${1:-all}" ;;
+    status|ps) cmd_status ;;
+    logs) cmd_logs "${1:-db}" ;;
+    seed) cmd_seed ;;
+    help|-h|--help) cmd_help ;;
+    *)
+      die "Comando desconocido: $cmd (./emrctl help)"
+      ;;
+  esac
+}
+
+main "$@"

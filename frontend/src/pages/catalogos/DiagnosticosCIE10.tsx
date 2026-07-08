@@ -8,14 +8,15 @@ import {
   deleteDiagnosticoCIE10,
 } from '../../services/apiService';
 import CatalogoBase from './CatalogoBase';
+import { canAccessCatalogosClinicos, canEditCatalogosClinicos } from '../../utils/permissions';
 
 const DiagnosticosCIE10: React.FC = () => {
   const { currentUser } = useData();
   const [items, setItems] = useState<DiagnosticoCIE10[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Verificar permisos - médicos y admin
-  const canEdit = currentUser?.rol === 'MEDICO' || currentUser?.rol === 'ADMIN' || currentUser?.is_superuser;
+  const canView = canAccessCatalogosClinicos(currentUser);
+  const canEdit = canEditCatalogosClinicos(currentUser);
 
   const loadData = useCallback(async () => {
     try {
@@ -29,7 +30,7 @@ const DiagnosticosCIE10: React.FC = () => {
     }
   }, []);
 
-  if (!canEdit) {
+  if (!canView) {
     return (
       <div style={{ padding: '20px' }}>
         <p>No tiene permisos para acceder a esta sección.</p>
@@ -46,6 +47,7 @@ const DiagnosticosCIE10: React.FC = () => {
       onCreate={createDiagnosticoCIE10}
       onUpdate={updateDiagnosticoCIE10}
       onDelete={deleteDiagnosticoCIE10}
+      readOnly={!canEdit}
       searchFields={['codigo', 'descripcion', 'enfermedad', 'capitulo']}
       fields={[
         { key: 'codigo', label: 'Código', type: 'text', required: true },

@@ -349,5 +349,19 @@ class TestSolicitudLimsYAuditoria:
     ):
         api.force_authenticate(user=user_secretaria)
         r = api.post('/api/solicitudes/', _payload(paciente_a.pk), format='json')
-        assert r.status_code in (200, 201)
+        assert r.status_code == 403
         mock_lims.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestSecretariaSolicitudesSoloLectura:
+    def test_secretaria_solo_lectura_solicitudes(self, api, user_secretaria, solicitud_vinculada):
+        api.force_authenticate(user=user_secretaria)
+        assert api.get('/api/solicitudes/').status_code == 200
+        assert api.get(f'/api/solicitudes/{solicitud_vinculada.pk}/').status_code == 200
+        r = api.patch(
+            f'/api/solicitudes/{solicitud_vinculada.pk}/',
+            {'descripcion': 'Intento secretaría'},
+            format='json',
+        )
+        assert r.status_code == 403

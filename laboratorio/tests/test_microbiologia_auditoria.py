@@ -96,7 +96,7 @@ def _setup_solicitud(suf: str):
     sol = SolicitudExamen.objects.create(
         paciente=pac,
         medico_interno=med,
-        origen_solicitud="EMR",
+        origen_solicitud="AMBULATORIO_CEHTA",
         estado="PENDIENTE",
     )
     sol.tipos_examen.add(te)

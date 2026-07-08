@@ -43,25 +43,6 @@ class Medicamento(models.Model):
         return f"{self.nombre} ({self.principio_activo}) {self.concentracion}"
 
 
-class Procedimiento(models.Model):
-    """Procedimientos médicos"""
-    codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
-    nombre = models.CharField(max_length=200, verbose_name="Nombre del Procedimiento")
-    descripcion = models.TextField(verbose_name="Descripción")
-    especialidad = models.ForeignKey('medicos.Especialidad', on_delete=models.CASCADE, verbose_name="Especialidad")
-    duracion_estimada = models.IntegerField(help_text="Duración en minutos", verbose_name="Duración Estimada")
-    requiere_anestesia = models.BooleanField(default=False, verbose_name="Requiere Anestesia")
-    activo = models.BooleanField(default=True, verbose_name="Activo")
-
-    class Meta:
-        verbose_name = "Procedimiento"
-        verbose_name_plural = "Procedimientos"
-        ordering = ['nombre']
-
-    def __str__(self):
-        return f"{self.codigo} - {self.nombre}"
-
-
 class CentroAtencion(models.Model):
     """Centros de atención médica"""
     nombre = models.CharField(max_length=200, verbose_name="Nombre del Centro")
@@ -263,8 +244,8 @@ class ProcedimientoCatalogo(models.Model):
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
-        verbose_name = "Procedimiento (Catálogo)"
-        verbose_name_plural = "Procedimientos (Catálogo)"
+        verbose_name = "Procedimiento"
+        verbose_name_plural = "Procedimientos"
         ordering = ['nombre']
 
     def __str__(self):

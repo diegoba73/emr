@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -23,7 +23,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { Add, Visibility } from '@mui/icons-material';
+import { Add, CalendarMonth, Clear, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import AsyncAutocomplete from '../components/common/AsyncAutocomplete';
 import { useData } from '../contexts/DataContext';
@@ -36,12 +36,14 @@ import {
 } from '../modules/estudios/constants';
 import {
   canAccessEstudiosModule,
+  canAsignarTurnoEstudio,
   canWriteEstudio,
 } from '../modules/estudios/permissions';
 import {
   createEstudioComplementario,
   listEstudiosComplementarios,
 } from '../services/estudiosComplementariosApi';
+import { turnosAgendarEstudioPath } from '../utils/agendarEstudioNavigation';
 import type {
   CreateEstudioComplementarioPayload,
   EstudioComplementario,
@@ -49,7 +51,7 @@ import type {
   EstudioModalidad,
 } from '../types/estudios';
 import { Paciente } from '../types';
-import { formatPacienteLabel } from '../utils/pacienteFormat';
+import { formatPacienteLabel, formatPacienteNombre } from '../utils/pacienteFormat';
 
 const EstudiosComplementarios: React.FC = () => {
   const navigate = useNavigate();
@@ -59,7 +61,8 @@ const EstudiosComplementarios: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<string>('');
   const [filtroModalidad, setFiltroModalidad] = useState<string>('');
-  const [filtroPaciente, setFiltroPaciente] = useState<Paciente | null>(null);
+  const [busquedaPaciente, setBusquedaPaciente] = useState('');
+  const [busquedaPacienteDebounced, setBusquedaPacienteDebounced] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<CreateEstudioComplementarioPayload>({
@@ -71,7 +74,12 @@ const EstudiosComplementarios: React.FC = () => {
   });
 
   const writeAccess = canWriteEstudio(currentUser);
+  const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
   const rol = (currentUser?.rol || '').toLowerCase();
+
+  const irAgendarEnCalendario = (estudio: EstudioComplementario) => {
+    navigate(turnosAgendarEstudioPath(estudio.id));
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,7 +88,7 @@ const EstudiosComplementarios: React.FC = () => {
       const params: Record<string, string | number> = {};
       if (filtroEstado) params.estado = filtroEstado;
       if (filtroModalidad) params.modalidad = filtroModalidad;
-      if (filtroPaciente?.id) params.paciente = filtroPaciente.id;
+      if (busquedaPacienteDebounced.trim()) params.search = busquedaPacienteDebounced.trim();
       const data = await listEstudiosComplementarios(params);
       setEstudios(data);
     } catch (e) {
@@ -89,7 +97,14 @@ const EstudiosComplementarios: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filtroEstado, filtroModalidad, filtroPaciente]);
+  }, [filtroEstado, filtroModalidad, busquedaPacienteDebounced]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setBusquedaPacienteDebounced(busquedaPaciente);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [busquedaPaciente]);
 
   useEffect(() => {
     if (!canAccessEstudiosModule(currentUser)) return;
@@ -102,16 +117,20 @@ const EstudiosComplementarios: React.FC = () => {
     }
   }, [writeAccess, loadPacientes]);
 
-  const pacienteNombre = useMemo(() => {
-    const map = new Map(pacientes.map((p) => [p.id, formatPacienteLabel(p)]));
-    return (id: number) => map.get(id) || `Paciente #${id}`;
-  }, [pacientes]);
+  const pacienteNombre = useCallback(
+    (row: EstudioComplementario) => {
+      if (row.paciente_nombre) return row.paciente_nombre;
+      const p = pacientes.find((item) => item.id === row.paciente_id);
+      return p ? formatPacienteNombre(p) : `Paciente #${row.paciente_id}`;
+    },
+    [pacientes]
+  );
+
+  const puedeFiltrarPorPaciente = rol !== 'paciente';
 
   const openCreate = () => {
     const defaultPacienteId =
-      rol === 'paciente' && currentUser?.paciente?.id
-        ? currentUser.paciente.id
-        : filtroPaciente?.id || 0;
+      rol === 'paciente' && currentUser?.paciente?.id ? currentUser.paciente.id : 0;
     setForm({
       paciente_id: defaultPacienteId,
       modalidad: 'IMAGEN_RX',
@@ -165,15 +184,26 @@ const EstudiosComplementarios: React.FC = () => {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-          {writeAccess && rol !== 'paciente' && (
-            <AsyncAutocomplete<Paciente>
-              label="Paciente"
-              endpoint="/pacientes/"
-              value={filtroPaciente}
-              onChange={setFiltroPaciente}
-              getOptionLabel={formatPacienteLabel}
-              sx={{ minWidth: 280 }}
-            />
+          {puedeFiltrarPorPaciente && (
+            <>
+              <TextField
+                size="small"
+                label="Buscar paciente"
+                placeholder="Nombre, apellido o DNI"
+                value={busquedaPaciente}
+                onChange={(e) => setBusquedaPaciente(e.target.value)}
+                sx={{ minWidth: 280 }}
+              />
+              {busquedaPaciente && (
+                <Button
+                  size="small"
+                  startIcon={<Clear />}
+                  onClick={() => setBusquedaPaciente('')}
+                >
+                  Limpiar paciente
+                </Button>
+              )}
+            </>
           )}
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Estado</InputLabel>
@@ -231,6 +261,7 @@ const EstudiosComplementarios: React.FC = () => {
                 {rol !== 'paciente' && <TableCell>Paciente</TableCell>}
                 <TableCell>Tipo / modalidad</TableCell>
                 <TableCell>Estado</TableCell>
+                <TableCell>Turno</TableCell>
                 <TableCell>F. solicitud</TableCell>
                 <TableCell>F. realización</TableCell>
                 <TableCell>Centro</TableCell>
@@ -239,10 +270,19 @@ const EstudiosComplementarios: React.FC = () => {
             </TableHead>
             <TableBody>
               {estudios.map((row) => (
-                <TableRow key={row.id} hover>
+                <TableRow
+                  key={row.id}
+                  hover
+                  sx={{ cursor: row.estado === 'SOLICITADO' && puedeAsignarTurno ? 'pointer' : undefined }}
+                  onClick={() => {
+                    if (row.estado === 'SOLICITADO' && puedeAsignarTurno) {
+                      irAgendarEnCalendario(row);
+                    }
+                  }}
+                >
                   <TableCell>{row.id}</TableCell>
                   {rol !== 'paciente' && (
-                    <TableCell>{pacienteNombre(row.paciente_id)}</TableCell>
+                    <TableCell>{pacienteNombre(row)}</TableCell>
                   )}
                   <TableCell>
                     {row.tipo_estudio_nombre || '—'}
@@ -259,6 +299,24 @@ const EstudiosComplementarios: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
+                    {row.turno_fecha_hora_inicio ? (
+                      <>
+                        {new Date(row.turno_fecha_hora_inicio).toLocaleString()}
+                        {row.turno_recurso_nombre ? (
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            {row.turno_recurso_nombre}
+                          </Typography>
+                        ) : null}
+                      </>
+                    ) : row.estado === 'SOLICITADO' && puedeAsignarTurno ? (
+                      <Typography variant="body2" color="primary">
+                        Clic para elegir horario en calendario
+                      </Typography>
+                    ) : (
+                      '—'
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {row.fecha_solicitud
                       ? new Date(row.fecha_solicitud).toLocaleString()
                       : '—'}
@@ -270,10 +328,26 @@ const EstudiosComplementarios: React.FC = () => {
                   </TableCell>
                   <TableCell>{row.centro_realizador || '—'}</TableCell>
                   <TableCell align="right">
+                    {row.estado === 'SOLICITADO' && puedeAsignarTurno && (
+                      <Button
+                        size="small"
+                        startIcon={<CalendarMonth />}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          irAgendarEnCalendario(row);
+                        }}
+                        sx={{ mr: 1 }}
+                      >
+                        Turno
+                      </Button>
+                    )}
                     <Button
                       size="small"
                       startIcon={<Visibility />}
-                      onClick={() => navigate(`/estudios-complementarios/${row.id}`)}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        navigate(`/estudios-complementarios/${row.id}`);
+                      }}
                     >
                       Ver
                     </Button>
@@ -363,6 +437,7 @@ const EstudiosComplementarios: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
     </Box>
   );
 };

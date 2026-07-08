@@ -26,13 +26,14 @@ from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from api.permissions import IsMedicoOrEnfermeriaOrAdmin, emr_staff_or_admin_global
+from api.permissions import ConsultaPermission, emr_staff_or_admin_global
 from auditoria.audit_service import log_create, log_update
 from auditoria.snapshot import safe_model_snapshot
 
 from .models import Consulta, HistoriaClinica
 from .serializers import (
     ConsultaCreateSerializer,
+    ConsultaDetalleSerializer,
     ConsultaSerializer,
     HistoriaClinicaSerializer,
 )
@@ -156,7 +157,7 @@ class ConsultaViewSet(viewsets.ModelViewSet):
         .prefetch_related('diagnosticos', 'tratamientos', 'prescripciones')
         .all()
     )
-    permission_classes = [IsMedicoOrEnfermeriaOrAdmin]
+    permission_classes = [ConsultaPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['historia_clinica', 'medico', 'turno']
     ordering = ['-fecha_hora_consulta']
@@ -164,6 +165,8 @@ class ConsultaViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return ConsultaCreateSerializer
+        if self.action == 'retrieve':
+            return ConsultaDetalleSerializer
         return ConsultaSerializer
 
     def get_queryset(self):
@@ -183,6 +186,13 @@ class ConsultaViewSet(viewsets.ModelViewSet):
         if historia_clinica_id:
             try:
                 queryset = queryset.filter(historia_clinica_id=int(historia_clinica_id))
+            except (ValueError, TypeError):
+                pass
+
+        paciente_id = self.request.query_params.get('paciente')
+        if paciente_id:
+            try:
+                queryset = queryset.filter(historia_clinica_id=int(paciente_id))
             except (ValueError, TypeError):
                 pass
 

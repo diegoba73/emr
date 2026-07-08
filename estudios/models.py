@@ -46,6 +46,7 @@ class TipoEstudioComplementario(TimestampedModel):
 class EstudioComplementario(TimestampedModel):
     class Estado(models.TextChoices):
         SOLICITADO = 'SOLICITADO', 'Solicitado'
+        CONFIRMADO = 'CONFIRMADO', 'Confirmado'
         REALIZADO = 'REALIZADO', 'Realizado'
         INFORMADO = 'INFORMADO', 'Informado'
         VALIDADO = 'VALIDADO', 'Validado'
@@ -92,6 +93,13 @@ class EstudioComplementario(TimestampedModel):
         null=True,
         blank=True,
         related_name='estudios_solicitados',
+    )
+    turno = models.OneToOneField(
+        'turnos.Turno',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='estudio_complementario',
     )
     atencion = models.ForeignKey(
         'turnos.Atencion',
@@ -151,6 +159,8 @@ class EstudioComplementario(TimestampedModel):
         return f'EstudioComplementario:{self.pk}'
 
     def clean(self) -> None:
+        if self.turno_id and self.turno.paciente_id != self.paciente_id:
+            raise ValidationError({'turno': 'El turno no pertenece al paciente.'})
         if self.atencion_id and self.atencion.paciente_id != self.paciente_id:
             raise ValidationError({'atencion': 'La atención no pertenece al paciente.'})
         if self.consulta_hc_id and self.consulta_hc.historia_clinica_id != self.paciente_id:

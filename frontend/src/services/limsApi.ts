@@ -6,13 +6,17 @@ import {
   informeLimsPdfFilename,
 } from '../utils/limsDownload';
 import type {
+  AnalisisLongitudinalOrden,
   CargarResultadoPayload,
   LimsPanelExamen,
   LimsTipoContenedor,
   LimsTipoExamen,
+  TipoExamenLimsWriteBody,
   LimsTipoMuestra,
   MuestraTransaccional,
   Paginated,
+  OrigenSolicitudLims,
+  EnviarInformeOrdenResponse,
   SolicitudExamenLims,
 } from '../types/lims';
 
@@ -108,6 +112,11 @@ export async function listSolicitudesExamen(params?: {
   estado?: string;
   numero?: string;
   paciente?: number;
+  search?: string;
+  /** YYYY-MM-DD — fecha de creación de la orden. */
+  fecha?: string;
+  /** YYYY-MM-DD — día en que se tomó la muestra (bandeja diaria de laboratorio). */
+  fecha_muestra?: string;
 }): Promise<SolicitudExamenLims[]> {
   return getPaginatedAll<SolicitudExamenLims>(`${LAB}/solicitudes/`, {
     ...params,
@@ -120,39 +129,106 @@ export async function getSolicitudExamen(id: number): Promise<SolicitudExamenLim
   return data;
 }
 
-export async function postTomarMuestraOrden(id: number): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/tomar-muestra/`, {});
+export async function postTomarMuestraOrden(
+  id: number,
+  body: {
+    muestras?: Array<{
+      tipo_muestra_id: number;
+      tipo_contenedor_id?: number | null;
+      observaciones?: string;
+    }>;
+  } = {}
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/tomar-muestra/`, body);
   return data;
 }
 
 export async function postCargarResultados(
   id: number,
-  resultados: CargarResultadoPayload[]
+  resultados: CargarResultadoPayload[],
+  options?: { observaciones?: string; informar_parcial?: boolean; orden_grupos_informe?: string[] }
 ): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/cargar-resultados/`, {
-    resultados,
-  });
+  const body: {
+    resultados: CargarResultadoPayload[];
+    observaciones?: string;
+    informar_parcial?: boolean;
+    orden_grupos_informe?: string[];
+  } = { resultados };
+  if (options?.observaciones !== undefined) {
+    body.observaciones = options.observaciones;
+  }
+  if (options?.informar_parcial) {
+    body.informar_parcial = true;
+  }
+  if (options?.orden_grupos_informe !== undefined) {
+    body.orden_grupos_informe = options.orden_grupos_informe;
+  }
+  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/cargar-resultados/`, body);
+  return data;
+}
+
+export async function patchOrdenInformeOrden(
+  id: number,
+  orden_grupos_informe: string[]
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.patch<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${id}/orden-informe/`,
+    { orden_grupos_informe }
+  );
+  return data;
+}
+
+export async function getAnalisisLongitudinal(id: number): Promise<AnalisisLongitudinalOrden> {
+  const { data } = await apiClient.get<AnalisisLongitudinalOrden>(
+    `${LAB}/solicitudes/${id}/analisis-longitudinal/`
+  );
   return data;
 }
 
 /** Catálogo tipos examen indexado por id (carga de resultados B2-C). */
 export async function getTiposExamenMap(): Promise<Map<number, LimsTipoExamen>> {
-  const list = await listTiposExamenLims();
+  const list = await listTiposExamenLims({ activo: true });
   return new Map(list.map((t) => [t.id, t]));
 }
 
+export async function postEnviarInformeOrden(
+  id: number,
+  body: { email?: boolean; whatsapp?: boolean }
+): Promise<EnviarInformeOrdenResponse> {
+  const { data } = await apiClient.post<EnviarInformeOrdenResponse>(
+    `${LAB}/solicitudes/${id}/enviar-informe/`,
+    body,
+    { timeout: 45_000 }
+  );
+  return data;
+}
+
+/** @deprecated La orden se finaliza al cargar todos los resultados */
+export async function postFinalizarOrden(id: number): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/finalizar/`, {});
+  return data;
+}
+
+/** @deprecated Usar postFinalizarOrden */
 export async function postValidarOrden(id: number): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/validar/`, {});
-  return data;
+  return postFinalizarOrden(id);
 }
 
-export async function postMarcarEntregado(id: number): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/marcar-entregado/`, {});
-  return data;
+export interface CreateSolicitudExamenLimsPayload {
+  paciente_id: number;
+  medico_id?: number;
+  medico_externo_nombre?: string;
+  consulta_hc_id?: number;
+  origen_solicitud?: OrigenSolicitudLims;
+  examenes_ids?: number[];
+  paneles_ids?: number[];
+  observaciones?: string;
 }
 
-export async function postCancelarOrden(id: number): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/cancelar/`, {});
+export async function createSolicitudExamenLims(
+  body: CreateSolicitudExamenLimsPayload
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/`, body);
   return data;
 }
 
@@ -236,12 +312,81 @@ export async function postMuestraCancelar(
 
 // --- Catálogos ---
 
-export async function listTiposExamenLims(): Promise<LimsTipoExamen[]> {
-  return getPaginatedAll<LimsTipoExamen>(`${LAB}/examenes/`, { page_size: 500 });
+export async function listTiposExamenLims(params?: {
+  activo?: boolean;
+  search?: string;
+}): Promise<LimsTipoExamen[]> {
+  const query: Record<string, string | number | undefined> = { page_size: 500 };
+  if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
+  if (params?.search) query.search = params.search;
+  return getPaginatedAll<LimsTipoExamen>(`${LAB}/examenes/`, query);
 }
 
-export async function listTiposMuestraLims(): Promise<LimsTipoMuestra[]> {
-  return getPaginatedAll<LimsTipoMuestra>(`${LAB}/muestras/`, { page_size: 500 });
+export function sanitizeTipoExamenWriteBody(body: TipoExamenLimsWriteBody): TipoExamenLimsWriteBody {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined) continue;
+    out[key] = value;
+  }
+  for (const key of ['metodo', 'unidad_default', 'abreviatura', 'rango_referencia_texto'] as const) {
+    if (out[key] === null) delete out[key];
+  }
+  const modo = out.modo_entrada;
+  if (modo && modo !== 'ESTANDAR') {
+    if (out.multiplicador_clinico === '' || out.multiplicador_clinico === null) {
+      out.multiplicador_clinico = 1;
+    }
+  }
+  return out as TipoExamenLimsWriteBody;
+}
+
+export async function createTipoExamenLims(
+  body: TipoExamenLimsWriteBody & { codigo: string; nombre: string; tipo_muestra_requerida: number }
+): Promise<LimsTipoExamen> {
+  const { data } = await apiClient.post<LimsTipoExamen>(
+    `${LAB}/examenes/`,
+    sanitizeTipoExamenWriteBody(body)
+  );
+  return data;
+}
+
+export async function patchTipoExamenLims(
+  id: number,
+  body: TipoExamenLimsWriteBody
+): Promise<LimsTipoExamen> {
+  const { data } = await apiClient.patch<LimsTipoExamen>(
+    `${LAB}/examenes/${id}/`,
+    sanitizeTipoExamenWriteBody(body)
+  );
+  return data;
+}
+
+export async function listTiposMuestraLims(params?: {
+  activo?: boolean;
+  search?: string;
+}): Promise<LimsTipoMuestra[]> {
+  const query: Record<string, string | number | undefined> = { page_size: 500 };
+  if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
+  if (params?.search) query.search = params.search;
+  return getPaginatedAll<LimsTipoMuestra>(`${LAB}/muestras/`, query);
+}
+
+export async function createTipoMuestraLims(body: {
+  codigo: string;
+  nombre: string;
+  color_tubo?: string;
+  activo?: boolean;
+}): Promise<LimsTipoMuestra> {
+  const { data } = await apiClient.post<LimsTipoMuestra>(`${LAB}/muestras/`, body);
+  return data;
+}
+
+export async function patchTipoMuestraLims(
+  id: number,
+  body: Partial<Pick<LimsTipoMuestra, 'nombre' | 'color_tubo' | 'activo'>>
+): Promise<LimsTipoMuestra> {
+  const { data } = await apiClient.patch<LimsTipoMuestra>(`${LAB}/muestras/${id}/`, body);
+  return data;
 }
 
 export async function listPanelesLims(): Promise<LimsPanelExamen[]> {

@@ -212,6 +212,11 @@ export const getConsultas = async (params?: { historia_clinica_id?: number; page
   }
 };
 
+export const getConsultaDetalle = async (id: number): Promise<import('../types').ConsultaDetalle> => {
+  const response = await api.get(`/consultas/${id}/`);
+  return response.data;
+};
+
 export const createConsulta = async (consultaData: Partial<Consulta>): Promise<Consulta> => {
   try {
     const response = await api.post('/consultas/', consultaData);
@@ -268,6 +273,17 @@ export const getArchivosPorConsulta = async (consultaId: number): Promise<Archiv
     return response.data.results || response.data || [];
   } catch {
     throw new Error('No se pudieron cargar los archivos de la consulta.');
+  }
+};
+
+export const getArchivosPorAtencion = async (atencionId: number): Promise<ArchivoMedico[]> => {
+  try {
+    const response = await api.get(`/archivos-medicos/archivos/`, {
+      params: { atencion_id: atencionId },
+    });
+    return response.data.results || response.data || [];
+  } catch {
+    throw new Error('No se pudieron cargar los archivos de la atención.');
   }
 };
 

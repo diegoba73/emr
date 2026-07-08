@@ -397,7 +397,7 @@ class TestTurnoAPI(APITestCase):
             assert response.status_code == status.HTTP_200_OK
             assert len(response.data['results']) == 2
 
-    def test_laboratorio_no_ve_turnos(self):
+    def test_laboratorio_ve_turnos_lectura(self):
         lab_user = User.objects.create_user(
             username='ta_laboratorio_turnos',
             email='ta_lab@test.com',
@@ -417,10 +417,10 @@ class TestTurnoAPI(APITestCase):
         response = self.client.get('/api/turnos/')
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['results'] == []
+        assert len(response.data['results']) == 1
 
-    def test_laboratorio_is_staff_no_ve_turnos(self):
-        """is_staff=True no debe elevar operador LIMS a agenda EMR."""
+    def test_laboratorio_is_staff_ve_turnos_por_rol_operativo(self):
+        """is_staff=True no amplía agenda; el rol laboratorio sí tiene lectura operativa."""
         lab_user = User.objects.create_user(
             username='ta_laboratorio_staff_turnos',
             email='ta_lab_staff@test.com',
@@ -439,7 +439,7 @@ class TestTurnoAPI(APITestCase):
         self.client.force_authenticate(user=lab_user)
         response = self.client.get('/api/turnos/')
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['results'] == []
+        assert len(response.data['results']) == 1
 
     def test_validacion_fecha_fin_mayor_inicio(self):
         fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)

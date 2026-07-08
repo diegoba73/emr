@@ -138,6 +138,11 @@ const GestionUsuarios: React.FC = () => {
     { value: 'medico', label: 'Médico' },
     { value: 'secretaria', label: 'Secretaria' },
     { value: 'enfermeria', label: 'Enfermería' },
+    { value: 'laboratorio', label: 'Laboratorio' },
+    { value: 'kinesiologo', label: 'Kinesiólogo' },
+    { value: 'radiologo', label: 'Radiólogo' },
+    { value: 'ecografista', label: 'Ecografista' },
+    { value: 'fonoaudiologo', label: 'Fonoaudiólogo' },
     { value: 'admin', label: 'Administrador' },
   ];
 

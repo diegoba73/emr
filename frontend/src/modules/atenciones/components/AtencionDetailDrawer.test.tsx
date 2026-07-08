@@ -39,8 +39,8 @@ jest.mock('./forms/ConsultaAmbulatoriaForm', () => ({
 
 jest.mock('./DocumentosAdjuntos', () => ({
   __esModule: true,
-  default: ({ canEdit }: { canEdit: boolean }) => (
-    <div data-testid="documentos-panel">{canEdit ? 'UPLOAD-ENABLED' : 'UPLOAD-DISABLED'}</div>
+  default: ({ canEdit }: { canEdit: boolean; atencionId: number; pacienteId: number }) => (
+    <div data-testid="archivos-panel">{canEdit ? 'UPLOAD-ENABLED' : 'UPLOAD-DISABLED'}</div>
   ),
 }));
 
@@ -91,8 +91,8 @@ describe('AtencionDetailDrawer — permisos QA-ROLE-01', () => {
 
     expect(screen.getByText('Detalle de la Atención')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Documentos/i }));
-    expect(screen.getByTestId('documentos-panel')).toHaveTextContent('UPLOAD-DISABLED');
+    fireEvent.click(screen.getByRole('tab', { name: /Archivos/i }));
+    expect(screen.getByTestId('archivos-panel')).toHaveTextContent('UPLOAD-DISABLED');
 
     fireEvent.click(screen.getByRole('tab', { name: /Detalle clínico/i }));
     expect(screen.getByTestId('consulta-form')).toHaveTextContent('EDIT-DISABLED');
@@ -101,15 +101,15 @@ describe('AtencionDetailDrawer — permisos QA-ROLE-01', () => {
   it('paciente ve el drawer propio en solo lectura', () => {
     renderDrawer(mockUser({ rol: 'PACIENTE' }), false);
 
-    fireEvent.click(screen.getByRole('tab', { name: /Documentos/i }));
-    expect(within(screen.getByTestId('documentos-panel')).getByText('UPLOAD-DISABLED')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Archivos/i }));
+    expect(within(screen.getByTestId('archivos-panel')).getByText('UPLOAD-DISABLED')).toBeInTheDocument();
   });
 
   it('médico ve controles de edición', () => {
     renderDrawer(mockUser({ rol: 'MEDICO' }));
 
-    fireEvent.click(screen.getByRole('tab', { name: /Documentos/i }));
-    expect(screen.getByTestId('documentos-panel')).toHaveTextContent('UPLOAD-ENABLED');
+    fireEvent.click(screen.getByRole('tab', { name: /Archivos/i }));
+    expect(screen.getByTestId('archivos-panel')).toHaveTextContent('UPLOAD-ENABLED');
 
     fireEvent.click(screen.getByRole('tab', { name: /Detalle clínico/i }));
     expect(screen.getByTestId('consulta-form')).toHaveTextContent('EDIT-ENABLED');

@@ -260,6 +260,141 @@ class ConsultaCreateSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
+# DETALLE DE CONSULTA (eje documental)
+# ============================================================================
+
+class ArchivoConsultaResumenSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    titulo = serializers.CharField()
+    tipo_archivo = serializers.CharField()
+    descripcion = serializers.CharField(allow_null=True)
+    fecha_subida = serializers.DateTimeField()
+    archivo_nombre = serializers.CharField(allow_null=True)
+    download_url = serializers.CharField(allow_null=True)
+
+
+class EstudioConsultaResumenSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    modalidad = serializers.CharField()
+    estado = serializers.CharField()
+    tipo_estudio_nombre = serializers.CharField(allow_null=True)
+    fecha_solicitud = serializers.DateTimeField(allow_null=True)
+    descripcion_clinica = serializers.CharField(allow_blank=True)
+
+
+class ResultadoLaboratorioResumenSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    tipo_examen_nombre = serializers.CharField(allow_null=True)
+    valor_obtenido = serializers.CharField(allow_null=True, allow_blank=True)
+    unidad = serializers.CharField(allow_null=True, allow_blank=True)
+    estado = serializers.CharField(allow_null=True)
+    es_patologico = serializers.BooleanField(allow_null=True)
+
+
+class SolicitudLaboratorioResumenSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    numero = serializers.CharField(allow_null=True)
+    estado = serializers.CharField()
+    fecha_solicitud = serializers.DateTimeField()
+    tipos_examen_nombres = serializers.ListField(child=serializers.CharField())
+    paneles_nombres = serializers.ListField(child=serializers.CharField())
+    resultados = ResultadoLaboratorioResumenSerializer(many=True)
+
+
+class ConsultaDetalleSerializer(ConsultaSerializer):
+    """Consulta con archivos, pedidos de laboratorio y estudios complementarios vinculados."""
+
+    paciente_id = serializers.IntegerField(source='historia_clinica_id', read_only=True)
+    archivos = serializers.SerializerMethodField()
+    estudios_complementarios = serializers.SerializerMethodField()
+    solicitudes_laboratorio = serializers.SerializerMethodField()
+
+    class Meta(ConsultaSerializer.Meta):
+        fields = ConsultaSerializer.Meta.fields + [
+            'paciente_id',
+            'archivos',
+            'estudios_complementarios',
+            'solicitudes_laboratorio',
+        ]
+
+    def get_archivos(self, obj):
+        from archivos_medicos.models import ArchivoMedico
+        request = self.context.get('request')
+        items = ArchivoMedico.objects.filter(consulta_id=obj.pk).order_by('-fecha_subida')
+        result = []
+        for ar in items:
+            nombre = None
+            if ar.archivo:
+                import os
+                nombre = os.path.basename(ar.archivo.name)
+            download_url = None
+            if request and ar.pk:
+                download_url = request.build_absolute_uri(
+                    f'/api/archivos-medicos/archivos/{ar.pk}/download/'
+                )
+            result.append({
+                'id': ar.id,
+                'titulo': ar.titulo,
+                'tipo_archivo': ar.tipo_archivo,
+                'descripcion': ar.descripcion,
+                'fecha_subida': ar.fecha_subida,
+                'archivo_nombre': nombre,
+                'download_url': download_url,
+            })
+        return ArchivoConsultaResumenSerializer(result, many=True).data
+
+    def get_estudios_complementarios(self, obj):
+        from estudios.models import EstudioComplementario
+        estudios = (
+            EstudioComplementario.objects.filter(consulta_hc_id=obj.pk)
+            .select_related('tipo_estudio')
+            .order_by('-fecha_solicitud', '-created_at')
+        )
+        data = []
+        for est in estudios:
+            data.append({
+                'id': est.id,
+                'modalidad': est.modalidad,
+                'estado': est.estado,
+                'tipo_estudio_nombre': est.tipo_estudio.nombre if est.tipo_estudio else None,
+                'fecha_solicitud': est.fecha_solicitud,
+                'descripcion_clinica': est.descripcion_clinica or '',
+            })
+        return EstudioConsultaResumenSerializer(data, many=True).data
+
+    def get_solicitudes_laboratorio(self, obj):
+        from laboratorio.models import SolicitudExamen
+        solicitudes = (
+            SolicitudExamen.objects.filter(consulta_hc_id=obj.pk)
+            .prefetch_related('tipos_examen', 'paneles', 'resultados__tipo_examen')
+            .order_by('-fecha_solicitud')
+        )
+        data = []
+        for sol in solicitudes:
+            resultados = []
+            for res in sol.resultados.all():
+                valor = (res.valor_obtenido or '').strip()
+                resultados.append({
+                    'id': res.id,
+                    'tipo_examen_nombre': res.tipo_examen.nombre if res.tipo_examen else None,
+                    'valor_obtenido': res.valor_obtenido,
+                    'unidad': (res.unidad or getattr(res.tipo_examen, 'unidad', None) or '') if res.tipo_examen else res.unidad,
+                    'estado': 'CARGADO' if valor else 'PENDIENTE',
+                    'es_patologico': res.es_patologico,
+                })
+            data.append({
+                'id': sol.id,
+                'numero': sol.numero,
+                'estado': sol.estado,
+                'fecha_solicitud': sol.fecha_solicitud,
+                'tipos_examen_nombres': [te.nombre for te in sol.tipos_examen.all()],
+                'paneles_nombres': [p.nombre for p in sol.paneles.all()],
+                'resultados': resultados,
+            })
+        return SolicitudLaboratorioResumenSerializer(data, many=True).data
+
+
+# ============================================================================
 # SERIALIZER DE HISTORIA CLINICA
 # ============================================================================
 

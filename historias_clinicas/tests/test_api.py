@@ -204,6 +204,48 @@ class TestConsultaAPI(APITestCase):
         ).count()
         assert nuevo == prior + 1
 
+    def test_retrieve_consulta_con_solicitud_laboratorio_y_resultados(self):
+        """GET detalle no debe fallar cuando hay resultados LIMS vinculados."""
+        from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
+
+        consulta = Consulta.objects.create(
+            historia_clinica=self.historia_clinica,
+            medico=self.medico,
+            fecha_hora_consulta=timezone.now(),
+            motivo_consulta_detalle='Control con laboratorio',
+        )
+        tipo_muestra = TipoMuestra.objects.create(
+            codigo='SNG-HC-DET',
+            nombre='Sangre HC detalle',
+            activo=True,
+        )
+        tipo_examen = TipoExamen.objects.create(
+            codigo='GLU-HC-DET',
+            nombre='Glucosa HC detalle',
+            tipo_muestra_requerida=tipo_muestra,
+            activo=True,
+        )
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            consulta_hc=consulta,
+            origen_solicitud='AMBULATORIO_CEHTA',
+        )
+        solicitud.tipos_examen.add(tipo_examen)
+        ResultadoExamen.objects.create(
+            solicitud=solicitud,
+            tipo_examen=tipo_examen,
+            valor_obtenido='',
+            es_patologico=False,
+        )
+
+        response = self.client.get(f'/api/consultas/{consulta.id}/')
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['solicitudes_laboratorio']) == 1
+        resultados = response.data['solicitudes_laboratorio'][0]['resultados']
+        assert len(resultados) == 1
+        assert resultados[0]['estado'] == 'PENDIENTE'
+
 
 @pytest.mark.django_db
 class TestAtencionAPI(APITestCase):

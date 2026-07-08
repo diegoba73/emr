@@ -17,7 +17,7 @@ from django.db.models import Case, IntegerField, Q, When
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -40,8 +40,9 @@ except Exception:  # pragma: no cover - defensa por si la app no está cargada
 
 _AUDIT_AVAILABLE = log_create is not None and log_update is not None
 
+from usuarios.roles import ROLES_LECTURA_OPERATIVA
+
 _ROLES_LECTURA_GLOBAL = frozenset({"admin", "secretaria", "enfermeria"})
-_ROLES_SIN_PHI_EMR_GLOBAL = frozenset({"laboratorio"})
 
 
 def _user_rol(user) -> str:
@@ -51,17 +52,18 @@ def _user_rol(user) -> str:
 def _user_tiene_lectura_global(user) -> bool:
     if getattr(user, "is_superuser", False):
         return True
-    if _user_rol(user) in _ROLES_SIN_PHI_EMR_GLOBAL:
-        return False
+    rol = _user_rol(user)
+    if rol in ROLES_LECTURA_OPERATIVA:
+        return True
     if getattr(user, "is_staff", False):
         return True
-    return _user_rol(user) in _ROLES_LECTURA_GLOBAL
+    return rol in _ROLES_LECTURA_GLOBAL
 
 
 class PacienteViewSet(viewsets.ModelViewSet):
     """CRUD de pacientes con filtros estrictos por rol.
 
-    - Admin / staff / ``rol in {admin, secretaria, enfermeria}``: ven todos.
+    - Admin / staff / secretaría / enfermería / laboratorio / profesionales de estudio: ven todos.
     - Médico: solo pacientes con los que tenga turnos o consultas.
       ``?all=true`` está deshabilitado por privacidad.
     - Paciente: solo su propia ficha.
@@ -148,7 +150,29 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return queryset.none()
         return queryset.filter(id__in=pacientes_ids)
 
+    def _deny_operativo_solo_lectura(self) -> None:
+        if _user_rol(self.request.user) in ROLES_LECTURA_OPERATIVA:
+            raise PermissionDenied('Su rol solo tiene permiso de lectura sobre pacientes.')
+
+    def _deny_paciente_mutations(self) -> None:
+        if _user_rol(self.request.user) == 'paciente':
+            raise PermissionDenied(
+                'Los pacientes no pueden modificar datos demográficos.'
+            )
+
+    def update(self, request, *args, **kwargs):
+        self._deny_operativo_solo_lectura()
+        self._deny_paciente_mutations()
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._deny_operativo_solo_lectura()
+        self._deny_paciente_mutations()
+        return super().partial_update(request, *args, **kwargs)
+
     def perform_create(self, serializer):
+        self._deny_operativo_solo_lectura()
+        self._deny_paciente_mutations()
         instance = serializer.save(
             creado_por=self.request.user,
             modificado_por=self.request.user,
@@ -165,6 +189,8 @@ class PacienteViewSet(viewsets.ModelViewSet):
                 logger.exception("Audit log_create failed for Paciente %s", instance.pk)
 
     def perform_update(self, serializer):
+        self._deny_operativo_solo_lectura()
+        self._deny_paciente_mutations()
         before = safe_model_snapshot(self.get_object()) if _AUDIT_AVAILABLE else None
         instance = serializer.save(modificado_por=self.request.user)
         if _AUDIT_AVAILABLE:

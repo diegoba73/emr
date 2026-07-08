@@ -107,22 +107,37 @@ class CamaViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(sector__nombre=sector_param)
         return queryset
     
+    def perform_update(self, serializer):
+        cama = serializer.save()
+        logger.info(
+            f"Cama '{cama.nombre}' actualizada por usuario {self.request.user.username} "
+            f"(Rol: {self.request.user.rol})"
+        )
+
     def update(self, request, *args, **kwargs):
-        """Permitir actualizar solo el estado de la cama"""
+        """Actualizar datos de la cama con restricciones según su estado."""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        
-        # Solo permitir actualizar el estado si la cama no está ocupada
+
         if instance.estado == 'OCUPADA':
-            return Response(
-                {'error': 'No se puede cambiar el estado de una cama ocupada. Debe dar de alta al paciente primero.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            campos_permitidos = {'nombre', 'aislada'}
+            campos_solicitados = set(request.data.keys())
+            campos_no_permitidos = campos_solicitados - campos_permitidos
+            if campos_no_permitidos:
+                return Response(
+                    {
+                        'error': (
+                            'En una cama ocupada solo se puede editar el nombre y si es aislada. '
+                            'Para cambiar sector o estado, gestioná la internación del paciente.'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        
+
         return Response(serializer.data)
 
 

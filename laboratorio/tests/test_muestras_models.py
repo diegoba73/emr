@@ -66,7 +66,7 @@ class TestMuestraModeloYServicio:
         sol = SolicitudExamen.objects.create(
             paciente=pac,
             medico_interno=med,
-            origen_solicitud="EMR",
+            origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
         )
         sol.tipos_examen.add(te)
@@ -171,4 +171,4 @@ class TestMuestraModeloYServicio:
         assert base["sol"].estado == "PENDIENTE"
         aplicar_tomar(m.pk, actor=None, view="test_tomar")
         base["sol"].refresh_from_db()
-        assert base["sol"].estado == "TOMA_MUESTRA"
+        assert base["sol"].estado == "EN_PROCESO"

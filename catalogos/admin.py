@@ -1,11 +1,12 @@
 from django.contrib import admin
 from .models import (
-    DiagnosticoCIE10, 
-    Medicamento, 
-    Procedimiento, 
+    DiagnosticoCIE10,
+    Medicamento,
+    ProcedimientoCatalogo,
+    EstudioDiagnostico,
     CentroAtencion,
     CentroFisico,
-    TipoAtencion
+    TipoAtencion,
 )
 
 
@@ -26,11 +27,19 @@ class MedicamentoAdmin(admin.ModelAdmin):
     ordering = ['nombre']
 
 
-@admin.register(Procedimiento)
-class ProcedimientoAdmin(admin.ModelAdmin):
-    list_display = ['codigo', 'nombre', 'especialidad', 'duracion_estimada', 'requiere_anestesia', 'activo']
-    list_filter = ['especialidad', 'requiere_anestesia', 'activo']
-    search_fields = ['codigo', 'nombre']
+@admin.register(ProcedimientoCatalogo)
+class ProcedimientoCatalogoAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'activo']
+    list_filter = ['activo']
+    search_fields = ['nombre', 'descripcion']
+    ordering = ['nombre']
+
+
+@admin.register(EstudioDiagnostico)
+class EstudioDiagnosticoAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'activo']
+    list_filter = ['activo']
+    search_fields = ['nombre', 'descripcion']
     ordering = ['nombre']
 
 

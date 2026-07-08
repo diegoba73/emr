@@ -179,10 +179,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (credentials: LoginCredentials) => {
     try {
       setLoading(prev => ({ ...prev, user: true }));
-      const response = await authService.login(credentials);
-      // Normalizar rol a mayúsculas
-      const normalized = { ...response.user, rol: (response.user?.rol || '').toUpperCase() as "ADMIN" | "SECRETARIA" | "MEDICO" | "PACIENTE" | "ENFERMERIA" };
-      setCurrentUser(normalized);
+      await authService.login(credentials);
+      const userData = await authService.getCurrentUser();
+      if (userData) {
+        const normalized = { ...userData, rol: (userData?.rol || '').toUpperCase() as "ADMIN" | "SECRETARIA" | "MEDICO" | "PACIENTE" | "ENFERMERIA" };
+        setCurrentUser(normalized);
+      } else {
+        setCurrentUser(null);
+      }
       devLog('✅ Login exitoso');
     } catch (error: unknown) {
       devError('Error en login', error);
@@ -361,27 +365,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(prev => ({ ...prev, recursos: true }));
       devLog('🔍 Intentando cargar recursos...');
-      
-      const response = await fetch(`${API_BASE}/api/recursos/`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const recursosData = Array.isArray(data) ? data : (data.results || []);
-        devLog('✅ Recursos cargados:', recursosData.length, 'registros');
-        setRecursos(recursosData);
-        setLastUpdate(prev => ({ ...prev, recursos: new Date() }));
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      const { items } = await fetchPaginated<Recurso>('/api/recursos/?page_size=500');
+      devLog('✅ Recursos cargados:', items.length, 'registros');
+      setRecursos(items);
+      setLastUpdate(prev => ({ ...prev, recursos: new Date() }));
     } catch (error: unknown) {
       devError('Error loading recursos', error);
       setRecursos([]);
     } finally {
       setLoading(prev => ({ ...prev, recursos: false }));
     }
-  }, []);
+  }, [fetchPaginated]);
 
   const loadTiposExamen = useCallback(async () => {
     try {
