@@ -93,10 +93,15 @@ describe('canDownloadInformeLimsPdf', () => {
     expect(canDownloadInformeLimsPdf(medUser)).toBe(true);
   });
 
-  it('paciente, secretaría y enfermería no', () => {
+  it('secretaría y enfermería solo en órdenes finalizadas', () => {
+    expect(canDownloadInformeLimsPdf(secUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeLimsPdf(enfUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeLimsPdf(secUser, 'EN_PROCESO')).toBe(false);
+    expect(canDownloadInformeLimsPdf(enfUser, 'PENDIENTE')).toBe(false);
+  });
+
+  it('paciente no puede descargar desde módulo LIMS', () => {
     expect(canDownloadInformeLimsPdf(pacUser)).toBe(false);
-    expect(canDownloadInformeLimsPdf(secUser)).toBe(false);
-    expect(canDownloadInformeLimsPdf(enfUser)).toBe(false);
     expect(canDownloadInformeLimsPdf(null)).toBe(false);
   });
 });

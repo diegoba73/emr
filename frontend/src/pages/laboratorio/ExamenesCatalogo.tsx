@@ -43,7 +43,7 @@ import {
   type FormatoInformeEntrada,
   type ModoEntradaResultado,
 } from '../../utils/entradaResultados';
-import { canAccessLimsModule, canEditLimsCatalogos } from '../../utils/limsAccess';
+import { canAccessLimsCatalogos, canEditLimsCatalogos } from '../../utils/limsAccess';
 
 type ExamenForm = {
   codigo: string;
@@ -114,7 +114,7 @@ const ExamenesCatalogo: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ExamenForm>(emptyForm());
 
-  const allowed = canAccessLimsModule(currentUser);
+  const allowed = canAccessLimsCatalogos(currentUser);
   const canEdit = canEditLimsCatalogos(currentUser);
 
   const load = useCallback(async () => {

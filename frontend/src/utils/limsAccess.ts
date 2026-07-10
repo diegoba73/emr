@@ -6,12 +6,55 @@ export function normalizeRol(user: User | null): NormalizedRol {
   return String(user?.rol || '').toLowerCase();
 }
 
-/** Puede listar órdenes LIMS (lectura: admin, laboratorio, médico, secretaría). */
+/** Módulo LIMS completo: admin, laboratorio, médico. */
 export function canAccessLimsModule(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'laboratorio' || r === 'medico' || r === 'secretaria';
+  return r === 'admin' || r === 'laboratorio' || r === 'medico';
+}
+
+/** Secretaría/enfermería: solo pendientes y órdenes finalizadas (sin catálogos ni micro). */
+export function canAccessLimsOperativaLimitada(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return false;
+  const r = normalizeRol(user);
+  return r === 'secretaria' || r === 'enfermeria';
+}
+
+/** Cualquier acceso al área LIMS (completo o restringido). */
+export function canAccessLimsAny(user: User | null): boolean {
+  return canAccessLimsModule(user) || canAccessLimsOperativaLimitada(user);
+}
+
+/** Pendientes y órdenes LIMS en sidebar/rutas. */
+export function canAccessLimsPendientes(user: User | null): boolean {
+  return canAccessLimsAny(user);
+}
+
+export function canAccessLimsOrdenes(user: User | null): boolean {
+  return canAccessLimsAny(user);
+}
+
+/** Catálogos LIMS (exámenes, tipos de muestra): sin secretaría/enfermería. */
+export function canAccessLimsCatalogos(user: User | null): boolean {
+  return canAccessLimsModule(user);
+}
+
+/** Rol con bandeja restringida (no operador LIMS completo). */
+export function isLimsOperativaLimitada(user: User | null): boolean {
+  return canAccessLimsOperativaLimitada(user) && !canAccessLimsModule(user);
+}
+
+/** Detalle de orden visible para roles restringidos solo en PENDIENTE/FINALIZADO. */
+export function canAccessLimsOrdenDetalle(
+  user: User | null,
+  estado: string | null | undefined
+): boolean {
+  if (!canAccessLimsAny(user)) return false;
+  if (!isLimsOperativaLimitada(user)) return true;
+  const e = String(estado || '').toUpperCase();
+  return e === 'PENDIENTE' || e === 'FINALIZADO';
 }
 
 /** Consulta clínica de análisis (módulo Solicitudes / Análisis clínico). */
@@ -53,9 +96,16 @@ export function canValidarOrdenLims(user: User | null): boolean {
   return canFinalizarOrdenLims(user);
 }
 
-/** Descargar informe PDF LIMS (PDF-1-FE): admin, laboratorio y médico con acceso al módulo. */
-export function canDownloadInformeLimsPdf(user: User | null): boolean {
-  return canAccessLimsModule(user);
+/** Descargar informe PDF LIMS (PDF-1-FE): operadores completos o roles limitados en órdenes finalizadas. */
+export function canDownloadInformeLimsPdf(
+  user: User | null,
+  estado?: string | null
+): boolean {
+  if (canAccessLimsModule(user)) return true;
+  if (isLimsOperativaLimitada(user)) {
+    return String(estado || '').toUpperCase() === 'FINALIZADO';
+  }
+  return false;
 }
 
 /** Misma visibilidad que órdenes LIMS (admin, laboratorio, médico lectura). */

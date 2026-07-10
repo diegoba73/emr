@@ -152,12 +152,11 @@ export function canOperateAtenciones(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico/secretaría. */
+/** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico (sin secretaría/enfermería). */
 export function canAccessCatalogosClinicos(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
-  const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'secretaria';
+  return normalizeRol(user) === 'medico';
 }
 
 /** Edición de catálogos clínicos (secretaría: solo lectura). */

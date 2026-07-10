@@ -37,7 +37,12 @@ import {
   canAccessSolicitudes,
 } from '../../utils/permissions';
 import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
-import { canAccessLimsModule, canAccessMicrobiologia } from '../../utils/limsAccess';
+import {
+  canAccessLimsCatalogos,
+  canAccessLimsPendientes,
+  canAccessLimsOrdenes,
+  canAccessMicrobiologia,
+} from '../../utils/limsAccess';
 import { canAccessTurnosAgenda } from '../../utils/turnoPermissions';
 import { getHomeNavLabel, getSolicitudesModuleLabel } from '../../utils/navLabels';
 
@@ -83,10 +88,10 @@ const adminOnly: NavItem[] = [
 ];
 
 const labItems: NavItem[] = [
-  { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsModule },
-  { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsModule },
-  { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsModule },
-  { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsModule },
+  { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsPendientes },
+  { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsOrdenes },
+  { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsCatalogos },
+  { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsCatalogos },
   { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
   { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', canAccess: canAccessMicrobiologia },
 ];

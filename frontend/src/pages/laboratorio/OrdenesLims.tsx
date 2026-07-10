@@ -21,7 +21,10 @@ import { useData } from '../../contexts/DataContext';
 import type { SolicitudExamenLims } from '../../types/lims';
 import { listSolicitudesExamen } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
-import { canAccessLimsModule } from '../../utils/limsAccess';
+import {
+  canAccessLimsOrdenes,
+  isLimsOperativaLimitada,
+} from '../../utils/limsAccess';
 import {
   buildDiasLaboratorio,
   diasVisiblesParaIncluir,
@@ -36,6 +39,9 @@ import { ESTADOS_ORDEN_LIMS } from '../../utils/limsEstadosOrden';
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
 
+/** Roles restringidos: solo órdenes finalizadas en esta vista. */
+const ESTADOS_BANDEJA_LIMITADA = ['FINALIZADO'] as const;
+
 const DIAS_PESTANAS_INICIAL = 7;
 
 const OrdenesLims: React.FC = () => {
@@ -43,13 +49,18 @@ const OrdenesLims: React.FC = () => {
   const { currentUser } = useData();
   const [rows, setRows] = useState<SolicitudExamenLims[]>([]);
   const [loading, setLoading] = useState(true);
-  const [estadoFiltro, setEstadoFiltro] = useState<string>('');
   const [numeroFiltro, setNumeroFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
   const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
 
-  const allowed = canAccessLimsModule(currentUser);
+  const allowed = canAccessLimsOrdenes(currentUser);
+  const vistaLimitada = isLimsOperativaLimitada(currentUser);
+  const estadosBandeja = vistaLimitada ? ESTADOS_BANDEJA_LIMITADA : ESTADOS_BANDEJA;
+
+  const [estadoFiltro, setEstadoFiltro] = useState<string>(() =>
+    vistaLimitada ? 'FINALIZADO' : ''
+  );
 
   const fechaApi = formatFechaLocal(diaSeleccionado);
   const buscarPorNumero = numeroFiltro.trim().length > 0;
@@ -117,7 +128,9 @@ const OrdenesLims: React.FC = () => {
           <Typography variant="body2" color="text.secondary">
             {buscarPorNumero
               ? 'Búsqueda por número en todo el historial.'
-              : `Muestras tomadas el ${labelDiaOrden(diaSeleccionado)}. Las órdenes pendientes de extracción están en `}
+              : vistaLimitada
+                ? `Órdenes finalizadas con muestra tomada el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de extracción están en `
+                : `Muestras tomadas el ${labelDiaOrden(diaSeleccionado)}. Las órdenes pendientes de extracción están en `}
             {!buscarPorNumero && (
               <Button size="small" sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }} onClick={() => navigate('/laboratorio/pendientes')}>
                 Pendientes
@@ -190,9 +203,10 @@ const OrdenesLims: React.FC = () => {
               label="Estado"
               value={estadoFiltro}
               onChange={(e) => setEstadoFiltro(e.target.value as string)}
+              disabled={vistaLimitada}
             >
-              <MenuItem value="">Todos (con muestra)</MenuItem>
-              {ESTADOS_BANDEJA.map((s) => (
+              {!vistaLimitada && <MenuItem value="">Todos (con muestra)</MenuItem>}
+              {estadosBandeja.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
                 </MenuItem>

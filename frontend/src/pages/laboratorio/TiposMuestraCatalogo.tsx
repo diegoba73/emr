@@ -20,7 +20,7 @@ import { useData } from '../../contexts/DataContext';
 import type { LimsTipoMuestra } from '../../types/lims';
 import { createTipoMuestraLims, listTiposMuestraLims, patchTipoMuestraLims } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
-import { canAccessLimsModule, canEditLimsCatalogos } from '../../utils/limsAccess';
+import { canAccessLimsCatalogos, canEditLimsCatalogos } from '../../utils/limsAccess';
 
 const TiposMuestraCatalogo: React.FC = () => {
   const navigate = useNavigate();
@@ -32,7 +32,7 @@ const TiposMuestraCatalogo: React.FC = () => {
   const [colorTubo, setColorTubo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const allowed = canAccessLimsModule(currentUser);
+  const allowed = canAccessLimsCatalogos(currentUser);
   const canEdit = canEditLimsCatalogos(currentUser);
 
   const load = async () => {

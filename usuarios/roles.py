@@ -20,6 +20,24 @@ ROLES_AGENDA_TURNOS_LECTURA = frozenset({
     *ROLES_LECTURA_OPERATIVA,
 })
 
+# Lectura de catálogos LIMS (exámenes, tipos de muestra, micro catálogos).
+ROLES_LIMS_CATALOG_READ = frozenset({
+    'admin',
+    'laboratorio',
+    'medico',
+})
+
+# Secretaría/enfermería: bandeja LIMS restringida (pendientes + órdenes finalizadas).
+ROLES_LIMS_OPERATIVA_LIMITADA = frozenset({
+    'secretaria',
+    'enfermeria',
+})
+
+ESTADOS_LIMS_OPERATIVA_LIMITADA = frozenset({
+    'PENDIENTE',
+    'FINALIZADO',
+})
+
 # Roles que no deben escalar a PHI EMR global aunque tengan is_staff=True.
 ROLES_SIN_BYPASS_EMR_STAFF = frozenset({
     'laboratorio',

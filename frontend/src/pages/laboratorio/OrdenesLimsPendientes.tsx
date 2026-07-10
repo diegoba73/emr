@@ -16,7 +16,7 @@ import { useData } from '../../contexts/DataContext';
 import type { SolicitudExamenLims } from '../../types/lims';
 import { listSolicitudesExamen } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
-import { canAccessLimsModule, canOperateLims } from '../../utils/limsAccess';
+import { canAccessLimsPendientes, canOperateLims } from '../../utils/limsAccess';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 
@@ -28,7 +28,7 @@ const OrdenesLimsPendientes: React.FC = () => {
   const [busqueda, setBusqueda] = useState('');
   const [nuevaOrdenOpen, setNuevaOrdenOpen] = useState(false);
 
-  const allowed = canAccessLimsModule(currentUser);
+  const allowed = canAccessLimsPendientes(currentUser);
   const puedeCrear = canOperateLims(currentUser);
   const puedeTomar = canOperateLims(currentUser);
 

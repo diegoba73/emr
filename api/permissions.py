@@ -1,6 +1,11 @@
 from rest_framework import permissions
 
-from usuarios.roles import ROLES_SIN_BYPASS_EMR_STAFF
+from usuarios.roles import (
+    ESTADOS_LIMS_OPERATIVA_LIMITADA,
+    ROLES_LIMS_CATALOG_READ,
+    ROLES_LIMS_OPERATIVA_LIMITADA,
+    ROLES_SIN_BYPASS_EMR_STAFF,
+)
 
 
 def get_normalized_role(user):
@@ -13,10 +18,10 @@ def get_normalized_role(user):
 class LimsCatalogReadPermission(permissions.BasePermission):
     """
     Lectura de catálogos LIMS (tipos de muestra, exámenes, paneles).
-    Roles: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
+    Roles: admin, laboratorio, médico (+ superuser).
     Sin acceso: anónimo y paciente. Los ViewSets son ReadOnly; métodos no seguros se niegan.
     """
-    _roles_read = frozenset({'admin', 'laboratorio', 'medico', 'secretaria', 'enfermeria'})
+    _roles_read = ROLES_LIMS_CATALOG_READ
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -35,7 +40,7 @@ class LimsTipoMuestraCatalogPermission(permissions.BasePermission):
     Lectura: roles clínicos con acceso LIMS. Escritura: admin y laboratorio.
     """
 
-    _roles_read = frozenset({'admin', 'laboratorio', 'medico', 'secretaria', 'enfermeria'})
+    _roles_read = ROLES_LIMS_CATALOG_READ
     _roles_write = frozenset({'admin', 'laboratorio'})
 
     def has_permission(self, request, view):
@@ -57,7 +62,7 @@ class LimsTipoExamenCatalogPermission(permissions.BasePermission):
     Lectura: roles clínicos con acceso LIMS. Escritura: admin y laboratorio.
     """
 
-    _roles_read = frozenset({'admin', 'laboratorio', 'medico', 'secretaria', 'enfermeria'})
+    _roles_read = ROLES_LIMS_CATALOG_READ
     _roles_write = frozenset({'admin', 'laboratorio'})
 
     def has_permission(self, request, view):
@@ -81,8 +86,12 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
         return True
 
     role = get_normalized_role(user)
-    if role in ('admin', 'laboratorio', 'secretaria'):
+    if role in ('admin', 'laboratorio'):
         return True
+
+    if role in ROLES_LIMS_OPERATIVA_LIMITADA:
+        estado = getattr(solicitud, 'estado', None)
+        return estado in ESTADOS_LIMS_OPERATIVA_LIMITADA
 
     if role == 'medico':
         medico = getattr(solicitud, 'medico_interno', None)
@@ -104,8 +113,10 @@ def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
     if user.is_superuser:
         return True
     role = get_normalized_role(user)
-    if role in ('admin', 'laboratorio', 'secretaria'):
+    if role in ('admin', 'laboratorio'):
         return True
+    if role in ROLES_LIMS_OPERATIVA_LIMITADA:
+        return solicitud.estado == 'FINALIZADO'
     if role in ('medico', 'paciente'):
         return solicitud.estado in ('INFORMADO_PARCIAL', 'FINALIZADO')
     return False
@@ -126,7 +137,14 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         action = getattr(view, 'action', None)
 
         if action == 'list':
-            return role in ('admin', 'laboratorio', 'medico', 'secretaria', 'paciente')
+            return role in (
+                'admin',
+                'laboratorio',
+                'medico',
+                'secretaria',
+                'enfermeria',
+                'paciente',
+            )
         if action == 'create':
             return role in ('admin', 'laboratorio', 'medico')
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):
@@ -135,6 +153,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
                 'laboratorio',
                 'medico',
                 'secretaria',
+                'enfermeria',
                 'paciente',
             ):
                 return True
@@ -150,9 +169,23 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'etiqueta':
             return role in ('admin', 'laboratorio')
         if action == 'informe_pdf':
-            return role in ('admin', 'laboratorio', 'medico', 'secretaria', 'paciente')
+            return role in (
+                'admin',
+                'laboratorio',
+                'medico',
+                'secretaria',
+                'enfermeria',
+                'paciente',
+            )
         if action == 'analisis_longitudinal':
-            return role in ('admin', 'laboratorio', 'medico', 'secretaria', 'paciente')
+            return role in (
+                'admin',
+                'laboratorio',
+                'medico',
+                'secretaria',
+                'enfermeria',
+                'paciente',
+            )
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -529,11 +562,11 @@ class CanWriteDocumentoClinico(permissions.BasePermission):
 class LimsB0CatalogPermission(permissions.BasePermission):
     """
     Catálogos B0 (área, sección, tipo contenedor).
-    Lectura: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
+    Lectura: admin, laboratorio, médico (+ superuser).
     Escritura (POST/PATCH): solo admin/superuser (catálogos maestros).
     """
 
-    _roles_read = frozenset({"admin", "laboratorio", "medico", "secretaria", "enfermeria"})
+    _roles_read = ROLES_LIMS_CATALOG_READ
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -609,11 +642,11 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
 class LimsMicrobiologiaCatalogPermission(permissions.BasePermission):
     """
     Catálogo de microbiología (medios de cultivo) — LIMS Fase B3.1.
-    Lectura: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
+    Lectura: admin, laboratorio, médico (+ superuser).
     Escritura (POST/PATCH): solo admin/superuser. Sin destroy (se desactiva).
     """
 
-    _roles_read = frozenset({"admin", "laboratorio", "medico", "secretaria", "enfermeria"})
+    _roles_read = ROLES_LIMS_CATALOG_READ
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:

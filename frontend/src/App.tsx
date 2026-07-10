@@ -52,7 +52,14 @@ import {
   canAccessSolicitudes,
 } from './utils/permissions';
 import { canAccessEstudiosModule } from './modules/estudios/permissions';
-import { canAccessLimsModule, canAccessMicrobiologia } from './utils/limsAccess';
+import {
+  canAccessLimsModule,
+  canAccessLimsCatalogos,
+  canAccessLimsPendientes,
+  canAccessLimsOrdenes,
+  canAccessLimsAny,
+  canAccessMicrobiologia,
+} from './utils/limsAccess';
 import { canAccessTurnosAgenda } from './utils/turnoPermissions';
 
 // Create query client
@@ -325,7 +332,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                requiredRole={['ADMIN', 'MEDICO']}
                 canAccess={canAccessCatalogosClinicos}
               >
                 <DiagnosticosCIE10 />
@@ -339,7 +346,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                requiredRole={['ADMIN', 'MEDICO']}
                 canAccess={canAccessCatalogosClinicos}
               >
                 <EstudiosDiagnostico />
@@ -353,7 +360,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                requiredRole={['ADMIN', 'MEDICO']}
                 canAccess={canAccessCatalogosClinicos}
               >
                 <Procedimientos />
@@ -367,7 +374,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                requiredRole={['ADMIN', 'MEDICO']}
                 canAccess={canAccessCatalogosClinicos}
               >
                 <Medicamentos />
@@ -381,7 +388,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO', 'SECRETARIA']}
+                requiredRole={['ADMIN', 'MEDICO']}
                 canAccess={canAccessCatalogosClinicos}
               >
                 <Especialidades />
@@ -395,7 +402,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsModule}
+                canAccess={canAccessLimsPendientes}
               >
                 <OrdenesLimsPendientes />
               </ProtectedRoute>
@@ -408,7 +415,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsModule}
+                canAccess={canAccessLimsAny}
               >
                 <OrdenLimsDetalle />
               </ProtectedRoute>
@@ -421,7 +428,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsModule}
+                canAccess={canAccessLimsOrdenes}
               >
                 <OrdenesLims />
               </ProtectedRoute>
@@ -473,7 +480,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsModule}
+                canAccess={canAccessLimsCatalogos}
               >
                 <ExamenesCatalogo />
               </ProtectedRoute>
@@ -486,7 +493,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsModule}
+                canAccess={canAccessLimsCatalogos}
               >
                 <TiposMuestraCatalogo />
               </ProtectedRoute>

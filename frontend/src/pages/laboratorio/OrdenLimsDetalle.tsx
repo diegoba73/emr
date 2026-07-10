@@ -20,7 +20,8 @@ import {
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
-  canAccessLimsModule,
+  canAccessLimsAny,
+  canAccessLimsOrdenDetalle,
   canDownloadInformeLimsPdf,
   canEnviarInformeLims,
   canOperateLims,
@@ -53,10 +54,11 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [editandoResultados, setEditandoResultados] = useState(false);
 
-  const allowed = canAccessLimsModule(currentUser);
+  const allowed = canAccessLimsAny(currentUser);
+  const canVerOrden = orden ? canAccessLimsOrdenDetalle(currentUser, orden.estado) : true;
   const canOp = canOperateLims(currentUser);
   const canEnviar = canEnviarInformeLims(currentUser);
-  const canPdf = canDownloadInformeLimsPdf(currentUser);
+  const canPdf = canDownloadInformeLimsPdf(currentUser, orden?.estado);
 
   const refreshMuestras = async (oid: number, numero?: string | null) => {
     const m = await listMuestrasPorSolicitud(oid, numero ?? undefined);
@@ -116,6 +118,17 @@ const OrdenLimsDetalle: React.FC = () => {
     return (
       <Box sx={{ p: 3 }}>
         <Typography>Sin acceso al módulo LIMS.</Typography>
+      </Box>
+    );
+  }
+
+  if (!loading && orden && !canVerOrden) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Button size="small" onClick={() => navigate('/laboratorio/ordenes')} sx={{ mb: 1 }}>
+          ← Volver al listado
+        </Button>
+        <Typography>No tiene permisos para ver esta orden en su estado actual.</Typography>
       </Box>
     );
   }

@@ -518,7 +518,7 @@ class TestLimsAuthorization(APITestCase):
         )
         assert r.status_code == status.HTTP_200_OK
 
-    def test_secretaria_no_lista_solicitudes_enfermeria_si(self):
+    def test_secretaria_y_enfermeria_listan_solo_pendiente_y_finalizado(self):
         sec = User.objects.create_user(
             username='sec_lims',
             email='sec@test.com',
@@ -531,12 +531,22 @@ class TestLimsAuthorization(APITestCase):
             password='x',
             rol='enfermeria',
         )
-        self.client.force_authenticate(user=sec)
-        assert self.client.get('/api/lab/solicitudes/').status_code == status.HTTP_403_FORBIDDEN
-        self.client.force_authenticate(user=enf)
-        assert self.client.get('/api/lab/solicitudes/').status_code == status.HTTP_403_FORBIDDEN
+        self.sol_medico.estado = 'EN_PROCESO'
+        self.sol_medico.save(update_fields=['estado'])
 
-    def test_secretaria_y_enfermeria_pueden_leer_catalogo(self):
+        self.client.force_authenticate(user=sec)
+        r = self.client.get('/api/lab/solicitudes/')
+        assert r.status_code == status.HTTP_200_OK
+        estados = {item['estado'] for item in r.data}
+        assert estados.issubset({'PENDIENTE', 'FINALIZADO'})
+
+        self.client.force_authenticate(user=enf)
+        r2 = self.client.get('/api/lab/solicitudes/')
+        assert r2.status_code == status.HTTP_200_OK
+        estados2 = {item['estado'] for item in r2.data}
+        assert estados2.issubset({'PENDIENTE', 'FINALIZADO'})
+
+    def test_secretaria_y_enfermeria_no_leen_catalogo_lims(self):
         sec = User.objects.create_user(
             username='sec_cat',
             email='sec-cat@test.com',
@@ -550,9 +560,9 @@ class TestLimsAuthorization(APITestCase):
             rol='enfermeria',
         )
         self.client.force_authenticate(user=sec)
-        assert self.client.get('/api/lab/muestras/').status_code == status.HTTP_200_OK
+        assert self.client.get('/api/lab/muestras/').status_code == status.HTTP_403_FORBIDDEN
         self.client.force_authenticate(user=enf)
-        assert self.client.get('/api/lab/examenes/').status_code == status.HTTP_200_OK
+        assert self.client.get('/api/lab/examenes/').status_code == status.HTTP_403_FORBIDDEN
 
     def test_alias_laboratorio_misma_proteccion(self):
         self.client.force_authenticate(user=self.user_lab)

@@ -279,7 +279,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             pass
         else:
             role = get_normalized_role(user)
-            if role in ('admin', 'laboratorio', 'secretaria'):
+            if role in ('admin', 'laboratorio', 'secretaria', 'enfermeria'):
                 pass
             elif role == 'medico':
                 queryset = queryset.filter(medico_interno__user=user)
@@ -292,6 +292,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 queryset = queryset.none()
 
         if getattr(self, 'action', None) == 'list':
+            role = get_normalized_role(user)
+            if role in ('secretaria', 'enfermeria'):
+                queryset = queryset.filter(estado__in=('PENDIENTE', 'FINALIZADO'))
             queryset = queryset.annotate(fecha_toma_muestra=Max('muestras__fecha_toma'))
 
         numero = self.request.query_params.get('numero')
