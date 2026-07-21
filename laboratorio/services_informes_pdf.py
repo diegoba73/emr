@@ -30,6 +30,7 @@ def _cargar_datos_solicitud(solicitud: SolicitudExamen) -> dict[str, Any]:
         .prefetch_related(
             "resultados__tipo_examen__tipo_muestra_requerida",
             "resultados__muestra__tipo_muestra",
+            "resultados__validado_por",
             "paneles__tipos_examen",
             "tipos_examen",
         )

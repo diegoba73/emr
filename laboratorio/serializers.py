@@ -13,6 +13,7 @@ from .models import (
     SolicitudExamen,
     ResultadoExamen,
 )
+from .models_catalog import TipoContenedor
 from pacientes.models import Paciente
 from medicos.models import Medico
 from historias_clinicas.models import Consulta
@@ -85,9 +86,25 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         source='tipo_muestra_requerida.codigo',
         read_only=True
     )
+    tipo_contenedor_codigo = serializers.CharField(
+        source='tipo_contenedor.codigo',
+        read_only=True,
+        allow_null=True,
+    )
+    tipo_contenedor_nombre = serializers.CharField(
+        source='tipo_contenedor.nombre',
+        read_only=True,
+        allow_null=True,
+    )
     tipo_muestra_requerida = serializers.PrimaryKeyRelatedField(
         queryset=TipoMuestra.objects.all(),
         help_text="ID del tipo de muestra requerida"
+    )
+    tipo_contenedor = serializers.PrimaryKeyRelatedField(
+        queryset=TipoContenedor.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="ID del tipo de tubo / contenedor",
     )
     metodo = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
     unidad_default = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
@@ -110,6 +127,9 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'tipo_muestra_requerida',
             'tipo_muestra_nombre',
             'tipo_muestra_codigo',
+            'tipo_contenedor',
+            'tipo_contenedor_codigo',
+            'tipo_contenedor_nombre',
             'seccion',
             'tipo_resultado',
             'metodo',
@@ -132,6 +152,8 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'id',
             'tipo_muestra_nombre',
             'tipo_muestra_codigo',
+            'tipo_contenedor_codigo',
+            'tipo_contenedor_nombre',
         ]
 
     def __init__(self, *args, **kwargs):
@@ -368,6 +390,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     procedencia_display = serializers.SerializerMethodField()
     origen_solicitud_display = serializers.SerializerMethodField()
     fecha_toma_muestra = serializers.DateTimeField(read_only=True, required=False)
+    extraccion_completa = serializers.SerializerMethodField()
+    tubos_pendientes_extraccion = serializers.SerializerMethodField()
     
     class Meta:
         model = SolicitudExamen
@@ -403,6 +427,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'consulta_hc',
             'resultados',
             'orden_grupos_informe',
+            'extraccion_completa',
+            'tubos_pendientes_extraccion',
         ]
         read_only_fields = [
             'id',
@@ -417,6 +443,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'medico_interno_nombre',
             'tipos_examen_nombres',
             'paneles_nombres',
+            'extraccion_completa',
+            'tubos_pendientes_extraccion',
         ]
     
     def get_tipos_examen_nombres(self, obj):
@@ -457,6 +485,27 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
 
     def get_origen_solicitud_display(self, obj):
         return label_origen_solicitud(getattr(obj, 'origen_solicitud', None))
+
+    def get_extraccion_completa(self, obj):
+        from laboratorio.muestra_estado import extraccion_completa
+
+        return extraccion_completa(obj.pk)
+
+    def get_tubos_pendientes_extraccion(self, obj):
+        from laboratorio.muestra_estado import tubos_pendientes_extraccion
+
+        out = []
+        for p in tubos_pendientes_extraccion(obj.pk):
+            out.append(
+                {
+                    "id": p.pk,
+                    "codigo_barra": p.codigo_barra,
+                    "tipo_contenedor_codigo": p.tipo_contenedor.codigo if p.tipo_contenedor_id else None,
+                    "tipo_contenedor_nombre": p.tipo_contenedor.nombre if p.tipo_contenedor_id else None,
+                    "estado": p.estado,
+                }
+            )
+        return out
 
 
 class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
@@ -564,10 +613,6 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         # Crear la Solicitud
         solicitud = SolicitudExamen.objects.create(**validated_data)
         
-        # Asociar tipos_examen y paneles
-        if examenes_ids:
-            solicitud.tipos_examen.set(examenes_ids)
-        
         if paneles_ids:
             solicitud.paneles.set(paneles_ids)
         
@@ -604,6 +649,11 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                         tipos_examen_creados.add(tipo_examen.id)
             except PanelExamen.DoesNotExist:
                 logger.warning(f"PanelExamen con ID {panel_id} no existe")
+
+        # M2M tipos_examen = todos los analitos de la orden (directos + paneles)
+        # para cálculo de tubos / etiquetas.
+        if tipos_examen_creados:
+            solicitud.tipos_examen.set(list(tipos_examen_creados))
         
         return solicitud
 
@@ -617,7 +667,7 @@ class TomarMuestraItemSerializer(serializers.Serializer):
 
 
 class TomarMuestraOrdenSerializer(serializers.Serializer):
-    """Payload opcional para POST …/tomar-muestra/ (crear + tomar muestras físicas)."""
+    """Payload opcional para POST …/tomar-muestra/ (crear tubos/etiquetas; toma por escaneo)."""
 
     muestras = TomarMuestraItemSerializer(many=True, required=False, allow_empty=True)
 

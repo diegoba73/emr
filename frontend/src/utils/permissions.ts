@@ -1,6 +1,7 @@
 import type { User } from '../types';
 import {
   isLecturaOperativaRole,
+  isOperadorLimsRole,
   isProfesionalEstudioRole,
 } from './roles';
 import {
@@ -29,6 +30,7 @@ export type NormalizedAppRole =
   | 'secretaria'
   | 'enfermeria'
   | 'laboratorio'
+  | 'bioquimico'
   | 'kinesiologo'
   | 'radiologo'
   | 'ecografista'
@@ -36,12 +38,12 @@ export type NormalizedAppRole =
   | 'paciente'
   | 'sin_rol';
 
-export { isProfesionalEstudioRole, isLecturaOperativaRole } from './roles';
+export { isProfesionalEstudioRole, isLecturaOperativaRole, isOperadorLimsRole } from './roles';
 
 /** Rol operador LIMS (puede tener `is_staff` para Django admin sin acceso EMR PHI). */
 export function isLaboratorioRole(user: User | null | undefined): boolean {
   if (!user) return false;
-  return normalizeRol(user) === 'laboratorio';
+  return isOperadorLimsRole(normalizeRol(user));
 }
 
 /**

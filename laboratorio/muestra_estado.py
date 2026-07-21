@@ -229,9 +229,18 @@ def tomar_muestras_en_solicitud(
     view: str,
 ) -> SolicitudExamen:
     """
-    Crea muestras físicas, las marca TOMADA y coordina PENDIENTE → EN_PROCESO.
-    Sin ítems, solo transiciona la orden (compatibilidad legacy).
+    Genera tubos físicos (un tubo = una Muestra en PENDIENTE_TOMA) con código
+    de barras listo para imprimir etiquetas.
+
+    No marca TOMADA ni pasa la orden a EN_PROCESO: la toma física se confirma
+    luego por escaneo (``aplicar_tomar`` / tomar-por-codigo).
+
+    Sin ítems: resuelve tubos desde los exámenes (ceil(n/10) por contenedor).
+    Si no hay tubos a crear y la orden no tiene muestras, transiciona legacy
+    PENDIENTE → EN_PROCESO.
     """
+    from laboratorio.tubos_orden import TubosOrdenError, expandir_items_crear_muestras
+
     with transaction.atomic():
         solicitud = (
             SolicitudExamen.objects.select_for_update()
@@ -240,10 +249,22 @@ def tomar_muestras_en_solicitud(
         )
         if solicitud.estado != "PENDIENTE":
             raise SolicitudEstadoTransitionError(
-                "Solo se puede tomar muestra cuando la solicitud está pendiente."
+                "Solo se pueden imprimir etiquetas cuando la solicitud está pendiente."
             )
 
-        if not items:
+        working_items = list(items or [])
+        if not working_items:
+            try:
+                working_items = expandir_items_crear_muestras(solicitud)
+            except TubosOrdenError as exc:
+                raise MuestraAccionError(str(exc)) from exc
+
+        if not working_items:
+            # Sin tubos: si ya hay muestras, solo reimpresión; si no, legacy.
+            if Muestra.objects.filter(solicitud_id=solicitud.pk).exclude(
+                estado__in=_MUESTRA_ESTADOS_TERMINALES
+            ).exists():
+                return solicitud
             apply_solicitud_estado_transition(
                 solicitud,
                 "EN_PROCESO",
@@ -253,13 +274,11 @@ def tomar_muestras_en_solicitud(
             )
             return solicitud
 
-        vistos: set[int] = set()
-        for item in items:
+        for item in working_items:
             tm_id = int(item["tipo_muestra_id"])
-            if tm_id in vistos:
-                raise MuestraAccionError("No se puede repetir el mismo tipo de muestra.")
-            vistos.add(tm_id)
+            tc_id = item.get("tipo_contenedor_id")
             from laboratorio.models import TipoMuestra
+            from laboratorio.models_catalog import TipoContenedor
 
             try:
                 tm = TipoMuestra.objects.get(pk=tm_id)
@@ -267,45 +286,62 @@ def tomar_muestras_en_solicitud(
                 raise MuestraAccionError("Tipo de muestra inexistente.") from exc
             if not tm.activo:
                 raise MuestraAccionError("El tipo de muestra seleccionado está inactivo.")
-            if Muestra.objects.filter(
-                solicitud_id=solicitud.pk,
-                tipo_muestra_id=tm_id,
-            ).exclude(estado__in=_MUESTRA_ESTADOS_TERMINALES).exists():
-                raise MuestraAccionError(
-                    "Ya existe una muestra activa de ese tipo para esta orden."
-                )
-            muestra = crear_muestra(
+            if tc_id is not None:
+                try:
+                    tc = TipoContenedor.objects.get(pk=int(tc_id))
+                except (TipoContenedor.DoesNotExist, TypeError, ValueError) as exc:
+                    raise MuestraAccionError("Tipo de tubo/contenedor inexistente.") from exc
+                if not tc.activo:
+                    raise MuestraAccionError("El tipo de tubo seleccionado está inactivo.")
+
+            crear_muestra(
                 solicitud=solicitud,
                 tipo_muestra_id=tm_id,
-                tipo_contenedor_id=item.get("tipo_contenedor_id"),
+                tipo_contenedor_id=tc_id,
                 observaciones=item.get("observaciones") or "",
                 actor=actor,
                 view=view,
             )
-            aplicar_tomar(
-                muestra.pk,
-                actor=actor,
-                view=view,
-                observaciones=item.get("observaciones") or "",
-            )
-            aplicar_recibir(
-                muestra.pk,
-                actor=actor,
-                view=view,
-                observaciones="Recepción automática al tomar muestra en la orden.",
-                ubicacion_actual=item.get("ubicacion_actual") or "Laboratorio",
-            )
+            # Queda PENDIENTE_TOMA: se confirma TOMADA al escanear en extracción.
 
-        solicitud.refresh_from_db()
-        if solicitud.estado == "PENDIENTE":
-            apply_solicitud_estado_transition(
-                solicitud,
-                "EN_PROCESO",
-                actor=actor,
-                accion="tomar_muestra",
-                view=view,
-            )
         return solicitud
+
+
+def avanzar_orden_si_corresponde_por_toma(
+    muestra: Muestra,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+) -> SolicitudExamen:
+    """Tras escanear un tubo a TOMADA: si la orden está PENDIENTE → EN_PROCESO."""
+    solicitud = muestra.solicitud
+    if solicitud.estado == "PENDIENTE":
+        apply_solicitud_estado_transition(
+            solicitud,
+            "EN_PROCESO",
+            actor=actor,
+            accion="tomar_muestra",
+            view=view,
+        )
+        solicitud.refresh_from_db()
+    return solicitud
+
+
+def tubos_pendientes_extraccion(solicitud_id: int) -> list[Muestra]:
+    return list(
+        Muestra.objects.filter(solicitud_id=solicitud_id, estado="PENDIENTE_TOMA")
+        .select_related("tipo_contenedor", "tipo_muestra")
+        .order_by("id")
+    )
+
+
+def extraccion_completa(solicitud_id: int) -> bool:
+    activas = Muestra.objects.filter(solicitud_id=solicitud_id).exclude(
+        estado__in=_MUESTRA_ESTADOS_TERMINALES
+    )
+    if not activas.exists():
+        return False
+    return not activas.filter(estado="PENDIENTE_TOMA").exists()
 
 
 def aplicar_recibir(
@@ -316,15 +352,28 @@ def aplicar_recibir(
     observaciones: str = "",
     ubicacion_actual: str = "",
 ) -> Muestra:
+    """
+    Recepción de tubo en laboratorio.
+
+    Acepta ``TOMADA`` o ``PENDIENTE_TOMA`` (flujo unificado: un solo escaneo
+    confirma toma + ingreso, sin paso de extracción aparte).
+    """
     with transaction.atomic():
         muestra = Muestra.objects.select_for_update().select_related("solicitud").get(pk=muestra_id)
         prev = muestra.estado
         if prev in _TERMINAL_NO_OP:
             raise MuestraAccionError("No se puede recibir una muestra en estado terminal.")
-        if prev != "TOMADA":
-            raise MuestraAccionError("Solo se pueden recibir muestras ya tomadas (no recepción directa en esta fase).")
+        if prev not in ("TOMADA", "PENDIENTE_TOMA"):
+            raise MuestraAccionError(
+                "Solo se pueden recibir muestras pendientes de toma o ya tomadas."
+            )
         before = safe_model_snapshot(muestra)
         now = timezone.now()
+        if prev == "PENDIENTE_TOMA":
+            muestra.fecha_toma = now
+            muestra.tomada_por = actor if getattr(actor, "is_authenticated", False) else None
+            sol = SolicitudExamen.objects.select_for_update().get(pk=muestra.solicitud_id)
+            _maybe_coordina_solicitud_toma_muestra(sol, actor=actor, view=view, muestra=muestra)
         muestra.estado = "RECIBIDA"
         muestra.fecha_recepcion = now
         muestra.recibida_por = actor if getattr(actor, "is_authenticated", False) else None
@@ -341,10 +390,20 @@ def aplicar_recibir(
             estado_anterior=prev,
             estado_nuevo=muestra.estado,
         )
+        if prev == "PENDIENTE_TOMA":
+            _append_evento(
+                muestra,
+                accion="TOMADA",
+                estado_anterior="PENDIENTE_TOMA",
+                estado_nuevo="TOMADA",
+                actor=actor,
+                observaciones=observaciones or "Toma implícita al recibir.",
+                metadata={**meta, "via": "recepcion_unificada"},
+            )
         _append_evento(
             muestra,
             accion="RECIBIDA",
-            estado_anterior=prev,
+            estado_anterior="TOMADA" if prev == "PENDIENTE_TOMA" else prev,
             estado_nuevo=muestra.estado,
             actor=actor,
             observaciones=observaciones,

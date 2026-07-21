@@ -23,6 +23,11 @@ interface ModalIngresarPacienteProps {
   onClose: () => void;
   cama: Cama | null;
   onSuccess: () => void;
+  prefill?: {
+    pacienteId?: number;
+    atencionOrigenId?: number;
+    motivoIngreso?: string;
+  };
 }
 
 const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
@@ -30,6 +35,7 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   onClose,
   cama,
   onSuccess,
+  prefill,
 }) => {
   const [selectedPaciente, setSelectedPaciente] = useState<Paciente | null>(null);
   const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
@@ -69,6 +75,27 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       return;
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !prefill) return;
+
+    const loadPrefillPaciente = async () => {
+      if (!prefill.pacienteId) return;
+      try {
+        const paciente = await apiService.getPaciente(prefill.pacienteId);
+        setSelectedPaciente(paciente);
+        setPacienteInputValue(formatPacienteLabel(paciente));
+        pacienteInputReason.current = 'selection';
+      } catch {
+        /* ignore */
+      }
+    };
+
+    loadPrefillPaciente();
+    if (prefill.motivoIngreso) {
+      setDiagnosticoTextoLibre(prefill.motivoIngreso);
+    }
+  }, [open, prefill]);
 
   // Búsqueda de pacientes en el servidor
   useEffect(() => {
@@ -233,6 +260,13 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       
       if (diagnosticoTextoLibre.trim()) {
         internacionData.diagnostico_ingreso = diagnosticoTextoLibre.trim();
+      }
+
+      if (prefill?.atencionOrigenId) {
+        internacionData.atencion_origen = prefill.atencionOrigenId;
+      }
+      if (prefill?.motivoIngreso?.trim()) {
+        internacionData.motivo_ingreso = prefill.motivoIngreso.trim();
       }
       
       await createInternacion(internacionData);

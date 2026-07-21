@@ -20,6 +20,7 @@ import {
   EstudioDiagnostico,
   ProcedimientoCatalogo,
   ConsultaAmbulatoriaRecord,
+  EvolucionInternacionRecord,
   RegistroProcedimientoRecord,
   RegistroQuirurgicoRecord,
   TipoExamen,
@@ -252,8 +253,18 @@ class ApiService {
   }
 
   // Pacientes
-  async getPacientes(): Promise<ApiResponse<Paciente>> {
-    const response: AxiosResponse<ApiResponse<Paciente>> = await this.api.get('/pacientes/');
+  async getPacientes(params?: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+  }): Promise<ApiResponse<Paciente>> {
+    const response: AxiosResponse<ApiResponse<Paciente>> = await this.api.get('/pacientes/', {
+      params: {
+        page: params?.page,
+        page_size: params?.page_size,
+        search: params?.search?.trim() || undefined,
+      },
+    });
     return response.data;
   }
 
@@ -304,17 +315,25 @@ class ApiService {
     if (!query || query.trim().length < 2) {
       return [];
     }
-    // Usar el nuevo endpoint optimizado con parámetro search
-    // El backend aplica límite de 20 resultados automáticamente
-    // y respeta las reglas de filtrado por rol
-    const response = await this.api.get('/pacientes/', {
-      params: { search: query.trim() },
-    });
-    const data = response.data as any;
-    if (Array.isArray(data)) {
-      return data;
+    try {
+      const response = await this.api.get('/pacientes/buscar/', {
+        params: { q: query.trim() },
+      });
+      const data = response.data as Paciente[] | { results?: Paciente[] };
+      if (Array.isArray(data)) {
+        return data;
+      }
+      return Array.isArray(data?.results) ? data.results : [];
+    } catch {
+      const fallback = await this.api.get('/pacientes/', {
+        params: { search: query.trim() },
+      });
+      const data = fallback.data as Paciente[] | { results?: Paciente[] };
+      if (Array.isArray(data)) {
+        return data;
+      }
+      return Array.isArray(data?.results) ? data.results : [];
     }
-    return Array.isArray(data?.results) ? data.results : [];
   }
 
   // Médicos
@@ -538,6 +557,24 @@ class ApiService {
     return response.data;
   }
 
+  async iniciarAtencionGuardia(payload: {
+    paciente_id: number;
+    medico_id?: number;
+    motivo_consulta?: string;
+    turno_id?: number;
+    observaciones_generales?: string;
+  }): Promise<Atencion> {
+    const response: AxiosResponse<Atencion> = await this.api.post('/atenciones/iniciar-guardia/', payload);
+    return response.data;
+  }
+
+  async ensureConsultaHc(atencionId: number): Promise<number> {
+    const response: AxiosResponse<{ consulta_hc_id: number }> = await this.api.post(
+      `/atenciones/${atencionId}/ensure-consulta-hc/`
+    );
+    return response.data.consulta_hc_id;
+  }
+
   // Documentos clínicos
   async getTiposDocumento(): Promise<Array<{ value: string; label: string }>> {
     const response: AxiosResponse<Array<{ value: string; label: string }>> = await this.api.get('/documentos/tipos/');
@@ -591,6 +628,27 @@ class ApiService {
     }
     
     const response: AxiosResponse<ConsultaAmbulatoriaRecord> = await this.api.put(`/consultas-ambulatorias/${idToUse}/`, payload);
+    return response.data;
+  }
+
+  async updateEvolucionInternacion(
+    atencionId: number,
+    payload: Partial<EvolucionInternacionRecord>,
+    registroId?: number,
+  ): Promise<EvolucionInternacionRecord> {
+    let idToUse = registroId;
+    if (!idToUse) {
+      const atencion = await this.getAtencion(atencionId);
+      if (atencion.evolucion_internacion?.id) {
+        idToUse = atencion.evolucion_internacion.id;
+      } else {
+        throw new Error('No existe evolución de internación para esta atención.');
+      }
+    }
+    const response: AxiosResponse<EvolucionInternacionRecord> = await this.api.patch(
+      `/evoluciones-internacion/${idToUse}/`,
+      payload,
+    );
     return response.data;
   }
 

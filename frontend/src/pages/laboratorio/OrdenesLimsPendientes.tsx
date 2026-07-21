@@ -10,7 +10,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { SolicitudExamenLims } from '../../types/lims';
@@ -19,18 +19,21 @@ import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../util
 import { canAccessLimsPendientes, canOperateLims } from '../../utils/limsAccess';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
+import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
 
 const OrdenesLimsPendientes: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser } = useData();
   const [rows, setRows] = useState<SolicitudExamenLims[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [nuevaOrdenOpen, setNuevaOrdenOpen] = useState(false);
+  const [ordenEtiquetas, setOrdenEtiquetas] = useState<SolicitudExamenLims | null>(null);
 
   const allowed = canAccessLimsPendientes(currentUser);
   const puedeCrear = canOperateLims(currentUser);
-  const puedeTomar = canOperateLims(currentUser);
+  const puedeImprimir = canOperateLims(currentUser);
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -48,6 +51,15 @@ const OrdenesLimsPendientes: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!puedeCrear) return;
+    if (searchParams.get('action') !== 'nueva') return;
+    setNuevaOrdenOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('action');
+    setSearchParams(next, { replace: true });
+  }, [puedeCrear, searchParams, setSearchParams]);
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -76,8 +88,8 @@ const OrdenesLimsPendientes: React.FC = () => {
             Pendientes
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Órdenes esperando extracción de muestra. Al tomar la muestra, la orden pasa a la bandeja diaria de{' '}
-            <strong>Órdenes LIMS</strong> según el día de la toma.
+            Órdenes esperando impresión de etiquetas y recepción. Imprimí las etiquetas, pegá en los
+            tubos y confirmá el ingreso escaneando en <strong>Recepción</strong>.
           </Typography>
         </Box>
         {puedeCrear && (
@@ -111,10 +123,15 @@ const OrdenesLimsPendientes: React.FC = () => {
         <Paper>
           <OrdenesLimsTabla
             rows={filtradas}
-            emptyMessage="No hay órdenes pendientes de toma de muestra."
+            emptyMessage="No hay órdenes pendientes de etiquetas / recepción."
             columnaFecha="solicitud"
-            accionLabel={puedeTomar ? 'Tomar muestra' : 'Ver'}
+            accionLabel={puedeImprimir ? 'Imprimir etiquetas' : 'Ver'}
             onVer={(id) => navigate(`/laboratorio/ordenes/${id}`)}
+            onAccion={
+              puedeImprimir
+                ? (orden) => setOrdenEtiquetas(orden)
+                : undefined
+            }
           />
         </Paper>
       )}
@@ -127,6 +144,19 @@ const OrdenesLimsPendientes: React.FC = () => {
           navigate(`/laboratorio/ordenes/${id}`);
         }}
       />
+
+      {ordenEtiquetas && (
+        <TomarMuestraOrdenDialog
+          open={!!ordenEtiquetas}
+          orden={ordenEtiquetas}
+          muestrasExistentes={[]}
+          onClose={() => setOrdenEtiquetas(null)}
+          onSuccess={() => {
+            setOrdenEtiquetas(null);
+            load();
+          }}
+        />
+      )}
     </Box>
   );
 };

@@ -14,11 +14,13 @@ import type {
   TipoExamenLimsWriteBody,
   LimsTipoMuestra,
   MuestraTransaccional,
+  MuestraLookupLims,
   Paginated,
   OrigenSolicitudLims,
   EnviarInformeOrdenResponse,
   SolicitudExamenLims,
 } from '../types/lims';
+import type { TuboOrdenPreview } from '../utils/limsTubosOrden';
 
 const LAB = '/lab';
 
@@ -143,6 +145,13 @@ export async function postTomarMuestraOrden(
   return data;
 }
 
+export async function getTubosPreviewOrden(solicitudId: number): Promise<TuboOrdenPreview[]> {
+  const { data } = await apiClient.get<{ tubos: TuboOrdenPreview[] }>(
+    `${LAB}/solicitudes/${solicitudId}/tubos-preview/`
+  );
+  return data.tubos || [];
+}
+
 export async function postCargarResultados(
   id: number,
   resultados: CargarResultadoPayload[],
@@ -203,15 +212,36 @@ export async function postEnviarInformeOrden(
   return data;
 }
 
-/** @deprecated La orden se finaliza al cargar todos los resultados */
-export async function postFinalizarOrden(id: number): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/${id}/finalizar/`, {});
+/** Validar y liberar informe (bioquímico / admin). Bloquea resultados. */
+export async function postValidarSolicitud(
+  id: number,
+  options?: { confirmar_criticos?: boolean }
+): Promise<SolicitudExamenLims> {
+  const body: { confirmar_criticos?: boolean } = {};
+  if (options?.confirmar_criticos) {
+    body.confirmar_criticos = true;
+  }
+  const { data } = await apiClient.post<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${id}/validar/`,
+    body
+  );
   return data;
 }
 
-/** @deprecated Usar postFinalizarOrden */
-export async function postValidarOrden(id: number): Promise<SolicitudExamenLims> {
-  return postFinalizarOrden(id);
+/** @deprecated Usar postValidarSolicitud */
+export async function postFinalizarOrden(
+  id: number,
+  options?: { confirmar_criticos?: boolean }
+): Promise<SolicitudExamenLims> {
+  return postValidarSolicitud(id, options);
+}
+
+/** @deprecated Usar postValidarSolicitud */
+export async function postValidarOrden(
+  id: number,
+  options?: { confirmar_criticos?: boolean }
+): Promise<SolicitudExamenLims> {
+  return postValidarSolicitud(id, options);
 }
 
 export interface CreateSolicitudExamenLimsPayload {
@@ -308,6 +338,83 @@ export async function postMuestraCancelar(
 ): Promise<MuestraTransaccional> {
   const { data } = await apiClient.post<MuestraTransaccional>(`${LAB}/muestras-transaccionales/${id}/cancelar/`, body);
   return data;
+}
+
+export async function getMuestraPorCodigo(codigo: string): Promise<MuestraLookupLims> {
+  const encoded = encodeURIComponent(codigo.trim());
+  const { data } = await apiClient.get<MuestraLookupLims>(
+    `${LAB}/muestras-transaccionales/por-codigo/${encoded}/`
+  );
+  return data;
+}
+
+export async function postRecibirMuestraPorCodigo(body: {
+  codigo_barra: string;
+  ubicacion_actual?: string;
+  observaciones?: string;
+}): Promise<MuestraLookupLims & {
+  extraccion_completa?: boolean;
+  tubos_pendientes_extraccion?: Array<{
+    id: number;
+    codigo_barra: string | null;
+    tipo_contenedor_codigo?: string | null;
+    tipo_contenedor_nombre?: string | null;
+  }>;
+}> {
+  const { data } = await apiClient.post(
+    `${LAB}/muestras-transaccionales/recibir-por-codigo/`,
+    body
+  );
+  return data;
+}
+
+export async function postTomarMuestraPorCodigo(body: {
+  codigo_barra: string;
+  observaciones?: string;
+}): Promise<MuestraLookupLims & {
+  extraccion_completa?: boolean;
+  tubos_pendientes_extraccion?: Array<{
+    id: number;
+    codigo_barra: string | null;
+    tipo_contenedor_codigo?: string | null;
+    tipo_contenedor_nombre?: string | null;
+  }>;
+}> {
+  const { data } = await apiClient.post(
+    `${LAB}/muestras-transaccionales/tomar-por-codigo/`,
+    body
+  );
+  return data;
+}
+
+export async function getEtiquetaMuestraPdfBlob(muestraId: number): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`${LAB}/muestras-transaccionales/${muestraId}/etiqueta/`, {
+    responseType: 'blob',
+  });
+  return data;
+}
+
+export async function downloadEtiquetaMuestra(muestraId: number, codigoBarra?: string | null): Promise<void> {
+  const blob = await getEtiquetaMuestraPdfBlob(muestraId);
+  const safe = (codigoBarra || String(muestraId)).replace(/\//g, '-');
+  await triggerBlobDownload(blob, `etiqueta-muestra-${safe}.pdf`);
+}
+
+export async function getEtiquetasOrdenMuestrasPdfBlob(solicitudId: number): Promise<Blob> {
+  assertValidSolicitudId(solicitudId);
+  const { data } = await apiClient.get<Blob>(`${LAB}/solicitudes/${solicitudId}/etiquetas-muestras/`, {
+    responseType: 'blob',
+  });
+  return data;
+}
+
+export async function downloadEtiquetasOrdenMuestras(
+  solicitudId: number,
+  numeroOrden?: string | null
+): Promise<void> {
+  const blob = await getEtiquetasOrdenMuestrasPdfBlob(solicitudId);
+  const ref = (numeroOrden || String(solicitudId)).replace(/\//g, '-');
+  await triggerBlobDownload(blob, `etiquetas-orden-${ref}.pdf`);
 }
 
 // --- Catálogos ---

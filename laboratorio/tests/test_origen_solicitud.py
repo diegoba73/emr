@@ -80,6 +80,39 @@ class TestInferirOrigenSolicitud(TestCase):
             AMBULATORIO_ICPL,
         )
 
+    def test_guardia_desde_atencion_walk_in_sin_turno(self):
+        from medicos.models import Especialidad, Medico
+        from historias_clinicas.services import ensure_consulta_hc_desde_atencion
+        from turnos.services import AtencionService
+
+        esp, _ = Especialidad.objects.get_or_create(nombre='Cardio-guard-walk')
+        medico = Medico.objects.create(
+            matricula='M-GW-001',
+            nombre='Laura',
+            apellido='Guardia',
+            especialidad=esp,
+        )
+        outcome = AtencionService.iniciar_atencion_guardia(
+            paciente_id=self.paciente.pk,
+            medico_id=medico.pk,
+            motivo_consulta='Dolor torácico',
+        )
+        consulta = ensure_consulta_hc_desde_atencion(outcome.atencion)
+        self.assertEqual(
+            inferir_origen_solicitud(paciente_id=self.paciente.pk, consulta_hc=consulta),
+            GUARDIA,
+        )
+        from laboratorio.models import SolicitudExamen
+
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            consulta_hc=consulta,
+            origen_solicitud=GUARDIA,
+        )
+        proc = resolver_procedencia_solicitud(solicitud)
+        self.assertEqual(proc['procedencia_tipo'], 'GUARDIA')
+        self.assertIn('ICPL', proc['procedencia_display'])
+
     def test_guardia_desde_nombre_recurso(self):
         recurso = Recurso.objects.create(
             nombre='Guardia cardiológica ICPL',

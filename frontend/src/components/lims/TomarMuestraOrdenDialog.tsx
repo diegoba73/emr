@@ -3,117 +3,97 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  FormGroup,
+  List,
+  ListItem,
+  ListItemText,
   Typography,
 } from '@mui/material';
+import { Print } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import type { MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
 import {
-  getTiposExamenMap,
-  listTiposMuestraLims,
+  downloadEtiquetasOrdenMuestras,
+  getTubosPreviewOrden,
   postTomarMuestraOrden,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
-  buildOpcionesTiposMuestraTomar,
-  idsTiposMuestraRequeridosPendientes,
-  type TipoMuestraTomarOpcion,
-} from '../../utils/limsTiposMuestraOrden';
+  formatTuboPreviewLabel,
+  totalEtiquetasDesdeTubos,
+  type TuboOrdenPreview,
+} from '../../utils/limsTubosOrden';
 
 export interface TomarMuestraOrdenDialogProps {
   open: boolean;
   orden: SolicitudExamenLims;
-  muestrasExistentes: MuestraTransaccional[];
+  muestrasExistentes?: MuestraTransaccional[];
   onClose: () => void;
   onSuccess: (orden: SolicitudExamenLims) => void;
 }
 
+/**
+ * Flujo «Imprimir etiquetas»: confirma tubos, genera muestras (PENDIENTE_TOMA)
+ * y descarga el PDF de etiquetas en el mismo paso.
+ */
 const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   open,
   orden,
-  muestrasExistentes,
+  muestrasExistentes = [],
   onClose,
   onSuccess,
 }) => {
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [opciones, setOpciones] = useState<TipoMuestraTomarOpcion[]>([]);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [tubos, setTubos] = useState<TuboOrdenPreview[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const yaTieneMuestras =
+    muestrasExistentes.length > 0 ||
+    (orden.tubos_pendientes_extraccion?.length ?? 0) > 0 ||
+    !!orden.fecha_toma_muestra;
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setLoadingCatalog(true);
-    setSelected(new Set());
+    setLoading(true);
+    setPreviewError(null);
+    setTubos([]);
     (async () => {
       try {
-        const [examMap, tiposMuestra] = await Promise.all([
-          getTiposExamenMap(),
-          listTiposMuestraLims({ activo: true }),
-        ]);
+        const data = await getTubosPreviewOrden(orden.id);
         if (cancelled) return;
-        const opts = buildOpcionesTiposMuestraTomar(orden, examMap, tiposMuestra, muestrasExistentes);
-        setOpciones(opts);
-        const preselect = idsTiposMuestraRequeridosPendientes(orden, examMap, tiposMuestra, muestrasExistentes);
-        const validPreselect = preselect.filter((id) => opts.some((o) => o.tipoMuestraId === id));
-        setSelected(new Set(validPreselect.length > 0 ? validPreselect : opts.length === 1 ? [opts[0].tipoMuestraId] : []));
+        setTubos(data);
       } catch (e) {
         if (!cancelled) {
-          toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
-          onClose();
+          setPreviewError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
         }
       } finally {
-        if (!cancelled) setLoadingCatalog(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, orden, muestrasExistentes, onClose]);
+  }, [open, orden.id]);
 
-  const toggle = (id: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const seleccionarRequeridas = () => {
-    setSelected(new Set(opciones.filter((o) => o.requeridoPorOrden).map((o) => o.tipoMuestraId)));
-  };
-
-  const seleccionarTodas = () => {
-    setSelected(new Set(opciones.map((o) => o.tipoMuestraId)));
-  };
-
-  const requeridas = opciones.filter((o) => o.requeridoPorOrden);
-  const hayVarias = opciones.length > 1;
-  const selectedCount = selected.size;
+  const totalEtiquetas = totalEtiquetasDesdeTubos(tubos);
 
   const handleConfirm = async () => {
-    if (selectedCount === 0) {
-      toast.error('Seleccioná al menos un tipo de muestra');
-      return;
-    }
     setSaving(true);
     try {
-      const updated = await postTomarMuestraOrden(orden.id, {
-        muestras: Array.from(selected).map((tipo_muestra_id) => ({ tipo_muestra_id })),
-      });
-      toast.success(
-        selectedCount === 1 ? 'Muestra registrada y tomada' : `${selectedCount} muestras registradas y tomadas`
-      );
+      const updated = await postTomarMuestraOrden(orden.id, {});
+      try {
+        await downloadEtiquetasOrdenMuestras(updated.id, updated.numero);
+        toast.success('Etiquetas generadas. Imprimí el PDF y pegá en cada tubo.');
+      } catch {
+        toast.success('Tubos registrados. Podés reimprimir etiquetas desde la orden.');
+      }
       onSuccess(updated);
       onClose();
     } catch (e) {
@@ -125,75 +105,64 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={() => !saving && onClose()} maxWidth="sm" fullWidth>
-      <DialogTitle>Tomar muestra — orden {orden.numero || orden.id}</DialogTitle>
+      <DialogTitle>Imprimir etiquetas — orden {orden.numero || orden.id}</DialogTitle>
       <DialogContent>
-        {loadingCatalog ? (
+        {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={32} />
           </Box>
-        ) : opciones.length === 0 ? (
+        ) : previewError ? (
+          <Alert severity="error" sx={{ mb: 1 }}>
+            {previewError}
+          </Alert>
+        ) : tubos.length === 0 ? (
           <Box sx={{ py: 2 }}>
             <Alert severity="warning" sx={{ mb: 2 }}>
-              No hay tipos de muestra disponibles. Cargá el catálogo (sangre, orina, etc.) antes de tomar muestras.
+              No se calcularon tubos. Verificá que los exámenes o el panel tengan tipo de tubo
+              (EDTA, Citrato, Heparina, Suero…) en el catálogo.
             </Alert>
-            <Button component={RouterLink} to="/laboratorio/catalogos/tipos-muestra" variant="outlined" size="small">
-              Ir a tipos de muestra
+            <Button
+              component={RouterLink}
+              to="/laboratorio/catalogos/examenes"
+              variant="outlined"
+              size="small"
+            >
+              Ir a catálogo de exámenes
             </Button>
           </Box>
         ) : (
           <>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Elegí del catálogo qué muestra(s) tomaste. Se registrarán y quedarán disponibles para cargar
-              resultados.
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Se generarán estos tubos con código de barras (máx. 10 exámenes por tubo; el
+              hemograma cuenta como uno). La recepción se confirma después escaneando cada tubo.
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-              {requeridas.length > 0 && (
-                <Button size="small" onClick={seleccionarRequeridas}>
-                  Requeridas por la orden ({requeridas.length})
-                </Button>
-              )}
-              {hayVarias && (
-                <Button size="small" onClick={seleccionarTodas}>
-                  Todas ({opciones.length})
-                </Button>
-              )}
-            </Box>
-            <FormGroup>
-              {opciones.map((t) => (
-                <FormControlLabel
-                  key={t.tipoMuestraId}
-                  control={
-                    <Checkbox
-                      checked={selected.has(t.tipoMuestraId)}
-                      onChange={() => toggle(t.tipoMuestraId)}
-                      disabled={saving}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="body2">
-                          {t.codigo} — {t.nombre}
-                        </Typography>
-                        {t.requeridoPorOrden && (
-                          <Chip size="small" label="Requerido" color="primary" variant="outlined" />
-                        )}
-                      </Box>
-                      {t.colorTubo && (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Tubo: {t.colorTubo}
-                        </Typography>
-                      )}
-                      {t.examenesAsociados.length > 0 && (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Exámenes: {t.examenesAsociados.join(', ')}
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                />
+            <Chip
+              size="small"
+              color="primary"
+              label={`${totalEtiquetas} etiqueta${totalEtiquetas === 1 ? '' : 's'}`}
+              sx={{ mb: 1 }}
+            />
+            <List dense>
+              {tubos.map((t) => (
+                <ListItem key={t.tipo_contenedor_id} alignItems="flex-start" sx={{ px: 0 }}>
+                  <ListItemText
+                    primary={formatTuboPreviewLabel(t)}
+                    secondary={
+                      t.examenes?.length
+                        ? t.examenes.slice(0, 12).join(', ') +
+                          (t.examenes.length > 12 ? `… (+${t.examenes.length - 12})` : '')
+                        : undefined
+                    }
+                  />
+                </ListItem>
               ))}
-            </FormGroup>
+            </List>
+            {yaTieneMuestras && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                Si ya hay tubos de esta orden, solo se crean los faltantes y se reimprimen las etiquetas.
+                La recepción se confirma después en Recepción.
+              </Alert>
+            )}
           </>
         )}
       </DialogContent>
@@ -203,10 +172,17 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
         </Button>
         <Button
           variant="contained"
+          startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <Print />}
           onClick={handleConfirm}
-          disabled={saving || loadingCatalog || opciones.length === 0 || selectedCount === 0}
+          disabled={saving || loading || !!previewError || tubos.length === 0}
         >
-          {saving ? 'Registrando…' : selectedCount > 1 ? `Tomar ${selectedCount} muestras` : 'Tomar muestra'}
+          {saving
+            ? 'Generando…'
+            : yaTieneMuestras
+              ? 'Reimprimir etiquetas'
+              : totalEtiquetas > 1
+                ? `Crear tubos e imprimir ${totalEtiquetas} etiquetas`
+                : 'Crear tubo e imprimir etiqueta'}
         </Button>
       </DialogActions>
     </Dialog>

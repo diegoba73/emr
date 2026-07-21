@@ -19,7 +19,7 @@ describe('limsOrigenSolicitud', () => {
       origen_solicitud: 'GUARDIA',
       procedencia_display: 'Guardia',
     });
-    expect(cell.titulo).toBe('Guardia');
+    expect(cell.titulo).toBe('Guardia — ICPL');
     expect(cell.detalle).toBeUndefined();
   });
 

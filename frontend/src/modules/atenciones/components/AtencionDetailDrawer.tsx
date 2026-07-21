@@ -13,7 +13,8 @@ import {
   CircularProgress,
   Button,
 } from '@mui/material';
-import { Close, LocalHospital, AssignmentTurnedIn } from '@mui/icons-material';
+import { Close, LocalHospital, AssignmentTurnedIn, TransferWithinAStation } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Atencion, User } from '../../../types';
 import {
@@ -22,7 +23,8 @@ import {
 } from '../hooks';
 import DocumentosAdjuntos from './DocumentosAdjuntos';
 import ConsultaAmbulatoriaForm from './forms/ConsultaAmbulatoriaForm';
-import ConsultaPedidosPanel from './ConsultaPedidosPanel';
+import EvolucionInternacionForm from './forms/EvolucionInternacionForm';
+import AtencionPedidosSection from './AtencionPedidosSection';
 import EstudioDiagnosticoForm from './forms/EstudioDiagnosticoForm';
 import ProcedimientoForm from './forms/ProcedimientoForm';
 import CirugiaForm from './forms/CirugiaForm';
@@ -39,6 +41,8 @@ interface AtencionDetailDrawerProps {
   canOperate?: boolean;
   onIntervencionSaved?: () => void | Promise<void>;
   forceEdit?: boolean;
+  /** Pestaña inicial al abrir (guardia → pedidos clínicos). */
+  initialTab?: 'pedidos' | 'detalle' | 'resumen';
 }
 
 const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
@@ -50,6 +54,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   canOperate: canOperateProp,
   onIntervencionSaved,
   forceEdit = false,
+  initialTab = 'resumen',
 }) => {
   const { currentUser: currentUserFromContext } = useData();
   const effectiveUser = currentUserProp ?? currentUserFromContext ?? null;
@@ -62,6 +67,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   // El backend ahora siempre devuelve IDs explícitos y relaciones completas
   // No necesitamos refetches defensivos que causan loops infinitos
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   
   // OPTIMIZACIÓN: Solo buscar consulta previa si es necesario (cuando hay registro_procedimiento y no hay consulta_ambulatoria)
@@ -145,9 +151,44 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   const atencionAbierta = data?.estado_clinico === 'ABIERTA' && !data?.fecha_cierre;
   const canEditClinical = canEdit && Boolean(atencionAbierta);
 
-  const pedidosTabVisible =
-    data?.tipo_intervencion === 'CONSULTA' && Boolean(data?.consulta_hc_id);
-  const detalleTabIndex = pedidosTabVisible ? 3 : 2;
+  const isInternacion = useMemo(
+    () => data?.contexto_atencion === 'INTERNACION' || Boolean(data?.evolucion_internacion),
+    [data?.contexto_atencion, data?.evolucion_internacion],
+  );
+
+  const isGuardia = useMemo(
+    () => data?.contexto_atencion === 'GUARDIA',
+    [data?.contexto_atencion],
+  );
+
+  const showPedidosTab = useMemo(
+    () =>
+      data?.tipo_intervencion === 'CONSULTA' || isInternacion || isGuardia,
+    [data?.tipo_intervencion, isInternacion, isGuardia],
+  );
+
+  const tabIndices = useMemo(
+    () => ({
+      resumen: 0,
+      archivos: 1,
+      pedidos: showPedidosTab ? 2 : null,
+      detalle: showPedidosTab ? 3 : 2,
+    }),
+    [showPedidosTab],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialTab === 'pedidos' && tabIndices.pedidos !== null) {
+      setTabValue(tabIndices.pedidos);
+      return;
+    }
+    if (initialTab === 'detalle' || forceEdit) {
+      setTabValue(tabIndices.detalle);
+      return;
+    }
+    setTabValue(0);
+  }, [atencionId, open, forceEdit, initialTab, tabIndices.detalle, tabIndices.pedidos]);
 
   const showTabPanel = (index: number) => ({
     display: tabValue === index ? 'block' : 'none',
@@ -166,6 +207,16 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   };
 
   const renderDetalle = (atencion: Atencion) => {
+    if (atencion.contexto_atencion === 'INTERNACION' || atencion.evolucion_internacion) {
+      return (
+        <EvolucionInternacionForm
+          key={`evolucion-${atencion.id}-${forceEdit ? 'edit' : 'view'}`}
+          atencionId={atencion.id}
+          canEdit={canEditClinical}
+          onSaveSuccess={handleSaveSuccess}
+        />
+      );
+    }
     switch (atencion.tipo_intervencion) {
       case 'CONSULTA':
         return (
@@ -235,7 +286,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
         <Stack direction="row" alignItems="center" spacing={1.5}>
           <LocalHospital color="primary" />
           <Typography variant="h6" fontWeight={700}>
-            Detalle de la Atención
+            {isInternacion ? 'Atención de internación' : 'Detalle de la Atención'}
           </Typography>
         </Stack>
         <IconButton onClick={onClose}>
@@ -299,12 +350,34 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
         </Box>
       ) : (
         <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-          <Stack direction="row" spacing={1} mb={2} alignItems="center">
+          <Stack direction="row" spacing={1} mb={2} alignItems="center" flexWrap="wrap" useFlexGap>
             <Chip
-              label={data.tipo_intervencion || 'N/A'}
-              color="primary"
+              label={data.contexto_atencion_display || data.contexto_atencion || 'Ambulatoria'}
+              color={
+                data.contexto_atencion === 'INTERNACION'
+                  ? 'warning'
+                  : data.contexto_atencion === 'GUARDIA'
+                    ? 'error'
+                    : 'info'
+              }
               size="small"
             />
+            {data.tipo_intervencion && data.tipo_intervencion !== 'CONSULTA' && (
+              <Chip
+                label={
+                  data.tipo_intervencion === 'ESTUDIO'
+                    ? 'Estudio'
+                    : data.tipo_intervencion === 'PROCEDIMIENTO'
+                      ? 'Procedimiento'
+                      : data.tipo_intervencion === 'CIRUGIA'
+                        ? 'Cirugía'
+                        : data.tipo_intervencion
+                }
+                color="primary"
+                size="small"
+                variant="outlined"
+              />
+            )}
             <Chip
               label={data.estado_clinico || 'N/A'}
               color={data.estado_clinico === 'FINALIZADA' ? 'success' : data.estado_clinico === 'EN_REVISION' ? 'warning' : 'info'}
@@ -319,6 +392,29 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
                 color="success"
                 variant="outlined"
               />
+            )}
+            {isGuardia && data.paciente?.id && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                startIcon={<TransferWithinAStation />}
+                onClick={() => {
+                  navigate('/internacion', {
+                    state: {
+                      derivarDesdeAtencionId: data.id,
+                      pacienteId: data.paciente.id,
+                      motivoIngreso:
+                        data.consulta_ambulatoria?.diagnostico_presuntivo ||
+                        data.observaciones_generales ||
+                        '',
+                    },
+                  });
+                }}
+                sx={{ ml: 'auto' }}
+              >
+                Derivar a internación
+              </Button>
             )}
           </Stack>
 
@@ -394,14 +490,12 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
           >
             <Tab label="Resumen" />
             <Tab label="Archivos" />
-            {data.tipo_intervencion === 'CONSULTA' && data.consulta_hc_id ? (
-              <Tab label="Pedidos y resultados" />
-            ) : null}
-            <Tab label="Detalle clínico" />
+            {showPedidosTab ? <Tab label="Pedidos y resultados" /> : null}
+            <Tab label={isInternacion ? 'Evolución clínica' : 'Detalle clínico'} />
           </Tabs>
 
           <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }}>
-            <Box sx={showTabPanel(0)}>
+            <Box sx={showTabPanel(tabIndices.resumen)}>
               <Stack spacing={3}>
                 <Typography variant="subtitle1" fontWeight={600}>
                   Información general
@@ -570,18 +664,75 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
                   </Stack>
                 )}
 
+                {data.evolucion_internacion && (
+                  <Stack spacing={2}>
+                    <Divider />
+                    <Typography variant="subtitle2" fontWeight={600} color="warning.main">
+                      Evolución de internación
+                      {data.evolucion_internacion.tipo_evolucion_display
+                        ? ` — ${data.evolucion_internacion.tipo_evolucion_display}`
+                        : ''}
+                    </Typography>
+                    {data.evolucion_internacion.subjetivo && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Subjetivo
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {data.evolucion_internacion.subjetivo}
+                        </Typography>
+                      </Box>
+                    )}
+                    {data.evolucion_internacion.objetivo && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Objetivo
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {data.evolucion_internacion.objetivo}
+                        </Typography>
+                      </Box>
+                    )}
+                    {data.evolucion_internacion.analisis && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Análisis
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {data.evolucion_internacion.analisis}
+                        </Typography>
+                      </Box>
+                    )}
+                    {data.evolucion_internacion.plan && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                          Plan
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {data.evolucion_internacion.plan}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Stack>
+                )}
+
                 {/* Mensaje si no hay registros clínicos */}
-                {!data.consulta_ambulatoria && !data.registro_quirurgico && !data.registro_procedimiento && (
+                {!data.consulta_ambulatoria &&
+                  !data.registro_quirurgico &&
+                  !data.registro_procedimiento &&
+                  !data.evolucion_internacion && (
                   <Box sx={{ py: 2, textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                      No hay registros clínicos disponibles. Utiliza la pestaña "Detalle clínico" para cargar la información correspondiente.
+                      {isInternacion
+                        ? 'No hay evolución cargada. Utilizá la pestaña "Evolución clínica" para documentar la internación.'
+                        : 'No hay registros clínicos disponibles. Utiliza la pestaña "Detalle clínico" para cargar la información correspondiente.'}
                     </Typography>
                   </Box>
                 )}
               </Stack>
             </Box>
 
-            <Box sx={showTabPanel(1)}>
+            <Box sx={showTabPanel(tabIndices.archivos)}>
               {data.paciente?.id && (
               <DocumentosAdjuntos
                 key={`archivos-${data.id}-${data.consulta_hc_id ?? 'sin-hc'}`}
@@ -593,16 +744,17 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
               )}
             </Box>
 
-            {pedidosTabVisible && data.paciente?.id && (
-              <Box sx={showTabPanel(2)}>
-                <ConsultaPedidosPanel
-                  consultaHcId={data.consulta_hc_id!}
+            {showPedidosTab && tabIndices.pedidos !== null && data.id && (
+              <Box sx={showTabPanel(tabIndices.pedidos)}>
+                <AtencionPedidosSection
+                  atencionId={data.id}
                   canEdit={canEditClinical}
+                  variant="full"
                 />
               </Box>
             )}
 
-            <Box sx={showTabPanel(detalleTabIndex)}>
+            <Box sx={showTabPanel(tabIndices.detalle)}>
               {renderDetalle(data)}
             </Box>
           </Box>

@@ -4,7 +4,7 @@ from . import views
 from pacientes.views import PacienteViewSet
 from medicos.views import MedicoViewSet, EspecialidadViewSet
 from catalogos.views import CentroFisicoViewSet, TipoAtencionViewSet
-from turnos.views import TurnoViewSet, RecursoViewSet, AtencionViewSet
+from turnos.views import TurnoViewSet, RecursoViewSet, AtencionViewSet, EvolucionInternacionViewSet
 from historias_clinicas.views import HistoriaClinicaViewSet, ConsultaViewSet
 from solicitudes.views import SolicitudViewSet
 from laboratorio.views import (
@@ -205,6 +205,7 @@ router.register(r'internaciones', views.InternacionViewSet)
 router.register(r'dashboard', views.DashboardViewSet, basename='dashboard')
 # Atenciones ahora se registra desde turnos.views (ver arriba)
 router.register(r'consultas-ambulatorias', views.ConsultaAmbulatoriaViewSet)
+router.register(r'evoluciones-internacion', EvolucionInternacionViewSet, basename='evoluciones-internacion')
 router.register(r'registros-procedimientos', views.RegistroProcedimientoViewSet)
 router.register(r'registros-quirurgicos', views.RegistroQuirurgicoViewSet)
 router.register(r'estudios-diagnosticos', views.EstudioDiagnosticoViewSet)

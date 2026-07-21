@@ -150,6 +150,19 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return queryset.none()
         return queryset.filter(id__in=pacientes_ids)
 
+    def _queryset_busqueda_operativa(self, queryset):
+        """Búsqueda por DNI/nombre para guardia, turnos y agenda (sin listado global).
+
+        Médico/enfermería: pueden localizar cualquier paciente al atender (mín. 2 chars
+        en ``buscar``), pero el listado completo sigue restringido por rol.
+        """
+        user = self.request.user
+        if _user_tiene_lectura_global(user):
+            return queryset
+        if getattr(user, "medico", None) or _user_rol(user) == "enfermeria":
+            return queryset
+        return self.get_queryset()
+
     def _deny_operativo_solo_lectura(self) -> None:
         if _user_rol(self.request.user) in ROLES_LECTURA_OPERATIVA:
             raise PermissionDenied('Su rol solo tiene permiso de lectura sobre pacientes.')
@@ -227,11 +240,10 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="buscar")
     def buscar(self, request):
-        """Búsqueda inteligente por DNI o nombre/apellido.
+        """Búsqueda por DNI o nombre/apellido para guardia, turnos y agenda.
 
-        Respeta los filtros de rol vía ``self.get_queryset()``: un médico
-        solo puede encontrar pacientes con los que ya tenga vínculo clínico,
-        y un paciente solo se encuentra a sí mismo.
+        Médico/enfermería: pueden localizar cualquier paciente (mín. 2 chars).
+        El listado paginado completo sigue restringido por rol vía ``get_queryset()``.
         """
         q = request.query_params.get("q", "").strip()
         if not q:
@@ -246,7 +258,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
             q,
         )
 
-        queryset = self.get_queryset()
+        queryset = self._queryset_busqueda_operativa(super().get_queryset())
 
         try:
             int(q)

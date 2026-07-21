@@ -100,7 +100,7 @@ class TestCargaHemogramaCompletoAPI:
         )
         assert r2.status_code == status.HTTP_200_OK, r2.data
         self.sol.refresh_from_db()
-        assert self.sol.estado == "FINALIZADO"
+        assert self.sol.estado == "EN_PROCESO"
 
     def test_guardar_e_informar_parcial(self):
         self.client.post(f"/api/lab/solicitudes/{self.sol.pk}/tomar-muestra/", {}, format="json")

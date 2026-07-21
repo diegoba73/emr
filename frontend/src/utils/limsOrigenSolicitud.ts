@@ -7,7 +7,7 @@ export const ORIGEN_SOLICITUD_LIMS_OPTIONS: Array<{
 }> = [
   { value: 'INTERNACION_UCO', label: 'Internación — UCO', group: 'Internación' },
   { value: 'INTERNACION_UCE', label: 'Internación — UCE', group: 'Internación' },
-  { value: 'GUARDIA', label: 'Guardia', group: 'Guardia' },
+  { value: 'GUARDIA', label: 'Guardia — ICPL', group: 'Guardia' },
   { value: 'AMBULATORIO_CEHTA', label: 'Ambulatorio — CEHTA', group: 'Ambulatorio' },
   { value: 'AMBULATORIO_ICPL', label: 'Ambulatorio — ICPL', group: 'Ambulatorio' },
   { value: 'EXTERNO_CEHTA', label: 'Ambulatorio externo — CEHTA', group: 'Ambulatorio externo' },

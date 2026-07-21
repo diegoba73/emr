@@ -64,6 +64,15 @@ class TipoExamen(models.Model):
         related_name='tipos_examen',
         verbose_name="Tipo de Muestra Requerida"
     )
+    tipo_contenedor = models.ForeignKey(
+        "laboratorio.TipoContenedor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="tipos_examen",
+        verbose_name="Tipo de tubo / contenedor",
+        help_text="Tubo físico requerido para la extracción (EDTA, Citrato, Heparina, Suero, etc.).",
+    )
     seccion = models.ForeignKey(
         "laboratorio.SeccionLaboratorio",
         null=True,

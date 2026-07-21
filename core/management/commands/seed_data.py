@@ -436,6 +436,18 @@ class Command(BaseCommand):
             },
         )
 
+        self._ensure_user(
+            'bioquimico1',
+            'bioquimico123',
+            {
+                'email': 'bioquimico1@example.com',
+                'rol': 'bioquimico',
+                'first_name': 'Laura',
+                'last_name': 'Bioquímica',
+                'is_staff': True,
+            },
+        )
+
         enfermeria_user, _ = self._ensure_user(
             'enfermeria1',
             'enfermeria123',
@@ -476,6 +488,7 @@ class Command(BaseCommand):
         self.stdout.write('  - medico1 / medico123 (Médico - Cardiología)')
         self.stdout.write('  - paciente1 / paciente123 (Paciente Demo Uno)')
         self.stdout.write('  - laboratorio1 / laboratorio123 (Operador laboratorio / LIMS)')
+        self.stdout.write('  - bioquimico1 / bioquimico123 (Bioquímico — valida y libera informes)')
         self.stdout.write('  - enfermeria1 / enfermeria123 (Enfermería)')
         self.stdout.write('  - secretaria1 / secretaria123 (Secretaría)')
         self.stdout.write(self.style.WARNING('\nDatos QA sintéticos:'))

@@ -21,6 +21,8 @@ from laboratorio.catalogo_solicitud_papel import (
     PANELES,
 )
 from laboratorio.models import PanelExamen, TipoExamen, TipoMuestra
+from laboratorio.models_catalog import TipoContenedor
+from laboratorio.tubos_catalogo import CONTENEDORES_TODOS, tubo_codigo_para_examen
 
 
 class Command(BaseCommand):
@@ -40,6 +42,7 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             muestras = self._ensure_muestras(dry_run)
+            self._ensure_contenedores(dry_run)
             examenes_map = self._ensure_examenes(muestras, dry_run)
             self._deactivate_legacy(examenes_map, dry_run)
             self._ensure_paneles(examenes_map, dry_run)
@@ -88,13 +91,41 @@ class Command(BaseCommand):
         out.update(entrada_defaults_dict(codigo))
         return out
 
+    def _ensure_contenedores(self, dry_run: bool) -> None:
+        for codigo, nombre, color, aditivo in CONTENEDORES_TODOS:
+            if dry_run:
+                TipoContenedor.objects.get_or_create(
+                    codigo=codigo,
+                    defaults={
+                        "nombre": nombre,
+                        "color": color,
+                        "aditivo": aditivo,
+                        "activo": True,
+                    },
+                )
+            else:
+                obj, created = TipoContenedor.objects.update_or_create(
+                    codigo=codigo,
+                    defaults={
+                        "nombre": nombre,
+                        "color": color,
+                        "aditivo": aditivo,
+                        "activo": True,
+                    },
+                )
+                tag = "creado" if created else "actualizado"
+                self.stdout.write(f"  Contenedor {codigo}: {tag}")
+
     def _ensure_examenes(
         self, muestras: dict[str, TipoMuestra], dry_run: bool
     ) -> dict[str, TipoExamen]:
         out: dict[str, TipoExamen] = {}
+        contenedores = {tc.codigo: tc for tc in TipoContenedor.objects.filter(activo=True)}
         for item in EXAMENES:
             codigo = item["codigo"]
             muestra = muestras[item["muestra"]]
+            tubo_codigo = tubo_codigo_para_examen(codigo, item.get("muestra"))
+            tubo = contenedores.get(tubo_codigo)
             defaults = {
                 "nombre": item["nombre"],
                 "tipo_muestra_requerida": muestra,
@@ -103,6 +134,8 @@ class Command(BaseCommand):
                 "activo": True,
                 **self._referencia_defaults(codigo),
             }
+            if tubo is not None:
+                defaults["tipo_contenedor"] = tubo
             if dry_run:
                 obj, _ = TipoExamen.objects.get_or_create(codigo=codigo, defaults=defaults)
             else:
@@ -111,7 +144,11 @@ class Command(BaseCommand):
                     defaults=defaults,
                 )
                 if created:
-                    self.stdout.write(f"  Examen {codigo}: creado")
+                    self.stdout.write(f"  Examen {codigo}: creado ({tubo_codigo})")
+                elif tubo is not None and obj.tipo_contenedor_id != tubo.pk:
+                    obj.tipo_contenedor = tubo
+                    obj.save(update_fields=["tipo_contenedor"])
+                    self.stdout.write(f"  Examen {codigo}: tubo → {tubo_codigo}")
             out[codigo] = obj
         return out
 

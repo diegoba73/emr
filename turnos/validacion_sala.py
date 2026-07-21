@@ -77,13 +77,14 @@ def validar_disponibilidad_sala_estudio(
 
     if solapados.exists():
         otro = solapados.first()
+        inicio_txt = otro.fecha_hora_inicio.strftime('%d/%m/%Y %H:%M')
+        fin_txt = f'–{otro.fecha_hora_fin.strftime("%H:%M")}' if otro.fecha_hora_fin else ''
         raise ValidationError(
             {
                 'fecha_hora_inicio': (
                     f'La sala "{recurso.nombre}" no está disponible: debe haber al menos '
                     f'{buffer_minutos} minutos libres respecto del turno '
-                    f'{otro.fecha_hora_inicio.strftime("%d/%m/%Y %H:%M")}'
-                    f'{f"–{otro.fecha_hora_fin.strftime("%H:%M")}" if otro.fecha_hora_fin else ""}.'
+                    f'{inicio_txt}{fin_txt}.'
                 )
             }
         )

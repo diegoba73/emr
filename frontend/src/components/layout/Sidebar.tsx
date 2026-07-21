@@ -15,6 +15,7 @@ import {
   People as PeopleIcon,
   CalendarToday as CalendarIcon,
   LocalHospital,
+  Emergency as EmergencyIcon,
   Folder as FolderIcon,
   AssignmentTurnedIn as SolicitudIcon,
   MenuBook as CatalogIcon,
@@ -23,6 +24,8 @@ import {
   Biotech as BiotechIcon,
   HourglassEmpty as PendientesIcon,
   Description,
+  QrCodeScanner as BarcodeIcon,
+  Inventory as RecepcionIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
@@ -41,7 +44,9 @@ import {
   canAccessLimsCatalogos,
   canAccessLimsPendientes,
   canAccessLimsOrdenes,
+  canAccessLimsModule,
   canAccessMicrobiologia,
+  canOperateLims,
 } from '../../utils/limsAccess';
 import { canAccessTurnosAgenda } from '../../utils/turnoPermissions';
 import { getHomeNavLabel, getSolicitudesModuleLabel } from '../../utils/navLabels';
@@ -63,7 +68,8 @@ const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: () => true, resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
-  { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
+  { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
+  { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessAtenciones },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
   {
     text: 'Estudios complementarios',
@@ -90,6 +96,8 @@ const adminOnly: NavItem[] = [
 const labItems: NavItem[] = [
   { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsPendientes },
   { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsOrdenes },
+  { text: 'Consulta muestra', icon: <BarcodeIcon />, path: '/laboratorio/muestras/consulta', canAccess: canAccessLimsModule },
+  { text: 'Recepción muestras', icon: <RecepcionIcon />, path: '/laboratorio/muestras/recepcion', canAccess: canOperateLims },
   { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsCatalogos },
   { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsCatalogos },
   { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
@@ -198,6 +206,10 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
                 (item.path === '/laboratorio/pendientes' &&
                   location.pathname.startsWith('/laboratorio/pendientes')) ||
                 (item.path === '/laboratorio/ordenes' && location.pathname.startsWith('/laboratorio/ordenes')) ||
+                (item.path === '/laboratorio/muestras/consulta' &&
+                  location.pathname.startsWith('/laboratorio/muestras/consulta')) ||
+                (item.path === '/laboratorio/muestras/recepcion' &&
+                  location.pathname.startsWith('/laboratorio/muestras/recepcion')) ||
                 (item.path === '/laboratorio/catalogos/examenes' &&
                   location.pathname.startsWith('/laboratorio/catalogos/examenes')) ||
                 (item.path === '/laboratorio/catalogos/tipos-muestra' &&

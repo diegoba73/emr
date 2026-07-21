@@ -24,49 +24,59 @@ function mockUser(overrides: Partial<User> & Pick<User, 'rol'>): User {
   };
 }
 
-describe('Sidebar Consultas (/atenciones)', () => {
+describe('Sidebar Atenciones Clínicas (/atenciones)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('muestra Consultas para médico', () => {
+  it('muestra Atenciones Clínicas para médico', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'MEDICO' }) });
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.getByText('Consultas')).toBeInTheDocument();
+    expect(screen.getByText('Atenciones Clínicas')).toBeInTheDocument();
   });
 
-  it('no muestra Consultas para secretaría', () => {
+  it('no muestra Atenciones Clínicas para secretaría', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'SECRETARIA' }) });
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.queryByText('Consultas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
   });
 
-  it('muestra Consultas para enfermería (lectura)', () => {
+  it('muestra Atenciones Clínicas para enfermería (lectura)', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'ENFERMERIA' }) });
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.getByText('Consultas')).toBeInTheDocument();
+    expect(screen.getByText('Atenciones Clínicas')).toBeInTheDocument();
   });
 
-  it('no muestra Consultas para laboratorio', () => {
+  it('no muestra Atenciones Clínicas para laboratorio', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'LABORATORIO' }) });
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.queryByText('Consultas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
+  });
+
+  it('no muestra Turnos para laboratorio', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'LABORATORIO' }) });
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.queryByText('Turnos')).not.toBeInTheDocument();
   });
 });
 
@@ -86,7 +96,7 @@ describe('Sidebar paciente', () => {
     );
     expect(screen.getByText('Inicio')).toBeInTheDocument();
     expect(screen.getByText('Turnos')).toBeInTheDocument();
-    expect(screen.getByText('Consultas')).toBeInTheDocument();
+    expect(screen.getByText('Atenciones Clínicas')).toBeInTheDocument();
     expect(screen.getByText('Archivos')).toBeInTheDocument();
     expect(screen.getByText('Estudios complementarios')).toBeInTheDocument();
     expect(screen.getByText('Análisis Clínico')).toBeInTheDocument();
@@ -111,7 +121,7 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
       </MemoryRouter>
     );
     expect(screen.queryByText('Pacientes')).not.toBeInTheDocument();
-    expect(screen.queryByText('Consultas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoría')).not.toBeInTheDocument();
     expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
   });
@@ -122,7 +132,48 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
         <SidebarContent />
       </MemoryRouter>
     );
+    expect(screen.getByText('Laboratorio (LIMS)')).toBeInTheDocument();
     expect(screen.getByText('Órdenes LIMS')).toBeInTheDocument();
     expect(screen.getByText('Microbiología')).toBeInTheDocument();
+  });
+
+  it('no muestra Turnos ni agenda', () => {
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.queryByText('Turnos')).not.toBeInTheDocument();
+  });
+});
+
+describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('médico ve Laboratorio clínico y no el bloque LIMS', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'MEDICO' }) });
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Laboratorio')).toBeInTheDocument();
+    expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Órdenes LIMS')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pendientes')).not.toBeInTheDocument();
+  });
+
+  it('secretaría ve Laboratorio clínico y no el bloque LIMS', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'SECRETARIA' }) });
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Laboratorio')).toBeInTheDocument();
+    expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Órdenes LIMS')).not.toBeInTheDocument();
   });
 });

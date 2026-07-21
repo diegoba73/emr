@@ -244,7 +244,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   const editable =
     permitirEdicion &&
     canOperate &&
-    (ordenPuedeCargarResultados(orden.estado) || orden.estado === 'FINALIZADO') &&
+    ordenPuedeCargarResultados(orden.estado) &&
     resultados.length > 0;
 
   const setRow = (id: number, patch: Partial<DraftCargaRow>) => {
@@ -322,8 +322,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       });
       if (informarParcial && updated.estado === 'INFORMADO_PARCIAL') {
         toast.success('Resultados guardados e informados parcialmente');
-      } else if (updated.estado === 'FINALIZADO') {
-        toast.success('Resultados completos — orden finalizada');
+      } else if (countResultadosConValor(updated).conValor === (updated.resultados || []).length) {
+        toast.success('Resultados completos — listos para validación del bioquímico');
       } else {
         toast.success('Avance guardado');
       }
@@ -358,7 +358,11 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       const row = draft[r.id] || emptyDraft();
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const requiereMuestra = !!te?.requiere_muestra;
-      const opcionesMuestra = muestrasCompatiblesParaTipo(muestrasProcesables, te?.tipo_muestra_requerida);
+      const opcionesMuestra = muestrasCompatiblesParaTipo(
+        muestrasProcesables,
+        te?.tipo_muestra_requerida,
+        te?.tipo_contenedor
+      );
       const sinOpciones = requiereMuestra && opcionesMuestra.length === 0;
       const ticketEntry = usesTicketEntry(te, r.tipo_examen_codigo);
       const informePreview = ticketEntry
@@ -593,8 +597,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           </Typography>
           {muestrasProcesables.length === 0 && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              No hay muestras registradas para esta orden. Usá <strong>Tomar muestra</strong> en acciones de orden
-              antes de asociar resultados que lo requieran.
+              No hay muestras listas para asociar. Usá <strong>Imprimir etiquetas</strong> y luego
+              confirmá el ingreso escaneando en <strong>Recepción</strong>.
             </Alert>
           )}
           {grupos.map((grupo) => {
@@ -730,21 +734,36 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         <Alert severity="info" sx={{ mt: 2 }}>
           {orden.estado === 'PENDIENTE' ? (
             <>
-              La orden está <strong>pendiente de extracción</strong>. Usá <strong>Tomar muestra</strong> en
-              acciones de orden antes de cargar resultados.
+              La orden está <strong>pendiente</strong>. Usá <strong>Imprimir etiquetas</strong> y confirmá
+              la recepción escaneando cada tubo en <strong>Recepción</strong> antes de cargar resultados.
             </>
           ) : orden.estado === 'INFORMADO_PARCIAL' && !permitirEdicion ? (
             <>
               La orden está <strong>informada parcialmente</strong>. Podés seguir cargando resultados o enviar el
               informe parcial al paciente desde acciones de orden.
             </>
-          ) : orden.estado === 'FINALIZADO' && !editandoResultadosMode(orden, permitirEdicion) ? (
+          ) : orden.estado === 'FINALIZADO' ? (
             <>
-              La orden está <strong>finalizada</strong>. Usá <strong>Modificar resultados</strong> en acciones de
-              orden para corregir valores.
+              Orden <strong>validada y bloqueada</strong>
+              {(() => {
+                const val = (orden.resultados || []).find((r) => r.validado_por_nombre || r.fecha_validacion);
+                if (!val) return null;
+                const quien = val.validado_por_nombre || 'bioquímico';
+                const cuando = val.fecha_validacion
+                  ? new Date(val.fecha_validacion).toLocaleString('es-AR')
+                  : '';
+                return (
+                  <>
+                    {' '}
+                    — Validado por <strong>{quien}</strong>
+                    {cuando ? ` (${cuando})` : ''}.
+                  </>
+                );
+              })()}{' '}
+              Los resultados no se pueden modificar.
             </>
           ) : !canOperate ? (
-            'Solo lectura: se requiere rol laboratorio o administrador para cargar resultados.'
+            'Solo lectura: se requiere rol laboratorio, bioquímico o administrador para cargar resultados.'
           ) : (
             'La carga de valores no está disponible en el estado actual de la orden.'
           )}
@@ -761,12 +780,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           </Typography>
         </Box>
       )}
-
-      {!editable && canOperate && permitirEdicion && (
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-          La carga de valores está disponible en proceso, informe parcial o al modificar una orden finalizada.
-        </Typography>
-      )}
     </Box>
   );
 };
@@ -779,13 +792,6 @@ function emptyDraft(): DraftCargaRow {
     unidad: '',
     muestra_id: null,
   };
-}
-
-function editandoResultadosMode(
-  orden: SolicitudExamenLims,
-  permitirEdicion: boolean
-): boolean {
-  return orden.estado === 'FINALIZADO' && !permitirEdicion;
 }
 
 export default CargaResultadosLims;

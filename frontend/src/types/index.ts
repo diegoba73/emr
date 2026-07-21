@@ -12,7 +12,7 @@ export interface User extends BaseModel {
   first_name: string;
   last_name: string;
   nombre_completo?: string; // Nombre completo calculado (first_name + last_name)
-  rol: 'ADMIN' | 'SECRETARIA' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO' | 'KINESIOLOGO' | 'RADIOLOGO' | 'ECOGRAFISTA' | 'FONOAUDIOLOGO';
+  rol: 'ADMIN' | 'SECRETARIA' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO' | 'BIOQUIMICO' | 'KINESIOLOGO' | 'RADIOLOGO' | 'ECOGRAFISTA' | 'FONOAUDIOLOGO';
   telefono?: string;
   is_active: boolean;
   is_staff?: boolean;
@@ -184,9 +184,12 @@ export interface Cama extends BaseModel {
 }
 
 export interface InternacionCama extends BaseModel {
+  numero_internacion?: string | null;
   paciente: number;
   cama: number;
   medico: number | null;
+  atencion_origen?: number | null;
+  motivo_ingreso?: string | null;
   fecha_ingreso: string;
   fecha_alta: string | null;
   diagnostico_ingreso: string;
@@ -194,6 +197,7 @@ export interface InternacionCama extends BaseModel {
   activo: boolean;
   nombre_paciente?: string;
   nombre_medico?: string | null;
+  cama_nombre?: string;
   dias_internacion?: number;
 }
 
@@ -207,6 +211,8 @@ export interface Recurso extends BaseModel {
   activo: boolean;
 }
 
+export type ContextoAtencion = 'AMBULATORIA' | 'INTERNACION' | 'GUARDIA';
+export type TipoEvolucionInternacion = 'EVOLUCION_DIARIA' | 'INTERCONSULTA' | 'NOTA_ENFERMERIA';
 export type TipoIntervencion = 'CONSULTA' | 'ESTUDIO' | 'PROCEDIMIENTO' | 'CIRUGIA';
 export type EstadoClinico = 'ABIERTA' | 'FINALIZADA' | 'EN_REVISION';
 
@@ -250,6 +256,21 @@ export interface ConsultaAmbulatoriaRecord extends BaseModel {
   observaciones_medicas?: string | null;
 }
 
+export interface EvolucionInternacionRecord extends BaseModel {
+  atencion_id: number;
+  tipo_evolucion: TipoEvolucionInternacion;
+  tipo_evolucion_display?: string;
+  fecha_evolucion?: string;
+  subjetivo?: string | null;
+  objetivo?: string | null;
+  analisis?: string | null;
+  plan?: string | null;
+  signos_vitales_resumen?: string | null;
+  diagnostico_actualizado?: string | null;
+  plan_manejo?: string | null;
+  observaciones?: string | null;
+}
+
 export interface RegistroProcedimientoRecord extends BaseModel {
   atencion_id: number;
   estudio?: EstudioDiagnostico | null;
@@ -286,8 +307,11 @@ export interface RegistroQuirurgicoRecord extends BaseModel {
 export interface AtencionSummary {
   id: number;
   fecha_admision: string;
-  tipo_atencion: 'CONSULTORIO' | 'SALA_PROCEDIMIENTO' | 'SALA_HEMODINAMIA' | 'QUIROFANO';
+  tipo_atencion: 'CONSULTORIO' | 'SALA_PROCEDIMIENTO' | 'SALA_HEMODINAMIA' | 'QUIROFANO' | 'INTERNACION' | 'GUARDIA';
   tipo_intervencion?: TipoIntervencion;
+  contexto_atencion?: ContextoAtencion;
+  contexto_atencion_display?: string;
+  internacion_id?: number | null;
   estado_clinico?: EstadoClinico;
   /** True si la consulta ambulatoria tiene al menos un campo de texto con contenido (API turnos) */
   consulta_cargada?: boolean;
@@ -305,11 +329,15 @@ export interface Atencion extends BaseModel {
   medico_principal_id?: number | null;
   fecha_admision: string;
   fecha_cierre?: string | null;
-  tipo_atencion: 'CONSULTORIO' | 'SALA_PROCEDIMIENTO' | 'SALA_HEMODINAMIA' | 'QUIROFANO';
+  tipo_atencion: 'CONSULTORIO' | 'SALA_PROCEDIMIENTO' | 'SALA_HEMODINAMIA' | 'QUIROFANO' | 'INTERNACION' | 'GUARDIA';
   tipo_intervencion: TipoIntervencion;
+  contexto_atencion?: ContextoAtencion;
+  contexto_atencion_display?: string;
+  internacion_id?: number | null;
   estado_clinico: EstadoClinico;
   observaciones_generales?: string | null;
   consulta_ambulatoria?: ConsultaAmbulatoriaRecord | null;
+  evolucion_internacion?: EvolucionInternacionRecord | null;
   consulta_hc_id?: number | null;
   registro_procedimiento?: RegistroProcedimientoRecord | null;
   registro_quirurgico?: RegistroQuirurgicoRecord | null;

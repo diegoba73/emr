@@ -118,10 +118,13 @@ def finalizar_solicitud_si_completa(
     actor: AbstractUser | None,
     view: str,
     accion: str = "finalizar_auto",
+    confirmar_criticos: bool = False,
 ) -> bool:
     """
-    Pasa EN_PROCESO → FINALIZADO si todos los resultados tienen valor.
+    Pasa EN_PROCESO / INFORMADO_PARCIAL → FINALIZADO si todos los resultados tienen valor.
     Devuelve True si se aplicó la transición.
+
+    Requiere confirmación explícita si hay resultados patológicos o críticos.
     """
     if solicitud.estado not in ("EN_PROCESO", "INFORMADO_PARCIAL"):
         return False
@@ -130,7 +133,15 @@ def finalizar_solicitud_si_completa(
     _preparar_muestras_para_cierre(solicitud, actor=actor, view=view)
     _validar_muestras_para_cierre(solicitud)
 
-    before_resultados = {r.id: safe_model_snapshot(r) for r in solicitud.resultados.all()}
+    qs = solicitud.resultados.all()
+    tiene_alertas = qs.filter(es_patologico=True).exists() or qs.filter(es_critico=True).exists()
+    if tiene_alertas and not confirmar_criticos:
+        raise SolicitudCierreError(
+            "Hay resultados patológicos o críticos. Confirme la liberación "
+            "enviando confirmar_criticos=true."
+        )
+
+    before_resultados = {r.id: safe_model_snapshot(r) for r in qs}
 
     apply_solicitud_estado_transition(
         solicitud,
@@ -140,9 +151,10 @@ def finalizar_solicitud_si_completa(
         view=view,
     )
 
+    now = timezone.now()
     solicitud.resultados.update(
         validado_por=actor,
-        fecha_validacion=timezone.now(),
+        fecha_validacion=now,
     )
     solicitud.refresh_from_db()
 
@@ -166,8 +178,9 @@ def finalizar_solicitud_manual(
     *,
     actor: AbstractUser | None,
     view: str,
+    confirmar_criticos: bool = False,
 ) -> None:
-    """Cierre explícito (endpoint legacy ``finalizar``)."""
+    """Cierre explícito (validación / liberación clínica)."""
     if solicitud.estado == "FINALIZADO":
         raise SolicitudEstadoTransitionError("La solicitud ya está finalizada.")
     if solicitud.estado != "EN_PROCESO" and solicitud.estado != "INFORMADO_PARCIAL":
@@ -179,6 +192,10 @@ def finalizar_solicitud_manual(
             "No se puede finalizar una solicitud con resultados vacíos."
         )
     if not finalizar_solicitud_si_completa(
-        solicitud, actor=actor, view=view, accion="finalizar"
+        solicitud,
+        actor=actor,
+        view=view,
+        accion="validar",
+        confirmar_criticos=confirmar_criticos,
     ):
         raise SolicitudCierreError("No se pudo finalizar la solicitud.")

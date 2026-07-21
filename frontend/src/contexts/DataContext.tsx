@@ -22,6 +22,7 @@ const devError = (message: string, err?: unknown) => {
 interface DataContextType {
   turnos: Turno[];
   pacientes: Paciente[];
+  pacientesLoadError: string | null;
   medicos: Medico[];
   especialidades: Especialidad[];
   centrosFisicos: CentroFisico[];
@@ -98,6 +99,7 @@ export const useData = () => {
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
+  const [pacientesLoadError, setPacientesLoadError] = useState<string | null>(null);
   const [medicos, setMedicos] = useState<Medico[]>([]);
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
   const [centrosFisicos, setCentrosFisicos] = useState<CentroFisico[]>([]);
@@ -203,6 +205,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const PAGE_SIZE = 1000; // Aumentado de 200 a 1000 para cargar más datos por request
   const API_BASE = process.env.REACT_APP_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8000';
 
+  const normalizePaginationUrl = useCallback((url: string): string => {
+    if (!url) return url;
+    if (url.startsWith('http')) {
+      try {
+        const parsed = new URL(url);
+        return `${API_BASE}${parsed.pathname}${parsed.search}`;
+      } catch {
+        return url;
+      }
+    }
+    return url.startsWith('/') ? `${API_BASE}${url}` : `${API_BASE}/${url}`;
+  }, [API_BASE]);
+
   const fetchPaginated = useCallback(async <T,>(initialPath: string): Promise<{ items: T[]; total: number }> => {
     const items: T[] = [];
     let total = 0;
@@ -232,7 +247,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const nextValue: unknown = paginatedData?.next;
       if (typeof nextValue === 'string' && nextValue.length > 0) {
-        nextUrl = nextValue.startsWith('http') ? nextValue : `${API_BASE}${nextValue}`;
+        nextUrl = normalizePaginationUrl(nextValue);
       } else {
         nextUrl = null;
       }
@@ -243,7 +258,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return { items, total };
-  }, []);
+  }, [normalizePaginationUrl]);
 
   const loadTurnos = useCallback(async () => {
     try {
@@ -266,27 +281,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadPacientes = useCallback(async () => {
     try {
       setLoading(prev => ({ ...prev, pacientes: true }));
+      setPacientesLoadError(null);
       devLog('🔍 Intentando cargar pacientes...');
-      
-      // Determinar si es médico para usar ?all=true
-      // ADMIN/SECRETARIA/ENFERMERIA: ven todos los pacientes sin parámetro
-      // MEDICO: necesita ?all=true para ver todos los pacientes
-      const isMedico = currentUser?.rol === 'MEDICO';
-      const url = isMedico 
-        ? `/api/pacientes/?all=true&page_size=${PAGE_SIZE}`
-        : `/api/pacientes/?page_size=${PAGE_SIZE}`;
-      
-      const { items, total } = await fetchPaginated<Paciente>(url);
+
+      const { items, total } = await fetchPaginated<Paciente>(
+        `/api/pacientes/?page_size=${PAGE_SIZE}`
+      );
       devLog(`✅ Pacientes cargados: ${items.length} registros (total reportado: ${total})`);
       setPacientes(items);
       setLastUpdate(prev => ({ ...prev, pacientes: new Date() }));
     } catch (error) {
       devError('Error cargando pacientes', error);
-      setPacientes([]); // Asegurar que siempre sea un array
+      setPacientes([]);
+      setPacientesLoadError(
+        'No se pudieron cargar los pacientes. Verificá que el backend esté activo (./emrctl up) y aplicá migraciones (./emrctl repair-migrations).'
+      );
     } finally {
       setLoading(prev => ({ ...prev, pacientes: false }));
     }
-  }, [fetchPaginated, currentUser]);
+  }, [fetchPaginated]);
 
   const loadMedicos = useCallback(async () => {
     try {
@@ -555,6 +568,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser, loadTurnos, loadRecursos, loadEspecialidades, loadCentrosFisicos, loadTiposAtencion]);
 
+  // Precargar pacientes para roles con lectura global (admin, secretaría, enfermería)
+  useEffect(() => {
+    if (!currentUser) return;
+    const rolesConListadoGlobal = ['ADMIN', 'SECRETARIA', 'ENFERMERIA'];
+    if (
+      rolesConListadoGlobal.includes(currentUser.rol) &&
+      pacientes.length === 0 &&
+      !loading.pacientes &&
+      !pacientesLoadError
+    ) {
+      void loadPacientes();
+    }
+  }, [currentUser, pacientes.length, loading.pacientes, pacientesLoadError, loadPacientes]);
+
   // ELIMINADO: useEffect problemático que causaba bucle infinito
   // useEffect(() => {
   //   if (currentUser) {
@@ -577,6 +604,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = {
     turnos,
     pacientes,
+    pacientesLoadError,
     medicos,
     especialidades,
     centrosFisicos,

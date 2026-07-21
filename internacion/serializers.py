@@ -45,9 +45,12 @@ class InternacionSerializer(serializers.ModelSerializer):
         model = Internacion
         fields = [
             'id',
+            'numero_internacion',
             'paciente',
             'cama',
             'medico',
+            'atencion_origen',
+            'motivo_ingreso',
             'fecha_ingreso',
             'fecha_alta',
             'diagnostico_cie',
@@ -60,7 +63,13 @@ class InternacionSerializer(serializers.ModelSerializer):
             'nombre_medico',
             'dias_internacion',
         ]
-        read_only_fields = ['fecha_ingreso', 'dias_internacion', 'paciente_nombre', 'cama_nombre']
+        read_only_fields = [
+            'fecha_ingreso',
+            'dias_internacion',
+            'paciente_nombre',
+            'cama_nombre',
+            'numero_internacion',
+        ]
     
     def get_nombre_paciente(self, obj):
         """Retorna 'Apellido, Nombre' del paciente"""

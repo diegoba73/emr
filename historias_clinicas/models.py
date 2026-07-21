@@ -73,6 +73,14 @@ class Consulta(models.Model):
         blank=True,
         verbose_name="Turno Asociado"
     )
+    atencion = models.OneToOneField(
+        'turnos.Atencion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='consulta_hc',
+        verbose_name="Atención asociada",
+    )
 
     fecha_hora_consulta = models.DateTimeField(verbose_name="Fecha y Hora de la Consulta")
     motivo_consulta_detalle = models.TextField(verbose_name="Motivo de Consulta (Detalle)")

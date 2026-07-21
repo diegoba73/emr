@@ -27,10 +27,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { LimsTipoExamen, LimsTipoMuestra, TipoExamenLimsWriteBody } from '../../types/lims';
+import type { LimsTipoContenedor, LimsTipoExamen, LimsTipoMuestra, TipoExamenLimsWriteBody } from '../../types/lims';
 import {
   createTipoExamenLims,
   formatDrfError,
+  listContenedoresLims,
   listTiposExamenLims,
   listTiposMuestraLims,
   patchTipoExamenLims,
@@ -45,11 +46,20 @@ import {
 } from '../../utils/entradaResultados';
 import { canAccessLimsCatalogos, canEditLimsCatalogos } from '../../utils/limsAccess';
 
+function rowTipoContenedorFallback(rows: LimsTipoExamen[], id: number): string {
+  const row = rows.find((r) => r.tipo_contenedor === id);
+  if (row?.tipo_contenedor_codigo) {
+    return `${row.tipo_contenedor_codigo}${row.tipo_contenedor_nombre ? ` — ${row.tipo_contenedor_nombre}` : ''}`;
+  }
+  return `#${id}`;
+}
+
 type ExamenForm = {
   codigo: string;
   nombre: string;
   abreviatura: string;
   tipo_muestra_requerida: number | '';
+  tipo_contenedor: number | '';
   tipo_resultado: 'TEXTO' | 'NUMERICO' | 'CUALITATIVO';
   metodo: string;
   unidad_default: string;
@@ -69,6 +79,7 @@ const emptyForm = (): ExamenForm => ({
   nombre: '',
   abreviatura: '',
   tipo_muestra_requerida: '',
+  tipo_contenedor: '',
   tipo_resultado: 'NUMERICO',
   metodo: '',
   unidad_default: '',
@@ -88,6 +99,7 @@ const formFromRow = (row: LimsTipoExamen): ExamenForm => ({
   nombre: row.nombre,
   abreviatura: row.abreviatura ?? '',
   tipo_muestra_requerida: row.tipo_muestra_requerida,
+  tipo_contenedor: row.tipo_contenedor ?? '',
   tipo_resultado: row.tipo_resultado ?? 'NUMERICO',
   metodo: row.metodo ?? '',
   unidad_default: row.unidad_default ?? '',
@@ -107,6 +119,7 @@ const ExamenesCatalogo: React.FC = () => {
   const { currentUser } = useData();
   const [rows, setRows] = useState<LimsTipoExamen[]>([]);
   const [tiposMuestra, setTiposMuestra] = useState<LimsTipoMuestra[]>([]);
+  const [contenedores, setContenedores] = useState<LimsTipoContenedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -120,12 +133,14 @@ const ExamenesCatalogo: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [examenes, muestras] = await Promise.all([
+      const [examenes, muestras, conts] = await Promise.all([
         listTiposExamenLims({ search: search.trim() || undefined }),
         listTiposMuestraLims(),
+        listContenedoresLims(),
       ]);
       setRows(examenes);
       setTiposMuestra(muestras);
+      setContenedores(conts.filter((c) => c.activo !== false));
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
     } finally {
@@ -136,6 +151,12 @@ const ExamenesCatalogo: React.FC = () => {
   useEffect(() => {
     if (allowed) load();
   }, [allowed, load]);
+
+  const contenedorLabel = useMemo(() => {
+    const map = new Map(contenedores.map((t) => [t.id, `${t.codigo} — ${t.nombre}`]));
+    return (id: number | null | undefined) =>
+      id != null ? map.get(id) ?? rowTipoContenedorFallback(rows, id) : '—';
+  }, [contenedores, rows]);
 
   const muestraNombre = useMemo(() => {
     const map = new Map(tiposMuestra.map((t) => [t.id, t.nombre]));
@@ -166,6 +187,7 @@ const ExamenesCatalogo: React.FC = () => {
       nombre: form.nombre.trim(),
       abreviatura: form.abreviatura.trim() || undefined,
       tipo_muestra_requerida: Number(form.tipo_muestra_requerida),
+      tipo_contenedor: form.tipo_contenedor === '' ? null : Number(form.tipo_contenedor),
       tipo_resultado: form.tipo_resultado,
       metodo: form.metodo.trim() || undefined,
       unidad_default: form.unidad_default.trim() || undefined,
@@ -289,6 +311,7 @@ const ExamenesCatalogo: React.FC = () => {
               <TableCell>Nombre</TableCell>
               <TableCell>Método</TableCell>
               <TableCell>Muestra</TableCell>
+              <TableCell>Tubo</TableCell>
               <TableCell>Unidad</TableCell>
               <TableCell>Modo ingreso</TableCell>
               <TableCell>Estado</TableCell>
@@ -298,13 +321,13 @@ const ExamenesCatalogo: React.FC = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 8 : 7}>
+                <TableCell colSpan={canEdit ? 9 : 8}>
                   <Typography color="text.secondary">Cargando…</Typography>
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 8 : 7}>
+                <TableCell colSpan={canEdit ? 9 : 8}>
                   <Typography color="text.secondary">Sin registros.</Typography>
                 </TableCell>
               </TableRow>
@@ -315,6 +338,7 @@ const ExamenesCatalogo: React.FC = () => {
                   <TableCell>{r.nombre}</TableCell>
                   <TableCell>{r.metodo || '—'}</TableCell>
                   <TableCell>{r.tipo_muestra_nombre || muestraNombre(r.tipo_muestra_requerida)}</TableCell>
+                  <TableCell>{contenedorLabel(r.tipo_contenedor)}</TableCell>
                   <TableCell>{r.unidad_default || '—'}</TableCell>
                   <TableCell>
                     <Typography variant="body2">{modoEntradaResumen(r)}</Typography>
@@ -383,6 +407,24 @@ const ExamenesCatalogo: React.FC = () => {
                 {tiposMuestra.map((t) => (
                   <MenuItem key={t.id} value={t.id}>
                     {t.codigo} — {t.nombre}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl>
+              <InputLabel>Tipo de tubo</InputLabel>
+              <Select
+                label="Tipo de tubo"
+                value={form.tipo_contenedor === '' ? '' : String(form.tipo_contenedor)}
+                onChange={(ev) => {
+                  const v = ev.target.value;
+                  patchForm({ tipo_contenedor: v === '' ? '' : Number(v) });
+                }}
+              >
+                <MenuItem value="">— Sin asignar —</MenuItem>
+                {contenedores.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.codigo} — {c.nombre}
                   </MenuItem>
                 ))}
               </Select>

@@ -104,7 +104,8 @@ const TiposMuestraCatalogo: React.FC = () => {
         Tipos de muestra
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Catálogo de muestras biológicas (sangre, orina, etc.). Aparecen al tomar muestras en una orden. Podés agregar
+        Catálogo de muestras biológicas (sangre, orina, etc.). Se usan al generar tubos e imprimir
+        etiquetas en una orden. Podés agregar
         nuevos tipos cuando el laboratorio los incorpore.
       </Typography>
 

@@ -1,6 +1,7 @@
 import type { Turno, User } from '../types';
 import {
   canEditTurno,
+  canViewTurnosAgenda,
   medicoEsDuenoTurno,
   pacientePuedeMutarTurno,
 } from './turnoPermissions';
@@ -148,5 +149,17 @@ describe('canEditTurno — médico y estudio', () => {
         turno({ medico_id: 99, medico: { id: 99 } as Turno['medico'] }),
       ),
     ).toBe(false);
+  });
+});
+
+describe('canViewTurnosAgenda', () => {
+  it('bloquea laboratorio (usa flujo LIMS, no agenda)', () => {
+    expect(canViewTurnosAgenda(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canViewTurnosAgenda(user({ rol: 'LABORATORIO', is_staff: true }))).toBe(false);
+  });
+
+  it('permite médico y secretaría', () => {
+    expect(canViewTurnosAgenda(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canViewTurnosAgenda(user({ rol: 'SECRETARIA' }))).toBe(true);
   });
 });

@@ -33,7 +33,8 @@ describe('navLabels', () => {
   it('títulos de segmento adaptados para paciente', () => {
     expect(getAppSegmentTitle('/dashboard', user('PACIENTE'))).toBe('Inicio');
     expect(getAppSegmentTitle('/solicitudes', user('PACIENTE'))).toBe('Análisis Clínico');
-    expect(getAppSegmentTitle('/atenciones', user('PACIENTE'))).toBe('Mis consultas');
+    expect(getAppSegmentTitle('/atenciones', user('PACIENTE'))).toBe('Mis atenciones');
+    expect(getAppSegmentTitle('/atenciones', user('MEDICO'))).toBe('Atenciones Clínicas');
     expect(getAppSegmentTitle('/solicitudes', user('MEDICO'))).toBe('Laboratorio');
   });
 

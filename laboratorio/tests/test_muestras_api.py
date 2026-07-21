@@ -341,3 +341,109 @@ class TestLimsMuestrasB1API(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
         self.assertEqual(r.json()["codigo_barra"], cb)
+
+    def test_lookup_por_codigo_exacto(self):
+        mid = self._crear_muestra()
+        m = Muestra.objects.get(pk=mid)
+        r = self.client.get(f"/api/lab/muestras-transaccionales/por-codigo/{m.codigo_barra}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.json()["id"], mid)
+        self.assertEqual(r.json()["codigo_barra"], m.codigo_barra)
+        self.assertIn("solicitud_numero", r.json())
+        self.assertIn("eventos", r.json())
+
+    def test_lookup_por_codigo_inexistente_404(self):
+        r = self.client.get("/api/lab/muestras-transaccionales/por-codigo/MUE-9999-999999/")
+        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_recibir_por_codigo_ok(self):
+        mid = self._crear_muestra()
+        m = Muestra.objects.get(pk=mid)
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/tomar/", {}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/muestras-transaccionales/recibir-por-codigo/",
+                {"codigo_barra": m.codigo_barra, "ubicacion_actual": "Recepción"},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.json()["estado"], "RECIBIDA")
+        self.assertEqual(r.json()["ubicacion_actual"], "Recepción")
+
+    def test_recibir_por_codigo_ya_recibida_400(self):
+        mid = self._crear_muestra()
+        m = Muestra.objects.get(pk=mid)
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/tomar/", {}, format="json")
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/recibir/", {}, format="json")
+        r = self.client.post(
+            "/api/lab/muestras-transaccionales/recibir-por-codigo/",
+            {"codigo_barra": m.codigo_barra},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_recibir_por_codigo_desde_pendiente_toma(self):
+        mid = self._crear_muestra()
+        m = Muestra.objects.get(pk=mid)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/muestras-transaccionales/recibir-por-codigo/",
+                {"codigo_barra": m.codigo_barra, "ubicacion_actual": "Lab"},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["estado"], "RECIBIDA")
+        self.assertTrue(r.json().get("extraccion_completa"))
+        self.assertEqual(r.json().get("tubos_pendientes_extraccion"), [])
+        self.solicitud.refresh_from_db()
+        self.assertEqual(self.solicitud.estado, "EN_PROCESO")
+        m.refresh_from_db()
+        self.assertIsNotNone(m.fecha_toma)
+        self.assertIsNotNone(m.fecha_recepcion)
+
+        r2 = self.client.post(
+            "/api/lab/muestras-transaccionales/recibir-por-codigo/",
+            {"codigo_barra": m.codigo_barra},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_tomar_por_codigo_ok_y_parcial(self):
+        mid = self._crear_muestra()
+        m = Muestra.objects.get(pk=mid)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/muestras-transaccionales/tomar-por-codigo/",
+                {"codigo_barra": m.codigo_barra},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["estado"], "TOMADA")
+        self.assertTrue(r.json().get("extraccion_completa"))
+        self.assertEqual(r.json().get("tubos_pendientes_extraccion"), [])
+        self.solicitud.refresh_from_db()
+        self.assertEqual(self.solicitud.estado, "EN_PROCESO")
+
+        r2 = self.client.post(
+            "/api/lab/muestras-transaccionales/tomar-por-codigo/",
+            {"codigo_barra": m.codigo_barra},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_etiqueta_muestra_pdf(self):
+        mid = self._crear_muestra()
+        r = self.client.get(f"/api/lab/muestras-transaccionales/{mid}/etiqueta/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.assertTrue(r.content.startswith(b"%PDF"))
+
+    def test_etiquetas_orden_pdf(self):
+        mid = self._crear_muestra()
+        self.client.post(f"/api/lab/muestras-transaccionales/{mid}/tomar/", {}, format="json")
+        r = self.client.get(f"/api/lab/solicitudes/{self.solicitud.pk}/etiquetas-muestras/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.assertTrue(r.content.startswith(b"%PDF"))
+        m = Muestra.objects.get(pk=mid)
+        self.assertIn(m.codigo_barra.encode(), r.content)

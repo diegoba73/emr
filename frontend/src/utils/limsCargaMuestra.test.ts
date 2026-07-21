@@ -128,4 +128,12 @@ describe('limsCargaMuestra', () => {
     const proc = [muestra(1, 1, 'RECIBIDA'), muestra(2, 2, 'EN_PROCESO')];
     expect(muestrasCompatiblesParaTipo(proc, 1).map((m) => m.id)).toEqual([1]);
   });
+
+  it('prioriza tubos del tipo_contenedor del examen', () => {
+    const proc = [
+      muestra(1, 1, 'TOMADA'),
+      { ...muestra(2, 1, 'TOMADA'), tipo_contenedor: 99 },
+    ] as MuestraTransaccional[];
+    expect(muestrasCompatiblesParaTipo(proc, 1, 99).map((m) => m.id)).toEqual([2]);
+  });
 });

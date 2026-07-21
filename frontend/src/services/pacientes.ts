@@ -34,10 +34,12 @@ class PacientesService {
    * @param page - Número de página (opcional)
    * @returns Lista de pacientes con información de paginación
    */
-  async getAll(page?: number): Promise<PacientesResponse> {
+  async getAll(page?: number, pageSize = 20): Promise<PacientesResponse> {
     try {
-      const response = await apiService.getPacientes();
-      // Convertir ApiResponse a PacientesResponse
+      const response = await apiService.getPacientes({
+        page: page ?? 1,
+        page_size: pageSize,
+      });
       return {
         count: response.count || response.results.length,
         next: response.next || null,

@@ -823,17 +823,31 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         ).status_code == 200
         sol.refresh_from_db()
-        assert sol.estado == 'FINALIZADO'
+        assert sol.estado == 'EN_PROCESO'
 
+        # Técnico no puede validar
+        r_lab_validar = self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json')
+        assert r_lab_validar.status_code == status.HTTP_403_FORBIDDEN
+
+        self.client.force_authenticate(user=self.user_admin)
         assert self.client.post(
-            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
-            {'resultados': [{'id': ra.id, 'valor': '95'}]},
+            f'/api/lab/solicitudes/{sol.id}/validar/',
+            {},
             format='json',
         ).status_code == 200
         sol.refresh_from_db()
         assert sol.estado == 'FINALIZADO'
+
+        # Tras validar, bloqueado
+        self.client.force_authenticate(user=self.user_lab)
+        r_bloqueado = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': ra.id, 'valor': '95'}]},
+            format='json',
+        )
+        assert r_bloqueado.status_code == status.HTTP_400_BAD_REQUEST
         ra.refresh_from_db()
-        assert ra.valor_obtenido == '95'
+        assert ra.valor_obtenido == '90'
 
     def test_cargar_desde_pendiente_requiere_toma_muestra(self):
         sol = self._crear_solicitud_api()
@@ -853,7 +867,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         r = self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_tomar_muestra_con_payload_crea_muestras_tomadas(self):
+    def test_tomar_muestra_con_payload_crea_tubos_pendientes_extraccion(self):
         sol = self._crear_solicitud_api()
         r = self.client.post(
             f'/api/lab/solicitudes/{sol.id}/tomar-muestra/',
@@ -862,11 +876,27 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         )
         assert r.status_code == status.HTTP_200_OK, r.data
         sol.refresh_from_db()
-        assert sol.estado == 'EN_PROCESO'
+        # Imprimir etiquetas no toma ni avanza la orden.
+        assert sol.estado == 'PENDIENTE'
         muestras = Muestra.objects.filter(solicitud=sol)
         assert muestras.count() == 1
-        assert muestras.get().estado == 'RECIBIDA'
-        assert muestras.get().tipo_muestra_id == self.tipo_muestra.id
+        m = muestras.get()
+        assert m.estado == 'PENDIENTE_TOMA'
+        assert m.tipo_muestra_id == self.tipo_muestra.id
+        assert r.data.get('extraccion_completa') is False
+        assert len(r.data.get('tubos_pendientes_extraccion') or []) == 1
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r2 = self.client.post(
+                '/api/lab/muestras-transaccionales/recibir-por-codigo/',
+                {'codigo_barra': m.codigo_barra, 'ubicacion_actual': 'Lab'},
+                format='json',
+            )
+        assert r2.status_code == status.HTTP_200_OK, r2.data
+        assert r2.data['estado'] == 'RECIBIDA'
+        assert r2.data.get('extraccion_completa') is True
+        sol.refresh_from_db()
+        assert sol.estado == 'EN_PROCESO'
 
     def test_tomar_muestra_varios_tipos_en_un_paso(self):
         tm_orina = TipoMuestra.objects.create(
@@ -894,6 +924,20 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         )
         assert r.status_code == status.HTTP_200_OK, r.data
+        sol.refresh_from_db()
+        assert sol.estado == 'PENDIENTE'
+        assert Muestra.objects.filter(solicitud=sol, estado='PENDIENTE_TOMA').count() == 2
+
+        for m in Muestra.objects.filter(solicitud=sol):
+            with self.captureOnCommitCallbacks(execute=True):
+                rt = self.client.post(
+                    '/api/lab/muestras-transaccionales/recibir-por-codigo/',
+                    {'codigo_barra': m.codigo_barra},
+                    format='json',
+                )
+            assert rt.status_code == status.HTTP_200_OK, rt.data
+            assert rt.data['estado'] == 'RECIBIDA'
+
         sol.refresh_from_db()
         assert sol.estado == 'EN_PROCESO'
         assert Muestra.objects.filter(solicitud=sol, estado='RECIBIDA').count() == 2
@@ -952,7 +996,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json').status_code == 404
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/marcar-entregado/', {}, format='json').status_code == 404
 
-    def test_cargar_finalizado_permite_corregir(self):
+    def test_cargar_finalizado_bloqueado(self):
         sol = self._crear_solicitud_api()
         res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
         self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
@@ -962,32 +1006,43 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         )
         sol.refresh_from_db()
+        assert sol.estado == 'EN_PROCESO'
+        self.client.force_authenticate(user=self.user_admin)
+        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
+        sol.refresh_from_db()
         assert sol.estado == 'FINALIZADO'
+        self.client.force_authenticate(user=self.user_lab)
         r = self.client.post(
             f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
             {'resultados': [{'id': res.id, 'valor': '2'}]},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
         res.refresh_from_db()
-        assert res.valor_obtenido == '2'
+        assert res.valor_obtenido == '1'
 
     def test_finalizar_sin_en_proceso(self):
         sol_p = self._crear_solicitud_api()
         rp = sol_p.resultados.get(tipo_examen=self.tipo_examen_a)
         rp.valor_obtenido = '8'
         rp.save()
+        self.client.force_authenticate(user=self.user_admin)
         r_pend = self.client.post(f'/api/lab/solicitudes/{sol_p.id}/finalizar/', {}, format='json')
         assert r_pend.status_code == status.HTTP_400_BAD_REQUEST
 
         sol_ok = self._crear_solicitud_api()
         r_ok = sol_ok.resultados.get(tipo_examen=self.tipo_examen_a)
+        self.client.force_authenticate(user=self.user_lab)
         self.client.post(f'/api/lab/solicitudes/{sol_ok.id}/tomar-muestra/', {}, format='json')
         self.client.post(
             f'/api/lab/solicitudes/{sol_ok.id}/cargar-resultados/',
             {'resultados': [{'id': r_ok.id, 'valor': '9'}]},
             format='json',
         )
+        sol_ok.refresh_from_db()
+        assert sol_ok.estado == 'EN_PROCESO'
+        self.client.force_authenticate(user=self.user_admin)
+        assert self.client.post(f'/api/lab/solicitudes/{sol_ok.id}/validar/', {}, format='json').status_code == 200
         sol_ok.refresh_from_db()
         assert sol_ok.estado == 'FINALIZADO'
         assert self.client.post(f'/api/lab/solicitudes/{sol_ok.id}/finalizar/', {}, format='json').status_code == 400
@@ -1004,7 +1059,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         assert sol.estado == 'PENDIENTE'
         assert sol.observaciones == 'nota fsm'
 
-    def test_auto_finalizar_al_cargar_resultados(self):
+    def test_no_auto_finalizar_al_cargar_resultados(self):
         sol = self._crear_solicitud_api()
         res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
         self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
@@ -1015,10 +1070,10 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         )
         assert r.status_code == status.HTTP_200_OK
         sol.refresh_from_db()
-        assert sol.estado == 'FINALIZADO'
+        assert sol.estado == 'EN_PROCESO'
 
     def test_finalizar_con_muestra_tomada_vinculada(self):
-        """Al completar resultados, recepciona muestras TOMADA antes de finalizar."""
+        """Al validar, recepciona muestras TOMADA antes de finalizar."""
         from laboratorio.muestra_estado import aplicar_tomar, crear_muestra
 
         sol = self._crear_solicitud_api()
@@ -1043,6 +1098,10 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         )
         assert r.status_code == status.HTTP_200_OK, r.data
+        sol.refresh_from_db()
+        assert sol.estado == 'EN_PROCESO'
+        self.client.force_authenticate(user=self.user_admin)
+        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
         sol.refresh_from_db()
         assert sol.estado == 'FINALIZADO'
         muestra.refresh_from_db()
@@ -1085,6 +1144,10 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         )
         assert r_completo.status_code == status.HTTP_200_OK
+        sol.refresh_from_db()
+        assert sol.estado == 'INFORMADO_PARCIAL'
+        self.client.force_authenticate(user=self.user_admin)
+        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
         sol.refresh_from_db()
         assert sol.estado == 'FINALIZADO'
 
@@ -1139,7 +1202,7 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
         )
         self.paciente = Paciente.objects.create(dni='11112222', nombre='A', apellido='B')
 
-    def test_finalizar_audit_event_metadata(self):
+    def test_validar_audit_event_metadata(self):
         self.client.force_authenticate(user=self.user_lab)
         r = self.client.post(
             '/api/lab/solicitudes/',
@@ -1154,14 +1217,30 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
         sid = r.data['id']
         res = ResultadoExamen.objects.get(solicitud_id=sid)
         self.client.post(f'/api/lab/solicitudes/{sid}/tomar-muestra/', {}, format='json')
+        self.client.post(
+            f'/api/lab/solicitudes/{sid}/cargar-resultados/',
+            {'resultados': [{'id': res.id, 'valor': '7'}]},
+            format='json',
+        )
+        sol = SolicitudExamen.objects.get(pk=sid)
+        self.assertEqual(sol.estado, 'EN_PROCESO')
+
+        user_bio = User.objects.create_user(
+            username='bio_audit_fsm',
+            email='bio-audit@test.com',
+            password='x',
+            rol='bioquimico',
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=user_bio)
         with self.captureOnCommitCallbacks(execute=True):
             r2 = self.client.post(
-                f'/api/lab/solicitudes/{sid}/cargar-resultados/',
-                {'resultados': [{'id': res.id, 'valor': '7'}]},
+                f'/api/lab/solicitudes/{sid}/validar/',
+                {},
                 format='json',
             )
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
-        sol = SolicitudExamen.objects.get(pk=sid)
+        sol.refresh_from_db()
         self.assertEqual(sol.estado, 'FINALIZADO')
 
         ev = (
@@ -1170,14 +1249,14 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
                 entity_id=str(sid),
                 action='UPDATE',
                 module='laboratorio',
-                metadata__accion='finalizar_auto',
+                metadata__accion='validar',
             )
             .order_by('-timestamp', '-id')
             .first()
         )
         self.assertIsNotNone(ev)
         self.assertIsNotNone(ev.metadata)
-        self.assertEqual(ev.metadata.get('accion'), 'finalizar_auto')
+        self.assertEqual(ev.metadata.get('accion'), 'validar')
         self.assertEqual(ev.metadata.get('estado_anterior'), 'EN_PROCESO')
         self.assertEqual(ev.metadata.get('estado_nuevo'), 'FINALIZADO')
 

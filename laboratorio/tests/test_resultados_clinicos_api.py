@@ -168,7 +168,7 @@ class TestResultadosClinicosAPI(APITestCase):
         res.refresh_from_db()
         self.assertEqual(res.unidad, "mmol/L")
 
-    def test_finalizar_con_resultados_estructurados(self):
+    def test_cargar_completo_no_finaliza_solo(self):
         sol, res = self._sol_y_res()
         r = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
@@ -181,14 +181,15 @@ class TestResultadosClinicosAPI(APITestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         sol.refresh_from_db()
-        self.assertEqual(sol.estado, "FINALIZADO")
+        self.assertEqual(sol.estado, "EN_PROCESO")
 
     def test_finalizar_falla_con_vacio(self):
         sol, res = self._sol_y_res()
+        self.client.force_authenticate(user=self.user_admin)
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/finalizar/", {}, format="json")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_laboratorio_puede_finalizar_auto_al_cargar(self):
+    def test_laboratorio_no_auto_finaliza_al_cargar(self):
         sol, res = self._sol_y_res()
         r = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
@@ -197,7 +198,41 @@ class TestResultadosClinicosAPI(APITestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         sol.refresh_from_db()
+        self.assertEqual(sol.estado, "EN_PROCESO")
+
+    def test_bioquimico_valida_y_bloquea(self):
+        sol, res = self._sol_y_res()
+        self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": res.pk, "valor": "90", "valor_numerico": 90}]},
+            format="json",
+        )
+        user_bio = User.objects.create_user(
+            username="bio_b41",
+            email="bio-b41@test.com",
+            password="x",
+            rol="bioquimico",
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=self.user_lab)
+        r_forbid = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
+        self.assertEqual(r_forbid.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=user_bio)
+        r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        sol.refresh_from_db()
         self.assertEqual(sol.estado, "FINALIZADO")
+        res.refresh_from_db()
+        self.assertEqual(res.validado_por_id, user_bio.id)
+
+        self.client.force_authenticate(user=self.user_lab)
+        r_lock = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": res.pk, "valor": "91"}]},
+            format="json",
+        )
+        self.assertEqual(r_lock.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_medico_no_puede_cargar(self):
         sol, res = self._sol_y_res()

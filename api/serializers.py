@@ -11,7 +11,10 @@ User = get_user_model()
 # from laboratorio.models import TipoExamen, PanelExamen, SolicitudExamen, ResultadoExamen
 from historias_clinicas.models import HistoriaClinica, Consulta, Diagnostico, Prescripcion, Internacion
 from catalogos.models import DiagnosticoCIE10, Medicamento
-from turnos.models import Turno, Recurso, Atencion, ConsultaAmbulatoria, RegistroProcedimiento, RegistroQuirurgico
+from turnos.models import (
+    Turno, Recurso, Atencion, ConsultaAmbulatoria, EvolucionInternacion,
+    RegistroProcedimiento, RegistroQuirurgico,
+)
 from catalogos.models import EstudioDiagnostico, ProcedimientoCatalogo
 from emr.models import SignosVitales, Documento
 
@@ -778,6 +781,38 @@ class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
         ]
 
 
+class EvolucionInternacionSerializer(serializers.ModelSerializer):
+    """Serializer para evoluciones clínicas durante internación."""
+
+    atencion_id = serializers.IntegerField(source='atencion.id', read_only=True)
+    id = serializers.IntegerField(source='atencion_id', read_only=True)
+    tipo_evolucion_display = serializers.CharField(
+        source='get_tipo_evolucion_display',
+        read_only=True,
+    )
+
+    class Meta:
+        model = EvolucionInternacion
+        fields = [
+            'id',
+            'atencion_id',
+            'tipo_evolucion',
+            'tipo_evolucion_display',
+            'fecha_evolucion',
+            'subjetivo',
+            'objetivo',
+            'analisis',
+            'plan',
+            'signos_vitales_resumen',
+            'diagnostico_actualizado',
+            'plan_manejo',
+            'observaciones',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['fecha_evolucion', 'created_at', 'updated_at']
+
+
 class RegistroProcedimientoSerializer(serializers.ModelSerializer):
     """Serializer para registros de procedimientos/estudios"""
     atencion_id = serializers.IntegerField(source='atencion.id', read_only=True)
@@ -986,7 +1021,14 @@ class AtencionSerializer(serializers.ModelSerializer):
     medico_principal_id = serializers.IntegerField(read_only=True)
     turno = TurnoAtencionNestedSerializer(read_only=True, allow_null=True)
     turno_id = serializers.IntegerField(read_only=True, allow_null=True)
+    contexto_atencion = serializers.CharField(read_only=True)
+    contexto_atencion_display = serializers.CharField(
+        source='get_contexto_atencion_display',
+        read_only=True,
+    )
+    internacion_id = serializers.IntegerField(read_only=True, allow_null=True)
     consulta_ambulatoria = ConsultaAmbulatoriaSerializer(read_only=True, allow_null=True)
+    evolucion_internacion = EvolucionInternacionSerializer(read_only=True, allow_null=True)
     consulta_hc_id = serializers.SerializerMethodField()
     registro_procedimiento = RegistroProcedimientoSerializer(read_only=True, allow_null=True)
     registro_quirurgico = RegistroQuirurgicoSerializer(read_only=True, allow_null=True)
@@ -998,10 +1040,24 @@ class AtencionSerializer(serializers.ModelSerializer):
         cid = consulta_hc_id_para_atencion(instance)
         if cid:
             return cid
-        if instance.tipo_intervencion == 'CONSULTA':
+        ctx = getattr(instance, 'contexto_atencion', None)
+        puede_vincular_hc = (
+            instance.tipo_intervencion == 'CONSULTA'
+            or ctx in (
+                Atencion.ContextoAtencion.INTERNACION,
+                Atencion.ContextoAtencion.GUARDIA,
+            )
+        )
+        if puede_vincular_hc:
             try:
                 return ensure_consulta_hc_desde_atencion(instance).pk
             except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    'get_consulta_hc_id: ensure falló para atencion=%s contexto=%s',
+                    instance.pk,
+                    ctx,
+                )
                 return None
         return None
     
@@ -1037,12 +1093,16 @@ class AtencionSerializer(serializers.ModelSerializer):
             'medico_principal_id',
             'fecha_admision',
             'fecha_cierre',
+            'contexto_atencion',
+            'contexto_atencion_display',
+            'internacion_id',
             'tipo_atencion',
             'tipo_atencion_display',
             'tipo_intervencion',
             'estado_clinico',
             'observaciones_generales',
             'consulta_ambulatoria',
+            'evolucion_internacion',
             'consulta_hc_id',
             'registro_procedimiento',
             'registro_quirurgico',

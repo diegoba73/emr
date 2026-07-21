@@ -122,18 +122,20 @@ describe('LIMS permissions (re-export)', () => {
   const enf = user({ rol: 'ENFERMERIA' });
   const adm = user({ rol: 'ADMIN', is_superuser: true });
 
-  it('LIMS rutas: admin/laboratorio/médico', () => {
+  it('LIMS rutas: admin, laboratorio y bioquímico', () => {
     expect(canAccessLims(adm)).toBe(true);
     expect(canAccessLims(lab)).toBe(true);
-    expect(canAccessLims(med)).toBe(true);
+    expect(canAccessLims(user({ rol: 'BIOQUIMICO' }))).toBe(true);
+    expect(canAccessLims(med)).toBe(false);
     expect(canAccessLims(pac)).toBe(false);
     expect(canAccessLims(sec)).toBe(false);
     expect(canAccessLims(enf)).toBe(false);
   });
 
-  it('finalizar LIMS admin y laboratorio', () => {
+  it('validar LIMS solo admin y bioquímico', () => {
     expect(canValidateLims(adm)).toBe(true);
-    expect(canValidateLims(lab)).toBe(true);
+    expect(canValidateLims(user({ rol: 'BIOQUIMICO' }))).toBe(true);
+    expect(canValidateLims(lab)).toBe(false);
     expect(canValidateLims(med)).toBe(false);
   });
 
@@ -141,6 +143,7 @@ describe('LIMS permissions (re-export)', () => {
     expect(canAccessMicrobiologia(lab)).toBe(true);
     expect(canAccessMicrobiologia(pac)).toBe(false);
     expect(canValidateMicrobiologia(lab)).toBe(false);
+    expect(canValidateMicrobiologia(user({ rol: 'BIOQUIMICO' }))).toBe(true);
     expect(canValidateMicrobiologia(adm)).toBe(true);
   });
 });
@@ -191,9 +194,9 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(isEmrStaffOrAdmin(labStaff)).toBe(false);
   });
 
-  it('lectura operativa de pacientes y turnos; sin módulos clínicos EMR', () => {
+  it('lectura operativa de pacientes; sin agenda ni módulos clínicos EMR', () => {
     expect(canAccessPacientes(labStaff)).toBe(true);
-    expect(canViewTurnosAgenda(labStaff)).toBe(true);
+    expect(canViewTurnosAgenda(labStaff)).toBe(false);
     expect(canMutateTurnosGlobally(labStaff)).toBe(false);
     expect(canAccessAtenciones(labStaff)).toBe(false);
     expect(canOperateAtenciones(labStaff)).toBe(false);
@@ -203,10 +206,11 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(canAccessArchivosMedicos(labStaff)).toBe(false);
   });
 
-  it('conserva acceso LIMS', () => {
+  it('conserva acceso LIMS operativo; validar solo bioquímico/admin', () => {
     expect(canAccessLims(labStaff)).toBe(true);
     expect(canAccessMicrobiologia(labStaff)).toBe(true);
-    expect(canValidateLims(labStaff)).toBe(true);
+    expect(canValidateLims(labStaff)).toBe(false);
+    expect(canValidateLims(user({ rol: 'BIOQUIMICO', is_staff: true }))).toBe(true);
     expect(canValidateMicrobiologia(labStaff)).toBe(false);
   });
 

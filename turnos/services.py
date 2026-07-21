@@ -27,11 +27,18 @@ def resolve_tipo_intervencion_from_recurso(tipo_recurso: str) -> str:
     """
     mapping = {
         Recurso.TipoRecurso.CONSULTORIO: Atencion.TipoIntervencion.CONSULTA,
+        Recurso.TipoRecurso.GUARDIA: Atencion.TipoIntervencion.CONSULTA,
         Recurso.TipoRecurso.SALA_PROCEDIMIENTO: Atencion.TipoIntervencion.ESTUDIO,
         Recurso.TipoRecurso.SALA_HEMODINAMIA: Atencion.TipoIntervencion.PROCEDIMIENTO,
         Recurso.TipoRecurso.QUIROFANO: Atencion.TipoIntervencion.CIRUGIA,
     }
     return mapping.get(tipo_recurso, Atencion.TipoIntervencion.CONSULTA)
+
+
+def resolve_contexto_atencion_from_recurso(tipo_recurso: str) -> str:
+    if tipo_recurso == Recurso.TipoRecurso.GUARDIA:
+        return Atencion.ContextoAtencion.GUARDIA
+    return Atencion.ContextoAtencion.AMBULATORIA
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +166,7 @@ class AtencionService:
 
                 tipo_atencion = turno.recurso.tipo_recurso
                 tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
+                contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
 
                 logger.info(
                     "Creando Atencion: tipo_atencion=%s, tipo_intervencion=%s",
@@ -170,6 +178,7 @@ class AtencionService:
                     turno=turno,
                     paciente=turno.paciente,
                     medico_principal=turno.medico,
+                    contexto_atencion=contexto_atencion,
                     tipo_atencion=tipo_atencion,
                     tipo_intervencion=tipo_intervencion,
                     estado_clinico=Atencion.EstadoClinico.ABIERTA,
@@ -236,11 +245,13 @@ class AtencionService:
 
             tipo_atencion = turno.recurso.tipo_recurso
             tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
+            contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
 
             atencion = Atencion.objects.create(
                 turno=turno,
                 paciente=turno.paciente,
                 medico_principal=turno.medico,
+                contexto_atencion=contexto_atencion,
                 tipo_atencion=tipo_atencion,
                 tipo_intervencion=tipo_intervencion,
                 estado_clinico=Atencion.EstadoClinico.ABIERTA,
@@ -315,11 +326,13 @@ class AtencionService:
 
         tipo_atencion = turno.recurso.tipo_recurso
         tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
+        contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
 
         atencion = Atencion.objects.create(
             turno=turno,
             paciente=turno.paciente,
             medico_principal=turno.medico,
+            contexto_atencion=contexto_atencion,
             tipo_atencion=tipo_atencion,
             tipo_intervencion=tipo_intervencion,
             estado_clinico=Atencion.EstadoClinico.ABIERTA,
@@ -346,7 +359,7 @@ class AtencionService:
         logger.debug("Creando registro hijo clínico (tipo_atencion=%s).", tipo_atencion)
         
         # Mapeo de tipo_recurso a registro hijo
-        if tipo_atencion == Recurso.TipoRecurso.CONSULTORIO:
+        if tipo_atencion in (Recurso.TipoRecurso.CONSULTORIO, Recurso.TipoRecurso.GUARDIA):
             # Crear ConsultaAmbulatoria
             ConsultaAmbulatoria.objects.create(atencion=atencion)
             from historias_clinicas.services import ensure_consulta_hc_desde_atencion
@@ -383,4 +396,57 @@ class AtencionService:
                 tipo_atencion,
             )
             # No crear registro hijo si no hay mapeo definido
+
+    @staticmethod
+    @transaction.atomic
+    def iniciar_atencion_guardia(
+        *,
+        paciente_id: int,
+        medico_id: int,
+        motivo_consulta: str = '',
+        turno_id: int | None = None,
+        observaciones_generales: str = '',
+    ) -> IniciarAtencionOutcome:
+        """Inicia una atención de guardia (con o sin turno previo)."""
+        from pacientes.models import Paciente
+        from medicos.models import Medico
+
+        try:
+            paciente = Paciente.objects.get(pk=paciente_id)
+        except Paciente.DoesNotExist:
+            raise BusinessLogicError(f'El paciente {paciente_id} no existe.')
+
+        try:
+            medico = Medico.objects.get(pk=medico_id)
+        except Medico.DoesNotExist:
+            raise BusinessLogicError(f'El médico {medico_id} no existe.')
+
+        turno = None
+        if turno_id is not None:
+            try:
+                turno = Turno.objects.select_for_update().get(pk=turno_id)
+            except Turno.DoesNotExist:
+                raise BusinessLogicError(f'El turno {turno_id} no existe.')
+            if turno.paciente_id and turno.paciente_id != paciente.pk:
+                raise BusinessLogicError('El turno no corresponde al paciente indicado.')
+            existing = Atencion.objects.filter(turno_id=turno.pk).first()
+            if existing is not None:
+                return IniciarAtencionOutcome(atencion=existing, created_new=False)
+            if turno.estado in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
+                turno.estado = Turno.Estado.REALIZADO
+                turno.save(update_fields=['estado', 'updated_at'])
+
+        atencion = Atencion.objects.create(
+            turno=turno,
+            paciente=paciente,
+            medico_principal=medico,
+            contexto_atencion=Atencion.ContextoAtencion.GUARDIA,
+            tipo_atencion=Recurso.TipoRecurso.GUARDIA,
+            tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
+            estado_clinico=Atencion.EstadoClinico.ABIERTA,
+            observaciones_generales=observaciones_generales or motivo_consulta or None,
+        )
+        AtencionService._crear_registro_hijo(atencion, Recurso.TipoRecurso.GUARDIA)
+        logger.info('Atención de guardia creada: atencion=%s paciente=%s', atencion.pk, paciente.pk)
+        return IniciarAtencionOutcome(atencion=atencion, created_new=True)
 

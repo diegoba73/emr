@@ -20,6 +20,9 @@ class Command(BaseCommand):
             {'nombre': 'Sala Holter', 'ubicacion': 'CEHTA', 'tipo_recurso': 'SALA_PROCEDIMIENTO'},
             {'nombre': 'Sala Ergometría', 'ubicacion': 'CEHTA', 'tipo_recurso': 'SALA_PROCEDIMIENTO'},
             
+            # ICPL - Guardia cardiológica
+            {'nombre': 'Guardia Cardiológica ICPL', 'ubicacion': 'ICPL', 'tipo_recurso': 'GUARDIA'},
+
             # ICPL - Quirófanos
             {'nombre': 'Quirófano 1', 'ubicacion': 'ICPL', 'tipo_recurso': 'QUIROFANO'},
             {'nombre': 'Quirófano 2', 'ubicacion': 'ICPL', 'tipo_recurso': 'QUIROFANO'},

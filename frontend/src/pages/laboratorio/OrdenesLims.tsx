@@ -129,8 +129,8 @@ const OrdenesLims: React.FC = () => {
             {buscarPorNumero
               ? 'Búsqueda por número en todo el historial.'
               : vistaLimitada
-                ? `Órdenes finalizadas con muestra tomada el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de extracción están en `
-                : `Muestras tomadas el ${labelDiaOrden(diaSeleccionado)}. Las órdenes pendientes de extracción están en `}
+                ? `Órdenes finalizadas con muestra tomada el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
+                : `Muestras tomadas el ${labelDiaOrden(diaSeleccionado)}. Las órdenes pendientes de recepción están en `}
             {!buscarPorNumero && (
               <Button size="small" sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }} onClick={() => navigate('/laboratorio/pendientes')}>
                 Pendientes

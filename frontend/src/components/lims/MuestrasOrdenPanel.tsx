@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import type { LimsTipoContenedor, LimsTipoMuestra, MuestraTransaccional } from '../../types/lims';
 import {
   createMuestra,
+  downloadEtiquetasOrdenMuestras,
   listContenedoresLims,
   listMuestrasPorSolicitud,
   listTiposMuestraLims,
@@ -57,6 +58,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   const [tipoId, setTipoId] = useState<number | ''>('');
   const [contId, setContId] = useState<number | ''>('');
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -105,6 +107,18 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
     }
   };
 
+  const handleImprimirEtiquetas = async () => {
+    setPrinting(true);
+    try {
+      await downloadEtiquetasOrdenMuestras(solicitudId, solicitudNumero);
+      toast.success('Etiquetas descargadas');
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden));
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -119,15 +133,23 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Muestras</Typography>
-        {showAlta && (
-          <Button variant="contained" size="small" onClick={() => setOpenAlta(true)}>
-            Registrar muestra
-          </Button>
-        )}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {rows.length > 0 && canOperate && (
+            <Button variant="outlined" size="small" onClick={handleImprimirEtiquetas} disabled={printing}>
+              {printing ? 'Generando…' : 'Reimprimir etiquetas'}
+            </Button>
+          )}
+          {showAlta && (
+            <Button variant="contained" size="small" onClick={() => setOpenAlta(true)}>
+              Registrar muestra
+            </Button>
+          )}
+        </Box>
       </Box>
       {canOperate && ordenEstado === 'PENDIENTE' && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Usá el botón <strong>Tomar muestra</strong> en acciones de orden para registrar la toma física.
+          Usá <strong>Imprimir etiquetas</strong> para generar los tubos y códigos. La recepción se
+          confirma después en <strong>Recepción</strong> escaneando cada tubo.
         </Typography>
       )}
 
@@ -136,7 +158,8 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
           <TableHead>
             <TableRow>
               <TableCell>Código</TableCell>
-              <TableCell>Tipo</TableCell>
+              <TableCell>Tubo</TableCell>
+              <TableCell>Tipo muestra</TableCell>
               <TableCell>Estado</TableCell>
               <TableCell>Ubicación</TableCell>
               <TableCell align="right">Acciones</TableCell>
@@ -145,16 +168,23 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography color="text.secondary">Sin muestras registradas.</Typography>
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((m) => {
                 const tipoNombre = tipos.find((t) => t.id === m.tipo_muestra)?.nombre || `ID ${m.tipo_muestra}`;
+                const contNombre =
+                  m.tipo_contenedor != null
+                    ? conts.find((c) => c.id === m.tipo_contenedor)?.codigo ||
+                      conts.find((c) => c.id === m.tipo_contenedor)?.nombre ||
+                      `#${m.tipo_contenedor}`
+                    : '—';
                 return (
                   <TableRow key={m.id}>
                     <TableCell>{m.codigo_barra || '—'}</TableCell>
+                    <TableCell>{contNombre}</TableCell>
                     <TableCell>{tipoNombre}</TableCell>
                   <TableCell>
                     <MuestraEstadoBadge estado={m.estado} />

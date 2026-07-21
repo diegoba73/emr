@@ -37,8 +37,13 @@ export function filterMuestrasProcesables(muestras: MuestraTransaccional[]): Mue
 
 export function muestrasCompatiblesParaTipo(
   procesables: MuestraTransaccional[],
-  tipoMuestraRequeridaId: number | undefined
+  tipoMuestraRequeridaId: number | undefined,
+  tipoContenedorId?: number | null
 ): MuestraTransaccional[] {
+  if (tipoContenedorId != null) {
+    const byCont = procesables.filter((m) => m.tipo_contenedor === tipoContenedorId);
+    if (byCont.length > 0) return byCont;
+  }
   if (!tipoMuestraRequeridaId) return procesables;
   return procesables.filter((m) => m.tipo_muestra === tipoMuestraRequeridaId);
 }
@@ -195,7 +200,11 @@ export function suggestMuestraIdForResultado(
 ): number | null {
   if (currentMuestraId != null) return currentMuestraId;
   const te = catalog.get(r.tipo_examen);
-  const opciones = muestrasCompatiblesParaTipo(procesables, te?.tipo_muestra_requerida);
+  const opciones = muestrasCompatiblesParaTipo(
+    procesables,
+    te?.tipo_muestra_requerida,
+    te?.tipo_contenedor
+  );
   if (opciones.length === 1) return opciones[0].id;
   if (te?.requiere_muestra && opciones.length > 0) return opciones[0].id;
   return null;
@@ -206,6 +215,8 @@ export function formatMuestraSelectLabel(
   tipoMuestraNombre?: string
 ): string {
   const tipo = tipoMuestraNombre || `tipo #${m.tipo_muestra}`;
-  const cont = m.tipo_contenedor != null ? ` · cont. #${m.tipo_contenedor}` : '';
-  return `#${m.id} · ${tipo}${cont} · ${m.estado}`;
+  const cont = m.tipo_contenedor != null ? `cont. #${m.tipo_contenedor}` : '';
+  const contPart = cont ? ` · ${cont}` : '';
+  const code = m.codigo_barra ? ` · ${m.codigo_barra}` : '';
+  return `#${m.id}${code} · ${tipo}${contPart} · ${m.estado}`;
 }

@@ -33,6 +33,20 @@ def resolver_procedencia_solicitud(solicitud: SolicitudExamen) -> dict[str, Any]
 
     consulta = getattr(solicitud, "consulta_hc", None)
     if consulta is not None:
+        from laboratorio.origen_solicitud import (
+            _atencion_desde_consulta,
+            _atencion_es_guardia,
+            procedencia_display_guardia,
+        )
+
+        atencion = _atencion_desde_consulta(consulta)
+        if _atencion_es_guardia(atencion):
+            return {
+                "procedencia_tipo": "GUARDIA",
+                "procedencia_display": procedencia_display_guardia(),
+                "procedencia_ubicacion": "ICPL",
+            }
+
         turno = getattr(consulta, "turno", None)
         recurso = getattr(turno, "recurso", None) if turno is not None else None
         if recurso is not None:

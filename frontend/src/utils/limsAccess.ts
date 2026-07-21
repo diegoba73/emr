@@ -1,4 +1,5 @@
 import { User } from '../types';
+import { isOperadorLimsRole, puedeValidarLimsRole } from './roles';
 
 export type NormalizedRol = string;
 
@@ -6,34 +7,38 @@ export function normalizeRol(user: User | null): NormalizedRol {
   return String(user?.rol || '').toLowerCase();
 }
 
-/** Módulo LIMS completo: admin, laboratorio, médico. */
+/**
+ * Módulo LIMS (sidebar «Laboratorio (LIMS)» y rutas /laboratorio/*).
+ * Admin, laboratorio (técnico) y bioquímico.
+ * Médicos/secretaría usan el portal clínico «Laboratorio» (/solicitudes).
+ */
 export function canAccessLimsModule(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'laboratorio' || r === 'medico';
+  return r === 'admin' || isOperadorLimsRole(r);
 }
 
-/** Secretaría/enfermería: solo pendientes y órdenes finalizadas (sin catálogos ni micro). */
-export function canAccessLimsOperativaLimitada(user: User | null): boolean {
-  if (!user) return false;
-  if (user.is_superuser) return false;
-  const r = normalizeRol(user);
-  return r === 'secretaria' || r === 'enfermeria';
+/**
+ * @deprecated El área LIMS ya no admite roles operativos limitados.
+ * Secretaría/enfermería consultan resultados validados en /solicitudes.
+ */
+export function canAccessLimsOperativaLimitada(_user: User | null): boolean {
+  return false;
 }
 
-/** Cualquier acceso al área LIMS (completo o restringido). */
+/** Acceso al área LIMS (alias de canAccessLimsModule). */
 export function canAccessLimsAny(user: User | null): boolean {
-  return canAccessLimsModule(user) || canAccessLimsOperativaLimitada(user);
+  return canAccessLimsModule(user);
 }
 
 /** Pendientes y órdenes LIMS en sidebar/rutas. */
 export function canAccessLimsPendientes(user: User | null): boolean {
-  return canAccessLimsAny(user);
+  return canAccessLimsModule(user);
 }
 
 export function canAccessLimsOrdenes(user: User | null): boolean {
-  return canAccessLimsAny(user);
+  return canAccessLimsModule(user);
 }
 
 /** Catálogos LIMS (exámenes, tipos de muestra): sin secretaría/enfermería. */
@@ -73,42 +78,40 @@ export function canDownloadInformeClinicoPdf(user: User | null): boolean {
   return r === 'admin' || r === 'medico' || r === 'paciente';
 }
 
-/** Operaciones de laboratorio sobre orden/muestra/resultados (admin + laboratorio). */
+/** Operaciones de laboratorio sobre orden/muestra/resultados (admin + operadores). */
 export function canOperateLims(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'laboratorio';
+  return r === 'admin' || isOperadorLimsRole(r);
 }
 
-/** Enviar informe al paciente (admin y laboratorio). */
+/** Enviar informe al paciente (admin y operadores LIMS). */
 export function canEnviarInformeLims(user: User | null): boolean {
   return canOperateLims(user);
 }
 
 /** @deprecated Usar canEnviarInformeLims */
 export function canFinalizarOrdenLims(user: User | null): boolean {
-  return canEnviarInformeLims(user);
+  return canValidarOrdenLims(user);
 }
 
-/** @deprecated Usar canFinalizarOrdenLims */
+/** Validar y liberar informe (solo bioquímico y admin). */
 export function canValidarOrdenLims(user: User | null): boolean {
-  return canFinalizarOrdenLims(user);
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  return puedeValidarLimsRole(normalizeRol(user));
 }
 
-/** Descargar informe PDF LIMS (PDF-1-FE): operadores completos o roles limitados en órdenes finalizadas. */
+/** Descargar informe PDF LIMS (PDF-1-FE): solo operadores del módulo LIMS. */
 export function canDownloadInformeLimsPdf(
   user: User | null,
-  estado?: string | null
+  _estado?: string | null
 ): boolean {
-  if (canAccessLimsModule(user)) return true;
-  if (isLimsOperativaLimitada(user)) {
-    return String(estado || '').toUpperCase() === 'FINALIZADO';
-  }
-  return false;
+  return canAccessLimsModule(user);
 }
 
-/** Misma visibilidad que órdenes LIMS (admin, laboratorio, médico lectura). */
+/** Misma visibilidad que el módulo LIMS (admin, laboratorio, bioquímico). */
 export function canAccessMicrobiologia(user: User | null): boolean {
   return canAccessLimsModule(user);
 }
@@ -117,7 +120,7 @@ export function canOperateMicrobiologia(user: User | null): boolean {
   return canOperateLims(user);
 }
 
-/** Validar informe microbiológico final (solo admin). */
+/** Validar informe microbiológico final (bioquímico / admin). */
 export function canValidarInformeMicro(user: User | null): boolean {
   return canValidarOrdenLims(user);
 }
@@ -148,7 +151,7 @@ export function canMarcarMicroEstudioInformado(
   return canOperateMicrobiologia(user) && estadoEstudio === 'VALIDADO';
 }
 
-/** Catálogos LIMS generales (tipos de muestra): escritura admin y laboratorio. */
+/** Catálogos LIMS generales (tipos de muestra): escritura admin y operadores. */
 export function canEditLimsCatalogos(user: User | null): boolean {
   return canOperateLims(user);
 }

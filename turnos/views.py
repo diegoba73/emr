@@ -17,7 +17,7 @@ from archivos_medicos.access import paciente_ids_vinculados_a_medico
 from pacientes.services import ensure_paciente_linked_to_user
 
 from medicos.models import Medico
-from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria
+from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria, EvolucionInternacion
 from . import turno_estado
 from .access import medico_es_dueno_turno
 from .services import AtencionService, BusinessLogicError
@@ -25,6 +25,7 @@ from .serializers import (
     TurnoSerializer,
     RecursoSerializer,
     ConsultaAmbulatoriaSerializer,
+    EvolucionInternacionSerializer,
     consulta_ambulatoria_tiene_contenido,
 )
 # Usar el AtencionSerializer completo de api.serializers que incluye documentos
@@ -669,15 +670,19 @@ class AtencionViewSet(viewsets.ModelViewSet):
     Permisos: AtencionPermission (QA-ROLE-01).
     """
     queryset = Atencion.objects.select_related(
-        'paciente', 'medico_principal', 'turno'
+        'paciente', 'medico_principal', 'turno', 'internacion', 'internacion__cama__sector'
     ).prefetch_related(
         'documentos', 'documentos__usuario_cargador',
-        'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico'
+        'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico',
+        'evolucion_internacion',
     ).all()
     serializer_class = AtencionSerializer
     permission_classes = [AtencionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['paciente', 'medico_principal', 'estado_clinico', 'tipo_atencion']
+    filterset_fields = [
+        'paciente', 'medico_principal', 'estado_clinico', 'tipo_atencion',
+        'contexto_atencion', 'internacion', 'tipo_intervencion',
+    ]
     search_fields = ['paciente__nombre', 'paciente__apellido', 'paciente__dni']
     ordering_fields = ['fecha_admision', 'fecha_cierre', 'estado_clinico']
     ordering = ['-fecha_admision']
@@ -758,7 +763,97 @@ class AtencionViewSet(viewsets.ModelViewSet):
                 headers=headers,
             )
         return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
-    
+
+    @action(detail=False, methods=['post'], url_path='iniciar-guardia')
+    def iniciar_guardia(self, request):
+        """Inicia una atención de guardia cardiológica (walk-in o desde turno)."""
+        paciente_id = request.data.get('paciente_id')
+        medico_id = request.data.get('medico_id')
+        if not paciente_id:
+            return Response({'error': 'paciente_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not medico_id:
+            try:
+                medico_id = request.user.medico_id
+            except Exception:
+                medico_id = None
+        if not medico_id:
+            return Response(
+                {'error': 'Debe indicar medico_id o iniciar sesión como médico.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            outcome = AtencionService.iniciar_atencion_guardia(
+                paciente_id=int(paciente_id),
+                medico_id=int(medico_id),
+                motivo_consulta=request.data.get('motivo_consulta', ''),
+                turno_id=request.data.get('turno_id'),
+                observaciones_generales=request.data.get('observaciones_generales', ''),
+            )
+        except BusinessLogicError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        atencion = (
+            self.get_queryset()
+            .select_related('paciente', 'medico_principal', 'turno', 'internacion')
+            .prefetch_related(
+                'consulta_ambulatoria',
+                'documentos',
+                'evolucion_internacion',
+            )
+            .get(pk=outcome.atencion.pk)
+        )
+        serializer = self.get_serializer(atencion)
+        status_code = status.HTTP_201_CREATED if outcome.created_new else status.HTTP_200_OK
+        if outcome.created_new:
+            log_create(
+                actor=request.user,
+                entity=atencion,
+                module='turnos',
+                metadata={'action': 'iniciar_guardia', 'view': 'AtencionViewSet.iniciar_guardia'},
+            )
+        return Response(serializer.data, status=status_code)
+
+    @action(detail=True, methods=['post'], url_path='ensure-consulta-hc')
+    def ensure_consulta_hc(self, request, pk=None):
+        """Obtiene o crea la Consulta HC vinculada a la atención (pedidos LIMS / estudios)."""
+        atencion = self.get_object()
+        from historias_clinicas.services import ensure_consulta_hc_desde_atencion
+
+        ctx = atencion.contexto_atencion
+        puede = (
+            atencion.tipo_intervencion == Atencion.TipoIntervencion.CONSULTA
+            or ctx
+            in (
+                Atencion.ContextoAtencion.INTERNACION,
+                Atencion.ContextoAtencion.GUARDIA,
+            )
+        )
+        if not puede:
+            return Response(
+                {'error': 'Esta atención no admite pedidos clínicos vinculados a HC.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if atencion.tipo_intervencion == Atencion.TipoIntervencion.CONSULTA:
+            ConsultaAmbulatoria.objects.get_or_create(atencion=atencion)
+
+        try:
+            consulta = ensure_consulta_hc_desde_atencion(atencion)
+        except Exception as exc:
+            logger.exception(
+                'ensure_consulta_hc falló para atencion=%s usuario=%s',
+                atencion.pk,
+                getattr(request.user, 'username', 'anon'),
+            )
+            return Response(
+                {'error': f'No se pudo vincular la consulta HC: {exc}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response({'consulta_hc_id': consulta.pk})
+
     @action(detail=True, methods=['post'], url_path='cerrar')
     @transaction.atomic
     def cerrar(self, request, pk=None):
@@ -1006,3 +1101,41 @@ class AtencionViewSet(viewsets.ModelViewSet):
             atencion.id, request.user.username,
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class EvolucionInternacionViewSet(viewsets.ModelViewSet):
+    """CRUD de evoluciones clínicas durante internación."""
+
+    queryset = EvolucionInternacion.objects.select_related(
+        'atencion',
+        'atencion__internacion',
+        'atencion__medico_principal',
+        'atencion__paciente',
+    ).all()
+    serializer_class = EvolucionInternacionSerializer
+    permission_classes = [AtencionPermission]
+    http_method_names = ['get', 'put', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        base = super().get_queryset()
+        atencion_ids = filter_atencion_queryset_for_user(
+            self.request.user,
+            Atencion.objects.all(),
+        ).values_list('pk', flat=True)
+        return base.filter(atencion_id__in=atencion_ids)
+
+    @action(detail=True, methods=['post'], url_path='registrar')
+    @transaction.atomic
+    def registrar(self, request, pk=None):
+        """Actualiza evolución de internación (upsert semántico)."""
+        evolucion = self.get_object()
+        atencion = evolucion.atencion
+        if atencion.fecha_cierre:
+            return Response(
+                {'error': 'No se puede editar una evolución de una atención ya cerrada.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        serializer = self.get_serializer(evolucion, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)

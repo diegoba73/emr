@@ -9,7 +9,9 @@ from rest_framework import filters
 
 from .models import Sector, Cama, Internacion
 from .serializers import SectorSerializer, CamaSerializer, InternacionSerializer
+from .services import InternacionClinicalService, InternacionClinicalError
 from api.permissions import IsMedicoOrAdmin, IsMedicoOrEnfermeriaOrAdmin
+from api.serializers import AtencionSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -154,28 +156,34 @@ class InternacionViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtrar por usuario según rol y por defecto solo activas"""
-        queryset = super().get_queryset()
         user = self.request.user
-        
-        # Permitir ver todas las internaciones activas por defecto
-        # El filtro por activo=True ya está en el queryset base
+        paciente_param = self.request.query_params.get('paciente')
+        incluir_historico = self.request.query_params.get('historico', '').lower() in ('1', 'true', 'yes')
+
+        if paciente_param or incluir_historico:
+            queryset = Internacion.objects.select_related(
+                'paciente', 'cama', 'medico', 'cama__sector'
+            ).all()
+            if paciente_param:
+                queryset = queryset.filter(paciente_id=paciente_param)
+            if not incluir_historico and not paciente_param:
+                queryset = queryset.filter(activo=True)
+        else:
+            queryset = super().get_queryset()
         
         if hasattr(user, 'rol') and user.rol:
             rol_upper = str(user.rol).strip().upper()
             if rol_upper == 'MEDICO':
-                # Médicos pueden ver todas las internaciones activas para el panel
-                queryset = queryset.filter(activo=True)
+                if not (paciente_param or incluir_historico):
+                    queryset = queryset.filter(activo=True)
             elif rol_upper == 'ENFERMERIA':
-                # Enfermería puede ver todas las internaciones activas
-                queryset = queryset.filter(activo=True)
+                if not (paciente_param or incluir_historico):
+                    queryset = queryset.filter(activo=True)
             elif rol_upper == 'ADMIN':
-                # Admins ven todas las internaciones (activas e inactivas)
-                queryset = Internacion.objects.select_related('paciente', 'cama', 'medico', 'cama__sector').all()
+                pass
             else:
-                # Otros roles no ven internaciones
                 queryset = queryset.none()
         elif not user.is_superuser:
-            # Si no tiene rol y no es superusuario, no ver nada
             queryset = queryset.none()
         
         return queryset
@@ -382,3 +390,77 @@ class InternacionViewSet(viewsets.ModelViewSet):
                 {'error': f'La cama destino no está disponible. Estado: {cama_destino.estado}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+    def _resolve_medico_from_request(self, request, internacion):
+        medico_id = request.data.get('medico_id')
+        if medico_id:
+            from medicos.models import Medico
+            try:
+                return Medico.objects.get(pk=medico_id)
+            except Medico.DoesNotExist:
+                raise ValidationError({'medico_id': 'Médico no encontrado.'})
+        try:
+            return request.user.medico
+        except Exception:
+            return internacion.medico
+
+    @action(detail=True, methods=['get'], url_path='evoluciones')
+    def evoluciones(self, request, pk=None):
+        """Lista atenciones clínicas del episodio de internación."""
+        internacion = self.get_object()
+        from turnos.models import Atencion
+        atenciones = (
+            Atencion.objects.filter(internacion=internacion)
+            .select_related('medico_principal', 'paciente')
+            .prefetch_related('evolucion_internacion')
+            .order_by('-fecha_admision')
+        )
+        serializer = AtencionSerializer(atenciones, many=True, context={'request': request})
+        return Response({
+            'internacion_id': internacion.pk,
+            'evolucion_diaria_hoy': InternacionClinicalService.tiene_evolucion_diaria_hoy(internacion.pk),
+            'atenciones': serializer.data,
+        })
+
+    @action(detail=True, methods=['post'], url_path='iniciar-evolucion')
+    def iniciar_evolucion(self, request, pk=None):
+        """Inicia evolución diaria de internación."""
+        internacion = self.get_object()
+        try:
+            medico = self._resolve_medico_from_request(request, internacion)
+            outcome = InternacionClinicalService.iniciar_evolucion_internacion(
+                internacion,
+                medico=medico,
+                tipo_evolucion='EVOLUCION_DIARIA',
+                observaciones_generales=request.data.get('observaciones_generales', ''),
+            )
+        except InternacionClinicalError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AtencionSerializer(outcome.atencion, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='iniciar-nota')
+    def iniciar_nota(self, request, pk=None):
+        """Inicia interconsulta o nota adicional durante internación."""
+        internacion = self.get_object()
+        tipo = request.data.get('tipo_evolucion', 'INTERCONSULTA')
+        valid_types = {'INTERCONSULTA', 'NOTA_ENFERMERIA'}
+        if tipo not in valid_types:
+            return Response(
+                {'error': f'tipo_evolucion inválido. Valores: {sorted(valid_types)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            medico = self._resolve_medico_from_request(request, internacion)
+            outcome = InternacionClinicalService.iniciar_evolucion_internacion(
+                internacion,
+                medico=medico,
+                tipo_evolucion=tipo,
+                observaciones_generales=request.data.get('observaciones_generales', ''),
+            )
+        except InternacionClinicalError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AtencionSerializer(outcome.atencion, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

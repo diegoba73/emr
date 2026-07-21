@@ -18,6 +18,8 @@ export interface OrdenesLimsTablaProps {
   rows: SolicitudExamenLims[];
   emptyMessage: string;
   onVer: (id: number) => void;
+  /** Si se define, el botón principal invoca esto con la fila completa (p. ej. imprimir etiquetas). */
+  onAccion?: (orden: SolicitudExamenLims) => void;
   columnaFecha?: 'solicitud' | 'toma';
   accionLabel?: string;
 }
@@ -26,6 +28,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
   rows,
   emptyMessage,
   onVer,
+  onAccion,
   columnaFecha = 'solicitud',
   accionLabel = 'Ver',
 }) => (
@@ -76,10 +79,19 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     label={labelEstadoOrdenLims(r.estado)}
                     color={estadoOrdenColor(r.estado)}
                   />
+                  {r.tubos_pendientes_extraccion && r.tubos_pendientes_extraccion.length > 0 && (
+                    <Typography variant="caption" display="block" color="warning.main">
+                      Faltan {r.tubos_pendientes_extraccion.length} tubo(s)
+                    </Typography>
+                  )}
                 </TableCell>
                 <TableCell>{fechaMostrar ? new Date(fechaMostrar).toLocaleString() : '—'}</TableCell>
                 <TableCell align="right">
-                  <Button size="small" variant="contained" onClick={() => onVer(r.id)}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => (onAccion ? onAccion(r) : onVer(r.id))}
+                  >
                     {accionLabel}
                   </Button>
                 </TableCell>

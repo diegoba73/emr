@@ -13,7 +13,8 @@ import {
   Cama,
   InternacionCama,
   Sector,
-  TipoExamen
+  TipoExamen,
+  Atencion,
 } from '../types';
 import { apiClient as api, API_BASE_URL } from './apiClient';
 
@@ -825,13 +826,39 @@ export const darAltaInternacion = async (id: number, fecha_alta?: string): Promi
   }
 };
 
-export const getInternaciones = async (): Promise<InternacionCama[]> => {
+export const getInternaciones = async (params?: { paciente?: number; historico?: boolean }): Promise<InternacionCama[]> => {
   try {
-    const response = await api.get('/internacion/internaciones/');
+    const response = await api.get('/internacion/internaciones/', { params });
     return response.data.results || response.data;
   } catch (error) {
     throw error;
   }
+};
+
+export interface InternacionEvolucionesResponse {
+  internacion_id: number;
+  evolucion_diaria_hoy: boolean;
+  atenciones: Atencion[];
+}
+
+export const getInternacionEvoluciones = async (internacionId: number): Promise<InternacionEvolucionesResponse> => {
+  const response = await api.get(`/internacion/internaciones/${internacionId}/evoluciones/`);
+  return response.data;
+};
+
+export const iniciarEvolucionDiariaInternacion = async (internacionId: number): Promise<Atencion> => {
+  const response = await api.post(`/internacion/internaciones/${internacionId}/iniciar-evolucion/`);
+  return response.data;
+};
+
+export const iniciarNotaInternacion = async (
+  internacionId: number,
+  tipoEvolucion: 'INTERCONSULTA' | 'NOTA_ENFERMERIA' = 'INTERCONSULTA',
+): Promise<Atencion> => {
+  const response = await api.post(`/internacion/internaciones/${internacionId}/iniciar-nota/`, {
+    tipo_evolucion: tipoEvolucion,
+  });
+  return response.data;
 };
 
 export const updateInternacion = async (id: number, data: Partial<InternacionCama>): Promise<InternacionCama> => {

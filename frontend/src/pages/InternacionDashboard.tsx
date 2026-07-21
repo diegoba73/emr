@@ -11,6 +11,7 @@ import {
   Button,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { useLocation } from 'react-router-dom';
 import { Cama } from '../types';
 import { getCamas, moverPacienteCama } from '../services/apiService';
 import { useData } from '../contexts/DataContext';
@@ -22,12 +23,23 @@ import ModalCrearCama from '../components/internacion/ModalCrearCama';
 
 const InternacionDashboard: React.FC = () => {
   const { currentUser } = useData();
+  const location = useLocation();
+  const derivacionPrefill = (location.state as {
+    derivarDesdeAtencionId?: number;
+    pacienteId?: number;
+    motivoIngreso?: string;
+  } | null) ?? null;
   const [camasUCO, setCamasUCO] = useState<Cama[]>([]);
   const [camasUCE, setCamasUCE] = useState<Cama[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCama, setSelectedCama] = useState<Cama | null>(null);
   const [modalIngresarOpen, setModalIngresarOpen] = useState(false);
+  const [ingresoPrefill, setIngresoPrefill] = useState<{
+    pacienteId?: number;
+    atencionOrigenId?: number;
+    motivoIngreso?: string;
+  } | undefined>(undefined);
   const [modalGestionarOpen, setModalGestionarOpen] = useState(false);
   const [modalGestionarCamaOpen, setModalGestionarCamaOpen] = useState(false);
   const [modalCrearCamaOpen, setModalCrearCamaOpen] = useState(false);
@@ -119,11 +131,27 @@ const InternacionDashboard: React.FC = () => {
     }
   }, [loading, camasUCO, camasUCE]);
 
+  useEffect(() => {
+    if (!derivacionPrefill?.pacienteId) return;
+    setIngresoPrefill({
+      pacienteId: derivacionPrefill.pacienteId,
+      atencionOrigenId: derivacionPrefill.derivarDesdeAtencionId,
+      motivoIngreso: derivacionPrefill.motivoIngreso,
+    });
+  }, [derivacionPrefill]);
+
   const handleCamaClick = (cama: Cama) => {
     setSelectedCama(cama);
     // Guardar el ID de la cama para restaurar scroll después
     camaToScrollRef.current = cama.id;
     if (cama.estado === 'DISPONIBLE') {
+      if (derivacionPrefill) {
+        setIngresoPrefill({
+          pacienteId: derivacionPrefill.pacienteId,
+          atencionOrigenId: derivacionPrefill.derivarDesdeAtencionId,
+          motivoIngreso: derivacionPrefill.motivoIngreso,
+        });
+      }
       setModalIngresarOpen(true);
     } else if (cama.estado === 'OCUPADA') {
       setModalGestionarOpen(true);
@@ -137,6 +165,7 @@ const InternacionDashboard: React.FC = () => {
     setModalGestionarOpen(false);
     setModalGestionarCamaOpen(false);
     setSelectedCama(null);
+    setIngresoPrefill(undefined);
   };
 
   const handleSuccess = () => {
@@ -252,6 +281,13 @@ const InternacionDashboard: React.FC = () => {
         </Box>
       </Box>
 
+      {derivacionPrefill?.pacienteId && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Derivación desde guardia: seleccioná una cama disponible para ingresar al paciente.
+          La atención de origen quedará vinculada al episodio de internación.
+        </Alert>
+      )}
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
@@ -336,6 +372,7 @@ const InternacionDashboard: React.FC = () => {
         onClose={handleModalClose}
         cama={selectedCama}
         onSuccess={handleSuccess}
+        prefill={ingresoPrefill}
       />
 
       <ModalGestionarPaciente

@@ -17,8 +17,9 @@ import { ArrowBack, Edit, PersonOutline, WarningAmber } from '@mui/icons-materia
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
 import { listSolicitudesExamen } from '../../services/limsApi';
-import { Atencion, ArchivoMedico, Consulta, Paciente, Turno } from '../../types';
+import { Atencion, ArchivoMedico, Consulta, InternacionCama, Paciente, Turno } from '../../types';
 import type { SolicitudExamenLims } from '../../types/lims';
+import { getInternaciones } from '../../services/apiService';
 import PatientIntegratedView from '../PatientIntegratedView';
 import PacienteFormDialog from '../PacienteFormDialog';
 import { canUpdatePacienteDemographics } from '../../utils/permissions';
@@ -43,6 +44,7 @@ const PatientDashboard: React.FC = () => {
   } = useData();
 
   const [atenciones, setAtenciones] = useState<Atencion[]>([]);
+  const [internaciones, setInternaciones] = useState<InternacionCama[]>([]);
   const [ordenesLab, setOrdenesLab] = useState<SolicitudExamenLims[]>([]);
   const [loadingAte, setLoadingAte] = useState(false);
   const [showEditPaciente, setShowEditPaciente] = useState(false);
@@ -110,36 +112,105 @@ const PatientDashboard: React.FC = () => {
     [consultas, pid]
   );
 
+  useEffect(() => {
+    if (!paciente?.id) return;
+    getInternaciones({ paciente: paciente.id, historico: true })
+      .then(setInternaciones)
+      .catch(() => setInternaciones([]));
+  }, [paciente?.id]);
+
+  const internacionActiva = useMemo(
+    () => internaciones.find((i) => i.activo),
+    [internaciones],
+  );
+
   const timelineItems: TimelineItem[] = useMemo(() => {
     const out: TimelineItem[] = [];
+    const internacionIds = new Set(internaciones.map((i) => i.id));
+
     for (const t of turnosPx) {
       const start = t.fecha_hora_inicio ? new Date(t.fecha_hora_inicio) : new Date(0);
       if (Number.isNaN(start.getTime())) continue;
       out.push({
         id: `turno-${t.id}`,
         type: 'turno',
-        title: `Turno (${t.estado})`,
+        title: `Turno ambulatorio (${t.estado})`,
         subtitle: t.motivo_reserva || t.motivo_consulta || t.recurso?.nombre,
         date: start,
         critical: t.estado === 'CANCELADO',
         onClick: () => navigate('/turnos'),
       });
     }
+
+    for (const internacion of internaciones) {
+      const ingreso = internacion.fecha_ingreso ? new Date(internacion.fecha_ingreso) : new Date(0);
+      const groupId = `internacion-${internacion.id}`;
+      const sectorLabel = internacion.cama_nombre || `Internación #${internacion.id}`;
+      if (!Number.isNaN(ingreso.getTime())) {
+        out.push({
+          id: `int-ingreso-${internacion.id}`,
+          type: 'internacion_ingreso',
+          title: `Ingreso — ${internacion.numero_internacion || groupId}`,
+          subtitle: internacion.diagnostico_ingreso || internacion.motivo_ingreso || sectorLabel,
+          date: ingreso,
+          episodeGroupId: groupId,
+          episodeGroupTitle: `Episodio de internación · ${sectorLabel}`,
+          onClick: () => navigate('/internacion'),
+        });
+      }
+      if (internacion.fecha_alta) {
+        const alta = new Date(internacion.fecha_alta);
+        if (!Number.isNaN(alta.getTime())) {
+          out.push({
+            id: `int-alta-${internacion.id}`,
+            type: 'internacion_alta',
+            title: 'Alta médica',
+            subtitle: internacion.numero_internacion || undefined,
+            date: alta,
+            episodeGroupId: groupId,
+            nested: true,
+            onClick: () => navigate('/internacion'),
+          });
+        }
+      }
+    }
+
     for (const a of atenciones) {
       const d = a.fecha_admision ? new Date(a.fecha_admision) : new Date(0);
       if (Number.isNaN(d.getTime())) continue;
+      const isInternacion = a.contexto_atencion === 'INTERNACION' || Boolean(a.internacion_id);
+      if (isInternacion && a.internacion_id && internacionIds.has(a.internacion_id)) {
+        const evo = a.evolucion_internacion;
+        const tipoEvo = evo?.tipo_evolucion_display || evo?.tipo_evolucion || 'Evolución';
+        out.push({
+          id: `atencion-${a.id}`,
+          type: 'internacion_evolucion',
+          title: tipoEvo,
+          subtitle: a.estado_clinico ? `Estado: ${a.estado_clinico}` : undefined,
+          date: evo?.fecha_evolucion ? new Date(evo.fecha_evolucion) : d,
+          episodeGroupId: `internacion-${a.internacion_id}`,
+          nested: true,
+          critical: a.estado_clinico === 'ABIERTA',
+          onClick: () => navigate('/atenciones', { state: { openAtencionId: a.id } }),
+        });
+        continue;
+      }
       const t = a.tipo_intervencion;
+      const isGuardia = a.contexto_atencion === 'GUARDIA';
       out.push({
         id: `atencion-${a.id}`,
-        type: t === 'ESTUDIO' ? 'estudio' : t === 'PROCEDIMIENTO' || t === 'CIRUGIA' ? 'procedimiento' : 'consulta',
-        title: a.tipo_intervencion === 'CONSULTA' ? 'Consulta ambulatoria' : a.tipo_intervencion,
+        type: isGuardia ? 'guardia' : t === 'ESTUDIO' ? 'estudio' : t === 'PROCEDIMIENTO' || t === 'CIRUGIA' ? 'procedimiento' : 'consulta',
+        title: isGuardia
+          ? 'Guardia cardiológica'
+          : a.tipo_intervencion === 'CONSULTA'
+            ? 'Consulta ambulatoria'
+            : a.tipo_intervencion,
         subtitle: a.estado_clinico ? `Estado: ${a.estado_clinico}` : undefined,
         date: d,
-        critical: a.estado_clinico === 'ABIERTA' && t === 'CONSULTA',
+        critical: a.estado_clinico === 'ABIERTA' && (t === 'CONSULTA' || isGuardia),
         onClick: () => {
           if (a.id) {
-            // Abrir ficha: usuario puede ir a atenciones; drawer global no está en esta vista
-            navigate('/atenciones', { state: { openAtencionId: a.id } });
+            navigate(isGuardia ? '/guardia' : '/atenciones', { state: { openAtencionId: a.id } });
           }
         },
       });
@@ -169,7 +240,7 @@ const PatientDashboard: React.FC = () => {
       });
     }
     return out;
-  }, [atenciones, consultasPx, navigate, ordenesLabPx, turnosPx]);
+  }, [atenciones, consultasPx, internaciones, navigate, ordenesLabPx, turnosPx]);
 
   if (!id || Number.isNaN(pid)) {
     return (
@@ -238,6 +309,14 @@ const PatientDashboard: React.FC = () => {
                 sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' }}
               />
               <Chip size="small" label={`${edad} años`} sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' }} />
+              {internacionActiva && (
+                <Chip
+                  size="small"
+                  color="warning"
+                  label={`Internado${internacionActiva.cama_nombre ? ` · ${internacionActiva.cama_nombre}` : ''}`}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.95)', color: 'warning.dark', fontWeight: 700 }}
+                />
+              )}
             </Stack>
           </Box>
           <Stack direction="row" spacing={1} alignItems="flex-start">

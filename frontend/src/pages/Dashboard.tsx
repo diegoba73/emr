@@ -17,6 +17,8 @@ import {
   Search,
   Folder,
   Hotel,
+  Science,
+  Inventory,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
@@ -37,7 +39,7 @@ const quickActions: QuickActionCard[] = [
     icon: <Add />,
     path: '/turnos?action=create',
     color: '#667eea',
-    roles: ['all'],
+    roles: ['medico', 'admin', 'secretaria', 'paciente', 'enfermeria'],
   },
   {
     title: 'Buscar Paciente',
@@ -53,10 +55,36 @@ const quickActions: QuickActionCard[] = [
     icon: <CalendarToday />,
     path: '/turnos',
     color: '#48bb78',
-    roles: ['all'],
+    roles: [
+      'medico',
+      'admin',
+      'secretaria',
+      'paciente',
+      'enfermeria',
+      'kinesiologo',
+      'radiologo',
+      'ecografista',
+      'fonoaudiologo',
+    ],
   },
   {
-    title: 'Consultas',
+    title: 'Nueva orden',
+    description: 'Crear una orden de laboratorio',
+    icon: <Science />,
+    path: '/laboratorio/pendientes?action=nueva',
+    color: '#3182ce',
+    roles: ['laboratorio', 'admin'],
+  },
+  {
+    title: 'Recepción muestras',
+    description: 'Recibir muestras escaneando el código de barras',
+    icon: <Inventory />,
+    path: '/laboratorio/muestras/recepcion',
+    color: '#2b6cb0',
+    roles: ['laboratorio', 'admin'],
+  },
+  {
+    title: 'Atenciones Clínicas',
     description: 'Ver y gestionar atenciones clínicas',
     icon: <LocalHospital />,
     path: '/atenciones',
@@ -142,6 +170,7 @@ const Dashboard: React.FC = () => {
     if (role === 'ADMIN') return 'Admin.';
     if (role === 'SECRETARIA') return 'Srta.';
     if (role === 'ENFERMERIA') return 'Enf.';
+    if (role === 'LABORATORIO') return 'Lab.';
     return 'Sr./Sra.';
   };
 

@@ -49,7 +49,7 @@ interface MenuItemConfig {
 
 const menuItems: MenuItemConfig[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', roles: ['all'] },
-  { text: 'Consultas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria', 'paciente'] },
+  { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria', 'paciente'] },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', roles: ['medico', 'admin', 'paciente'] },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
   { text: 'Estudios complementarios', icon: <MedicalServices />, path: '/estudios-complementarios', roles: ['medico', 'admin', 'paciente', 'secretaria'] },

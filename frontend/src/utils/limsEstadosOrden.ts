@@ -40,7 +40,13 @@ export function ordenPuedeCargarResultados(estado: EstadoSolicitudLims): boolean
 }
 
 export function ordenPuedeCorregirResultados(estado: EstadoSolicitudLims): boolean {
-  return estado === 'EN_PROCESO' || estado === 'INFORMADO_PARCIAL' || estado === 'FINALIZADO';
+  // Fase A: tras FINALIZADO los resultados quedan bloqueados.
+  return estado === 'EN_PROCESO' || estado === 'INFORMADO_PARCIAL';
+}
+
+/** Completos y aún no liberados: listos para validación del bioquímico. */
+export function ordenListaParaValidar(estado: EstadoSolicitudLims, resultadosCompletos: boolean): boolean {
+  return resultadosCompletos && (estado === 'EN_PROCESO' || estado === 'INFORMADO_PARCIAL');
 }
 
 export function ordenPuedeEnviarInforme(estado: EstadoSolicitudLims): boolean {

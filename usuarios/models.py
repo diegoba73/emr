@@ -11,6 +11,7 @@ class User(AbstractUser):
         ('secretaria', 'Secretaria'),
         ('enfermeria', 'Enfermería'),
         ('laboratorio', 'Laboratorio'),
+        ('bioquimico', 'Bioquímico'),
         ('kinesiologo', 'Kinesiólogo'),
         ('radiologo', 'Radiólogo'),
         ('ecografista', 'Ecografista'),

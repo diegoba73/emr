@@ -22,7 +22,7 @@ export function getAppSegmentTitle(pathname: string, user: User | null | undefin
   if (p.startsWith('/dashboard')) return getHomeNavLabel();
   if (p.startsWith('/pacientes')) return 'Pacientes';
   if (p.startsWith('/turnos')) return 'Turnos';
-  if (p.startsWith('/atenciones')) return isPacienteRole(user) ? 'Mis consultas' : 'Consultas';
+  if (p.startsWith('/atenciones')) return isPacienteRole(user) ? 'Mis atenciones' : 'Atenciones Clínicas';
   if (p.startsWith('/archivos')) return isPacienteRole(user) ? 'Mis archivos' : 'Archivos';
   if (p.startsWith('/estudios-complementarios')) {
     return isPacienteRole(user) ? 'Mis estudios complementarios' : 'Estudios complementarios';

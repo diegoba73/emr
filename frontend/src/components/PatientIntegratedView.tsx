@@ -34,6 +34,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Stack,
 } from '@mui/material';
 import {
   Visibility,
@@ -871,17 +872,42 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                         )}
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          label={
-                            atencion.tipo_intervencion === 'CONSULTA' ? 'Consulta Ambulatoria' :
-                            atencion.tipo_intervencion === 'ESTUDIO' ? 'Estudio Médico' :
-                            atencion.tipo_intervencion === 'PROCEDIMIENTO' ? 'Procedimiento' :
-                            atencion.tipo_intervencion === 'CIRUGIA' ? 'Cirugía' :
-                            atencion.tipo_intervencion
-                          }
-                          color={getTipoChipColor(atencion.tipo_intervencion) as any}
-                        />
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                          <Chip
+                            size="small"
+                            label={
+                              atencion.contexto_atencion_display ||
+                              (atencion.contexto_atencion === 'GUARDIA'
+                                ? 'Guardia'
+                                : atencion.contexto_atencion === 'INTERNACION'
+                                  ? 'Internación'
+                                  : 'Ambulatoria')
+                            }
+                            color={
+                              atencion.contexto_atencion === 'INTERNACION'
+                                ? 'warning'
+                                : atencion.contexto_atencion === 'GUARDIA'
+                                  ? 'error'
+                                  : 'info'
+                            }
+                          />
+                          {atencion.tipo_intervencion && atencion.tipo_intervencion !== 'CONSULTA' && (
+                            <Chip
+                              size="small"
+                              label={
+                                atencion.tipo_intervencion === 'ESTUDIO'
+                                  ? 'Estudio'
+                                  : atencion.tipo_intervencion === 'PROCEDIMIENTO'
+                                    ? 'Procedimiento'
+                                    : atencion.tipo_intervencion === 'CIRUGIA'
+                                      ? 'Cirugía'
+                                      : atencion.tipo_intervencion
+                              }
+                              color={getTipoChipColor(atencion.tipo_intervencion) as any}
+                              variant="outlined"
+                            />
+                          )}
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         <Chip

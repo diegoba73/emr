@@ -156,13 +156,31 @@ run_seed_local() {
 }
 
 run_seed_docker() {
+  local run_py
+  if backend_running_in_docker; then
+    run_py() { docker_compose exec -T backend python manage.py "$@"; }
+  else
+    info "Backend no está estable; ejecutando comandos con docker compose run..."
+    run_py() {
+      docker_compose run --rm -e RUN_MIGRATIONS=false -e RUN_SEED=false --entrypoint "" backend \
+        python manage.py "$@"
+    }
+  fi
   info "Ejecutando seed_data (idempotente, contenedor backend)..."
-  docker_compose exec -T backend python manage.py seed_data
+  run_py seed_data
   info "Salas de estudio y consultorios (idempotente)..."
-  docker_compose exec -T backend python manage.py crear_recursos_iniciales
+  run_py crear_recursos_iniciales
   info "Cargando catálogo completo de solicitud en papel..."
-  docker_compose exec -T backend python manage.py seed_catalogo_solicitud_papel
+  run_py seed_catalogo_solicitud_papel
   ok "Datos demo + catálogo LIMS listos (medico1/medico123, laboratorio1/laboratorio123, …)."
+}
+
+cmd_repair_migrations() {
+  wait_for_docker
+  if ! db_running_in_docker; then
+    die "Postgres no está corriendo. Ejecutá: ./emrctl up"
+  fi
+  bash "${BASE_DIR}/scripts/docker_fix_migration_history.sh"
 }
 
 cmd_up_db_only() {
@@ -356,11 +374,10 @@ cmd_logs() {
 
 cmd_seed() {
   wait_for_docker
-  if backend_running_in_docker; then
-    run_seed_docker
-  else
-    run_seed_local
+  if ! db_running_in_docker; then
+    die "Postgres no está corriendo. Ejecutá: ./emrctl up"
   fi
+  run_seed_docker
 }
 
 cmd_help() {
@@ -385,6 +402,7 @@ main() {
     status|ps) cmd_status ;;
     logs) cmd_logs "${1:-db}" ;;
     seed) cmd_seed ;;
+    repair-migrations|repair) cmd_repair_migrations ;;
     help|-h|--help) cmd_help ;;
     *)
       die "Comando desconocido: $cmd (./emrctl help)"

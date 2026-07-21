@@ -55,6 +55,13 @@ class Cama(models.Model):
 
 class Internacion(models.Model):
     """Internaciones de pacientes"""
+    numero_internacion = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name="Número de Internación",
+    )
     paciente = models.ForeignKey(
         'pacientes.Paciente',
         on_delete=models.CASCADE,
@@ -75,6 +82,15 @@ class Internacion(models.Model):
         related_name='internaciones_camas',
         verbose_name="Médico"
     )
+    atencion_origen = models.ForeignKey(
+        'turnos.Atencion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='internaciones_derivadas',
+        verbose_name="Atención de origen",
+    )
+    motivo_ingreso = models.TextField(null=True, blank=True, verbose_name="Motivo de Ingreso")
     fecha_ingreso = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Ingreso")
     fecha_alta = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de Alta")
     diagnostico_cie = models.ForeignKey(
@@ -97,6 +113,22 @@ class Internacion(models.Model):
         return f"Internación {self.paciente.apellido}, {self.paciente.nombre} - {self.cama.nombre}"
     
     def save(self, *args, **kwargs):
+        if not self.numero_internacion:
+            fecha_actual = timezone.now()
+            prefijo = f"INT-{fecha_actual.strftime('%Y%m%d')}"
+            ultima_internacion = Internacion.objects.filter(
+                numero_internacion__startswith=prefijo
+            ).order_by('-numero_internacion').first()
+            if ultima_internacion and ultima_internacion.numero_internacion:
+                try:
+                    ultimo_numero = int(ultima_internacion.numero_internacion.split('-')[-1])
+                    nuevo_numero = ultimo_numero + 1
+                except (ValueError, IndexError):
+                    nuevo_numero = 1
+            else:
+                nuevo_numero = 1
+            self.numero_internacion = f"{prefijo}-{nuevo_numero:03d}"
+
         # Si es una nueva internación (no tiene ID aún)
         if not self.pk:
             # Verificar que la cama esté disponible

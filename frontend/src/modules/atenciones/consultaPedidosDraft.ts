@@ -30,8 +30,55 @@ const emptyDraft = (): ConsultaPedidosDraft => ({
   estudios: [],
 });
 
+const GUARDIA_PENDING_KEY = 'guardia-pedidos-pending';
+
 function draftKey(consultaHcId: number): string {
   return `consulta-pedidos-borrador-${consultaHcId}`;
+}
+
+export function loadGuardiaPendingDraft(): ConsultaPedidosDraft {
+  try {
+    const raw = sessionStorage.getItem(GUARDIA_PENDING_KEY);
+    if (!raw) return emptyDraft();
+    const parsed = JSON.parse(raw) as ConsultaPedidosDraft;
+    return {
+      solicitudesLab: Array.isArray(parsed.solicitudesLab) ? parsed.solicitudesLab : [],
+      estudios: Array.isArray(parsed.estudios) ? parsed.estudios : [],
+    };
+  } catch {
+    return emptyDraft();
+  }
+}
+
+export function saveGuardiaPendingDraft(draft: ConsultaPedidosDraft): void {
+  try {
+    sessionStorage.setItem(GUARDIA_PENDING_KEY, JSON.stringify(draft));
+  } catch {
+    /* storage lleno o privado */
+  }
+}
+
+export function clearGuardiaPendingDraft(): void {
+  try {
+    sessionStorage.removeItem(GUARDIA_PENDING_KEY);
+  } catch {
+    /* nada */
+  }
+}
+
+/** Traslada el borrador de guardia al consulta HC recién creado. */
+export function migrateGuardiaPendingDraftToConsulta(consultaHcId: number): void {
+  const pending = loadGuardiaPendingDraft();
+  if (pending.solicitudesLab.length === 0 && pending.estudios.length === 0) {
+    return;
+  }
+  saveConsultaPedidosDraft(consultaHcId, pending);
+  clearGuardiaPendingDraft();
+}
+
+export function countGuardiaPendingDraftItems(): number {
+  const pending = loadGuardiaPendingDraft();
+  return pending.solicitudesLab.length + pending.estudios.length;
 }
 
 export function loadConsultaPedidosDraft(consultaHcId: number): ConsultaPedidosDraft {
@@ -72,14 +119,17 @@ export interface FlushConsultaPedidosParams {
   consultaHcId: number;
   pacienteId: number;
   medicoId?: number | null;
+  /** Origen clínico explícito (p. ej. guardia walk-in en ICPL). */
+  origenSolicitud?: 'GUARDIA';
 }
 
 /** Persiste borradores en LIMS / estudios complementarios. Lanza si alguna creación falla. */
 export async function flushConsultaPedidosDrafts(
-  params: FlushConsultaPedidosParams
+  params: FlushConsultaPedidosParams,
+  draftOverride?: ConsultaPedidosDraft
 ): Promise<void> {
-  const { consultaHcId, pacienteId, medicoId } = params;
-  const draft = loadConsultaPedidosDraft(consultaHcId);
+  const { consultaHcId, pacienteId, medicoId, origenSolicitud } = params;
+  const draft = draftOverride ?? loadConsultaPedidosDraft(consultaHcId);
   if (draft.solicitudesLab.length === 0 && draft.estudios.length === 0) {
     return;
   }
@@ -95,6 +145,7 @@ export async function flushConsultaPedidosDrafts(
         examenes_ids: sol.examenes_ids,
         paneles_ids: sol.paneles_ids,
         observaciones: sol.observaciones,
+        origen_solicitud: origenSolicitud,
       });
     } catch (e) {
       errors.push(formatDrfError(e));

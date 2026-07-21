@@ -12,10 +12,9 @@ import {
 } from '@mui/material';
 import { ConsultaAmbulatoriaRecord } from '../../../../types';
 import toast from 'react-hot-toast';
+import AtencionPedidosSection from '../AtencionPedidosSection';
 import { useSaveConsultaAmbulatoriaMutation, useAtencionQuery, useCloseAtencionMutation } from '../../hooks';
-import {
-  flushConsultaPedidosDrafts,
-} from '../../consultaPedidosDraft';
+import { flushConsultaPedidosDrafts } from '../../consultaPedidosDraft';
 
 interface ConsultaAmbulatoriaFormProps {
   atencionId: number;
@@ -259,6 +258,9 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({ atenc
           Tu rol no puede modificar el detalle clínico de esta atención.
         </Alert>
       )}
+
+      <AtencionPedidosSection atencionId={atencionId} canEdit={canSave} />
+
       <Tabs
         value={tab}
         onChange={(_e, v) => setTab(v)}

@@ -28,11 +28,14 @@ import { DataProvider, useData } from './contexts/DataContext';
 import { ThemeModeProvider, useThemeMode } from './contexts/ThemeModeContext';
 import { buildAppTheme } from './theme/buildAppTheme';
 import AtencionesClinicasPage from './modules/atenciones/AtencionesClinicasPage';
+import GuardiaPage from './pages/GuardiaPage';
 import InternacionDashboard from './pages/InternacionDashboard';
 import ListaExamenesTest from './pages/laboratorio/ListaExamenesTest';
 import OrdenesLims from './pages/laboratorio/OrdenesLims';
 import OrdenesLimsPendientes from './pages/laboratorio/OrdenesLimsPendientes';
 import OrdenLimsDetalle from './pages/laboratorio/OrdenLimsDetalle';
+import MuestraConsultaPage from './pages/laboratorio/MuestraConsultaPage';
+import RecepcionMuestrasPage from './pages/laboratorio/RecepcionMuestrasPage';
 import TiposMuestraCatalogo from './pages/laboratorio/TiposMuestraCatalogo';
 import ExamenesCatalogo from './pages/laboratorio/ExamenesCatalogo';
 import MicrobiologiaHub from './pages/laboratorio/MicrobiologiaHub';
@@ -57,8 +60,8 @@ import {
   canAccessLimsCatalogos,
   canAccessLimsPendientes,
   canAccessLimsOrdenes,
-  canAccessLimsAny,
   canAccessMicrobiologia,
+  canOperateLims,
 } from './utils/limsAccess';
 import { canAccessTurnosAgenda } from './utils/turnoPermissions';
 
@@ -216,6 +219,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessAtenciones}
               >
                 <AtencionesClinicasPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/guardia"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessAtenciones}
+              >
+                <GuardiaPage />
               </ProtectedRoute>
             }
           />
@@ -415,7 +431,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsAny}
+                canAccess={canAccessLimsOrdenes}
               >
                 <OrdenLimsDetalle />
               </ProtectedRoute>
@@ -431,6 +447,32 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsOrdenes}
               >
                 <OrdenesLims />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/muestras/consulta"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <MuestraConsultaPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/muestras/recepcion"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canOperateLims}
+              >
+                <RecepcionMuestrasPage />
               </ProtectedRoute>
             }
           />

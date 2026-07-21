@@ -45,8 +45,13 @@ HEADER_HEIGHT = 4.2 * cm
 FOOTER_HEIGHT = 3.6 * cm
 CONTENT_TOP_PAD = 0.2 * cm
 
-COL_EXAMEN = 11.2 * cm
-COL_RESULTADO = 6.0 * cm
+# Anchos de columna (total ≈ 17.2 cm útiles en A4 con márgenes 1.8 cm)
+COL_EXAMEN = 5.6 * cm
+COL_RESULTADO = 2.8 * cm
+COL_UNIDAD = 2.0 * cm
+COL_REFERENCIA = 5.4 * cm
+COL_FLAG = 1.4 * cm
+COL_TOTAL = COL_EXAMEN + COL_RESULTADO + COL_UNIDAD + COL_REFERENCIA + COL_FLAG
 
 
 @dataclass
@@ -180,6 +185,43 @@ def _valor_y_unidad(res: ResultadoExamen) -> tuple[str, str]:
     valor = (res.valor_obtenido or "").strip() or "—"
     unidad = (res.unidad or res.tipo_examen.unidad_default or "").strip()
     return valor, unidad
+
+
+def _flag_resultado(res: ResultadoExamen) -> str:
+    """Marca H/L/* según rango snapshot o flags clínicos."""
+    if res.es_critico:
+        return "*"
+    valor = res.valor_numerico
+    if valor is not None:
+        vmin = res.rango_min_snapshot
+        vmax = res.rango_max_snapshot
+        if vmin is not None and valor < vmin:
+            return "L"
+        if vmax is not None and valor > vmax:
+            return "H"
+    if res.es_patologico:
+        return "H"
+    return ""
+
+
+def _nombre_validador(resultados: list[ResultadoExamen]) -> tuple[str | None, datetime | None]:
+    for res in resultados:
+        if res.validado_por_id and res.fecha_validacion:
+            user = res.validado_por
+            nombre = ""
+            if user is not None:
+                full = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+                nombre = full or getattr(user, "username", "") or str(user)
+            return nombre or None, res.fecha_validacion
+    for res in resultados:
+        if res.validado_por_id:
+            user = res.validado_por
+            nombre = ""
+            if user is not None:
+                full = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+                nombre = full or getattr(user, "username", "") or str(user)
+            return nombre or None, res.fecha_validacion
+    return None, None
 
 
 class _InformeIcplDoc(BaseDocTemplate):
@@ -360,12 +402,37 @@ def _styles() -> dict[str, ParagraphStyle]:
             alignment=TA_RIGHT,
             textColor=meta_color,
         ),
+        "result_ref": ParagraphStyle(
+            "ResultRef",
+            fontName="Helvetica",
+            fontSize=typo["exam_meta"],
+            leading=typo["exam_meta"] + 1.5,
+            textColor=meta_color,
+            alignment=TA_LEFT,
+        ),
+        "result_flag": ParagraphStyle(
+            "ResultFlag",
+            fontName="Helvetica-Bold",
+            fontSize=typo["result_value"],
+            leading=typo["result_value"] + 2,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#B91C1C"),
+        ),
         "table_header": ParagraphStyle(
             "TableHeader",
             fontName="Helvetica-Bold",
             fontSize=typo["table_header"],
             leading=typo["table_header"] + 2,
             textColor=meta_color,
+        ),
+        "validation_block": ParagraphStyle(
+            "ValidationBlock",
+            fontName="Helvetica",
+            fontSize=typo["exam_meta"],
+            leading=typo["exam_meta"] + 2,
+            textColor=colors.black,
+            spaceBefore=10,
+            spaceAfter=4,
         ),
         "empty": ParagraphStyle(
             "Empty",
@@ -381,6 +448,14 @@ def _styles() -> dict[str, ParagraphStyle]:
             textColor=colors.HexColor("#B45309"),
             spaceAfter=6,
         ),
+        "legend": ParagraphStyle(
+            "FlagLegend",
+            fontName="Helvetica",
+            fontSize=7,
+            leading=9,
+            textColor=meta_color,
+            spaceBefore=6,
+        ),
     }
 
 
@@ -392,19 +467,7 @@ def _celda_examen(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> li
     if metodo:
         parts.append(Paragraph(f"Método: {_escape(metodo)}", styles["exam_meta"]))
 
-    ref = _referencia_texto(res)
-    if ref:
-        parts.append(Paragraph(f"Valor de referencia: {_escape(ref)}", styles["exam_meta"]))
-
     return parts
-
-
-def _celda_resultado(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> list[Any]:
-    valor, unidad = _valor_y_unidad(res)
-    flow: list[Any] = [Paragraph(_escape(valor), styles["result_value"])]
-    if unidad:
-        flow.append(Paragraph(_escape(unidad), styles["result_unit"]))
-    return flow
 
 
 def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
@@ -413,9 +476,12 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
             [
                 Paragraph("EXAMEN", styles["table_header"]),
                 Paragraph("RESULTADO", styles["table_header"]),
+                Paragraph("UNIDAD", styles["table_header"]),
+                Paragraph("REFERENCIA", styles["table_header"]),
+                Paragraph("", styles["table_header"]),
             ]
         ],
-        colWidths=[COL_EXAMEN, COL_RESULTADO],
+        colWidths=[COL_EXAMEN, COL_RESULTADO, COL_UNIDAD, COL_REFERENCIA, COL_FLAG],
     )
     tbl.setStyle(
         TableStyle(
@@ -423,7 +489,8 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
                 ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor(INFORME_TYPO["color_rule"])),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("ALIGN", (1, 0), (2, 0), "RIGHT"),
+                ("ALIGN", (4, 0), (4, 0), "CENTER"),
             ]
         )
     )
@@ -431,9 +498,14 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
 
 
 def _fila_resultado(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> Table:
+    valor, unidad = _valor_y_unidad(res)
+    ref = _referencia_texto(res) or "—"
+    flag = _flag_resultado(res)
+
+    left_parts = _celda_examen(res, styles)
     left = Table(
-        [[p] for p in _celda_examen(res, styles)],
-        colWidths=[COL_EXAMEN - 0.2 * cm],
+        [[p] for p in left_parts],
+        colWidths=[COL_EXAMEN - 0.15 * cm],
     )
     left.setStyle(
         TableStyle(
@@ -446,25 +518,17 @@ def _fila_resultado(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> 
         )
     )
 
-    right = Table(
-        [[p] for p in _celda_resultado(res, styles)],
-        colWidths=[COL_RESULTADO - 0.2 * cm],
-    )
-    right.setStyle(
-        TableStyle(
-            [
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
-            ]
-        )
-    )
-
     row = Table(
-        [[left, right]],
-        colWidths=[COL_EXAMEN, COL_RESULTADO],
+        [
+            [
+                left,
+                Paragraph(_escape(valor), styles["result_value"]),
+                Paragraph(_escape(unidad or "—"), styles["result_unit"]),
+                Paragraph(_escape(ref), styles["result_ref"]),
+                Paragraph(_escape(flag), styles["result_flag"]),
+            ]
+        ],
+        colWidths=[COL_EXAMEN, COL_RESULTADO, COL_UNIDAD, COL_REFERENCIA, COL_FLAG],
     )
     row.setStyle(
         TableStyle(
@@ -474,7 +538,9 @@ def _fila_resultado(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> 
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
                 ("LEFTPADDING", (0, 0), (0, 0), 2),
-                ("RIGHTPADDING", (1, 0), (1, 0), 2),
+                ("RIGHTPADDING", (1, 0), (2, 0), 2),
+                ("ALIGN", (1, 0), (2, 0), "RIGHT"),
+                ("ALIGN", (4, 0), (4, 0), "CENTER"),
             ]
         )
     )
@@ -486,7 +552,7 @@ def _bloque_panel(grupo: GrupoResultadosPdf, styles: dict[str, ParagraphStyle]) 
 
     panel_header = Table(
         [[Paragraph(_escape(grupo.titulo), styles["panel"])]],
-        colWidths=[COL_EXAMEN + COL_RESULTADO],
+        colWidths=[COL_TOTAL],
     )
     panel_header.setStyle(
         TableStyle(
@@ -520,6 +586,32 @@ def _bloque_panel(grupo: GrupoResultadosPdf, styles: dict[str, ParagraphStyle]) 
     return [KeepTogether(flow)]
 
 
+def _bloque_validacion(
+    solicitud: SolicitudExamen,
+    resultados: list[ResultadoExamen],
+    styles: dict[str, ParagraphStyle],
+) -> list[Any]:
+    flow: list[Any] = []
+    nombre, fecha = _nombre_validador(resultados)
+    if solicitud.estado == "FINALIZADO" and (nombre or fecha):
+        fecha_txt = ""
+        if fecha:
+            fecha_txt = timezone.localtime(fecha).strftime("%d/%m/%Y %H:%M") if timezone.is_aware(fecha) else fecha.strftime("%d/%m/%Y %H:%M")
+        partes = ["Resultados validados para emisión."]
+        if nombre:
+            partes.append(f"Validado por: {nombre}.")
+        if fecha_txt:
+            partes.append(f"Fecha de validación: {fecha_txt}.")
+        flow.append(Paragraph(" ".join(partes), styles["validation_block"]))
+    flow.append(
+        Paragraph(
+            "H = valor por encima del rango de referencia · L = valor por debajo · * = valor crítico",
+            styles["legend"],
+        )
+    )
+    return flow
+
+
 def construir_story_icpl(
     solicitud: SolicitudExamen,
     resultados: list[ResultadoExamen],
@@ -535,11 +627,20 @@ def construir_story_icpl(
     if es_parcial:
         story.append(
             Paragraph(
-                "INFORME PARCIAL — algunos resultados están pendientes de completar.",
+                "INFORME PARCIAL — algunos resultados están pendientes de completar o validar.",
                 styles["partial_banner"],
             )
         )
         story.append(Spacer(1, 0.15 * cm))
+    elif solicitud.estado != "FINALIZADO":
+        story.append(
+            Paragraph(
+                "BORRADOR — resultados aún no validados para emisión oficial.",
+                styles["partial_banner"],
+            )
+        )
+        story.append(Spacer(1, 0.15 * cm))
+
     grupos = agrupar_resultados_por_panel(solicitud, resultados)
 
     if not grupos:
@@ -562,6 +663,7 @@ def construir_story_icpl(
                 )
             )
 
+    story.extend(_bloque_validacion(solicitud, resultados, styles))
     return story
 
 

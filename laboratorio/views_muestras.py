@@ -7,6 +7,7 @@ import logging
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.http import HttpResponse
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -18,6 +19,10 @@ from api.permissions import (
 )
 from auditoria.audit_service import log_update
 from auditoria.snapshot import safe_model_snapshot
+from laboratorio.etiquetas_muestra import (
+    generar_etiqueta_muestra_pdf_bytes,
+    nombre_archivo_etiqueta_muestra,
+)
 from laboratorio.models_catalog import AreaLaboratorio, Muestra, SeccionLaboratorio, TipoContenedor
 from laboratorio.muestra_estado import (
     MuestraAccionError,
@@ -28,8 +33,11 @@ from laboratorio.muestra_estado import (
     aplicar_rechazar,
     aplicar_recibir,
     aplicar_tomar,
+    avanzar_orden_si_corresponde_por_toma,
     crear_muestra,
+    extraccion_completa,
     registrar_evento_actualizacion_admin,
+    tubos_pendientes_extraccion,
 )
 from laboratorio.serializers_muestras import (
     AreaLaboratorioSerializer,
@@ -39,10 +47,13 @@ from laboratorio.serializers_muestras import (
     MuestraConservarSerializer,
     MuestraCreateSerializer,
     MuestraDescartarSerializer,
+    MuestraLookupSerializer,
     MuestraPartialUpdateSerializer,
     MuestraRechazarSerializer,
+    MuestraRecibirPorCodigoSerializer,
     MuestraRecibirSerializer,
     MuestraSerializer,
+    MuestraTomarPorCodigoSerializer,
     MuestraTomarSerializer,
     SeccionLaboratorioSerializer,
     TipoContenedorSerializer,
@@ -292,3 +303,120 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
             motivo=ser.validated_data.get("motivo") or "",
             observaciones=ser.validated_data.get("observaciones") or "",
         )
+
+    @action(detail=True, methods=["get"], url_path="etiqueta")
+    def etiqueta(self, request, pk=None):
+        muestra = self.get_object()
+        if not muestra.codigo_barra:
+            return Response(
+                {"error": "La muestra no tiene código de barras asignado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            pdf_bytes = generar_etiqueta_muestra_pdf_bytes(muestra)
+        except Exception:
+            logger.exception("generar etiqueta muestra pk=%s", pk)
+            return Response(
+                {"error": "No se pudo generar la etiqueta PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        nombre = nombre_archivo_etiqueta_muestra(muestra.pk, muestra.codigo_barra)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{nombre}"'
+        return response
+
+    @action(detail=False, methods=["get"], url_path=r"por-codigo/(?P<codigo>[^/]+)")
+    def por_codigo(self, request, codigo=None):
+        codigo_limpio = (codigo or "").strip()
+        if not codigo_limpio:
+            return Response({"error": "Código requerido."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            muestra = self.get_queryset().get(codigo_barra=codigo_limpio)
+        except Muestra.DoesNotExist:
+            return Response({"error": "Muestra no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, muestra)
+        return Response(
+            MuestraLookupSerializer(muestra, context=self.get_serializer_context()).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="tomar-por-codigo")
+    def tomar_por_codigo(self, request):
+        """Confirma extracción física: PENDIENTE_TOMA → TOMADA al escanear el tubo."""
+        ser = MuestraTomarPorCodigoSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        codigo = ser.validated_data["codigo_barra"]
+        try:
+            muestra = self.get_queryset().get(codigo_barra=codigo)
+        except Muestra.DoesNotExist:
+            return Response({"error": "Muestra no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, muestra)
+        try:
+            with transaction.atomic():
+                muestra = aplicar_tomar(
+                    muestra.pk,
+                    actor=request.user,
+                    view="MuestraTransaccionalViewSet.tomar_por_codigo",
+                    observaciones=ser.validated_data.get("observaciones") or "",
+                )
+                avanzar_orden_si_corresponde_por_toma(
+                    muestra,
+                    actor=request.user,
+                    view="MuestraTransaccionalViewSet.tomar_por_codigo",
+                )
+                muestra.refresh_from_db()
+        except MuestraAccionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = MuestraLookupSerializer(muestra, context=self.get_serializer_context()).data
+        sid = muestra.solicitud_id
+        pendientes = tubos_pendientes_extraccion(sid)
+        data["extraccion_completa"] = extraccion_completa(sid)
+        data["tubos_pendientes_extraccion"] = [
+            {
+                "id": p.pk,
+                "codigo_barra": p.codigo_barra,
+                "tipo_contenedor_codigo": p.tipo_contenedor.codigo if p.tipo_contenedor_id else None,
+                "tipo_contenedor_nombre": p.tipo_contenedor.nombre if p.tipo_contenedor_id else None,
+            }
+            for p in pendientes
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], url_path="recibir-por-codigo")
+    def recibir_por_codigo(self, request):
+        """
+        Escaneo de recepción: PENDIENTE_TOMA o TOMADA → RECIBIDA.
+        Unifica toma + ingreso (sin paso de extracción aparte).
+        """
+        ser = MuestraRecibirPorCodigoSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        codigo = ser.validated_data["codigo_barra"]
+        try:
+            muestra = self.get_queryset().get(codigo_barra=codigo)
+        except Muestra.DoesNotExist:
+            return Response({"error": "Muestra no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        self.check_object_permissions(request, muestra)
+        try:
+            muestra = aplicar_recibir(
+                muestra.pk,
+                actor=request.user,
+                view="MuestraTransaccionalViewSet.recibir_por_codigo",
+                observaciones=ser.validated_data.get("observaciones") or "",
+                ubicacion_actual=ser.validated_data.get("ubicacion_actual") or "Laboratorio",
+            )
+        except MuestraAccionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = MuestraLookupSerializer(muestra, context=self.get_serializer_context()).data
+        sid = muestra.solicitud_id
+        pendientes = tubos_pendientes_extraccion(sid)
+        data["extraccion_completa"] = extraccion_completa(sid)
+        data["tubos_pendientes_extraccion"] = [
+            {
+                "id": p.pk,
+                "codigo_barra": p.codigo_barra,
+                "tipo_contenedor_codigo": p.tipo_contenedor.codigo if p.tipo_contenedor_id else None,
+                "tipo_contenedor_nombre": p.tipo_contenedor.nombre if p.tipo_contenedor_id else None,
+            }
+            for p in pendientes
+        ]
+        return Response(data, status=status.HTTP_200_OK)

@@ -51,9 +51,14 @@ export function canMutateTurnosGlobally(user?: User | null): boolean {
   return r === 'ADMIN' || r === 'SECRETARIA';
 }
 
-/** Lectura de agenda en pantalla /turnos. */
+export function isLaboratorioRole(user?: User | null): boolean {
+  return normalizeRol(user) === 'LABORATORIO';
+}
+
+/** Lectura de agenda en pantalla /turnos. Laboratorio no usa agenda (flujo LIMS). */
 export function canViewTurnosAgenda(user?: User | null): boolean {
   if (!user) return false;
+  if (isLaboratorioRole(user)) return false;
   if (isEmrStaffOrAdmin(user)) return true;
   const r = normalizeRol(user);
   return [
@@ -62,7 +67,6 @@ export function canViewTurnosAgenda(user?: User | null): boolean {
     'MEDICO',
     'PACIENTE',
     'ENFERMERIA',
-    'LABORATORIO',
     ...ROLES_ESTUDIO_COMPLEMENTARIO.map((rol) => rol.toUpperCase()),
   ].includes(r);
 }
@@ -95,15 +99,11 @@ export function canEditTurno(user?: User | null, turno?: Turno | null): boolean 
   return false;
 }
 
-/** Enfermería, laboratorio y profesionales de estudio: ver agenda global sin crear/editar. */
+/** Enfermería y profesionales de estudio: ver agenda global sin crear/editar. */
 export function isAgendaReadOnlyRole(user?: User | null): boolean {
   const r = normalizeRol(user);
-  if (r === 'ENFERMERIA' || r === 'LABORATORIO') return true;
+  if (r === 'ENFERMERIA') return true;
   return isProfesionalEstudioRole(r.toLowerCase());
-}
-
-export function isLaboratorioRole(user?: User | null): boolean {
-  return normalizeRol(user) === 'LABORATORIO';
 }
 
 /** DELETE físico bloqueado en API (405). */

@@ -44,5 +44,7 @@ describe('AppLayout', () => {
       </ThemeModeProvider>
     );
     expect(screen.getByText('Contenido de prueba')).toBeInTheDocument();
+    const copyrightLink = screen.getByRole('link', { name: 'PlanDigital' });
+    expect(copyrightLink).toHaveAttribute('href', 'https://plandigital.com.ar');
   });
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Toolbar, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Link, Toolbar, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar, { SIDEBAR_WIDTH } from './Sidebar';
 import Header from './Header';
@@ -47,10 +47,33 @@ const AppLayout: React.FC = () => {
             overflow: 'auto',
             px: { xs: 1.5, sm: 2, md: 3 },
             py: { xs: 1.5, md: 2 },
-            pb: 4,
+            pb: 2,
           }}
         >
           <Outlet />
+        </Box>
+        <Box
+          component="footer"
+          sx={{
+            py: 1.5,
+            px: { xs: 1.5, sm: 2, md: 3 },
+            borderTop: 1,
+            borderColor: 'divider',
+            textAlign: 'center',
+          }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            © {new Date().getFullYear()}{' '}
+            <Link
+              href="https://plandigital.com.ar"
+              target="_blank"
+              rel="noopener noreferrer"
+              color="inherit"
+              underline="hover"
+            >
+              PlanDigital
+            </Link>
+          </Typography>
         </Box>
       </Box>
     </Box>

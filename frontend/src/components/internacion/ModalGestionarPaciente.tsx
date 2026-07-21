@@ -13,6 +13,7 @@ import {
   Divider,
   TextField,
   Autocomplete,
+  Stack,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -24,10 +25,13 @@ import {
   Cancel,
 } from '@mui/icons-material';
 import { Cama, InternacionCama, Paciente, DiagnosticoCIE10 } from '../../types';
-import { darAltaInternacion, getInternaciones, updateInternacion, buscarDiagnosticosCIE10 } from '../../services/apiService';
+import { darAltaInternacion, getInternaciones, updateInternacion, buscarDiagnosticosCIE10, getInternacionEvoluciones, iniciarEvolucionDiariaInternacion, iniciarNotaInternacion } from '../../services/apiService';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import AtencionDetailDrawer from '../../modules/atenciones/components/AtencionDetailDrawer';
+import { Atencion } from '../../types';
+import { NoteAdd, PostAdd } from '@mui/icons-material';
 
 interface ModalGestionarPacienteProps {
   open: boolean;
@@ -49,6 +53,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [confirmAlta, setConfirmAlta] = useState(false);
+  const [evoluciones, setEvoluciones] = useState<Atencion[]>([]);
+  const [evolucionDiariaHoy, setEvolucionDiariaHoy] = useState(false);
+  const [loadingEvoluciones, setLoadingEvoluciones] = useState(false);
+  const [selectedAtencionId, setSelectedAtencionId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   
   // Estados para modo edición
   const [isEditing, setIsEditing] = useState(false);
@@ -216,6 +225,20 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     }
   }, [editedData.paciente, internacion?.paciente, pacienteOptions]);
 
+  const loadEvoluciones = async (internacionId: number) => {
+    setLoadingEvoluciones(true);
+    try {
+      const data = await getInternacionEvoluciones(internacionId);
+      setEvoluciones(data.atenciones || []);
+      setEvolucionDiariaHoy(Boolean(data.evolucion_diaria_hoy));
+    } catch {
+      setEvoluciones([]);
+      setEvolucionDiariaHoy(false);
+    } finally {
+      setLoadingEvoluciones(false);
+    }
+  };
+
   const loadInternacion = async () => {
     if (!cama?.internacion_actual) {
       return;
@@ -244,6 +267,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         } else {
           setDiagnosticoInputValue('');
         }
+        await loadEvoluciones(internacionId);
       } else {
         // Fallback: buscar en la lista
         const internaciones = await getInternaciones();
@@ -263,6 +287,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           } else {
             setDiagnosticoInputValue('');
           }
+          await loadEvoluciones(internacionId);
         } else {
           setError('No se encontró la internación');
         }
@@ -401,6 +426,48 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       setConfirmAlta(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const internacionIdActual = internacion?.id || cama?.internacion_actual?.id_internacion;
+
+  const handleIniciarEvolucionDiaria = async () => {
+    if (!internacionIdActual) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const atencion = await iniciarEvolucionDiariaInternacion(internacionIdActual);
+      await loadEvoluciones(internacionIdActual);
+      setSelectedAtencionId(atencion.id);
+      setDrawerOpen(true);
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, 'No se pudo iniciar la evolución diaria.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleIniciarInterconsulta = async () => {
+    if (!internacionIdActual) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const atencion = await iniciarNotaInternacion(internacionIdActual, 'INTERCONSULTA');
+      await loadEvoluciones(internacionIdActual);
+      setSelectedAtencionId(atencion.id);
+      setDrawerOpen(true);
+    } catch (err: unknown) {
+      setError(getSafeClinicalActionMessage(err, 'No se pudo iniciar la interconsulta.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrawerClose = () => {
+    setDrawerOpen(false);
+    setSelectedAtencionId(null);
+    if (internacionIdActual) {
+      loadEvoluciones(internacionIdActual);
     }
   };
 
@@ -700,6 +767,84 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                 </Typography>
               )}
             </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                Seguimiento clínico
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<NoteAdd />}
+                  onClick={handleIniciarEvolucionDiaria}
+                  disabled={loading || loadingEvoluciones || evolucionDiariaHoy || isEditing}
+                >
+                  Nueva evolución diaria
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PostAdd />}
+                  onClick={handleIniciarInterconsulta}
+                  disabled={loading || loadingEvoluciones || isEditing}
+                >
+                  Interconsulta / nota
+                </Button>
+              </Stack>
+              {evolucionDiariaHoy && (
+                <Alert severity="info" sx={{ mb: 1 }}>
+                  Ya existe una evolución diaria registrada para hoy.
+                </Alert>
+              )}
+              {loadingEvoluciones ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : evoluciones.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Sin evoluciones registradas en este episodio.
+                </Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {evoluciones.map((evo) => (
+                    <Box
+                      key={evo.id}
+                      sx={{
+                        p: 1.25,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                      onClick={() => {
+                        setSelectedAtencionId(evo.id);
+                        setDrawerOpen(true);
+                      }}
+                    >
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {evo.evolucion_internacion?.tipo_evolucion_display || 'Evolución'}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={evo.estado_clinico}
+                          color={evo.estado_clinico === 'FINALIZADA' ? 'success' : 'info'}
+                        />
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        {evo.fecha_admision
+                          ? new Date(evo.fecha_admision).toLocaleString('es-AR')
+                          : '—'}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
           </>
         )}
       </DialogContent>
@@ -745,6 +890,18 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           </>
         )}
       </DialogActions>
+
+      <AtencionDetailDrawer
+        atencionId={selectedAtencionId}
+        open={drawerOpen}
+        onClose={handleDrawerClose}
+        forceEdit
+        onIntervencionSaved={() => {
+          if (internacionIdActual) {
+            loadEvoluciones(internacionIdActual);
+          }
+        }}
+      />
     </Dialog>
   );
 };

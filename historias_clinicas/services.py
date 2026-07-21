@@ -12,16 +12,38 @@ from historias_clinicas.models import Consulta, HistoriaClinica
 from turnos.models import Atencion, ConsultaAmbulatoria
 
 
+def _motivo_consulta_desde_atencion(atencion: Atencion) -> str:
+    if atencion.contexto_atencion == Atencion.ContextoAtencion.INTERNACION:
+        evo = getattr(atencion, 'evolucion_internacion', None)
+        if evo is not None:
+            return f'Internación — {evo.get_tipo_evolucion_display()}'
+        return 'Internación — evolución clínica'
+    if atencion.contexto_atencion == Atencion.ContextoAtencion.GUARDIA:
+        return 'Guardia cardiológica'
+    return 'Consulta médica'
+
+
 def ensure_consulta_hc_desde_atencion(atencion: Atencion) -> Consulta:
-    """Obtiene o crea la Consulta HC vinculada a una atención (vía turno si existe)."""
+    """Obtiene o crea la Consulta HC vinculada a una atención."""
+    existing = (
+        Consulta.objects.filter(atencion_id=atencion.pk).first()
+        if atencion.pk
+        else None
+    )
+    if existing is not None:
+        return existing
+
     turno = atencion.turno
     if turno is not None:
         consulta = Consulta.objects.filter(turno_id=turno.pk).first()
         if consulta is not None:
+            if not consulta.atencion_id:
+                consulta.atencion = atencion
+                consulta.save(update_fields=['atencion'])
             return consulta
 
     historia, _ = HistoriaClinica.objects.get_or_create(paciente=atencion.paciente)
-    motivo = 'Consulta médica'
+    motivo = _motivo_consulta_desde_atencion(atencion)
     fecha = atencion.fecha_admision
     if turno is not None:
         motivo = turno.motivo_reserva or motivo
@@ -31,6 +53,7 @@ def ensure_consulta_hc_desde_atencion(atencion: Atencion) -> Consulta:
         historia_clinica=historia,
         medico=atencion.medico_principal,
         turno=turno,
+        atencion=atencion,
         fecha_hora_consulta=fecha,
         motivo_consulta_detalle=motivo,
     )
@@ -82,6 +105,13 @@ def sync_consulta_hc_desde_ambulatoria(consulta_amb: ConsultaAmbulatoria) -> Con
 
 def consulta_hc_id_para_atencion(atencion: Atencion) -> int | None:
     """Devuelve el id de Consulta HC para una atención, sin crear si no existe."""
+    cid = (
+        Consulta.objects.filter(atencion_id=atencion.pk)
+        .values_list('pk', flat=True)
+        .first()
+    )
+    if cid:
+        return cid
     if atencion.turno_id:
         cid = (
             Consulta.objects.filter(turno_id=atencion.turno_id)

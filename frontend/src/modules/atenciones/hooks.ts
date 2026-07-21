@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import {
   Atencion,
   ConsultaAmbulatoriaRecord,
+  EvolucionInternacionRecord,
   EstudioDiagnostico,
   ProcedimientoCatalogo,
 } from '../../types';
@@ -10,17 +11,23 @@ import { apiService } from '../../services/api';
 
 export interface AtencionFilters {
   tipo_intervencion?: string;
+  contexto_atencion?: string;
+  internacion?: number;
   medico_id?: number | null;
   estado_clinico?: string;
   start_date?: string;
   end_date?: string;
   search?: string;
+  paciente?: number;
 }
 
 const buildParams = (filters: AtencionFilters | undefined) => {
   if (!filters) return undefined;
   const params: Record<string, any> = {};
   if (filters.tipo_intervencion) params.tipo_intervencion = filters.tipo_intervencion;
+  if (filters.contexto_atencion) params.contexto_atencion = filters.contexto_atencion;
+  if (filters.internacion) params.internacion = filters.internacion;
+  if (filters.paciente) params.paciente = filters.paciente;
   if (filters.medico_id) params.medico_principal = filters.medico_id;
   if (filters.estado_clinico) params.estado_clinico = filters.estado_clinico;
   if (filters.start_date) params.fecha_admision__gte = filters.start_date;
@@ -271,6 +278,30 @@ export const useSaveConsultaAmbulatoriaMutation = () => {
     },
     onError: (error: any) => {
       const errorMessage = error?.response?.data?.error || error?.message || 'No se pudo guardar la consulta';
+      toast.error(errorMessage);
+    },
+  });
+};
+
+interface SaveEvolucionPayload {
+  atencionId: number;
+  data: Partial<EvolucionInternacionRecord>;
+  registroId?: number;
+}
+
+export const useSaveEvolucionInternacionMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ atencionId, data, registroId }: SaveEvolucionPayload) =>
+      apiService.updateEvolucionInternacion(atencionId, data, registroId),
+    onSuccess: async (_data, variables) => {
+      toast.success('Evolución guardada');
+      await queryClient.invalidateQueries({ queryKey: ['atencion', variables.atencionId] });
+      await queryClient.invalidateQueries({ queryKey: ['atenciones'] });
+      await queryClient.invalidateQueries({ queryKey: ['internacion-evoluciones'] });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || error?.message || 'No se pudo guardar la evolución';
       toast.error(errorMessage);
     },
   });

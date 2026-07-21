@@ -52,12 +52,15 @@ from .orden_grupos_informe import claves_grupos_validas, validar_orden_grupos
 from .solicitud_cierre import (
     SolicitudCierreError,
     finalizar_solicitud_manual,
-    finalizar_solicitud_si_completa,
     informar_parcial_si_corresponde,
     solicitud_resultados_completos,
     solicitud_tiene_algun_resultado,
 )
 from .informe_entrega_token import InformeEntregaTokenError, verificar_token_entrega_informe
+from .etiquetas_muestra import (
+    generar_etiquetas_muestras_pdf_bytes,
+    nombre_archivo_etiquetas_orden,
+)
 from .services_envio_informe import EnvioInformeError, enviar_informe_solicitud
 from .services_informes_pdf import (
     auditar_descarga_informe_pdf,
@@ -139,7 +142,7 @@ class TipoMuestraViewSet(viewsets.ModelViewSet):
 class TipoExamenViewSet(viewsets.ModelViewSet):
     """Catálogo de tipos de examen. Escritura: admin y laboratorio."""
 
-    queryset = TipoExamen.objects.all().select_related('tipo_muestra_requerida', 'seccion')
+    queryset = TipoExamen.objects.all().select_related('tipo_muestra_requerida', 'tipo_contenedor', 'seccion')
     serializer_class = TipoExamenSerializer
     permission_classes = [LimsTipoExamenCatalogPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -321,8 +324,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         Action para cargar resultados de exámenes.
         Recibe un JSON con lista de resultados: [{id: 1, valor: "100", es_patologico: false}, ...]
         Itera y actualiza atómicamente.
-        Solo permitido en EN_PROCESO, INFORMADO_PARCIAL o FINALIZADO (corrección).
-        Si todos los resultados quedan completos, la orden pasa automáticamente a FINALIZADO.
+        Solo permitido en EN_PROCESO o INFORMADO_PARCIAL (no tras FINALIZADO).
+        Completar todos los valores no finaliza la orden: la liberación es POST /validar/.
         Con ``informar_parcial: true`` y resultados incompletos, pasa a INFORMADO_PARCIAL.
         """
         resultados_data = request.data.get('resultados', [])
@@ -350,10 +353,25 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         {'error': 'Debe tomarse la muestra antes de cargar resultados.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                if solicitud.estado not in ('EN_PROCESO', 'INFORMADO_PARCIAL', 'FINALIZADO'):
+                if solicitud.estado == 'FINALIZADO':
                     return Response(
-                        {'error': 'Solo se pueden cargar o corregir resultados en órdenes en proceso, informadas parcialmente o finalizadas.'},
-                        status=status.HTTP_400_BAD_REQUEST
+                        {
+                            'error': (
+                                'La orden está validada y bloqueada. '
+                                'No se pueden modificar los resultados.'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if solicitud.estado not in ('EN_PROCESO', 'INFORMADO_PARCIAL'):
+                    return Response(
+                        {
+                            'error': (
+                                'Solo se pueden cargar resultados en órdenes '
+                                'en proceso o informadas parcialmente.'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
 
                 before_solicitud = safe_model_snapshot(solicitud)
@@ -530,11 +548,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                     except ResultadoExamen.DoesNotExist:
                         logger.warning("ResultadoExamen inexistente para carga de resultados")
 
-                finalizar_solicitud_si_completa(
-                    solicitud,
-                    actor=request.user,
-                    view="SolicitudExamenViewSet.cargar_resultados",
-                )
+                # No auto-finalizar: la liberación clínica es POST /validar/ (bioquímico).
                 solicitud.refresh_from_db()
                 if not solicitud_resultados_completos(solicitud):
                     if informar_parcial:
@@ -624,29 +638,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], url_path='finalizar')
     def finalizar(self, request, pk=None):
-        """Alias legacy: cierra la orden si los resultados están completos."""
-        try:
-            with transaction.atomic():
-                solicitud = SolicitudExamen.objects.select_for_update().get(pk=pk)
-                finalizar_solicitud_manual(
-                    solicitud,
-                    actor=request.user,
-                    view='SolicitudExamenViewSet.finalizar',
-                )
-                serializer = self.get_serializer(solicitud)
-                return Response(serializer.data, status=status.HTTP_200_OK)
-        except SolicitudEstadoTransitionError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except SolicitudCierreError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except SolicitudExamen.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        except Exception:
-            logger.error("Error finalizando solicitud", exc_info=True)
-            return Response(
-                {'error': 'Error al finalizar solicitud.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        """Alias de validar: liberación clínica (bioquímico / admin)."""
+        return self.validar(request, pk=pk)
 
     @action(detail=True, methods=['post'], url_path='enviar-informe')
     def enviar_informe(self, request, pk=None):
@@ -697,8 +690,38 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='validar')
     def validar(self, request, pk=None):
-        """Alias legacy de finalizar."""
-        return self.finalizar(request, pk=pk)
+        """
+        Liberación clínica: marca la orden FINALIZADO y bloquea resultados.
+        Solo bioquímico / admin. Si hay patológicos/críticos, exige confirmar_criticos.
+        """
+        raw_confirm = request.data.get('confirmar_criticos', False) if hasattr(request, 'data') else False
+        if isinstance(raw_confirm, str):
+            confirmar_criticos = raw_confirm.strip().lower() in ('1', 'true', 'yes', 'si', 'sí')
+        else:
+            confirmar_criticos = bool(raw_confirm)
+        try:
+            with transaction.atomic():
+                solicitud = SolicitudExamen.objects.select_for_update().get(pk=pk)
+                finalizar_solicitud_manual(
+                    solicitud,
+                    actor=request.user,
+                    view='SolicitudExamenViewSet.validar',
+                    confirmar_criticos=confirmar_criticos,
+                )
+                serializer = self.get_serializer(solicitud)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except SolicitudEstadoTransitionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SolicitudCierreError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SolicitudExamen.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            logger.error("Error validando solicitud", exc_info=True)
+            return Response(
+                {'error': 'Error al validar la solicitud.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=True, methods=['get'], url_path='analisis-longitudinal')
     def analisis_longitudinal(self, request, pk=None):
@@ -716,11 +739,27 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         data = analizar_solicitud_optimizado(solicitud)
         return Response(data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'], url_path='tubos-preview')
+    def tubos_preview(self, request, pk=None):
+        """Lista de tubos físicos a generar según los exámenes de la orden."""
+        from laboratorio.tubos_orden import TubosOrdenError, preview_tubos_solicitud
+
+        solicitud = self.get_object()
+        try:
+            data = preview_tubos_solicitud(solicitud)
+        except TubosOrdenError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'tubos': data}, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='tomar-muestra')
     def tomar_muestra(self, request, pk=None):
         """
-        Marca la solicitud en proceso (PENDIENTE → EN_PROCESO) al tomar muestra física.
-        Payload opcional ``muestras``: crea tubos, los marca TOMADA y avanza la orden.
+        Imprime / genera tubos de la orden (PENDIENTE): crea muestras en
+        PENDIENTE_TOMA con código de barras. No marca RECIBIDA ni EN_PROCESO;
+        eso ocurre al escanear en recepción (recibir-por-codigo).
+        Sin ``muestras``: resuelve tubos según catálogo (tipo_contenedor + tope 10/tubo;
+        hemograma = 1 unidad).
+        Con ``muestras``: crea los ítems indicados (uno por tubo físico).
         """
         ser = TomarMuestraOrdenSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -736,7 +775,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
         except SolicitudEstadoTransitionError:
             return Response(
-                {'error': 'Solo se puede tomar muestra cuando la solicitud está pendiente.'},
+                {'error': 'Solo se pueden imprimir etiquetas cuando la solicitud está pendiente.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except MuestraAccionError as exc:
@@ -842,4 +881,33 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         }
         
         return Response(zpl_data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='etiquetas-muestras')
+    def etiquetas_muestras(self, request, pk=None):
+        """PDF con etiquetas Code128 de todas las muestras de la orden."""
+        solicitud = self.get_object()
+        muestras = list(
+            Muestra.objects.filter(solicitud=solicitud)
+            .select_related('solicitud', 'paciente', 'tipo_muestra', 'tipo_contenedor')
+            .exclude(codigo_barra__isnull=True)
+            .exclude(codigo_barra='')
+            .order_by('id')
+        )
+        if not muestras:
+            return Response(
+                {'error': 'La orden no tiene muestras con código de barras para imprimir.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            pdf_bytes = generar_etiquetas_muestras_pdf_bytes(muestras)
+        except Exception:
+            logger.exception('generar etiquetas muestras orden pk=%s', pk)
+            return Response(
+                {'error': 'No se pudieron generar las etiquetas PDF.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        nombre = nombre_archivo_etiquetas_orden(solicitud.pk, solicitud.numero)
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
 

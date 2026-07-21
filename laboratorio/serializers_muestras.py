@@ -189,3 +189,80 @@ class MuestraDescartarSerializer(serializers.Serializer):
 class MuestraCancelarSerializer(serializers.Serializer):
     motivo = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class EventoMuestraLookupSerializer(serializers.ModelSerializer):
+    """Historial de custodia para consulta por escaneo (sin metadata de auditoría)."""
+
+    class Meta:
+        model = EventoMuestra
+        fields = (
+            "id",
+            "accion",
+            "estado_anterior",
+            "estado_nuevo",
+            "actor",
+            "fecha",
+            "observaciones",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class MuestraLookupSerializer(serializers.ModelSerializer):
+    """Respuesta enriquecida para lookup exacto por código de barras."""
+
+    solicitud_numero = serializers.CharField(source="solicitud.numero", read_only=True)
+    paciente_nombre = serializers.CharField(source="paciente.nombre_completo", read_only=True)
+    paciente_dni = serializers.CharField(source="paciente.dni", read_only=True)
+    tipo_muestra_codigo = serializers.CharField(source="tipo_muestra.codigo", read_only=True)
+    tipo_muestra_nombre = serializers.CharField(source="tipo_muestra.nombre", read_only=True)
+    eventos = EventoMuestraLookupSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Muestra
+        fields = (
+            "id",
+            "codigo_barra",
+            "solicitud",
+            "solicitud_numero",
+            "paciente",
+            "paciente_nombre",
+            "paciente_dni",
+            "tipo_muestra",
+            "tipo_muestra_codigo",
+            "tipo_muestra_nombre",
+            "tipo_contenedor",
+            "estado",
+            "fecha_toma",
+            "fecha_recepcion",
+            "ubicacion_actual",
+            "observaciones",
+            "created_at",
+            "updated_at",
+            "eventos",
+        )
+        read_only_fields = fields
+
+
+class MuestraRecibirPorCodigoSerializer(serializers.Serializer):
+    codigo_barra = serializers.CharField()
+    ubicacion_actual = serializers.CharField(required=False, allow_blank=True, default="")
+    observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_codigo_barra(self, value):
+        cb = (value or "").strip()
+        if not cb:
+            raise serializers.ValidationError("El código de barras es obligatorio.")
+        return cb
+
+
+class MuestraTomarPorCodigoSerializer(serializers.Serializer):
+    codigo_barra = serializers.CharField()
+    observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_codigo_barra(self, value):
+        cb = (value or "").strip()
+        if not cb:
+            raise serializers.ValidationError("El código de barras es obligatorio.")
+        return cb

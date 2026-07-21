@@ -328,6 +328,37 @@ class TestAtencionPermissionsMutations:
         response = client.post(url, {}, format='json')
         assert response.status_code == status.HTTP_200_OK
 
+    def test_medico_puede_iniciar_guardia(self, client, medico_a, paciente):
+        client.force_authenticate(user=medico_a[0])
+        _, med = medico_a
+        response = client.post(
+            reverse('atenciones-iniciar-guardia'),
+            {
+                'paciente_id': paciente.id,
+                'medico_id': med.id,
+                'motivo_consulta': 'Dolor torácico',
+            },
+            format='json',
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['contexto_atencion'] == 'GUARDIA'
+        assert response.data.get('consulta_hc_id')
+
+    def test_medico_puede_ensure_consulta_hc_en_guardia(self, client, medico_a, paciente):
+        client.force_authenticate(user=medico_a[0])
+        _, med = medico_a
+        create = client.post(
+            reverse('atenciones-iniciar-guardia'),
+            {'paciente_id': paciente.id, 'medico_id': med.id},
+            format='json',
+        )
+        assert create.status_code == status.HTTP_201_CREATED
+        atencion_id = create.data['id']
+        ensure_url = reverse('atenciones-ensure-consulta-hc', args=[atencion_id])
+        response = client.post(ensure_url, {}, format='json')
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['consulta_hc_id']
+
     def test_enfermeria_no_puede_cerrar(self, client, atencion_medico_a):
         client.force_authenticate(user=_user('enfermeria'))
         url = reverse('atenciones-cerrar', args=[atencion_medico_a.id])

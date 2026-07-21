@@ -1,8 +1,18 @@
 import React from 'react';
 import { Box, Typography, Stack, Chip, useTheme, alpha, Paper } from '@mui/material';
-import { LocalHospital, Science, Healing, Event, Assignment } from '@mui/icons-material';
+import { LocalHospital, Science, Healing, Event, Assignment, Hotel, Emergency } from '@mui/icons-material';
 
-export type TimelineItemType = 'consulta' | 'estudio' | 'procedimiento' | 'turno' | 'solicitud' | 'otro';
+export type TimelineItemType =
+  | 'consulta'
+  | 'guardia'
+  | 'estudio'
+  | 'procedimiento'
+  | 'turno'
+  | 'solicitud'
+  | 'internacion_ingreso'
+  | 'internacion_evolucion'
+  | 'internacion_alta'
+  | 'otro';
 
 export interface TimelineItem {
   id: string;
@@ -12,12 +22,17 @@ export interface TimelineItem {
   date: Date;
   critical?: boolean;
   onClick?: () => void;
+  episodeGroupId?: string;
+  episodeGroupTitle?: string;
+  nested?: boolean;
 }
 
 const typeColor = (type: TimelineItemType, theme: { palette: any }) => {
   switch (type) {
     case 'consulta':
       return theme.palette.primary.main;
+    case 'guardia':
+      return theme.palette.error.main;
     case 'estudio':
       return theme.palette.info.main;
     case 'procedimiento':
@@ -26,6 +41,10 @@ const typeColor = (type: TimelineItemType, theme: { palette: any }) => {
       return theme.palette.secondary.main;
     case 'solicitud':
       return theme.palette.success.main;
+    case 'internacion_ingreso':
+    case 'internacion_evolucion':
+    case 'internacion_alta':
+      return theme.palette.warning.main;
     default:
       return theme.palette.text.secondary;
   }
@@ -35,6 +54,8 @@ const typeIcon = (type: TimelineItemType) => {
   switch (type) {
     case 'consulta':
       return <LocalHospital fontSize="small" />;
+    case 'guardia':
+      return <Emergency fontSize="small" />;
     case 'estudio':
       return <Science fontSize="small" />;
     case 'procedimiento':
@@ -43,6 +64,10 @@ const typeIcon = (type: TimelineItemType) => {
       return <Event fontSize="small" />;
     case 'solicitud':
       return <Assignment fontSize="small" />;
+    case 'internacion_ingreso':
+    case 'internacion_evolucion':
+    case 'internacion_alta':
+      return <Hotel fontSize="small" />;
     default:
       return <Event fontSize="small" />;
   }
@@ -74,19 +99,35 @@ const Timeline: React.FC<TimelineProps> = ({ items, emptyLabel = 'Sin eventos cl
     <Stack spacing={1.25} sx={{ pl: 0.5 }}>
       {sorted.map((item) => {
         const c = typeColor(item.type, theme);
+        const isInternacionEpisode = Boolean(item.episodeGroupId);
         return (
+          <Box key={item.id}>
+            {item.episodeGroupTitle && (
+              <Typography
+                variant="caption"
+                fontWeight={700}
+                color="warning.dark"
+                sx={{ display: 'block', mb: 0.5, ml: item.nested ? 2 : 0 }}
+              >
+                {item.episodeGroupTitle}
+              </Typography>
+            )}
           <Paper
-            key={item.id}
             variant="outlined"
             onClick={item.onClick}
             sx={{
               p: 1.5,
               display: 'flex',
               gap: 1.5,
+              ml: item.nested ? 2 : 0,
               borderLeft: `4px solid ${c}`,
               cursor: item.onClick ? 'pointer' : 'default',
               transition: 'background 0.15s',
-              bgcolor: item.critical ? alpha(theme.palette.error.main, 0.04) : 'background.paper',
+              bgcolor: item.critical
+                ? alpha(theme.palette.error.main, 0.04)
+                : isInternacionEpisode
+                  ? alpha(theme.palette.warning.main, 0.04)
+                  : 'background.paper',
               '&:hover': item.onClick
                 ? { bgcolor: alpha(c, 0.06) }
                 : undefined,
@@ -129,6 +170,7 @@ const Timeline: React.FC<TimelineProps> = ({ items, emptyLabel = 'Sin eventos cl
               )}
             </Box>
           </Paper>
+          </Box>
         );
       })}
     </Stack>

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from pacientes.models import Paciente
 from medicos.models import Medico
@@ -24,6 +25,7 @@ class Recurso(TimestampedModel):
 
     class TipoRecurso(models.TextChoices):
         CONSULTORIO = 'CONSULTORIO', 'Consultorio Ambulatorio'
+        GUARDIA = 'GUARDIA', 'Guardia'
         SALA_PROCEDIMIENTO = 'SALA_PROCEDIMIENTO', 'Sala de Procedimiento/Estudio'
         SALA_HEMODINAMIA = 'SALA_HEMODINAMIA', 'Sala de Hemodinamia'
         QUIROFANO = 'QUIROFANO', 'Quirófano'
@@ -114,7 +116,14 @@ class Atencion(TimestampedModel):
     Contenedor principal para un encuentro clínico. Se crea cuando un turno
     se admite y vincula todos los registros médicos asociados.
     """
-    
+
+    TIPO_ATENCION_INTERNACION = 'INTERNACION'
+
+    class ContextoAtencion(models.TextChoices):
+        AMBULATORIA = 'AMBULATORIA', 'Ambulatoria'
+        INTERNACION = 'INTERNACION', 'Internación'
+        GUARDIA = 'GUARDIA', 'Guardia'
+
     class TipoIntervencion(models.TextChoices):
         CONSULTA = 'CONSULTA', 'Consulta'
         ESTUDIO = 'ESTUDIO', 'Estudio'
@@ -125,6 +134,10 @@ class Atencion(TimestampedModel):
         ABIERTA = 'ABIERTA', 'Abierta'
         FINALIZADA = 'FINALIZADA', 'Finalizada'
         EN_REVISION = 'EN_REVISION', 'En revisión'
+
+    TIPO_ATENCION_CHOICES = list(Recurso.TipoRecurso.choices) + [
+        (TIPO_ATENCION_INTERNACION, 'Internación'),
+    ]
 
     turno = models.OneToOneField(
         Turno,
@@ -145,7 +158,20 @@ class Atencion(TimestampedModel):
     )
     fecha_admision = models.DateTimeField(auto_now_add=True, db_index=True)
     fecha_cierre = models.DateTimeField(null=True, blank=True)
-    tipo_atencion = models.CharField(max_length=30, choices=Recurso.TipoRecurso.choices)
+    contexto_atencion = models.CharField(
+        max_length=20,
+        choices=ContextoAtencion.choices,
+        default=ContextoAtencion.AMBULATORIA,
+        db_index=True,
+    )
+    internacion = models.ForeignKey(
+        'internacion.Internacion',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='atenciones',
+    )
+    tipo_atencion = models.CharField(max_length=30, choices=TIPO_ATENCION_CHOICES)
     tipo_intervencion = models.CharField(
         max_length=20,
         choices=TipoIntervencion.choices,
@@ -157,6 +183,35 @@ class Atencion(TimestampedModel):
         default=EstadoClinico.ABIERTA
     )
     observaciones_generales = models.TextField(blank=True, null=True)
+
+    def clean(self):
+        if self.contexto_atencion == self.ContextoAtencion.AMBULATORIA:
+            if self.internacion_id:
+                raise ValidationError({
+                    'internacion': 'Una atención ambulatoria no puede vincularse a una internación.',
+                })
+        elif self.contexto_atencion == self.ContextoAtencion.INTERNACION:
+            if not self.internacion_id:
+                raise ValidationError({
+                    'internacion': 'Una atención de internación requiere una internación asociada.',
+                })
+            if self.turno_id:
+                raise ValidationError({
+                    'turno': 'Una atención de internación no puede vincularse a un turno.',
+                })
+            if self.internacion.paciente_id != self.paciente_id:
+                raise ValidationError({
+                    'paciente': 'El paciente de la atención debe coincidir con el de la internación.',
+                })
+        elif self.contexto_atencion == self.ContextoAtencion.GUARDIA:
+            if self.internacion_id:
+                raise ValidationError({
+                    'internacion': 'Una atención de guardia no puede vincularse a una internación.',
+                })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         paciente_str = f"{self.paciente.apellido}, {self.paciente.nombre}" if self.paciente else "Sin paciente"
@@ -183,6 +238,40 @@ class ConsultaAmbulatoria(TimestampedModel):
 
     def __str__(self):
         return f"Consulta de Atención {self.atencion_id}"
+
+
+class EvolucionInternacion(TimestampedModel):
+    """Registro clínico durante una internación (evolución diaria, interconsulta, etc.)."""
+
+    class TipoEvolucion(models.TextChoices):
+        EVOLUCION_DIARIA = 'EVOLUCION_DIARIA', 'Evolución diaria'
+        INTERCONSULTA = 'INTERCONSULTA', 'Interconsulta'
+        NOTA_ENFERMERIA = 'NOTA_ENFERMERIA', 'Nota de enfermería'
+
+    atencion = models.OneToOneField(
+        Atencion,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='evolucion_internacion',
+    )
+    tipo_evolucion = models.CharField(
+        max_length=30,
+        choices=TipoEvolucion.choices,
+        default=TipoEvolucion.EVOLUCION_DIARIA,
+        db_index=True,
+    )
+    fecha_evolucion = models.DateTimeField(auto_now_add=True, db_index=True)
+    subjetivo = models.TextField(blank=True, null=True)
+    objetivo = models.TextField(blank=True, null=True)
+    analisis = models.TextField(blank=True, null=True)
+    plan = models.TextField(blank=True, null=True)
+    signos_vitales_resumen = models.TextField(blank=True, null=True)
+    diagnostico_actualizado = models.TextField(blank=True, null=True)
+    plan_manejo = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Evolución internación Atención {self.atencion_id}"
 
 
 class RegistroProcedimiento(TimestampedModel):

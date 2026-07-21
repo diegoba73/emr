@@ -5,6 +5,7 @@ import {
   canMarcarMicroEstudioInformado,
   canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
+  canValidarOrdenLims,
   isMicroEstudioCerrado,
 } from './limsAccess';
 import type { User } from '../types';
@@ -18,6 +19,13 @@ const labUser: User = {
   rol: 'LABORATORIO',
   is_active: true,
   is_superuser: false,
+};
+
+const bioUser: User = {
+  ...labUser,
+  id: 20,
+  username: 'bio',
+  rol: 'BIOQUIMICO',
 };
 
 describe('isMicroEstudioCerrado', () => {
@@ -67,8 +75,8 @@ describe('micro LIMS role matrix', () => {
     expect(canOperateMicroEstudioTecnico(labUser, 'SEMBRADO')).toBe(true);
   });
 
-  it('medico can access but not operate', () => {
-    expect(canAccessMicrobiologia(medUser)).toBe(true);
+  it('medico cannot access LIMS/micro (usa portal /solicitudes)', () => {
+    expect(canAccessMicrobiologia(medUser)).toBe(false);
     expect(canOperateMicrobiologia(medUser)).toBe(false);
     expect(canOperateMicroEstudioTecnico(medUser, 'SEMBRADO')).toBe(false);
   });
@@ -84,24 +92,29 @@ const secUser: User = { ...labUser, id: 11, username: 'sec', rol: 'SECRETARIA' }
 const enfUser: User = { ...labUser, id: 12, username: 'enf', rol: 'ENFERMERIA' };
 
 describe('canDownloadInformeLimsPdf', () => {
-  it('admin y laboratorio pueden descargar', () => {
+  it('admin, laboratorio y bioquímico pueden descargar', () => {
     expect(canDownloadInformeLimsPdf(adminUser)).toBe(true);
     expect(canDownloadInformeLimsPdf(labUser)).toBe(true);
+    expect(canDownloadInformeLimsPdf(bioUser)).toBe(true);
   });
 
-  it('médico puede descargar si accede al módulo', () => {
-    expect(canDownloadInformeLimsPdf(medUser)).toBe(true);
-  });
-
-  it('secretaría y enfermería solo en órdenes finalizadas', () => {
-    expect(canDownloadInformeLimsPdf(secUser, 'FINALIZADO')).toBe(true);
-    expect(canDownloadInformeLimsPdf(enfUser, 'FINALIZADO')).toBe(true);
-    expect(canDownloadInformeLimsPdf(secUser, 'EN_PROCESO')).toBe(false);
-    expect(canDownloadInformeLimsPdf(enfUser, 'PENDIENTE')).toBe(false);
+  it('médico, secretaría y enfermería no descargan desde módulo LIMS', () => {
+    expect(canDownloadInformeLimsPdf(medUser)).toBe(false);
+    expect(canDownloadInformeLimsPdf(secUser, 'FINALIZADO')).toBe(false);
+    expect(canDownloadInformeLimsPdf(enfUser, 'FINALIZADO')).toBe(false);
   });
 
   it('paciente no puede descargar desde módulo LIMS', () => {
     expect(canDownloadInformeLimsPdf(pacUser)).toBe(false);
     expect(canDownloadInformeLimsPdf(null)).toBe(false);
+  });
+});
+
+describe('canValidarOrdenLims', () => {
+  it('solo bioquímico y admin validan', () => {
+    expect(canValidarOrdenLims(bioUser)).toBe(true);
+    expect(canValidarOrdenLims(adminUser)).toBe(true);
+    expect(canValidarOrdenLims(labUser)).toBe(false);
+    expect(canValidarOrdenLims(medUser)).toBe(false);
   });
 });

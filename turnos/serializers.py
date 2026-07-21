@@ -13,6 +13,7 @@ from .models import (
     Recurso,
     Atencion,
     ConsultaAmbulatoria,
+    EvolucionInternacion,
     RegistroProcedimiento,
     RegistroQuirurgico,
 )
@@ -530,4 +531,48 @@ class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
         instance = super().save(**kwargs)
         _sync_hc_after_ambulatoria_save(instance)
         return instance
+
+
+class EvolucionInternacionSerializer(serializers.ModelSerializer):
+    """Serializer para evoluciones clínicas durante internación."""
+
+    atencion_id = serializers.IntegerField(source='atencion.id', read_only=True)
+    id = serializers.IntegerField(source='atencion_id', read_only=True)
+    tipo_evolucion_display = serializers.CharField(
+        source='get_tipo_evolucion_display',
+        read_only=True,
+    )
+
+    class Meta:
+        model = EvolucionInternacion
+        fields = [
+            'id',
+            'atencion_id',
+            'tipo_evolucion',
+            'tipo_evolucion_display',
+            'fecha_evolucion',
+            'subjetivo',
+            'objetivo',
+            'analisis',
+            'plan',
+            'signos_vitales_resumen',
+            'diagnostico_actualizado',
+            'plan_manejo',
+            'observaciones',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['fecha_evolucion', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        atencion = self.context.get('atencion') or getattr(self.instance, 'atencion', None)
+        if atencion and atencion.fecha_cierre:
+            raise serializers.ValidationError({
+                'atencion': 'No se puede editar una evolución de una atención ya cerrada.',
+            })
+        if atencion and atencion.contexto_atencion != Atencion.ContextoAtencion.INTERNACION:
+            raise serializers.ValidationError({
+                'atencion': 'La atención no corresponde a un contexto de internación.',
+            })
+        return attrs
 

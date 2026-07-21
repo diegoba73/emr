@@ -17,7 +17,7 @@ EXTERNO_ICPL = 'EXTERNO_ICPL'
 ORIGEN_CHOICES = [
     (INTERNACION_UCO, 'Internación — UCO'),
     (INTERNACION_UCE, 'Internación — UCE'),
-    (GUARDIA, 'Guardia'),
+    (GUARDIA, 'Guardia — ICPL'),
     (AMBULATORIO_CEHTA, 'Ambulatorio — CEHTA'),
     (AMBULATORIO_ICPL, 'Ambulatorio — ICPL'),
     (EXTERNO_CEHTA, 'Ambulatorio externo — CEHTA'),
@@ -67,6 +67,40 @@ def _sector_es_uce(sector_nombre: str) -> bool:
     return 'UCE' in (sector_nombre or '').upper()
 
 
+def _atencion_desde_consulta(consulta):
+    if consulta is None:
+        return None
+    atencion = getattr(consulta, 'atencion', None)
+    if atencion is not None:
+        return atencion
+    atencion_id = getattr(consulta, 'atencion_id', None)
+    if not atencion_id:
+        return None
+    try:
+        from turnos.models import Atencion
+    except Exception:
+        return None
+    return Atencion.objects.filter(pk=atencion_id).first()
+
+
+def _atencion_es_guardia(atencion) -> bool:
+    if atencion is None:
+        return False
+    ctx = getattr(atencion, 'contexto_atencion', '') or ''
+    if ctx == GUARDIA:
+        return True
+    return (getattr(atencion, 'tipo_atencion', '') or '') == GUARDIA
+
+
+def _consulta_es_guardia(consulta) -> bool:
+    return _atencion_es_guardia(_atencion_desde_consulta(consulta))
+
+
+def procedencia_display_guardia() -> str:
+    """Guardia cardiológica: único punto de atención en ICPL."""
+    return 'Guardia cardiológica — ICPL'
+
+
 def _recurso_es_guardia(recurso) -> bool:
     if recurso is None:
         return False
@@ -111,9 +145,10 @@ def inferir_origen_solicitud(
 
     Prioridad:
     1. Internación activa (UCO / UCE)
-    2. Consulta → turno → recurso (guardia vs ambulatorio CEHTA/ICPL)
-    3. Origen explícito del cliente (si es válido)
-    4. Ambulatorio CEHTA por defecto
+    2. Consulta → atención de guardia (walk-in sin turno)
+    3. Consulta → turno → recurso (guardia vs ambulatorio CEHTA/ICPL)
+    4. Origen explícito del cliente (si es válido)
+    5. Ambulatorio CEHTA por defecto
     """
     if origen_explicito:
         norm = normalizar_origen_solicitud(origen_explicito) or origen_explicito
@@ -133,6 +168,9 @@ def inferir_origen_solicitud(
         return INTERNACION_UCE
 
     consulta = consulta_hc
+    if consulta is not None and _consulta_es_guardia(consulta):
+        return GUARDIA
+
     if consulta is not None:
         turno = getattr(consulta, 'turno', None)
         recurso = getattr(turno, 'recurso', None) if turno is not None else None

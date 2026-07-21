@@ -48,6 +48,9 @@ export interface LimsTipoExamen {
   tipo_muestra_requerida: number;
   tipo_muestra_nombre?: string;
   tipo_muestra_codigo?: string;
+  tipo_contenedor?: number | null;
+  tipo_contenedor_codigo?: string | null;
+  tipo_contenedor_nombre?: string | null;
   /** B2-B: obligatoriedad progresiva en carga de resultados (lectura API catálogo). */
   requiere_muestra?: boolean;
   metodo?: string;
@@ -70,6 +73,7 @@ export type TipoExamenLimsWriteBody = {
   nombre?: string;
   abreviatura?: string;
   tipo_muestra_requerida?: number;
+  tipo_contenedor?: number | null;
   tipo_resultado?: 'TEXTO' | 'NUMERICO' | 'CUALITATIVO';
   metodo?: string;
   unidad_default?: string;
@@ -175,6 +179,15 @@ export interface SolicitudExamenLims {
   informe_enviado_email?: boolean;
   informe_enviado_whatsapp?: boolean;
   resultados?: ResultadoExamenLims[];
+  /** True si no quedan tubos en PENDIENTE_TOMA. */
+  extraccion_completa?: boolean;
+  tubos_pendientes_extraccion?: Array<{
+    id: number;
+    codigo_barra: string | null;
+    tipo_contenedor_codigo?: string | null;
+    tipo_contenedor_nombre?: string | null;
+    estado?: string;
+  }>;
 }
 
 export interface EnvioInformeLimsResultado {
@@ -201,6 +214,7 @@ export interface MuestraEventoLims {
   actor?: number | null;
   fecha?: string;
   observaciones?: string;
+  created_at?: string;
 }
 
 export interface MuestraTransaccional {
@@ -220,6 +234,14 @@ export interface MuestraTransaccional {
   created_at?: string;
   updated_at?: string;
   eventos?: MuestraEventoLims[];
+}
+
+export interface MuestraLookupLims extends MuestraTransaccional {
+  solicitud_numero?: string | null;
+  paciente_nombre?: string;
+  paciente_dni?: string | null;
+  tipo_muestra_codigo?: string;
+  tipo_muestra_nombre?: string;
 }
 
 /** Payload por ítem en POST cargar-resultados (retrocompatible con UI-1). */

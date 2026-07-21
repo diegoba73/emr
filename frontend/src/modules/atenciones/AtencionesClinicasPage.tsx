@@ -26,13 +26,38 @@ import { Atencion, Medico } from '../../types';
 import AtencionDetailDrawer from './components/AtencionDetailDrawer';
 import { canOperateAtenciones } from '../../utils/permissions';
 
+const contextoAtencionOptions = [
+  { value: '', label: 'Todos' },
+  { value: 'AMBULATORIA', label: 'Ambulatoria' },
+  { value: 'GUARDIA', label: 'Guardia' },
+  { value: 'INTERNACION', label: 'Internación' },
+];
+
 const tipoIntervencionOptions = [
   { value: '', label: 'Todos' },
-  { value: 'CONSULTA', label: 'Consulta Ambulatoria' },
-  { value: 'ESTUDIO', label: 'Estudio Médico' },
+  { value: 'CONSULTA', label: 'Consulta' },
+  { value: 'ESTUDIO', label: 'Estudio' },
   { value: 'PROCEDIMIENTO', label: 'Procedimiento' },
   { value: 'CIRUGIA', label: 'Cirugía' },
 ];
+
+const getContextoLabel = (item: Atencion) =>
+  item.contexto_atencion_display ||
+  contextoAtencionOptions.find((opt) => opt.value === item.contexto_atencion)?.label ||
+  'Ambulatoria';
+
+const getContextoChipColor = (contexto?: string) => {
+  switch (contexto) {
+    case 'INTERNACION':
+      return 'warning';
+    case 'GUARDIA':
+      return 'error';
+    case 'AMBULATORIA':
+      return 'info';
+    default:
+      return 'info';
+  }
+};
 
 const estadoClinicoOptions = [
   { value: '', label: 'Todos' },
@@ -87,6 +112,7 @@ const AtencionesClinicasPage: React.FC = () => {
   const { medicos, currentUser } = useData();
   const [filters, setFilters] = useState<AtencionFilters>({
     tipo_intervencion: '',
+    contexto_atencion: '',
     medico_id: undefined,
     estado_clinico: '',
     start_date: '',
@@ -110,6 +136,7 @@ const AtencionesClinicasPage: React.FC = () => {
   const handleClearFilters = () => {
     const baseFilters: AtencionFilters = {
       tipo_intervencion: '',
+      contexto_atencion: '',
       medico_id: undefined,
       estado_clinico: '',
       start_date: '',
@@ -174,6 +201,23 @@ const AtencionesClinicasPage: React.FC = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                select
+                label="Contexto"
+                value={formFilters.contexto_atencion ?? ''}
+                onChange={(event) =>
+                  setFormFilters((prev) => ({ ...prev, contexto_atencion: event.target.value || '' }))
+                }
+              >
+                {contextoAtencionOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
             <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
@@ -332,11 +376,24 @@ const AtencionesClinicasPage: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={tipoIntervencionOptions.find((opt) => opt.value === item.tipo_intervencion)?.label ?? item.tipo_intervencion}
-                        color={getTipoChipColor(item.tipo_intervencion)}
-                      />
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        <Chip
+                          size="small"
+                          label={getContextoLabel(item)}
+                          color={getContextoChipColor(item.contexto_atencion)}
+                        />
+                        {item.tipo_intervencion && item.tipo_intervencion !== 'CONSULTA' && (
+                          <Chip
+                            size="small"
+                            label={
+                              tipoIntervencionOptions.find((opt) => opt.value === item.tipo_intervencion)?.label ??
+                              item.tipo_intervencion
+                            }
+                            color={getTipoChipColor(item.tipo_intervencion)}
+                            variant="outlined"
+                          />
+                        )}
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Chip

@@ -74,6 +74,9 @@ _GEM_CONTEXT/
 .cursorrules
 .vscode/
 _tmp_*
+_dbg_*
 emr_test_write
+frontend/_jest_*
+frontend/run_jest_capture.sh
 *.code-workspace
 /docs_synesis_gpt_knowledge/

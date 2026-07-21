@@ -62,9 +62,10 @@ class TipoMuestraAdmin(admin.ModelAdmin):
 
 @admin.register(TipoExamen)
 class TipoExamenAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'metodo', 'unidad_default', 'precio', 'activo')
-    list_filter = ('activo', 'tipo_muestra_requerida')
+    list_display = ('codigo', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'tipo_contenedor', 'metodo', 'unidad_default', 'precio', 'activo')
+    list_filter = ('activo', 'tipo_muestra_requerida', 'tipo_contenedor')
     search_fields = ('codigo', 'nombre', 'abreviatura')
+    autocomplete_fields = ('tipo_muestra_requerida', 'tipo_contenedor')
     ordering = ('nombre',)
 
 
