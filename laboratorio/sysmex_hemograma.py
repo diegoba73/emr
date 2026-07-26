@@ -27,11 +27,13 @@ class _CodigoTipoExamen:
 
 
 SYSMEX_HEMOGRAMA_UNIDADES: dict[str, str] = {
-    "LEU": "/mm³",
+    "LEUCO": "/mm³",
     "PLAQ": "/mm³",
     "HEMATIES": "mill/mm³",
     "HGB": "g/dL",
     "HTO": "%",
+    "VCM": "fL",
+    "CHCM": "g/dL",
     "RDW": "%",
     "NEUT_CAY": "%",
     "NEUT_SEG": "%",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from auditoria.models import AuditEvent
 from auditoria.tests.compat import capture_on_commit_callbacks
@@ -182,9 +183,32 @@ def test_no_quedan_dos_informes_vigentes_por_flujo_normal(
 
 
 @pytest.mark.django_db
-def test_medico_no_puede_validar_informe(
+def test_medico_realizador_puede_validar_informe(
     client, medico, paciente, tipo_estudio, atencion_vinculada,
 ):
+    client.force_authenticate(user=medico.user)
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    eid = r.data['id']
+    _estudio_realizado(client, eid)
+    estudio = EstudioComplementario.objects.get(pk=eid)
+    assert estudio.realizado_por_id == medico.user_id
+    r = client.post(f'{BASE}{eid}/informes/', {'texto': 'X'}, format='json')
+    iid = r.data['id']
+    client.post(f'{BASE}{eid}/informes/{iid}/emitir/')
+    r = client.post(f'{BASE}{eid}/informes/{iid}/validar/')
+    assert r.status_code == 200
+    estudio.refresh_from_db()
+    assert estudio.estado == EstudioComplementario.Estado.VALIDADO
+
+
+@pytest.mark.django_db
+def test_medico_ajeno_no_puede_validar_informe(
+    client, medico, medico_ajeno, paciente, tipo_estudio, atencion_vinculada, recurso,
+):
+    from django.utils import timezone
+    from datetime import timedelta
+    from turnos.models import Atencion, Turno
+
     client.force_authenticate(user=medico.user)
     r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
     eid = r.data['id']
@@ -192,7 +216,40 @@ def test_medico_no_puede_validar_informe(
     r = client.post(f'{BASE}{eid}/informes/', {'texto': 'X'}, format='json')
     iid = r.data['id']
     client.post(f'{BASE}{eid}/informes/{iid}/emitir/')
+
+    # Vínculo clínico para que el médico ajeno vea el estudio pero no sea realizador
+    turno = Turno.objects.create(
+        paciente=paciente,
+        medico=medico_ajeno,
+        recurso=recurso,
+        fecha_hora_inicio=timezone.now(),
+        fecha_hora_fin=timezone.now() + timedelta(minutes=30),
+        estado='CONFIRMADO',
+    )
+    Atencion.objects.create(
+        turno=turno,
+        paciente=paciente,
+        medico_principal=medico_ajeno,
+        tipo_atencion='CONSULTORIO',
+        tipo_intervencion='CONSULTA',
+        estado_clinico='ABIERTA',
+    )
+
+    client.force_authenticate(user=medico_ajeno.user)
     r = client.post(f'{BASE}{eid}/informes/{iid}/validar/')
+    assert r.status_code == 403
+
+    client.force_authenticate(user=medico.user)
+    r = client.post(f'{BASE}{eid}/informes/{iid}/validar/')
+    assert r.status_code == 200
+
+    content = SimpleUploadedFile('x.pdf', b'%PDF-1.4', content_type='application/pdf')
+    client.force_authenticate(user=medico_ajeno.user)
+    r = client.post(
+        f'{BASE}{eid}/subir-archivo/',
+        {'archivo': content, 'titulo': 'X', 'tipo_archivo': 'PDF'},
+        format='multipart',
+    )
     assert r.status_code == 403
 
 
@@ -384,14 +441,15 @@ def test_enfermeria_no_accede_estudios(client, db, estudio_solicitado):
 
 @pytest.mark.django_db
 def test_download_archivo_genera_auditoria(
-    client, admin_user, estudio_solicitado, archivo_medico,
+    client, admin_user, estudio_solicitado,
 ):
     client.force_authenticate(user=admin_user)
+    content = SimpleUploadedFile('estudio.pdf', b'%PDF-1.4 test', content_type='application/pdf')
     with capture_on_commit_callbacks(execute=True):
         r = client.post(
-            f'{BASE}{estudio_solicitado.id}/agregar-archivo/',
-            {'archivo_medico_id': archivo_medico.id},
-            format='json',
+            f'{BASE}{estudio_solicitado.id}/subir-archivo/',
+            {'archivo': content, 'titulo': 'Estudio', 'tipo_archivo': 'PDF'},
+            format='multipart',
         )
         archivo_estudio_id = r.data['id']
         client.get(
@@ -406,16 +464,17 @@ def test_download_archivo_genera_auditoria(
 
 @pytest.mark.django_db
 def test_paciente_descarga_archivo_entregado(
-    client, paciente, estudio_solicitado, archivo_medico, admin_user,
+    client, paciente, estudio_solicitado, admin_user,
 ):
     client.force_authenticate(user=admin_user)
     eid = estudio_solicitado.id
+    content = SimpleUploadedFile('estudio.pdf', b'%PDF-1.4 test', content_type='application/pdf')
     with capture_on_commit_callbacks(execute=True):
         _estudio_realizado(client, eid)
         r = client.post(
-            f'{BASE}{eid}/agregar-archivo/',
-            {'archivo_medico_id': archivo_medico.id},
-            format='json',
+            f'{BASE}{eid}/subir-archivo/',
+            {'archivo': content, 'titulo': 'Estudio', 'tipo_archivo': 'PDF'},
+            format='multipart',
         )
         archivo_estudio_id = r.data['id']
         r = client.post(f'{BASE}{eid}/informes/', {'texto': 'X'}, format='json')

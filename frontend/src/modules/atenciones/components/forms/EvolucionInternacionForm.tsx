@@ -18,6 +18,7 @@ import {
 } from '../../hooks';
 import { flushConsultaPedidosDrafts } from '../../consultaPedidosDraft';
 import AtencionPedidosSection from '../AtencionPedidosSection';
+import SignosVitalesPanel from '../../../../components/clinical/SignosVitalesPanel';
 
 interface EvolucionInternacionFormProps {
   atencionId: number;
@@ -181,7 +182,25 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
         </Alert>
       )}
 
-      <AtencionPedidosSection atencionId={atencionId} canEdit={canSave} />
+      <AtencionPedidosSection
+        atencionId={atencionId}
+        canEdit={canSave}
+        pacienteId={
+          atencion?.paciente && typeof atencion.paciente === 'object'
+            ? atencion.paciente.id
+            : typeof atencion?.paciente === 'number'
+              ? atencion.paciente
+              : undefined
+        }
+      />
+
+      <Box sx={{ mb: 2 }}>
+        <SignosVitalesPanel
+          atencionId={atencionId}
+          canEdit={canSave}
+          initialItems={atencion?.signos_vitales}
+        />
+      </Box>
 
       <Stack spacing={2}>
         <TextField
@@ -203,13 +222,14 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
           fullWidth
         />
         <TextField
-          label="Signos vitales (resumen)"
+          label="Signos vitales (resumen cache)"
           multiline
           minRows={2}
           value={formState.signos_vitales_resumen}
           onChange={handleChange('signos_vitales_resumen')}
           disabled={!canSave}
           fullWidth
+          helperText="Se actualiza automáticamente al registrar signos vitales estructurados."
         />
         <TextField
           label="Análisis (A)"

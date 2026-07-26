@@ -23,6 +23,8 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import toast from 'react-hot-toast';
 import { useData } from '../contexts/DataContext';
+import { authService } from '../services/auth';
+import { isPacienteRole } from '../utils/navLabels';
 import { useThemeMode } from '../contexts/ThemeModeContext';
 import ThemeModeToggle from '../components/ThemeModeToggle';
 import { authPageGradient } from '../theme/buildAppTheme';
@@ -63,7 +65,8 @@ const Login: React.FC = () => {
     try {
       await login({ username: data.username, password: data.password });
       toast.success('Inicio de sesión exitoso');
-      navigate('/dashboard', { replace: true });
+      const user = await authService.getCurrentUser();
+      navigate(isPacienteRole(user) ? '/portal' : '/dashboard', { replace: true });
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.detail ||

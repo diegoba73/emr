@@ -13,11 +13,13 @@ const LEGACY_ENTRADA_BY_CODIGO: Record<
   string,
   { modo: ModoEntradaResultado; ticketDecimals: number; clinicalMultiplier: number; display: FormatoInformeEntrada }
 > = {
-  LEU: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1000, display: 'absolute_int' },
+  LEUCO: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1000, display: 'absolute_int' },
   PLAQ: { modo: 'TICKET_ENTERO', ticketDecimals: 0, clinicalMultiplier: 1000, display: 'absolute_int' },
   HEMATIES: { modo: 'TICKET_ENTERO', ticketDecimals: 2, clinicalMultiplier: 1, display: 'absolute_millions' },
   HGB: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   HTO: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
+  VCM: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
+  CHCM: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   RDW: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   NEUT_CAY: { modo: 'FORMULA_PORCENTAJE', ticketDecimals: 0, clinicalMultiplier: 1, display: 'integer' },
   NEUT_SEG: { modo: 'FORMULA_PORCENTAJE', ticketDecimals: 0, clinicalMultiplier: 1, display: 'integer' },

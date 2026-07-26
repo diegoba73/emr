@@ -17,6 +17,10 @@ class EstudioComplementarioPermission(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
         if request.method in permissions.SAFE_METHODS:
+            rol = str(getattr(request.user, 'rol', '') or '').lower()
+            # Paciente: listado/detalle filtrado a sus estudios ENTREGADO (queryset).
+            if rol == 'paciente':
+                return True
             return usuario_puede_ver_estudios_agenda(request.user)
         action = getattr(view, 'action', None)
         if action in ('asignar_turno', 'agendar_turno'):
@@ -39,6 +43,9 @@ class EstudioComplementarioPermission(permissions.BasePermission):
             'anular',
             'entregar',
             'agregar_archivo',
+            'subir_archivo',
+            'quitar_archivo',
+            'sugerir_informe',
             'informes',
             'emitir_informe',
             'validar_informe',

@@ -25,11 +25,14 @@ import { Add, Delete, OpenInNew } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { formatDrfError } from '../../../services/limsApi';
 import { getConsultaDetalle } from '../../../services/apiService';
-import { listTiposEstudioComplementario } from '../../../services/estudiosComplementariosApi';
+import {
+  listEstudiosComplementarios,
+  listTiposEstudioComplementario,
+} from '../../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../../estudios/apiErrors';
-import { MODALIDAD_OPTIONS } from '../../estudios/constants';
+import { ESTADO_LABELS, MODALIDAD_OPTIONS } from '../../estudios/constants';
 import type { ConsultaDetalle } from '../../../types';
-import type { TipoEstudioComplementario } from '../../../types/estudios';
+import type { EstudioComplementario, TipoEstudioComplementario } from '../../../types/estudios';
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
 import {
   loadConsultaPedidosDraft,
@@ -49,6 +52,7 @@ import {
 interface ConsultaPedidosPanelProps {
   /** Requerido salvo cuando ``usePendingDraft`` (formulario guardia antes de crear HC). */
   consultaHcId?: number;
+  pacienteId?: number;
   canEdit: boolean;
   /** `compact`: botones inline en el formulario clínico; `full`: pestaña Pedidos y resultados */
   variant?: 'full' | 'compact';
@@ -89,6 +93,7 @@ function formatEstudioTipoLabel(t: TipoEstudioComplementario): string {
 
 const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   consultaHcId,
+  pacienteId: pacienteIdProp,
   canEdit,
   variant = 'full',
   usePendingDraft = false,
@@ -98,13 +103,15 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   const [detalle, setDetalle] = useState<ConsultaDetalle | null>(null);
   const [loading, setLoading] = useState(!canEdit && !usePendingDraft);
   const [error, setError] = useState('');
+  const [estudiosPaciente, setEstudiosPaciente] = useState<EstudioComplementario[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   const loadDraftFromStorage = useCallback((): ConsultaPedidosDraft => {
     if (usePendingDraft) {
       return loadGuardiaPendingDraft();
     }
     if (!consultaHcId) {
-      return { solicitudesLab: [], estudios: [] };
+      return { solicitudesLab: [], solicitudesMicro: [], estudios: [] };
     }
     return loadConsultaPedidosDraft(consultaHcId);
   }, [consultaHcId, usePendingDraft]);
@@ -174,6 +181,40 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
     load();
   }, [load]);
 
+  const pacienteIdEfectivo = pacienteIdProp || detalle?.paciente_id || undefined;
+
+  useEffect(() => {
+    if (variant !== 'full' || !pacienteIdEfectivo) {
+      setEstudiosPaciente([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingHistorial(true);
+    listEstudiosComplementarios({ paciente_id: pacienteIdEfectivo })
+      .then((list) => {
+        if (cancelled) return;
+        const idsEstaConsulta = new Set(
+          (detalle?.estudios_complementarios ?? []).map((e) => e.id)
+        );
+        setEstudiosPaciente(
+          list.filter((e) => {
+            if (consultaHcId && e.consulta_hc === consultaHcId) return false;
+            if (idsEstaConsulta.has(e.id)) return false;
+            return e.estado !== 'ANULADO';
+          })
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEstudiosPaciente([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistorial(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [variant, pacienteIdEfectivo, consultaHcId, detalle?.estudios_complementarios]);
+
   const handleAddLabDraft = (payload: {
     examenes_ids: number[];
     paneles_ids: number[];
@@ -188,6 +229,30 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         {
           id: newDraftId(),
           ...payload,
+        },
+      ],
+    }));
+    setActionError('');
+  };
+
+  const handleAddMicroDraft = (payload: {
+    items: Array<{
+      tipo_cultivo_id: number;
+      tipo_muestra_micro_id: number;
+      cultivo_nombre: string;
+      muestra_nombre: string;
+    }>;
+    observaciones?: string;
+  }) => {
+    if (!payload.items.length) return;
+    persistDraft((prev) => ({
+      ...prev,
+      solicitudesMicro: [
+        ...(prev.solicitudesMicro || []),
+        {
+          id: newDraftId(),
+          items: payload.items,
+          observaciones: payload.observaciones,
         },
       ],
     }));
@@ -220,6 +285,13 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
     persistDraft((prev) => ({
       ...prev,
       solicitudesLab: prev.solicitudesLab.filter((s) => s.id !== id),
+    }));
+  };
+
+  const handleEliminarMicroBorrador = (id: string) => {
+    persistDraft((prev) => ({
+      ...prev,
+      solicitudesMicro: (prev.solicitudesMicro || []).filter((s) => s.id !== id),
     }));
   };
 
@@ -272,6 +344,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   const solicitudesLab = detalle?.solicitudes_laboratorio ?? [];
   const estudios = detalle?.estudios_complementarios ?? [];
   const draftLab = draft.solicitudesLab;
+  const draftMicro = draft.solicitudesMicro || [];
   const draftEstudios = draft.estudios;
 
   const estudioTipoLabel = useCallback(
@@ -306,6 +379,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         draftMode
         consultaHcId={consultaHcId}
         onAddDraft={handleAddLabDraft}
+        onAddDraftMicro={handleAddMicroDraft}
       />
 
       {renderClinicalDialog(
@@ -377,7 +451,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
       );
     }
 
-    const totalPendientes = draftLab.length + draftEstudios.length;
+    const totalPendientes = draftLab.length + draftMicro.length + draftEstudios.length;
 
     return (
       <Box
@@ -435,7 +509,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                 >
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="body2" fontWeight={500}>
-                      Laboratorio
+                      Lab. Clínico
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {[
@@ -450,6 +524,37 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                       color="error"
                       aria-label="Quitar pedido de laboratorio"
                       onClick={() => handleEliminarLabBorrador(sol.id)}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  )}
+                </Stack>
+              ))}
+              {draftMicro.map((sol) => (
+                <Stack
+                  key={sol.id}
+                  direction="row"
+                  alignItems="flex-start"
+                  justifyContent="space-between"
+                  spacing={1}
+                  sx={{ py: 0.5 }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" fontWeight={500}>
+                      Microbiología
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {sol.items
+                        .map((i) => `${i.cultivo_nombre} (${i.muestra_nombre})`)
+                        .join(' · ') || '—'}
+                    </Typography>
+                  </Box>
+                  {canEdit && (
+                    <IconButton
+                      size="small"
+                      color="error"
+                      aria-label="Quitar pedido de microbiología"
+                      onClick={() => handleEliminarMicroBorrador(sol.id)}
                     >
                       <Delete fontSize="small" />
                     </IconButton>
@@ -604,7 +709,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                             {res.valor_obtenido || '—'}
                             {res.unidad ? ` ${res.unidad}` : ''}
                             {res.es_patologico ? (
-                              <Chip label="Patológico" size="small" color="warning" sx={{ ml: 1 }} />
+                              <Chip label="Fuera de rango" size="small" color="warning" sx={{ ml: 1 }} />
                             ) : null}
                           </TableCell>
                           <TableCell>{res.estado || '—'}</TableCell>
@@ -623,10 +728,45 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         )}
       </Box>
 
+      {canEdit && draftMicro.length > 0 && (
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600} mb={1}>
+            Microbiología (borrador)
+          </Typography>
+          <Stack spacing={2}>
+            {draftMicro.map((sol) => (
+              <Box key={sol.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" mb={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body2" fontWeight={600}>
+                      Pedido de microbiología
+                    </Typography>
+                    <Chip label="Pendiente de guardar" size="small" color="warning" variant="outlined" />
+                  </Stack>
+                  <IconButton
+                    size="small"
+                    color="error"
+                    aria-label="Eliminar pedido de microbiología"
+                    onClick={() => handleEliminarMicroBorrador(sol.id)}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {sol.items
+                    .map((i) => `${i.cultivo_nombre} (${i.muestra_nombre})`)
+                    .join(' · ') || '—'}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
       <Box>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>
-            Estudios complementarios
+            {variant === 'full' ? 'Estudios solicitados en esta consulta' : 'Estudios complementarios'}
           </Typography>
           {canEdit && (
             <Button size="small" startIcon={<Add />} onClick={openEstudioDialog}>
@@ -723,6 +863,70 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
           </Table>
         )}
       </Box>
+
+      {variant === 'full' && pacienteIdEfectivo ? (
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600} mb={1}>
+            Estudios del paciente
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Historial de estudios complementarios del paciente (otras consultas). Los resultados se
+            cargan en el detalle del estudio.
+          </Typography>
+          {loadingHistorial ? (
+            <Box display="flex" justifyContent="center" py={2}>
+              <CircularProgress size={22} />
+            </Box>
+          ) : estudiosPaciente.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No hay otros estudios registrados para este paciente.
+            </Typography>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Estudio</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell align="right">Acción</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {estudiosPaciente.map((est) => (
+                  <TableRow key={est.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500}>
+                        {est.tipo_estudio_nombre ||
+                          MODALIDAD_OPTIONS.find((m) => m.value === est.modalidad)?.label ||
+                          est.modalidad}
+                      </Typography>
+                      {est.fecha_solicitud && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {new Date(est.fecha_solicitud).toLocaleDateString()}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={ESTADO_LABELS[est.estado] || est.estado}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        endIcon={<OpenInNew fontSize="small" />}
+                        onClick={() => navigate(`/estudios-complementarios/${est.id}`)}
+                      >
+                        Ver
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Box>
+      ) : null}
 
       {pedidosDialogs}
     </Stack>

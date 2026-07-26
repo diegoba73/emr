@@ -181,7 +181,7 @@ class TestResultadosClinicosAPI(APITestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         sol.refresh_from_db()
-        self.assertEqual(sol.estado, "EN_PROCESO")
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
 
     def test_finalizar_falla_con_vacio(self):
         sol, res = self._sol_y_res()
@@ -198,7 +198,7 @@ class TestResultadosClinicosAPI(APITestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         sol.refresh_from_db()
-        self.assertEqual(sol.estado, "EN_PROCESO")
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
 
     def test_bioquimico_valida_y_bloquea(self):
         sol, res = self._sol_y_res()

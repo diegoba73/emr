@@ -17,7 +17,7 @@ class _TipoExamenStub:
 @pytest.mark.parametrize(
     "codigo, entry, numeric, informe",
     [
-        ("LEU", "93", Decimal("9300"), "9300"),
+        ("LEUCO", "93", Decimal("9300"), "9300"),
         ("HEMATIES", "237", Decimal("2.37"), "2.370.000"),
         ("HGB", "73", Decimal("7.3"), "7.3"),
         ("RDW", "139", Decimal("13.9"), "13.9"),
@@ -35,14 +35,14 @@ def test_convert_ticket_entry_legacy_codigo(codigo, entry, numeric, informe):
 
 
 def test_convert_sysmex_entry_compat():
-    conv = convert_sysmex_entry("LEU", "93")
+    conv = convert_sysmex_entry("LEUCO", "93")
     assert conv is not None
     assert conv["valor_numerico"] == Decimal("9300")
 
 
 def test_convert_ticket_entry_from_catalog():
     te = _TipoExamenStub(
-        "LEU",
+        "LEUCO",
         modo_entrada="TICKET_ENTERO",
         ticket_decimales=1,
         multiplicador_clinico=Decimal("1000"),

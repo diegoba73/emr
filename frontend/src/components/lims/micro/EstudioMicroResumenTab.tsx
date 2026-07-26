@@ -28,17 +28,24 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
         <EstudioMicrobiologiaEstadoBadge estado={e} />
       </Box>
       <Typography>
-        <strong>Solicitud:</strong> #{estudio.solicitud}
+        <strong>Paciente:</strong> {estudio.paciente_nombre || `#${estudio.paciente}`}
       </Typography>
       <Typography sx={{ mt: 1 }}>
-        <strong>Muestra:</strong> #{estudio.muestra}
+        <strong>Médico:</strong> {estudio.medico_display || '—'}
       </Typography>
       <Typography sx={{ mt: 1 }}>
-        <strong>Paciente:</strong> #{estudio.paciente}
+        <strong>Tipo de cultivo:</strong>{' '}
+        {estudio.tipo_cultivo_nombre || estudio.tipo_estudio}
       </Typography>
       <Typography sx={{ mt: 1 }}>
-        <strong>Tipo:</strong> {estudio.tipo_estudio}
+        <strong>Tipo de muestra:</strong>{' '}
+        {estudio.tipo_muestra_micro_nombre || estudio.muestra_tipo_nombre || '—'}
       </Typography>
+      {estudio.solicitud ? (
+        <Typography sx={{ mt: 1 }} variant="body2" color="text.secondary">
+          Orden LIMS (legado): {estudio.solicitud_numero || `#${estudio.solicitud}`}
+        </Typography>
+      ) : null}
       <Typography sx={{ mt: 1 }}>
         <strong>Inicio:</strong> {estudio.fecha_inicio ? new Date(estudio.fecha_inicio).toLocaleString() : '—'}
       </Typography>
@@ -54,7 +61,7 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
         <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {canOperateTecnico && e === 'PENDIENTE' && (
             <Button variant="contained" onClick={onIniciar}>
-              Iniciar estudio
+              Confirmar recepción
             </Button>
           )}
           {canOperateTecnico && e !== 'CANCELADO' && e !== 'INFORMADO' && e !== 'VALIDADO' && (

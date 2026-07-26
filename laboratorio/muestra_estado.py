@@ -207,6 +207,7 @@ def aplicar_tomar(
             metadata=meta,
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        _hook_inventario_toma(muestra, actor=actor)
         return muestra
 
 
@@ -410,7 +411,54 @@ def aplicar_recibir(
             metadata=meta,
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        _hook_inventario_recibir(muestra, actor=actor)
         return muestra
+
+
+def _hook_inventario_toma(muestra: Muestra, *, actor: AbstractUser | None) -> None:
+    """Egreso suave de tubo al tomar muestra (no bloquea si falta stock)."""
+    if not muestra.tipo_contenedor_id:
+        return
+    try:
+        from laboratorio.inventario_service import egresar_por_contenedor
+
+        result = egresar_por_contenedor(
+            muestra.tipo_contenedor_id,
+            cantidad=1,
+            user=actor,
+            muestra_id=muestra.pk,
+            strict=False,
+        )
+        if not result.get("ok") and result.get("warning"):
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning("Inventario (toma): %s", result["warning"])
+    except Exception:
+        pass
+
+
+def _hook_inventario_recibir(muestra: Muestra, *, actor: AbstractUser | None) -> None:
+    """Egreso suave de tubo al recibir muestra si no se descontó en toma."""
+    if muestra.estado != "RECIBIDA" or not muestra.tipo_contenedor_id:
+        return
+    try:
+        from laboratorio.models_inventario import MovimientoStock
+
+        if MovimientoStock.objects.filter(muestra_id=muestra.pk, tipo="EGRESO").exists():
+            return
+        from laboratorio.inventario_service import egresar_por_contenedor
+
+        result = egresar_por_contenedor(
+            muestra.tipo_contenedor_id,
+            cantidad=1,
+            user=actor,
+            muestra_id=muestra.pk,
+            strict=False,
+        )
+        if not result.get("ok") and result.get("warning"):
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning("Inventario (recepción): %s", result["warning"])
+    except Exception:
+        pass
 
 
 def aplicar_iniciar_proceso(

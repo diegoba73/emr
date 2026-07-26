@@ -18,6 +18,7 @@ import {
   downloadInformeLimsPdf,
   getSolicitudExamen,
   listMuestrasPorSolicitud,
+  postMarcarDerivacion,
   postValidarSolicitud,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
@@ -34,6 +35,7 @@ import {
   estadoOrdenColor,
   labelEstadoOrdenLims,
   ordenListaParaValidar,
+  ordenPuedeAgregarExamenes,
   ordenPuedeCargarResultados,
   ordenPuedeEnviarInforme,
 } from '../../utils/limsEstadosOrden';
@@ -43,6 +45,7 @@ import MuestrasOrdenPanel from '../../components/lims/MuestrasOrdenPanel';
 import OrdenLimsResumenPanel from '../../components/lims/OrdenLimsResumenPanel';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
 import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDialog';
+import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +60,7 @@ const OrdenLimsDetalle: React.FC = () => {
   const [validando, setValidando] = useState(false);
   const [openTomarMuestra, setOpenTomarMuestra] = useState(false);
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
+  const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
   const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
 
   const allowed = canAccessLimsModule(currentUser);
@@ -126,7 +130,7 @@ const OrdenLimsDetalle: React.FC = () => {
     const tieneAlertas = resultados.some((r) => r.es_patologico || r.es_critico);
     if (tieneAlertas) {
       const ok = window.confirm(
-        'Hay resultados patológicos o críticos. ¿Confirmás la validación y liberación del informe?'
+        'Hay resultados fuera de rango o críticos. ¿Confirmás la validación y liberación del informe?'
       );
       if (!ok) return;
     }
@@ -244,9 +248,19 @@ const OrdenLimsDetalle: React.FC = () => {
               Imprimir etiquetas
             </Button>
           )}
-          {(enProceso || informadoParcial) && canOp && !resultadosCompletos && (
+          {canOp && ordenPuedeAgregarExamenes(orden) && (
+            <Button variant="contained" color="secondary" onClick={() => setOpenAgregarExamenes(true)}>
+              Agregar exámenes
+            </Button>
+          )}
+          {enProceso && canOp && !resultadosCompletos && (
             <Button variant="contained" onClick={() => setTab(2)}>
               Cargar resultados
+            </Button>
+          )}
+          {listaParaValidar && canOp && (
+            <Button variant="outlined" onClick={() => setTab(2)}>
+              Corregir resultados
             </Button>
           )}
           {listaParaValidar && canValidar && (
@@ -262,12 +276,12 @@ const OrdenLimsDetalle: React.FC = () => {
           {listaParaValidar && !canValidar && canOp && (
             <Chip
               size="small"
-              label="Resultados completos — pendiente de validación del bioquímico"
+              label="Listo para validar — pendiente del bioquímico"
               color="warning"
               variant="outlined"
             />
           )}
-          {puedeEnviarInforme && resultadosCompletos && canEnviar && (
+          {puedeEnviarInforme && finalizada && canEnviar && (
             <Button variant="contained" color="primary" onClick={() => setOpenEnviarInforme(true)}>
               Enviar informe
             </Button>
@@ -275,6 +289,11 @@ const OrdenLimsDetalle: React.FC = () => {
           {puedeEnviarInforme && !resultadosCompletos && canEnviar && (
             <Button variant="contained" color="info" onClick={() => setOpenEnviarInforme(true)}>
               Enviar informe parcial
+            </Button>
+          )}
+          {puedeEnviarInforme && listaParaValidar && canEnviar && (
+            <Button variant="outlined" color="primary" onClick={() => setOpenEnviarInforme(true)}>
+              Enviar borrador PDF
             </Button>
           )}
           {puedeEnviarInforme && canPdf && (
@@ -287,6 +306,12 @@ const OrdenLimsDetalle: React.FC = () => {
             </Button>
           )}
         </Box>
+        {canOp && ordenPuedeAgregarExamenes(orden) && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+            <strong>Agregar exámenes</strong>: sin etiquetas, libre; con etiquetas impresas, solo si
+            caben en los tubos ya generados (sin nueva extracción).
+          </Typography>
+        )}
         {canOp && e === 'PENDIENTE' && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Pendiente de recepción. <strong>Imprimir etiquetas</strong> genera los tubos con código de
@@ -305,27 +330,70 @@ const OrdenLimsDetalle: React.FC = () => {
             . Podés cargar resultados de los exámenes cuyos tubos ya estén recibidos.
           </Alert>
         )}
-        {(enProceso || informadoParcial) && !resultadosCompletos && (
+        {orden.derivaciones_resumen && orden.derivaciones_resumen.length > 0 && (
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            <Typography variant="body2" fontWeight={600} gutterBottom>
+              Exámenes derivados a laboratorio externo
+            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              {orden.derivaciones_resumen.map((d) => (
+                <li key={d.resultado_id}>
+                  {d.tipo_examen_codigo} → {d.laboratorio_codigo || '—'} ({d.estado_derivacion})
+                  {canOp && d.estado_derivacion === 'PENDIENTE_ENVIO' && (
+                    <Button
+                      size="small"
+                      sx={{ ml: 1 }}
+                      onClick={() => {
+                        void (async () => {
+                          try {
+                            await postMarcarDerivacion(orden.id, {
+                              resultado_id: d.resultado_id,
+                              estado_derivacion: 'ENVIADO',
+                            });
+                            const fresh = await getSolicitudExamen(orden.id);
+                            setOrden(fresh);
+                            toast.success(`Enviado a ${d.laboratorio_codigo}`);
+                          } catch (err) {
+                            toast.error(
+                              getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsGuardarResultado)
+                            );
+                          }
+                        })();
+                      }}
+                    >
+                      Marcar enviado
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </Box>
+            <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+              Cuando el resultado llega por correo, cargalo manualmente en la pestaña Resultados.
+            </Typography>
+          </Alert>
+        )}
+        {enProceso && !resultadosCompletos && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             {informadoParcial ? (
               <>
                 Orden <strong>informada parcialmente</strong> ({progreso.conValor} de {progreso.total}{' '}
-                resultados). El PDF refleja solo lo cargado. Seguí completando en Resultados; cuando
-                estén todos, un bioquímico debe <strong>Validar y liberar</strong>.
+                resultados). El PDF refleja solo lo cargado. Seguí completando en Resultados; al
+                completar todos pasa a <strong>Listo para validar</strong>.
               </>
             ) : (
               <>
                 Podés guardar resultados de a poco en Resultados. Si el médico solicita anticipar la
                 entrega, usá <strong>Guardar e informar parcialmente</strong> y luego{' '}
-                <strong>Enviar informe parcial</strong>.
+                <strong>Enviar informe parcial</strong>. Al completar todos, la orden pasa a{' '}
+                <strong>Listo para validar</strong>.
               </>
             )}
           </Typography>
         )}
         {listaParaValidar && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            Resultados completos. La orden permanece en borrador hasta que un bioquímico use{' '}
-            <strong>Validar y liberar</strong>.
+            Resultados completos — estado <strong>Listo para validar</strong>. Un bioquímico debe{' '}
+            <strong>Validar y liberar</strong> para finalizar. Podés corregir valores si hace falta.
           </Typography>
         )}
         {finalizada && resultadosCompletos && (
@@ -396,6 +464,20 @@ const OrdenLimsDetalle: React.FC = () => {
             setOrden(fresh);
           } catch {
             /* keep o */
+          }
+        }}
+      />
+      <NuevaOrdenLimsDialog
+        open={openAgregarExamenes}
+        onClose={() => setOpenAgregarExamenes(false)}
+        agregarAOrdenId={orden.id}
+        agregarAOrdenNumero={orden.numero}
+        onCreated={async () => {
+          try {
+            const fresh = await getSolicitudExamen(orden.id);
+            setOrden(fresh);
+          } catch {
+            /* ignore */
           }
         }}
       />

@@ -30,7 +30,7 @@ UMBRALES_POR_CODIGO: dict[str, UmbralesVariacion] = {
     # Coagulación
     "INR": {"estable": 10.0, "moderada": 20.0, "brusca": 30.0},
     # Hemograma — leucocitos/plaquetas con mayor rango fisiológico
-    "LEU": {"estable": 15.0, "moderada": 30.0, "brusca": 50.0},
+    "LEUCO": {"estable": 15.0, "moderada": 30.0, "brusca": 50.0},
     "PLAQ": {"estable": 15.0, "moderada": 30.0, "brusca": 45.0},
 }
 

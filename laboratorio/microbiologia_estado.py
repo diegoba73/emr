@@ -87,9 +87,11 @@ def _base_estudio_metadata(
         "accion": accion,
         "estudio_id": estudio.pk,
         "numero_estudio": estudio.numero,
-        "solicitud_id": sol.pk,
-        "numero_solicitud": sol.numero,
-        "muestra_id": muestra.pk,
+        "solicitud_id": sol.pk if sol else None,
+        "numero_solicitud": sol.numero if sol else None,
+        "muestra_id": muestra.pk if muestra else None,
+        "tipo_cultivo_id": estudio.tipo_cultivo_id,
+        "tipo_muestra_micro_id": estudio.tipo_muestra_micro_id,
         "estado_anterior": estado_anterior,
         "estado_nuevo": estado_nuevo,
         "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
@@ -124,40 +126,69 @@ def _audit_estudio_update(
 
 def crear_estudio(
     *,
-    solicitud,
-    muestra,
-    tipo_estudio: str,
-    observaciones: str,
-    actor: "AbstractUser | None",
-    view: str,
+    solicitud=None,
+    muestra=None,
+    paciente=None,
+    tipo_estudio: str = "UROCULTIVO",
+    observaciones: str = "",
+    actor: "AbstractUser | None" = None,
+    view: str = "",
+    tipo_cultivo=None,
+    tipo_muestra_micro=None,
+    medico_interno=None,
+    medico_externo_nombre: str = "",
+    consulta_hc=None,
+    origen_solicitud: str = "",
 ) -> EstudioMicrobiologia:
     """Crea un estudio microbiológico en estado PENDIENTE.
 
-    Valida:
-    - muestra y solicitud coinciden;
-    - paciente consistente;
-    - muestra en RECIBIDA, CONSERVADA o EN_PROCESO;
-    - solicitud no finalizada.
+    Flujo moderno: paciente + tipo_cultivo + tipo_muestra_micro (sin LIMS).
+    Flujo legado: solicitud + muestra LIMS.
     """
-    if solicitud.estado == "FINALIZADO":
+    if solicitud is not None and getattr(solicitud, "estado", None) == "FINALIZADO":
         raise MicrobiologiaAccionError(
             "No se puede crear un estudio sobre una solicitud finalizada."
         )
-    if muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
-        raise MicrobiologiaAccionError(
-            "Solo se puede iniciar microbiología sobre muestras RECIBIDA, CONSERVADA o EN_PROCESO."
-        )
-    if muestra.solicitud_id != solicitud.pk:
-        raise MicrobiologiaAccionError(
-            "La muestra no pertenece a la solicitud indicada."
-        )
+    if muestra is not None:
+        if muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
+            raise MicrobiologiaAccionError(
+                "Solo se puede iniciar microbiología sobre muestras RECIBIDA, CONSERVADA o EN_PROCESO."
+            )
+        if solicitud is not None and muestra.solicitud_id != solicitud.pk:
+            raise MicrobiologiaAccionError(
+                "La muestra no pertenece a la solicitud indicada."
+            )
+
+    paciente_id = None
+    if paciente is not None:
+        paciente_id = paciente.pk
+    elif solicitud is not None:
+        paciente_id = solicitud.paciente_id
+    elif muestra is not None:
+        paciente_id = muestra.paciente_id
+    if not paciente_id:
+        raise MicrobiologiaAccionError("Se requiere un paciente para el estudio.")
+
+    codigo = tipo_estudio or "UROCULTIVO"
+    if tipo_cultivo is not None:
+        codigo = tipo_cultivo.codigo
+
+    origen = (origen_solicitud or "").strip()
+    if not origen and solicitud is not None:
+        origen = getattr(solicitud, "origen_solicitud", "") or ""
 
     with transaction.atomic():
         estudio = EstudioMicrobiologia(
             solicitud=solicitud,
             muestra=muestra,
-            paciente_id=solicitud.paciente_id,
-            tipo_estudio=tipo_estudio or "CULTIVO_RUTINA",
+            paciente_id=paciente_id,
+            consulta_hc=consulta_hc,
+            origen_solicitud=origen,
+            medico_interno=medico_interno,
+            medico_externo_nombre=(medico_externo_nombre or "").strip(),
+            tipo_cultivo=tipo_cultivo,
+            tipo_muestra_micro=tipo_muestra_micro,
+            tipo_estudio=codigo,
             observaciones=observaciones or "",
             estado="PENDIENTE",
         )
@@ -172,6 +203,182 @@ def crear_estudio(
         )
         log_create(actor=actor, entity=estudio, module="laboratorio", metadata=meta)
         return estudio
+
+
+def crear_estudio_desde_pedido(
+    *,
+    paciente,
+    tipo_cultivo_id: int,
+    tipo_muestra_micro_id: int,
+    medico_interno=None,
+    medico_externo_nombre: str = "",
+    observaciones: str = "",
+    actor: "AbstractUser | None" = None,
+    view: str = "",
+    # Compat firmas antiguas (ignoradas / mapeadas).
+    tipo_estudio: str = "",
+    tipo_muestra_id: int | None = None,
+    origen_solicitud: str = "",
+    consulta_hc=None,
+    muestra_existente=None,
+) -> EstudioMicrobiologia:
+    """
+    Alta de estudio de microbiología: paciente + médico + cultivo + muestra micro.
+
+    No crea ni vincula órdenes LIMS de química clínica.
+    """
+    from laboratorio.models_microbiologia import (
+        TipoCultivoMicrobiologia,
+        TipoMuestraMicrobiologia,
+    )
+    from laboratorio.origen_solicitud import normalizar_origen_solicitud
+
+    del tipo_muestra_id
+
+    if muestra_existente is not None:
+        # Legado: vincular a muestra LIMS existente del paciente.
+        if muestra_existente.paciente_id != paciente.pk:
+            raise MicrobiologiaAccionError(
+                "La muestra no pertenece al paciente indicado."
+            )
+        cultivo = None
+        if tipo_cultivo_id:
+            cultivo = TipoCultivoMicrobiologia.objects.filter(pk=tipo_cultivo_id).first()
+        return crear_estudio(
+            solicitud=muestra_existente.solicitud,
+            muestra=muestra_existente,
+            paciente=paciente,
+            tipo_estudio=tipo_estudio or (cultivo.codigo if cultivo else "UROCULTIVO"),
+            tipo_cultivo=cultivo,
+            observaciones=observaciones,
+            actor=actor,
+            view=view,
+            medico_interno=medico_interno,
+            medico_externo_nombre=medico_externo_nombre,
+            consulta_hc=consulta_hc,
+            origen_solicitud=origen_solicitud,
+        )
+
+    try:
+        cultivo = TipoCultivoMicrobiologia.objects.get(pk=int(tipo_cultivo_id), activo=True)
+    except (TipoCultivoMicrobiologia.DoesNotExist, TypeError, ValueError) as exc:
+        raise MicrobiologiaAccionError("Tipo de cultivo inexistente o inactivo.") from exc
+
+    try:
+        muestra_micro = TipoMuestraMicrobiologia.objects.get(
+            pk=int(tipo_muestra_micro_id), activo=True
+        )
+    except (TipoMuestraMicrobiologia.DoesNotExist, TypeError, ValueError) as exc:
+        raise MicrobiologiaAccionError("Tipo de muestra inexistente o inactivo.") from exc
+
+    medico_ext = (medico_externo_nombre or "").strip()
+    origen = normalizar_origen_solicitud(origen_solicitud) or (origen_solicitud or "").strip()
+    if not origen and consulta_hc is not None:
+        from laboratorio.origen_solicitud import inferir_origen_solicitud
+
+        origen = (
+            inferir_origen_solicitud(
+                paciente_id=paciente.pk,
+                consulta_hc=consulta_hc,
+            )
+            or ""
+        )
+
+    return crear_estudio(
+        paciente=paciente,
+        tipo_cultivo=cultivo,
+        tipo_muestra_micro=muestra_micro,
+        tipo_estudio=cultivo.codigo,
+        observaciones=observaciones,
+        actor=actor,
+        view=view,
+        medico_interno=medico_interno,
+        medico_externo_nombre=medico_ext,
+        consulta_hc=consulta_hc,
+        origen_solicitud=origen,
+    )
+
+
+def crear_estudios_batch(
+    *,
+    paciente,
+    items: list[dict[str, int]],
+    medico_interno=None,
+    medico_externo_nombre: str = "",
+    observaciones: str = "",
+    actor: "AbstractUser | None" = None,
+    view: str = "",
+    origen_solicitud: str = "",
+    consulta_hc=None,
+) -> list[EstudioMicrobiologia]:
+    """Crea N estudios (uno por ítem cultivo+muestra) en una transacción."""
+    if not items:
+        raise MicrobiologiaAccionError("Indique al menos un cultivo.")
+    with transaction.atomic():
+        creados: list[EstudioMicrobiologia] = []
+        for item in items:
+            estudio = crear_estudio_desde_pedido(
+                paciente=paciente,
+                tipo_cultivo_id=int(item["tipo_cultivo_id"]),
+                tipo_muestra_micro_id=int(item["tipo_muestra_micro_id"]),
+                medico_interno=medico_interno,
+                medico_externo_nombre=medico_externo_nombre,
+                observaciones=observaciones,
+                actor=actor,
+                view=view,
+                origen_solicitud=origen_solicitud,
+                consulta_hc=consulta_hc,
+            )
+            creados.append(estudio)
+        return creados
+
+
+def imprimir_etiquetas_estudios(
+    estudio_ids: list[int],
+    *,
+    actor: "AbstractUser | None" = None,
+    view: str = "",
+) -> list[EstudioMicrobiologia]:
+    """Asigna barcode y marca etiquetas_impresas_at en estudios PENDIENTE."""
+    if not estudio_ids:
+        raise MicrobiologiaAccionError("Indique al menos un estudio.")
+    with transaction.atomic():
+        # select_for_update no admite OUTER JOIN (FKs nullable en select_related).
+        locked_ids = list(
+            EstudioMicrobiologia.objects.select_for_update()
+            .filter(pk__in=estudio_ids)
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
+        if len(locked_ids) != len(set(estudio_ids)):
+            raise MicrobiologiaAccionError("Uno o más estudios no existen.")
+        estudios = list(
+            EstudioMicrobiologia.objects.select_related(
+                "paciente", "tipo_cultivo", "tipo_muestra_micro"
+            )
+            .filter(pk__in=locked_ids)
+            .order_by("pk")
+        )
+        for estudio in estudios:
+            if estudio.estado != "PENDIENTE":
+                raise MicrobiologiaAccionError(
+                    "Solo se pueden imprimir etiquetas de estudios en estado PENDIENTE."
+                )
+            before = safe_model_snapshot(estudio)
+            estudio.ensure_codigo_barra()
+            if estudio.etiquetas_impresas_at is None:
+                estudio.etiquetas_impresas_at = timezone.now()
+            estudio.save(update_fields=["codigo_barra", "etiquetas_impresas_at", "updated_at"])
+            meta = _base_estudio_metadata(
+                estudio,
+                accion="IMPRIMIR_ETIQUETAS",
+                view=view,
+                actor=actor,
+                estado_anterior=estudio.estado,
+                estado_nuevo=estudio.estado,
+            )
+            _audit_estudio_update(estudio, before=before, actor=actor, metadata=meta)
+        return estudios
 
 
 def aplicar_iniciar_estudio(
@@ -382,10 +589,11 @@ def crear_siembra(
             raise MicrobiologiaAccionError("El medio de cultivo no existe.") from exc
         if not medio.activo:
             raise MicrobiologiaAccionError("El medio de cultivo debe estar activo.")
-        if estudio.muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
-            raise MicrobiologiaAccionError(
-                "La muestra del estudio debe estar RECIBIDA, CONSERVADA o EN_PROCESO para sembrar."
-            )
+        if estudio.muestra_id:
+            if estudio.muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
+                raise MicrobiologiaAccionError(
+                    "La muestra LIMS del estudio debe estar RECIBIDA, CONSERVADA o EN_PROCESO para sembrar."
+                )
 
         siembra = SiembraMicrobiologia(
             estudio=estudio,
@@ -408,7 +616,7 @@ def crear_siembra(
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
-            "numero_solicitud": estudio.solicitud.numero,
+            "numero_solicitud": estudio.solicitud.numero if estudio.solicitud_id else None,
             "muestra_id": estudio.muestra_id,
             "medio_id": medio.pk,
             "observacion_presente": bool(siembra.observaciones),
@@ -420,7 +628,33 @@ def crear_siembra(
         log_create(actor=actor, entity=siembra, module="laboratorio", metadata=meta)
 
         _maybe_avanzar_estudio_a_sembrado(estudio, actor=actor, view=view)
+        _hook_inventario_siembra(siembra, medio_id=medio.pk, actor=actor)
         return siembra
+
+
+def _hook_inventario_siembra(
+    siembra: SiembraMicrobiologia,
+    *,
+    medio_id: int,
+    actor: "AbstractUser | None",
+) -> None:
+    """Egreso suave de medio al sembrar (no bloquea si falta stock)."""
+    try:
+        from laboratorio.inventario_service import egresar_medio
+
+        result = egresar_medio(
+            medio_id,
+            cantidad=1,
+            user=actor,
+            siembra_id=siembra.pk,
+            strict=False,
+        )
+        if not result.get("ok") and result.get("warning"):
+            import logging
+
+            logging.getLogger(__name__).warning("Inventario (siembra): %s", result["warning"])
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------

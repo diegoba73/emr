@@ -8,7 +8,7 @@ from laboratorio.sysmex_hemograma import convert_sysmex_entry, format_sysmex_inf
 @pytest.mark.parametrize(
     "codigo, entry, numeric, informe",
     [
-        ("LEU", "93", Decimal("9300"), "9300"),
+        ("LEUCO", "93", Decimal("9300"), "9300"),
         ("HEMATIES", "237", Decimal("2.37"), "2.370.000"),
         ("HGB", "73", Decimal("7.3"), "7.3"),
         ("RDW", "139", Decimal("13.9"), "13.9"),

@@ -1,4 +1,9 @@
 from rest_framework import serializers
+from turnos.situacion_paciente import (
+    SituacionPacienteConflictError,
+    assert_puede_admitir_internacion,
+    finalizar_atencion_por_derivacion,
+)
 from .models import Sector, Cama, Internacion
 from pacientes.models import Paciente
 from medicos.models import Medico
@@ -109,20 +114,20 @@ class InternacionSerializer(serializers.ModelSerializer):
                         'cama': f'La cama {cama.nombre} no está disponible. Estado actual: {cama.estado}'
                     })
         
-        # Validación 2: Paciente libre (solo para nuevas internaciones)
+        # Validación 2: exclusividad de situación (solo para nuevas internaciones)
         paciente = data.get('paciente')
         if paciente and not self.instance:  # Solo validar en creación
-            internacion_activa = Internacion.objects.filter(
-                paciente=paciente,
-                activo=True
-            ).first()
-            
-            if internacion_activa:
-                cama_actual = internacion_activa.cama
-                raise serializers.ValidationError({
-                    'paciente': f'El paciente ya está internado en la cama {cama_actual.nombre} (Sector: {cama_actual.sector.nombre}). '
-                               f'Debe dar de alta al paciente antes de ingresarlo a otra cama.'
-                })
+            atencion_origen = data.get('atencion_origen')
+            atencion_origen_id = (
+                atencion_origen.pk if atencion_origen is not None else None
+            )
+            try:
+                assert_puede_admitir_internacion(
+                    paciente.pk,
+                    atencion_origen_id=atencion_origen_id,
+                )
+            except SituacionPacienteConflictError as exc:
+                raise serializers.ValidationError({'paciente': str(exc)}) from exc
         
         # Validación 3: Diagnóstico (al menos uno debe estar presente)
         diagnostico_cie = data.get('diagnostico_cie')
@@ -135,6 +140,16 @@ class InternacionSerializer(serializers.ModelSerializer):
             })
         
         return data
+
+
+    def create(self, validated_data):
+        """Crea la internación y cierra la atención de origen si hubo derivación."""
+        atencion_origen = validated_data.get('atencion_origen')
+        internacion = super().create(validated_data)
+        if atencion_origen is not None:
+            finalizar_atencion_por_derivacion(atencion_origen)
+        return internacion
+
 
 
 class CamaSerializer(serializers.ModelSerializer):

@@ -167,3 +167,34 @@ export function canEditCatalogosClinicos(user: User | null | undefined): boolean
   if (isStaffOrAdmin(user)) return true;
   return normalizeRol(user) === 'medico';
 }
+
+/** Dashboard BI / indicadores de calidad. */
+export function canAccessBiDashboard(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const rol = normalizeRol(user);
+  return rol === 'admin' || rol === 'bioquimico' || rol === 'secretaria' || rol === 'laboratorio';
+}
+
+/** Portal del paciente — acceso base. */
+export function canAccessPortal(user: User | null | undefined): boolean {
+  return normalizeRol(user ?? null) === 'paciente';
+}
+
+export function canAccessPortalTurnos(user: User | null | undefined): boolean {
+  return canAccessPortal(user);
+}
+
+export function canAccessPortalResultados(user: User | null | undefined): boolean {
+  return canAccessPortal(user);
+}
+
+export function canAccessPortalDocumentos(user: User | null | undefined): boolean {
+  return canAccessPortal(user);
+}
+
+export function canAccessPortalHistoria(user: User | null | undefined): boolean {
+  return canAccessPortal(user);
+}
+
+export { isPacienteRole } from './navLabels';

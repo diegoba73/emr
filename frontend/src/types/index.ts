@@ -334,14 +334,55 @@ export interface Atencion extends BaseModel {
   contexto_atencion?: ContextoAtencion;
   contexto_atencion_display?: string;
   internacion_id?: number | null;
+  /** True si existe Internacion con atencion_origen = esta atención (típico guardia). */
+  derivada_a_internacion?: boolean;
   estado_clinico: EstadoClinico;
   observaciones_generales?: string | null;
   consulta_ambulatoria?: ConsultaAmbulatoriaRecord | null;
   evolucion_internacion?: EvolucionInternacionRecord | null;
   consulta_hc_id?: number | null;
+  /** Órdenes LIMS de la consulta HC aún no FINALIZADO. */
+  pedidos_lab_pendientes?: number;
+  /** Estudios complementarios aún no informados/cerrados. */
+  pedidos_estudios_pendientes?: number;
   registro_procedimiento?: RegistroProcedimientoRecord | null;
   registro_quirurgico?: RegistroQuirurgicoRecord | null;
   documentos: Documento[];
+  signos_vitales?: SignosVitales[];
+  ultimo_signo_vital?: SignosVitales | null;
+  documentos_count?: number;
+}
+
+export interface SignosVitales extends BaseModel {
+  atencion_id: number;
+  rol_registrador?: string;
+  fecha_registro: string;
+  tension_arterial?: string | null;
+  frecuencia_cardiaca?: number | null;
+  frecuencia_respiratoria?: number | null;
+  temperatura?: number | string | null;
+  saturacion_oxigeno?: number | string | null;
+  indice_masa_corporal?: number | string | null;
+  peso?: number | string | null;
+  talla?: number | string | null;
+  registrado_por_id?: number | null;
+  registrado_por_nombre?: string | null;
+}
+
+export interface PacienteTimelineEvent {
+  id: string;
+  type: string;
+  title: string;
+  subtitle?: string | null;
+  date: string;
+  critical?: boolean;
+  nested?: boolean;
+  episode_group_id?: string | null;
+  episode_group_title?: string | null;
+  atencion_id?: number | null;
+  consulta_hc_id?: number | null;
+  navigate_to?: string | null;
+  meta?: Record<string, unknown>;
 }
 
 // Tipo para crear una atención

@@ -58,6 +58,10 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        # Resultados de estudios hechos en clínica viven en el estudio, no en Archivos.
+        queryset = queryset.exclude(
+            vinculos_estudio__estudio__origen='INTERNO'
+        ).distinct()
         paciente_id = self.request.query_params.get('paciente_id')
         atencion_id = self.request.query_params.get('atencion_id')
         if paciente_id:

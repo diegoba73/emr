@@ -30,29 +30,48 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [email, setEmail] = useState(true);
-  const [whatsapp, setWhatsapp] = useState(true);
+  const [emailPaciente, setEmailPaciente] = useState(true);
+  const [whatsappPaciente, setWhatsappPaciente] = useState(true);
+  const [emailMedico, setEmailMedico] = useState(false);
+  const [whatsappMedico, setWhatsappMedico] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const tieneEmail = Boolean((orden.paciente_email || '').trim());
-  const tieneTel = Boolean((orden.paciente_telefono || '').trim());
+  const tieneEmailPac = Boolean((orden.paciente_email || '').trim());
+  const tieneTelPac = Boolean((orden.paciente_telefono || '').trim());
+  const tieneMedicoInterno = Boolean(orden.medico_interno);
+  const tieneEmailMed = Boolean((orden.medico_email || '').trim());
+  const tieneTelMed = Boolean((orden.medico_telefono || '').trim());
+  const medicoLabel =
+    orden.medico_interno_nombre || orden.medico_display || 'Médico solicitante';
+
   const esInformeParcial = orden.estado === 'INFORMADO_PARCIAL';
+  const esBorradorListo = orden.estado === 'LISTO_PARA_VALIDAR';
   const progreso = countResultadosConValor(orden);
 
   useEffect(() => {
     if (!open) return;
-    setEmail(tieneEmail);
-    setWhatsapp(tieneTel);
-  }, [open, tieneEmail, tieneTel]);
+    setEmailPaciente(tieneEmailPac);
+    setWhatsappPaciente(tieneTelPac);
+    setEmailMedico(tieneMedicoInterno && tieneEmailMed);
+    setWhatsappMedico(false);
+  }, [open, tieneEmailPac, tieneTelPac, tieneMedicoInterno, tieneEmailMed]);
+
+  const algunoSeleccionado =
+    emailPaciente || whatsappPaciente || emailMedico || whatsappMedico;
 
   const handleEnviar = async () => {
-    if (!email && !whatsapp) {
+    if (!algunoSeleccionado) {
       toast.error('Seleccioná al menos un canal de envío.');
       return;
     }
     setSending(true);
     try {
-      const res = await postEnviarInformeOrden(orden.id, { email, whatsapp });
+      const res = await postEnviarInformeOrden(orden.id, {
+        email: emailPaciente,
+        whatsapp: whatsappPaciente,
+        email_medico: emailMedico,
+        whatsapp_medico: whatsappMedico,
+      });
       const envio = res.envio;
 
       if (envio?.email_enviado) {
@@ -60,8 +79,8 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
         const tipo = esInformeParcial ? 'Informe parcial' : 'Informe';
         toast.success(
           adj
-            ? `${tipo} enviado por correo a ${envio.email_destino || 'paciente'} con PDF adjunto.`
-            : `${tipo} enviado por correo a ${envio.email_destino || 'paciente'}.`
+            ? `${tipo} enviado por correo a ${envio.email_destino || 'destinatarios'} con PDF adjunto.`
+            : `${tipo} enviado por correo a ${envio.email_destino || 'destinatarios'}.`
         );
       }
 
@@ -79,11 +98,32 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
               : 'WhatsApp enviado con enlace de descarga del informe.'
           );
         }
-      } else if (whatsapp && envio?.whatsapp_enlace) {
+      }
+
+      const enlacesFallback = (envio?.whatsapp_enlaces || []).filter(
+        (e) => e?.enlace
+      );
+      const pidioWhatsapp = whatsappPaciente || whatsappMedico;
+      if (pidioWhatsapp && !envio?.whatsapp_enviado && enlacesFallback.length > 0) {
         try {
           await downloadInformeLimsPdf(orden.id);
         } catch {
           /* el operador puede descargar desde la orden */
+        }
+        for (const item of enlacesFallback) {
+          window.open(item.enlace, '_blank', 'noopener,noreferrer');
+        }
+        toast.success(
+          enlacesFallback.length > 1
+            ? 'Se descargó el PDF y se abrieron los chats de WhatsApp: adjunte el archivo si el envío automático no estaba disponible.'
+            : 'Se descargó el PDF y se abrió WhatsApp: adjunte el archivo al chat si el envío automático no estaba disponible.',
+          { duration: 6000 }
+        );
+      } else if (pidioWhatsapp && !envio?.whatsapp_enviado && envio?.whatsapp_enlace) {
+        try {
+          await downloadInformeLimsPdf(orden.id);
+        } catch {
+          /* ignore */
         }
         window.open(envio.whatsapp_enlace, '_blank', 'noopener,noreferrer');
         toast.success(
@@ -105,11 +145,16 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
   return (
     <Dialog open={open} onClose={sending ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        {esInformeParcial ? 'Enviar informe parcial al paciente' : 'Enviar informe al paciente'}
+        {esInformeParcial
+          ? 'Enviar informe parcial'
+          : esBorradorListo
+            ? 'Enviar borrador PDF'
+            : 'Enviar informe'}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Orden {orden.numero || orden.id} — {orden.paciente_nombre || 'Paciente'}
+          {medicoLabel ? ` · ${medicoLabel}` : ''}
         </Typography>
         {esInformeParcial && (
           <Alert severity="info" sx={{ mb: 2 }}>
@@ -118,55 +163,113 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
             informe no está completo. Podés enviar un informe definitivo cuando finalice la orden.
           </Alert>
         )}
-        {!tieneEmail && !tieneTel && (
+        {esBorradorListo && (
           <Alert severity="warning" sx={{ mb: 2 }}>
-            El paciente no tiene email ni teléfono cargados. Actualice los datos en la ficha del
-            paciente.
+            <strong>Borrador.</strong> La orden está lista para validar pero aún no fue liberada por el
+            bioquímico. El PDF puede marcarse como no validado.
           </Alert>
         )}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        {!tieneEmailPac && !tieneTelPac && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            El paciente no tiene email ni teléfono cargados.
+          </Alert>
+        )}
+        {tieneMedicoInterno && !tieneEmailMed && !tieneTelMed && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            El médico solicitante no tiene email ni teléfono en su usuario del sistema.
+          </Alert>
+        )}
+        {!tieneMedicoInterno && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Esta orden no tiene médico interno vinculado
+            {orden.medico_externo_nombre
+              ? ` (solicitante externo: ${orden.medico_externo_nombre})`
+              : ''}
+            ; solo se puede enviar al paciente.
+          </Alert>
+        )}
+
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+          Paciente
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 2 }}>
           <FormControlLabel
             control={
               <Checkbox
-                checked={email}
-                onChange={(e) => setEmail(e.target.checked)}
-                disabled={!tieneEmail || sending}
+                checked={emailPaciente}
+                onChange={(e) => setEmailPaciente(e.target.checked)}
+                disabled={!tieneEmailPac || sending}
               />
             }
             label={
               <span>
                 Email con PDF adjunto{' '}
-                {tieneEmail ? `(${orden.paciente_email})` : '(no registrado)'}
+                {tieneEmailPac ? `(${orden.paciente_email})` : '(no registrado)'}
               </span>
             }
           />
           <FormControlLabel
             control={
               <Checkbox
-                checked={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.checked)}
-                disabled={!tieneTel || sending}
+                checked={whatsappPaciente}
+                onChange={(e) => setWhatsappPaciente(e.target.checked)}
+                disabled={!tieneTelPac || sending}
               />
             }
             label={
               <span>
-                WhatsApp {tieneTel ? `(${orden.paciente_telefono})` : '(no registrado)'}
+                WhatsApp {tieneTelPac ? `(${orden.paciente_telefono})` : '(no registrado)'}
+              </span>
+            }
+          />
+        </Box>
+
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+          Médico solicitante
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={emailMedico}
+                onChange={(e) => setEmailMedico(e.target.checked)}
+                disabled={!tieneMedicoInterno || !tieneEmailMed || sending}
+              />
+            }
+            label={
+              <span>
+                Email con PDF adjunto{' '}
+                {!tieneMedicoInterno
+                  ? '(sin médico interno)'
+                  : tieneEmailMed
+                    ? `(${orden.medico_email})`
+                    : '(no registrado)'}
+              </span>
+            }
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={whatsappMedico}
+                onChange={(e) => setWhatsappMedico(e.target.checked)}
+                disabled={!tieneMedicoInterno || !tieneTelMed || sending}
+              />
+            }
+            label={
+              <span>
+                WhatsApp{' '}
+                {!tieneMedicoInterno
+                  ? '(sin médico interno)'
+                  : tieneTelMed
+                    ? `(${orden.medico_telefono})`
+                    : '(no registrado)'}
               </span>
             }
           />
         </Box>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
-          {esInformeParcial ? (
-            <>
-              El correo adjunta el PDF parcial. WhatsApp envía el PDF vía Twilio si está configurado; si
-              no, se abre el chat con un enlace de descarga y se descarga el PDF para que usted lo adjunte.
-            </>
-          ) : (
-            <>
-              El correo incluye el PDF adjunto. WhatsApp envía el PDF vía Twilio si está configurado; si
-              no, se abre el chat con un enlace de descarga y se descarga el PDF para que usted lo adjunte.
-            </>
-          )}
+          El correo incluye el PDF adjunto. WhatsApp envía el PDF vía Twilio si está configurado; si
+          no, se abren el/los chats con enlace de descarga y se descarga el PDF para adjuntarlo.
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -177,7 +280,7 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
           variant="contained"
           color="primary"
           onClick={handleEnviar}
-          disabled={sending || (!email && !whatsapp)}
+          disabled={sending || !algunoSeleccionado}
         >
           {sending ? 'Enviando…' : esInformeParcial ? 'Enviar informe parcial' : 'Enviar informe'}
         </Button>

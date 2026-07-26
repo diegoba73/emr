@@ -1,4 +1,6 @@
-import { createSolicitudExamenLims, formatDrfError } from '../../services/limsApi';
+import toast from 'react-hot-toast';
+import { createSolicitudExamenLims, formatDrfError, getOrdenAbiertaPaciente } from '../../services/limsApi';
+import { createEstudiosMicrobiologiaBatch } from '../../services/limsMicroApi';
 import { createEstudioComplementario } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../estudios/apiErrors';
 import type { EstudioModalidad } from '../../types/estudios';
@@ -12,6 +14,19 @@ export interface DraftSolicitudLab {
   observaciones?: string;
 }
 
+export interface DraftPedidoMicroItem {
+  tipo_cultivo_id: number;
+  tipo_muestra_micro_id: number;
+  cultivo_nombre: string;
+  muestra_nombre: string;
+}
+
+export interface DraftPedidoMicro {
+  id: string;
+  items: DraftPedidoMicroItem[];
+  observaciones?: string;
+}
+
 export interface DraftEstudioComplementario {
   id: string;
   tipo_estudio_id?: number;
@@ -22,13 +37,23 @@ export interface DraftEstudioComplementario {
 
 export interface ConsultaPedidosDraft {
   solicitudesLab: DraftSolicitudLab[];
+  solicitudesMicro: DraftPedidoMicro[];
   estudios: DraftEstudioComplementario[];
 }
 
 const emptyDraft = (): ConsultaPedidosDraft => ({
   solicitudesLab: [],
+  solicitudesMicro: [],
   estudios: [],
 });
+
+function normalizeDraft(parsed: Partial<ConsultaPedidosDraft>): ConsultaPedidosDraft {
+  return {
+    solicitudesLab: Array.isArray(parsed.solicitudesLab) ? parsed.solicitudesLab : [],
+    solicitudesMicro: Array.isArray(parsed.solicitudesMicro) ? parsed.solicitudesMicro : [],
+    estudios: Array.isArray(parsed.estudios) ? parsed.estudios : [],
+  };
+}
 
 const GUARDIA_PENDING_KEY = 'guardia-pedidos-pending';
 
@@ -40,11 +65,7 @@ export function loadGuardiaPendingDraft(): ConsultaPedidosDraft {
   try {
     const raw = sessionStorage.getItem(GUARDIA_PENDING_KEY);
     if (!raw) return emptyDraft();
-    const parsed = JSON.parse(raw) as ConsultaPedidosDraft;
-    return {
-      solicitudesLab: Array.isArray(parsed.solicitudesLab) ? parsed.solicitudesLab : [],
-      estudios: Array.isArray(parsed.estudios) ? parsed.estudios : [],
-    };
+    return normalizeDraft(JSON.parse(raw) as ConsultaPedidosDraft);
   } catch {
     return emptyDraft();
   }
@@ -69,7 +90,11 @@ export function clearGuardiaPendingDraft(): void {
 /** Traslada el borrador de guardia al consulta HC recién creado. */
 export function migrateGuardiaPendingDraftToConsulta(consultaHcId: number): void {
   const pending = loadGuardiaPendingDraft();
-  if (pending.solicitudesLab.length === 0 && pending.estudios.length === 0) {
+  if (
+    pending.solicitudesLab.length === 0 &&
+    pending.solicitudesMicro.length === 0 &&
+    pending.estudios.length === 0
+  ) {
     return;
   }
   saveConsultaPedidosDraft(consultaHcId, pending);
@@ -78,18 +103,18 @@ export function migrateGuardiaPendingDraftToConsulta(consultaHcId: number): void
 
 export function countGuardiaPendingDraftItems(): number {
   const pending = loadGuardiaPendingDraft();
-  return pending.solicitudesLab.length + pending.estudios.length;
+  return (
+    pending.solicitudesLab.length +
+    pending.solicitudesMicro.length +
+    pending.estudios.length
+  );
 }
 
 export function loadConsultaPedidosDraft(consultaHcId: number): ConsultaPedidosDraft {
   try {
     const raw = sessionStorage.getItem(draftKey(consultaHcId));
     if (!raw) return emptyDraft();
-    const parsed = JSON.parse(raw) as ConsultaPedidosDraft;
-    return {
-      solicitudesLab: Array.isArray(parsed.solicitudesLab) ? parsed.solicitudesLab : [],
-      estudios: Array.isArray(parsed.estudios) ? parsed.estudios : [],
-    };
+    return normalizeDraft(JSON.parse(raw) as ConsultaPedidosDraft);
   } catch {
     return emptyDraft();
   }
@@ -123,22 +148,51 @@ export interface FlushConsultaPedidosParams {
   origenSolicitud?: 'GUARDIA';
 }
 
-/** Persiste borradores en LIMS / estudios complementarios. Lanza si alguna creación falla. */
+/** Persiste borradores en LIMS / micro / estudios complementarios. Lanza si alguna creación falla. */
 export async function flushConsultaPedidosDrafts(
   params: FlushConsultaPedidosParams,
   draftOverride?: ConsultaPedidosDraft
 ): Promise<void> {
   const { consultaHcId, pacienteId, medicoId, origenSolicitud } = params;
   const draft = draftOverride ?? loadConsultaPedidosDraft(consultaHcId);
-  if (draft.solicitudesLab.length === 0 && draft.estudios.length === 0) {
+  if (
+    draft.solicitudesLab.length === 0 &&
+    draft.solicitudesMicro.length === 0 &&
+    draft.estudios.length === 0
+  ) {
     return;
   }
 
+  if (draft.solicitudesLab.length > 0) {
+    try {
+      const abierta = await getOrdenAbiertaPaciente(pacienteId);
+      if (abierta) {
+        const ok = window.confirm(
+          `Ya hay una orden solicitada (${abierta.numero || `#${abierta.id}`}) pendiente de toma. ` +
+            'Los exámenes de laboratorio se agregarán a esa orden. ¿Continuar?'
+        );
+        if (!ok) {
+          throw new Error('Pedido de laboratorio cancelado: ya existe una orden abierta.');
+        }
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Pedido de laboratorio cancelado')) {
+        throw e;
+      }
+      /* si falla el check, seguimos */
+    }
+  }
+
   const errors: string[] = [];
+  const remaining: ConsultaPedidosDraft = {
+    solicitudesLab: [],
+    solicitudesMicro: [],
+    estudios: [],
+  };
 
   for (const sol of draft.solicitudesLab) {
     try {
-      await createSolicitudExamenLims({
+      const orden = await createSolicitudExamenLims({
         paciente_id: pacienteId,
         medico_id: medicoId ?? undefined,
         consulta_hc_id: consultaHcId,
@@ -147,8 +201,44 @@ export async function flushConsultaPedidosDrafts(
         observaciones: sol.observaciones,
         origen_solicitud: origenSolicitud,
       });
+      if (orden.merged) {
+        toast.success(
+          `Exámenes agregados a la orden ${orden.numero || `#${orden.id}`} (aún pendiente de toma).`
+        );
+      }
     } catch (e) {
-      errors.push(formatDrfError(e));
+      errors.push(`Lab. clínico: ${formatDrfError(e)}`);
+      remaining.solicitudesLab.push(sol);
+    }
+  }
+
+  for (const micro of draft.solicitudesMicro) {
+    try {
+      const items = (micro.items || []).filter(
+        (i) => i.tipo_cultivo_id && i.tipo_muestra_micro_id
+      );
+      if (items.length === 0) {
+        throw new Error('Pedido de microbiología sin cultivos/muestras válidos.');
+      }
+      const estudios = await createEstudiosMicrobiologiaBatch({
+        paciente_id: pacienteId,
+        medico_id: medicoId ?? null,
+        consulta_hc_id: consultaHcId,
+        origen_solicitud: origenSolicitud,
+        observaciones: micro.observaciones,
+        items: items.map((i) => ({
+          tipo_cultivo_id: i.tipo_cultivo_id,
+          tipo_muestra_micro_id: i.tipo_muestra_micro_id,
+        })),
+      });
+      toast.success(
+        estudios.length === 1
+          ? `Pedido micro ${estudios[0].numero || `#${estudios[0].id}`} creado.`
+          : `${estudios.length} pedidos de microbiología creados.`
+      );
+    } catch (e) {
+      errors.push(`Microbiología: ${formatDrfError(e)}`);
+      remaining.solicitudesMicro.push(micro);
     }
   }
 
@@ -164,11 +254,16 @@ export async function flushConsultaPedidosDrafts(
         origen: 'INTERNO',
       });
     } catch (e) {
-      errors.push(parseEstudiosApiError(e, 'No se pudo registrar un estudio complementario.'));
+      errors.push(
+        `Estudio: ${parseEstudiosApiError(e, 'No se pudo registrar un estudio complementario.')}`
+      );
+      remaining.estudios.push(est);
     }
   }
 
   if (errors.length > 0) {
+    // Conservar solo lo que falló para poder reintentar al guardar de nuevo.
+    saveConsultaPedidosDraft(consultaHcId, remaining);
     throw new Error(errors.join(' · '));
   }
 

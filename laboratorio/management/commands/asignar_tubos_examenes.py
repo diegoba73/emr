@@ -41,8 +41,11 @@ class Command(BaseCommand):
             updated = 0
             skipped = 0
             for ex in TipoExamen.objects.select_related("tipo_muestra_requerida").iterator():
-                muestra = ex.tipo_muestra_requerida.codigo if ex.tipo_muestra_requerida_id else None
-                tubo = tubo_codigo_para_examen(ex.codigo, muestra)
+                m = ex.tipo_muestra_requerida
+                muestra = m.codigo if m else None
+                tubo = tubo_codigo_para_examen(
+                    ex.codigo, muestra, muestra_nombre=m.nombre if m else None
+                )
                 tc = by_codigo.get(tubo)
                 if tc is None:
                     self.stdout.write(self.style.WARNING(f"  Sin contenedor {tubo} para {ex.codigo}"))

@@ -10,18 +10,21 @@ ROLES_ESTUDIO_COMPLEMENTARIO = frozenset({
 })
 
 # Operadores LIMS: técnico (laboratorio) y bioquímico.
+# Misma capacidad operativa; la única diferencia es validar (ver ROLES_LIMS_VALIDAR).
 ROLES_LIMS_OPERADOR = frozenset({
     'laboratorio',
     'bioquimico',
 })
 
 # Escritura operativa LIMS (toma, carga, recepción, catálogos editables).
+# Incluye técnico y bioquímico: el bioquímico hace todo lo del laboratorio.
 ROLES_LIMS_WRITE = frozenset({
     'admin',
     *ROLES_LIMS_OPERADOR,
 })
 
 # Liberación clínica de resultados / informe (Fase A).
+# Única diferencia vs técnico laboratorio: solo bioquímico (+ admin) valida.
 ROLES_LIMS_VALIDAR = frozenset({
     'admin',
     'bioquimico',

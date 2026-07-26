@@ -15,6 +15,7 @@ from .permissions import (
     IsMedicoOrSecretariaOrAdmin,
     IsEMRClinicianOrReadOnly,
     CanWriteDocumentoClinico,
+    CanWriteSignosVitales,
     IsEMRClinician,
     IsMedicoOrEnfermeriaOrAdmin,
     AtencionPermission,
@@ -1504,36 +1505,37 @@ class TurnoViewSet(viewsets.ModelViewSet):
 
 # Vista especial para el panel
 class DashboardViewSet(viewsets.ViewSet):
-    permission_classes = [AllowAny]  # Cambiado para desarrollo
-    
+    permission_classes = [IsAuthenticated]
+
     @action(detail=False, methods=['get'])
     def estadisticas(self, request):
         """Estadísticas generales del panel"""
+        from laboratorio.models import ResultadoExamen, SolicitudExamen
+
         hoy = timezone.now().date()
-        
+
         # Estadísticas básicas
         total_pacientes = Paciente.objects.count()
         consultas_hoy = Consulta.objects.filter(fecha_hora_consulta__date=hoy).count()
-        # solicitudes_pendientes = SolicitudExamen.objects.filter(estado='PENDIENTE').count()
-        # resultados_listos = ResultadoExamen.objects.filter(
-        #     fecha_resultado__date=hoy,
-        #     es_normal=False
-        # ).count()
-        solicitudes_pendientes = 0  # Temporalmente en 0 hasta implementar solicitudes
-        resultados_listos = 0  # Temporalmente en 0 hasta implementar resultados
-        
+        solicitudes_pendientes = SolicitudExamen.objects.filter(
+            estado__in=['PENDIENTE', 'EN_PROCESO', 'INFORMADO_PARCIAL'],
+        ).count()
+        resultados_listos = ResultadoExamen.objects.filter(
+            fecha_validacion__date=hoy,
+            fecha_validacion__isnull=False,
+        ).count()
+
         # Consultas por especialidad
         consultas_por_especialidad = Consulta.objects.filter(
             fecha_hora_consulta__date=hoy
         ).values('medico__especialidad__nombre').annotate(
             total=Count('id')
         )
-        
+
         # Solicitudes por estado
-        # solicitudes_por_estado = SolicitudExamen.objects.values('estado').annotate(
-        #     total=Count('id')
-        # )
-        solicitudes_por_estado = []  # Temporalmente vacío hasta implementar solicitudes
+        solicitudes_por_estado = SolicitudExamen.objects.values('estado').annotate(
+            total=Count('id')
+        )
         
         stats = {
             'total_pacientes': total_pacientes,
@@ -2056,6 +2058,12 @@ def register_secretary(request):
 
 # NUEVO: ViewSet para Internaciones
 class InternacionViewSet(viewsets.ModelViewSet):
+    """
+    DEPRECATED para UI nueva: usar ``/api/internacion/`` (app internacion, camas).
+
+    Este ViewSet opera sobre ``historias_clinicas.Internacion`` (legacy).
+    Se mantiene por compatibilidad de API; no usarlo en Patient 360 ni flujos nuevos.
+    """
     queryset = Internacion.objects.all()
     serializer_class = InternacionSerializer
     permission_classes = [IsMedicoOrEnfermeriaOrAdmin]  # Médicos, enfermería y admins pueden gestionar internaciones
@@ -2304,7 +2312,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def crear_registro_ambulatorio(self, request, pk=None):
-        """Crear registro de consulta ambulatoria para una atención"""
+        """Crear o actualizar registro de consulta ambulatoria para una atención."""
         atencion = self.get_object()
         
         if atencion.tipo_intervencion != Atencion.TipoIntervencion.CONSULTA:
@@ -2312,21 +2320,26 @@ class AtencionViewSet(viewsets.ModelViewSet):
                 {'error': 'Este tipo de atención no corresponde a consulta ambulatoria'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        if hasattr(atencion, 'consulta_ambulatoria'):
-            return Response(
-                {'error': 'Ya existe un registro de consulta ambulatoria para esta atención'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+
+        consulta_existente = None
+        try:
+            consulta_existente = atencion.consulta_ambulatoria
+        except ConsultaAmbulatoria.DoesNotExist:
+            pass
         
         serializer = ConsultaAmbulatoriaSerializer(
+            instance=consulta_existente,
             data=request.data,
-            context={'request': request}
+            partial=bool(consulta_existente),
+            context={'request': request, 'atencion': atencion},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save(atencion=atencion)
         
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK if consulta_existente else status.HTTP_201_CREATED,
+        )
     
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def crear_registro_procedimiento(self, request, pk=None):
@@ -2807,9 +2820,11 @@ class DocumentoViewSet(viewsets.ModelViewSet):
 
 class SignosVitalesViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar registros de signos vitales"""
-    queryset = SignosVitales.objects.select_related('atencion', 'atencion__paciente', 'atencion__medico_principal', 'registrado_por')
+    queryset = SignosVitales.objects.select_related(
+        'atencion', 'atencion__paciente', 'atencion__medico_principal', 'registrado_por'
+    )
     serializer_class = SignosVitalesSerializer
-    permission_classes = [IsEMRClinicianOrReadOnly]
+    permission_classes = [CanWriteSignosVitales]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['atencion', 'rol_registrador']
     ordering_fields = ['fecha_registro', 'created_at']
@@ -2820,7 +2835,7 @@ class SignosVitalesViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or role in ['admin', 'secretaria']:
+        if user.is_superuser or role in ['admin', 'secretaria', 'enfermeria']:
             pass
         elif role == 'medico':
             try:
@@ -2840,46 +2855,48 @@ class SignosVitalesViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(atencion_id=atencion_param)
         return queryset
 
-    def create(self, request, *args, **kwargs):
-        """Sobrescribir create para logging detallado y mejor manejo de errores"""
-        import logging
-        import traceback
-        logger = logging.getLogger(__name__)
-        
-        logger.error(f"🔍 SignosVitalesViewSet.create - request.data: {request.data}")
-        logger.error(f"🔍 SignosVitalesViewSet.create - request.user: {request.user}")
-        
-        serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            logger.error(f"❌ SignosVitalesViewSet.create - Errores de validación: {serializer.errors}")
-            # Devolver los errores de validación de forma clara
-            return Response(
-                {
-                    'error': 'Error de validación',
-                    'details': serializer.errors
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            self.perform_create(serializer)
-            headers = self.get_success_headers(serializer.data)
-            logger.error(f"✅ SignosVitalesViewSet.create - Creado exitosamente: {serializer.data}")
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        except Exception as e:
-            logger.error(f"❌ SignosVitalesViewSet.create - Error al guardar: {e}")
-            logger.error(f"❌ Traceback: {traceback.format_exc()}")
-            return Response(
-                {
-                    'error': 'Error al guardar el registro',
-                    'details': str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
+    @staticmethod
+    def _resumen_texto(sv: SignosVitales) -> str:
+        parts = []
+        if sv.tension_arterial:
+            parts.append(f'TA {sv.tension_arterial}')
+        if sv.frecuencia_cardiaca is not None:
+            parts.append(f'FC {sv.frecuencia_cardiaca}')
+        if sv.frecuencia_respiratoria is not None:
+            parts.append(f'FR {sv.frecuencia_respiratoria}')
+        if sv.temperatura is not None:
+            parts.append(f'T {sv.temperatura}°C')
+        if sv.saturacion_oxigeno is not None:
+            parts.append(f'SpO₂ {sv.saturacion_oxigeno}%')
+        if sv.peso is not None:
+            parts.append(f'Peso {sv.peso} kg')
+        if sv.talla is not None:
+            parts.append(f'Talla {sv.talla} m')
+        if sv.indice_masa_corporal is not None:
+            parts.append(f'IMC {sv.indice_masa_corporal}')
+        return ' · '.join(parts)
+
     def perform_create(self, serializer):
         usuario = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(registrado_por=usuario)
+        role = str(getattr(usuario, 'rol', '') or '').lower() if usuario else ''
+        rol_map = {
+            'medico': SignosVitales.RolRegistrador.MEDICO,
+            'enfermeria': SignosVitales.RolRegistrador.ENFERMERIA,
+            'admin': SignosVitales.RolRegistrador.ADMINISTRATIVO,
+            'secretaria': SignosVitales.RolRegistrador.ADMINISTRATIVO,
+        }
+        extras = {}
+        if 'rol_registrador' not in serializer.validated_data:
+            extras['rol_registrador'] = rol_map.get(role, SignosVitales.RolRegistrador.OTRO)
+        sv = serializer.save(registrado_por=usuario, **extras)
+        # Cache texto en evolución de internación (compatibilidad UI legacy)
+        evo = getattr(sv.atencion, 'evolucion_internacion', None)
+        if evo is not None:
+            resumen = self._resumen_texto(sv)
+            if resumen:
+                evo.signos_vitales_resumen = resumen
+                evo.save(update_fields=['signos_vitales_resumen', 'updated_at'])
+
 
 # ViewSets para catálogos
 class EstudioDiagnosticoViewSet(viewsets.ModelViewSet):

@@ -17,7 +17,7 @@ import { ArrowBack, Edit, PersonOutline, WarningAmber } from '@mui/icons-materia
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
 import { listSolicitudesExamen } from '../../services/limsApi';
-import { Atencion, ArchivoMedico, Consulta, InternacionCama, Paciente, Turno } from '../../types';
+import { Atencion, ArchivoMedico, InternacionCama, Paciente, PacienteTimelineEvent } from '../../types';
 import type { SolicitudExamenLims } from '../../types/lims';
 import { getInternaciones } from '../../services/apiService';
 import PatientIntegratedView from '../PatientIntegratedView';
@@ -25,8 +25,37 @@ import PacienteFormDialog from '../PacienteFormDialog';
 import { canUpdatePacienteDemographics } from '../../utils/permissions';
 import SectionCard from './SectionCard';
 import InfoCard from './InfoCard';
-import Timeline, { TimelineItem } from './Timeline';
+import Timeline, { TimelineItem, TimelineItemType } from './Timeline';
 import { patientAgeYears } from './patientAge';
+
+function mapTimelineEvent(
+  ev: PacienteTimelineEvent,
+  navigate: (path: string, opts?: { state?: unknown }) => void,
+): TimelineItem | null {
+  const date = ev.date ? new Date(ev.date) : new Date(0);
+  if (Number.isNaN(date.getTime())) return null;
+  const type = (ev.type || 'otro') as TimelineItemType;
+  return {
+    id: ev.id,
+    type,
+    title: ev.title,
+    subtitle: ev.subtitle || undefined,
+    date,
+    critical: Boolean(ev.critical),
+    nested: Boolean(ev.nested),
+    episodeGroupId: ev.episode_group_id || undefined,
+    episodeGroupTitle: ev.episode_group_title || undefined,
+    onClick: () => {
+      const path = ev.navigate_to || '/atenciones';
+      const openId = ev.atencion_id || (ev.meta?.openAtencionId as number | undefined);
+      if (openId) {
+        navigate(path, { state: { openAtencionId: openId } });
+      } else {
+        navigate(path);
+      }
+    },
+  };
+}
 
 const PatientDashboard: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,18 +64,17 @@ const PatientDashboard: React.FC = () => {
     pacientes,
     loadPacientes,
     loading,
-    turnos,
     archivosMedicos,
     loadArchivosMedicos,
-    consultas,
-    loadConsultas,
     currentUser,
   } = useData();
 
   const [atenciones, setAtenciones] = useState<Atencion[]>([]);
   const [internaciones, setInternaciones] = useState<InternacionCama[]>([]);
   const [ordenesLab, setOrdenesLab] = useState<SolicitudExamenLims[]>([]);
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [loadingAte, setLoadingAte] = useState(false);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
   const [showEditPaciente, setShowEditPaciente] = useState(false);
 
   const pid = Number(id);
@@ -64,9 +92,8 @@ const PatientDashboard: React.FC = () => {
   useEffect(() => {
     if (paciente?.id) {
       loadArchivosMedicos();
-      loadConsultas();
     }
-  }, [loadArchivosMedicos, loadConsultas, paciente?.id]);
+  }, [loadArchivosMedicos, paciente?.id]);
 
   const loadAtenciones = useCallback(async () => {
     if (!paciente?.id) return;
@@ -81,9 +108,30 @@ const PatientDashboard: React.FC = () => {
     }
   }, [paciente?.id]);
 
+  const loadTimeline = useCallback(async () => {
+    if (!paciente?.id) return;
+    setLoadingTimeline(true);
+    try {
+      const events = await apiService.getPacienteTimeline(paciente.id);
+      setTimelineItems(
+        events
+          .map((ev) => mapTimelineEvent(ev, navigate))
+          .filter((x): x is TimelineItem => Boolean(x)),
+      );
+    } catch {
+      setTimelineItems([]);
+    } finally {
+      setLoadingTimeline(false);
+    }
+  }, [paciente?.id, navigate]);
+
   useEffect(() => {
     loadAtenciones();
   }, [loadAtenciones]);
+
+  useEffect(() => {
+    loadTimeline();
+  }, [loadTimeline]);
 
   useEffect(() => {
     if (!paciente?.id) return;
@@ -92,24 +140,10 @@ const PatientDashboard: React.FC = () => {
       .catch(() => setOrdenesLab([]));
   }, [paciente?.id]);
 
-  const turnosPx: Turno[] = useMemo(
-    () => turnos.filter((t) => t.paciente?.id === pid || t.paciente_id === pid),
-    [turnos, pid]
-  );
   const ordenesLabPx = ordenesLab;
   const archivosPx: ArchivoMedico[] = useMemo(
     () => archivosMedicos.filter((a) => a.paciente_id === pid),
     [archivosMedicos, pid]
-  );
-  const consultasPx: Consulta[] = useMemo(
-    () =>
-      consultas.filter(
-        (c) =>
-          c.paciente_id === pid ||
-          (c as any).paciente?.id === pid ||
-          (c.historia_clinica?.paciente as Paciente | undefined)?.id === pid
-      ),
-    [consultas, pid]
   );
 
   useEffect(() => {
@@ -123,125 +157,6 @@ const PatientDashboard: React.FC = () => {
     () => internaciones.find((i) => i.activo),
     [internaciones],
   );
-
-  const timelineItems: TimelineItem[] = useMemo(() => {
-    const out: TimelineItem[] = [];
-    const internacionIds = new Set(internaciones.map((i) => i.id));
-
-    for (const t of turnosPx) {
-      const start = t.fecha_hora_inicio ? new Date(t.fecha_hora_inicio) : new Date(0);
-      if (Number.isNaN(start.getTime())) continue;
-      out.push({
-        id: `turno-${t.id}`,
-        type: 'turno',
-        title: `Turno ambulatorio (${t.estado})`,
-        subtitle: t.motivo_reserva || t.motivo_consulta || t.recurso?.nombre,
-        date: start,
-        critical: t.estado === 'CANCELADO',
-        onClick: () => navigate('/turnos'),
-      });
-    }
-
-    for (const internacion of internaciones) {
-      const ingreso = internacion.fecha_ingreso ? new Date(internacion.fecha_ingreso) : new Date(0);
-      const groupId = `internacion-${internacion.id}`;
-      const sectorLabel = internacion.cama_nombre || `Internación #${internacion.id}`;
-      if (!Number.isNaN(ingreso.getTime())) {
-        out.push({
-          id: `int-ingreso-${internacion.id}`,
-          type: 'internacion_ingreso',
-          title: `Ingreso — ${internacion.numero_internacion || groupId}`,
-          subtitle: internacion.diagnostico_ingreso || internacion.motivo_ingreso || sectorLabel,
-          date: ingreso,
-          episodeGroupId: groupId,
-          episodeGroupTitle: `Episodio de internación · ${sectorLabel}`,
-          onClick: () => navigate('/internacion'),
-        });
-      }
-      if (internacion.fecha_alta) {
-        const alta = new Date(internacion.fecha_alta);
-        if (!Number.isNaN(alta.getTime())) {
-          out.push({
-            id: `int-alta-${internacion.id}`,
-            type: 'internacion_alta',
-            title: 'Alta médica',
-            subtitle: internacion.numero_internacion || undefined,
-            date: alta,
-            episodeGroupId: groupId,
-            nested: true,
-            onClick: () => navigate('/internacion'),
-          });
-        }
-      }
-    }
-
-    for (const a of atenciones) {
-      const d = a.fecha_admision ? new Date(a.fecha_admision) : new Date(0);
-      if (Number.isNaN(d.getTime())) continue;
-      const isInternacion = a.contexto_atencion === 'INTERNACION' || Boolean(a.internacion_id);
-      if (isInternacion && a.internacion_id && internacionIds.has(a.internacion_id)) {
-        const evo = a.evolucion_internacion;
-        const tipoEvo = evo?.tipo_evolucion_display || evo?.tipo_evolucion || 'Evolución';
-        out.push({
-          id: `atencion-${a.id}`,
-          type: 'internacion_evolucion',
-          title: tipoEvo,
-          subtitle: a.estado_clinico ? `Estado: ${a.estado_clinico}` : undefined,
-          date: evo?.fecha_evolucion ? new Date(evo.fecha_evolucion) : d,
-          episodeGroupId: `internacion-${a.internacion_id}`,
-          nested: true,
-          critical: a.estado_clinico === 'ABIERTA',
-          onClick: () => navigate('/atenciones', { state: { openAtencionId: a.id } }),
-        });
-        continue;
-      }
-      const t = a.tipo_intervencion;
-      const isGuardia = a.contexto_atencion === 'GUARDIA';
-      out.push({
-        id: `atencion-${a.id}`,
-        type: isGuardia ? 'guardia' : t === 'ESTUDIO' ? 'estudio' : t === 'PROCEDIMIENTO' || t === 'CIRUGIA' ? 'procedimiento' : 'consulta',
-        title: isGuardia
-          ? 'Guardia cardiológica'
-          : a.tipo_intervencion === 'CONSULTA'
-            ? 'Consulta ambulatoria'
-            : a.tipo_intervencion,
-        subtitle: a.estado_clinico ? `Estado: ${a.estado_clinico}` : undefined,
-        date: d,
-        critical: a.estado_clinico === 'ABIERTA' && (t === 'CONSULTA' || isGuardia),
-        onClick: () => {
-          if (a.id) {
-            navigate(isGuardia ? '/guardia' : '/atenciones', { state: { openAtencionId: a.id } });
-          }
-        },
-      });
-    }
-    for (const s of ordenesLabPx) {
-      const d = s.fecha_solicitud ? new Date(s.fecha_solicitud) : new Date(0);
-      if (Number.isNaN(d.getTime())) continue;
-      out.push({
-        id: `sol-${s.id}`,
-        type: 'solicitud',
-        title: s.numero ? `Lab ${s.numero}` : 'Análisis de laboratorio',
-        subtitle: s.estado,
-        date: d,
-        critical: s.estado === 'PENDIENTE',
-        onClick: () => navigate(`/solicitudes/${s.id}`),
-      });
-    }
-    for (const c of consultasPx) {
-      const d = c.fecha_hora_consulta ? new Date(c.fecha_hora_consulta) : c.created_at ? new Date(c.created_at) : new Date(0);
-      if (Number.isNaN(d.getTime())) continue;
-      out.push({
-        id: `con-${c.id}`,
-        type: 'consulta',
-        title: c.motivo_consulta_detalle?.slice(0, 80) || 'Consulta',
-        date: d,
-        onClick: () => navigate('/atenciones'),
-      });
-    }
-    return out;
-  }, [atenciones, consultasPx, internaciones, navigate, ordenesLabPx, turnosPx]);
-
   if (!id || Number.isNaN(pid)) {
     return (
       <Box sx={{ p: 2 }}>
@@ -374,9 +289,9 @@ const PatientDashboard: React.FC = () => {
         <Box>
           <SectionCard
             title="Línea de tiempo clínica"
-            subtitle="Turnos, consultas, procedimientos y solicitudes (datos ya cargados en contexto o API de atenciones)"
+            subtitle="Timeline unificada (Atención como eje; sin duplicar HC vinculada)"
             headerRight={
-              loadingAte ? <CircularProgress size={18} color="inherit" /> : null
+              loadingAte || loadingTimeline ? <CircularProgress size={18} color="inherit" /> : null
             }
           >
             <Timeline items={timelineItems} />
@@ -384,6 +299,45 @@ const PatientDashboard: React.FC = () => {
         </Box>
         <Box>
           <Stack spacing={2} sx={{ height: '100%' }}>
+            <InfoCard title="Últimos signos vitales" dense>
+              {atenciones.some((a) => a.ultimo_signo_vital || (a.signos_vitales && a.signos_vitales.length > 0)) ? (
+                <List dense disablePadding>
+                  {atenciones
+                    .filter((a) => a.ultimo_signo_vital || (a.signos_vitales && a.signos_vitales[0]))
+                    .slice(0, 3)
+                    .map((a) => {
+                      const sv = a.ultimo_signo_vital || a.signos_vitales?.[0];
+                      if (!sv) return null;
+                      const parts = [
+                        sv.tension_arterial && `TA ${sv.tension_arterial}`,
+                        sv.frecuencia_cardiaca != null && `FC ${sv.frecuencia_cardiaca}`,
+                        sv.temperatura != null && `T ${sv.temperatura}°C`,
+                        sv.saturacion_oxigeno != null && `SpO₂ ${sv.saturacion_oxigeno}%`,
+                      ].filter(Boolean);
+                      return (
+                        <ListItemButton
+                          key={`sv-${a.id}`}
+                          onClick={() => navigate('/atenciones', { state: { openAtencionId: a.id } })}
+                          sx={{ borderRadius: 1 }}
+                        >
+                          <ListItemText
+                            primary={parts.join(' · ') || 'Registro SV'}
+                            secondary={
+                              sv.fecha_registro
+                                ? new Date(sv.fecha_registro).toLocaleString('es-AR')
+                                : a.fecha_admision
+                            }
+                          />
+                        </ListItemButton>
+                      );
+                    })}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Sin signos vitales recientes
+                </Typography>
+              )}
+            </InfoCard>
             <InfoCard title="Últimas atenciones / consultas" dense>
               {atenciones.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">

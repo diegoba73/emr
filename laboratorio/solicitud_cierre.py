@@ -1,5 +1,5 @@
 """
-Cierre automático de SolicitudExamen al completar resultados y envío de informes.
+Cierre y estados de SolicitudExamen al completar resultados / validar / informar parcial.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from laboratorio.resultado_muestra_validacion import (
     asegurar_muestra_lista_para_carga,
 )
 from laboratorio.solicitud_estado import (
+    ESTADOS_SOLICITUD_EDITABLES,
     SolicitudEstadoTransitionError,
     apply_solicitud_estado_transition,
 )
@@ -94,14 +95,18 @@ def informar_parcial_si_corresponde(
 ) -> bool:
     """
     Marca la orden como INFORMADO_PARCIAL si hay al menos un resultado cargado
-    y aún faltan valores. Devuelve True si el estado es (o queda) informado parcial.
+    y aún faltan valores. No finaliza. Devuelve True si el estado es (o queda) parcial.
     """
     if solicitud.estado == "FINALIZADO":
+        return False
+    if solicitud.estado == "LISTO_PARA_VALIDAR":
         return False
     if not solicitud_resultados_parciales(solicitud):
         return False
     if solicitud.estado == "INFORMADO_PARCIAL":
         return True
+    if solicitud.estado != "EN_PROCESO":
+        return False
     apply_solicitud_estado_transition(
         solicitud,
         "INFORMADO_PARCIAL",
@@ -112,21 +117,72 @@ def informar_parcial_si_corresponde(
     return True
 
 
+def sincronizar_estado_tras_carga(
+    solicitud: SolicitudExamen,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+    informar_parcial: bool = False,
+) -> str:
+    """
+    Tras cargar resultados:
+    - Completos → LISTO_PARA_VALIDAR (desde EN_PROCESO o INFORMADO_PARCIAL).
+    - Incompletos + informar_parcial → INFORMADO_PARCIAL.
+    - Incompletos desde LISTO_PARA_VALIDAR → EN_PROCESO (reabrir).
+    """
+    solicitud.refresh_from_db()
+    if solicitud.estado == "FINALIZADO":
+        return solicitud.estado
+
+    completos = solicitud_resultados_completos(solicitud)
+
+    if completos:
+        if solicitud.estado in ("EN_PROCESO", "INFORMADO_PARCIAL"):
+            apply_solicitud_estado_transition(
+                solicitud,
+                "LISTO_PARA_VALIDAR",
+                actor=actor,
+                accion="completar_carga",
+                view=view,
+            )
+        return solicitud.estado
+
+    # Incompletos
+    if solicitud.estado == "LISTO_PARA_VALIDAR":
+        apply_solicitud_estado_transition(
+            solicitud,
+            "EN_PROCESO",
+            actor=actor,
+            accion="reabrir_carga",
+            view=view,
+        )
+        return solicitud.estado
+
+    if informar_parcial:
+        if not solicitud_tiene_algun_resultado(solicitud):
+            raise SolicitudCierreError(
+                "No hay resultados cargados para informar parcialmente."
+            )
+        informar_parcial_si_corresponde(solicitud, actor=actor, view=view)
+
+    return solicitud.estado
+
+
 def finalizar_solicitud_si_completa(
     solicitud: SolicitudExamen,
     *,
     actor: AbstractUser | None,
     view: str,
-    accion: str = "finalizar_auto",
+    accion: str = "validar",
     confirmar_criticos: bool = False,
 ) -> bool:
     """
-    Pasa EN_PROCESO / INFORMADO_PARCIAL → FINALIZADO si todos los resultados tienen valor.
+    Pasa LISTO_PARA_VALIDAR → FINALIZADO si todos los resultados tienen valor.
     Devuelve True si se aplicó la transición.
 
-    Requiere confirmación explícita si hay resultados patológicos o críticos.
+    Requiere confirmación explícita si hay resultados fuera de rango o críticos.
     """
-    if solicitud.estado not in ("EN_PROCESO", "INFORMADO_PARCIAL"):
+    if solicitud.estado != "LISTO_PARA_VALIDAR":
         return False
     if not solicitud_resultados_completos(solicitud):
         return False
@@ -137,7 +193,7 @@ def finalizar_solicitud_si_completa(
     tiene_alertas = qs.filter(es_patologico=True).exists() or qs.filter(es_critico=True).exists()
     if tiene_alertas and not confirmar_criticos:
         raise SolicitudCierreError(
-            "Hay resultados patológicos o críticos. Confirme la liberación "
+            "Hay resultados fuera de rango o críticos. Confirme la liberación "
             "enviando confirmar_criticos=true."
         )
 
@@ -179,18 +235,31 @@ def finalizar_solicitud_manual(
     actor: AbstractUser | None,
     view: str,
     confirmar_criticos: bool = False,
+    confirmar_qc_override: bool = False,
+    motivo_qc_override: str = "",
 ) -> None:
-    """Cierre explícito (validación / liberación clínica)."""
+    """Cierre explícito (validación / liberación clínica) desde LISTO_PARA_VALIDAR."""
     if solicitud.estado == "FINALIZADO":
         raise SolicitudEstadoTransitionError("La solicitud ya está finalizada.")
-    if solicitud.estado != "EN_PROCESO" and solicitud.estado != "INFORMADO_PARCIAL":
+    if solicitud.estado != "LISTO_PARA_VALIDAR":
         raise SolicitudEstadoTransitionError(
-            "Solo se pueden finalizar solicitudes en proceso o informadas parcialmente."
+            "Solo se pueden validar órdenes en estado «Listo para validar» "
+            "(todos los resultados deben estar cargados)."
         )
     if not solicitud_resultados_completos(solicitud):
         raise SolicitudCierreError(
             "No se puede finalizar una solicitud con resultados vacíos."
         )
+
+    from laboratorio.qc_service import validar_qc_para_cierre
+
+    validar_qc_para_cierre(
+        solicitud,
+        confirmar_qc_override=confirmar_qc_override,
+        motivo_override=motivo_qc_override,
+        actor=actor,
+    )
+
     if not finalizar_solicitud_si_completa(
         solicitud,
         actor=actor,
@@ -199,3 +268,7 @@ def finalizar_solicitud_manual(
         confirmar_criticos=confirmar_criticos,
     ):
         raise SolicitudCierreError("No se pudo finalizar la solicitud.")
+
+
+def solicitud_permite_cargar_resultados(solicitud: SolicitudExamen) -> bool:
+    return solicitud.estado in ESTADOS_SOLICITUD_EDITABLES

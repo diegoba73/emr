@@ -2,7 +2,12 @@
  * Tipos LIMS nativo (/api/lab/...). No mezclar con solicitudes EMR (solicitudes.Solicitud).
  */
 
-export type EstadoSolicitudLims = 'PENDIENTE' | 'EN_PROCESO' | 'INFORMADO_PARCIAL' | 'FINALIZADO';
+export type EstadoSolicitudLims =
+  | 'PENDIENTE'
+  | 'EN_PROCESO'
+  | 'INFORMADO_PARCIAL'
+  | 'LISTO_PARA_VALIDAR'
+  | 'FINALIZADO';
 
 export type OrigenSolicitudLims =
   | 'INTERNACION_UCO'
@@ -64,6 +69,9 @@ export interface LimsTipoExamen {
   rango_referencia_texto?: string;
   rango_min?: string | null;
   rango_max?: string | null;
+  laboratorio_derivacion?: number | null;
+  laboratorio_derivacion_codigo?: string | null;
+  laboratorio_derivacion_nombre?: string | null;
   activo?: boolean;
 }
 
@@ -97,12 +105,19 @@ export interface LimsPanelResumen {
 }
 
 export type ProcedenciaOrdenLims = 'RECURSO' | 'INTERNACION' | null;
+export interface LimsPanelExamenComponente {
+  id: number;
+  codigo: string;
+  nombre: string;
+}
+
 export interface LimsPanelExamen {
   id: number;
   codigo: string;
   nombre: string;
   tipos_examen?: number[];
   tipos_examen_nombres?: string[];
+  tipos_examen_detalle?: LimsPanelExamenComponente[];
   activo?: boolean;
 }
 
@@ -144,6 +159,13 @@ export interface ResultadoExamenLims {
   tipo_muestra_nombre?: string | null;
   /** Código del tipo de muestra requerida por el examen (catálogo). */
   tipo_examen_muestra_codigo?: string | null;
+  laboratorio_derivacion?: number | null;
+  laboratorio_derivacion_codigo?: string | null;
+  laboratorio_derivacion_nombre?: string | null;
+  laboratorio_derivacion_ciudad?: string | null;
+  estado_derivacion?: 'LOCAL' | 'PENDIENTE_ENVIO' | 'ENVIADO' | 'RESULTADO_RECIBIDO';
+  fecha_envio_derivacion?: string | null;
+  observaciones_derivacion?: string;
 }
 
 export interface SolicitudExamenLims {
@@ -158,6 +180,8 @@ export interface SolicitudExamenLims {
   medico_interno_nombre?: string | null;
   medico_externo_nombre?: string | null;
   medico_display?: string;
+  medico_email?: string | null;
+  medico_telefono?: string | null;
   origen_solicitud: OrigenSolicitudLims;
   origen_solicitud_display?: string;
   tipos_examen?: number[];
@@ -181,6 +205,24 @@ export interface SolicitudExamenLims {
   resultados?: ResultadoExamenLims[];
   /** True si no quedan tubos en PENDIENTE_TOMA. */
   extraccion_completa?: boolean;
+  /** PENDIENTE sin etiquetas/tubos — admite agregar exámenes. */
+  orden_abierta?: boolean;
+  /** PENDIENTE con etiquetas impresas, esperando recepción de tubos. */
+  esperando_recepcion?: boolean;
+  /** Abierta o esperando recepción (agregar post-etiquetas solo si cabe en tubos). */
+  puede_agregar_examenes?: boolean;
+  /** PENDIENTE editable mientras el paciente ya tiene otra orden en curso. */
+  pedido_adicional?: boolean;
+  /** Respuesta de create/agregar: se fusionó en orden existente. */
+  merged?: boolean;
+  derivaciones_resumen?: Array<{
+    resultado_id: number;
+    tipo_examen_codigo: string | null;
+    tipo_examen_nombre: string | null;
+    laboratorio_codigo: string | null;
+    laboratorio_nombre: string | null;
+    estado_derivacion: string;
+  }>;
   tubos_pendientes_extraccion?: Array<{
     id: number;
     codigo_barra: string | null;
@@ -193,10 +235,12 @@ export interface SolicitudExamenLims {
 export interface EnvioInformeLimsResultado {
   email_enviado: boolean;
   email_destino?: string | null;
+  email_destinos?: string[];
   email_adjunto_pdf?: boolean;
   whatsapp_enviado: boolean;
   whatsapp_telefono?: string | null;
   whatsapp_enlace?: string | null;
+  whatsapp_enlaces?: Array<{ rol: string; telefono: string; enlace: string }>;
   whatsapp_pdf_adjunto?: boolean;
   informe_enlace_descarga?: string | null;
   advertencias?: string[];
@@ -282,13 +326,25 @@ export const ESTADOS_MICRO_CERRADOS_OPERACION: readonly EstadoEstudioMicrobiolog
   'INFORMADO',
 ];
 
-export type TipoEstudioMicrobiologia =
-  | 'CULTIVO_RUTINA'
-  | 'UROCULTIVO'
-  | 'HEMOCULTIVO'
-  | 'COPROCULTIVO'
-  | 'CULTIVO_HERIDA'
-  | 'OTRO';
+export type TipoEstudioMicrobiologia = string;
+
+export interface TipoCultivoMicrobiologia {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  orden?: number;
+  activo?: boolean;
+}
+
+export interface TipoMuestraMicrobiologia {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  orden?: number;
+  activo?: boolean;
+}
 
 export type EstadoAisladoMicrobiologico = 'SOSPECHADO' | 'IDENTIFICADO' | 'DESCARTADO';
 
@@ -329,9 +385,29 @@ export interface MedioCultivo {
 export interface EstudioMicrobiologia {
   id: number;
   numero?: string | null;
-  solicitud: number;
-  muestra: number;
+  solicitud?: number | null;
+  solicitud_numero?: string | null;
+  muestra?: number | null;
+  muestra_codigo_barra?: string | null;
+  muestra_tipo_nombre?: string | null;
   paciente: number;
+  paciente_nombre?: string | null;
+  paciente_dni?: string | null;
+  medico_interno?: number | null;
+  medico_externo_nombre?: string;
+  medico_display?: string | null;
+  consulta_hc?: number | null;
+  origen_solicitud?: string;
+  origen_solicitud_display?: string | null;
+  codigo_barra?: string | null;
+  etiquetas_impresas_at?: string | null;
+  sin_etiquetas?: boolean;
+  esperando_recepcion?: boolean;
+  tipo_pedido?: 'MICROBIOLOGIA' | string;
+  tipo_cultivo?: number | null;
+  tipo_cultivo_nombre?: string | null;
+  tipo_muestra_micro?: number | null;
+  tipo_muestra_micro_nombre?: string | null;
   tipo_estudio: TipoEstudioMicrobiologia | string;
   estado: EstadoEstudioMicrobiologia;
   observaciones?: string;

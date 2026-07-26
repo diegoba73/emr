@@ -52,10 +52,11 @@ from .orden_grupos_informe import claves_grupos_validas, validar_orden_grupos
 from .solicitud_cierre import (
     SolicitudCierreError,
     finalizar_solicitud_manual,
-    informar_parcial_si_corresponde,
+    sincronizar_estado_tras_carga,
     solicitud_resultados_completos,
     solicitud_tiene_algun_resultado,
 )
+from .qc_service import QcGateError
 from .informe_entrega_token import InformeEntregaTokenError, verificar_token_entrega_informe
 from .etiquetas_muestra import (
     generar_etiquetas_muestras_pdf_bytes,
@@ -142,7 +143,9 @@ class TipoMuestraViewSet(viewsets.ModelViewSet):
 class TipoExamenViewSet(viewsets.ModelViewSet):
     """Catálogo de tipos de examen. Escritura: admin y laboratorio."""
 
-    queryset = TipoExamen.objects.all().select_related('tipo_muestra_requerida', 'tipo_contenedor', 'seccion')
+    queryset = TipoExamen.objects.all().select_related(
+        'tipo_muestra_requerida', 'tipo_contenedor', 'seccion', 'laboratorio_derivacion'
+    )
     serializer_class = TipoExamenSerializer
     permission_classes = [LimsTipoExamenCatalogPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -190,14 +193,55 @@ class TipoExamenViewSet(viewsets.ModelViewSet):
         )
 
 
-class PanelExamenViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet de solo lectura para PanelExamen."""
-    queryset = PanelExamen.objects.filter(activo=True).prefetch_related('tipos_examen')
+class PanelExamenViewSet(viewsets.ModelViewSet):
+    """Catálogo de paneles LIMS. Escritura: admin y laboratorio."""
+
+    queryset = PanelExamen.objects.all().prefetch_related('tipos_examen').order_by('nombre')
     serializer_class = PanelExamenSerializer
-    permission_classes = [LimsCatalogReadPermission]
-    filter_backends = [DjangoFilterBackend]
+    permission_classes = [LimsTipoExamenCatalogPermission]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['activo']
+    search_fields = ['nombre', 'codigo']
+    ordering_fields = ['nombre', 'codigo']
     ordering = ['nombre']
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_create(
+            actor=getattr(self.request, 'user', None),
+            entity=instance,
+            module='laboratorio',
+            metadata={
+                'accion': 'crear_panel_examen',
+                'panel_id': instance.pk,
+                'codigo': instance.codigo,
+                'view': 'PanelExamenViewSet.create',
+            },
+        )
+
+    def perform_update(self, serializer):
+        before = safe_model_snapshot(serializer.instance)
+        instance = serializer.save()
+        log_update(
+            actor=getattr(self.request, 'user', None),
+            entity=instance,
+            before=before,
+            module='laboratorio',
+            metadata={
+                'accion': 'actualizar_panel_examen',
+                'panel_id': instance.pk,
+                'codigo': instance.codigo,
+                'activo_nuevo': instance.activo,
+                'view': 'PanelExamenViewSet.partial_update',
+            },
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {'detail': 'No se permite eliminar paneles; desactive con activo=false.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
 
 # ============================================================================
@@ -218,6 +262,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         'paneles',
         'resultados__tipo_examen',
         'resultados__muestra',
+        'resultados__laboratorio_derivacion',
+        'muestras',
     ).all()
     permission_classes = [LimsSolicitudExamenPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -238,9 +284,172 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             return SolicitudExamenCreateSerializer
         return SolicitudExamenSerializer
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        instance = serializer.instance
+        merged = bool(getattr(instance, "_orden_merged", False))
+        out = SolicitudExamenSerializer(instance, context=self.get_serializer_context()).data
+        out["merged"] = merged
+        headers = self.get_success_headers(out)
+        return Response(
+            out,
+            status=status.HTTP_200_OK if merged else status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
     def perform_create(self, serializer):
         instance = serializer.save()
-        log_create(actor=getattr(self.request, "user", None), entity=instance, module="laboratorio", metadata={"view": "SolicitudExamenViewSet.perform_create"})
+        log_create(actor=getattr(self.request, "user", None), entity=instance, module="laboratorio", metadata={"view": "SolicitudExamenViewSet.perform_create", "merged": bool(getattr(instance, "_orden_merged", False))})
+
+    @action(detail=True, methods=['post'], url_path='agregar-examenes')
+    def agregar_examenes(self, request, pk=None):
+        """Agrega exámenes/paneles a orden abierta, o post-etiquetas si caben en tubos impresos."""
+        from laboratorio.solicitud_orden_abierta import (
+            OrdenNoAbiertaError,
+            TuboNuevoRequeridoError,
+            agregar_examenes_a_solicitud,
+        )
+
+        solicitud = self.get_object()
+        examenes_ids = request.data.get('examenes_ids') or []
+        paneles_ids = request.data.get('paneles_ids') or []
+        if not isinstance(examenes_ids, list) or not isinstance(paneles_ids, list):
+            return Response(
+                {'detail': 'examenes_ids y paneles_ids deben ser listas.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not examenes_ids and not paneles_ids:
+            return Response(
+                {'detail': 'Indique al menos un examen o panel.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            actualizada = agregar_examenes_a_solicitud(
+                solicitud,
+                examenes_ids=examenes_ids,
+                paneles_ids=paneles_ids,
+            )
+        except (OrdenNoAbiertaError, TuboNuevoRequeridoError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        log_update(
+            actor=getattr(request, "user", None),
+            entity=actualizada,
+            before=None,
+            module="laboratorio",
+            metadata={
+                "view": "SolicitudExamenViewSet.agregar_examenes",
+                "examenes_ids": examenes_ids,
+                "paneles_ids": paneles_ids,
+            },
+        )
+        data = SolicitudExamenSerializer(actualizada, context=self.get_serializer_context()).data
+        data['merged'] = True
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='orden-abierta')
+    def orden_abierta(self, request):
+        """Devuelve la orden abierta del paciente (si existe) para alerta de merge."""
+        from laboratorio.solicitud_orden_abierta import buscar_orden_abierta
+
+        raw = request.query_params.get('paciente_id')
+        if not raw:
+            return Response(
+                {'detail': 'paciente_id es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            paciente_id = int(raw)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'paciente_id inválido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        sol = buscar_orden_abierta(paciente_id)
+        if not sol:
+            return Response(None)
+        return Response(
+            {
+                'id': sol.id,
+                'numero': sol.numero,
+                'fecha_solicitud': sol.fecha_solicitud,
+                'estado': sol.estado,
+            }
+        )
+
+    @action(detail=True, methods=['post'], url_path='marcar-derivacion')
+    def marcar_derivacion(self, request, pk=None):
+        """Marca envío / override de lab externo en un ResultadoExamen de la orden."""
+        from laboratorio.models_derivacion import EstadoDerivacion, LaboratorioDerivacion
+
+        solicitud = self.get_object()
+        resultado_id = request.data.get('resultado_id')
+        if not resultado_id:
+            return Response(
+                {'detail': 'resultado_id es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            resultado = solicitud.resultados.select_related(
+                'laboratorio_derivacion', 'tipo_examen'
+            ).get(pk=resultado_id)
+        except ResultadoExamen.DoesNotExist:
+            return Response(
+                {'detail': 'Resultado no pertenece a esta orden.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        lab_id = request.data.get('laboratorio_derivacion_id', None)
+        if lab_id is not None:
+            if lab_id in ('', None):
+                resultado.laboratorio_derivacion = None
+                resultado.estado_derivacion = EstadoDerivacion.LOCAL
+                resultado.fecha_envio_derivacion = None
+            else:
+                try:
+                    lab = LaboratorioDerivacion.objects.get(pk=lab_id, activo=True)
+                except LaboratorioDerivacion.DoesNotExist:
+                    return Response(
+                        {'detail': 'Laboratorio de derivación no encontrado.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                resultado.laboratorio_derivacion = lab
+                if resultado.estado_derivacion == EstadoDerivacion.LOCAL:
+                    resultado.estado_derivacion = EstadoDerivacion.PENDIENTE_ENVIO
+
+        nuevo_estado = request.data.get('estado_derivacion')
+        if nuevo_estado:
+            validos = {c.value for c in EstadoDerivacion}
+            if nuevo_estado not in validos:
+                return Response(
+                    {'detail': f'estado_derivacion inválido: {nuevo_estado}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            resultado.estado_derivacion = nuevo_estado
+            if nuevo_estado == EstadoDerivacion.ENVIADO and not resultado.fecha_envio_derivacion:
+                resultado.fecha_envio_derivacion = timezone.now()
+            if nuevo_estado == EstadoDerivacion.LOCAL:
+                resultado.laboratorio_derivacion = None
+                resultado.fecha_envio_derivacion = None
+
+        obs = request.data.get('observaciones_derivacion')
+        if obs is not None:
+            resultado.observaciones_derivacion = str(obs)
+
+        resultado.save()
+        data = ResultadoExamenSerializer(resultado, context=self.get_serializer_context()).data
+        return Response(data)
+
+    def retrieve(self, request, *args, **kwargs):
+        from laboratorio.hemograma_resultados import asegurar_resultados_panel_hemograma
+
+        instance = self.get_object()
+        if asegurar_resultados_panel_hemograma(instance):
+            instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def perform_update(self, serializer):
         before = safe_model_snapshot(self.get_object())
@@ -268,7 +477,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Restringe solicitudes por rol (médico: solo propias vía medico_interno).
+        Restringe solicitudes por rol.
+        Médico: propias (medico_interno) o de pacientes con vínculo clínico.
         Filtros adicionales por query params:
         - numero: Búsqueda exacta para código de barras
         - fecha: Filtro por fecha de solicitud (creación)
@@ -282,10 +492,12 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             pass
         else:
             role = get_normalized_role(user)
-            if role in ('admin', 'laboratorio', 'secretaria', 'enfermeria'):
+            if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria'):
                 pass
             elif role == 'medico':
-                queryset = queryset.filter(medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                queryset = filtrar_lectura_lims_medico(queryset, user)
             elif role == 'paciente':
                 try:
                     queryset = queryset.filter(paciente_id=user.paciente.id)
@@ -324,8 +536,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         Action para cargar resultados de exámenes.
         Recibe un JSON con lista de resultados: [{id: 1, valor: "100", es_patologico: false}, ...]
         Itera y actualiza atómicamente.
-        Solo permitido en EN_PROCESO o INFORMADO_PARCIAL (no tras FINALIZADO).
-        Completar todos los valores no finaliza la orden: la liberación es POST /validar/.
+        Solo permitido en EN_PROCESO, INFORMADO_PARCIAL o LISTO_PARA_VALIDAR (no tras FINALIZADO).
+        Completar todos los valores pasa a LISTO_PARA_VALIDAR (no finaliza).
         Con ``informar_parcial: true`` y resultados incompletos, pasa a INFORMADO_PARCIAL.
         """
         resultados_data = request.data.get('resultados', [])
@@ -363,12 +575,16 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                if solicitud.estado not in ('EN_PROCESO', 'INFORMADO_PARCIAL'):
+                if solicitud.estado not in (
+                    'EN_PROCESO',
+                    'INFORMADO_PARCIAL',
+                    'LISTO_PARA_VALIDAR',
+                ):
                     return Response(
                         {
                             'error': (
                                 'Solo se pueden cargar resultados en órdenes '
-                                'en proceso o informadas parcialmente.'
+                                'en proceso, informadas parcialmente o listas para validar.'
                             )
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -490,6 +706,13 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         except ValidationError as exc:
                             msg = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
                             return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+                        # Resultado externo recibido por correo → estado RESULTADO_RECIBIDO
+                        if (
+                            (resultado.valor_obtenido or "").strip()
+                            and resultado.estado_derivacion
+                            in ("PENDIENTE_ENVIO", "ENVIADO")
+                        ):
+                            resultado.estado_derivacion = "RESULTADO_RECIBIDO"
                         try:
                             resultado.save()
                         except ValidationError as exc:
@@ -548,20 +771,17 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                     except ResultadoExamen.DoesNotExist:
                         logger.warning("ResultadoExamen inexistente para carga de resultados")
 
-                # No auto-finalizar: la liberación clínica es POST /validar/ (bioquímico).
+                # Sync estado: completos → LISTO_PARA_VALIDAR; parcial → INFORMADO_PARCIAL.
                 solicitud.refresh_from_db()
-                if not solicitud_resultados_completos(solicitud):
-                    if informar_parcial:
-                        if not solicitud_tiene_algun_resultado(solicitud):
-                            return Response(
-                                {'error': 'No hay resultados cargados para informar parcialmente.'},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-                        informar_parcial_si_corresponde(
-                            solicitud,
-                            actor=request.user,
-                            view="SolicitudExamenViewSet.cargar_resultados",
-                        )
+                try:
+                    sincronizar_estado_tras_carga(
+                        solicitud,
+                        actor=request.user,
+                        view="SolicitudExamenViewSet.cargar_resultados",
+                        informar_parcial=informar_parcial,
+                    )
+                except SolicitudCierreError as exc:
+                    return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                 solicitud.refresh_from_db()
 
                 log_update(
@@ -643,14 +863,14 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='enviar-informe')
     def enviar_informe(self, request, pk=None):
-        """Envía el informe PDF al paciente por email y/o WhatsApp."""
+        """Envía el informe PDF al paciente y/o médico solicitante por email y/o WhatsApp."""
         ser = EnviarInformeOrdenSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         try:
             with transaction.atomic():
                 solicitud = (
-                    SolicitudExamen.objects.select_for_update()
-                    .select_related('paciente')
+                    SolicitudExamen.objects.select_for_update(of=('self',))
+                    .select_related('paciente', 'medico_interno', 'medico_interno__user')
                     .get(pk=pk)
                 )
                 public_base = request.build_absolute_uri('/').rstrip('/')
@@ -658,6 +878,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                     solicitud,
                     enviar_email=ser.validated_data.get('email', False),
                     enviar_whatsapp=ser.validated_data.get('whatsapp', False),
+                    enviar_email_medico=ser.validated_data.get('email_medico', False),
+                    enviar_whatsapp_medico=ser.validated_data.get('whatsapp_medico', False),
                     actor=request.user,
                     view='SolicitudExamenViewSet.enviar_informe',
                     public_base_url=public_base,
@@ -678,10 +900,12 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         data['envio'] = {
             'email_enviado': resultado.email_enviado,
             'email_destino': resultado.email_destino,
+            'email_destinos': resultado.email_destinos,
             'email_adjunto_pdf': resultado.email_adjunto_pdf,
             'whatsapp_enviado': resultado.whatsapp_enviado,
             'whatsapp_telefono': resultado.whatsapp_telefono,
             'whatsapp_enlace': resultado.whatsapp_enlace,
+            'whatsapp_enlaces': resultado.whatsapp_enlaces,
             'whatsapp_pdf_adjunto': resultado.whatsapp_pdf_adjunto,
             'informe_enlace_descarga': resultado.informe_enlace_descarga,
             'advertencias': resultado.advertencias or [],
@@ -692,13 +916,19 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     def validar(self, request, pk=None):
         """
         Liberación clínica: marca la orden FINALIZADO y bloquea resultados.
-        Solo bioquímico / admin. Si hay patológicos/críticos, exige confirmar_criticos.
+        Solo bioquímico / admin. Si hay fuera de rango/críticos, exige confirmar_criticos.
         """
         raw_confirm = request.data.get('confirmar_criticos', False) if hasattr(request, 'data') else False
         if isinstance(raw_confirm, str):
             confirmar_criticos = raw_confirm.strip().lower() in ('1', 'true', 'yes', 'si', 'sí')
         else:
             confirmar_criticos = bool(raw_confirm)
+        raw_qc_override = request.data.get('confirmar_qc_override', False) if hasattr(request, 'data') else False
+        if isinstance(raw_qc_override, str):
+            confirmar_qc_override = raw_qc_override.strip().lower() in ('1', 'true', 'yes', 'si', 'sí')
+        else:
+            confirmar_qc_override = bool(raw_qc_override)
+        motivo_qc_override = str(request.data.get('motivo_qc_override', '') or '').strip()
         try:
             with transaction.atomic():
                 solicitud = SolicitudExamen.objects.select_for_update().get(pk=pk)
@@ -707,12 +937,16 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                     actor=request.user,
                     view='SolicitudExamenViewSet.validar',
                     confirmar_criticos=confirmar_criticos,
+                    confirmar_qc_override=confirmar_qc_override,
+                    motivo_qc_override=motivo_qc_override,
                 )
                 serializer = self.get_serializer(solicitud)
                 return Response(serializer.data, status=status.HTTP_200_OK)
         except SolicitudEstadoTransitionError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except SolicitudCierreError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except QcGateError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except SolicitudExamen.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -739,6 +973,64 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         data = analizar_solicitud_optimizado(solicitud)
         return Response(data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'], url_path='sugerir-conclusion-hemograma')
+    def sugerir_conclusion_hemograma(self, request, pk=None):
+        """
+        Borrador de conclusión de hemograma (reglas y/o MedGemma local).
+
+        No persiste: el operador debe guardar en observaciones vía cargar-resultados.
+        Acepta ``valores_borrador`` (dict codigo→valor) para sugerir con lo tipeado
+        en pantalla aunque aún no se haya guardado.
+        """
+        from laboratorio.conclusion_hemograma import (
+            parse_valores_borrador,
+            solicitud_tiene_hemograma,
+            sugerir_conclusion_hemograma as generar_sugerencia,
+        )
+
+        solicitud = self.get_object()
+        if not solicitud_tiene_hemograma(solicitud):
+            return Response(
+                {'error': 'La orden no incluye hemograma (PAN_HEMO) ni analitos hematológicos.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        valores_borrador = parse_valores_borrador(request.data.get('valores_borrador'))
+        if not solicitud_tiene_algun_resultado(solicitud) and not valores_borrador:
+            return Response(
+                {
+                    'error': (
+                        'No hay resultados cargados para sugerir una conclusión. '
+                        'Ingresá valores en la grilla o guardá los resultados primero.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        prefer_ia = str(request.data.get('prefer_medgemma', 'true')).lower() in (
+            '1', 'true', 'yes',
+        )
+        data = generar_sugerencia(
+            solicitud,
+            prefer_medgemma=prefer_ia,
+            valores_borrador=valores_borrador or None,
+        )
+        log_event(
+            action='IA_SUGGESTION_CREATED',
+            actor=request.user,
+            entity=solicitud,
+            module='laboratorio',
+            metadata={
+                'view': 'SolicitudExamenViewSet.sugerir_conclusion_hemograma',
+                'fuente': data.get('fuente'),
+                'marcado_sugerencia': True,
+                'modelo': data.get('modelo'),
+                'texto_len': len(data.get('texto') or ''),
+                'con_borrador': bool(valores_borrador),
+            },
+        )
+        return Response(data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['get'], url_path='tubos-preview')
     def tubos_preview(self, request, pk=None):
         """Lista de tubos físicos a generar según los exámenes de la orden."""
@@ -758,7 +1050,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         PENDIENTE_TOMA con código de barras. No marca RECIBIDA ni EN_PROCESO;
         eso ocurre al escanear en recepción (recibir-por-codigo).
         Sin ``muestras``: resuelve tubos según catálogo (tipo_contenedor + tope 10/tubo;
-        hemograma = 1 unidad).
+        hemograma y orina completa = 1 unidad c/u).
         Con ``muestras``: crea los ítems indicados (uno por tubo físico).
         """
         ser = TomarMuestraOrdenSerializer(data=request.data)
@@ -838,7 +1130,11 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'error': 'Orden no encontrada.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        if solicitud.estado not in ('FINALIZADO', 'INFORMADO_PARCIAL'):
+        if solicitud.estado not in (
+            'FINALIZADO',
+            'INFORMADO_PARCIAL',
+            'LISTO_PARA_VALIDAR',
+        ):
             return Response(
                 {'error': 'El informe no está disponible.'},
                 status=status.HTTP_404_NOT_FOUND,

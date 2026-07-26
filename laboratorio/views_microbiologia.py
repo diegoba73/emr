@@ -19,6 +19,7 @@ from api.permissions import (
     LimsMicrobiologiaPermission,
     get_normalized_role,
 )
+from usuarios.roles import ROLES_LIMS_WRITE
 from auditoria.audit_service import log_create, log_update
 from auditoria.snapshot import safe_model_snapshot
 from laboratorio.microbiologia_estado import (
@@ -38,11 +39,14 @@ from laboratorio.microbiologia_estado import (
     crear_aislado,
     crear_antibiograma,
     crear_estudio,
+    crear_estudio_desde_pedido,
+    crear_estudios_batch,
     crear_identificacion,
     crear_informe_borrador,
     crear_lectura,
     crear_resultado_antibiotico,
     crear_siembra,
+    imprimir_etiquetas_estudios,
 )
 from laboratorio.models_microbiologia import (
     AisladoMicrobiologico,
@@ -56,6 +60,8 @@ from laboratorio.models_microbiologia import (
     Microorganismo,
     ResultadoAntibiotico,
     SiembraMicrobiologia,
+    TipoCultivoMicrobiologia,
+    TipoMuestraMicrobiologia,
 )
 from laboratorio.serializers_microbiologia import (
     AisladoDescartarSerializer,
@@ -71,9 +77,11 @@ from laboratorio.serializers_microbiologia import (
     EstudioCancelarSerializer,
     EstudioIniciarSerializer,
     EstudioMarcarInformadoSerializer,
+    EstudioMicrobiologiaBatchCreateSerializer,
     EstudioMicrobiologiaCreateSerializer,
     EstudioMicrobiologiaPartialUpdateSerializer,
     EstudioMicrobiologiaSerializer,
+    EstudioMicroImprimirEtiquetasSerializer,
     IdentificacionMicroorganismoCreateSerializer,
     IdentificacionMicroorganismoSerializer,
     InformeAnularSerializer,
@@ -92,6 +100,8 @@ from laboratorio.serializers_microbiologia import (
     SiembraMicrobiologiaCreateSerializer,
     SiembraMicrobiologiaPartialUpdateSerializer,
     SiembraMicrobiologiaSerializer,
+    TipoCultivoMicrobiologiaSerializer,
+    TipoMuestraMicrobiologiaSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,6 +144,30 @@ def _guard_estudio_micro_operable_entity(entity) -> None:
         assert_estudio_micro_operable(estudio)
     except MicrobiologiaAccionError as exc:
         raise ValidationError(str(exc)) from exc
+
+
+class TipoCultivoMicrobiologiaViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catálogo de tipos de cultivo clínico (lectura operadores LIMS)."""
+
+    queryset = TipoCultivoMicrobiologia.objects.filter(activo=True).order_by("orden", "nombre")
+    serializer_class = TipoCultivoMicrobiologiaSerializer
+    permission_classes = [LimsMicrobiologiaPermission]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["codigo", "nombre"]
+    ordering_fields = ["orden", "nombre", "codigo"]
+    http_method_names = ["get", "head", "options"]
+
+
+class TipoMuestraMicrobiologiaViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catálogo de tipos de muestra microbiológica (lectura operadores LIMS)."""
+
+    queryset = TipoMuestraMicrobiologia.objects.filter(activo=True).order_by("orden", "nombre")
+    serializer_class = TipoMuestraMicrobiologiaSerializer
+    permission_classes = [LimsMicrobiologiaPermission]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["codigo", "nombre"]
+    ordering_fields = ["orden", "nombre", "codigo"]
+    http_method_names = ["get", "head", "options"]
 
 
 class MedioCultivoViewSet(viewsets.ModelViewSet):
@@ -192,12 +226,27 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         "solicitud",
         "solicitud__medico_interno",
         "muestra",
+        "muestra__tipo_muestra",
         "paciente",
+        "medico_interno",
+        "tipo_cultivo",
+        "tipo_muestra_micro",
+        "consulta_hc",
         "responsable",
     ).prefetch_related("siembras", "lecturas")
     permission_classes = [LimsMicrobiologiaPermission]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["numero", "solicitud__numero", "muestra__codigo_barra"]
+    search_fields = [
+        "numero",
+        "codigo_barra",
+        "solicitud__numero",
+        "muestra__codigo_barra",
+        "paciente__apellido",
+        "paciente__nombre",
+        "paciente__dni",
+        "tipo_cultivo__nombre",
+        "tipo_muestra_micro__nombre",
+    ]
     ordering_fields = ["created_at", "fecha_inicio", "estado"]
     ordering = ["-created_at"]
     http_method_names = ["get", "post", "patch", "head", "options"]
@@ -205,6 +254,8 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == "create":
             return EstudioMicrobiologiaCreateSerializer
+        if self.action == "batch":
+            return EstudioMicrobiologiaBatchCreateSerializer
         if self.action in ("partial_update", "update"):
             return EstudioMicrobiologiaPartialUpdateSerializer
         return EstudioMicrobiologiaSerializer
@@ -216,31 +267,188 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(solicitud__medico_interno__user=user)
+                from django.db.models import Q
+
+                from laboratorio.access import q_lectura_lims_medico
+
+                # Combinar con Q (no con | entre QuerySets): filtrar_lectura_lims_medico
+                # aplica .distinct() y Django no permite OR unique + non-unique.
+                q_via_solicitud = Q(solicitud__isnull=False) & q_lectura_lims_medico(
+                    user, solicitud_path="solicitud"
+                )
+                q_directo = Q(solicitud__isnull=True, medico_interno__user_id=user.pk)
+                try:
+                    from archivos_medicos.access import paciente_ids_vinculados_a_medico
+
+                    ids = paciente_ids_vinculados_a_medico(user.medico)
+                    if ids:
+                        q_directo = q_directo | Q(
+                            solicitud__isnull=True, paciente_id__in=ids
+                        )
+                except Exception:
+                    pass
+                qs = qs.filter(q_via_solicitud | q_directo).distinct()
             else:
                 return qs.none()
+
+        estado = self.request.query_params.get("estado")
+        if estado:
+            qs = qs.filter(estado=estado)
+        sin_etiquetas = self.request.query_params.get("sin_etiquetas")
+        if sin_etiquetas in ("1", "true", "True"):
+            qs = qs.filter(estado="PENDIENTE", etiquetas_impresas_at__isnull=True)
+        esperando = self.request.query_params.get("esperando_recepcion")
+        if esperando in ("1", "true", "True"):
+            qs = qs.filter(estado="PENDIENTE", etiquetas_impresas_at__isnull=False)
+
         return _apply_estudio_id_query_filter(qs, self.request, lookup="pk")
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
         vd = ser.validated_data
+        # Alta desde muestra LIMS (legado): solo operadores/admin. El médico
+        # solicita por paciente+cultivo (modo pedido) o batch.
+        if vd.get("_modo") == "legado":
+            role = get_normalized_role(request.user)
+            if not request.user.is_superuser and role not in ROLES_LIMS_WRITE:
+                return Response(
+                    {
+                        "error": (
+                            "Solo laboratorio puede iniciar un estudio microbiológico "
+                            "desde una muestra LIMS ya tomada. Use el pedido por cultivo."
+                        )
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         try:
-            estudio = crear_estudio(
-                solicitud=vd["_solicitud"],
-                muestra=vd["_muestra"],
-                tipo_estudio=vd.get("tipo_estudio") or "CULTIVO_RUTINA",
-                observaciones=vd.get("observaciones") or "",
-                actor=request.user,
-                view="EstudioMicrobiologiaViewSet.create",
-            )
+            if vd.get("_modo") == "pedido":
+                cultivo = vd["_tipo_cultivo"]
+                muestra_micro = vd["_tipo_muestra_micro"]
+                estudio = crear_estudio_desde_pedido(
+                    paciente=vd["_paciente"],
+                    tipo_cultivo_id=cultivo.pk,
+                    tipo_muestra_micro_id=muestra_micro.pk,
+                    medico_interno=vd.get("_medico"),
+                    medico_externo_nombre=vd.get("medico_externo_nombre") or "",
+                    observaciones=vd.get("observaciones") or "",
+                    actor=request.user,
+                    view="EstudioMicrobiologiaViewSet.create",
+                    origen_solicitud=vd.get("_origen_solicitud") or "",
+                    consulta_hc=vd.get("_consulta_hc"),
+                )
+            else:
+                estudio = crear_estudio(
+                    solicitud=vd["_solicitud"],
+                    muestra=vd["_muestra"],
+                    tipo_estudio=vd.get("tipo_estudio") or "UROCULTIVO",
+                    observaciones=vd.get("observaciones") or "",
+                    actor=request.user,
+                    view="EstudioMicrobiologiaViewSet.create",
+                )
         except MicrobiologiaAccionError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         out = EstudioMicrobiologiaSerializer(estudio, context=self.get_serializer_context())
         return Response(out.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="batch")
+    def batch(self, request):
+        ser = EstudioMicrobiologiaBatchCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        vd = ser.validated_data
+        try:
+            estudios = crear_estudios_batch(
+                paciente=vd["_paciente"],
+                items=vd["items"],
+                medico_interno=vd.get("_medico"),
+                medico_externo_nombre=vd.get("medico_externo_nombre") or "",
+                observaciones=vd.get("observaciones") or "",
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.batch",
+                origen_solicitud=vd.get("_origen_solicitud") or "",
+                consulta_hc=vd.get("_consulta_hc"),
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        out = EstudioMicrobiologiaSerializer(
+            estudios, many=True, context=self.get_serializer_context()
+        )
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="imprimir-etiquetas")
+    def imprimir_etiquetas(self, request, pk=None):
+        from django.http import HttpResponse
+
+        from laboratorio.etiquetas_microbiologia import (
+            generar_etiquetas_micro_pdf_bytes,
+            nombre_archivo_etiquetas_micro,
+        )
+
+        try:
+            estudios = imprimir_etiquetas_estudios(
+                [int(pk)],
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.imprimir_etiquetas",
+            )
+        except EstudioMicrobiologia.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            pdf_bytes = generar_etiquetas_micro_pdf_bytes(estudios)
+        except Exception:
+            logger.exception("generar etiquetas micro estudio pk=%s", pk)
+            return Response(
+                {"error": "No se pudieron generar las etiquetas PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="{nombre_archivo_etiquetas_micro([int(pk)])}"'
+        )
+        return resp
+
+    @action(detail=False, methods=["post"], url_path="imprimir-etiquetas")
+    def imprimir_etiquetas_batch(self, request):
+        from django.http import HttpResponse
+
+        from laboratorio.etiquetas_microbiologia import (
+            generar_etiquetas_micro_pdf_bytes,
+            nombre_archivo_etiquetas_micro,
+        )
+
+        ser = EstudioMicroImprimirEtiquetasSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = ser.validated_data.get("estudio_ids") or []
+        if not ids:
+            return Response(
+                {"error": "Indique estudio_ids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            estudios = imprimir_etiquetas_estudios(
+                ids,
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.imprimir_etiquetas_batch",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            pdf_bytes = generar_etiquetas_micro_pdf_bytes(estudios)
+        except Exception:
+            logger.exception("generar etiquetas micro batch")
+            return Response(
+                {"error": "No se pudieron generar las etiquetas PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="{nombre_archivo_etiquetas_micro(ids)}"'
+        )
+        return resp
 
     def perform_update(self, serializer):
         _guard_estudio_micro_operable_entity(serializer.instance)
@@ -345,10 +553,14 @@ class SiembraMicrobiologiaViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs, user, solicitud_path="estudio__solicitud"
+                )
             else:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
@@ -422,10 +634,14 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs, user, solicitud_path="estudio__solicitud"
+                )
             else:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
@@ -558,10 +774,14 @@ class AisladoMicrobiologicoViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs, user, solicitud_path="estudio__solicitud"
+                )
             else:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
@@ -657,10 +877,14 @@ class IdentificacionMicroorganismoViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(aislado__estudio__solicitud__medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs, user, solicitud_path="aislado__estudio__solicitud"
+                )
             else:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request, lookup="aislado__estudio_id")
@@ -774,10 +998,14 @@ class AntibiogramaViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(aislado__estudio__solicitud__medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs, user, solicitud_path="aislado__estudio__solicitud"
+                )
             else:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request, lookup="aislado__estudio_id")
@@ -888,11 +1116,15 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(
-                    antibiograma__aislado__estudio__solicitud__medico_interno__user=user
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs,
+                    user,
+                    solicitud_path="antibiograma__aislado__estudio__solicitud",
                 )
             else:
                 return qs.none()
@@ -975,10 +1207,14 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ("admin", "laboratorio"):
+            if role in ROLES_LIMS_WRITE:
                 pass
             elif role == "medico":
-                qs = qs.filter(estudio__solicitud__medico_interno__user=user)
+                from laboratorio.access import filtrar_lectura_lims_medico
+
+                qs = filtrar_lectura_lims_medico(
+                    qs, user, solicitud_path="estudio__solicitud"
+                )
             else:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)

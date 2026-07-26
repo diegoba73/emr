@@ -8,7 +8,7 @@ import {
 
 describe('sysmexHemograma', () => {
   it('convierte leucocitos ticket 93 → 9300 /mm³', () => {
-    const c = convertSysmexEntry('LEU', '93');
+    const c = convertSysmexEntry('LEUCO', '93');
     expect(c?.valorNumerico).toBe(9300);
     expect(c?.valorInforme).toBe('9300');
   });
@@ -42,7 +42,7 @@ describe('sysmexHemograma', () => {
     const p = computeFormulaLeucocitariaProgress([
       { codigo: 'NEUT_CAY', valor_sysmex: '70' },
       { codigo: 'NEUT_SEG', valor_sysmex: '' },
-      { codigo: 'LEU', valor_sysmex: '93' },
+      { codigo: 'LEUCO', valor_sysmex: '93' },
     ]);
     expect(p.sum).toBe(70);
     expect(p.remaining).toBe(30);
@@ -67,7 +67,7 @@ describe('sysmexHemograma', () => {
   });
 
   it('reconstruye entero desde valor guardado', () => {
-    expect(sysmexEntryFromStored('LEU', 9300)).toBe('93');
+    expect(sysmexEntryFromStored('LEUCO', 9300)).toBe('93');
     expect(sysmexEntryFromStored('HEMATIES', 2.37)).toBe('237');
     expect(sysmexEntryFromStored('HGB', 7.3)).toBe('73');
   });

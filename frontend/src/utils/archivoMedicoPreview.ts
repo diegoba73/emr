@@ -4,13 +4,16 @@ export type ArchivoPreviewKind = 'pdf' | 'image' | 'unsupported';
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff']);
 
-export function getArchivoFileName(archivo: Pick<ArchivoMedico, 'archivo_nombre' | 'titulo'>): string {
+export function getArchivoFileName(archivo: {
+  archivo_nombre?: string | null;
+  titulo?: string | null;
+}): string {
   return archivo.archivo_nombre || archivo.titulo || 'archivo';
 }
 
 export function guessArchivoMimeType(
   filename: string,
-  tipoArchivo?: ArchivoMedico['tipo_archivo']
+  tipoArchivo?: string | null
 ): string {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
   if (ext === 'pdf') return 'application/pdf';
@@ -32,7 +35,7 @@ export function guessArchivoMimeType(
 
 export function getArchivoPreviewKind(
   filename: string,
-  tipoArchivo?: ArchivoMedico['tipo_archivo']
+  tipoArchivo?: string | null
 ): ArchivoPreviewKind {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
   if (ext === 'pdf' || tipoArchivo === 'PDF') return 'pdf';
@@ -44,6 +47,17 @@ export function getArchivoPreviewKind(
     return 'image';
   }
   return 'unsupported';
+}
+
+/** Infiere tipo_archivo de ArchivoMedico a partir del nombre del fichero. */
+export function inferTipoArchivoFromFileName(filename: string): ArchivoMedico['tipo_archivo'] {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  if (ext === 'pdf') return 'PDF';
+  if (ext === 'dcm') return 'DICOM';
+  if (['nii', 'gz'].includes(ext) || filename.toLowerCase().endsWith('.nii.gz')) return 'NIFTI';
+  if (IMAGE_EXTENSIONS.has(ext)) return 'FOTO_CLINICA';
+  if (ext === 'zip') return 'OTRO';
+  return 'OTRO';
 }
 
 export function normalizePreviewBlob(blob: Blob, mimeType: string): Blob {

@@ -111,41 +111,23 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _queryset_para_medico(queryset, user):
-        """Pacientes vinculados al médico vía turnos o consultas.
+        """Pacientes vinculados al médico vía turnos, atenciones o consultas.
 
         Imports diferidos: ``turnos`` e ``historias_clinicas`` no son
         prerequisitos a nivel de módulo y pueden estar en distintos estados de
         rescate. Si fallan, se devuelve queryset vacío en lugar de propagar.
         """
-        pacientes_ids = set()
-        try:
-            from turnos.models import Turno
+        from archivos_medicos.access import paciente_ids_vinculados_a_medico
 
-            pacientes_ids.update(
-                Turno.objects.filter(medico=user.medico).values_list(
-                    "paciente_id", flat=True
-                )
-            )
+        try:
+            pacientes_ids = paciente_ids_vinculados_a_medico(user.medico)
         except Exception:
             logger.exception(
-                "PacienteViewSet: no se pudieron resolver turnos para el médico %s",
+                "PacienteViewSet: no se pudieron resolver vínculos para el médico %s",
                 user.id,
             )
-        try:
-            from historias_clinicas.models import Consulta
+            pacientes_ids = set()
 
-            pacientes_ids.update(
-                Consulta.objects.filter(medico=user.medico).values_list(
-                    "historia_clinica__paciente_id", flat=True
-                )
-            )
-        except Exception:
-            logger.exception(
-                "PacienteViewSet: no se pudieron resolver consultas para el médico %s",
-                user.id,
-            )
-
-        pacientes_ids.discard(None)
         if not pacientes_ids:
             return queryset.none()
         return queryset.filter(id__in=pacientes_ids)
@@ -291,3 +273,63 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="timeline")
+    def timeline(self, request, pk=None):
+        """Línea de tiempo clínica unificada (Atencion como eje + dedupe HC)."""
+        paciente = self.get_object()
+        from pacientes.services_timeline import build_paciente_timeline
+
+        events = build_paciente_timeline(paciente.id, user=request.user)
+        return Response({"results": events, "count": len(events)})
+
+    @action(detail=True, methods=["get"], url_path="portal-resumen")
+    def portal_resumen(self, request, pk=None):
+        """Resumen para portal del paciente (solo ficha propia si rol paciente)."""
+        paciente = self.get_object()
+        if _user_rol(request.user) == "paciente":
+            linked = getattr(request.user, "paciente", None)
+            if not linked or linked.id != paciente.id:
+                raise PermissionDenied("Solo puede consultar su propio resumen.")
+
+        from django.utils import timezone as tz
+        from estudios.models import EstudioComplementario
+        from laboratorio.models import SolicitudExamen
+        from turnos.models import Turno
+
+        now = tz.now()
+        proximos_turnos = Turno.objects.filter(
+            paciente=paciente,
+            fecha_hora_inicio__gte=now,
+            estado__in=[Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO],
+        ).count()
+
+        resultados_listos = SolicitudExamen.objects.filter(
+            paciente=paciente,
+            estado__in=["FINALIZADO", "INFORMADO_PARCIAL"],
+        ).count()
+
+        try:
+            from archivos_medicos.models import ArchivoMedico
+
+            documentos_archivos = ArchivoMedico.objects.filter(
+                paciente=paciente,
+            ).count()
+        except Exception:
+            documentos_archivos = 0
+
+        estudios_entregados = EstudioComplementario.objects.filter(
+            paciente=paciente,
+            estado=EstudioComplementario.Estado.ENTREGADO,
+        ).count()
+
+        return Response(
+            {
+                "paciente_id": paciente.id,
+                "proximos_turnos": proximos_turnos,
+                "resultados_laboratorio_listos": resultados_listos,
+                "documentos_archivos": documentos_archivos,
+                "estudios_entregados": estudios_entregados,
+                "documentos_total": documentos_archivos + estudios_entregados,
+            }
+        )

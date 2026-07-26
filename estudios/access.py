@@ -57,6 +57,14 @@ def usuario_puede_ver_estudio(user, estudio) -> bool:
             return medico_puede_acceder_paciente(user.medico, estudio.paciente)
         except Exception:
             return False
+    if rol == 'paciente':
+        try:
+            return (
+                estudio.paciente_id == user.paciente.id
+                and estudio.estado == estudio.Estado.ENTREGADO
+            )
+        except Exception:
+            return False
 
     return False
 
@@ -158,8 +166,45 @@ def usuario_puede_descargar_pdf_informe(user, estudio, informe) -> bool:
     return False
 
 
-def usuario_puede_validar_informe(user) -> bool:
-    """C6.4.1: validación final solo admin/superuser."""
+def usuario_puede_validar_informe(user, estudio=None) -> bool:
+    """
+    Validar informe (y pasar estudio a VALIDADO):
+    - admin / superuser
+    - profesional que realizó el estudio (``realizado_por``)
+    """
     if not user.is_authenticated:
         return False
-    return user.is_superuser or _rol(user) == 'admin'
+    if user.is_superuser or _rol(user) == 'admin':
+        return True
+    if estudio is None:
+        return False
+    return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
+
+
+def usuario_puede_modificar_contenido_estudio(user, estudio) -> bool:
+    """
+    Editar metadatos, archivos e informes del estudio.
+    Tras VALIDADO: solo el realizador o admin.
+    ENTREGADO/ANULADO: no (la reapertura va por rectificación).
+    """
+    if not usuario_puede_escribir_estudio(user):
+        return False
+    if not usuario_puede_ver_estudio_clinico(user, estudio):
+        return False
+    if estudio.estado == estudio.Estado.ANULADO:
+        return False
+    if estudio.estado == estudio.Estado.ENTREGADO:
+        return False
+    if estudio.estado == estudio.Estado.VALIDADO:
+        if user.is_superuser or _rol(user) == 'admin':
+            return True
+        return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
+    return True
+
+
+def usuario_es_realizador_o_admin(user, estudio) -> bool:
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser or _rol(user) == 'admin':
+        return True
+    return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)

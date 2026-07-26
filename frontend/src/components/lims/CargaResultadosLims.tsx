@@ -28,11 +28,13 @@ import {
   listTiposMuestraLims,
   patchOrdenInformeOrden,
   postCargarResultados,
+  postSugerirConclusionHemograma,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
 import {
   applyOrdenGrupos,
+  PANEL_HEMOGRAMA,
   reorderOrdenGrupos,
   resolveOrdenGrupos,
 } from '../../utils/limsOrdenInforme';
@@ -40,7 +42,9 @@ import ResultadoRangoInfo from './ResultadoRangoInfo';
 import ResultadosOrdenLista from './ResultadosOrdenLista';
 import AnalisisLongitudinalPanel from './AnalisisLongitudinalPanel';
 import {
+  applyAutofillVcmChcm,
   buildCargarResultadoPayload,
+  buildValoresBorradorConclusion,
   draftRowHasValue,
   draftSysmexTicketFromResultado,
   filterMuestrasProcesables,
@@ -78,31 +82,40 @@ function buildCargaFocusOrder(
   tiposExamenMap: Map<number, LimsTipoExamen>
 ): string[] {
   const keys: string[] = [];
+  let observacionesInsertada = false;
   for (const grupo of grupos) {
     for (const r of grupo.resultados) {
       const te = tiposExamenMap.get(r.tipo_examen);
       if (usesTicketEntry(te, r.tipo_examen_codigo)) {
         keys.push(`sysmex-${r.id}`);
       } else {
-        keys.push(`valor-${r.id}`, `num-${r.id}`);
+        keys.push(`valor-${r.id}`);
       }
     }
+    // Conclusión del hemograma: foco justo debajo del panel.
+    if (grupo.codigo === PANEL_HEMOGRAMA) {
+      keys.push('observaciones');
+      observacionesInsertada = true;
+    }
   }
-  keys.push('observaciones');
+  if (!observacionesInsertada) {
+    keys.push('observaciones');
+  }
   return keys;
 }
 
-function focusCargaField(key: string): void {
+function focusCargaField(key: string): boolean {
   const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
     `[data-carga-focus="${key}"]`
   );
-  if (!input) return;
+  if (!input) return false;
   input.focus();
   if (input instanceof HTMLInputElement && input.type !== 'hidden') {
     input.select();
   } else if (input instanceof HTMLTextAreaElement) {
     input.select();
   }
+  return true;
 }
 
 const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
@@ -116,8 +129,24 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   const [draft, setDraft] = useState<Record<number, DraftCargaRow>>({});
   const [observacionesOrden, setObservacionesOrden] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sugeriendo, setSugeriendo] = useState(false);
+  const [sugerenciaMeta, setSugerenciaMeta] = useState<{
+    fuente: string;
+    marcado: boolean;
+  } | null>(null);
   const [tiposExamenMap, setTiposExamenMap] = useState<Map<number, LimsTipoExamen>>(new Map());
   const [tiposMuestraMap, setTiposMuestraMap] = useState<Map<number, LimsTipoMuestra>>(new Map());
+
+  const esHemograma = useMemo(
+    () =>
+      (orden.paneles_resumen ?? []).some((p) => p.codigo === PANEL_HEMOGRAMA) ||
+      (orden.resultados ?? []).some((r) =>
+        ['HGB', 'HEMATIES', 'HTO', 'PLAQ', 'RDW'].includes(
+          (r.tipo_examen_codigo || '').toUpperCase()
+        )
+      ),
+    [orden.paneles_resumen, orden.resultados]
+  );
 
   const muestrasProcesables = useMemo(() => filterMuestrasProcesables(muestras), [muestras]);
   const gruposBase = useMemo(
@@ -145,6 +174,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   const focusOrder = useMemo(() => buildCargaFocusOrder(grupos, tiposExamenMap), [grupos, tiposExamenMap]);
   const guardarBtnRef = useRef<HTMLButtonElement>(null);
   const [focusedSysmexKey, setFocusedSysmexKey] = useState<string | null>(null);
+  const indicesManualRef = useRef<Set<number>>(new Set());
 
   const formulaProgress = useMemo(
     () =>
@@ -162,9 +192,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     (currentKey: string) => {
       const idx = focusOrder.indexOf(currentKey);
       if (idx === -1) return;
-      if (idx < focusOrder.length - 1) {
-        focusCargaField(focusOrder[idx + 1]);
-        return;
+      for (let i = idx + 1; i < focusOrder.length; i += 1) {
+        if (focusCargaField(focusOrder[i])) return;
       }
       guardarBtnRef.current?.focus();
     },
@@ -200,6 +229,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   }, []);
 
   useEffect(() => {
+    indicesManualRef.current = new Set();
     setDraft((prev) => {
       const next: Record<number, DraftCargaRow> = {};
       for (const r of resultados) {
@@ -233,10 +263,20 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           if (prevRow.muestra_id != null) built.muestra_id = prevRow.muestra_id;
         }
         next[r.id] = built;
+        const c = (codigo || '').toUpperCase();
+        if (
+          (c === 'VCM' || c === 'CHCM') &&
+          draftRowHasValue(built, te, codigo) &&
+          (r.valor_obtenido || r.valor_numerico != null)
+        ) {
+          // Valor ya persistido: tratar como fijado hasta que el operador edite bases.
+          indicesManualRef.current.add(r.id);
+        }
       }
-      return next;
+      return applyAutofillVcmChcm(resultados, next, tiposExamenMap, indicesManualRef.current);
     });
     setObservacionesOrden(orden.observaciones ?? '');
+    setSugerenciaMeta(null);
   }, [orden, resultados, muestrasProcesables, tiposExamenMap]);
 
   const progreso = useMemo(() => countResultadosConValor(orden), [orden]);
@@ -248,7 +288,18 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     resultados.length > 0;
 
   const setRow = (id: number, patch: Partial<DraftCargaRow>) => {
-    setDraft((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
+    const r = resultados.find((x) => x.id === id);
+    const te = r ? tiposExamenMap.get(r.tipo_examen) : undefined;
+    const codigo = (r?.tipo_examen_codigo || te?.codigo || '').toUpperCase();
+    if (codigo === 'VCM' || codigo === 'CHCM') {
+      if (patch.valor_sysmex !== undefined || patch.valor !== undefined || patch.valor_numerico !== undefined) {
+        indicesManualRef.current.add(id);
+      }
+    }
+    setDraft((d) => {
+      const next = { ...d, [id]: { ...d[id], ...patch } };
+      return applyAutofillVcmChcm(resultados, next, tiposExamenMap, indicesManualRef.current);
+    });
   };
 
   const moveGrupoInforme = useCallback(
@@ -272,6 +323,36 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     },
     [orden.id, ordenGrupos, onGuardado]
   );
+
+  const handleSugerirConclusion = async () => {
+    setSugeriendo(true);
+    try {
+      const valores_borrador = buildValoresBorradorConclusion(resultados, draft, tiposExamenMap);
+      if (Object.keys(valores_borrador).length === 0) {
+        toast.error('Ingresá al menos un valor del hemograma para sugerir la conclusión.');
+        return;
+      }
+      const data = await postSugerirConclusionHemograma(orden.id, { valores_borrador });
+      if (!data.texto?.trim()) {
+        toast.error('No se pudo generar una conclusión con los valores actuales.');
+        return;
+      }
+      setObservacionesOrden(data.texto.trim());
+      setSugerenciaMeta({
+        fuente: data.fuente || 'reglas',
+        marcado: Boolean(data.marcado_sugerencia),
+      });
+      toast.success(
+        data.fuente === 'medgemma'
+          ? 'Sugerencia MedGemma lista — revisá y guardá.'
+          : 'Sugerencia por reglas lista — revisá y guardá.'
+      );
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, 'No se pudo sugerir la conclusión.'));
+    } finally {
+      setSugeriendo(false);
+    }
+  };
 
   const handleGuardar = async (informarParcial = false) => {
     const filasAGuardar = resultados.filter((r) => {
@@ -322,8 +403,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       });
       if (informarParcial && updated.estado === 'INFORMADO_PARCIAL') {
         toast.success('Resultados guardados e informados parcialmente');
-      } else if (countResultadosConValor(updated).conValor === (updated.resultados || []).length) {
-        toast.success('Resultados completos — listos para validación del bioquímico');
+      } else if (updated.estado === 'LISTO_PARA_VALIDAR') {
+        toast.success('Resultados completos — listo para validar');
       } else {
         toast.success('Avance guardado');
       }
@@ -371,7 +452,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       const unidadLabel = resolveUnidad(r, te);
       const sysmexFocusKey = `sysmex-${r.id}`;
       const valorFocusKey = `valor-${r.id}`;
-      const numFocusKey = `num-${r.id}`;
       const esFormula = isFormulaPercent(te, r.tipo_examen_codigo);
       const mostrarIndicadorFormula = esFormula && focusedSysmexKey === sysmexFocusKey;
       const showOrden = ordenOpts?.ordenRowSpan !== undefined;
@@ -391,6 +471,18 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               )}
               {te?.tipo_muestra_nombre && (
                 <Chip size="small" label={`Tipo requerido: ${te.tipo_muestra_nombre}`} variant="outlined" />
+              )}
+              {r.estado_derivacion && r.estado_derivacion !== 'LOCAL' && (
+                <Chip
+                  size="small"
+                  color="info"
+                  variant="outlined"
+                  label={`Derivado ${r.laboratorio_derivacion_codigo || ''}: ${r.estado_derivacion}${
+                    r.estado_derivacion === 'PENDIENTE_ENVIO' || r.estado_derivacion === 'ENVIADO'
+                      ? ' · cargar al llegar por correo'
+                      : ''
+                  }`}
+                />
               )}
             </Box>
           </TableCell>
@@ -454,20 +546,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                   value={row.valor}
                   onChange={(ev) => setRow(r.id, { valor: ev.target.value })}
                   onKeyDown={handleEnterNext(valorFocusKey)}
-                  placeholder="Ej. 120 o Positivo"
+                  placeholder="Ej. 120 o Positivo · Enter → siguiente"
                   inputProps={{ 'data-carga-focus': valorFocusKey }}
-                />
-              </TableCell>
-              <TableCell>
-                <TextField
-                  size="small"
-                  type="text"
-                  inputMode="decimal"
-                  value={row.valor_numerico}
-                  onChange={(ev) => setRow(r.id, { valor_numerico: ev.target.value })}
-                  onKeyDown={handleEnterNext(numFocusKey)}
-                  placeholder="Opcional"
-                  inputProps={{ 'data-carga-focus': numFocusKey }}
                 />
               </TableCell>
             </>
@@ -562,7 +642,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         Resultados cargados
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Patológico y crítico se calculan automáticamente al guardar, según los rangos del catálogo.
+        Fuera de rango y crítico se calculan automáticamente al guardar cuando el valor es numérico
+        (o viene del ticket Sysmex), según las referencias del catálogo.
       </Typography>
       <Box sx={{ mb: 3 }}>
         <ResultadosOrdenLista
@@ -570,6 +651,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           muestras={muestras}
           tiposMuestraMap={tiposMuestraMap}
           orden={orden}
+          observaciones={orden.observaciones}
         />
       </Box>
 
@@ -611,6 +693,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               const te = tiposExamenMap.get(r.tipo_examen);
               return isFormulaPercent(te, r.tipo_examen_codigo);
             });
+            const esGrupoHemograma = grupo.codigo === PANEL_HEMOGRAMA;
             return (
               <Box key={grupo.key} sx={{ mb: 3 }}>
                 <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
@@ -648,10 +731,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                             <TableCell>Informe</TableCell>
                           </>
                         ) : (
-                          <>
-                            <TableCell>Valor</TableCell>
-                            <TableCell>Valor num.</TableCell>
-                          </>
+                          <TableCell>Valor</TableCell>
                         )}
                         <TableCell>Muestra</TableCell>
                         <TableCell align="right" sx={{ width: 52 }}>
@@ -675,28 +755,75 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                     </TableBody>
                   </Table>
                 </TableContainer>
+
+                {esGrupoHemograma && (
+                  <Box sx={{ mt: 2 }}>
+                    <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => void handleSugerirConclusion()}
+                        disabled={sugeriendo || saving}
+                      >
+                        {sugeriendo ? 'Sugiriendo…' : 'Sugerir conclusión'}
+                      </Button>
+                      {sugerenciaMeta?.marcado && (
+                        <Chip
+                          size="small"
+                          color="info"
+                          variant="outlined"
+                          label={`Sugerencia (no validada) · ${sugerenciaMeta.fuente}`}
+                        />
+                      )}
+                    </Box>
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      label="Conclusión / observaciones del hemograma"
+                      value={observacionesOrden}
+                      onChange={(ev) => {
+                        setObservacionesOrden(ev.target.value);
+                        if (sugerenciaMeta) {
+                          setSugerenciaMeta((m) => (m ? { ...m, marcado: true } : m));
+                        }
+                      }}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter' && !ev.shiftKey && !ev.nativeEvent.isComposing) {
+                          ev.preventDefault();
+                          focusNextField('observaciones');
+                        }
+                      }}
+                      placeholder="Ej.: Anemia normocítica normocrómica, con trombocitopenia leve y anisocitosis."
+                      helperText="Enter → siguiente · Shift+Enter → nueva línea. La sugerencia es borrador; el bioquímico debe revisar y guardar."
+                      inputProps={{ 'data-carga-focus': 'observaciones' }}
+                    />
+                  </Box>
+                )}
               </Box>
             );
           })}
 
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            label="Observaciones de la muestra / orden"
-            value={observacionesOrden}
-            onChange={(ev) => setObservacionesOrden(ev.target.value)}
-            onKeyDown={(ev) => {
-              if (ev.key === 'Enter' && !ev.shiftKey && !ev.nativeEvent.isComposing) {
-                ev.preventDefault();
-                focusNextField('observaciones');
-              }
-            }}
-            placeholder="Notas generales del informe (aplican a toda la orden)"
-            helperText="Enter → guardar · Shift+Enter → nueva línea"
-            inputProps={{ 'data-carga-focus': 'observaciones' }}
-            sx={{ mt: 2, mb: 2 }}
-          />
+          {!esHemograma && (
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              label="Observaciones de la muestra / orden"
+              value={observacionesOrden}
+              onChange={(ev) => setObservacionesOrden(ev.target.value)}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Enter' && !ev.shiftKey && !ev.nativeEvent.isComposing) {
+                  ev.preventDefault();
+                  focusNextField('observaciones');
+                }
+              }}
+              placeholder="Notas generales del informe (aplican a toda la orden)"
+              helperText="Enter → guardar · Shift+Enter → nueva línea"
+              inputProps={{ 'data-carga-focus': 'observaciones' }}
+              sx={{ mb: 2 }}
+            />
+          )}
 
           <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             <Button
@@ -717,16 +844,25 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               variant="outlined"
               color="info"
               onClick={() => void handleGuardar(true)}
-              disabled={saving}
+              disabled={saving || progreso.conValor === 0 || progreso.conValor >= progreso.total}
             >
               Guardar e informar parcialmente
             </Button>
           </Box>
+          {progreso.conValor < progreso.total && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Guardá solo los valores que tengas listos. Usá{' '}
             <strong>Guardar e informar parcialmente</strong> cuando el médico solicite los resultados
             disponibles antes de completar la orden; después podés enviar el PDF desde acciones de orden.
+            Al completar todos, la orden pasa a <strong>Listo para validar</strong>.
           </Typography>
+          )}
+          {orden.estado === 'LISTO_PARA_VALIDAR' && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+            Orden <strong>lista para validar</strong>. Podés corregir valores; el bioquímico libera con{' '}
+            <strong>Validar y liberar</strong>.
+          </Typography>
+          )}
         </>
       )}
 
@@ -768,17 +904,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             'La carga de valores no está disponible en el estado actual de la orden.'
           )}
         </Alert>
-      )}
-
-      {!editable && orden.observaciones?.trim() && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Observaciones
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-            {orden.observaciones}
-          </Typography>
-        </Box>
       )}
     </Box>
   );

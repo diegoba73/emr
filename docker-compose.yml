@@ -38,6 +38,8 @@ services:
     env_file:
       - .env
     environment:
+      # Evita que un PATH vacío del host/.env rompa #!/usr/bin/env en el entrypoint
+      PATH: /usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
       DJANGO_DEBUG: "true"
       DJANGO_RUNTIME: runserver
       DJANGO_SECRET_KEY: dev_secret_key_change_me

@@ -32,14 +32,14 @@ class TestSeedCatalogoSolicitudPapel:
         )
         assert PanelExamen.objects.filter(activo=True).count() == len(PANELES)
 
-    def test_hemograma_tiene_doce_componentes(self):
+    def test_hemograma_tiene_catorce_componentes(self):
         call_command("seed_catalogo_solicitud_papel")
         panel = PanelExamen.objects.get(codigo="PAN_HEMO")
-        assert panel.tipos_examen.count() == 12
+        assert panel.tipos_examen.count() == 14
         codigos = [te.codigo for te in ordenar_queryset_panel(panel)]
         assert codigos == [
-            "HEMATIES", "HTO", "HGB", "RDW", "LEU", "NEUT_CAY", "NEUT_SEG",
-            "EOS", "BAS", "LINF", "MONO", "PLAQ",
+            "HEMATIES", "HTO", "HGB", "VCM", "CHCM", "RDW", "LEUCO", "NEUT_CAY",
+            "NEUT_SEG", "EOS", "BAS", "LINF", "MONO", "PLAQ",
         ]
 
     def test_sin_duplicar_componentes_entre_registros(self):

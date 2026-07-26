@@ -19,6 +19,7 @@ import {
   Hotel,
   Science,
   Inventory,
+  Insights,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
@@ -122,6 +123,14 @@ const quickActions: QuickActionCard[] = [
     path: '/internacion',
     color: '#9f7aea',
     roles: ['medico', 'admin', 'enfermeria'],
+  },
+  {
+    title: 'Indicadores de calidad',
+    description: 'KPIs de laboratorio, turnos e internación',
+    icon: <Insights />,
+    path: '/bi',
+    color: '#0d9488',
+    roles: ['admin', 'bioquimico', 'secretaria', 'laboratorio'],
   },
 ];
 

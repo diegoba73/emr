@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -16,6 +14,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -25,27 +24,26 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { EstadoEstudioMicrobiologia, EstudioMicrobiologia } from '../../types/lims';
+import { apiService } from '../../services/api';
+import type { Medico, Paciente } from '../../types';
+import type {
+  EstadoEstudioMicrobiologia,
+  EstudioMicrobiologia,
+  TipoCultivoMicrobiologia,
+  TipoMuestraMicrobiologia,
+} from '../../types/lims';
 import {
   createEstudioMicrobiologia,
-  listContenedoresLims,
   listEstudiosMicrobiologia,
-  listMuestrasPorSolicitud,
-  listSolicitudesExamen,
-  listTiposMuestraLims,
+  listTiposCultivoMicro,
+  listTiposMuestraMicro,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
-import type { LimsTipoContenedor, LimsTipoMuestra, MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
-import {
-  filterMuestrasProcesablesMicro,
-  formatMuestraTransaccionalMicroLabel,
-  formatSolicitudMicroLabel,
-  validateCrearEstudioMicroSelection,
-} from '../../utils/limsMicroUx';
+import { formatPacienteLabel } from '../../utils/pacienteFormat';
+import { sugerirMuestraPorCultivo, validateCrearEstudioMicroPedido } from '../../utils/limsMicroUx';
 import { canAccessMicrobiologia, canOperateMicrobiologia } from '../../utils/limsAccess';
 import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
 
@@ -62,8 +60,6 @@ const ESTADOS: EstadoEstudioMicrobiologia[] = [
   'CANCELADO',
 ];
 
-const TIPOS = ['CULTIVO_RUTINA', 'UROCULTIVO', 'HEMOCULTIVO', 'COPROCULTIVO', 'CULTIVO_HERIDA', 'OTRO'];
-
 const MicrobiologiaEstudios: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useData();
@@ -72,17 +68,25 @@ const MicrobiologiaEstudios: React.FC = () => {
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [openCreate, setOpenCreate] = useState(false);
-  const [form, setForm] = useState({
-    solicitud_id: '' as number | '',
-    muestra_id: '' as number | '',
-    tipo_estudio: 'CULTIVO_RUTINA',
-    observaciones: '',
-  });
-  const [solicitudesPicker, setSolicitudesPicker] = useState<SolicitudExamenLims[]>([]);
-  const [muestrasPicker, setMuestrasPicker] = useState<MuestraTransaccional[]>([]);
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const [tiposMuestraMap, setTiposMuestraMap] = useState<Map<number, LimsTipoMuestra>>(new Map());
-  const [contenedoresMap, setContenedoresMap] = useState<Map<number, LimsTipoContenedor>>(new Map());
+  const [saving, setSaving] = useState(false);
+
+  const [paciente, setPaciente] = useState<Paciente | null>(null);
+  const [pacienteQuery, setPacienteQuery] = useState('');
+  const [pacienteOptions, setPacienteOptions] = useState<Paciente[]>([]);
+  const [searchingPaciente, setSearchingPaciente] = useState(false);
+
+  const [medicoInterno, setMedicoInterno] = useState<Medico | null>(null);
+  const [medicoQuery, setMedicoQuery] = useState('');
+  const [medicoOptions, setMedicoOptions] = useState<Medico[]>([]);
+  const [medicoExterno, setMedicoExterno] = useState('');
+  const [medicoExternoMode, setMedicoExternoMode] = useState(false);
+
+  const [tiposCultivo, setTiposCultivo] = useState<TipoCultivoMicrobiologia[]>([]);
+  const [tiposMuestra, setTiposMuestra] = useState<TipoMuestraMicrobiologia[]>([]);
+  const [tipoCultivoId, setTipoCultivoId] = useState<number | ''>('');
+  const [tipoMuestraId, setTipoMuestraId] = useState<number | ''>('');
+  const [observaciones, setObservaciones] = useState('');
+  const [formError, setFormError] = useState('');
 
   const allowed = canAccessMicrobiologia(currentUser);
   const canOp = canOperateMicrobiologia(currentUser);
@@ -91,7 +95,9 @@ const MicrobiologiaEstudios: React.FC = () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const data = await listEstudiosMicrobiologia(busqueda.trim() ? { search: busqueda.trim() } : undefined);
+      const data = await listEstudiosMicrobiologia(
+        busqueda.trim() ? { search: busqueda.trim() } : undefined
+      );
       setRows(data);
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarEstudiosMicro));
@@ -109,74 +115,129 @@ const MicrobiologiaEstudios: React.FC = () => {
     return rows.filter((r) => r.estado === estadoFiltro);
   }, [rows, estadoFiltro]);
 
-  const loadPickerData = useCallback(async () => {
-    setPickerLoading(true);
-    try {
-      const [sols, tipos, conts] = await Promise.all([
-        listSolicitudesExamen(),
-        listTiposMuestraLims(),
-        listContenedoresLims(),
-      ]);
-      setSolicitudesPicker(
-        sols.filter((s) => s.estado !== 'PENDIENTE').slice(0, 200)
-      );
-      setTiposMuestraMap(new Map(tipos.map((t) => [t.id, t])));
-      setContenedoresMap(new Map(conts.map((c) => [c.id, c])));
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarDatosMicro));
-    } finally {
-      setPickerLoading(false);
+  useEffect(() => {
+    if (!openCreate) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [cultivos, muestras] = await Promise.all([
+          listTiposCultivoMicro(),
+          listTiposMuestraMicro(),
+        ]);
+        if (cancelled) return;
+        setTiposCultivo(cultivos);
+        setTiposMuestra(muestras);
+        if (!tipoCultivoId && cultivos[0]) setTipoCultivoId(cultivos[0].id);
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarDatosMicro));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCreate]);
+
+  useEffect(() => {
+    if (!openCreate || pacienteQuery.trim().length < 2) {
+      setPacienteOptions([]);
+      return;
     }
-  }, []);
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      setSearchingPaciente(true);
+      try {
+        const list = await apiService.buscarPacientes(pacienteQuery.trim());
+        if (!cancelled) setPacienteOptions(list);
+      } catch {
+        if (!cancelled) setPacienteOptions([]);
+      } finally {
+        if (!cancelled) setSearchingPaciente(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [openCreate, pacienteQuery]);
+
+  useEffect(() => {
+    if (!openCreate || medicoExternoMode) return;
+    const q = medicoQuery.trim();
+    if (q.length < 2) {
+      setMedicoOptions([]);
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      try {
+        const list = await apiService.buscarMedicos(q);
+        if (!cancelled) setMedicoOptions(list);
+      } catch {
+        if (!cancelled) setMedicoOptions([]);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [openCreate, medicoQuery, medicoExternoMode]);
+
+  useEffect(() => {
+    if (!openCreate || !tipoCultivoId || !tiposCultivo.length || !tiposMuestra.length) return;
+    const cultivo = tiposCultivo.find((c) => c.id === tipoCultivoId);
+    if (!cultivo) return;
+    const sugerida = sugerirMuestraPorCultivo(cultivo.codigo, tiposMuestra);
+    if (sugerida) setTipoMuestraId(sugerida.id);
+  }, [openCreate, tipoCultivoId, tiposCultivo, tiposMuestra]);
 
   const onOpenCreate = () => {
-    setForm({ solicitud_id: '', muestra_id: '', tipo_estudio: 'CULTIVO_RUTINA', observaciones: '' });
-    setMuestrasPicker([]);
+    setPaciente(null);
+    setPacienteQuery('');
+    setMedicoInterno(null);
+    setMedicoQuery('');
+    setMedicoExterno('');
+    setMedicoExternoMode(false);
+    setTipoCultivoId('');
+    setTipoMuestraId('');
+    setObservaciones('');
+    setFormError('');
     setOpenCreate(true);
-    loadPickerData();
   };
-
-  const onSelectSolicitud = async (sid: number | '') => {
-    setForm((f) => ({ ...f, solicitud_id: sid, muestra_id: '' }));
-    if (sid === '') {
-      setMuestrasPicker([]);
-      return;
-    }
-    setPickerLoading(true);
-    try {
-      const sol = solicitudesPicker.find((s) => s.id === sid);
-      const muestras = await listMuestrasPorSolicitud(sid, sol?.numero ?? undefined);
-      setMuestrasPicker(filterMuestrasProcesablesMicro(muestras));
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarMuestras));
-      setMuestrasPicker([]);
-    } finally {
-      setPickerLoading(false);
-    }
-  };
-
-  const muestrasProcesables = useMemo(() => muestrasPicker, [muestrasPicker]);
 
   const crear = async () => {
-    const err = validateCrearEstudioMicroSelection(form.solicitud_id, form.muestra_id);
+    setFormError('');
+    const err = validateCrearEstudioMicroPedido({
+      pacienteId: paciente?.id,
+      tipoCultivoId,
+      tipoMuestraId,
+      medicoInternoId: medicoInterno?.id,
+      medicoExterno: medicoExternoMode ? medicoExterno : '',
+      requiereMedicoExterno: medicoExternoMode,
+    });
     if (err) {
-      toast.error(err);
+      setFormError(err);
       return;
     }
-    const sid = Number(form.solicitud_id);
-    const mid = Number(form.muestra_id);
+    setSaving(true);
     try {
       const est = await createEstudioMicrobiologia({
-        solicitud_id: sid,
-        muestra_id: mid,
-        tipo_estudio: form.tipo_estudio,
-        observaciones: form.observaciones,
+        paciente_id: paciente!.id,
+        tipo_cultivo_id: Number(tipoCultivoId),
+        tipo_muestra_micro_id: Number(tipoMuestraId),
+        observaciones: observaciones.trim() || undefined,
+        medico_id: medicoExternoMode ? null : medicoInterno?.id ?? null,
+        medico_externo_nombre: medicoExternoMode ? medicoExterno.trim() : undefined,
       });
-      toast.success('Estudio creado');
+      toast.success(`Estudio ${est.numero || est.id} creado`);
       setOpenCreate(false);
       navigate(`/laboratorio/microbiologia/estudios/${est.id}`);
     } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCrearEstudioMicro));
+      setFormError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCrearEstudioMicro));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -194,12 +255,18 @@ const MicrobiologiaEstudios: React.FC = () => {
         Estudios de microbiología
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Flujo independiente de <code>ResultadoExamen</code> clínico general. Vinculado a orden y muestra LIMS.
+        Pedidos de cultivo independientes del laboratorio de química clínica: paciente, médico, tipo
+        de cultivo y tipo de muestra.
       </Typography>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-          <TextField size="small" label="Buscar (nº estudio / orden)" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          <TextField
+            size="small"
+            label="Buscar (nº, paciente, DNI)"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Estado</InputLabel>
             <Select label="Estado" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
@@ -233,9 +300,10 @@ const MicrobiologiaEstudios: React.FC = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Nº estudio</TableCell>
-                <TableCell>Solicitud</TableCell>
+                <TableCell>Paciente</TableCell>
+                <TableCell>Médico</TableCell>
+                <TableCell>Cultivo</TableCell>
                 <TableCell>Muestra</TableCell>
-                <TableCell>Tipo</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell>Creado</TableCell>
                 <TableCell align="right" />
@@ -244,7 +312,7 @@ const MicrobiologiaEstudios: React.FC = () => {
             <TableBody>
               {filtradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Typography color="text.secondary">Sin estudios.</Typography>
                   </TableCell>
                 </TableRow>
@@ -252,17 +320,28 @@ const MicrobiologiaEstudios: React.FC = () => {
                 filtradas.map((r) => (
                   <TableRow key={r.id} hover>
                     <TableCell>{r.numero || r.id}</TableCell>
+                    <TableCell>{r.paciente_nombre || `#${r.paciente}`}</TableCell>
+                    <TableCell>{r.medico_display || '—'}</TableCell>
+                    <TableCell>{r.tipo_cultivo_nombre || r.tipo_estudio}</TableCell>
                     <TableCell>
-                      <Chip size="small" label={`#${r.solicitud}`} variant="outlined" />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={r.tipo_muestra_micro_nombre || r.muestra_tipo_nombre || '—'}
+                      />
                     </TableCell>
-                    <TableCell>#{r.muestra}</TableCell>
-                    <TableCell>{r.tipo_estudio}</TableCell>
                     <TableCell>
                       <EstudioMicrobiologiaEstadoBadge estado={r.estado} />
                     </TableCell>
-                    <TableCell>{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</TableCell>
+                    <TableCell>
+                      {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                    </TableCell>
                     <TableCell align="right">
-                      <Button size="small" variant="contained" onClick={() => navigate(`/laboratorio/microbiologia/estudios/${r.id}`)}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => navigate(`/laboratorio/microbiologia/estudios/${r.id}`)}
+                      >
                         Abrir
                       </Button>
                     </TableCell>
@@ -274,112 +353,112 @@ const MicrobiologiaEstudios: React.FC = () => {
         </TableContainer>
       )}
 
-      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} maxWidth="sm" fullWidth>
+      <Dialog open={openCreate} onClose={saving ? undefined : () => setOpenCreate(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Nuevo estudio microbiológico</DialogTitle>
         <DialogContent>
-          {pickerLoading && <CircularProgress size={24} sx={{ my: 1 }} />}
-          <FormControl fullWidth margin="dense" disabled={pickerLoading}>
-            <InputLabel>Solicitud LIMS</InputLabel>
-            <Select
-              label="Solicitud LIMS"
-              value={form.solicitud_id === '' ? '' : form.solicitud_id}
-              onChange={(e) => {
-                const v = e.target.value;
-                onSelectSolicitud(String(v) === '' ? '' : Number(v));
+          <Stack spacing={2} sx={{ mt: 0.5 }}>
+            {formError ? (
+              <Typography color="error" variant="body2">
+                {formError}
+              </Typography>
+            ) : null}
+
+            <Autocomplete
+              options={pacienteOptions}
+              value={paciente}
+              onChange={(_e, value) => setPaciente(value)}
+              inputValue={pacienteQuery}
+              onInputChange={(_e, value) => setPacienteQuery(value)}
+              getOptionLabel={(p) => formatPacienteLabel(p)}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              loading={searchingPaciente}
+              noOptionsText={
+                pacienteQuery.trim().length < 2
+                  ? 'Escribí al menos 2 caracteres'
+                  : 'Sin coincidencias'
+              }
+              renderInput={(params) => (
+                <TextField {...params} label="Paciente *" placeholder="DNI, apellido o nombre" />
+              )}
+            />
+
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => {
+                setMedicoExternoMode((v) => !v);
+                setMedicoInterno(null);
+                setMedicoExterno('');
+                setMedicoQuery('');
               }}
+              sx={{ alignSelf: 'flex-start' }}
             >
-              <MenuItem value="">
-                <em>Seleccionar…</em>
-              </MenuItem>
-              {solicitudesPicker.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {formatSolicitudMicroLabel(s)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth margin="dense" disabled={form.solicitud_id === '' || pickerLoading}>
-            <InputLabel>Muestra transaccional</InputLabel>
-            <Select
-              label="Muestra transaccional"
-              value={form.muestra_id === '' ? '' : form.muestra_id}
-              onChange={(e) => {
-                const v = e.target.value;
-                setForm((f) => ({
-                  ...f,
-                  muestra_id: String(v) === '' ? '' : Number(v),
-                }));
-              }}
-            >
-              <MenuItem value="">
-                <em>Seleccionar…</em>
-              </MenuItem>
-              {muestrasProcesables.map((m) => (
-                <MenuItem key={m.id} value={m.id}>
-                  {formatMuestraTransaccionalMicroLabel(m, tiposMuestraMap, contenedoresMap)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {form.solicitud_id !== '' && muestrasProcesables.length === 0 && !pickerLoading && (
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-              Sin muestras en RECIBIDA, CONSERVADA o EN_PROCESO para esta solicitud.
-            </Typography>
-          )}
-          <Accordion disableGutters elevation={0} sx={{ mt: 1 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="caption">Ingreso manual (avanzado)</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
+              {medicoExternoMode ? 'Usar médico interno del sistema' : 'Médico externo (texto libre)'}
+            </Button>
+
+            {medicoExternoMode ? (
               <TextField
                 fullWidth
-                margin="dense"
-                label="ID solicitud LIMS"
-                type="number"
-                value={form.solicitud_id === '' ? '' : form.solicitud_id}
+                size="small"
+                label="Médico solicitante (externo)"
+                placeholder="Apellido y nombre"
+                value={medicoExterno}
+                onChange={(e) => setMedicoExterno(e.target.value)}
+              />
+            ) : (
+              <Autocomplete
+                options={medicoOptions}
+                value={medicoInterno}
+                onChange={(_e, value) => setMedicoInterno(value)}
+                inputValue={medicoQuery}
+                onInputChange={(_e, value) => setMedicoQuery(value)}
+                getOptionLabel={(m) =>
+                  `Dr. ${[m.apellido, m.nombre].filter(Boolean).join(', ')}${
+                    m.matricula ? ` — MP ${m.matricula}` : ''
+                  }`
+                }
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Médico solicitante" placeholder="Apellido o matrícula" />
+                )}
+              />
+            )}
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Tipo de cultivo *</InputLabel>
+              <Select
+                label="Tipo de cultivo *"
+                value={tipoCultivoId === '' ? '' : tipoCultivoId}
                 onChange={(e) => {
                   const v = e.target.value;
-                  onSelectSolicitud(v === '' ? '' : Number(v));
+                  setTipoCultivoId(String(v) === '' ? '' : Number(v));
                 }}
-              />
-              <TextField
-                fullWidth
-                margin="dense"
-                label="ID muestra transaccional"
-                type="number"
-                value={form.muestra_id === '' ? '' : form.muestra_id}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    muestra_id: e.target.value === '' ? '' : Number(e.target.value),
-                  }))
-                }
-              />
-            </AccordionDetails>
-          </Accordion>
-          <FormControl fullWidth margin="dense">
-            <InputLabel>Tipo</InputLabel>
-            <Select label="Tipo" value={form.tipo_estudio} onChange={(e) => setForm((f) => ({ ...f, tipo_estudio: e.target.value }))}>
-              {TIPOS.map((t) => (
-                <MenuItem key={t} value={t}>
-                  {t}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            fullWidth
-            margin="dense"
-            multiline
-            label="Observaciones"
-            value={form.observaciones}
-            onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
-          />
+              >
+                {tiposCultivo.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>
+                    {t.nombre}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+              label="Observaciones"
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCreate(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={crear}>
-            Crear
+          <Button onClick={() => setOpenCreate(false)} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button variant="contained" onClick={() => void crear()} disabled={saving}>
+            {saving ? 'Creando…' : 'Crear estudio'}
           </Button>
         </DialogActions>
       </Dialog>

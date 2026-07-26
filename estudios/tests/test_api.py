@@ -229,24 +229,63 @@ def test_paciente_solo_ve_entregado(client, paciente, estudio_solicitado, admin_
 
 
 @pytest.mark.django_db
-def test_archivos_sin_media(client, admin_user, estudio_solicitado, archivo_medico):
+def test_archivos_sin_media(client, admin_user, estudio_solicitado):
     client.force_authenticate(user=admin_user)
+    content = SimpleUploadedFile('estudio.pdf', b'%PDF-1.4 test', content_type='application/pdf')
     with capture_on_commit_callbacks(execute=True):
-        client.post(
-            f'{BASE}{estudio_solicitado.id}/agregar-archivo/',
-            {'archivo_medico_id': archivo_medico.id},
-            format='json',
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/subir-archivo/',
+            {
+                'archivo': content,
+                'titulo': 'RX',
+                'tipo_archivo': 'PDF',
+                'tipo_rol': 'IMAGEN',
+            },
+            format='multipart',
         )
+    assert r.status_code == 201
     r = client.get(f'{BASE}{estudio_solicitado.id}/archivos/')
     assert r.status_code == 200
     assert '/media/' not in str(r.data)
     assert 'download_url' in r.data[0]
+    assert 'titulo' in r.data[0]
+    assert 'tipo_archivo' in r.data[0]
+
+
+@pytest.mark.django_db
+def test_asociar_archivo_interno_rechazado(
+    client, admin_user, estudio_solicitado, archivo_medico,
+):
+    client.force_authenticate(user=admin_user)
+    r = client.post(
+        f'{BASE}{estudio_solicitado.id}/agregar-archivo/',
+        {'archivo_medico_id': archivo_medico.id},
+        format='json',
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_asociar_archivo_externo_ok(client, admin_user, estudio_solicitado, archivo_medico):
+    estudio_solicitado.origen = EstudioComplementario.Origen.EXTERNO
+    estudio_solicitado.save(update_fields=['origen'])
+    client.force_authenticate(user=admin_user)
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/agregar-archivo/',
+            {'archivo_medico_id': archivo_medico.id},
+            format='json',
+        )
+    assert r.status_code == 201
+    assert r.data['archivo_medico_id'] == archivo_medico.id
 
 
 @pytest.mark.django_db
 def test_asociar_archivo_otro_paciente_rechazado(
     client, admin_user, estudio_solicitado, archivo_otro_paciente,
 ):
+    estudio_solicitado.origen = EstudioComplementario.Origen.EXTERNO
+    estudio_solicitado.save(update_fields=['origen'])
     client.force_authenticate(user=admin_user)
     r = client.post(
         f'{BASE}{estudio_solicitado.id}/agregar-archivo/',
@@ -257,9 +296,66 @@ def test_asociar_archivo_otro_paciente_rechazado(
 
 
 @pytest.mark.django_db
-def test_paciente_no_descarga_si_no_entregado(
-    client, paciente, estudio_solicitado, archivo_medico, admin_user,
+def test_subir_archivo_interno_ok(client, admin_user, estudio_solicitado, paciente):
+    client.force_authenticate(user=admin_user)
+    content = SimpleUploadedFile('rx.pdf', b'%PDF-1.4 rx', content_type='application/pdf')
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/subir-archivo/',
+            {
+                'archivo': content,
+                'titulo': 'Informe RX',
+                'tipo_archivo': 'PDF',
+                'tipo_rol': 'INFORME_ESCANEADO',
+            },
+            format='multipart',
+        )
+    assert r.status_code == 201
+    archivo_id = r.data['archivo_medico_id']
+    am = ArchivoMedico.objects.get(pk=archivo_id)
+    assert am.paciente_id == paciente.id
+    assert am.consulta_id is None
+    assert am.atencion_id is None
+    # No debe listarse en Archivos (resultado de estudio interno)
+    r_list = client.get('/api/archivos-medicos/archivos/', {'paciente_id': paciente.id})
+    assert r_list.status_code == 200
+    items = r_list.data.get('results', r_list.data)
+    assert not any(i['id'] == archivo_id for i in items)
+
+
+@pytest.mark.django_db
+def test_quitar_archivo_subido_elimina_huerfano(client, admin_user, estudio_solicitado, paciente):
+    client.force_authenticate(user=admin_user)
+    content = SimpleUploadedFile('rx.pdf', b'%PDF-1.4 rx', content_type='application/pdf')
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/subir-archivo/',
+            {'archivo': content, 'titulo': 'RX', 'tipo_archivo': 'PDF'},
+            format='multipart',
+        )
+    assert r.status_code == 201
+    archivo_estudio_id = r.data['id']
+    archivo_medico_id = r.data['archivo_medico_id']
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/quitar-archivo/',
+            {'archivo_estudio_id': archivo_estudio_id},
+            format='json',
+        )
+    assert r.status_code == 200
+    assert r.data['archivo_medico_eliminado'] is True
+    assert not ArchivoMedico.objects.filter(pk=archivo_medico_id).exists()
+    r_list = client.get(f'{BASE}{estudio_solicitado.id}/archivos/')
+    assert r_list.status_code == 200
+    assert r_list.data == []
+
+
+@pytest.mark.django_db
+def test_quitar_archivo_asociado_solo_desvincula(
+    client, admin_user, estudio_solicitado, archivo_medico,
 ):
+    estudio_solicitado.origen = EstudioComplementario.Origen.EXTERNO
+    estudio_solicitado.save(update_fields=['origen'])
     client.force_authenticate(user=admin_user)
     with capture_on_commit_callbacks(execute=True):
         r = client.post(
@@ -267,6 +363,32 @@ def test_paciente_no_descarga_si_no_entregado(
             {'archivo_medico_id': archivo_medico.id},
             format='json',
         )
+    assert r.status_code == 201
+    archivo_estudio_id = r.data['id']
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/quitar-archivo/',
+            {'archivo_estudio_id': archivo_estudio_id},
+            format='json',
+        )
+    assert r.status_code == 200
+    assert r.data['archivo_medico_eliminado'] is False
+    assert ArchivoMedico.objects.filter(pk=archivo_medico.id).exists()
+
+
+@pytest.mark.django_db
+def test_paciente_no_descarga_si_no_entregado(
+    client, paciente, estudio_solicitado, admin_user,
+):
+    client.force_authenticate(user=admin_user)
+    content = SimpleUploadedFile('estudio.pdf', b'%PDF-1.4 test', content_type='application/pdf')
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(
+            f'{BASE}{estudio_solicitado.id}/subir-archivo/',
+            {'archivo': content, 'titulo': 'Estudio', 'tipo_archivo': 'PDF'},
+            format='multipart',
+        )
+    assert r.status_code == 201
     archivo_estudio_id = r.data['id']
     client.force_authenticate(user=paciente.user)
     r = client.get(

@@ -82,7 +82,11 @@ class LimsTipoExamenCatalogPermission(permissions.BasePermission):
 
 
 def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
-    """True si el usuario puede leer la orden LIMS (list/retrieve)."""
+    """True si el usuario puede leer la orden LIMS (list/retrieve).
+
+    Médico: órdenes propias **o** de pacientes con vínculo clínico
+    (turno / consulta HC / atención), p. ej. cabecera viendo labs de guardia.
+    """
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
@@ -98,7 +102,19 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
 
     if role == 'medico':
         medico = getattr(solicitud, 'medico_interno', None)
-        return bool(medico and getattr(medico, 'user_id', None) == user.id)
+        if medico and getattr(medico, 'user_id', None) == user.id:
+            return True
+        try:
+            from archivos_medicos.access import medico_puede_acceder_paciente
+            from pacientes.models import Paciente
+
+            profile = user.medico
+            paciente = getattr(solicitud, 'paciente', None)
+            if paciente is None and getattr(solicitud, 'paciente_id', None):
+                paciente = Paciente.objects.get(pk=solicitud.paciente_id)
+            return bool(paciente and medico_puede_acceder_paciente(profile, paciente))
+        except Exception:
+            return False
 
     if role == 'paciente':
         try:
@@ -154,6 +170,12 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'create':
             return role in (*ROLES_LIMS_WRITE, 'medico')
+        if action == 'agregar_examenes':
+            return role in (*ROLES_LIMS_WRITE, 'medico')
+        if action == 'orden_abierta':
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria', 'enfermeria')
+        if action == 'marcar_derivacion':
+            return role in ROLES_LIMS_WRITE
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):
             if action == 'retrieve' and role in _LIMS_SOLICITUD_READ_ROLES:
                 return True
@@ -178,6 +200,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'analisis_longitudinal':
             return role in _LIMS_SOLICITUD_READ_ROLES
+        if action == 'sugerir_conclusion_hemograma':
+            return role in ROLES_LIMS_WRITE
         if action == 'orden_informe':
             return role in ROLES_LIMS_WRITE
         return False
@@ -206,6 +230,16 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action in ('tomar_muestra', 'enviar_informe'):
             return role in ROLES_LIMS_WRITE
 
+        if action == 'agregar_examenes':
+            if role in ROLES_LIMS_WRITE:
+                return True
+            if role == 'medico':
+                return usuario_puede_ver_solicitud_lims(request.user, obj)
+            return False
+
+        if action == 'marcar_derivacion':
+            return role in ROLES_LIMS_WRITE
+
         if action in ('finalizar', 'validar'):
             return role in ROLES_LIMS_VALIDAR
 
@@ -223,6 +257,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
 
         if action == 'analisis_longitudinal':
             return usuario_puede_ver_solicitud_lims(request.user, obj)
+
+        if action == 'sugerir_conclusion_hemograma':
+            return role in ROLES_LIMS_WRITE
 
         if action == 'orden_informe':
             return role in ROLES_LIMS_WRITE
@@ -551,6 +588,21 @@ class IsEMRClinicianOrReadOnly(permissions.BasePermission):
         return clinician_permission.has_permission(request, view)
 
 
+class CanWriteSignosVitales(permissions.BasePermission):
+    """Escritura de signos vitales: médico, enfermería y admin."""
+
+    allowed_roles = frozenset({'medico', 'enfermeria', 'admin'})
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        if request.user.is_superuser:
+            return True
+        return get_normalized_role(request.user) in self.allowed_roles
+
+
 class CanWriteArchivoMedico(permissions.BasePermission):
     """
     Alta/actualización de ArchivoMedico: admin y médico (vínculo validado en view).
@@ -605,7 +657,7 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
     Muestra transaccional (Fase B1).
     - admin/superuser: CRUD restringido (sin destroy en práctica), todas las acciones.
     - laboratorio: listar/ver, crear, PATCH administrativo, tomar/recibir/rechazar/conservar/descartar/cancelar.
-    - médico: solo lectura de muestras vinculadas a solicitudes propias (medico_interno.user).
+    - médico: solo lectura de muestras de órdenes propias o de pacientes vinculados.
     Sin acceso: anónimo, paciente, secretaría (no lectura técnica de muestras en esta fase).
     """
 
@@ -655,8 +707,9 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
         if role == "medico":
             if action not in ("retrieve", "list", "eventos"):
                 return False
-            mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
-            return bool(mi and getattr(mi, "user_id", None) == request.user.id)
+            if solicitud is None:
+                return False
+            return usuario_puede_ver_solicitud_lims(request.user, solicitud)
         if role in ROLES_LIMS_OPERADOR:
             return True
         if role == "admin":
@@ -690,9 +743,9 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
 
     - admin / superuser: acceso total a list/retrieve/create/update y acciones.
     - laboratorio / bioquímico: list/retrieve/create/update y acciones técnicas.
-    - médico: list/retrieve sólo de estudios cuya solicitud tiene
-      ``medico_interno.user`` = usuario actual (el queryset filtra; este permiso
-      bloquea operaciones de escritura).
+    - médico: list/retrieve; además puede **solicitar** estudios (create/batch)
+      desde consulta/mostrador (pedido clínico). No opera el flujo técnico
+      (iniciar, siembras, etiquetas, etc.).
     - secretaría / enfermería / paciente / anónimo: sin acceso a operación
       técnica de microbiología en esta fase.
     """
@@ -708,11 +761,20 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         action = getattr(view, "action", None)
         if action in ("list", "retrieve"):
             return True
-        if action == "create":
-            return role in ROLES_LIMS_WRITE
+        # Pedido clínico: médico y operadores LIMS (create individual o batch).
+        if action in ("create", "batch"):
+            return role in (*ROLES_LIMS_WRITE, "medico")
         if action in ("update", "partial_update"):
             return role in ROLES_LIMS_WRITE
-        if action in ("iniciar", "cancelar", "descartar", "completar", "marcar_informado"):
+        if action in (
+            "iniciar",
+            "cancelar",
+            "descartar",
+            "completar",
+            "marcar_informado",
+            "imprimir_etiquetas",
+            "imprimir_etiquetas_batch",
+        ):
             return role in ROLES_LIMS_WRITE
         if action == "destroy":
             return False
@@ -732,19 +794,51 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             action = getattr(view, "action", None)
             if action not in ("retrieve", "list"):
                 return False
-            # Resolver solicitud caminando: estudio → aislado → antibiograma → resultado.
-            solicitud = getattr(obj, "solicitud", None)
-            if solicitud is None:
+
+            # Pedido directo (sin solicitud LIMS): el médico solicitante puede verlo.
+            estudio = obj if hasattr(obj, "medico_interno_id") else None
+            if estudio is None:
                 estudio = getattr(obj, "estudio", None)
                 if estudio is None:
                     aislado = getattr(obj, "aislado", None)
                     if aislado is None:
                         antibiograma = getattr(obj, "antibiograma", None)
-                        aislado = getattr(antibiograma, "aislado", None) if antibiograma else None
+                        aislado = (
+                            getattr(antibiograma, "aislado", None) if antibiograma else None
+                        )
                     estudio = getattr(aislado, "estudio", None) if aislado else None
+            if estudio is not None:
+                medico_interno_id = getattr(estudio, "medico_interno_id", None)
+                if medico_interno_id:
+                    try:
+                        if (
+                            hasattr(request.user, "medico")
+                            and request.user.medico
+                            and request.user.medico.pk == medico_interno_id
+                        ):
+                            return True
+                    except Exception:
+                        pass
+
+            # Resolver solicitud caminando: estudio → aislado → antibiograma → resultado.
+            solicitud = getattr(obj, "solicitud", None)
+            if solicitud is None:
+                if estudio is None:
+                    estudio = getattr(obj, "estudio", None)
+                    if estudio is None:
+                        aislado = getattr(obj, "aislado", None)
+                        if aislado is None:
+                            antibiograma = getattr(obj, "antibiograma", None)
+                            aislado = (
+                                getattr(antibiograma, "aislado", None)
+                                if antibiograma
+                                else None
+                            )
+                        estudio = getattr(aislado, "estudio", None) if aislado else None
                 solicitud = getattr(estudio, "solicitud", None) if estudio else None
-            mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
-            return bool(mi and getattr(mi, "user_id", None) == request.user.id)
+            if solicitud is None:
+                return False
+            return usuario_puede_ver_solicitud_lims(request.user, solicitud)
         return False
 
 
@@ -753,9 +847,9 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
     Informes de microbiología (B3.4).
 
     - admin / superuser: acceso total (incluye ``validar``).
-    - laboratorio: crear/editar borradores, emitir, anular (no ``validar``).
-    - bioquímico / admin: ``validar``.
-    - médico: solo list/retrieve de informes de estudios de sus solicitudes.
+    - laboratorio / bioquímico: crear/editar borradores, emitir, anular.
+    - solo bioquímico / admin: ``validar`` (única diferencia operativa).
+    - médico: list/retrieve de informes de órdenes propias o pacientes vinculados.
     - secretaría / enfermería / paciente / anónimo: sin acceso.
     """
 
@@ -795,9 +889,40 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
                 return False
             estudio = getattr(obj, "estudio", None)
             solicitud = getattr(estudio, "solicitud", None) if estudio else None
-            mi = getattr(solicitud, "medico_interno", None) if solicitud is not None else None
-            return bool(mi and getattr(mi, "user_id", None) == request.user.id)
+            if solicitud is None:
+                return False
+            return usuario_puede_ver_solicitud_lims(request.user, solicitud)
         return False
+
+
+class LimsInventarioPermission(permissions.BasePermission):
+    """
+    Inventario de laboratorio — insumos, lotes y movimientos.
+    Lectura/escritura: admin, laboratorio, bioquímico (+ superuser).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        return role in ROLES_LIMS_WRITE
+
+
+class LimsQcPermission(permissions.BasePermission):
+    """
+    Control de calidad Westgard.
+    Lectura/escritura: admin, laboratorio, bioquímico (+ superuser).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        return role in ROLES_LIMS_WRITE
 
 
 class CanUpdatePacienteDemographics(permissions.BasePermission):

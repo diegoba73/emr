@@ -21,6 +21,7 @@ jest.mock('../../hooks', () => ({
   useAtencionQuery: () => ({
     data: mockAtencion,
     isLoading: false,
+    isFetching: false,
   }),
   useSaveConsultaAmbulatoriaMutation: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
   useCloseAtencionMutation: () => ({ mutateAsync: mockCloseAsync, isPending: false }),
@@ -40,6 +41,7 @@ describe('ConsultaAmbulatoriaForm', () => {
   beforeEach(() => {
     mockMutateAsync.mockClear();
     mockCloseAsync.mockClear();
+    sessionStorage.clear();
     mockAtencion = {
       id: 1,
       estado_clinico: 'ABIERTA',
@@ -103,5 +105,56 @@ describe('ConsultaAmbulatoriaForm', () => {
 
     expect(screen.getByText(/Tu rol no puede modificar/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Anamnesis/i)).toBeDisabled();
+  });
+
+  it('muestra campos clínicos del servidor al reabrir', () => {
+    mockAtencion = {
+      id: 1,
+      estado_clinico: 'FINALIZADA',
+      fecha_cierre: '2026-01-20T12:00:00Z',
+      consulta_ambulatoria: {
+        id: 1,
+        atencion_id: 1,
+        anamnesis: 'Dolor precordial de 2 horas',
+        examen_fisico: 'Ruidos cardíacos normales',
+        plan_manejo: 'ECG y enzimas',
+      },
+    };
+
+    renderForm();
+
+    expect(screen.getByLabelText(/Anamnesis/i)).toHaveValue('Dolor precordial de 2 horas');
+    expect(screen.getByRole('tab', { name: /Examen físico/i })).toBeInTheDocument();
+  });
+
+  it('no deja que un borrador vacío pise datos del servidor', () => {
+    sessionStorage.setItem(
+      'consulta-amb-borrador-1',
+      JSON.stringify({
+        anamnesis: '',
+        examen_fisico: '',
+        diagnostico_presuntivo: '',
+        plan_manejo: '',
+        antecedentes_relevantes: '',
+        alergias: '',
+        medicacion_actual: '',
+        diagnostico_definitivo: '',
+        observaciones_medicas: '',
+      })
+    );
+    mockAtencion = {
+      id: 1,
+      estado_clinico: 'ABIERTA',
+      fecha_cierre: null,
+      consulta_ambulatoria: {
+        id: 1,
+        anamnesis: 'Contenido persistido en BD',
+        plan_manejo: 'Seguimiento',
+      },
+    };
+
+    renderForm();
+
+    expect(screen.getByLabelText(/Anamnesis/i)).toHaveValue('Contenido persistido en BD');
   });
 });

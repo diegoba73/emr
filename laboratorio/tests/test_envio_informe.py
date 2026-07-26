@@ -88,6 +88,71 @@ class TestEnvioInformeAPI(APITestCase):
         self.assertTrue(r.json()["envio"]["email_adjunto_pdf"])
         mock_send.assert_called_once()
 
+    @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
+    def test_enviar_email_medico_solicitante(self, mock_send):
+        user_med = User.objects.create_user(
+            username="med_env",
+            email="medico.env@test.com",
+            password="x",
+            rol="medico",
+            telefono="01144445555",
+        )
+        self.medico.user = user_med
+        self.medico.save(update_fields=["user"])
+        sol = self._sol_finalizada()
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
+            {
+                "email": False,
+                "whatsapp": False,
+                "email_medico": True,
+                "whatsapp_medico": False,
+            },
+            format="json",
+            HTTP_HOST="localhost:8000",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        envio = r.json()["envio"]
+        self.assertTrue(envio["email_enviado"])
+        self.assertIn("medico.env@test.com", envio["email_destino"])
+        self.assertEqual(envio["email_destinos"], ["medico.env@test.com"])
+        mock_send.assert_called_once()
+
+    @patch("laboratorio.services_envio_informe._intentar_twilio_whatsapp")
+    @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
+    def test_enviar_paciente_y_medico(self, mock_send, mock_wa):
+        mock_wa.return_value = (True, None)
+        user_med = User.objects.create_user(
+            username="med_env2",
+            email="medico2.env@test.com",
+            password="x",
+            rol="medico",
+            telefono="01166667777",
+        )
+        self.medico.user = user_med
+        self.medico.save(update_fields=["user"])
+        sol = self._sol_finalizada()
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
+            {
+                "email": True,
+                "whatsapp": False,
+                "email_medico": True,
+                "whatsapp_medico": True,
+            },
+            format="json",
+            HTTP_HOST="localhost:8000",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        envio = r.json()["envio"]
+        self.assertTrue(envio["email_enviado"])
+        self.assertEqual(len(envio["email_destinos"]), 2)
+        self.assertTrue(envio["whatsapp_enviado"])
+        roles = {e["rol"] for e in envio["whatsapp_enlaces"]}
+        self.assertIn("medico", roles)
+        self.assertEqual(mock_send.call_count, 2)
+        self.assertEqual(mock_wa.call_count, 1)
+
     @patch("laboratorio.services_envio_informe._intentar_twilio_whatsapp")
     def test_enviar_whatsapp_incluye_url_pdf(self, mock_wa):
         sol = self._sol_finalizada()

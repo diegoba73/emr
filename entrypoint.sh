@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Entrypoint backend EMR — PROD-2-A.
 # - Espera Postgres (DB_HOST:DB_PORT).
 # - Migraciones solo si RUN_MIGRATIONS=true.

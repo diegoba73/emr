@@ -51,8 +51,8 @@ class TipoMuestraSerializer(serializers.ModelSerializer):
         codigo = (value or '').strip().upper()
         if not codigo:
             raise serializers.ValidationError('El código es obligatorio.')
-        if len(codigo) > 10:
-            raise serializers.ValidationError('Máximo 10 caracteres.')
+        if len(codigo) > 64:
+            raise serializers.ValidationError('Máximo 64 caracteres.')
         qs = TipoMuestra.objects.filter(codigo__iexact=codigo)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -116,6 +116,16 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    laboratorio_derivacion_codigo = serializers.CharField(
+        source='laboratorio_derivacion.codigo',
+        read_only=True,
+        allow_null=True,
+    )
+    laboratorio_derivacion_nombre = serializers.CharField(
+        source='laboratorio_derivacion.nombre',
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = TipoExamen
@@ -146,6 +156,9 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'ticket_decimales',
             'multiplicador_clinico',
             'formato_informe_entrada',
+            'laboratorio_derivacion',
+            'laboratorio_derivacion_codigo',
+            'laboratorio_derivacion_nombre',
             'activo',
         ]
         read_only_fields = [
@@ -154,6 +167,8 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'tipo_muestra_codigo',
             'tipo_contenedor_codigo',
             'tipo_contenedor_nombre',
+            'laboratorio_derivacion_codigo',
+            'laboratorio_derivacion_nombre',
         ]
 
     def __init__(self, *args, **kwargs):
@@ -236,6 +251,7 @@ class TipoExamenSerializer(serializers.ModelSerializer):
 class PanelExamenSerializer(serializers.ModelSerializer):
     """Serializer para PanelExamen."""
     tipos_examen_nombres = serializers.SerializerMethodField()
+    tipos_examen_detalle = serializers.SerializerMethodField()
     tipos_examen_ids = serializers.PrimaryKeyRelatedField(
         queryset=TipoExamen.objects.all(),
         many=True,
@@ -243,7 +259,7 @@ class PanelExamenSerializer(serializers.ModelSerializer):
         required=False,
         source='tipos_examen'
     )
-    
+
     class Meta:
         model = PanelExamen
         fields = [
@@ -253,13 +269,32 @@ class PanelExamenSerializer(serializers.ModelSerializer):
             'tipos_examen',
             'tipos_examen_ids',
             'tipos_examen_nombres',
+            'tipos_examen_detalle',
             'activo',
         ]
-        read_only_fields = ['id', 'tipos_examen_nombres']
-    
+        read_only_fields = ['id', 'tipos_examen_nombres', 'tipos_examen_detalle']
+
     def get_tipos_examen_nombres(self, obj):
         """Retorna los nombres de los tipos de examen del panel (orden clínico)."""
         return [te.nombre for te in ordenar_queryset_panel(obj)]
+
+    def get_tipos_examen_detalle(self, obj):
+        """Componentes ordenados con id/código/nombre para UI de catálogo."""
+        return [
+            {"id": te.id, "codigo": te.codigo, "nombre": te.nombre}
+            for te in ordenar_queryset_panel(obj)
+        ]
+
+    def validate_codigo(self, value):
+        codigo = (value or "").strip().upper()
+        if not codigo:
+            raise serializers.ValidationError("El código es obligatorio.")
+        qs = PanelExamen.objects.filter(codigo__iexact=codigo)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Ya existe un panel con ese código.")
+        return codigo
 
 
 # ============================================================================
@@ -307,6 +342,25 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
         allow_null=True,
         default=None,
     )
+    laboratorio_derivacion = serializers.PrimaryKeyRelatedField(read_only=True, allow_null=True)
+    laboratorio_derivacion_codigo = serializers.CharField(
+        source="laboratorio_derivacion.codigo",
+        read_only=True,
+        allow_null=True,
+    )
+    laboratorio_derivacion_nombre = serializers.CharField(
+        source="laboratorio_derivacion.nombre",
+        read_only=True,
+        allow_null=True,
+    )
+    laboratorio_derivacion_ciudad = serializers.CharField(
+        source="laboratorio_derivacion.ciudad",
+        read_only=True,
+        allow_null=True,
+    )
+    estado_derivacion = serializers.CharField(read_only=True)
+    fecha_envio_derivacion = serializers.DateTimeField(read_only=True, allow_null=True)
+    observaciones_derivacion = serializers.CharField(read_only=True)
 
     class Meta:
         model = ResultadoExamen
@@ -335,6 +389,13 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'muestra_estado',
             'tipo_muestra_nombre',
             'tipo_examen_muestra_codigo',
+            'laboratorio_derivacion',
+            'laboratorio_derivacion_codigo',
+            'laboratorio_derivacion_nombre',
+            'laboratorio_derivacion_ciudad',
+            'estado_derivacion',
+            'fecha_envio_derivacion',
+            'observaciones_derivacion',
         ]
         read_only_fields = [
             'id',
@@ -349,6 +410,13 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'muestra_estado',
             'tipo_muestra_nombre',
             'tipo_examen_muestra_codigo',
+            'laboratorio_derivacion',
+            'laboratorio_derivacion_codigo',
+            'laboratorio_derivacion_nombre',
+            'laboratorio_derivacion_ciudad',
+            'estado_derivacion',
+            'fecha_envio_derivacion',
+            'observaciones_derivacion',
         ]
 
 
@@ -382,6 +450,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         source='medico_interno.nombre_completo',
         read_only=True
     )
+    medico_email = serializers.SerializerMethodField()
+    medico_telefono = serializers.SerializerMethodField()
     resultados = ResultadoExamenSerializer(many=True, read_only=True)
     tipos_examen_nombres = serializers.SerializerMethodField()
     paneles_nombres = serializers.SerializerMethodField()
@@ -392,6 +462,12 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     fecha_toma_muestra = serializers.DateTimeField(read_only=True, required=False)
     extraccion_completa = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
+    orden_abierta = serializers.SerializerMethodField()
+    esperando_recepcion = serializers.SerializerMethodField()
+    puede_agregar_examenes = serializers.SerializerMethodField()
+    pedido_adicional = serializers.SerializerMethodField()
+    merged = serializers.SerializerMethodField()
+    derivaciones_resumen = serializers.SerializerMethodField()
     
     class Meta:
         model = SolicitudExamen
@@ -407,6 +483,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'medico_interno_nombre',
             'medico_externo_nombre',
             'medico_display',
+            'medico_email',
+            'medico_telefono',
             'origen_solicitud',
             'origen_solicitud_display',
             'tipos_examen',
@@ -429,6 +507,12 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'orden_grupos_informe',
             'extraccion_completa',
             'tubos_pendientes_extraccion',
+            'orden_abierta',
+            'esperando_recepcion',
+            'puede_agregar_examenes',
+            'pedido_adicional',
+            'merged',
+            'derivaciones_resumen',
         ]
         read_only_fields = [
             'id',
@@ -441,12 +525,32 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'paciente_telefono',
             'medico_display',
             'medico_interno_nombre',
+            'medico_email',
+            'medico_telefono',
             'tipos_examen_nombres',
             'paneles_nombres',
             'extraccion_completa',
             'tubos_pendientes_extraccion',
+            'orden_abierta',
+            'esperando_recepcion',
+            'puede_agregar_examenes',
+            'pedido_adicional',
+            'merged',
+            'derivaciones_resumen',
         ]
     
+    def get_medico_email(self, obj):
+        medico = getattr(obj, 'medico_interno', None)
+        if not medico:
+            return None
+        return (getattr(medico, 'email', None) or '').strip() or None
+
+    def get_medico_telefono(self, obj):
+        medico = getattr(obj, 'medico_interno', None)
+        if not medico:
+            return None
+        return (getattr(medico, 'telefono', None) or '').strip() or None
+
     def get_tipos_examen_nombres(self, obj):
         """Retorna los nombres de los tipos de examen."""
         return [te.nombre for te in obj.tipos_examen.all()]
@@ -503,6 +607,61 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
                     "tipo_contenedor_codigo": p.tipo_contenedor.codigo if p.tipo_contenedor_id else None,
                     "tipo_contenedor_nombre": p.tipo_contenedor.nombre if p.tipo_contenedor_id else None,
                     "estado": p.estado,
+                }
+            )
+        return out
+
+    def get_orden_abierta(self, obj):
+        from laboratorio.solicitud_orden_abierta import orden_esta_abierta
+
+        return orden_esta_abierta(obj)
+
+    def get_esperando_recepcion(self, obj):
+        from laboratorio.solicitud_orden_abierta import orden_esperando_recepcion
+
+        return orden_esperando_recepcion(obj)
+
+    def get_puede_agregar_examenes(self, obj):
+        from laboratorio.solicitud_orden_abierta import orden_permite_intentar_agregar_examenes
+
+        return orden_permite_intentar_agregar_examenes(obj)
+
+    def get_pedido_adicional(self, obj):
+        """
+        Orden PENDIENTE editable creada mientras el paciente ya tiene otra
+        orden en curso (EN_PROCESO / parcial / a validar).
+        """
+        from laboratorio.solicitud_orden_abierta import (
+            orden_esta_abierta,
+            paciente_tiene_orden_bloqueada,
+        )
+
+        if not orden_esta_abierta(obj):
+            return False
+        return paciente_tiene_orden_bloqueada(
+            obj.paciente_id, exclude_solicitud_id=obj.pk
+        )
+
+    def get_merged(self, obj):
+        return bool(getattr(obj, "_orden_merged", False))
+
+    def get_derivaciones_resumen(self, obj):
+        out = []
+        for r in obj.resultados.all():
+            if getattr(r, "estado_derivacion", "LOCAL") == "LOCAL" and not r.laboratorio_derivacion_id:
+                continue
+            out.append(
+                {
+                    "resultado_id": r.id,
+                    "tipo_examen_codigo": r.tipo_examen.codigo if r.tipo_examen_id else None,
+                    "tipo_examen_nombre": r.tipo_examen.nombre if r.tipo_examen_id else None,
+                    "laboratorio_codigo": (
+                        r.laboratorio_derivacion.codigo if r.laboratorio_derivacion_id else None
+                    ),
+                    "laboratorio_nombre": (
+                        r.laboratorio_derivacion.nombre if r.laboratorio_derivacion_id else None
+                    ),
+                    "estado_derivacion": r.estado_derivacion,
                 }
             )
         return out
@@ -593,12 +752,14 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """
         Método create atómico:
-        - Crea la Solicitud
-        - Itera examenes_ids y crea los ResultadoExamen asociados en estado PENDIENTE
-        - Itera paneles_ids, busca sus exámenes componentes y crea los ResultadoExamen
-          correspondientes (evitando duplicados)
+        - Si el paciente ya tiene orden abierta (PENDIENTE sin toma), fusiona exámenes.
+        - Si no: crea Solicitud + ResultadoExamen (directos y de paneles, sin duplicados).
         """
-        # Extraer datos anidados
+        from laboratorio.solicitud_orden_abierta import (
+            agregar_examenes_a_solicitud,
+            buscar_orden_abierta,
+        )
+
         examenes_ids = validated_data.pop('examenes_ids', [])
         paneles_ids = validated_data.pop('paneles_ids', [])
         origen_explicito = validated_data.pop('origen_solicitud', None)
@@ -609,52 +770,68 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             consulta_hc=consulta_hc,
             origen_explicito=origen_explicito,
         )
-        
-        # Crear la Solicitud
+
+        abierta = buscar_orden_abierta(paciente.pk)
+        if abierta is not None:
+            solicitud = agregar_examenes_a_solicitud(
+                abierta,
+                examenes_ids=examenes_ids,
+                paneles_ids=paneles_ids,
+            )
+            solicitud._orden_merged = True
+            return solicitud
+
         solicitud = SolicitudExamen.objects.create(**validated_data)
-        
+        solicitud._orden_merged = False
+
         if paneles_ids:
             solicitud.paneles.set(paneles_ids)
-        
-        # Crear ResultadoExamen para cada tipo_examen directo
+
         tipos_examen_creados = set()
+        from laboratorio.derivacion_service import defaults_derivacion_para_tipo
+
         for tipo_examen_id in examenes_ids:
             try:
-                tipo_examen = TipoExamen.objects.get(id=tipo_examen_id)
+                tipo_examen = TipoExamen.objects.select_related(
+                    "laboratorio_derivacion"
+                ).get(id=tipo_examen_id)
                 ResultadoExamen.objects.create(
                     solicitud=solicitud,
                     tipo_examen=tipo_examen,
-                    valor_obtenido='',  # Vacío inicialmente
-                    es_patologico=False
+                    valor_obtenido='',
+                    es_patologico=False,
+                    **defaults_derivacion_para_tipo(tipo_examen),
                 )
                 tipos_examen_creados.add(tipo_examen_id)
             except TipoExamen.DoesNotExist:
                 logger.warning(f"TipoExamen con ID {tipo_examen_id} no existe")
-        
-        # Crear ResultadoExamen para exámenes de paneles (evitando duplicados)
+
         for panel_id in paneles_ids:
             try:
                 panel = PanelExamen.objects.get(id=panel_id)
                 tipos_examen_panel = ordenar_queryset_panel(panel)
-                
+
                 for tipo_examen in tipos_examen_panel:
-                    # Evitar duplicados: si ya se creó un resultado para este tipo_examen, no crear otro
                     if tipo_examen.id not in tipos_examen_creados:
+                        te = TipoExamen.objects.select_related(
+                            "laboratorio_derivacion"
+                        ).get(pk=tipo_examen.id)
                         ResultadoExamen.objects.create(
                             solicitud=solicitud,
-                            tipo_examen=tipo_examen,
-                            valor_obtenido='',  # Vacío inicialmente
-                            es_patologico=False
+                            tipo_examen=te,
+                            valor_obtenido='',
+                            es_patologico=False,
+                            **defaults_derivacion_para_tipo(te),
                         )
                         tipos_examen_creados.add(tipo_examen.id)
             except PanelExamen.DoesNotExist:
                 logger.warning(f"PanelExamen con ID {panel_id} no existe")
+            except TipoExamen.DoesNotExist:
+                logger.warning("TipoExamen de panel inexistente")
 
-        # M2M tipos_examen = todos los analitos de la orden (directos + paneles)
-        # para cálculo de tubos / etiquetas.
         if tipos_examen_creados:
             solicitud.tipos_examen.set(list(tipos_examen_creados))
-        
+
         return solicitud
 
 
@@ -673,15 +850,22 @@ class TomarMuestraOrdenSerializer(serializers.Serializer):
 
 
 class EnviarInformeOrdenSerializer(serializers.Serializer):
-    """POST …/enviar-informe/ — canales de entrega al paciente."""
+    """POST …/enviar-informe/ — canales de entrega al paciente y/o médico solicitante."""
 
     email = serializers.BooleanField(required=False, default=False)
     whatsapp = serializers.BooleanField(required=False, default=False)
+    email_medico = serializers.BooleanField(required=False, default=False)
+    whatsapp_medico = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs):
-        if not attrs.get("email") and not attrs.get("whatsapp"):
+        if not (
+            attrs.get("email")
+            or attrs.get("whatsapp")
+            or attrs.get("email_medico")
+            or attrs.get("whatsapp_medico")
+        ):
             raise serializers.ValidationError(
-                "Indique al menos un canal: email o whatsapp."
+                "Indique al menos un canal: email o whatsapp (paciente y/o médico)."
             )
         return attrs
 

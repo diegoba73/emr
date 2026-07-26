@@ -24,13 +24,17 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  AutoAwesome,
   ArrowBack,
   CalendarMonth,
   CheckCircle,
+  Delete,
   Download,
   Link as LinkIcon,
   Send,
   Undo,
+  UploadFile,
+  Visibility,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { turnosAgendarEstudioPath } from '../utils/agendarEstudioNavigation';
@@ -52,7 +56,9 @@ import {
   canEmitirInforme,
   canEntregarEstudio,
   canMarcarRealizado,
+  canQuitarArchivoEstudio,
   canRectificarInforme,
+  canSubirArchivoEstudio,
   canValidarInformeUi,
   canWriteEstudio,
 } from '../modules/estudios/permissions';
@@ -67,7 +73,10 @@ import {
   listArchivosEstudio,
   listInformesEstudio,
   marcarRealizadoEstudio,
+  quitarArchivoEstudio,
   rectificarInformeEstudio,
+  sugerirInformeEstudio,
+  subirArchivoEstudio,
   triggerBlobDownload,
   validarInformeEstudio,
   getEstudioComplementario,
@@ -79,6 +88,10 @@ import type {
 } from '../types/estudios';
 import { ArchivoMedico } from '../types';
 import { formatPacienteLabel } from '../utils/pacienteFormat';
+import ArchivoMedicoPreviewDialog, {
+  type ArchivoPreviewMeta,
+} from '../components/archivos/ArchivoMedicoPreviewDialog';
+import { inferTipoArchivoFromFileName } from '../utils/archivoMedicoPreview';
 
 const EstudioComplementarioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -96,14 +109,22 @@ const EstudioComplementarioDetalle: React.FC = () => {
   const [anularOpen, setAnularOpen] = useState(false);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [informeTexto, setInformeTexto] = useState('');
+  const [sugeriendoInforme, setSugeriendoInforme] = useState(false);
+  const [sugerenciaInformeMeta, setSugerenciaInformeMeta] = useState<{
+    fuente: string;
+  } | null>(null);
   const [rectificarOpen, setRectificarOpen] = useState(false);
   const [rectificarInformeId, setRectificarInformeId] = useState<number | null>(null);
   const [motivoRectificacion, setMotivoRectificacion] = useState('');
   const [textoRectificacion, setTextoRectificacion] = useState('');
   const [archivoOpen, setArchivoOpen] = useState(false);
+  const [subirOpen, setSubirOpen] = useState(false);
   const [archivosPaciente, setArchivosPaciente] = useState<ArchivoMedico[]>([]);
   const [archivoMedicoId, setArchivoMedicoId] = useState<number | ''>('');
   const [archivoRol, setArchivoRol] = useState('OTRO');
+  const [archivoFile, setArchivoFile] = useState<File | null>(null);
+  const [archivoTitulo, setArchivoTitulo] = useState('');
+  const [previewArchivo, setPreviewArchivo] = useState<ArchivoPreviewMeta | null>(null);
 
   const writeAccess = canWriteEstudio(currentUser);
   const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
@@ -155,11 +176,52 @@ const EstudioComplementarioDetalle: React.FC = () => {
     if (!estudio || !canDownloadArchivoEstudio(currentUser, estudio)) return;
     try {
       const blob = await downloadArchivoEstudio(estudio.id, arch.id);
-      await triggerBlobDownload(blob, `archivo-estudio-${arch.id}`);
+      await triggerBlobDownload(
+        blob,
+        arch.archivo_nombre || arch.titulo || `archivo-estudio-${arch.id}`
+      );
     } catch (e) {
       setError(parseEstudiosApiError(e, 'No se pudo descargar el archivo.'));
     }
   };
+
+  const handleVerArchivo = (arch: ArchivoEstudioComplementario) => {
+    if (!estudio || !canDownloadArchivoEstudio(currentUser, estudio)) return;
+    setPreviewArchivo({
+      id: arch.id,
+      titulo: arch.titulo || `Archivo #${arch.archivo_medico_id}`,
+      tipo_archivo: (arch.tipo_archivo as ArchivoMedico['tipo_archivo']) || 'OTRO',
+      archivo_nombre: arch.archivo_nombre || null,
+    });
+  };
+
+  const handleQuitarArchivo = (arch: ArchivoEstudioComplementario) => {
+    if (!estudio || !writeAccess || !canQuitarArchivoEstudio(currentUser, estudio)) return;
+    const label = arch.titulo || arch.archivo_nombre || `#${arch.archivo_medico_id}`;
+    if (
+      !window.confirm(
+        `¿Eliminar «${label}» de este estudio? Si el archivo se subió solo para el estudio, también se borrará del sistema.`
+      )
+    ) {
+      return;
+    }
+    void runAction(async () => {
+      await quitarArchivoEstudio(estudio.id, arch.id);
+      if (previewArchivo?.id === arch.id) {
+        setPreviewArchivo(null);
+      }
+    }, 'No se pudo eliminar el archivo del estudio.');
+  };
+
+  const fetchPreviewBlob = useCallback(
+    async (meta: ArchivoPreviewMeta) => {
+      if (!estudio) {
+        throw new Error('Estudio no disponible');
+      }
+      return downloadArchivoEstudio(estudio.id, meta.id);
+    },
+    [estudio]
+  );
 
   const openAsociarArchivo = async () => {
     if (!estudio) return;
@@ -182,6 +244,43 @@ const EstudioComplementarioDetalle: React.FC = () => {
       setArchivoOpen(false);
       setArchivoMedicoId('');
     }, 'No se pudo asociar el archivo.');
+  };
+
+  const handleSugerirInforme = async () => {
+    if (!estudio || !canCrearInforme(currentUser, estudio)) return;
+    setSugeriendoInforme(true);
+    setError(null);
+    try {
+      const data = await sugerirInformeEstudio(estudio.id, {
+        notas_medico: informeTexto,
+      });
+      if (!data.texto?.trim()) {
+        setError('No se pudo generar un borrador de informe.');
+        return;
+      }
+      setInformeTexto(data.texto.trim());
+      setSugerenciaInformeMeta({ fuente: data.fuente || 'reglas' });
+    } catch (e) {
+      setError(parseEstudiosApiError(e, 'No se pudo sugerir el informe.'));
+    } finally {
+      setSugeriendoInforme(false);
+    }
+  };
+
+  const handleSubirArchivo = async () => {
+    if (!archivoFile || !estudio) return;
+    await runAction(async () => {
+      await subirArchivoEstudio(estudio.id, {
+        archivo: archivoFile,
+        titulo: archivoTitulo.trim() || archivoFile.name,
+        tipo_archivo: inferTipoArchivoFromFileName(archivoFile.name),
+        tipo_rol: archivoRol,
+      });
+      setSubirOpen(false);
+      setArchivoFile(null);
+      setArchivoTitulo('');
+      setArchivoRol('OTRO');
+    }, 'No se pudo subir el archivo del estudio.');
   };
 
   if (!canAccessEstudiosModule(currentUser)) {
@@ -212,6 +311,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
   }
 
   const informeVigente = informes.find((i) => i.es_vigente && i.estado === 'VALIDADO');
+  const informePendienteValidar = informes.find((i) => i.estado === 'EMITIDO');
 
   return (
     <Box sx={{ p: 3 }}>
@@ -239,6 +339,11 @@ const EstudioComplementarioDetalle: React.FC = () => {
               {MODALIDAD_OPTIONS.find((m) => m.value === estudio.modalidad)?.label || estudio.modalidad}
               {estudio.tipo_estudio_nombre ? ` · ${estudio.tipo_estudio_nombre}` : ''}
             </Typography>
+            {estudio.realizado_por_nombre && (
+              <Typography variant="body2" color="text.secondary">
+                Realizado por: {estudio.realizado_por_nombre}
+              </Typography>
+            )}
           </Box>
           <Chip
             label={ESTADO_LABELS[estudio.estado]}
@@ -282,7 +387,25 @@ const EstudioComplementarioDetalle: React.FC = () => {
               Anular
             </Button>
           )}
-          {writeAccess && canEntregarEstudio(estudio) && (
+          {writeAccess &&
+            informePendienteValidar &&
+            canValidarInformeUi(currentUser, estudio, informePendienteValidar) && (
+              <Button
+                variant="contained"
+                color="secondary"
+                size="small"
+                startIcon={<CheckCircle />}
+                disabled={actionLoading}
+                onClick={() =>
+                  runAction(async () => {
+                    await validarInformeEstudio(estudio.id, informePendienteValidar.id);
+                  }, 'No se pudo validar el estudio.')
+                }
+              >
+                Validar estudio
+              </Button>
+            )}
+          {writeAccess && canEntregarEstudio(currentUser, estudio) && (
             <Button
               variant="contained"
               color="success"
@@ -297,6 +420,14 @@ const EstudioComplementarioDetalle: React.FC = () => {
             </Button>
           )}
         </Stack>
+
+        {estudio.estado === 'VALIDADO' && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Estudio validado
+            {estudio.realizado_por_nombre ? ` por ${estudio.realizado_por_nombre}` : ''}. Solo quien lo
+            realizó (o un administrador) puede editar archivos o rectificar el informe.
+          </Alert>
+        )}
 
         {estudio.motivo_anulacion && (
           <Alert severity="warning" sx={{ mt: 2 }}>
@@ -331,14 +462,38 @@ const EstudioComplementarioDetalle: React.FC = () => {
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-          <Typography variant="h6">Archivos asociados</Typography>
-          {writeAccess && canAsociarArchivo(estudio) && (
-            <Button size="small" startIcon={<LinkIcon />} onClick={openAsociarArchivo}>
-              Asociar archivo existente
-            </Button>
-          )}
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1} flexWrap="wrap" gap={1}>
+          <Typography variant="h6">Archivos del estudio</Typography>
+          <Stack direction="row" gap={1} flexWrap="wrap">
+            {writeAccess && canSubirArchivoEstudio(currentUser, estudio) && (
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<UploadFile />}
+                onClick={() => {
+                  setArchivoFile(null);
+                  setArchivoTitulo('');
+                  setArchivoRol('OTRO');
+                  setSubirOpen(true);
+                }}
+              >
+                Subir archivo del estudio
+              </Button>
+            )}
+            {writeAccess && canAsociarArchivo(currentUser, estudio) && (
+              <Button size="small" startIcon={<LinkIcon />} onClick={openAsociarArchivo}>
+                Asociar archivo existente
+              </Button>
+            )}
+          </Stack>
         </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          {canSubirArchivoEstudio(currentUser, estudio)
+            ? 'Resultados de estudios hechos en la clínica se suben aquí (quedan vinculados al paciente). El menú Archivos es solo para material que trae el paciente.'
+            : canAsociarArchivo(currentUser, estudio)
+              ? 'Estudio externo o histórico: podés vincular un archivo que el paciente ya trajo (menú Archivos).'
+              : 'No se pueden agregar archivos en el estado actual del estudio (o no tenés permiso de edición).'}
+        </Typography>
         {archivos.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
             Sin archivos vinculados.
@@ -348,18 +503,50 @@ const EstudioComplementarioDetalle: React.FC = () => {
             {archivos.map((a) => (
               <ListItem key={a.id} divider>
                 <ListItemText
-                  primary={`Archivo médico #${a.archivo_medico_id} · ${a.tipo_rol}`}
-                  secondary={a.descripcion || 'Sin descripción'}
+                  primary={
+                    a.titulo
+                      ? `${a.titulo} · ${a.tipo_rol}`
+                      : `Archivo médico #${a.archivo_medico_id} · ${a.tipo_rol}`
+                  }
+                  secondary={
+                    [a.tipo_archivo, a.archivo_nombre, a.descripcion].filter(Boolean).join(' · ') ||
+                    'Sin descripción'
+                  }
                 />
-                {canDownloadArchivoEstudio(currentUser, estudio) && (
+                {(canDownloadArchivoEstudio(currentUser, estudio) ||
+                  (writeAccess && canQuitarArchivoEstudio(currentUser, estudio))) && (
                   <ListItemSecondaryAction>
-                    <Button
-                      size="small"
-                      startIcon={<Download />}
-                      onClick={() => handleDownloadArchivo(a)}
-                    >
-                      Descargar
-                    </Button>
+                    {canDownloadArchivoEstudio(currentUser, estudio) && (
+                      <>
+                        <Button
+                          size="small"
+                          startIcon={<Visibility />}
+                          onClick={() => handleVerArchivo(a)}
+                          sx={{ mr: 0.5 }}
+                        >
+                          Ver
+                        </Button>
+                        <Button
+                          size="small"
+                          startIcon={<Download />}
+                          onClick={() => handleDownloadArchivo(a)}
+                          sx={{ mr: 0.5 }}
+                        >
+                          Descargar
+                        </Button>
+                      </>
+                    )}
+                    {writeAccess && canQuitarArchivoEstudio(currentUser, estudio) && (
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<Delete />}
+                        disabled={actionLoading}
+                        onClick={() => handleQuitarArchivo(a)}
+                      >
+                        Eliminar
+                      </Button>
+                    )}
                   </ListItemSecondaryAction>
                 )}
               </ListItem>
@@ -373,27 +560,50 @@ const EstudioComplementarioDetalle: React.FC = () => {
           Informes
         </Typography>
 
-        {writeAccess && canCrearInforme(estudio) && (
-          <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {writeAccess && canCrearInforme(currentUser, estudio) && (
+          <Box sx={{ mb: 2 }}>
             <TextField
-              size="small"
+              fullWidth
+              multiline
+              minRows={5}
               label="Texto del informe (borrador)"
               value={informeTexto}
-              onChange={(e) => setInformeTexto(e.target.value)}
-              sx={{ flex: 1, minWidth: 240 }}
-            />
-            <Button
-              variant="outlined"
-              disabled={actionLoading}
-              onClick={() =>
-                runAction(async () => {
-                  await crearInformeEstudio(estudio.id, { texto: informeTexto, tipo: 'FINAL' });
-                  setInformeTexto('');
-                }, 'No se pudo crear el informe.')
+              onChange={(e) => {
+                setInformeTexto(e.target.value);
+                setSugerenciaInformeMeta(null);
+              }}
+              helperText={
+                sugerenciaInformeMeta
+                  ? sugerenciaInformeMeta.fuente === 'medgemma'
+                    ? 'Sugerencia MedGemma — revisá y creá el borrador. No queda guardada hasta que confirmes.'
+                    : 'Sugerencia por plantilla — revisá y creá el borrador. No queda guardada hasta que confirmes.'
+                  : 'Podés escribir notas y usar «Sugerir informe» para armar un borrador (técnica / hallazgos / impresión).'
               }
-            >
-              Crear borrador
-            </Button>
+              sx={{ mb: 1 }}
+            />
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button
+                variant="outlined"
+                startIcon={sugeriendoInforme ? <CircularProgress size={16} /> : <AutoAwesome />}
+                disabled={actionLoading || sugeriendoInforme}
+                onClick={() => void handleSugerirInforme()}
+              >
+                {sugeriendoInforme ? 'Sugiriendo…' : 'Sugerir informe'}
+              </Button>
+              <Button
+                variant="contained"
+                disabled={actionLoading || !informeTexto.trim() || sugeriendoInforme}
+                onClick={() =>
+                  runAction(async () => {
+                    await crearInformeEstudio(estudio.id, { texto: informeTexto, tipo: 'FINAL' });
+                    setInformeTexto('');
+                    setSugerenciaInformeMeta(null);
+                  }, 'No se pudo crear el informe.')
+                }
+              >
+                Crear borrador
+              </Button>
+            </Stack>
           </Box>
         )}
 
@@ -423,7 +633,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
                 />
                 <ListItemSecondaryAction sx={{ position: 'relative', transform: 'none', top: 0, right: 0 }}>
                   <Stack direction="row" spacing={0.5} flexWrap="wrap" justifyContent="flex-end">
-                    {writeAccess && canEmitirInforme(estudio, inf) && (
+                    {writeAccess && canEmitirInforme(currentUser, estudio, inf) && (
                       <Button
                         size="small"
                         disabled={actionLoading}
@@ -451,7 +661,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
                         Validar
                       </Button>
                     )}
-                    {writeAccess && canRectificarInforme(estudio, inf) && (
+                    {writeAccess && canRectificarInforme(currentUser, estudio, inf) && (
                       <Button
                         size="small"
                         color="warning"
@@ -553,7 +763,8 @@ const EstudioComplementarioDetalle: React.FC = () => {
         <DialogTitle>Asociar archivo médico existente</DialogTitle>
         <DialogContent>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-            Debe pertenecer al mismo paciente. Subida directa desde estudio: pendiente (C6.4.2 deuda).
+            Solo para estudios externos o importados. El archivo debe pertenecer al mismo paciente
+            (material traído / menú Archivos).
           </Typography>
           <FormControl fullWidth sx={{ mb: 2 }}>
             <InputLabel>Archivo médico</InputLabel>
@@ -595,6 +806,67 @@ const EstudioComplementarioDetalle: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={subirOpen} onClose={() => setSubirOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Subir archivo del estudio</DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+            El archivo queda vinculado a este estudio y al paciente. No aparece en el menú Archivos
+            (reservado a material que trae el paciente).
+          </Typography>
+          <Button variant="outlined" component="label" sx={{ mb: 2 }}>
+            {archivoFile ? archivoFile.name : 'Seleccionar archivo'}
+            <input
+              type="file"
+              hidden
+              accept=".pdf,image/*,.zip,.dcm,.jpg,.jpeg,.png,.tif,.tiff,.webp"
+              onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                setArchivoFile(f);
+                if (f && !archivoTitulo) setArchivoTitulo(f.name.replace(/\.[^.]+$/, ''));
+              }}
+            />
+          </Button>
+          <TextField
+            fullWidth
+            label="Título"
+            value={archivoTitulo}
+            onChange={(e) => setArchivoTitulo(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Rol en el estudio</InputLabel>
+            <Select
+              label="Rol en el estudio"
+              value={archivoRol}
+              onChange={(e) => setArchivoRol(e.target.value)}
+            >
+              {ARCHIVO_ROL_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSubirOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            disabled={!archivoFile || actionLoading}
+            onClick={handleSubirArchivo}
+          >
+            Subir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ArchivoMedicoPreviewDialog
+        open={Boolean(previewArchivo)}
+        archivo={previewArchivo}
+        onClose={() => setPreviewArchivo(null)}
+        fetchBlob={fetchPreviewBlob}
+      />
 
     </Box>
   );

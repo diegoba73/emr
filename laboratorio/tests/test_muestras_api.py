@@ -98,6 +98,13 @@ class TestLimsMuestrasB1API(TestCase):
             rol="laboratorio",
             is_staff=True,
         )
+        self.bioq = User.objects.create_user(
+            username=f"bioq_m1_{self.suf}",
+            email=f"bq1{self.suf}@t.com",
+            password="pass12345",
+            rol="bioquimico",
+            is_staff=True,
+        )
         self.admin = User.objects.create_user(
             username=f"adm_m1_{self.suf}",
             email=f"am1{self.suf}@t.com",
@@ -369,6 +376,22 @@ class TestLimsMuestrasB1API(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(r.json()["estado"], "RECIBIDA")
         self.assertEqual(r.json()["ubicacion_actual"], "Recepción")
+
+    def test_bioquimico_recibir_por_codigo_ok(self):
+        """Regresión: bioquímico tiene ROLES_LIMS_WRITE pero no debe ver queryset vacío → 404."""
+        mid = self._crear_muestra()
+        m = Muestra.objects.get(pk=mid)
+        self.client.force_authenticate(self.bioq)
+        r_lookup = self.client.get(f"/api/lab/muestras-transaccionales/por-codigo/{m.codigo_barra}/")
+        self.assertEqual(r_lookup.status_code, status.HTTP_200_OK, r_lookup.content)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/muestras-transaccionales/recibir-por-codigo/",
+                {"codigo_barra": m.codigo_barra, "ubicacion_actual": "Lab"},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["estado"], "RECIBIDA")
 
     def test_recibir_por_codigo_ya_recibida_400(self):
         mid = self._crear_muestra()

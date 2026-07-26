@@ -86,6 +86,20 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="36",
         rmax="48",
     ),
+    "VCM": _r(
+        metodo=_M_HEMO,
+        unidad="fL",
+        ref="80 - 100 fL",
+        rmin="80",
+        rmax="100",
+    ),
+    "CHCM": _r(
+        metodo=_M_HEMO,
+        unidad="g/dL",
+        ref="32 - 36 g/dL",
+        rmin="32",
+        rmax="36",
+    ),
     "RDW": _r(
         metodo=_M_HEMO,
         unidad="%",
@@ -93,7 +107,7 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="11.5",
         rmax="14.5",
     ),
-    "LEU": _r(
+    "LEUCO": _r(
         metodo=_M_HEMO,
         unidad="/mm³",
         ref="4000 - 10000 /mm³",

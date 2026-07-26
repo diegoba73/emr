@@ -15,7 +15,7 @@ describe('limsTubosOrden', () => {
       'HTO',
       'HGB',
       'RDW',
-      'LEU',
+      'LEUCO',
       'NEUT_CAY',
       'NEUT_SEG',
       'EOS',
@@ -27,6 +27,28 @@ describe('limsTubosOrden', () => {
     expect(unidadesParaCalculoTubos(hemo)).toBe(1);
     expect(unidadesParaCalculoTubos([...hemo, 'HBA1C'])).toBe(2);
     expect(unidadesParaCalculoTubos(['GLU', 'UREA'])).toBe(2);
+  });
+
+  it('unidadesParaCalculoTubos: orina completa (>10) cuenta como 1', () => {
+    const orina = [
+      'ORI_COLOR',
+      'ORI_ASP',
+      'ORI_DENS',
+      'ORI_PH',
+      'ORI_BIL',
+      'ORI_NIT',
+      'ORI_CET',
+      'ORI_CEL',
+      'ORI_LEU',
+      'ORI_HEM',
+      'ORI_PIO',
+      'ORI_MUC',
+      'ORI_CRIS',
+      'ORI_CONC',
+    ];
+    expect(orina.length).toBeGreaterThan(10);
+    expect(unidadesParaCalculoTubos(orina)).toBe(1);
+    expect(unidadesParaCalculoTubos([...orina, 'PROT_U_AZ'])).toBe(2);
   });
 
   it('totalEtiquetasDesdeTubos suma cantidades', () => {

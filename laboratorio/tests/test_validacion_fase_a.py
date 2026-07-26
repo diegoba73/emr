@@ -99,7 +99,7 @@ class TestValidacionLimsFaseA(APITestCase):
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
         sol.refresh_from_db()
-        self.assertEqual(sol.estado, "EN_PROCESO")
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
 
     def test_bioquimico_valida(self):
         sol, res = self._orden_con_resultado()
@@ -119,7 +119,7 @@ class TestValidacionLimsFaseA(APITestCase):
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         sol.refresh_from_db()
-        self.assertEqual(sol.estado, "EN_PROCESO")
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
 
         r2 = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/validar/",

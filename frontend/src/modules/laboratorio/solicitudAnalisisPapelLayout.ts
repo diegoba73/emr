@@ -24,7 +24,7 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: e('HBA1C'), right: e('CPK_MB') },
   { left: e('GLU'), right: e('TROP_I') },
   { left: e('UREA'), right: e('MIOG') },
-  { left: e('CREA'), right: e('TROP_US') },
+  { left: e('CREATI'), right: e('TROP_US') },
   { left: e('AU'), right: e('PROBNP') },
   { left: e('CA'), right: e('DDIM') },
   { left: e('MG'), right: p('PAN_ORI') },
@@ -103,3 +103,25 @@ export function countPapelSelection(
 ): number {
   return panelesIds.size + examenesIds.size;
 }
+
+/** Códigos del formulario papel (examenes + paneles). */
+export function papelCodigosSet(): Set<string> {
+  const s = new Set<string>();
+  for (const row of SOLICITUD_ANALISIS_PAPEL_ROWS) {
+    if (row.left) s.add(row.left.codigo);
+    if (row.right) s.add(row.right.codigo);
+  }
+  return s;
+}
+
+/** Cultivos / micro para sección de pedido (alineado a EstudioMicrobiologia). */
+export const MICRO_PEDIDO_CODIGOS = [
+  'UROCULTIVO',
+  'HEMOCULTIVO',
+  'COPROCULTIVO',
+  'CULTIVO_HERIDA',
+  'CULTIVO_RUTINA',
+  'HISOPADO',
+  'PUNCION',
+] as const;
+

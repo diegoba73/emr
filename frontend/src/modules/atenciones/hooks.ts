@@ -117,7 +117,17 @@ export const useCloseAtencionMutation = () => {
       queryClient.invalidateQueries({ queryKey: ['atenciones'] });
       queryClient.invalidateQueries({ queryKey: ['turnos'] });
     },
-    onError: () => toast.error('No se pudo cerrar la atención'),
+    onError: (error: any) => {
+      const msg =
+        error?.response?.data?.error ||
+        error?.response?.data?.detail ||
+        error?.message ||
+        'No se pudo cerrar la atención';
+      const detail = typeof msg === 'string' ? msg : 'No se pudo cerrar la atención';
+      toast.error(
+        `${detail} Si la consulta ya se guardó, los datos clínicos están en el servidor.`
+      );
+    },
   });
 };
 
@@ -177,108 +187,45 @@ interface SaveConsultaPayload {
 export const useSaveConsultaAmbulatoriaMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ atencionId, data, exists, registroId }: SaveConsultaPayload) => {
-      try {
-        const atencion = await apiService.getAtencion(atencionId);
-        
-        // Extraer el ID de consulta_ambulatoria de diferentes formas posibles
-        let consultaId: number | undefined = undefined;
-        
-        if (atencion.consulta_ambulatoria) {
-          // Caso 1: consulta_ambulatoria es un objeto con id
-          if (typeof atencion.consulta_ambulatoria === 'object') {
-            if ('id' in atencion.consulta_ambulatoria && atencion.consulta_ambulatoria.id) {
-              consultaId = atencion.consulta_ambulatoria.id;
-            }
-          }
-          // Caso 2: consulta_ambulatoria es directamente un número (poco probable pero posible)
-          else if (typeof atencion.consulta_ambulatoria === 'number') {
-            consultaId = atencion.consulta_ambulatoria;
-          }
-        }
-        
-        // Si tenemos registroId del prop, usarlo como fallback
-        if (!consultaId && registroId) {
-          consultaId = registroId;
-        }
-        
-        // Si encontramos un ID, usar PATCH para actualizar
-        if (consultaId) {
-          return apiService.updateConsultaAmbulatoria(atencionId, data, consultaId);
-        }
-
-        return apiService.createConsultaAmbulatoria(atencionId, data);
-      } catch (error: any) {
-        // Si el error es que ya existe, intentar obtener el ID y actualizar
-        if (error?.response?.status === 400) {
-          const errorMessage = error?.response?.data?.error || '';
-          if (errorMessage.includes('Ya existe un registro') || errorMessage.includes('ya existe') || errorMessage.toLowerCase().includes('ya existe')) {
-            try {
-              await new Promise(resolve => setTimeout(resolve, 100));
-
-              const atencion = await apiService.getAtencion(atencionId);
-              
-              let consultaId: number | undefined = undefined;
-              
-              if (atencion.consulta_ambulatoria) {
-                if (typeof atencion.consulta_ambulatoria === 'object' && 'id' in atencion.consulta_ambulatoria) {
-                  consultaId = atencion.consulta_ambulatoria.id;
-                } else if (typeof atencion.consulta_ambulatoria === 'number') {
-                  consultaId = atencion.consulta_ambulatoria;
-                }
-              }
-              
-              if (consultaId) {
-                return apiService.updateConsultaAmbulatoria(atencionId, data, consultaId);
-              } else if (registroId) {
-                return apiService.updateConsultaAmbulatoria(atencionId, data, registroId);
-              } else {
-                return apiService.updateConsultaAmbulatoria(atencionId, data);
-              }
-            } catch (retryError: any) {
-              // Si updateConsultaAmbulatoria falla porque no existe, relanzar el error original
-              if (retryError?.message?.includes('No existe un registro')) {
-                throw error; // Relanzar el error original
-              }
-              throw retryError;
-            }
-          }
-        }
-        
-        // Si falla al obtener la atención o no se pudo resolver, intentar crear/actualizar según registroId
-        if (registroId) {
-          return apiService.updateConsultaAmbulatoria(atencionId, data, registroId);
-        }
-        return apiService.createConsultaAmbulatoria(atencionId, data);
-      }
+    mutationFn: async ({ atencionId, data }: SaveConsultaPayload) => {
+      // Un solo upsert: evita carrera create vs shell vacío de ensure-consulta-hc.
+      return apiService.registrarConsultaAmbulatoria(atencionId, data);
     },
-    onSuccess: async (_data, variables) => {
-      // El toast final lo muestra useCloseAtencionMutation al cerrar la atención.
-      // SIEMPRE actualizar el turno a REALIZADO después de guardar la consulta
-      try {
-        // Obtener la atención para acceder al turno asociado
-        const atencion = await apiService.getAtencion(variables.atencionId);
-        const turnoId = atencion.turno?.id || atencion.turno_id;
-        if (turnoId) {
-          await apiService.updateTurno(turnoId, { estado: 'REALIZADO' });
-        }
-      } catch {
-        // No fallar la operación si no se puede actualizar el turno
-      }
+    onSuccess: async (saved, variables) => {
+      // Turno → REALIZADO lo hace registrar-consulta (si hay contenido) y/o cerrar.
+      // No forzar updateTurno aquí: puede fallar por reglas de agenda y ensuciar el flujo.
+      queryClient.setQueryData(['atencion', variables.atencionId], (prev: Atencion | undefined) => {
+        if (!prev) return prev;
+        const id = saved.id ?? saved.atencion_id ?? variables.atencionId;
+        return {
+          ...prev,
+          consulta_ambulatoria: {
+            ...(typeof prev.consulta_ambulatoria === 'object' && prev.consulta_ambulatoria
+              ? prev.consulta_ambulatoria
+              : {}),
+            ...saved,
+            id,
+            atencion_id: saved.atencion_id ?? variables.atencionId,
+          },
+        };
+      });
 
       await queryClient.invalidateQueries({ queryKey: ['atencion', variables.atencionId] });
       await queryClient.invalidateQueries({ queryKey: ['atenciones'] });
       await queryClient.invalidateQueries({ queryKey: ['turnos'] });
-      
-      // 2. Forzar refetch inmediato y esperar a que complete
+
       await Promise.all([
         queryClient.refetchQueries({ queryKey: ['atencion', variables.atencionId] }),
-        queryClient.refetchQueries({ queryKey: ['turnos'] })
+        queryClient.refetchQueries({ queryKey: ['turnos'] }),
       ]);
     },
     onError: (error: any) => {
-      const errorMessage = error?.response?.data?.error || error?.message || 'No se pudo guardar la consulta';
-      toast.error(errorMessage);
+      const errorMessage =
+        error?.response?.data?.error ||
+        error?.response?.data?.anamnesis?.[0] ||
+        error?.message ||
+        'No se pudo guardar la consulta';
+      toast.error(typeof errorMessage === 'string' ? errorMessage : 'No se pudo guardar la consulta');
     },
   });
 };

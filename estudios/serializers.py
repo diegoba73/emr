@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from archivos_medicos.models import ArchivoMedico
 from pacientes.models import Paciente
 from medicos.models import Medico
 from turnos.models import Recurso
@@ -94,6 +95,17 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
         source='turno.recurso.nombre', read_only=True, default=None
     )
     turno_estado = serializers.CharField(source='turno.estado', read_only=True, default=None)
+    realizado_por = serializers.IntegerField(source='realizado_por_id', read_only=True, allow_null=True)
+    realizado_por_nombre = serializers.SerializerMethodField()
+
+    def get_realizado_por_nombre(self, obj) -> str | None:
+        user = getattr(obj, 'realizado_por', None)
+        if not user:
+            return None
+        full = (getattr(user, 'get_full_name', lambda: '')() or '').strip()
+        if full:
+            return full
+        return getattr(user, 'username', None) or str(user.pk)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -111,6 +123,8 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
             'modalidad',
             'estado',
             'medico_solicitante',
+            'realizado_por',
+            'realizado_por_nombre',
             'atencion',
             'consulta_hc',
             'solicitud_emr',
@@ -131,7 +145,7 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         )
-        read_only_fields = ('motivo_anulacion',)
+        read_only_fields = ('motivo_anulacion', 'realizado_por', 'realizado_por_nombre')
 
     def validate(self, attrs):
         if 'estado' in self.initial_data:
@@ -193,12 +207,18 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
 class ArchivoEstudioComplementarioSerializer(serializers.ModelSerializer):
     archivo_medico_id = serializers.IntegerField()
     download_url = serializers.SerializerMethodField()
+    titulo = serializers.CharField(source='archivo_medico.titulo', read_only=True)
+    tipo_archivo = serializers.CharField(source='archivo_medico.tipo_archivo', read_only=True)
+    archivo_nombre = serializers.SerializerMethodField()
 
     class Meta:
         model = ArchivoEstudioComplementario
         fields = (
             'id',
             'archivo_medico_id',
+            'titulo',
+            'tipo_archivo',
+            'archivo_nombre',
             'tipo_rol',
             'descripcion',
             'orden',
@@ -206,7 +226,21 @@ class ArchivoEstudioComplementarioSerializer(serializers.ModelSerializer):
             'download_url',
             'created_at',
         )
-        read_only_fields = ('id', 'download_url', 'created_at')
+        read_only_fields = (
+            'id',
+            'titulo',
+            'tipo_archivo',
+            'archivo_nombre',
+            'download_url',
+            'created_at',
+        )
+
+    def get_archivo_nombre(self, obj) -> str | None:
+        archivo = getattr(obj.archivo_medico, 'archivo', None)
+        if not archivo or not getattr(archivo, 'name', None):
+            return None
+        import os
+        return os.path.basename(archivo.name)
 
     def get_download_url(self, obj) -> str:
         request = self.context.get('request')
@@ -228,6 +262,33 @@ class AgregarArchivoSerializer(serializers.Serializer):
     descripcion = serializers.CharField(required=False, allow_blank=True, default='')
     orden = serializers.IntegerField(required=False, default=0, min_value=0)
     es_principal = serializers.BooleanField(required=False, default=False)
+
+
+class SubirArchivoEstudioSerializer(serializers.Serializer):
+    archivo = serializers.FileField()
+    titulo = serializers.CharField(required=False, allow_blank=True, max_length=200, default='')
+    tipo_archivo = serializers.ChoiceField(
+        choices=ArchivoMedico.TIPO_CHOICES,
+        default='PDF',
+        required=False,
+    )
+    tipo_rol = serializers.ChoiceField(
+        choices=ArchivoEstudioComplementario.TipoRol.choices,
+        default=ArchivoEstudioComplementario.TipoRol.OTRO,
+        required=False,
+    )
+    descripcion = serializers.CharField(required=False, allow_blank=True, default='')
+    orden = serializers.IntegerField(required=False, default=0, min_value=0)
+    es_principal = serializers.BooleanField(required=False, default=False)
+
+
+class SugerirInformeEstudioSerializer(serializers.Serializer):
+    notas_medico = serializers.CharField(required=False, allow_blank=True, default='', max_length=4000)
+    prefer_medgemma = serializers.BooleanField(required=False, default=True)
+
+
+class QuitarArchivoEstudioSerializer(serializers.Serializer):
+    archivo_estudio_id = serializers.IntegerField(min_value=1)
 
 
 class InformeEstudioComplementarioSerializer(serializers.ModelSerializer):

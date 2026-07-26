@@ -204,11 +204,12 @@ class TestSolicitudExamenAPI(APITestCase):
         - Llama al endpoint cargar_resultados con valores
         - Verifica que los valores se guarden en DB
         """
-        # Crear solicitud
+        # Crear solicitud ya en proceso (post-toma)
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
-            origen_solicitud='AMBULATORIO_CEHTA'
+            origen_solicitud='AMBULATORIO_CEHTA',
+            estado='EN_PROCESO',
         )
         solicitud.tipos_examen.add(self.tipo_examen_1)
         
@@ -246,9 +247,9 @@ class TestSolicitudExamenAPI(APITestCase):
         assert resultado.es_patologico is False
         assert resultado.observaciones == 'Valor normal'
         
-        # Verificar que el estado cambió a EN_PROCESO
+        # Verificar que el estado pasó a LISTO_PARA_VALIDAR (completos, sin validar)
         solicitud.refresh_from_db()
-        assert solicitud.estado == 'EN_PROCESO'
+        assert solicitud.estado == 'LISTO_PARA_VALIDAR'
     
     def test_validacion_bloqueo(self):
         """
@@ -257,12 +258,12 @@ class TestSolicitudExamenAPI(APITestCase):
         - Intenta cargar resultados de nuevo
         - Expected: 400 Bad Request o 403 Forbidden
         """
-        # Crear solicitud con resultado
+        # Crear solicitud listo para validar con resultado completo
         solicitud = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud='AMBULATORIO_CEHTA',
-            estado='EN_PROCESO'
+            estado='LISTO_PARA_VALIDAR'
         )
         solicitud.tipos_examen.add(self.tipo_examen_1)
         
@@ -330,9 +331,10 @@ class TestSolicitudExamenAPI(APITestCase):
         )
         self.client.force_authenticate(user=self.user_lab)
         
-        # Debe recibir 400 Bad Request
+        # Debe recibir 400 Bad Request (no está LISTO_PARA_VALIDAR / incompleto)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'vacíos' in response.data.get('error', '').lower()
+        err = response.data.get('error', '').lower()
+        assert 'validar' in err or 'vacíos' in err or 'listo' in err
     
     def test_etiqueta_zpl(self):
         """
@@ -442,7 +444,8 @@ class TestLimsAuthorization(APITestCase):
         r_cat = self.client.get('/api/lab/muestras/')
         assert r_cat.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_medico_lista_solo_sus_solicitudes(self):
+    def test_medico_lista_solo_sus_solicitudes_sin_vinculo_paciente(self):
+        """Sin turno/consulta/atención, el médico solo ve órdenes propias."""
         otro = Medico.objects.create(
             nombre='Otro',
             apellido='Médico',
@@ -459,6 +462,38 @@ class TestLimsAuthorization(APITestCase):
         assert r.status_code == status.HTTP_200_OK
         assert len(r.data['results']) == 1
         assert r.data['results'][0]['id'] == self.sol_medico.id
+
+    def test_medico_con_vinculo_ve_ordenes_de_otros_del_paciente(self):
+        """Cabecera con vínculo clínico puede leer labs pedidos por otro médico."""
+        from turnos.models import Atencion
+
+        otro = Medico.objects.create(
+            nombre='Guardia',
+            apellido='Médico',
+            matricula='MAT-GU-LAUTH',
+            especialidad=self.especialidad,
+        )
+        sol_ajena = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=otro,
+            origen_solicitud='AMBULATORIO_CEHTA',
+        )
+        Atencion.objects.create(
+            paciente=self.paciente,
+            medico_principal=self.medico,
+            tipo_atencion='CONSULTORIO',
+            tipo_intervencion='CONSULTA',
+            estado_clinico='ABIERTA',
+        )
+        self.client.force_authenticate(user=self.user_medico)
+        r = self.client.get('/api/lab/solicitudes/')
+        assert r.status_code == status.HTTP_200_OK
+        ids = {row['id'] for row in r.data['results']}
+        assert self.sol_medico.id in ids
+        assert sol_ajena.id in ids
+
+        r_detail = self.client.get(f'/api/lab/solicitudes/{sol_ajena.id}/')
+        assert r_detail.status_code == status.HTTP_200_OK
 
     def test_medico_no_puede_cargar_resultados(self):
         res = ResultadoExamen.objects.create(
@@ -495,6 +530,8 @@ class TestLimsAuthorization(APITestCase):
             valor_obtenido='',
             es_patologico=False,
         )
+        self.sol_medico.estado = 'EN_PROCESO'
+        self.sol_medico.save(update_fields=['estado'])
         self.client.force_authenticate(user=self.user_lab)
         r = self.client.post(
             f'/api/lab/solicitudes/{self.sol_medico.id}/cargar-resultados/',
@@ -510,7 +547,7 @@ class TestLimsAuthorization(APITestCase):
             valor_obtenido='10',
             es_patologico=False,
         )
-        self.sol_medico.estado = 'EN_PROCESO'
+        self.sol_medico.estado = 'LISTO_PARA_VALIDAR'
         self.sol_medico.save(update_fields=['estado'])
         self.client.force_authenticate(user=self.user_admin)
         r = self.client.post(
@@ -645,7 +682,7 @@ class TestLimsAuditTrail(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud='AMBULATORIO_CEHTA',
-            estado='EN_PROCESO',
+            estado='LISTO_PARA_VALIDAR',
         )
         solicitud.tipos_examen.add(self.tipo_examen)
         resultado = ResultadoExamen.objects.create(
@@ -823,7 +860,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         ).status_code == 200
         sol.refresh_from_db()
-        assert sol.estado == 'EN_PROCESO'
+        assert sol.estado == 'LISTO_PARA_VALIDAR'
 
         # Técnico no puede validar
         r_lab_validar = self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json')
@@ -1006,7 +1043,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         )
         sol.refresh_from_db()
-        assert sol.estado == 'EN_PROCESO'
+        assert sol.estado == 'LISTO_PARA_VALIDAR'
         self.client.force_authenticate(user=self.user_admin)
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
         sol.refresh_from_db()
@@ -1040,7 +1077,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             format='json',
         )
         sol_ok.refresh_from_db()
-        assert sol_ok.estado == 'EN_PROCESO'
+        assert sol_ok.estado == 'LISTO_PARA_VALIDAR'
         self.client.force_authenticate(user=self.user_admin)
         assert self.client.post(f'/api/lab/solicitudes/{sol_ok.id}/validar/', {}, format='json').status_code == 200
         sol_ok.refresh_from_db()
@@ -1070,7 +1107,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         )
         assert r.status_code == status.HTTP_200_OK
         sol.refresh_from_db()
-        assert sol.estado == 'EN_PROCESO'
+        assert sol.estado == 'LISTO_PARA_VALIDAR'
 
     def test_finalizar_con_muestra_tomada_vinculada(self):
         """Al validar, recepciona muestras TOMADA antes de finalizar."""
@@ -1099,7 +1136,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         )
         assert r.status_code == status.HTTP_200_OK, r.data
         sol.refresh_from_db()
-        assert sol.estado == 'EN_PROCESO'
+        assert sol.estado == 'LISTO_PARA_VALIDAR'
         self.client.force_authenticate(user=self.user_admin)
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
         sol.refresh_from_db()
@@ -1145,7 +1182,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         )
         assert r_completo.status_code == status.HTTP_200_OK
         sol.refresh_from_db()
-        assert sol.estado == 'INFORMADO_PARCIAL'
+        assert sol.estado == 'LISTO_PARA_VALIDAR'
         self.client.force_authenticate(user=self.user_admin)
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json').status_code == 200
         sol.refresh_from_db()
@@ -1223,7 +1260,7 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
             format='json',
         )
         sol = SolicitudExamen.objects.get(pk=sid)
-        self.assertEqual(sol.estado, 'EN_PROCESO')
+        self.assertEqual(sol.estado, 'LISTO_PARA_VALIDAR')
 
         user_bio = User.objects.create_user(
             username='bio_audit_fsm',
@@ -1257,7 +1294,7 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
         self.assertIsNotNone(ev)
         self.assertIsNotNone(ev.metadata)
         self.assertEqual(ev.metadata.get('accion'), 'validar')
-        self.assertEqual(ev.metadata.get('estado_anterior'), 'EN_PROCESO')
+        self.assertEqual(ev.metadata.get('estado_anterior'), 'LISTO_PARA_VALIDAR')
         self.assertEqual(ev.metadata.get('estado_nuevo'), 'FINALIZADO')
 
 

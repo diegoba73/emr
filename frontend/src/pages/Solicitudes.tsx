@@ -18,23 +18,33 @@ import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import OrdenesLimsTabla from '../components/lims/OrdenesLimsTabla';
 import { listSolicitudesExamen } from '../services/limsApi';
-import type { SolicitudExamenLims } from '../types/lims';
+import { listEstudiosMicrobiologia } from '../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/apiError';
-import { canAccessAnalisisClinicoLab } from '../utils/limsAccess';
+import {
+  canAccessAnalisisClinicoLab,
+  canAccessMicrobiologiaLectura,
+} from '../utils/limsAccess';
 import { ESTADOS_ORDEN_LIMS, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import {
+  mapLabToPendiente,
+  mapMicroToPendiente,
+  type PendientePedidoRow,
+} from '../utils/limsPendientesUnificados';
 import { isPacienteRole } from '../utils/navLabels';
 
 const Solicitudes: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useData();
-  const [ordenes, setOrdenes] = useState<SolicitudExamenLims[]>([]);
+  const [rows, setRows] = useState<PendientePedidoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState<'TODOS' | 'LAB_CLINICO' | 'MICROBIOLOGIA'>('TODOS');
   const [busqueda, setBusqueda] = useState('');
   const [busquedaDebounced, setBusquedaDebounced] = useState('');
 
   const allowed = canAccessAnalisisClinicoLab(currentUser);
+  const puedeVerMicro = canAccessMicrobiologiaLectura(currentUser);
   const esPaciente = isPacienteRole(currentUser);
 
   useEffect(() => {
@@ -50,18 +60,52 @@ const Solicitudes: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const params: Parameters<typeof listSolicitudesExamen>[0] = {};
-      if (filtroEstado) params.estado = filtroEstado;
-      if (busquedaDebounced.trim()) params.search = busquedaDebounced.trim();
-      const data = await listSolicitudesExamen(params);
-      setOrdenes(data);
+      const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
+      if (filtroEstado) labParams.estado = filtroEstado;
+      if (busquedaDebounced.trim()) labParams.search = busquedaDebounced.trim();
+
+      const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {};
+      if (filtroEstado) microParams.estado = filtroEstado;
+      if (busquedaDebounced.trim()) microParams.search = busquedaDebounced.trim();
+
+      const labsPromise =
+        filtroTipo === 'MICROBIOLOGIA'
+          ? Promise.resolve([])
+          : listSolicitudesExamen(labParams);
+
+      let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
+      if (puedeVerMicro && filtroTipo !== 'LAB_CLINICO') {
+        try {
+          micros = await listEstudiosMicrobiologia(microParams);
+        } catch (microErr) {
+          // No silenciar: si falla micro, el médico veía Lab. Clínico y “Microbiología: 0”.
+          setError(
+            getSafeClinicalActionMessage(
+              microErr,
+              'No se pudieron cargar los pedidos de microbiología.'
+            )
+          );
+          micros = [];
+        }
+      }
+
+      const labs = await labsPromise;
+      const merged = [
+        ...labs.map(mapLabToPendiente),
+        ...micros.map(mapMicroToPendiente),
+      ].sort((a, b) => {
+        const ta = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
+        const tb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
+        return tb - ta;
+      });
+      setRows(merged);
     } catch (e) {
       setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-      setOrdenes([]);
+      setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [allowed, filtroEstado, busquedaDebounced]);
+  }, [allowed, puedeVerMicro, filtroEstado, filtroTipo, busquedaDebounced]);
 
   useEffect(() => {
     load();
@@ -70,11 +114,15 @@ const Solicitudes: React.FC = () => {
   const stats = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const st of ESTADOS_ORDEN_LIMS) counts[st] = 0;
-    for (const o of ordenes) {
-      if (counts[o.estado] !== undefined) counts[o.estado] += 1;
+    let lab = 0;
+    let micro = 0;
+    for (const r of rows) {
+      if (r.tipo === 'MICROBIOLOGIA') micro += 1;
+      else lab += 1;
+      if (counts[r.estado] !== undefined) counts[r.estado] += 1;
     }
-    return counts;
-  }, [ordenes]);
+    return { counts, lab, micro };
+  }, [rows]);
 
   if (!allowed) {
     return (
@@ -87,7 +135,15 @@ const Solicitudes: React.FC = () => {
   const pageTitle = esPaciente ? 'Mis análisis clínico' : 'Análisis de laboratorio';
   const pageDescription = esPaciente
     ? 'Pedidos de laboratorio realizados desde consultas y sus resultados.'
-    : 'Órdenes de laboratorio generadas por médicos al cerrar consultas.';
+    : 'Órdenes de Lab. Clínico y Microbiología generadas al cerrar consultas.';
+
+  const handleVer = (row: PendientePedidoRow) => {
+    if (row.tipo === 'MICROBIOLOGIA') {
+      navigate(`/laboratorio/microbiologia/estudios/${row.id}`);
+      return;
+    }
+    navigate(`/solicitudes/${row.id}`);
+  };
 
   return (
     <Box sx={{ p: 3 }} className="fade-in">
@@ -114,6 +170,22 @@ const Solicitudes: React.FC = () => {
             onChange={(e) => setBusqueda(e.target.value)}
             sx={{ minWidth: 240 }}
           />
+          {puedeVerMicro && (
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Tipo</InputLabel>
+              <Select
+                label="Tipo"
+                value={filtroTipo}
+                onChange={(e) =>
+                  setFiltroTipo(e.target.value as 'TODOS' | 'LAB_CLINICO' | 'MICROBIOLOGIA')
+                }
+              >
+                <MenuItem value="TODOS">Todos</MenuItem>
+                <MenuItem value="LAB_CLINICO">Lab. Clínico</MenuItem>
+                <MenuItem value="MICROBIOLOGIA">Microbiología</MenuItem>
+              </Select>
+            </FormControl>
+          )}
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Estado</InputLabel>
             <Select
@@ -136,13 +208,24 @@ const Solicitudes: React.FC = () => {
       </Paper>
 
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2, gap: 1 }}>
-        <Chip label={`Total: ${ordenes.length}`} />
+        <Chip label={`Total: ${rows.length}`} />
+        {puedeVerMicro && (
+          <>
+            <Chip size="small" variant="outlined" color="primary" label={`Lab. Clínico: ${stats.lab}`} />
+            <Chip
+              size="small"
+              variant="outlined"
+              color="secondary"
+              label={`Microbiología: ${stats.micro}`}
+            />
+          </>
+        )}
         {ESTADOS_ORDEN_LIMS.map((st) => (
           <Chip
             key={st}
             size="small"
             variant="outlined"
-            label={`${labelEstadoOrdenLims(st)}: ${stats[st] ?? 0}`}
+            label={`${labelEstadoOrdenLims(st)}: ${stats.counts[st] ?? 0}`}
           />
         ))}
       </Stack>
@@ -154,9 +237,9 @@ const Solicitudes: React.FC = () => {
       ) : (
         <Paper sx={{ p: 1 }}>
           <OrdenesLimsTabla
-            rows={ordenes}
+            rows={rows}
             emptyMessage="No hay órdenes de laboratorio para los filtros seleccionados."
-            onVer={(id) => navigate(`/solicitudes/${id}`)}
+            onVer={handleVer}
             accionLabel="Ver detalle"
           />
         </Paper>

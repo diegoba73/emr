@@ -463,11 +463,16 @@ class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
         required=False,
         help_text="ID de la atención asociada"
     )
+    # PK = atencion_id; exponer `id` para el frontend (compat con api.serializers).
+    atencion_id = serializers.IntegerField(source='atencion.id', read_only=True)
+    id = serializers.IntegerField(source='atencion_id', read_only=True)
     
     class Meta:
         model = ConsultaAmbulatoria
         fields = [
+            'id',
             'atencion',
+            'atencion_id',
             'anamnesis',
             'examen_fisico',
             'diagnostico_presuntivo',
@@ -481,6 +486,8 @@ class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = [
+            'id',
+            'atencion_id',
             'created_at',
             'updated_at',
         ]
@@ -575,4 +582,17 @@ class EvolucionInternacionSerializer(serializers.ModelSerializer):
                 'atencion': 'La atención no corresponde a un contexto de internación.',
             })
         return attrs
+
+    def save(self, **kwargs):
+        instance = super().save(**kwargs)
+        try:
+            from historias_clinicas.services import sync_consulta_hc_desde_evolucion
+            sync_consulta_hc_desde_evolucion(instance)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'sync_consulta_hc_desde_evolucion falló para evolucion atencion=%s',
+                getattr(instance, 'atencion_id', None),
+            )
+        return instance
 

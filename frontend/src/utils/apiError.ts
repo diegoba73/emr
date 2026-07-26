@@ -5,6 +5,23 @@ function responseStatus(error: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined;
 }
 
+/** Extrae mensajes de validación DRF (`{ campo: ["msg"] }` o `{ non_field_errors: [...] }`). */
+function flattenDrfFieldErrors(data: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  for (const [key, raw] of Object.entries(data)) {
+    if (key === 'detail' || key === 'error') continue;
+    const msgs = Array.isArray(raw)
+      ? raw.filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+      : typeof raw === 'string' && raw.trim()
+        ? [raw]
+        : [];
+    for (const m of msgs) {
+      parts.push(key === 'non_field_errors' ? m : `${key}: ${m}`);
+    }
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
 export function getSafeApiErrorMessage(
   error: unknown,
   fallback = 'No se pudo completar la operación.'
@@ -33,6 +50,10 @@ export function getSafeApiErrorMessage(
       }
       if (typeof o.error === 'string' && o.error.trim()) {
         return o.error;
+      }
+      const fieldMsgs = flattenDrfFieldErrors(o);
+      if (fieldMsgs) {
+        return fieldMsgs;
       }
     }
   }
@@ -112,6 +133,9 @@ export const CLINICAL_ACTION_ERRORS = {
   limsCrearEstudioMicro: 'No se pudo crear el estudio. Intentá nuevamente.',
   limsGuardarResultado: 'No se pudo guardar el resultado. Intentá nuevamente.',
   limsCargarExamenes: 'No se pudieron cargar los exámenes. Intentá nuevamente.',
+  limsRegistrarCorridaQc:
+    'No se pudo registrar la corrida QC. Revisá lote, valor y equipo e intentá nuevamente.',
+  limsQcCatalogo: 'No se pudo guardar en el catálogo QC. Revisá los datos e intentá nuevamente.',
   genericClinicalAction: 'No se pudo completar la operación. Intentá nuevamente.',
 } as const;
 

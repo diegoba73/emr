@@ -94,6 +94,15 @@ class EstudioComplementario(TimestampedModel):
         blank=True,
         related_name='estudios_solicitados',
     )
+    realizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='estudios_complementarios_realizados',
+        verbose_name='Realizado / informado por',
+        help_text='Profesional que realizó el estudio; tras VALIDADO solo este usuario (o admin) puede editar.',
+    )
     turno = models.OneToOneField(
         'turnos.Turno',
         on_delete=models.SET_NULL,

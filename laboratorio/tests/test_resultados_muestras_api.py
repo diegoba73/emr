@@ -660,7 +660,7 @@ class TestValidarConMuestraAPI(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
-            estado="EN_PROCESO",
+            estado="LISTO_PARA_VALIDAR",
         )
         sol.tipos_examen.add(self.tipo_examen)
         ResultadoExamen.objects.create(
@@ -677,7 +677,7 @@ class TestValidarConMuestraAPI(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
-            estado="EN_PROCESO",
+            estado="LISTO_PARA_VALIDAR",
         )
         sol.tipos_examen.add(self.tipo_examen)
         m = crear_muestra(
@@ -701,7 +701,7 @@ class TestValidarConMuestraAPI(APITestCase):
         assert r.status_code == status.HTTP_200_OK
 
     def _solicitud_resultado_con_muestra(self, estado_muestra_final=None):
-        """Crea solicitud EN_PROCESO con un resultado vinculado a muestra RECIBIDA.
+        """Crea solicitud LISTO_PARA_VALIDAR con un resultado vinculado a muestra RECIBIDA.
 
         Si `estado_muestra_final` es provisto, transiciona la muestra a ese estado
         después de asociarla al resultado (simulando TOCTOU entre carga y validar).
@@ -710,7 +710,7 @@ class TestValidarConMuestraAPI(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
-            estado="EN_PROCESO",
+            estado="LISTO_PARA_VALIDAR",
         )
         sol.tipos_examen.add(self.tipo_examen)
         m = crear_muestra(
@@ -744,7 +744,7 @@ class TestValidarConMuestraAPI(APITestCase):
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
         assert r.status_code == status.HTTP_400_BAD_REQUEST
         sol.refresh_from_db()
-        assert sol.estado == "EN_PROCESO"
+        assert sol.estado == "LISTO_PARA_VALIDAR"
 
     def test_validar_muestra_cancelada_falla(self):
         """B2.1 TOCTOU defensivo: validar rechaza si muestra asociada pasó a CANCELADA."""
@@ -753,7 +753,7 @@ class TestValidarConMuestraAPI(APITestCase):
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
         assert r.status_code == status.HTTP_400_BAD_REQUEST
         sol.refresh_from_db()
-        assert sol.estado == "EN_PROCESO"
+        assert sol.estado == "LISTO_PARA_VALIDAR"
 
     def test_validar_releyendo_muestras_con_select_for_update(self):
         """B2.1: confirma que `validar` releyó el estado de las muestras dentro de la
@@ -769,14 +769,14 @@ class TestValidarConMuestraAPI(APITestCase):
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/")
         assert r.status_code == status.HTTP_400_BAD_REQUEST
         sol.refresh_from_db()
-        assert sol.estado == "EN_PROCESO"
+        assert sol.estado == "LISTO_PARA_VALIDAR"
 
     def test_validar_muestra_rechazada_falla(self):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
-            estado="EN_PROCESO",
+            estado="LISTO_PARA_VALIDAR",
         )
         sol.tipos_examen.add(self.tipo_examen)
         m = crear_muestra(

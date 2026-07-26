@@ -13,6 +13,11 @@ from django.db import transaction
 
 from turnos.models import Turno, Atencion, ConsultaAmbulatoria, RegistroProcedimiento, RegistroQuirurgico, Recurso
 
+from turnos.situacion_paciente import (
+    SituacionPacienteConflictError,
+    assert_puede_iniciar_atencion_ambulatoria_o_guardia,
+)
+
 
 # Mensajes alineados con el contrato histórico de POST /api/atenciones/ (AtencionViewSet.create).
 MSG_API_TURNO_INEXISTENTE = "El turno {turno_id} no existe."
@@ -75,6 +80,14 @@ class AtencionService:
     Service Layer para operaciones relacionadas con Atención.
     Encapsula la lógica de negocio para transiciones de Turno a Atención.
     """
+
+
+    @staticmethod
+    def _assert_situacion_libre(paciente_id: int, contexto: str) -> None:
+        try:
+            assert_puede_iniciar_atencion_ambulatoria_o_guardia(paciente_id, contexto)
+        except SituacionPacienteConflictError as exc:
+            raise BusinessLogicError(str(exc)) from exc
 
     @staticmethod
     def iniciar_atencion_desde_turno(
@@ -167,6 +180,7 @@ class AtencionService:
                 tipo_atencion = turno.recurso.tipo_recurso
                 tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
                 contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
+                AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
 
                 logger.info(
                     "Creando Atencion: tipo_atencion=%s, tipo_intervencion=%s",
@@ -246,6 +260,7 @@ class AtencionService:
             tipo_atencion = turno.recurso.tipo_recurso
             tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
             contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
+            AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
 
             atencion = Atencion.objects.create(
                 turno=turno,
@@ -327,6 +342,7 @@ class AtencionService:
         tipo_atencion = turno.recurso.tipo_recurso
         tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
         contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
+        AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
 
         atencion = Atencion.objects.create(
             turno=turno,
@@ -435,6 +451,10 @@ class AtencionService:
             if turno.estado in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
                 turno.estado = Turno.Estado.REALIZADO
                 turno.save(update_fields=['estado', 'updated_at'])
+
+        AtencionService._assert_situacion_libre(
+            paciente.pk, Atencion.ContextoAtencion.GUARDIA
+        )
 
         atencion = Atencion.objects.create(
             turno=turno,

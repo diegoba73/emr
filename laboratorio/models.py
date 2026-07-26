@@ -20,8 +20,8 @@ class TipoMuestra(models.Model):
     """
     Tipos de muestras biológicas (sangre, orina, etc.).
     """
-    codigo = models.CharField(max_length=10, unique=True, verbose_name="Código")
-    nombre = models.CharField(max_length=100, verbose_name="Nombre")
+    codigo = models.CharField(max_length=64, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre")
     color_tubo = models.CharField(
         max_length=50,
         blank=True,
@@ -190,6 +190,15 @@ class TipoExamen(models.Model):
         default="",
         verbose_name="Formato en informe (entrada ticket)",
     )
+    laboratorio_derivacion = models.ForeignKey(
+        "laboratorio.LaboratorioDerivacion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tipos_examen",
+        verbose_name="Laboratorio de derivación",
+        help_text="Si está vacío, el examen se procesa en el laboratorio propio.",
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
     class Meta:
@@ -282,6 +291,7 @@ class SolicitudExamen(models.Model):
         ('PENDIENTE', 'Pendiente'),
         ('EN_PROCESO', 'En Proceso'),
         ('INFORMADO_PARCIAL', 'Informado parcialmente'),
+        ('LISTO_PARA_VALIDAR', 'Listo para validar'),
         ('FINALIZADO', 'Finalizado'),
     ]
 
@@ -511,7 +521,8 @@ class ResultadoExamen(models.Model):
     )
     es_patologico = models.BooleanField(
         default=False,
-        verbose_name="Es Patológico"
+        verbose_name="Fuera de rango de referencia",
+        help_text="Indica desviación respecto al rango de referencia; no implica diagnóstico clínico.",
     )
     valor_numerico = models.DecimalField(
         max_digits=14,
@@ -590,6 +601,35 @@ class ResultadoExamen(models.Model):
         related_name="resultados",
         verbose_name="Muestra",
         help_text="Muestra física asociada (opcional; compatibilidad con resultados históricos sin muestra).",
+    )
+    laboratorio_derivacion = models.ForeignKey(
+        "laboratorio.LaboratorioDerivacion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resultados",
+        verbose_name="Laboratorio de derivación",
+    )
+    estado_derivacion = models.CharField(
+        max_length=24,
+        choices=[
+            ("LOCAL", "Local (lab propio)"),
+            ("PENDIENTE_ENVIO", "Pendiente de envío"),
+            ("ENVIADO", "Enviado a lab externo"),
+            ("RESULTADO_RECIBIDO", "Resultado externo cargado"),
+        ],
+        default="LOCAL",
+        verbose_name="Estado de derivación",
+    )
+    fecha_envio_derivacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha de envío a lab externo",
+    )
+    observaciones_derivacion = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Observaciones de derivación",
     )
 
     class Meta:
@@ -674,5 +714,24 @@ from laboratorio.models_microbiologia import (  # noqa: E402,F401
     Microorganismo,
     ResultadoAntibiotico,
     SiembraMicrobiologia,
+    TipoCultivoMicrobiologia,
+    TipoMuestraMicrobiologia,
+)
+from laboratorio.models_inventario import (  # noqa: E402,F401
+    InsumoLab,
+    LoteInsumo,
+    MovimientoStock,
+)
+from laboratorio.models_qc import (  # noqa: E402,F401
+    Calibracion,
+    CorridaQC,
+    EquipoAnalizador,
+    LoteControl,
+    MaterialControl,
+    PuntoQC,
+)
+from laboratorio.models_derivacion import (  # noqa: E402,F401
+    EstadoDerivacion,
+    LaboratorioDerivacion,
 )
 

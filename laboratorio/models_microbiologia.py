@@ -1,22 +1,8 @@
 """
-Microbiología base — LIMS Fase B3.1.
+Microbiología clínica — independiente del LIMS de química clínica.
 
-Modelos operativos para iniciar y seguir un estudio microbiológico básico
-desde una muestra ya transaccionalizada (B0/B1) y vinculable opcionalmente a
-``ResultadoExamen`` (B2/B2.1). Esta fase NO incluye microorganismos,
-aislados, identificación, antibiograma, informes preliminares ni finales.
-
-Cadena:
-
-    SolicitudExamen
-        └── Muestra (RECIBIDA / CONSERVADA / EN_PROCESO)
-                 └── EstudioMicrobiologia (B3.1)
-                         └── SiembraMicrobiologia (B3.1)
-                                 └── LecturaCultivo (B3.1)
-
-Microbiología NUNCA se serializa en ``ResultadoExamen.valor_obtenido``.
-
-Importado por ``laboratorio/models.py`` para asegurar registro Django.
+El pedido se arma con paciente + médico + tipo de cultivo + tipo de muestra
+microbiológica. ``SolicitudExamen`` / ``Muestra`` LIMS son opcionales (legado).
 """
 from __future__ import annotations
 
@@ -27,11 +13,51 @@ from django.utils import timezone
 
 from pacientes.models import Paciente
 
-# Reglas reutilizables de estado de muestra (compartido con B2/B2.1).
+# Reglas legado (solo si el estudio aún tiene muestra LIMS vinculada).
 MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO = frozenset({"RECIBIDA", "CONSERVADA", "EN_PROCESO"})
 MUESTRA_ESTADOS_BLOQUEAN_MICRO = frozenset(
     {"PENDIENTE_TOMA", "TOMADA", "RECHAZADA", "DESCARTADA", "CANCELADA"}
 )
+
+
+class TipoCultivoMicrobiologia(models.Model):
+    """Catálogo de tipos de cultivo clínico (hemocultivo, urocultivo, etc.)."""
+
+    codigo = models.CharField(max_length=40, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    descripcion = models.TextField(blank=True, default="", verbose_name="Descripción")
+    orden = models.PositiveSmallIntegerField(default=100, verbose_name="Orden")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tipo de cultivo microbiológico"
+        verbose_name_plural = "Tipos de cultivo microbiológico"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self) -> str:
+        return f"{self.codigo} - {self.nombre}"
+
+
+class TipoMuestraMicrobiologia(models.Model):
+    """Catálogo de tipos de muestra para microbiología clínica."""
+
+    codigo = models.CharField(max_length=40, unique=True, verbose_name="Código")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    descripcion = models.TextField(blank=True, default="", verbose_name="Descripción")
+    orden = models.PositiveSmallIntegerField(default=100, verbose_name="Orden")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tipo de muestra microbiológica"
+        verbose_name_plural = "Tipos de muestra microbiológica"
+        ordering = ["orden", "nombre"]
+
+    def __str__(self) -> str:
+        return f"{self.codigo} - {self.nombre}"
 
 
 class MedioCultivo(models.Model):
@@ -57,23 +83,7 @@ class MedioCultivo(models.Model):
 
 
 class EstudioMicrobiologia(models.Model):
-    """Estudio microbiológico asociado a una muestra real de la solicitud.
-
-    Estados cableados (B3.1 + B3.2 + B3.3 + B3.4):
-
-    - ``PENDIENTE`` (default al crear) — B3.1
-    - ``RECIBIDO`` (acción ``iniciar``) — B3.1
-    - ``SEMBRADO`` (auto al crear primera siembra válida) — B3.1
-    - ``LECTURA_PRELIMINAR`` (auto al cargar lectura ``es_preliminar=True``) — B3.1
-    - ``IDENTIFICACION`` (auto al registrar la primera identificación de aislado) — B3.2
-    - ``ANTIBIOGRAMA`` (auto al crear antibiograma o primer ResultadoAntibiotico) — B3.3
-    - ``LISTO_PARA_VALIDAR`` (emisión del informe final) — **B3.4**
-    - ``VALIDADO`` (validación profesional del informe final) — **B3.4**
-    - ``INFORMADO`` (marcado como informado/entregado) — **B3.4**
-    - ``CANCELADO`` (acción ``cancelar`` con motivo obligatorio) — B3.1
-
-    Estado futuro (no cableado): ``INCUBANDO``.
-    """
+    """Pedido / estudio de microbiología clínica (cultivo)."""
 
     ESTADO_CHOICES = [
         ("PENDIENTE", "Pendiente"),
@@ -90,14 +100,8 @@ class EstudioMicrobiologia(models.Model):
     ESTADOS_TERMINALES = frozenset({"CANCELADO", "INFORMADO"})
     ESTADOS_BLOQUEAN_OPERACION = frozenset({"CANCELADO"})
 
-    TIPO_ESTUDIO_CHOICES = [
-        ("CULTIVO_RUTINA", "Cultivo de rutina"),
-        ("UROCULTIVO", "Urocultivo"),
-        ("HEMOCULTIVO", "Hemocultivo"),
-        ("COPROCULTIVO", "Coprocultivo"),
-        ("CULTIVO_HERIDA", "Cultivo de herida"),
-        ("OTRO", "Otro"),
-    ]
+    # Espejo del código de TipoCultivoMicrobiologia (catálogo = fuente de verdad).
+    TIPO_ESTUDIO_CHOICES = []  # legado; no validar contra lista fija
 
     numero = models.CharField(
         max_length=32,
@@ -111,13 +115,17 @@ class EstudioMicrobiologia(models.Model):
         "laboratorio.SolicitudExamen",
         on_delete=models.PROTECT,
         related_name="estudios_microbiologia",
-        verbose_name="Solicitud",
+        verbose_name="Solicitud LIMS (legado)",
+        null=True,
+        blank=True,
     )
     muestra = models.ForeignKey(
         "laboratorio.Muestra",
         on_delete=models.PROTECT,
         related_name="estudios_microbiologia",
-        verbose_name="Muestra",
+        verbose_name="Muestra LIMS (legado)",
+        null=True,
+        blank=True,
     )
     paciente = models.ForeignKey(
         Paciente,
@@ -125,11 +133,69 @@ class EstudioMicrobiologia(models.Model):
         related_name="estudios_microbiologia",
         verbose_name="Paciente",
     )
-    tipo_estudio = models.CharField(
+    consulta_hc = models.ForeignKey(
+        "historias_clinicas.Consulta",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="estudios_microbiologia",
+        verbose_name="Consulta asociada",
+    )
+    origen_solicitud = models.CharField(
+        max_length=24,
+        blank=True,
+        default="",
+        verbose_name="Origen clínico",
+        help_text="Mismos códigos que LIMS (AMBULATORIO_*, INTERNACION_*, GUARDIA, EXTERNO_*).",
+    )
+    codigo_barra = models.CharField(
         max_length=32,
-        choices=TIPO_ESTUDIO_CHOICES,
-        default="CULTIVO_RUTINA",
-        verbose_name="Tipo de estudio",
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name="Código de barras",
+        help_text="Generado al imprimir etiqueta (MICB-YYYY-NNNNNN).",
+    )
+    etiquetas_impresas_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Etiquetas impresas",
+    )
+    medico_interno = models.ForeignKey(
+        "medicos.Medico",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="estudios_microbiologia",
+        verbose_name="Médico solicitante",
+    )
+    medico_externo_nombre = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Médico externo",
+    )
+    tipo_cultivo = models.ForeignKey(
+        TipoCultivoMicrobiologia,
+        on_delete=models.PROTECT,
+        related_name="estudios",
+        verbose_name="Tipo de cultivo",
+        null=True,
+        blank=True,
+    )
+    tipo_muestra_micro = models.ForeignKey(
+        TipoMuestraMicrobiologia,
+        on_delete=models.PROTECT,
+        related_name="estudios",
+        verbose_name="Tipo de muestra",
+        null=True,
+        blank=True,
+    )
+    tipo_estudio = models.CharField(
+        max_length=40,
+        default="UROCULTIVO",
+        verbose_name="Tipo de estudio (código)",
+        help_text="Espejo del código de tipo_cultivo; el catálogo es la fuente de verdad.",
     )
     estado = models.CharField(
         max_length=32,
@@ -191,19 +257,22 @@ class EstudioMicrobiologia(models.Model):
             raise ValidationError(
                 {"paciente": "El paciente del estudio debe coincidir con el paciente de la solicitud."}
             )
-        # Estado inicial debe ser válido respecto al estado de la muestra (sólo se valida en alta;
-        # transiciones posteriores van por servicio).
         if self._state.adding and self.muestra_id:
             if self.muestra.estado not in MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO:
                 raise ValidationError(
                     {
                         "muestra": (
-                            "Solo se puede iniciar microbiología sobre muestras RECIBIDA, CONSERVADA o EN_PROCESO."
+                            "Solo se puede vincular microbiología a muestras LIMS "
+                            "RECIBIDA, CONSERVADA o EN_PROCESO."
                         )
                     }
                 )
 
     def save(self, *args, **kwargs):
+        if self.tipo_cultivo_id:
+            codigo = getattr(self.tipo_cultivo, "codigo", None)
+            if codigo:
+                self.tipo_estudio = codigo
         if not self.numero:
             year = timezone.now().year
             prefix = f"MIC-{year}-"
@@ -222,6 +291,35 @@ class EstudioMicrobiologia(models.Model):
             self.numero = f"{prefix}{n:06d}"
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def ensure_codigo_barra(self) -> str:
+        """Asigna MICB-YYYY-NNNNNN si aún no tiene código de barras."""
+        if self.codigo_barra:
+            return self.codigo_barra
+        year = timezone.now().year
+        prefix = f"MICB-{year}-"
+        last = (
+            EstudioMicrobiologia.objects.filter(codigo_barra__startswith=prefix)
+            .order_by("-codigo_barra")
+            .first()
+        )
+        if last and last.codigo_barra:
+            try:
+                n = int(last.codigo_barra.split("-")[-1]) + 1
+            except (ValueError, IndexError):
+                n = 1
+        else:
+            n = 1
+        self.codigo_barra = f"{prefix}{n:06d}"
+        return self.codigo_barra
+
+    @property
+    def sin_etiquetas(self) -> bool:
+        return self.estado == "PENDIENTE" and self.etiquetas_impresas_at is None
+
+    @property
+    def esperando_recepcion(self) -> bool:
+        return self.estado == "PENDIENTE" and self.etiquetas_impresas_at is not None
 
 
 class SiembraMicrobiologia(models.Model):
@@ -242,7 +340,9 @@ class SiembraMicrobiologia(models.Model):
         "laboratorio.Muestra",
         on_delete=models.PROTECT,
         related_name="siembras_microbiologia",
-        verbose_name="Muestra",
+        verbose_name="Muestra LIMS (legado)",
+        null=True,
+        blank=True,
     )
     medio = models.ForeignKey(
         MedioCultivo,
@@ -291,7 +391,12 @@ class SiembraMicrobiologia(models.Model):
         return f"Siembra #{self.pk} ({self.medio.codigo})"
 
     def clean(self):
-        if self.estudio_id and self.muestra_id and self.muestra_id != self.estudio.muestra_id:
+        if (
+            self.estudio_id
+            and self.muestra_id
+            and self.estudio.muestra_id
+            and self.muestra_id != self.estudio.muestra_id
+        ):
             raise ValidationError(
                 {"muestra": "La siembra debe usar la misma muestra que el estudio asociado."}
             )

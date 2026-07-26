@@ -14,11 +14,24 @@ import type {
   Microorganismo,
   ResultadoAntibiotico,
   SiembraMicrobiologia,
+  TipoCultivoMicrobiologia,
   TipoEstudioMicrobiologia,
+  TipoMuestraMicrobiologia,
 } from '../types/lims';
 import { getPaginatedAll } from './limsApi';
 
 const MICRO = '/lab/microbiologia';
+
+export const listTiposCultivoMicro = (params?: { search?: string }) =>
+  getPaginatedAll<TipoCultivoMicrobiologia>(`${MICRO}/tipos-cultivo/`, {
+    page_size: 200,
+    ...params,
+  });
+export const listTiposMuestraMicro = (params?: { search?: string }) =>
+  getPaginatedAll<TipoMuestraMicrobiologia>(`${MICRO}/tipos-muestra/`, {
+    page_size: 200,
+    ...params,
+  });
 
 // --- Medios ---
 export const listMediosCultivo = (params?: { search?: string }) =>
@@ -29,16 +42,80 @@ export const updateMedioCultivo = (id: number, body: Partial<MedioCultivo>) =>
   apiClient.patch<MedioCultivo>(`${MICRO}/medios/${id}/`, body).then((r) => r.data);
 
 // --- Estudios ---
-export const listEstudiosMicrobiologia = (params?: { search?: string }) =>
-  getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, { page_size: 200, ...params });
+export const listEstudiosMicrobiologia = (params?: {
+  search?: string;
+  estado?: string;
+  sin_etiquetas?: boolean;
+  esperando_recepcion?: boolean;
+}) => {
+  const q: Record<string, string | number | undefined> = { page_size: 200 };
+  if (params?.search) q.search = params.search;
+  if (params?.estado) q.estado = params.estado;
+  if (params?.sin_etiquetas) q.sin_etiquetas = '1';
+  if (params?.esperando_recepcion) q.esperando_recepcion = '1';
+  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q);
+};
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);
 export const createEstudioMicrobiologia = (body: {
-  solicitud_id: number;
-  muestra_id: number;
+  paciente_id?: number;
+  medico_id?: number | null;
+  medico_externo_nombre?: string;
+  consulta_hc_id?: number | null;
+  origen_solicitud?: string;
+  tipo_cultivo_id?: number;
+  tipo_muestra_micro_id?: number;
+  /** @deprecated alias de tipo_muestra_micro_id */
+  tipo_muestra_id?: number;
+  solicitud_id?: number;
+  muestra_id?: number;
   tipo_estudio?: TipoEstudioMicrobiologia | string;
   observaciones?: string;
 }) => apiClient.post<EstudioMicrobiologia>(`${MICRO}/estudios/`, body).then((r) => r.data);
+
+export const createEstudiosMicrobiologiaBatch = (body: {
+  paciente_id: number;
+  medico_id?: number | null;
+  medico_externo_nombre?: string;
+  consulta_hc_id?: number | null;
+  origen_solicitud?: string;
+  observaciones?: string;
+  items: Array<{ tipo_cultivo_id: number; tipo_muestra_micro_id: number }>;
+}) =>
+  apiClient
+    .post<EstudioMicrobiologia[]>(`${MICRO}/estudios/batch/`, body)
+    .then((r) => r.data);
+
+export async function downloadEtiquetasEstudioMicro(estudioId: number): Promise<void> {
+  const res = await apiClient.post(
+    `${MICRO}/estudios/${estudioId}/imprimir-etiquetas/`,
+    {},
+    { responseType: 'blob' }
+  );
+  const blob = new Blob([res.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `etiquetas-micro-${estudioId}.pdf`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadEtiquetasEstudiosMicroBatch(estudioIds: number[]): Promise<void> {
+  const res = await apiClient.post(
+    `${MICRO}/estudios/imprimir-etiquetas/`,
+    { estudio_ids: estudioIds },
+    { responseType: 'blob' }
+  );
+  const blob = new Blob([res.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `etiquetas-micro-batch.pdf`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
 export const updateEstudioMicrobiologia = (
   id: number,
   body: { tipo_estudio?: string; observaciones?: string }

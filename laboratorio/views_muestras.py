@@ -17,6 +17,7 @@ from api.permissions import (
     LimsMuestraTransaccionalPermission,
     get_normalized_role,
 )
+from usuarios.roles import ROLES_LIMS_WRITE
 from auditoria.audit_service import log_update
 from auditoria.snapshot import safe_model_snapshot
 from laboratorio.etiquetas_muestra import (
@@ -142,10 +143,13 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return qs
         role = get_normalized_role(user)
-        if role in ("admin", "laboratorio"):
+        # Operadores LIMS + admin (técnico y bioquímico tienen la misma visibilidad).
+        if role in ROLES_LIMS_WRITE:
             return qs
         if role == "medico":
-            return qs.filter(solicitud__medico_interno__user=user)
+            from laboratorio.access import filtrar_lectura_lims_medico
+
+            return filtrar_lectura_lims_medico(qs, user, solicitud_path="solicitud")
         return qs.none()
 
     def create(self, request, *args, **kwargs):

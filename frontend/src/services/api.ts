@@ -24,7 +24,10 @@ import {
   RegistroProcedimientoRecord,
   RegistroQuirurgicoRecord,
   TipoExamen,
+  SignosVitales,
+  PacienteTimelineEvent,
 } from '../types';
+import type { BiKpisResponse, PortalResumen } from '../types/bi';
 import { fetchWithCSRF } from '../utils/csrf';
 import { apiClient } from './apiClient';
 
@@ -249,6 +252,18 @@ class ApiService {
   // Panel
   async getDashboardStats(): Promise<DashboardStats> {
     const response: AxiosResponse<DashboardStats> = await this.api.get('/dashboard/estadisticas/');
+    return response.data;
+  }
+
+  async getBiKpis(params: { desde: string; hasta: string }): Promise<BiKpisResponse> {
+    const response: AxiosResponse<BiKpisResponse> = await this.api.get('/bi/kpis/', { params });
+    return response.data;
+  }
+
+  async getPortalResumen(pacienteId: number): Promise<PortalResumen> {
+    const response: AxiosResponse<PortalResumen> = await this.api.get(
+      `/pacientes/${pacienteId}/portal-resumen/`,
+    );
     return response.data;
   }
 
@@ -609,26 +624,87 @@ class ApiService {
     return response.data.results || [];
   }
 
+  async getSignosVitales(params?: { atencion?: number }): Promise<SignosVitales[]> {
+    const response: AxiosResponse<ApiResponse<SignosVitales> | SignosVitales[]> = await this.api.get(
+      '/signos-vitales/',
+      { params },
+    );
+    if (Array.isArray(response.data)) return response.data;
+    return response.data.results || [];
+  }
+
+  async createSignosVitales(payload: Record<string, unknown>): Promise<SignosVitales> {
+    try {
+      const response: AxiosResponse<SignosVitales> = await this.api.post('/signos-vitales/', payload);
+      return response.data;
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { error?: string; detail?: string; details?: unknown } };
+        message?: string;
+      };
+      const details = err?.response?.data?.details;
+      const detailMsg =
+        typeof details === 'object' && details
+          ? Object.values(details as Record<string, string[]>)
+              .flat()
+              .join(' ')
+          : undefined;
+      throw new Error(
+        detailMsg ||
+          err?.response?.data?.error ||
+          err?.response?.data?.detail ||
+          err?.message ||
+          'Error al registrar signos vitales',
+      );
+    }
+  }
+
+  async getPacienteTimeline(pacienteId: number): Promise<PacienteTimelineEvent[]> {
+    const response: AxiosResponse<{ results: PacienteTimelineEvent[] } | PacienteTimelineEvent[]> =
+      await this.api.get(`/pacientes/${pacienteId}/timeline/`);
+    if (Array.isArray(response.data)) return response.data;
+    return response.data.results || [];
+  }
+
   // Consulta ambulatoria
+  /** Upsert canónico (crea o actualiza). Preferir frente a create/update separados. */
+  async registrarConsultaAmbulatoria(
+    atencionId: number,
+    payload: Partial<ConsultaAmbulatoriaRecord>,
+  ): Promise<ConsultaAmbulatoriaRecord> {
+    const response: AxiosResponse<ConsultaAmbulatoriaRecord> = await this.api.post(
+      `/atenciones/${atencionId}/registrar-consulta/`,
+      payload,
+    );
+    const data = response.data;
+    const id = data.id ?? data.atencion_id ?? atencionId;
+    return { ...data, id, atencion_id: data.atencion_id ?? atencionId };
+  }
+
   async createConsultaAmbulatoria(atencionId: number, payload: Partial<ConsultaAmbulatoriaRecord>): Promise<ConsultaAmbulatoriaRecord> {
-    const response: AxiosResponse<ConsultaAmbulatoriaRecord> = await this.api.post(`/atenciones/${atencionId}/crear_registro_ambulatorio/`, payload);
-    return response.data;
+    // Upsert: el shell vacío de ensure-consulta-hc no debe bloquear el primer guardado.
+    const response: AxiosResponse<ConsultaAmbulatoriaRecord> = await this.api.post(
+      `/atenciones/${atencionId}/crear_registro_ambulatorio/`,
+      payload,
+    );
+    const data = response.data;
+    const id = data.id ?? data.atencion_id ?? atencionId;
+    return { ...data, id, atencion_id: data.atencion_id ?? atencionId };
   }
 
   async updateConsultaAmbulatoria(atencionId: number, payload: Partial<ConsultaAmbulatoriaRecord>, registroId?: number): Promise<ConsultaAmbulatoriaRecord> {
-    // Si no se proporciona el ID del registro, obtenerlo de la atención
-    let idToUse = registroId;
-    if (!idToUse) {
-      const atencion = await this.getAtencion(atencionId);
-      if (atencion.consulta_ambulatoria?.id) {
-        idToUse = atencion.consulta_ambulatoria.id;
-      } else {
-        throw new Error('No existe un registro de consulta ambulatoria para esta atención. Use createConsultaAmbulatoria para crear uno nuevo.');
-      }
+    // Preferir upsert por atención (evita IDs incompletos del cache / listados).
+    if (!registroId) {
+      return this.registrarConsultaAmbulatoria(atencionId, payload);
     }
-    
-    const response: AxiosResponse<ConsultaAmbulatoriaRecord> = await this.api.put(`/consultas-ambulatorias/${idToUse}/`, payload);
-    return response.data;
+
+    const response: AxiosResponse<ConsultaAmbulatoriaRecord> = await this.api.put(
+      `/consultas-ambulatorias/${registroId}/`,
+      payload,
+    );
+    const data = response.data;
+    const id = data.id ?? data.atencion_id ?? registroId;
+    return { ...data, id, atencion_id: data.atencion_id ?? atencionId };
   }
 
   async updateEvolucionInternacion(

@@ -42,9 +42,13 @@ from .serializers import (
     EstudioComplementarioListSerializer,
     InformeEstudioComplementarioSerializer,
     RectificarInformeSerializer,
+    SubirArchivoEstudioSerializer,
+    SugerirInformeEstudioSerializer,
+    QuitarArchivoEstudioSerializer,
     TipoEstudioComplementarioSerializer,
 )
 from . import services
+from auditoria.audit_service import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +74,7 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         'atencion',
         'consulta_hc',
         'medico_solicitante',
+        'realizado_por',
         'turno',
         'turno__recurso',
     ).all()
@@ -253,6 +258,52 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
             return self._validation_error_response(exc)
         return Response(EstudioComplementarioDetailSerializer(estudio).data)
 
+    @action(detail=True, methods=['post'], url_path='sugerir-informe')
+    def sugerir_informe(self, request, pk=None):
+        """
+        Borrador de informe (plantilla y/o MedGemma). No persiste:
+        el médico debe crear el borrador explícitamente.
+        """
+        from .sugerir_informe import sugerir_informe_estudio
+
+        estudio = self.get_object()
+        if estudio.estado not in (
+            EstudioComplementario.Estado.REALIZADO,
+            EstudioComplementario.Estado.INFORMADO,
+        ):
+            return Response(
+                {
+                    'detail': (
+                        'Solo se puede sugerir informe cuando el estudio está '
+                        'REALIZADO o INFORMADO.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = SugerirInformeEstudioSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = sugerir_informe_estudio(
+            estudio,
+            notas_medico=ser.validated_data.get('notas_medico') or '',
+            prefer_medgemma=ser.validated_data.get('prefer_medgemma', True),
+        )
+        log_event(
+            action='IA_SUGGESTION_CREATED',
+            actor=request.user,
+            entity=estudio,
+            module='estudios',
+            metadata={
+                'view': 'EstudioComplementarioViewSet.sugerir_informe',
+                'accion': 'estudio_informe_sugerir',
+                'fuente': data.get('fuente'),
+                'marcado_sugerencia': True,
+                'modelo': data.get('modelo'),
+                'texto_len': len(data.get('texto') or ''),
+                'estudio_id': estudio.pk,
+            },
+        )
+        return Response(data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='agregar-archivo')
     def agregar_archivo(self, request, pk=None):
         estudio = self.get_object()
@@ -270,6 +321,39 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
             ArchivoEstudioComplementarioSerializer(vinculo, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=['post'], url_path='subir-archivo')
+    def subir_archivo(self, request, pk=None):
+        estudio = self.get_object()
+        ser = SubirArchivoEstudioSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            vinculo = services.subir_archivo_estudio(
+                estudio,
+                user=request.user,
+                **ser.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        return Response(
+            ArchivoEstudioComplementarioSerializer(vinculo, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['post'], url_path='quitar-archivo')
+    def quitar_archivo(self, request, pk=None):
+        estudio = self.get_object()
+        ser = QuitarArchivoEstudioSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            result = services.quitar_archivo_estudio(
+                estudio,
+                user=request.user,
+                archivo_estudio_id=ser.validated_data['archivo_estudio_id'],
+            )
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        return Response(result, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='archivos')
     def archivos(self, request, pk=None):

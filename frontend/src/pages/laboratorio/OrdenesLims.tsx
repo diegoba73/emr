@@ -35,6 +35,7 @@ import {
 } from '../../utils/limsOrdenesFecha';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import { ESTADOS_ORDEN_LIMS } from '../../utils/limsEstadosOrden';
+import { mapLabToPendiente } from '../../utils/limsPendientesUnificados';
 
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
@@ -237,14 +238,14 @@ const OrdenesLims: React.FC = () => {
       ) : (
         <Paper>
           <OrdenesLimsTabla
-            rows={filtradas}
+            rows={filtradas.map(mapLabToPendiente)}
             emptyMessage={
               buscarPorNumero
                 ? 'Sin órdenes con ese número.'
                 : `Sin muestras tomadas el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
             }
             columnaFecha="toma"
-            onVer={(id) => navigate(`/laboratorio/ordenes/${id}`)}
+            onVer={(row) => navigate(`/laboratorio/ordenes/${row.id}`)}
           />
         </Paper>
       )}

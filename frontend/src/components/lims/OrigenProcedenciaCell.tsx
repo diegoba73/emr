@@ -1,13 +1,14 @@
 import React from 'react';
 import { Typography } from '@mui/material';
-import type { SolicitudExamenLims } from '../../types/lims';
+import type { OrigenSolicitudLims } from '../../types/lims';
 import { formatOrigenProcedenciaCell } from '../../utils/limsOrigenSolicitud';
 
 export interface OrigenProcedenciaCellProps {
-  row: Pick<
-    SolicitudExamenLims,
-    'origen_solicitud' | 'origen_solicitud_display' | 'procedencia_display'
-  >;
+  row: {
+    origen_solicitud?: OrigenSolicitudLims | string | null;
+    origen_solicitud_display?: string | null;
+    procedencia_display?: string | null;
+  };
 }
 
 const OrigenProcedenciaCellView: React.FC<OrigenProcedenciaCellProps> = ({ row }) => {

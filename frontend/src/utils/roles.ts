@@ -9,6 +9,7 @@ export const ROLES_ESTUDIO_COMPLEMENTARIO = [
 
 export type RolEstudioComplementario = (typeof ROLES_ESTUDIO_COMPLEMENTARIO)[number];
 
+/** Técnico y bioquímico: misma operación LIMS; solo el bioquímico valida. */
 export const ROLES_LIMS_OPERADOR = ['laboratorio', 'bioquimico'] as const;
 
 export type RolLimsOperador = (typeof ROLES_LIMS_OPERADOR)[number];

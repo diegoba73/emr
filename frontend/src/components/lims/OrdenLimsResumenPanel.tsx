@@ -126,9 +126,11 @@ const OrdenLimsResumenPanel: React.FC<OrdenLimsResumenPanelProps> = ({ orden }) 
         <>
           <Divider sx={{ my: 2 }} />
           <Typography variant="subtitle2" gutterBottom>
-            Observaciones
+            {(orden.paneles_resumen ?? []).some((p) => p.codigo === 'PAN_HEMO')
+              ? 'Conclusión / observaciones del hemograma'
+              : 'Observaciones'}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
             {orden.observaciones}
           </Typography>
         </>

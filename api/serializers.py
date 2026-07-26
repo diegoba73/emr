@@ -685,76 +685,97 @@ class SignosVitalesSerializer(serializers.ModelSerializer):
         return None
 
     def validate_indice_masa_corporal(self, value):
-        """
-        Normalizar IMC a 2 decimales (sin validación de rango).
-        Validaciones de rango deshabilitadas temporalmente para evaluación del flujo.
-        """
         if value is None:
             return value
-        
-        # Solo normalizar a 2 decimales (sin validar rango)
         from decimal import Decimal, ROUND_HALF_UP
-        return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        value = Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if value < 10 or value > 80:
+            raise serializers.ValidationError('IMC fuera de rango fisiológico (10–80).')
+        return value
 
     def validate_temperatura(self, value):
-        """Normalizar temperatura a 1 decimal"""
         if value is None:
             return value
-        
         from decimal import Decimal, ROUND_HALF_UP
-        return Decimal(str(value)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+        value = Decimal(str(value)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+        if value < 30 or value > 45:
+            raise serializers.ValidationError('Temperatura fuera de rango (30–45 °C).')
+        return value
 
     def validate_saturacion_oxigeno(self, value):
-        """Normalizar saturación de oxígeno a 1 decimal"""
         if value is None:
             return value
-        
         from decimal import Decimal, ROUND_HALF_UP
-        return Decimal(str(value)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+        value = Decimal(str(value)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+        if value < 50 or value > 100:
+            raise serializers.ValidationError('SpO₂ fuera de rango (50–100 %).')
+        return value
 
     def validate_peso(self, value):
-        """Normalizar peso a 2 decimales"""
         if value is None:
             return value
-        
         from decimal import Decimal, ROUND_HALF_UP
-        return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        value = Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if value <= 0 or value > 500:
+            raise serializers.ValidationError('Peso fuera de rango (0–500 kg).')
+        return value
 
     def validate_talla(self, value):
-        """Normalizar talla a 2 decimales"""
         if value is None:
             return value
-        
         from decimal import Decimal, ROUND_HALF_UP
-        return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        value = Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if value <= 0 or value > 3:
+            raise serializers.ValidationError('Talla fuera de rango (0–3 m).')
+        return value
+
+    def validate_frecuencia_cardiaca(self, value):
+        if value is None:
+            return value
+        if value < 30 or value > 220:
+            raise serializers.ValidationError('Frecuencia cardíaca fuera de rango (30–220 bpm).')
+        return value
+
+    def validate_frecuencia_respiratoria(self, value):
+        if value is None:
+            return value
+        if value < 5 or value > 60:
+            raise serializers.ValidationError('Frecuencia respiratoria fuera de rango (5–60 rpm).')
+        return value
 
     def validate(self, data):
-        """
-        Validaciones clínicas DESHABILITADAS temporalmente para evaluación del flujo.
-        Solo se realiza normalización de datos sin rechazar valores.
-        
-        Rangos clínicos de referencia (para futuro):
-        - Frecuencia cardíaca: 30-220 bpm
-        - Frecuencia respiratoria: 8-60 rpm
-        - Temperatura: 30-45 °C
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"✅ SignosVitalesSerializer.validate - data recibida (sin validaciones de rango): {data}")
-        
-        # Validaciones de rango deshabilitadas para evaluación del flujo
-        # Los datos se aceptan tal como vienen
-        
+        atencion = data.get('atencion') or getattr(self.instance, 'atencion', None)
+        request = self.context.get('request')
+        role = ''
+        if request and getattr(request.user, 'is_authenticated', False):
+            role = (getattr(request.user, 'rol', '') or '').lower()
+            if getattr(request.user, 'is_superuser', False):
+                role = 'admin'
+        if atencion is not None:
+            cerrada = (
+                atencion.estado_clinico == 'FINALIZADA'
+                or atencion.fecha_cierre is not None
+            )
+            if cerrada and role != 'admin':
+                raise serializers.ValidationError(
+                    {'atencion_id': 'No se pueden registrar signos vitales en una atención finalizada.'}
+                )
+        measures = (
+            data.get('tension_arterial'),
+            data.get('frecuencia_cardiaca'),
+            data.get('frecuencia_respiratoria'),
+            data.get('temperatura'),
+            data.get('saturacion_oxigeno'),
+            data.get('peso'),
+            data.get('talla'),
+            data.get('indice_masa_corporal'),
+        )
+        if self.instance is None and not any(m is not None and m != '' for m in measures):
+            raise serializers.ValidationError('Debe indicar al menos un signo vital.')
         return data
 
     def to_representation(self, instance):
-        """
-        Asegurar que atencion_id siempre esté presente como entero en la respuesta.
-        Como atencion_id es write_only en el campo, necesitamos agregarlo manualmente en lectura.
-        """
         data = super().to_representation(instance)
-        # Como atencion_id es write_only, no aparece en la representación por defecto
-        # Lo agregamos manualmente como entero
         data['atencion_id'] = instance.atencion_id if hasattr(instance, 'atencion_id') else None
         return data
 
@@ -779,6 +800,12 @@ class ConsultaAmbulatoriaSerializer(serializers.ModelSerializer):
             'diagnostico_definitivo',
             'observaciones_medicas',
         ]
+
+    def save(self, **kwargs):
+        instance = super().save(**kwargs)
+        from historias_clinicas.services import sync_consulta_hc_desde_ambulatoria
+        sync_consulta_hc_desde_ambulatoria(instance)
+        return instance
 
 
 class EvolucionInternacionSerializer(serializers.ModelSerializer):
@@ -1027,13 +1054,37 @@ class AtencionSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     internacion_id = serializers.IntegerField(read_only=True, allow_null=True)
+    derivada_a_internacion = serializers.SerializerMethodField()
     consulta_ambulatoria = ConsultaAmbulatoriaSerializer(read_only=True, allow_null=True)
     evolucion_internacion = EvolucionInternacionSerializer(read_only=True, allow_null=True)
     consulta_hc_id = serializers.SerializerMethodField()
+    pedidos_lab_pendientes = serializers.SerializerMethodField()
+    pedidos_estudios_pendientes = serializers.SerializerMethodField()
     registro_procedimiento = RegistroProcedimientoSerializer(read_only=True, allow_null=True)
     registro_quirurgico = RegistroQuirurgicoSerializer(read_only=True, allow_null=True)
     tipo_atencion_display = serializers.CharField(source='get_tipo_atencion_display', read_only=True)
     documentos = DocumentoSerializer(many=True, read_only=True)
+    signos_vitales = SignosVitalesSerializer(many=True, read_only=True)
+    ultimo_signo_vital = serializers.SerializerMethodField()
+    documentos_count = serializers.SerializerMethodField()
+
+    def get_ultimo_signo_vital(self, instance):
+        qs = getattr(instance, 'signos_vitales', None)
+        if qs is None:
+            return None
+        latest = qs.all()[:1]
+        if not latest:
+            return None
+        return SignosVitalesSerializer(latest[0], context=self.context).data
+
+    def get_documentos_count(self, instance):
+        docs = getattr(instance, 'documentos', None)
+        if docs is None:
+            return 0
+        try:
+            return docs.count()
+        except TypeError:
+            return len(docs)
 
     def get_consulta_hc_id(self, instance):
         from historias_clinicas.services import consulta_hc_id_para_atencion, ensure_consulta_hc_desde_atencion
@@ -1060,6 +1111,50 @@ class AtencionSerializer(serializers.ModelSerializer):
                 )
                 return None
         return None
+
+    def get_pedidos_lab_pendientes(self, instance):
+        """Órdenes LIMS de la consulta HC de esta atención aún no FINALIZADO."""
+        from historias_clinicas.services import consulta_hc_id_para_atencion
+        from laboratorio.models import SolicitudExamen
+
+        cid = consulta_hc_id_para_atencion(instance)
+        if not cid:
+            return 0
+        return (
+            SolicitudExamen.objects.filter(consulta_hc_id=cid)
+            .exclude(estado='FINALIZADO')
+            .count()
+        )
+
+    def get_pedidos_estudios_pendientes(self, instance):
+        """Estudios complementarios aún no informados/cerrados de esta atención."""
+        from django.db.models import Q
+
+        from estudios.models import EstudioComplementario
+        from historias_clinicas.services import consulta_hc_id_para_atencion
+
+        estados_completos = (
+            EstudioComplementario.Estado.INFORMADO,
+            EstudioComplementario.Estado.VALIDADO,
+            EstudioComplementario.Estado.ENTREGADO,
+            EstudioComplementario.Estado.ANULADO,
+        )
+        cid = consulta_hc_id_para_atencion(instance)
+        q = Q(atencion_id=instance.pk)
+        if cid:
+            q |= Q(consulta_hc_id=cid)
+        return (
+            EstudioComplementario.objects.filter(q)
+            .exclude(estado__in=estados_completos)
+            .distinct()
+            .count()
+        )
+
+    def get_derivada_a_internacion(self, instance):
+        """Guardia no usa Atencion.internacion; la derivación es Internacion.atencion_origen."""
+        from internacion.models import Internacion
+
+        return Internacion.objects.filter(atencion_origen_id=instance.pk).exists()
     
     def to_representation(self, instance):
         """Sobrescribir para asegurar que los IDs siempre estén presentes"""
@@ -1096,6 +1191,7 @@ class AtencionSerializer(serializers.ModelSerializer):
             'contexto_atencion',
             'contexto_atencion_display',
             'internacion_id',
+            'derivada_a_internacion',
             'tipo_atencion',
             'tipo_atencion_display',
             'tipo_intervencion',
@@ -1104,9 +1200,14 @@ class AtencionSerializer(serializers.ModelSerializer):
             'consulta_ambulatoria',
             'evolucion_internacion',
             'consulta_hc_id',
+            'pedidos_lab_pendientes',
+            'pedidos_estudios_pendientes',
             'registro_procedimiento',
             'registro_quirurgico',
             'documentos',
+            'documentos_count',
+            'signos_vitales',
+            'ultimo_signo_vital',
             'created_at',
             'updated_at',
         ]

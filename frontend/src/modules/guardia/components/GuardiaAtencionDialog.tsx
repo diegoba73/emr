@@ -14,8 +14,6 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { TransferWithinAStation } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../../contexts/DataContext';
 import { useAtencionQuery } from '../../atenciones/hooks';
@@ -47,7 +45,6 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   onClose,
   onSaved,
 }) => {
-  const navigate = useNavigate();
   const { currentUser } = useData();
   const isReadOnly = mode === 'view';
   const isCreate = mode === 'create';
@@ -184,7 +181,8 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       origenSolicitud: 'GUARDIA',
     });
 
-    await apiService.closeAtencion(targetAtencionId!);
+    // La atención queda ABIERTA: pedidos LIMS/estudios siguen su ciclo;
+    // el cierre clínico es explícito (botón «Cerrar atención»).
     return targetAtencionId!;
   };
 
@@ -192,7 +190,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     setSaving(true);
     try {
       await persistAtencion();
-      toast.success('Atención de guardia registrada.');
+      toast.success('Atención de guardia guardada (sigue abierta).');
       onSaved();
       onClose();
     } catch (err: unknown) {
@@ -207,26 +205,33 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     }
   };
 
-  const handleDerivarInternacion = async () => {
+  const handleCerrarAtencion = async () => {
+    if (
+      !window.confirm(
+        '¿Cerrar esta atención de guardia? Podés seguir viendo los pedidos, pero no se podrán editar desde aquí.'
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     try {
-      const savedId = await persistAtencion();
-      const pacienteId = selectedPaciente?.id ?? atencion?.paciente?.id;
+      let id = atencionId ?? null;
+      if (isCreate || !id) {
+        id = await persistAtencion();
+      } else {
+        // Persistir motivo/pedidos pendientes antes de cerrar
+        await persistAtencion();
+      }
+      await apiService.closeAtencion(id!);
+      toast.success('Atención de guardia cerrada.');
       onSaved();
       onClose();
-      navigate('/internacion', {
-        state: {
-          derivarDesdeAtencionId: savedId,
-          pacienteId,
-          motivoIngreso: motivoConsulta.trim(),
-        },
-      });
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { error?: string; detail?: string } } };
       const message =
         ax.response?.data?.error ||
         ax.response?.data?.detail ||
-        (err instanceof Error ? err.message : 'No se pudo guardar antes de derivar.');
+        (err instanceof Error ? err.message : 'No se pudo cerrar la atención.');
       toast.error(message);
     } finally {
       setSaving(false);
@@ -255,8 +260,10 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
           <Stack spacing={2.5} sx={{ mt: 1 }}>
             {!isReadOnly && (
               <Alert severity="info" variant="outlined">
-                Completá paciente, motivo y pedidos en este formulario. Si el cuadro lo requiere, podés
-                derivar a internación; si no, guardá y listo.
+                Al guardar, la atención queda <strong>abierta</strong>: podés seguir agregando
+                pedidos y derivar a internación cuando haga falta. Los análisis y estudios se
+                completan en sus módulos; cerrá la atención solo cuando el episodio de guardia
+                termine.
               </Alert>
             )}
 
@@ -340,12 +347,11 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
           <>
             <Button
               variant="outlined"
-              color="warning"
-              startIcon={<TransferWithinAStation />}
-              onClick={handleDerivarInternacion}
+              color="inherit"
+              onClick={handleCerrarAtencion}
               disabled={saving || (isCreate && !selectedPaciente)}
             >
-              Guardar y derivar a internación
+              Cerrar atención
             </Button>
             <Button
               variant="contained"

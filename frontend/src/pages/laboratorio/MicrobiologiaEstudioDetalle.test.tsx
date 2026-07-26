@@ -41,17 +41,30 @@ jest.mock('../../contexts/DataContext', () => ({
 
 jest.mock('../../utils/limsAccess', () => ({
   canAccessMicrobiologia: () => true,
+  canAccessMicrobiologiaLectura: () => true,
+  canOperateMicrobiologia: () => true,
   canValidarInformeMicro: () => false,
   canOperateMicroEstudioTecnico: () => true,
   canMarcarMicroEstudioInformado: () => false,
   isMicroEstudioCerrado: () => false,
 }));
 
+jest.mock('../../services/limsMicroApi', () => ({
+  downloadEtiquetasEstudioMicro: jest.fn(),
+}));
+
+jest.mock('../../components/lims/micro/EstudioMicroPedidoRecepcionPanel', () => () => (
+  <div>Pedido recepción</div>
+));
 jest.mock('../../components/lims/micro/EstudioMicroResumenTab', () => () => <div>Resumen</div>);
 jest.mock('../../components/lims/micro/SiembrasLecturasPanel', () => () => <div>Siembras</div>);
 jest.mock('../../components/lims/micro/AisladosIdentificacionPanel', () => () => <div>Aislados</div>);
 jest.mock('../../components/lims/micro/AntibiogramaPanel', () => () => <div>Antibiograma</div>);
 jest.mock('../../components/lims/micro/InformesMicrobiologiaPanel', () => () => <div>Informes</div>);
+jest.mock('../../components/lims/micro/MotivoDialog', () => ({
+  MotivoDialog: () => null,
+  useMotivoDialog: () => ({ openMotivoDialog: jest.fn(), dialogProps: {} }),
+}));
 
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
@@ -83,7 +96,29 @@ describe('MicrobiologiaEstudioDetalle', () => {
     mockListAntibioticos.mockResolvedValue([]);
   });
 
-  it('pasa estudio_id a los listados micro filtrados', async () => {
+  it('en PENDIENTE muestra vista de recepción y no carga listas técnicas', async () => {
+    const { findByText } = render(
+      <MemoryRouter initialEntries={['/laboratorio/microbiologia/estudios/42']}>
+        <Routes>
+          <Route
+            path="/laboratorio/microbiologia/estudios/:id"
+            element={<MicrobiologiaEstudioDetalle />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(mockGetEstudio).toHaveBeenCalledWith(42);
+    });
+    expect(await findByText('Pedido recepción')).toBeInTheDocument();
+    expect(mockListSiembras).not.toHaveBeenCalled();
+    expect(mockListMedios).not.toHaveBeenCalled();
+  });
+
+  it('pasa estudio_id a los listados micro filtrados cuando ya está recibido', async () => {
+    mockGetEstudio.mockResolvedValue({ ...estudioMock, estado: 'RECIBIDO' });
+
     render(
       <MemoryRouter initialEntries={['/laboratorio/microbiologia/estudios/42']}>
         <Routes>
@@ -100,7 +135,9 @@ describe('MicrobiologiaEstudioDetalle', () => {
     });
 
     const filterParams = { estudio_id: 42 };
-    expect(mockListSiembras).toHaveBeenCalledWith(filterParams);
+    await waitFor(() => {
+      expect(mockListSiembras).toHaveBeenCalledWith(filterParams);
+    });
     expect(mockListLecturas).toHaveBeenCalledWith(filterParams);
     expect(mockListAislados).toHaveBeenCalledWith(filterParams);
     expect(mockListIdentificaciones).toHaveBeenCalledWith(filterParams);

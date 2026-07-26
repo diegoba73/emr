@@ -209,6 +209,25 @@ class Atencion(TimestampedModel):
                     'internacion': 'Una atención de guardia no puede vincularse a una internación.',
                 })
 
+        # Exclusividad de situación solo en altas nuevas ambulatoria/guardia.
+        if (
+            not self.pk
+            and self.contexto_atencion
+            in (self.ContextoAtencion.AMBULATORIA, self.ContextoAtencion.GUARDIA)
+            and self.paciente_id
+        ):
+            from turnos.situacion_paciente import (
+                SituacionPacienteConflictError,
+                assert_puede_iniciar_atencion_ambulatoria_o_guardia,
+            )
+            try:
+                assert_puede_iniciar_atencion_ambulatoria_o_guardia(
+                    self.paciente_id,
+                    self.contexto_atencion,
+                )
+            except SituacionPacienteConflictError as exc:
+                raise ValidationError({'paciente': str(exc)}) from exc
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)

@@ -10,7 +10,7 @@ from typing import Any
 
 from django.utils import timezone
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
@@ -34,6 +34,7 @@ from laboratorio.informe_pdf_config import (
 )
 from laboratorio.models import ResultadoExamen, SolicitudExamen
 from laboratorio.orden_grupos_informe import (
+    PANEL_HEMOGRAMA,
     GrupoInformeSpec,
     aplicar_orden_grupos,
     construir_grupos_informe,
@@ -59,6 +60,7 @@ class GrupoResultadosPdf:
     key: str
     titulo: str
     resultados: list[ResultadoExamen] = field(default_factory=list)
+    panel_codigo: str | None = None
 
 
 def _escape(text: str) -> str:
@@ -135,7 +137,12 @@ def agrupar_resultados_por_panel(
     orden = getattr(solicitud, "orden_grupos_informe", None) or []
     ordered: list[GrupoInformeSpec] = aplicar_orden_grupos(specs, orden if orden else None)
     return [
-        GrupoResultadosPdf(key=g.key, titulo=g.titulo, resultados=g.resultados)
+        GrupoResultadosPdf(
+            key=g.key,
+            titulo=g.titulo,
+            resultados=g.resultados,
+            panel_codigo=g.panel_codigo,
+        )
         for g in ordered
     ]
 
@@ -456,6 +463,22 @@ def _styles() -> dict[str, ParagraphStyle]:
             textColor=meta_color,
             spaceBefore=6,
         ),
+        "observaciones_title": ParagraphStyle(
+            "ObservacionesTitle",
+            fontName="Helvetica-Bold",
+            fontSize=typo["panel_title"],
+            leading=typo["panel_title"] + 2,
+            spaceBefore=10,
+            spaceAfter=2,
+        ),
+        "observaciones": ParagraphStyle(
+            "ObservacionesInforme",
+            fontName="Helvetica",
+            fontSize=typo["exam_title"],
+            leading=typo["exam_title"] + 2,
+            spaceBefore=2,
+            spaceAfter=4,
+        ),
     }
 
 
@@ -642,12 +665,23 @@ def construir_story_icpl(
         story.append(Spacer(1, 0.15 * cm))
 
     grupos = agrupar_resultados_por_panel(solicitud, resultados)
+    obs = (getattr(solicitud, "observaciones", None) or "").strip()
+    conclusion_hemo_insertada = False
 
     if not grupos:
         story.append(Paragraph("Sin resultados registrados.", styles["empty"]))
     else:
         for grupo in grupos:
             story.extend(_bloque_panel(grupo, styles))
+            if obs and grupo.panel_codigo == PANEL_HEMOGRAMA and not conclusion_hemo_insertada:
+                story.append(Spacer(1, 0.2 * cm))
+                story.append(
+                    Paragraph("CONCLUSIÓN / OBSERVACIONES (HEMOGRAMA)", styles["observaciones_title"])
+                )
+                story.append(
+                    Paragraph(_escape(obs).replace("\n", "<br/>"), styles["observaciones"])
+                )
+                conclusion_hemo_insertada = True
 
     if estudios_micro:
         story.append(Spacer(1, 0.3 * cm))
@@ -662,6 +696,11 @@ def construir_story_icpl(
                     styles["exam_meta"],
                 )
             )
+
+    if obs and not conclusion_hemo_insertada:
+        story.append(Spacer(1, 0.25 * cm))
+        story.append(Paragraph("CONCLUSIÓN / OBSERVACIONES", styles["observaciones_title"]))
+        story.append(Paragraph(_escape(obs).replace("\n", "<br/>"), styles["observaciones"]))
 
     story.extend(_bloque_validacion(solicitud, resultados, styles))
     return story

@@ -1,6 +1,11 @@
 """
 Transiciones de estado controladas para SolicitudExamen (LIMS nativo).
-Estados: PENDIENTE → EN_PROCESO (toma de muestra) → INFORMADO_PARCIAL (informe parcial) → FINALIZADO.
+
+PENDIENTE → EN_PROCESO (toma/recepción)
+EN_PROCESO → INFORMADO_PARCIAL (informe parcial incompleto)
+EN_PROCESO | INFORMADO_PARCIAL → LISTO_PARA_VALIDAR (resultados completos)
+LISTO_PARA_VALIDAR → FINALIZADO (validar bioquímico)
+LISTO_PARA_VALIDAR → EN_PROCESO (reabrir si queda valor vacío)
 """
 from __future__ import annotations
 
@@ -24,17 +29,21 @@ _ALLOWED_TRANSITIONS: frozenset[tuple[str, str, str]] = frozenset(
     {
         ("tomar_muestra", "PENDIENTE", "EN_PROCESO"),
         ("informar_parcial", "EN_PROCESO", "INFORMADO_PARCIAL"),
-        ("finalizar", "EN_PROCESO", "FINALIZADO"),
-        ("finalizar", "INFORMADO_PARCIAL", "FINALIZADO"),
-        ("finalizar_auto", "EN_PROCESO", "FINALIZADO"),
-        ("finalizar_auto", "INFORMADO_PARCIAL", "FINALIZADO"),
-        # Alias legacy API
-        ("validar", "EN_PROCESO", "FINALIZADO"),
-        ("validar", "INFORMADO_PARCIAL", "FINALIZADO"),
+        ("completar_carga", "EN_PROCESO", "LISTO_PARA_VALIDAR"),
+        ("completar_carga", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"),
+        ("reabrir_carga", "LISTO_PARA_VALIDAR", "EN_PROCESO"),
+        ("validar", "LISTO_PARA_VALIDAR", "FINALIZADO"),
+        # Alias legacy: finalizar_auto ya no cierra desde EN_PROCESO (va a LISTO).
+        ("finalizar", "LISTO_PARA_VALIDAR", "FINALIZADO"),
+        ("finalizar_auto", "LISTO_PARA_VALIDAR", "FINALIZADO"),
     }
 )
 
 ESTADOS_SOLICITUD_TERMINALES = frozenset({"FINALIZADO"})
+
+ESTADOS_SOLICITUD_EDITABLES = frozenset(
+    {"EN_PROCESO", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"}
+)
 
 
 def transicion_permitida(accion: str, estado_origen: str, estado_destino: str) -> bool:

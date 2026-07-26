@@ -18,6 +18,7 @@ import type {
   Paginated,
   OrigenSolicitudLims,
   EnviarInformeOrdenResponse,
+  ResultadoExamenLims,
   SolicitudExamenLims,
 } from '../types/lims';
 import type { TuboOrdenPreview } from '../utils/limsTubosOrden';
@@ -42,6 +43,9 @@ export function formatDrfError(error: unknown): string {
       else if (typeof v === 'string') parts.push(`${k}: ${v}`);
     }
     if (parts.length) return parts.join(' · ');
+  }
+  if (status === 403) {
+    return 'No tenés permiso para esta acción (revisá el rol o pedí a laboratorio).';
   }
   if (ax.message) return ax.message;
   return status ? `Error HTTP ${status}` : 'Error de red o servidor';
@@ -194,6 +198,41 @@ export async function getAnalisisLongitudinal(id: number): Promise<AnalisisLongi
   return data;
 }
 
+export interface SugerirConclusionHemogramaResponse {
+  texto: string;
+  fuente: 'reglas' | 'medgemma' | string;
+  marcado_sugerencia?: boolean;
+  detalle?: Record<string, string>;
+  modelo?: string;
+  vacio?: boolean;
+}
+
+/** Borrador de conclusión de hemograma (reglas y/o MedGemma). No persiste. */
+export async function postSugerirConclusionHemograma(
+  id: number,
+  options?: {
+    prefer_medgemma?: boolean;
+    /** Valores tipeados en pantalla (codigo → valor numérico/informe). */
+    valores_borrador?: Record<string, string | number>;
+  }
+): Promise<SugerirConclusionHemogramaResponse> {
+  const body: {
+    prefer_medgemma?: boolean;
+    valores_borrador?: Record<string, string | number>;
+  } = {};
+  if (options?.prefer_medgemma !== undefined) {
+    body.prefer_medgemma = options.prefer_medgemma;
+  }
+  if (options?.valores_borrador && Object.keys(options.valores_borrador).length > 0) {
+    body.valores_borrador = options.valores_borrador;
+  }
+  const { data } = await apiClient.post<SugerirConclusionHemogramaResponse>(
+    `${LAB}/solicitudes/${id}/sugerir-conclusion-hemograma/`,
+    body
+  );
+  return data;
+}
+
 /** Catálogo tipos examen indexado por id (carga de resultados B2-C). */
 export async function getTiposExamenMap(): Promise<Map<number, LimsTipoExamen>> {
   const list = await listTiposExamenLims({ activo: true });
@@ -202,7 +241,12 @@ export async function getTiposExamenMap(): Promise<Map<number, LimsTipoExamen>> 
 
 export async function postEnviarInformeOrden(
   id: number,
-  body: { email?: boolean; whatsapp?: boolean }
+  body: {
+    email?: boolean;
+    whatsapp?: boolean;
+    email_medico?: boolean;
+    whatsapp_medico?: boolean;
+  }
 ): Promise<EnviarInformeOrdenResponse> {
   const { data } = await apiClient.post<EnviarInformeOrdenResponse>(
     `${LAB}/solicitudes/${id}/enviar-informe/`,
@@ -257,8 +301,52 @@ export interface CreateSolicitudExamenLimsPayload {
 
 export async function createSolicitudExamenLims(
   body: CreateSolicitudExamenLimsPayload
-): Promise<SolicitudExamenLims> {
-  const { data } = await apiClient.post<SolicitudExamenLims>(`${LAB}/solicitudes/`, body);
+): Promise<SolicitudExamenLims & { merged?: boolean }> {
+  const { data } = await apiClient.post<SolicitudExamenLims & { merged?: boolean }>(
+    `${LAB}/solicitudes/`,
+    body
+  );
+  return data;
+}
+
+export async function getOrdenAbiertaPaciente(
+  pacienteId: number
+): Promise<{ id: number; numero: string | null; fecha_solicitud: string; estado: string } | null> {
+  const { data } = await apiClient.get<{
+    id: number;
+    numero: string | null;
+    fecha_solicitud: string;
+    estado: string;
+  } | null>(`${LAB}/solicitudes/orden-abierta/`, { params: { paciente_id: pacienteId } });
+  return data ?? null;
+}
+
+export async function postMarcarDerivacion(
+  solicitudId: number,
+  body: {
+    resultado_id: number;
+    estado_derivacion?: string;
+    laboratorio_derivacion_id?: number | null;
+    observaciones_derivacion?: string;
+  }
+): Promise<ResultadoExamenLims> {
+  assertValidSolicitudId(solicitudId);
+  const { data } = await apiClient.post<ResultadoExamenLims>(
+    `${LAB}/solicitudes/${solicitudId}/marcar-derivacion/`,
+    body
+  );
+  return data;
+}
+
+export async function agregarExamenesSolicitudLims(
+  solicitudId: number,
+  body: { examenes_ids?: number[]; paneles_ids?: number[] }
+): Promise<SolicitudExamenLims & { merged?: boolean }> {
+  assertValidSolicitudId(solicitudId);
+  const { data } = await apiClient.post<SolicitudExamenLims & { merged?: boolean }>(
+    `${LAB}/solicitudes/${solicitudId}/agregar-examenes/`,
+    body
+  );
   return data;
 }
 
@@ -423,7 +511,7 @@ export async function listTiposExamenLims(params?: {
   activo?: boolean;
   search?: string;
 }): Promise<LimsTipoExamen[]> {
-  const query: Record<string, string | number | undefined> = { page_size: 500 };
+  const query: Record<string, string | number | undefined> = { page_size: 2000 };
   if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
   if (params?.search) query.search = params.search;
   return getPaginatedAll<LimsTipoExamen>(`${LAB}/examenes/`, query);
@@ -472,7 +560,7 @@ export async function listTiposMuestraLims(params?: {
   activo?: boolean;
   search?: string;
 }): Promise<LimsTipoMuestra[]> {
-  const query: Record<string, string | number | undefined> = { page_size: 500 };
+  const query: Record<string, string | number | undefined> = { page_size: 1000 };
   if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
   if (params?.search) query.search = params.search;
   return getPaginatedAll<LimsTipoMuestra>(`${LAB}/muestras/`, query);
@@ -496,12 +584,355 @@ export async function patchTipoMuestraLims(
   return data;
 }
 
-export async function listPanelesLims(): Promise<LimsPanelExamen[]> {
-  return getPaginatedAll<LimsPanelExamen>(`${LAB}/paneles/`, { page_size: 200 });
+export async function listPanelesLims(params?: {
+  activo?: boolean;
+  search?: string;
+}): Promise<LimsPanelExamen[]> {
+  const query: Record<string, string | number | undefined> = { page_size: 200 };
+  if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
+  if (params?.search) query.search = params.search;
+  return getPaginatedAll<LimsPanelExamen>(`${LAB}/paneles/`, query);
+}
+
+export async function createPanelExamenLims(body: {
+  codigo: string;
+  nombre: string;
+  tipos_examen_ids: number[];
+  activo?: boolean;
+}): Promise<LimsPanelExamen> {
+  const { data } = await apiClient.post<LimsPanelExamen>(`${LAB}/paneles/`, body);
+  return data;
+}
+
+export async function patchPanelExamenLims(
+  id: number,
+  body: Partial<{
+    nombre: string;
+    tipos_examen_ids: number[];
+    activo: boolean;
+  }>
+): Promise<LimsPanelExamen> {
+  const { data } = await apiClient.patch<LimsPanelExamen>(`${LAB}/paneles/${id}/`, body);
+  return data;
 }
 
 export async function listContenedoresLims(): Promise<LimsTipoContenedor[]> {
   return getPaginatedAll<LimsTipoContenedor>(`${LAB}/contenedores/`, { page_size: 200 });
+}
+
+// --- Inventario de laboratorio ---
+
+export interface InsumoLab {
+  id: number;
+  tipo: 'REACTIVO' | 'TUBO' | 'MEDIO' | 'OTRO';
+  nombre: string;
+  codigo: string;
+  tipo_contenedor: number | null;
+  tipo_contenedor_nombre?: string | null;
+  medio_cultivo: number | null;
+  medio_cultivo_nombre?: string | null;
+  unidad: string;
+  stock_min: number;
+  stock_actual: number;
+  activo: boolean;
+}
+
+export interface LoteInsumo {
+  id: number;
+  insumo: number;
+  insumo_codigo: string;
+  insumo_nombre: string;
+  codigo_lote: string;
+  cantidad: number;
+  fecha_vencimiento: string | null;
+  ubicacion: string;
+  activo: boolean;
+}
+
+export interface MovimientoStock {
+  id: number;
+  tipo: 'INGRESO' | 'EGRESO' | 'AJUSTE' | 'DESCARTE';
+  lote: number;
+  lote_codigo: string;
+  insumo_codigo: string;
+  cantidad: number;
+  motivo: string;
+  created_at: string;
+  muestra_id: number | null;
+  siembra_id: number | null;
+}
+
+export interface InventarioAlertas {
+  bajo_minimo: Array<{
+    insumo_id: number;
+    codigo: string;
+    nombre: string;
+    stock_actual: number;
+    stock_min: number;
+    unidad: string;
+  }>;
+  por_vencer: Array<{
+    lote_id: number;
+    codigo_lote: string;
+    insumo_codigo: string;
+    insumo_nombre: string;
+    cantidad: number;
+    fecha_vencimiento: string;
+    dias_restantes: number;
+  }>;
+}
+
+export async function listInsumosLab(): Promise<InsumoLab[]> {
+  return getPaginatedAll<InsumoLab>(`${LAB}/inventario/insumos/`, { page_size: 500 });
+}
+
+export async function listLotesInsumo(params?: { insumo_id?: number }): Promise<LoteInsumo[]> {
+  return getPaginatedAll<LoteInsumo>(`${LAB}/inventario/lotes/`, {
+    page_size: 500,
+    insumo_id: params?.insumo_id,
+  });
+}
+
+export async function listMovimientosStock(params?: {
+  lote_id?: number;
+  insumo_id?: number;
+}): Promise<MovimientoStock[]> {
+  return getPaginatedAll<MovimientoStock>(`${LAB}/inventario/movimientos/`, {
+    page_size: 500,
+    ...params,
+  });
+}
+
+export async function getInventarioAlertas(): Promise<InventarioAlertas> {
+  const { data } = await apiClient.get<InventarioAlertas>(`${LAB}/inventario/insumos/alertas/`);
+  return data;
+}
+
+export async function createInsumoLab(body: Partial<InsumoLab> & { codigo: string; nombre: string; tipo: string }) {
+  const { data } = await apiClient.post<InsumoLab>(`${LAB}/inventario/insumos/`, body);
+  return data;
+}
+
+export async function createLoteInsumo(body: {
+  insumo: number;
+  codigo_lote: string;
+  cantidad: number;
+  fecha_vencimiento?: string | null;
+  ubicacion?: string;
+}) {
+  const { data } = await apiClient.post<LoteInsumo>(`${LAB}/inventario/lotes/`, body);
+  return data;
+}
+
+export async function registrarMovimientoStock(body: {
+  lote_id: number;
+  tipo: 'INGRESO' | 'AJUSTE' | 'DESCARTE';
+  cantidad: number;
+  motivo?: string;
+}) {
+  const { data } = await apiClient.post<MovimientoStock>(`${LAB}/inventario/movimientos/`, body);
+  return data;
+}
+
+// --- Control de calidad Westgard ---
+
+export interface EquipoAnalizador {
+  id: number;
+  nombre: string;
+  codigo: string;
+  marca_modelo: string;
+  area: number | null;
+  seccion: number | null;
+  activo: boolean;
+}
+
+export interface MaterialControl {
+  id: number;
+  nombre: string;
+  marca: string;
+  producto: string;
+  nivel: 'N1' | 'N2' | 'N3';
+  tipo_examen: number;
+  tipo_examen_codigo: string;
+  tipo_examen_nombre: string;
+  media_target: string;
+  de_target: string;
+  activo: boolean;
+}
+
+export interface LoteControl {
+  id: number;
+  material: number;
+  material_nombre: string;
+  codigo_lote: string;
+  vencimiento: string;
+  activo: boolean;
+}
+
+export interface PuntoCurvaCalibracion {
+  orden?: number;
+  concentracion: string | number;
+  senal?: string | number;
+  unidad?: string;
+}
+
+export interface PuntoQC {
+  id: number;
+  valor: string;
+  z_score: number | null;
+  reglas_disparadas: string[];
+  fuera_control: boolean;
+  warning: boolean;
+  created_at: string;
+}
+
+export interface CorridaQC {
+  id: number;
+  equipo: number | null;
+  lote_control: number;
+  lote_codigo: string;
+  material_nombre: string;
+  fecha: string;
+  estado: 'PENDIENTE' | 'ACEPTADA' | 'RECHAZADA';
+  observaciones: string;
+  puntos: PuntoQC[];
+}
+
+export interface Calibracion {
+  id: number;
+  equipo: number;
+  equipo_nombre: string;
+  equipo_codigo: string;
+  tipo_examen: number | null;
+  tipo_examen_codigo: string | null;
+  tipo_examen_nombre: string | null;
+  fecha: string;
+  vigente_hasta: string;
+  calibrador_nombre: string;
+  marca: string;
+  codigo_lote: string;
+  tipo: 'PUNTO_UNICO' | 'CURVA_MULTIPUNTO';
+  puntos_curva: PuntoCurvaCalibracion[];
+  observaciones: string;
+}
+
+export interface LeveyJenningsSeries {
+  material_id: number;
+  material_nombre: string;
+  tipo_examen_codigo: string;
+  media_target: number;
+  de_target: number;
+  puntos: Array<{
+    id: number;
+    fecha: string;
+    valor: number;
+    z_score: number | null;
+    fuera_control: boolean;
+    warning: boolean;
+    reglas: string[];
+  }>;
+}
+
+export async function listEquiposQc(): Promise<EquipoAnalizador[]> {
+  return getPaginatedAll<EquipoAnalizador>(`${LAB}/qc/equipos/`, { page_size: 200 });
+}
+
+export async function createEquipoQc(body: {
+  codigo: string;
+  nombre: string;
+  marca_modelo?: string;
+  activo?: boolean;
+  area?: number | null;
+  seccion?: number | null;
+}): Promise<EquipoAnalizador> {
+  const { data } = await apiClient.post<EquipoAnalizador>(`${LAB}/qc/equipos/`, body);
+  return data;
+}
+
+export async function listMaterialesQc(): Promise<MaterialControl[]> {
+  return getPaginatedAll<MaterialControl>(`${LAB}/qc/materiales/`, { page_size: 200 });
+}
+
+export async function createMaterialQc(body: {
+  nombre: string;
+  tipo_examen: number;
+  nivel: 'N1' | 'N2' | 'N3';
+  media_target: number | string;
+  de_target: number | string;
+  marca?: string;
+  producto?: string;
+  activo?: boolean;
+}): Promise<MaterialControl> {
+  const { data } = await apiClient.post<MaterialControl>(`${LAB}/qc/materiales/`, body);
+  return data;
+}
+
+export async function listLotesControl(params?: { material_id?: number }): Promise<LoteControl[]> {
+  return getPaginatedAll<LoteControl>(`${LAB}/qc/lotes/`, { page_size: 200, material_id: params?.material_id });
+}
+
+export async function createLoteControl(body: {
+  material: number;
+  codigo_lote: string;
+  vencimiento: string;
+  activo?: boolean;
+}): Promise<LoteControl> {
+  const { data } = await apiClient.post<LoteControl>(`${LAB}/qc/lotes/`, body);
+  return data;
+}
+
+export async function listCorridasQc(): Promise<CorridaQC[]> {
+  return getPaginatedAll<CorridaQC>(`${LAB}/qc/corridas/`, { page_size: 200 });
+}
+
+export async function listCalibracionesQc(): Promise<Calibracion[]> {
+  return getPaginatedAll<Calibracion>(`${LAB}/qc/calibraciones/`, { page_size: 200 });
+}
+
+export async function createCalibracionQc(body: {
+  equipo: number;
+  fecha: string;
+  vigente_hasta: string;
+  calibrador_nombre?: string;
+  marca?: string;
+  codigo_lote?: string;
+  tipo?: 'PUNTO_UNICO' | 'CURVA_MULTIPUNTO';
+  tipo_examen?: number | null;
+  puntos_curva?: PuntoCurvaCalibracion[];
+  observaciones?: string;
+}): Promise<Calibracion> {
+  const { data } = await apiClient.post<Calibracion>(`${LAB}/qc/calibraciones/`, body);
+  return data;
+}
+
+export async function getLeveyJenningsMaterial(materialId: number): Promise<LeveyJenningsSeries> {
+  const { data } = await apiClient.get<LeveyJenningsSeries>(
+    `${LAB}/qc/materiales/${materialId}/levey-jennings/`
+  );
+  return data;
+}
+
+export async function createCorridaQc(body: {
+  lote_control: number;
+  equipo?: number | null;
+  fecha: string;
+  observaciones?: string;
+  /** Si se envía, el backend evalúa Westgard y finaliza la corrida en un solo POST. */
+  valor?: number | string;
+}) {
+  const { data } = await apiClient.post<CorridaQC>(`${LAB}/qc/corridas/`, body);
+  return data;
+}
+
+export async function addPuntoCorridaQc(
+  corridaId: number,
+  body: { valor: number | string; finalize?: boolean }
+) {
+  const { data } = await apiClient.post<{ punto: PuntoQC; corrida: CorridaQC }>(
+    `${LAB}/qc/corridas/${corridaId}/puntos/`,
+    body
+  );
+  return data;
 }
 
 export * from './limsMicroApi';

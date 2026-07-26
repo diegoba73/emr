@@ -52,37 +52,44 @@ class MedicoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filtrado por rol según reglas de negocio.
-        - Admin/Secretaria/Enfermería: Todos los médicos
-        - Médico: Solo su propio perfil
-        - Paciente: Todos los médicos (para elegir en turnos)
-        
-        Optimización: Para listados, usa defer() para excluir campos pesados.
+        - Admin / secretaría / enfermería / operadores LIMS: todos los médicos
+        - Médico: solo su propio perfil (evita listar colegas en selects genéricos)
+        - Paciente u otros autenticados: todos (p. ej. elegir en turnos / orden LIMS)
+
+        Optimización: en listados se hace defer de campos pesados.
         """
         queryset = super().get_queryset()
         user = self.request.user
-        
-        # Normalizar rol a minúsculas para comparación
-        user_rol = (user.rol or '').lower()
-        
-        # Superusuarios, staff, admin, secretaria y enfermería ven todo
-        if user.is_superuser or user.is_staff or user_rol in ['admin', 'secretaria', 'enfermeria']:
+        user_rol = (getattr(user, "rol", None) or "").lower()
+
+        roles_ven_todos = {
+            "admin",
+            "secretaria",
+            "enfermeria",
+            "laboratorio",
+            "bioquimico",
+        }
+
+        medico = getattr(user, "medico", None)
+        paciente = getattr(user, "paciente", None)
+
+        if (
+            user.is_superuser
+            or user_rol in roles_ven_todos
+            # Staff administrativo (no operadores LIMS con is_staff)
+            or (user.is_staff and user_rol not in {"laboratorio", "bioquimico", "medico"})
+        ):
             base_queryset = queryset
-        # Médico: solo su propio perfil
-        elif hasattr(user, 'medico') and user.medico:
-            base_queryset = queryset.filter(id=user.medico.id)
-        # Paciente: puede ver todos los médicos (para elegir en turnos)
-        elif hasattr(user, 'paciente') and user.paciente:
+        elif medico is not None:
+            base_queryset = queryset.filter(id=medico.id)
+        elif paciente is not None:
             base_queryset = queryset
         else:
-            # Por defecto, todos los autenticados pueden ver
             base_queryset = queryset
-        
-        # Optimización: Para listados, excluir campos pesados
-        if self.action == 'list':
-            base_queryset = base_queryset.defer(
-                'areas_interes_ia'  # Campo de texto largo
-            )
-        
+
+        if self.action == "list":
+            base_queryset = base_queryset.defer("areas_interes_ia")
+
         return base_queryset
 
 

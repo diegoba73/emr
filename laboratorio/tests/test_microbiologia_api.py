@@ -222,6 +222,41 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             ).exists()
         )
 
+    def test_laboratorio_crea_estudio_desde_pedido_paciente(self):
+        """Alta clínica: paciente + cultivo micro + muestra micro (sin orden LIMS)."""
+        from laboratorio.micro_catalogos_seed import seed_catalogos_microbiologia
+        from laboratorio.models_microbiologia import (
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
+
+        seed_catalogos_microbiologia()
+        cultivo = TipoCultivoMicrobiologia.objects.get(codigo="UROCULTIVO")
+        muestra_micro = TipoMuestraMicrobiologia.objects.get(codigo="ORINA")
+        self.client.force_authenticate(self.lab)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/estudios/",
+                {
+                    "paciente_id": self.paciente.pk,
+                    "medico_id": self.medico.pk,
+                    "tipo_cultivo_id": cultivo.pk,
+                    "tipo_muestra_micro_id": muestra_micro.pk,
+                    "observaciones": "Pedido mostrador",
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        data = r.json()
+        self.assertEqual(data["estado"], "PENDIENTE")
+        self.assertEqual(data["paciente"], self.paciente.pk)
+        self.assertIsNone(data.get("solicitud"))
+        self.assertIsNone(data.get("muestra"))
+        self.assertEqual(data.get("tipo_cultivo"), cultivo.pk)
+        self.assertEqual(data.get("tipo_muestra_micro"), muestra_micro.pk)
+        self.assertTrue(data.get("medico_display"))
+        self.assertEqual(data.get("tipo_estudio"), "UROCULTIVO")
+
     def test_api_crear_estudio_microbiologia_con_muestra_conservada(self):
         m = _muestra_conservada(self.sol, self.tm)
         self.client.force_authenticate(self.lab)
@@ -293,7 +328,8 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_medico_no_crea_estudio(self):
+    def test_medico_no_crea_estudio_desde_muestra_lims(self):
+        """El médico no opera el alta técnica desde muestra ya tomada."""
         self.client.force_authenticate(self.med_user)
         r = self.client.post(
             "/api/lab/microbiologia/estudios/",
@@ -301,6 +337,68 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_medico_crea_estudio_pedido_clinico(self):
+        """Pedido desde consulta: paciente + cultivo + muestra micro."""
+        from laboratorio.micro_catalogos_seed import seed_catalogos_microbiologia
+        from laboratorio.models_microbiologia import (
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
+
+        seed_catalogos_microbiologia()
+        cultivo = TipoCultivoMicrobiologia.objects.get(codigo="UROCULTIVO")
+        muestra_micro = TipoMuestraMicrobiologia.objects.get(codigo="ORINA")
+        self.client.force_authenticate(self.med_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/estudios/",
+                {
+                    "paciente_id": self.paciente.pk,
+                    "medico_id": self.medico.pk,
+                    "tipo_cultivo_id": cultivo.pk,
+                    "tipo_muestra_micro_id": muestra_micro.pk,
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertEqual(r.json()["estado"], "PENDIENTE")
+
+    def test_medico_crea_estudios_batch(self):
+        """Batch urocultivo + coprocultivo desde consulta ambulatoria."""
+        from laboratorio.micro_catalogos_seed import seed_catalogos_microbiologia
+        from laboratorio.models_microbiologia import (
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
+
+        seed_catalogos_microbiologia()
+        uro = TipoCultivoMicrobiologia.objects.get(codigo="UROCULTIVO")
+        copro = TipoCultivoMicrobiologia.objects.get(codigo="COPROCULTIVO")
+        orina = TipoMuestraMicrobiologia.objects.get(codigo="ORINA")
+        materia = TipoMuestraMicrobiologia.objects.get(codigo="MATERIA_FECAL")
+        self.client.force_authenticate(self.med_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/estudios/batch/",
+                {
+                    "paciente_id": self.paciente.pk,
+                    "medico_id": self.medico.pk,
+                    "items": [
+                        {
+                            "tipo_cultivo_id": uro.pk,
+                            "tipo_muestra_micro_id": orina.pk,
+                        },
+                        {
+                            "tipo_cultivo_id": copro.pk,
+                            "tipo_muestra_micro_id": materia.pk,
+                        },
+                    ],
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertEqual(len(r.json()), 2)
 
     def test_paciente_no_lista_estudios(self):
         self.client.force_authenticate(self.pac_u)

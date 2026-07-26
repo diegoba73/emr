@@ -3,7 +3,11 @@
  */
 import { Turno, User } from '../types';
 import { isEmrStaffOrAdmin } from './permissions';
-import { isProfesionalEstudioRole, ROLES_ESTUDIO_COMPLEMENTARIO } from './roles';
+import {
+  isOperadorLimsRole,
+  isProfesionalEstudioRole,
+  ROLES_ESTUDIO_COMPLEMENTARIO,
+} from './roles';
 import { isTurnoEstudio } from './recursosEstudio';
 
 export function normalizeRol(user?: User | null): string {
@@ -51,11 +55,12 @@ export function canMutateTurnosGlobally(user?: User | null): boolean {
   return r === 'ADMIN' || r === 'SECRETARIA';
 }
 
+/** Técnico laboratorio o bioquímico (ambos operan LIMS, no agenda). */
 export function isLaboratorioRole(user?: User | null): boolean {
-  return normalizeRol(user) === 'LABORATORIO';
+  return isOperadorLimsRole(user?.rol);
 }
 
-/** Lectura de agenda en pantalla /turnos. Laboratorio no usa agenda (flujo LIMS). */
+/** Lectura de agenda en pantalla /turnos. Operadores LIMS no usan agenda. */
 export function canViewTurnosAgenda(user?: User | null): boolean {
   if (!user) return false;
   if (isLaboratorioRole(user)) return false;

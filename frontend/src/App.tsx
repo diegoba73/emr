@@ -38,21 +38,37 @@ import MuestraConsultaPage from './pages/laboratorio/MuestraConsultaPage';
 import RecepcionMuestrasPage from './pages/laboratorio/RecepcionMuestrasPage';
 import TiposMuestraCatalogo from './pages/laboratorio/TiposMuestraCatalogo';
 import ExamenesCatalogo from './pages/laboratorio/ExamenesCatalogo';
+import PanelesCatalogo from './pages/laboratorio/PanelesCatalogo';
 import MicrobiologiaHub from './pages/laboratorio/MicrobiologiaHub';
 import MicrobiologiaEstudios from './pages/laboratorio/MicrobiologiaEstudios';
 import MicrobiologiaEstudioDetalle from './pages/laboratorio/MicrobiologiaEstudioDetalle';
 import MicrobiologiaCatalogos from './pages/laboratorio/MicrobiologiaCatalogos';
+import InventarioPage from './pages/laboratorio/inventario/InventarioPage';
+import QcHubPage from './pages/laboratorio/qc/QcHubPage';
 import PatientDashboard from './components/patient360/PatientDashboard';
 import AuditEventsPage from './pages/AuditEventsPage';
+import BiDashboard from './pages/BiDashboard';
+import PortalHome from './pages/portal/PortalHome';
+import PortalTurnos from './pages/portal/PortalTurnos';
+import PortalResultados from './pages/portal/PortalResultados';
+import PortalDocumentos from './pages/portal/PortalDocumentos';
+import PortalHistoria from './pages/portal/PortalHistoria';
 import type { User } from './types';
 import {
   canAccessArchivosMedicos,
   canAccessAtenciones,
   canAccessAuditoria,
+  canAccessBiDashboard,
   canAccessCatalogosClinicos,
   canAccessPaciente360,
   canAccessPacientes,
+  canAccessPortal,
+  canAccessPortalDocumentos,
+  canAccessPortalHistoria,
+  canAccessPortalResultados,
+  canAccessPortalTurnos,
   canAccessSolicitudes,
+  isPacienteRole,
 } from './utils/permissions';
 import { canAccessEstudiosModule } from './modules/estudios/permissions';
 import {
@@ -61,6 +77,7 @@ import {
   canAccessLimsPendientes,
   canAccessLimsOrdenes,
   canAccessMicrobiologia,
+  canAccessMicrobiologiaLectura,
   canOperateLims,
 } from './utils/limsAccess';
 import { canAccessTurnosAgenda } from './utils/turnoPermissions';
@@ -164,11 +181,98 @@ const AppContent: React.FC = () => {
         >
           <Route
             path="/"
-            element={<Navigate to="/dashboard" replace />}
+            element={
+              <Navigate to={isPacienteRole(currentUser) ? '/portal' : '/dashboard'} replace />
+            }
           />
           <Route
             path="/dashboard"
-            element={<Dashboard />}
+            element={
+              isPacienteRole(currentUser) ? (
+                <Navigate to="/portal" replace />
+              ) : (
+                <Dashboard />
+              )
+            }
+          />
+          <Route
+            path="/bi"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessBiDashboard}
+              >
+                <BiDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/indicadores" element={<Navigate to="/bi" replace />} />
+          <Route
+            path="/portal"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPortal}
+              >
+                <PortalHome />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portal/turnos"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPortalTurnos}
+              >
+                <PortalTurnos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portal/resultados"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPortalResultados}
+              >
+                <PortalResultados />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portal/documentos"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPortalDocumentos}
+              >
+                <PortalDocumentos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portal/historia"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessPortalHistoria}
+              >
+                <PortalHistoria />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/pacientes"
@@ -496,7 +600,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessMicrobiologia}
+                canAccess={canAccessMicrobiologiaLectura}
               >
                 <MicrobiologiaEstudioDetalle />
               </ProtectedRoute>
@@ -542,6 +646,19 @@ const AppContent: React.FC = () => {
             }
           />
           <Route
+            path="/laboratorio/catalogos/paneles"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsCatalogos}
+              >
+                <PanelesCatalogo />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/laboratorio/microbiologia/catalogos"
             element={
               <ProtectedRoute
@@ -564,6 +681,32 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessMicrobiologia}
               >
                 <MicrobiologiaHub />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/inventario"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <InventarioPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/qc"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <QcHubPage />
               </ProtectedRoute>
             }
           />

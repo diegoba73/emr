@@ -153,9 +153,11 @@ describe('canEditTurno — médico y estudio', () => {
 });
 
 describe('canViewTurnosAgenda', () => {
-  it('bloquea laboratorio (usa flujo LIMS, no agenda)', () => {
+  it('bloquea laboratorio y bioquímico (usan flujo LIMS, no agenda)', () => {
     expect(canViewTurnosAgenda(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canViewTurnosAgenda(user({ rol: 'LABORATORIO', is_staff: true }))).toBe(false);
+    expect(canViewTurnosAgenda(user({ rol: 'BIOQUIMICO' }))).toBe(false);
+    expect(canViewTurnosAgenda(user({ rol: 'BIOQUIMICO', is_staff: true }))).toBe(false);
   });
 
   it('permite médico y secretaría', () => {

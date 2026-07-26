@@ -116,6 +116,19 @@ export function canAccessMicrobiologia(user: User | null): boolean {
   return canAccessLimsModule(user);
 }
 
+/**
+ * Lectura de pedidos/estudios de microbiología:
+ * - LIMS (operadores/admin): todos
+ * - Médico: los propios / de pacientes vinculados (filtra el API)
+ * No habilita el menú LIMS completo ni operaciones técnicas.
+ */
+export function canAccessMicrobiologiaLectura(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  return r === 'admin' || r === 'medico' || isOperadorLimsRole(r);
+}
+
 export function canOperateMicrobiologia(user: User | null): boolean {
   return canOperateLims(user);
 }
@@ -161,4 +174,14 @@ export function canEditMicroCatalogos(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   return normalizeRol(user) === 'admin';
+}
+
+/** Inventario de laboratorio (admin, laboratorio, bioquímico). */
+export function canAccessInventarioLab(user: User | null): boolean {
+  return canAccessLimsModule(user);
+}
+
+/** Control de calidad Westgard (admin, laboratorio, bioquímico). */
+export function canAccessQcLab(user: User | null): boolean {
+  return canAccessLimsModule(user);
 }

@@ -7,6 +7,7 @@ interface AtencionPedidosSectionProps {
   atencionId: number;
   canEdit: boolean;
   variant?: 'compact' | 'full';
+  pacienteId?: number;
 }
 
 /**
@@ -16,6 +17,7 @@ const AtencionPedidosSection: React.FC<AtencionPedidosSectionProps> = ({
   atencionId,
   canEdit,
   variant = 'compact',
+  pacienteId,
 }) => {
   const { consultaHcId, ensuring, error, retry } = useConsultaHcForAtencion(atencionId, canEdit);
 
@@ -68,6 +70,7 @@ const AtencionPedidosSection: React.FC<AtencionPedidosSectionProps> = ({
   return (
     <ConsultaPedidosPanel
       consultaHcId={consultaHcId}
+      pacienteId={pacienteId}
       canEdit={canEdit}
       variant={variant}
       key={`pedidos-${consultaHcId}-${variant}`}

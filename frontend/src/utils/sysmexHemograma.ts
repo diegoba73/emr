@@ -27,11 +27,13 @@ export {
 };
 
 export const SYSMEX_HEMOGRAMA_UNIDADES: Record<string, string> = {
-  LEU: '/mm³',
+  LEUCO: '/mm³',
   PLAQ: '/mm³',
   HEMATIES: 'mill/mm³',
   HGB: 'g/dL',
   HTO: '%',
+  VCM: 'fL',
+  CHCM: 'g/dL',
   RDW: '%',
   NEUT_CAY: '%',
   NEUT_SEG: '%',

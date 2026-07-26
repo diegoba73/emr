@@ -1,4 +1,4 @@
-/** Utilidades: tubos físicos (tope 10/tubo; hemograma = 1 unidad). */
+/** Utilidades: tubos físicos (tope 10/tubo; hemograma y orina completa = 1 unidad c/u). */
 
 export const MAX_EXAMENES_POR_TUBO = 10;
 
@@ -7,8 +7,10 @@ export const CODIGOS_HEMOGRAMA = new Set([
   'HEMATIES',
   'HTO',
   'HGB',
+  'VCM',
+  'CHCM',
   'RDW',
-  'LEU',
+  'LEUCO',
   'NEUT_CAY',
   'NEUT_SEG',
   'EOS',
@@ -16,6 +18,24 @@ export const CODIGOS_HEMOGRAMA = new Set([
   'LINF',
   'MONO',
   'PLAQ',
+]);
+
+/** Códigos de componentes PAN_ORI (orina completa → un solo frasco). */
+export const CODIGOS_ORINA_COMPLETA = new Set([
+  'ORI_COLOR',
+  'ORI_ASP',
+  'ORI_DENS',
+  'ORI_PH',
+  'ORI_BIL',
+  'ORI_NIT',
+  'ORI_CET',
+  'ORI_CEL',
+  'ORI_LEU',
+  'ORI_HEM',
+  'ORI_PIO',
+  'ORI_MUC',
+  'ORI_CRIS',
+  'ORI_CONC',
 ]);
 
 export interface TuboOrdenPreview {
@@ -36,18 +56,24 @@ export function cantidadTubosPorExamenes(
   return Math.ceil(nExamenes / maxPorTubo);
 }
 
-/** Unidades hacia el tope: hemograma completo cuenta 1 aunque tenga N componentes. */
+/**
+ * Unidades hacia el tope: hemograma y orina completa cuentan 1 c/u
+ * aunque tengan N componentes.
+ */
 export function unidadesParaCalculoTubos(codigosExamen: string[]): number {
   let tieneHemo = false;
+  let tieneOrina = false;
   let otros = 0;
   for (const codigo of codigosExamen) {
     if (CODIGOS_HEMOGRAMA.has(codigo)) {
       tieneHemo = true;
+    } else if (CODIGOS_ORINA_COMPLETA.has(codigo)) {
+      tieneOrina = true;
     } else {
       otros += 1;
     }
   }
-  return otros + (tieneHemo ? 1 : 0);
+  return otros + (tieneHemo ? 1 : 0) + (tieneOrina ? 1 : 0);
 }
 
 export function totalEtiquetasDesdeTubos(tubos: TuboOrdenPreview[]): number {

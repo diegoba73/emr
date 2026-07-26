@@ -37,9 +37,40 @@ export function canWriteEstudio(user: User | null | undefined): boolean {
   return puedeOperarEstudios(user);
 }
 
-export function canValidateInforme(user: User | null | undefined): boolean {
+/** Admin o profesional que marcó el estudio como realizado. */
+export function esRealizadorOAdmin(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
   if (!user) return false;
-  return user.is_superuser || normalizedRol(user) === 'admin';
+  if (user.is_superuser || normalizedRol(user) === 'admin') return true;
+  return Boolean(estudio.realizado_por && estudio.realizado_por === user.id);
+}
+
+/**
+ * Editar archivos / informes / metadata.
+ * Tras VALIDADO: solo realizador o admin. ENTREGADO/ANULADO: no.
+ */
+export function canModificarContenidoEstudio(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  if (!canWriteEstudio(user)) return false;
+  if (estudio.estado === 'ANULADO' || estudio.estado === 'ENTREGADO') return false;
+  if (estudio.estado === 'VALIDADO') {
+    return esRealizadorOAdmin(user, estudio);
+  }
+  return true;
+}
+
+export function canValidateInforme(
+  user: User | null | undefined,
+  estudio?: EstudioComplementario | null
+): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizedRol(user) === 'admin') return true;
+  if (!estudio) return false;
+  return Boolean(estudio.realizado_por && estudio.realizado_por === user.id);
 }
 
 export function canDownloadArchivoEstudio(
@@ -55,18 +86,25 @@ export function canDownloadArchivoEstudio(
   return false;
 }
 
-export function canCrearInforme(estudio: EstudioComplementario): boolean {
+export function canCrearInforme(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  if (!canModificarContenidoEstudio(user, estudio)) return false;
   return estudio.estado === 'REALIZADO' || estudio.estado === 'INFORMADO';
 }
 
 export function canEmitirInforme(
+  user: User | null | undefined,
   estudio: EstudioComplementario,
   informe: InformeEstudioComplementario
 ): boolean {
   if (informe.estado !== 'BORRADOR') return false;
   if (informe.reemplaza_a) {
+    if (!esRealizadorOAdmin(user, estudio)) return false;
     return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO';
   }
+  if (!canModificarContenidoEstudio(user, estudio)) return false;
   return estudio.estado === 'REALIZADO' || estudio.estado === 'INFORMADO';
 }
 
@@ -76,16 +114,18 @@ export function canValidarInformeUi(
   informe: InformeEstudioComplementario
 ): boolean {
   return (
-    canValidateInforme(user) &&
+    canValidateInforme(user, estudio) &&
     estudio.estado === 'INFORMADO' &&
     informe.estado === 'EMITIDO'
   );
 }
 
 export function canRectificarInforme(
+  user: User | null | undefined,
   estudio: EstudioComplementario,
   informe: InformeEstudioComplementario
 ): boolean {
+  if (!esRealizadorOAdmin(user, estudio)) return false;
   return (
     (estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO') &&
     informe.estado === 'VALIDADO' &&
@@ -101,10 +141,36 @@ export function canAnularEstudio(estudio: EstudioComplementario): boolean {
   return ['SOLICITADO', 'CONFIRMADO', 'REALIZADO', 'INFORMADO'].includes(estudio.estado);
 }
 
-export function canEntregarEstudio(estudio: EstudioComplementario): boolean {
-  return estudio.estado === 'VALIDADO';
+export function canEntregarEstudio(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  return estudio.estado === 'VALIDADO' && canModificarContenidoEstudio(user, estudio);
 }
 
-export function canAsociarArchivo(estudio: EstudioComplementario): boolean {
-  return !['ANULADO', 'ENTREGADO'].includes(estudio.estado);
+export function canAsociarArchivo(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  if (!canModificarContenidoEstudio(user, estudio)) return false;
+  const origen = estudio.origen || 'INTERNO';
+  return origen === 'EXTERNO' || origen === 'IMPORTADO_HISTORICO';
+}
+
+/** Subida directa de resultado (estudios hechos en la clínica). */
+export function canSubirArchivoEstudio(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  if (!canModificarContenidoEstudio(user, estudio)) return false;
+  const origen = estudio.origen || 'INTERNO';
+  return origen === 'INTERNO';
+}
+
+/** Quitar archivo vinculado (subido o asociado) mientras el estudio no esté cerrado. */
+export function canQuitarArchivoEstudio(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  return canModificarContenidoEstudio(user, estudio);
 }

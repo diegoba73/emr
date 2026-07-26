@@ -42,7 +42,11 @@ from auditoria.snapshot import safe_model_snapshot
 
 logger = logging.getLogger(__name__)
 
-from usuarios.roles import ROLES_AGENDA_TURNOS_LECTURA, ROLES_ESTUDIO_COMPLEMENTARIO
+from usuarios.roles import (
+    ROLES_AGENDA_TURNOS_LECTURA,
+    ROLES_ESTUDIO_COMPLEMENTARIO,
+    ROLES_LIMS_OPERADOR,
+)
 
 _ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'secretaria', 'enfermeria'}) | ROLES_AGENDA_TURNOS_LECTURA
 _TIPOS_RECURSO_ESTUDIO_TURNOS = ('SALA_PROCEDIMIENTO', 'SALA_HEMODINAMIA')
@@ -70,13 +74,14 @@ def _es_enfermeria(user) -> bool:
     return _rol_usuario(user) == 'enfermeria'
 
 
-def _es_laboratorio(user) -> bool:
-    return _rol_usuario(user) == 'laboratorio'
+def _es_operador_lims(user) -> bool:
+    """Técnico laboratorio o bioquímico (misma capacidad operativa LIMS)."""
+    return _rol_usuario(user) in ROLES_LIMS_OPERADOR
 
 
 def _es_rol_agenda_solo_lectura(user) -> bool:
-    """Enfermería, laboratorio y profesionales de estudio: agenda sin mutación."""
-    if _es_enfermeria(user) or _es_laboratorio(user):
+    """Enfermería, operadores LIMS y profesionales de estudio: agenda sin mutación."""
+    if _es_enfermeria(user) or _es_operador_lims(user):
         return True
     return _rol_usuario(user) in ROLES_ESTUDIO_COMPLEMENTARIO
 
@@ -674,7 +679,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
     ).prefetch_related(
         'documentos', 'documentos__usuario_cargador',
         'consulta_ambulatoria', 'registro_procedimiento', 'registro_quirurgico',
-        'evolucion_internacion',
+        'evolucion_internacion', 'signos_vitales', 'signos_vitales__registrado_por',
     ).all()
     serializer_class = AtencionSerializer
     permission_classes = [AtencionPermission]
@@ -1048,12 +1053,11 @@ class AtencionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='crear_registro_ambulatorio')
     @transaction.atomic
     def crear_registro_ambulatorio(self, request, pk=None):
-        """Crea (sin actualizar) una ``ConsultaAmbulatoria`` para una atención.
+        """Crea o actualiza una ``ConsultaAmbulatoria`` para una atención.
 
-        Compatibilidad con el endpoint esperado por el frontend. La operación
-        está envuelta en ``@transaction.atomic`` para que la creación de la
-        consulta y la auditoría asociada aborten en bloque ante cualquier
-        error en el medio.
+        Compatibilidad con el endpoint esperado por el frontend. Si ya existe
+        un registro (p. ej. shell vacío de ``ensure-consulta-hc``), se actualiza
+        en lugar de devolver 400. Operación atómica.
         """
         atencion = self.get_object()
 
@@ -1069,38 +1073,55 @@ class AtencionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # ensure-consulta-hc / pedidos suelen crear un shell vacío antes del guardado
+        # clínico: hacer upsert para no devolver 400 "Ya existe" con datos sin persistir.
+        consulta_existente = None
         try:
-            atencion.consulta_ambulatoria  # noqa: WPS428 - solo verificamos existencia
-            return Response(
-                {'error': 'Ya existe un registro de consulta ambulatoria para esta atención'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            consulta_existente = atencion.consulta_ambulatoria
         except ConsultaAmbulatoria.DoesNotExist:
             pass
 
         serializer = ConsultaAmbulatoriaSerializer(
+            instance=consulta_existente,
             data=request.data,
+            partial=bool(consulta_existente),
             context={'request': request, 'atencion': atencion},
         )
         serializer.is_valid(raise_exception=True)
         consulta = serializer.save(atencion=atencion)
 
+        if consulta_existente is None:
+            _safe_audit(
+                log_create,
+                actor=request.user,
+                entity=consulta,
+                module="turnos",
+                metadata={
+                    "action": "crear_registro_ambulatorio",
+                    "view": "AtencionViewSet.crear_registro_ambulatorio",
+                },
+            )
+            logger.info(
+                "ConsultaAmbulatoria creada para Atención ID: %s, Usuario: %s",
+                atencion.id, request.user.username,
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         _safe_audit(
-            log_create,
+            log_update,
             actor=request.user,
             entity=consulta,
             module="turnos",
             metadata={
-                "action": "crear_registro_ambulatorio",
+                "action": "crear_registro_ambulatorio_upsert",
                 "view": "AtencionViewSet.crear_registro_ambulatorio",
             },
         )
-
         logger.info(
-            "ConsultaAmbulatoria creada para Atención ID: %s, Usuario: %s",
+            "ConsultaAmbulatoria actualizada (upsert) Atención ID: %s, Usuario: %s",
             atencion.id, request.user.username,
         )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class EvolucionInternacionViewSet(viewsets.ModelViewSet):

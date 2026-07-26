@@ -80,3 +80,42 @@ def test_iniciar_guardia_paciente_inexistente(medico):
             paciente_id=999999,
             medico_id=medico.pk,
         )
+
+
+@pytest.mark.django_db
+def test_atencion_serializer_pedidos_pendientes_y_derivada(paciente, medico):
+    from api.serializers import AtencionSerializer
+    from laboratorio.models import SolicitudExamen, TipoExamen, TipoMuestra
+    from historias_clinicas.services import consulta_hc_id_para_atencion
+
+    outcome = AtencionService.iniciar_atencion_guardia(
+        paciente_id=paciente.pk,
+        medico_id=medico.pk,
+        motivo_consulta='Dolor',
+    )
+    atencion = outcome.atencion
+    assert atencion.estado_clinico == Atencion.EstadoClinico.ABIERTA
+
+    cid = consulta_hc_id_para_atencion(atencion)
+    assert cid is not None
+    tm = TipoMuestra.objects.create(codigo=f'TM-{unique_suffix()}', nombre='Sangre')
+    te = TipoExamen.objects.create(
+        codigo=f'GL-{unique_suffix()}',
+        nombre='Glucosa',
+        tipo_muestra_requerida=tm,
+        tipo_resultado='NUMERICO',
+    )
+    sol = SolicitudExamen.objects.create(
+        paciente=paciente,
+        medico_interno=medico,
+        consulta_hc_id=cid,
+        origen_solicitud='GUARDIA',
+        estado='PENDIENTE',
+    )
+    sol.tipos_examen.add(te)
+
+    data = AtencionSerializer(atencion).data
+    assert data['pedidos_lab_pendientes'] == 1
+    assert data['pedidos_estudios_pendientes'] == 0
+    assert data['derivada_a_internacion'] is False
+    assert data['estado_clinico'] == 'ABIERTA'

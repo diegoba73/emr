@@ -8,6 +8,7 @@ import type {
   CreateEstudioComplementarioPayload,
   EstudioComplementario,
   InformeEstudioComplementario,
+  SubirArchivoEstudioPayload,
   TipoEstudioComplementario,
   UpdateEstudioComplementarioPayload,
 } from '../types/estudios';
@@ -130,6 +131,27 @@ export const entregarEstudio = async (id: number): Promise<EstudioComplementario
   return response.data;
 };
 
+export interface SugerirInformeEstudioResponse {
+  texto: string;
+  fuente: 'reglas' | 'medgemma' | string;
+  marcado_sugerencia?: boolean;
+  modelo?: string;
+  vacio?: boolean;
+  detalle?: Record<string, unknown>;
+}
+
+/** Borrador de informe (plantilla y/o MedGemma). No persiste. */
+export const sugerirInformeEstudio = async (
+  estudioId: number,
+  payload?: { notas_medico?: string; prefer_medgemma?: boolean }
+): Promise<SugerirInformeEstudioResponse> => {
+  const response = await api.post(
+    `/estudios-complementarios/${estudioId}/sugerir-informe/`,
+    payload || {}
+  );
+  return response.data;
+};
+
 export const listArchivosEstudio = async (
   estudioId: number
 ): Promise<ArchivoEstudioComplementario[]> => {
@@ -145,6 +167,41 @@ export const agregarArchivoEstudio = async (
     `/estudios-complementarios/${estudioId}/agregar-archivo/`,
     payload
   );
+  return response.data;
+};
+
+export const subirArchivoEstudio = async (
+  estudioId: number,
+  payload: SubirArchivoEstudioPayload
+): Promise<ArchivoEstudioComplementario> => {
+  const form = new FormData();
+  form.append('archivo', payload.archivo);
+  if (payload.titulo) form.append('titulo', payload.titulo);
+  if (payload.tipo_archivo) form.append('tipo_archivo', payload.tipo_archivo);
+  if (payload.tipo_rol) form.append('tipo_rol', payload.tipo_rol);
+  if (payload.descripcion) form.append('descripcion', payload.descripcion);
+  if (payload.orden != null) form.append('orden', String(payload.orden));
+  if (payload.es_principal != null) form.append('es_principal', String(payload.es_principal));
+  const response = await api.post(
+    `/estudios-complementarios/${estudioId}/subir-archivo/`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
+export const quitarArchivoEstudio = async (
+  estudioId: number,
+  archivoEstudioId: number
+): Promise<{
+  ok: boolean;
+  archivo_estudio_id: number;
+  archivo_medico_id: number;
+  archivo_medico_eliminado: boolean;
+}> => {
+  const response = await api.post(`/estudios-complementarios/${estudioId}/quitar-archivo/`, {
+    archivo_estudio_id: archivoEstudioId,
+  });
   return response.data;
 };
 

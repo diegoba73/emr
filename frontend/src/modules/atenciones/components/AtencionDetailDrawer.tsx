@@ -750,6 +750,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
                   atencionId={data.id}
                   canEdit={canEditClinical}
                   variant="full"
+                  pacienteId={data.paciente?.id}
                 />
               </Box>
             )}

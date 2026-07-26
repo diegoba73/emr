@@ -26,6 +26,10 @@ import {
   Description,
   QrCodeScanner as BarcodeIcon,
   Inventory as RecepcionIcon,
+  Inventory2 as InventarioIcon,
+  Analytics as QcIcon,
+  Insights as BiIcon,
+  Timeline as PortalTimelineIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
@@ -35,9 +39,16 @@ import {
   canAccessArchivosMedicos,
   canAccessAtenciones,
   canAccessAuditoria,
+  canAccessBiDashboard,
   canAccessCatalogosClinicos,
   canAccessPacientes,
+  canAccessPortal,
+  canAccessPortalDocumentos,
+  canAccessPortalHistoria,
+  canAccessPortalResultados,
+  canAccessPortalTurnos,
   canAccessSolicitudes,
+  isPacienteRole,
 } from '../../utils/permissions';
 import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
 import {
@@ -65,7 +76,7 @@ export interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: () => true, resolveLabel: () => getHomeNavLabel() },
+  { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
@@ -85,6 +96,15 @@ const navItems: NavItem[] = [
     resolveLabel: getSolicitudesModuleLabel,
   },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria'] },
+  { text: 'Indicadores', icon: <BiIcon />, path: '/bi', canAccess: canAccessBiDashboard },
+];
+
+const portalItems: NavItem[] = [
+  { text: 'Mi portal', icon: <HomeIcon />, path: '/portal', canAccess: canAccessPortal },
+  { text: 'Mis turnos', icon: <CalendarIcon />, path: '/portal/turnos', canAccess: canAccessPortalTurnos },
+  { text: 'Mis resultados', icon: <ScienceIcon />, path: '/portal/resultados', canAccess: canAccessPortalResultados },
+  { text: 'Mis documentos', icon: <FolderIcon />, path: '/portal/documentos', canAccess: canAccessPortalDocumentos },
+  { text: 'Mi historia', icon: <PortalTimelineIcon />, path: '/portal/historia', canAccess: canAccessPortalHistoria },
 ];
 
 const adminOnly: NavItem[] = [
@@ -100,8 +120,11 @@ const labItems: NavItem[] = [
   { text: 'Recepción muestras', icon: <RecepcionIcon />, path: '/laboratorio/muestras/recepcion', canAccess: canOperateLims },
   { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsCatalogos },
   { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsCatalogos },
+  { text: 'Paneles', icon: <CatalogIcon />, path: '/laboratorio/catalogos/paneles', canAccess: canAccessLimsCatalogos },
   { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
   { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', canAccess: canAccessMicrobiologia },
+  { text: 'Inventario', icon: <InventarioIcon />, path: '/laboratorio/inventario', canAccess: canAccessLimsModule },
+  { text: 'Control calidad', icon: <QcIcon />, path: '/laboratorio/qc', canAccess: canAccessLimsModule },
 ];
 
 const catalogItems: NavItem[] = [
@@ -136,10 +159,10 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
   const location = useLocation();
   const { currentUser } = useData();
 
-  const primary = filterByRole(navItems, currentUser);
+  const primary = filterByRole(isPacienteRole(currentUser) ? portalItems : navItems, currentUser);
   const adminItems = filterByRole(adminOnly, currentUser);
   const catalogNav = filterByRole(catalogItems, currentUser);
-  const labNav = filterByRole(labItems, currentUser);
+  const labNav = isPacienteRole(currentUser) ? [] : filterByRole(labItems, currentUser);
 
   const go = (path: string) => {
     navigate(path);
@@ -161,7 +184,7 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
         <Logo size={110} />
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
-        Principal
+        {isPacienteRole(currentUser) ? 'Mi portal' : 'Principal'}
       </Typography>
       <List sx={{ pt: 0.5, px: 0.5 }}>
         {primary.map((item) => {
@@ -214,6 +237,8 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
                   location.pathname.startsWith('/laboratorio/catalogos/examenes')) ||
                 (item.path === '/laboratorio/catalogos/tipos-muestra' &&
                   location.pathname.startsWith('/laboratorio/catalogos/tipos-muestra')) ||
+                (item.path === '/laboratorio/catalogos/paneles' &&
+                  location.pathname.startsWith('/laboratorio/catalogos/paneles')) ||
                 (item.path === '/laboratorio/microbiologia/estudios' &&
                   location.pathname.startsWith('/laboratorio/microbiologia')) ||
                 (item.path === '/laboratorio/microbiologia/catalogos' &&

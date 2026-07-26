@@ -304,7 +304,7 @@ class SolicitudLaboratorioResumenSerializer(serializers.Serializer):
 class ConsultaDetalleSerializer(ConsultaSerializer):
     """Consulta con archivos, pedidos de laboratorio y estudios complementarios vinculados."""
 
-    paciente_id = serializers.IntegerField(source='historia_clinica_id', read_only=True)
+    paciente_id = serializers.IntegerField(source='historia_clinica.paciente_id', read_only=True)
     archivos = serializers.SerializerMethodField()
     estudios_complementarios = serializers.SerializerMethodField()
     solicitudes_laboratorio = serializers.SerializerMethodField()
@@ -320,7 +320,12 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
     def get_archivos(self, obj):
         from archivos_medicos.models import ArchivoMedico
         request = self.context.get('request')
-        items = ArchivoMedico.objects.filter(consulta_id=obj.pk).order_by('-fecha_subida')
+        items = (
+            ArchivoMedico.objects.filter(consulta_id=obj.pk)
+            .exclude(vinculos_estudio__estudio__origen='INTERNO')
+            .distinct()
+            .order_by('-fecha_subida')
+        )
         result = []
         for ar in items:
             nombre = None

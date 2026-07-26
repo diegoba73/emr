@@ -1,6 +1,7 @@
 import {
   ESTADOS_MICRO_CERRADOS,
   canAccessMicrobiologia,
+  canAccessMicrobiologiaLectura,
   canDownloadInformeLimsPdf,
   canMarcarMicroEstudioInformado,
   canOperateMicrobiologia,
@@ -116,5 +117,17 @@ describe('canValidarOrdenLims', () => {
     expect(canValidarOrdenLims(adminUser)).toBe(true);
     expect(canValidarOrdenLims(labUser)).toBe(false);
     expect(canValidarOrdenLims(medUser)).toBe(false);
+  });
+});
+
+describe('canAccessMicrobiologiaLectura', () => {
+  it('permite médico y operadores LIMS, no el menú LIMS completo al médico', () => {
+    expect(canAccessMicrobiologiaLectura(labUser)).toBe(true);
+    expect(canAccessMicrobiologiaLectura(medUser)).toBe(true);
+    expect(canAccessMicrobiologia(medUser)).toBe(false);
+  });
+
+  it('niega paciente', () => {
+    expect(canAccessMicrobiologiaLectura(pacUser)).toBe(false);
   });
 });

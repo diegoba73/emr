@@ -20,14 +20,17 @@ import {
   listSiembrasMicrobiologia,
   marcarEstudioMicrobiologiaInformado,
 } from '../../services/limsApi';
+import { downloadEtiquetasEstudioMicro } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
-  canAccessMicrobiologia,
+  canAccessMicrobiologiaLectura,
   canMarcarMicroEstudioInformado,
+  canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
   canValidarInformeMicro,
   isMicroEstudioCerrado,
 } from '../../utils/limsAccess';
+import EstudioMicroPedidoRecepcionPanel from '../../components/lims/micro/EstudioMicroPedidoRecepcionPanel';
 import EstudioMicroResumenTab from '../../components/lims/micro/EstudioMicroResumenTab';
 import SiembrasLecturasPanel from '../../components/lims/micro/SiembrasLecturasPanel';
 import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIdentificacionPanel';
@@ -42,6 +45,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [tab, setTab] = useState(0);
   const [estudio, setEstudio] = useState<EstudioMicrobiologia | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reprinting, setReprinting] = useState(false);
+  const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
   const [bundle, setBundle] = useState({
     siembras: [] as Awaited<ReturnType<typeof listSiembrasMicrobiologia>>,
     lecturas: [] as Awaited<ReturnType<typeof listLecturasCultivo>>,
@@ -55,11 +60,13 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     antibioticos: [] as Awaited<ReturnType<typeof listAntibioticos>>,
   });
 
-  const allowed = canAccessMicrobiologia(currentUser);
+  const allowed = canAccessMicrobiologiaLectura(currentUser);
+  const canOp = canOperateMicrobiologia(currentUser);
   const canVal = canValidarInformeMicro(currentUser);
   const estudioCerrado = estudio ? isMicroEstudioCerrado(estudio.estado) : false;
   const canOpEstudio = canOperateMicroEstudioTecnico(currentUser, estudio?.estado);
   const canMarcarInformado = canMarcarMicroEstudioInformado(currentUser, estudio?.estado);
+  const modoPedidoPendiente = estudio?.estado === 'PENDIENTE';
 
   const estudioId = Number(id);
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
@@ -69,32 +76,40 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     setLoading(true);
     try {
       const filterParams = { estudio_id: estudioId };
-      const [est, siembras, lecturas, aislados, identificaciones, antibiogramas, resultados, informes, medios, microorganismos, antibioticos] =
-        await Promise.all([
-          getEstudioMicrobiologia(estudioId),
-          listSiembrasMicrobiologia(filterParams),
-          listLecturasCultivo(filterParams),
-          listAisladosMicrobiologicos(filterParams),
-          listIdentificacionesMicroorganismo(filterParams),
-          listAntibiogramas(filterParams),
-          listResultadosAntibiotico(filterParams),
-          listInformesMicrobiologia(filterParams),
-          listMediosCultivo(),
-          listMicroorganismos(),
-          listAntibioticos(),
-        ]);
+      const est = await getEstudioMicrobiologia(estudioId);
       setEstudio(est);
+
+      // En PENDIENTE solo hace falta el estudio (vista de recepción).
+      if (est.estado === 'PENDIENTE') {
+        return;
+      }
+
+      const settled = await Promise.allSettled([
+        listSiembrasMicrobiologia(filterParams),
+        listLecturasCultivo(filterParams),
+        listAisladosMicrobiologicos(filterParams),
+        listIdentificacionesMicroorganismo(filterParams),
+        listAntibiogramas(filterParams),
+        listResultadosAntibiotico(filterParams),
+        listInformesMicrobiologia(filterParams),
+        listMediosCultivo(),
+        listMicroorganismos(),
+        listAntibioticos(),
+      ]);
+      const val = <T,>(i: number, fallback: T): T =>
+        settled[i].status === 'fulfilled' ? (settled[i] as PromiseFulfilledResult<T>).value : fallback;
+
       setBundle({
-        siembras,
-        lecturas,
-        aislados,
-        identificaciones,
-        antibiogramas,
-        resultados,
-        informes,
-        medios,
-        microorganismos,
-        antibioticos,
+        siembras: val(0, []),
+        lecturas: val(1, []),
+        aislados: val(2, []),
+        identificaciones: val(3, []),
+        antibiogramas: val(4, []),
+        resultados: val(5, []),
+        informes: val(6, []),
+        medios: val(7, []),
+        microorganismos: val(8, []),
+        antibioticos: val(9, []),
       });
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarEstudio));
@@ -108,11 +123,11 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     loadAll();
   }, [loadAll]);
 
-  const runEstudio = async (fn: () => Promise<EstudioMicrobiologia>) => {
+  const runEstudio = async (fn: () => Promise<EstudioMicrobiologia>, okMsg = 'Estudio actualizado') => {
     try {
       const est = await fn();
       setEstudio(est);
-      toast.success('Estudio actualizado');
+      toast.success(okMsg);
       await loadAll();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarEstudioMicro));
@@ -121,14 +136,14 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
 
   const onCancelar = () => {
     openMotivoDialog({
-      title: 'Cancelar estudio microbiológico',
+      title: 'Cancelar pedido microbiológico',
       label: 'Motivo de cancelación',
-      confirmLabel: 'Cancelar estudio',
+      confirmLabel: 'Cancelar pedido',
       onConfirm: async (motivo) => {
         try {
           const est = await cancelarEstudioMicrobiologia(estudioId, motivo);
           setEstudio(est);
-          toast.success('Estudio actualizado');
+          toast.success('Pedido cancelado');
           await loadAll();
         } catch (e) {
           const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCancelarEstudioMicro);
@@ -137,6 +152,50 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         }
       },
     });
+  };
+
+  const onReimprimir = async () => {
+    setReprinting(true);
+    try {
+      await downloadEtiquetasEstudioMicro(estudioId);
+      toast.success('Etiqueta generada.');
+      await loadAll();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
+    } finally {
+      setReprinting(false);
+    }
+  };
+
+  const onConfirmarRecepcion = async () => {
+    setConfirmingRecepcion(true);
+    try {
+      const est = await iniciarEstudioMicrobiologia(estudioId);
+      setEstudio(est);
+      toast.success('Recepción confirmada. Ya podés trabajar el estudio.');
+      await loadAll();
+      setTab(0);
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarEstudioMicro));
+    } finally {
+      setConfirmingRecepcion(false);
+    }
+  };
+
+  const handleVolver = () => {
+    if (canOperateMicrobiologia(currentUser)) {
+      if (modoPedidoPendiente) {
+        const tabPend =
+          estudio?.etiquetas_impresas_at || estudio?.codigo_barra
+            ? 'esperando_recepcion'
+            : 'sin_etiquetas';
+        navigate(`/laboratorio/pendientes?tab=${tabPend}`);
+        return;
+      }
+      navigate('/laboratorio/microbiologia/estudios');
+      return;
+    }
+    navigate('/solicitudes');
   };
 
   if (!allowed) {
@@ -155,10 +214,30 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     );
   }
 
+  if (modoPedidoPendiente) {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Button size="small" onClick={handleVolver} sx={{ mb: 1 }}>
+          ← Volver a pendientes
+        </Button>
+        <EstudioMicroPedidoRecepcionPanel
+          estudio={estudio}
+          canOperate={canOp}
+          reprinting={reprinting}
+          confirmingRecepcion={confirmingRecepcion}
+          onReimprimirEtiquetas={() => void onReimprimir()}
+          onConfirmarRecepcion={() => void onConfirmarRecepcion()}
+          onCancelar={onCancelar}
+        />
+        <MotivoDialog {...dialogProps} />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: 2 }}>
-      <Button size="small" onClick={() => navigate('/laboratorio/microbiologia/estudios')} sx={{ mb: 1 }}>
-        ← Estudios microbiología
+      <Button size="small" onClick={handleVolver} sx={{ mb: 1 }}>
+        ← Volver
       </Button>
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Resumen" />
@@ -179,9 +258,13 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           estudio={estudio}
           canOperateTecnico={canOpEstudio}
           canMarcarInformado={canMarcarInformado}
-          onIniciar={() => runEstudio(() => iniciarEstudioMicrobiologia(estudioId))}
+          onIniciar={() =>
+            void runEstudio(() => iniciarEstudioMicrobiologia(estudioId), 'Estudio iniciado')
+          }
           onCancelar={onCancelar}
-          onMarcarInformado={() => runEstudio(() => marcarEstudioMicrobiologiaInformado(estudioId))}
+          onMarcarInformado={() =>
+            void runEstudio(() => marcarEstudioMicrobiologiaInformado(estudioId))
+          }
         />
       )}
       {tab === 1 && (

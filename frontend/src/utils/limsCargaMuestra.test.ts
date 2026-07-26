@@ -94,13 +94,35 @@ describe('limsCargaMuestra', () => {
     expect(err).toMatch(/no corresponde al tipo requerido/i);
   });
 
+  it('payload deriva valor_numerico desde Valor si es número', () => {
+    const row: DraftCargaRow = {
+      ...draftRow(null),
+      valor: '120.5',
+      valor_numerico: '',
+    };
+    const payload = buildCargarResultadoPayload(1, row);
+    expect(payload.valor).toBe('120.5');
+    expect(payload.valor_numerico).toBe(120.5);
+  });
+
+  it('payload no fuerza valor_numerico en texto cualitativo', () => {
+    const row: DraftCargaRow = {
+      ...draftRow(null),
+      valor: 'Positivo',
+      valor_numerico: '',
+    };
+    const payload = buildCargarResultadoPayload(1, row);
+    expect(payload.valor).toBe('Positivo');
+    expect(payload.valor_numerico).toBeUndefined();
+  });
+
   it('payload sysmex convierte ticket hemograma', () => {
     const row: DraftCargaRow = {
       ...draftRow(null),
       valor: '',
       valor_sysmex: '93',
     };
-    const payload = buildCargarResultadoPayload(1, row, { id: 0, codigo: 'LEU', nombre: 'LEU', tipo_muestra_requerida: 0, modo_entrada: 'ESTANDAR' }, 'LEU');
+    const payload = buildCargarResultadoPayload(1, row, { id: 0, codigo: 'LEUCO', nombre: 'LEUCO', tipo_muestra_requerida: 0, modo_entrada: 'ESTANDAR' }, 'LEUCO');
     expect(payload.valor_sysmex).toBe('93');
     expect(payload.valor).toBe('9300');
     expect(payload.valor_numerico).toBe(9300);

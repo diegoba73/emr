@@ -23,16 +23,26 @@ import {
 } from '../../utils/archivoMedicoPreview';
 import { clinicalDrawerDialogProps } from '../../utils/layerZIndex';
 
+export type ArchivoPreviewMeta = {
+  id: number;
+  titulo?: string | null;
+  tipo_archivo?: ArchivoMedico['tipo_archivo'] | string | null;
+  archivo_nombre?: string | null;
+};
+
 interface ArchivoMedicoPreviewDialogProps {
   open: boolean;
-  archivo: ArchivoMedico | null;
+  archivo: ArchivoPreviewMeta | null;
   onClose: () => void;
+  /** Por defecto descarga vía API de Archivos (`archivo.id` = ArchivoMedico.id). */
+  fetchBlob?: (archivo: ArchivoPreviewMeta) => Promise<Blob>;
 }
 
 const ArchivoMedicoPreviewDialog: React.FC<ArchivoMedicoPreviewDialogProps> = ({
   open,
   archivo,
   onClose,
+  fetchBlob,
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -63,7 +73,9 @@ const ArchivoMedicoPreviewDialog: React.FC<ArchivoMedicoPreviewDialogProps> = ({
       setPreviewKind(kind);
 
       try {
-        const rawBlob = await downloadArchivoMedico(archivo.id);
+        const rawBlob = fetchBlob
+          ? await fetchBlob(archivo)
+          : await downloadArchivoMedico(archivo.id);
         if (cancelled) return;
 
         const mimeType = guessArchivoMimeType(name, archivo.tipo_archivo);
@@ -86,7 +98,7 @@ const ArchivoMedicoPreviewDialog: React.FC<ArchivoMedicoPreviewDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, archivo?.id, archivo?.titulo, archivo?.tipo_archivo, archivo?.archivo_nombre]);
+  }, [open, archivo?.id, archivo?.titulo, archivo?.tipo_archivo, archivo?.archivo_nombre, fetchBlob]);
 
   useEffect(() => {
     return () => {
@@ -174,7 +186,8 @@ const ArchivoMedicoPreviewDialog: React.FC<ArchivoMedicoPreviewDialogProps> = ({
               Este tipo de archivo no tiene vista previa integrada.
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Podés descargarlo o abrirlo en una pestaña nueva.
+              Podés descargarlo o abrirlo en una pestaña nueva. Los DICOM / ZIP se habilitarán en una
+              etapa posterior de visor.
             </Typography>
             <Button variant="outlined" onClick={handleOpenNewTab} sx={{ mr: 1 }}>
               Abrir en pestaña nueva

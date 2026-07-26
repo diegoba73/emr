@@ -39,6 +39,8 @@ export interface EstudioComplementario {
   modalidad: EstudioModalidad;
   estado: EstudioEstado;
   medico_solicitante?: number | null;
+  realizado_por?: number | null;
+  realizado_por_nombre?: string | null;
   atencion?: number | null;
   consulta_hc?: number | null;
   solicitud_emr?: number | null;
@@ -63,6 +65,9 @@ export interface EstudioComplementario {
 export interface ArchivoEstudioComplementario {
   id: number;
   archivo_medico_id: number;
+  titulo?: string | null;
+  tipo_archivo?: string | null;
+  archivo_nombre?: string | null;
   tipo_rol: string;
   descripcion?: string;
   orden?: number;
@@ -149,6 +154,16 @@ export interface AsignarTurnoEstudioPayload {
 
 export interface AgregarArchivoEstudioPayload {
   archivo_medico_id: number;
+  tipo_rol?: string;
+  descripcion?: string;
+  orden?: number;
+  es_principal?: boolean;
+}
+
+export interface SubirArchivoEstudioPayload {
+  archivo: File;
+  titulo?: string;
+  tipo_archivo?: string;
   tipo_rol?: string;
   descripcion?: string;
   orden?: number;

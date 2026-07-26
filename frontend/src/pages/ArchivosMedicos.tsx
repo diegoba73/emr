@@ -283,7 +283,8 @@ const ArchivosMedicos: React.FC = () => {
           Archivos
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Repositorio unificado de archivos del paciente (incluye adjuntos de atenciones, estudios e imágenes).
+          Archivos y estudios externos que el paciente trae a la clínica. Los resultados de estudios
+          realizados aquí se cargan en Estudios complementarios (no en este listado).
         </Typography>
       </Box>
 

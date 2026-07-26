@@ -161,7 +161,7 @@ const SolicitudLabDetalle: React.FC = () => {
                     {res.valor_obtenido || '—'}
                     {res.unidad ? ` ${res.unidad}` : ''}
                     {res.es_patologico ? (
-                      <Chip label="Patológico" size="small" color="warning" sx={{ ml: 1 }} />
+                      <Chip label="Fuera de rango" size="small" color="warning" sx={{ ml: 1 }} />
                     ) : null}
                   </TableCell>
                   <TableCell>{res.rango_referencia_snapshot || res.tipo_examen_rango_referencia || '—'}</TableCell>

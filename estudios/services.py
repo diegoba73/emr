@@ -16,7 +16,12 @@ from archivos_medicos.models import ArchivoMedico
 from auditoria.audit_service import log_event
 from auditoria.snapshot import safe_model_snapshot
 
-from .access import usuario_puede_descargar_pdf_informe, usuario_puede_validar_informe
+from .access import (
+    usuario_es_realizador_o_admin,
+    usuario_puede_descargar_pdf_informe,
+    usuario_puede_modificar_contenido_estudio,
+    usuario_puede_validar_informe,
+)
 from .estado import aplicar_transicion_estudio
 from .models import (
     ArchivoEstudioComplementario,
@@ -99,8 +104,17 @@ def crear_estudio(validated_data: dict, *, user) -> EstudioComplementario:
     return estudio
 
 
+def _assert_puede_modificar_contenido(estudio: EstudioComplementario, user) -> None:
+    if not usuario_puede_modificar_contenido_estudio(user, estudio):
+        raise PermissionDenied(
+            'No tiene permiso para modificar este estudio. '
+            'Tras la validación solo puede editarlo quien lo realizó (o un administrador).'
+        )
+
+
 @transaction.atomic
 def actualizar_estudio(estudio: EstudioComplementario, validated_data: dict, *, user) -> EstudioComplementario:
+    _assert_puede_modificar_contenido(estudio, user)
     if estudio.es_terminal:
         raise ValidationError('El estudio no admite modificaciones en su estado actual.')
     before = safe_model_snapshot(estudio)
@@ -316,13 +330,23 @@ def agendar_turno_estudio_desde_agenda(
 def marcar_realizado(estudio: EstudioComplementario, *, user, fecha_realizacion=None):
     estudio.fecha_realizacion = fecha_realizacion or timezone.now()
     estudio.modificado_por = user
+    if user is not None and getattr(user, 'is_authenticated', False):
+        # Quien marca realizado queda como responsable clínico del estudio.
+        estudio.realizado_por = user
     estudio.full_clean()
     anterior = aplicar_transicion_estudio(
         estudio,
         accion='marcar_realizado',
         nuevo_estado=EstudioComplementario.Estado.REALIZADO,
     )
-    estudio.save(update_fields=['fecha_realizacion', 'modificado_por', 'updated_at'])
+    estudio.save(
+        update_fields=[
+            'fecha_realizacion',
+            'modificado_por',
+            'realizado_por',
+            'updated_at',
+        ]
+    )
     _auditar_cambio_estado(
         estudio,
         user=user,
@@ -369,6 +393,7 @@ def _informe_vigente_validado(estudio: EstudioComplementario) -> InformeEstudioC
 
 @transaction.atomic
 def entregar_estudio(estudio: EstudioComplementario, *, user):
+    _assert_puede_modificar_contenido(estudio, user)
     if not _informe_vigente_validado(estudio):
         raise ValidationError('Entregar requiere un informe validado vigente.')
     if estudio.estado != EstudioComplementario.Estado.VALIDADO:
@@ -390,6 +415,12 @@ def entregar_estudio(estudio: EstudioComplementario, *, user):
     return estudio
 
 
+_ORIGENES_ASOCIAR_ARCHIVO = frozenset({
+    EstudioComplementario.Origen.EXTERNO,
+    EstudioComplementario.Origen.IMPORTADO_HISTORICO,
+})
+
+
 @transaction.atomic
 def asociar_archivo(
     estudio: EstudioComplementario,
@@ -401,8 +432,15 @@ def asociar_archivo(
     orden: int = 0,
     es_principal: bool = False,
 ) -> ArchivoEstudioComplementario:
+    _assert_puede_modificar_contenido(estudio, user)
     if estudio.es_terminal:
         raise ValidationError('No se pueden asociar archivos a un estudio terminal.')
+    if estudio.origen not in _ORIGENES_ASOCIAR_ARCHIVO:
+        raise ValidationError(
+            'Los estudios hechos en la clínica deben subir el archivo desde el estudio '
+            '(no asociar desde Archivos). La asociación solo aplica a estudios externos '
+            'o importados históricos.'
+        )
     try:
         archivo_medico = ArchivoMedico.objects.get(pk=archivo_medico_id)
     except ArchivoMedico.DoesNotExist as exc:
@@ -436,6 +474,161 @@ def asociar_archivo(
         },
     )
     return vinculo
+
+
+@transaction.atomic
+def subir_archivo_estudio(
+    estudio: EstudioComplementario,
+    *,
+    user,
+    archivo,
+    titulo: str,
+    tipo_archivo: str = 'PDF',
+    tipo_rol: str = ArchivoEstudioComplementario.TipoRol.OTRO,
+    descripcion: str = '',
+    orden: int = 0,
+    es_principal: bool = False,
+) -> ArchivoEstudioComplementario:
+    """Crea ArchivoMedico (sin consulta/atención) y lo vincula al estudio."""
+    _assert_puede_modificar_contenido(estudio, user)
+    if estudio.es_terminal:
+        raise ValidationError('No se pueden subir archivos a un estudio terminal.')
+    if not archivo:
+        raise ValidationError({'archivo': 'Debe adjuntar un archivo.'})
+
+    titulo_clean = (titulo or '').strip() or getattr(archivo, 'name', None) or 'Archivo de estudio'
+    tipos_ok = {c[0] for c in ArchivoMedico.TIPO_CHOICES}
+    if tipo_archivo not in tipos_ok:
+        raise ValidationError({'tipo_archivo': 'Tipo de archivo no válido.'})
+
+    archivo_medico = ArchivoMedico(
+        paciente=estudio.paciente,
+        titulo=titulo_clean[:200],
+        descripcion=descripcion or '',
+        tipo_archivo=tipo_archivo,
+        archivo=archivo,
+        subido_por=user,
+    )
+    archivo_medico.full_clean()
+    archivo_medico.save()
+
+    vinculo = ArchivoEstudioComplementario(
+        estudio=estudio,
+        archivo_medico=archivo_medico,
+        tipo_rol=tipo_rol,
+        descripcion=descripcion or '',
+        orden=orden,
+        es_principal=es_principal,
+        subido_por=user,
+    )
+    vinculo.full_clean()
+    vinculo.save()
+    _safe_audit(
+        log_event,
+        action='CREATE',
+        actor=user,
+        entity=vinculo,
+        after=safe_model_snapshot(vinculo),
+        entity_repr=f'estudios.ArchivoEstudioComplementario:{vinculo.pk}',
+        module='estudios',
+        metadata={
+            'accion': 'estudio_archivo_subir',
+            'view': 'EstudioComplementarioViewSet.subir_archivo',
+            'archivo_estudio_id': vinculo.pk,
+            'archivo_medico_id': archivo_medico.pk,
+            **_estudio_meta(estudio),
+        },
+    )
+    return vinculo
+
+
+@transaction.atomic
+def quitar_archivo_estudio(
+    estudio: EstudioComplementario,
+    *,
+    user,
+    archivo_estudio_id: int,
+) -> dict:
+    """
+    Quita el archivo del estudio (elimina el vínculo).
+
+    Si el ArchivoMedico fue subido solo para este estudio (sin consulta/atención
+    y sin otros vínculos), también se elimina ese registro para que no reaparezca
+    en el menú Archivos. Archivos traídos por el paciente (asociados) solo se
+    desvinculan.
+    """
+    _assert_puede_modificar_contenido(estudio, user)
+    if estudio.es_terminal:
+        raise ValidationError('No se pueden quitar archivos de un estudio terminal.')
+    try:
+        vinculo = estudio.archivos_estudio.select_related('archivo_medico').get(
+            pk=archivo_estudio_id
+        )
+    except ArchivoEstudioComplementario.DoesNotExist as exc:
+        raise ValidationError({'archivo_estudio_id': 'Archivo no vinculado a este estudio.'}) from exc
+
+    archivo_medico = vinculo.archivo_medico
+    archivo_medico_id = archivo_medico.pk
+    before = safe_model_snapshot(vinculo)
+    _safe_audit(
+        log_event,
+        action='DELETE',
+        actor=user,
+        entity=vinculo,
+        before=before,
+        entity_repr=f'estudios.ArchivoEstudioComplementario:{vinculo.pk}',
+        module='estudios',
+        metadata={
+            'accion': 'estudio_archivo_quitar',
+            'view': 'EstudioComplementarioViewSet.quitar_archivo',
+            'archivo_estudio_id': vinculo.pk,
+            'archivo_medico_id': archivo_medico_id,
+            **_estudio_meta(estudio),
+        },
+    )
+    vinculo.delete()
+
+    eliminado_archivo_medico = False
+    # Solo borrar el ArchivoMedico si nació como carga del estudio interno
+    # (huérfano). Archivos asociados (externos) se desvinculan y quedan en Archivos.
+    es_huerfano_estudio = (
+        estudio.origen == EstudioComplementario.Origen.INTERNO
+        and archivo_medico.consulta_id is None
+        and archivo_medico.atencion_id is None
+        and not archivo_medico.vinculos_estudio.exists()
+    )
+    if es_huerfano_estudio:
+        before_am = safe_model_snapshot(archivo_medico)
+        # Quitar fichero del storage si existe (best-effort).
+        try:
+            if archivo_medico.archivo:
+                archivo_medico.archivo.delete(save=False)
+        except Exception:  # pragma: no cover
+            logger.exception('No se pudo borrar el fichero físico del ArchivoMedico huérfano')
+        archivo_medico.delete()
+        eliminado_archivo_medico = True
+        _safe_audit(
+            log_event,
+            action='DELETE',
+            actor=user,
+            entity=None,
+            before=before_am,
+            entity_repr=f'archivos_medicos.ArchivoMedico:{archivo_medico_id}',
+            module='estudios',
+            metadata={
+                'accion': 'estudio_archivo_medico_huerfano_eliminar',
+                'view': 'EstudioComplementarioViewSet.quitar_archivo',
+                'archivo_medico_id': archivo_medico_id,
+                **_estudio_meta(estudio),
+            },
+        )
+
+    return {
+        'ok': True,
+        'archivo_estudio_id': archivo_estudio_id,
+        'archivo_medico_id': archivo_medico_id,
+        'archivo_medico_eliminado': eliminado_archivo_medico,
+    }
 
 
 def servir_descarga_archivo_estudio(vinculo: ArchivoEstudioComplementario, *, user):
@@ -484,6 +677,7 @@ def crear_informe(
     texto: str = '',
     tipo: str = InformeEstudioComplementario.TipoInforme.FINAL,
 ) -> InformeEstudioComplementario:
+    _assert_puede_modificar_contenido(estudio, user)
     _exigir_estado_estudio(
         estudio,
         _ESTADOS_CREAR_EMITIR_INFORME,
@@ -520,6 +714,17 @@ def crear_informe(
 @transaction.atomic
 def emitir_informe(informe: InformeEstudioComplementario, *, user, medico=None):
     estudio = informe.estudio
+    if estudio.estado in (
+        EstudioComplementario.Estado.VALIDADO,
+        EstudioComplementario.Estado.ENTREGADO,
+    ):
+        if not usuario_es_realizador_o_admin(user, estudio):
+            raise PermissionDenied(
+                'Solo quien realizó el estudio o un administrador pueden emitir '
+                'la rectificación.'
+            )
+    else:
+        _assert_puede_modificar_contenido(estudio, user)
     if informe.estado != InformeEstudioComplementario.EstadoInforme.BORRADOR:
         raise ValidationError('Solo se puede emitir un informe en borrador.')
     estados_emitir = set(_ESTADOS_CREAR_EMITIR_INFORME)
@@ -620,8 +825,12 @@ def emitir_informe(informe: InformeEstudioComplementario, *, user, medico=None):
 
 @transaction.atomic
 def validar_informe(informe: InformeEstudioComplementario, *, user):
-    if not usuario_puede_validar_informe(user):
-        raise PermissionDenied('No tiene permiso para validar informes.')
+    estudio_previo = informe.estudio
+    if not usuario_puede_validar_informe(user, estudio_previo):
+        raise PermissionDenied(
+            'No tiene permiso para validar este informe. '
+            'Solo quien realizó el estudio o un administrador pueden validarlo.'
+        )
     if informe.estado != InformeEstudioComplementario.EstadoInforme.EMITIDO:
         raise ValidationError('Solo se puede validar un informe emitido.')
     estudio = (
@@ -713,6 +922,11 @@ def rectificar_informe(
 ):
     if informe.estado != InformeEstudioComplementario.EstadoInforme.VALIDADO:
         raise ValidationError('Solo se puede rectificar un informe validado.')
+    estudio = informe.estudio
+    if not usuario_es_realizador_o_admin(user, estudio):
+        raise PermissionDenied(
+            'Solo quien realizó el estudio o un administrador pueden rectificar el informe.'
+        )
     motivo_final = (motivo_rectificacion or motivo or '').strip()
     if not motivo_final:
         raise ValidationError({'motivo_rectificacion': 'El motivo de rectificación es obligatorio.'})

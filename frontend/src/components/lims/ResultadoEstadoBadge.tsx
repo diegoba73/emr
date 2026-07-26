@@ -16,9 +16,9 @@ const ResultadoEstadoBadge: React.FC<ResultadoEstadoBadgeProps> = ({ resultado, 
     return <Chip size={size} label="Crítico" color="error" />;
   }
   if (resultado.es_patologico) {
-    return <Chip size={size} label="Patológico" color="warning" />;
+    return <Chip size={size} label="Fuera de rango" color="warning" />;
   }
-  return <Chip size={size} label="Normal" color="success" variant="outlined" />;
+  return <Chip size={size} label="En rango" color="success" variant="outlined" />;
 };
 
 export default ResultadoEstadoBadge;

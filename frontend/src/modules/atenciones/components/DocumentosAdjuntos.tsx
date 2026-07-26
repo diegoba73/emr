@@ -202,8 +202,8 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {consultaHcId
-              ? 'Estudios previos u otra información que el paciente trae a la consulta.'
-              : 'Los adjuntos de esta atención también aparecen en el menú Archivos.'}
+              ? 'Estudios previos u otra información que el paciente trae a la consulta (no hechos en la clínica). Los resultados de estudios realizados aquí se cargan en Estudios complementarios.'
+              : 'Adjuntos que el paciente trae. Los resultados de estudios hechos en la clínica se cargan en el módulo Estudios complementarios.'}
           </Typography>
         </Box>
         {canEdit && (

@@ -103,6 +103,44 @@ def sync_consulta_hc_desde_ambulatoria(consulta_amb: ConsultaAmbulatoria) -> Con
     return hc
 
 
+@transaction.atomic
+def sync_consulta_hc_desde_evolucion(evolucion) -> Consulta | None:
+    """Proyecta evolución de internación hacia la Consulta HC del encuentro."""
+    atencion = evolucion.atencion
+    if atencion.contexto_atencion != Atencion.ContextoAtencion.INTERNACION:
+        # También permitir guardia si se desea proyección
+        if atencion.contexto_atencion != Atencion.ContextoAtencion.GUARDIA:
+            if atencion.tipo_intervencion != Atencion.TipoIntervencion.CONSULTA:
+                return None
+
+    hc = ensure_consulta_hc_desde_atencion(atencion)
+    partes = []
+    if evolucion.subjetivo:
+        partes.append(f'S: {evolucion.subjetivo}')
+    if evolucion.objetivo:
+        partes.append(f'O: {evolucion.objetivo}')
+    if evolucion.analisis:
+        partes.append(f'A: {evolucion.analisis}')
+    if evolucion.plan:
+        partes.append(f'P: {evolucion.plan}')
+    soap = '\n'.join(partes)
+    if soap:
+        hc.anamnesis = soap
+    if evolucion.diagnostico_actualizado:
+        hc.diagnostico_presuntivo = evolucion.diagnostico_actualizado
+    if evolucion.plan_manejo:
+        hc.plan_manejo = evolucion.plan_manejo
+    if evolucion.signos_vitales_resumen:
+        prev = hc.notas_medicas or ''
+        nota_sv = f'SV: {evolucion.signos_vitales_resumen}'
+        if nota_sv not in prev:
+            hc.notas_medicas = f'{prev}\n{nota_sv}'.strip() if prev else nota_sv
+    if not hc.medico_id and atencion.medico_principal_id:
+        hc.medico_id = atencion.medico_principal_id
+    hc.save()
+    return hc
+
+
 def consulta_hc_id_para_atencion(atencion: Atencion) -> int | None:
     """Devuelve el id de Consulta HC para una atención, sin crear si no existe."""
     cid = (

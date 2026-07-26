@@ -22,7 +22,46 @@ from laboratorio.models_microbiologia import (
     Microorganismo,
     ResultadoAntibiotico,
     SiembraMicrobiologia,
+    TipoCultivoMicrobiologia,
+    TipoMuestraMicrobiologia,
 )
+
+
+# ---------------------------------------------------------------------------
+# Catálogos cultivo / muestra micro
+# ---------------------------------------------------------------------------
+
+
+class TipoCultivoMicrobiologiaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TipoCultivoMicrobiologia
+        fields = (
+            "id",
+            "codigo",
+            "nombre",
+            "descripcion",
+            "orden",
+            "activo",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class TipoMuestraMicrobiologiaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TipoMuestraMicrobiologia
+        fields = (
+            "id",
+            "codigo",
+            "nombre",
+            "descripcion",
+            "orden",
+            "activo",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
 
 
 # ---------------------------------------------------------------------------
@@ -54,14 +93,47 @@ class MedioCultivoSerializer(serializers.ModelSerializer):
 class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     """Lectura: incluye estado y campos derivados; el estado es read-only."""
 
+    paciente_nombre = serializers.SerializerMethodField()
+    paciente_dni = serializers.SerializerMethodField()
+    medico_display = serializers.SerializerMethodField()
+    solicitud_numero = serializers.SerializerMethodField()
+    muestra_codigo_barra = serializers.SerializerMethodField()
+    muestra_tipo_nombre = serializers.SerializerMethodField()
+    tipo_cultivo_nombre = serializers.SerializerMethodField()
+    tipo_muestra_micro_nombre = serializers.SerializerMethodField()
+    tipo_pedido = serializers.SerializerMethodField()
+    sin_etiquetas = serializers.SerializerMethodField()
+    esperando_recepcion = serializers.SerializerMethodField()
+    origen_solicitud_display = serializers.SerializerMethodField()
+
     class Meta:
         model = EstudioMicrobiologia
         fields = (
             "id",
             "numero",
             "solicitud",
+            "solicitud_numero",
             "muestra",
+            "muestra_codigo_barra",
+            "muestra_tipo_nombre",
             "paciente",
+            "paciente_nombre",
+            "paciente_dni",
+            "medico_interno",
+            "medico_externo_nombre",
+            "medico_display",
+            "consulta_hc",
+            "origen_solicitud",
+            "origen_solicitud_display",
+            "codigo_barra",
+            "etiquetas_impresas_at",
+            "sin_etiquetas",
+            "esperando_recepcion",
+            "tipo_pedido",
+            "tipo_cultivo",
+            "tipo_cultivo_nombre",
+            "tipo_muestra_micro",
+            "tipo_muestra_micro_nombre",
             "tipo_estudio",
             "estado",
             "observaciones",
@@ -76,33 +148,300 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def get_paciente_nombre(self, obj):
+        p = getattr(obj, "paciente", None)
+        if not p:
+            return None
+        return f"{getattr(p, 'apellido', '')}, {getattr(p, 'nombre', '')}".strip(", ")
+
+    def get_paciente_dni(self, obj):
+        p = getattr(obj, "paciente", None)
+        return getattr(p, "dni", None) if p else None
+
+    def get_medico_display(self, obj):
+        mi = getattr(obj, "medico_interno", None)
+        if mi:
+            parts = [getattr(mi, "apellido", ""), getattr(mi, "nombre", "")]
+            label = ", ".join(x for x in parts if x).strip(", ")
+            return f"Dr. {label}" if label else str(mi)
+        ext = (getattr(obj, "medico_externo_nombre", None) or "").strip()
+        if ext:
+            return ext
+        sol = getattr(obj, "solicitud", None)
+        if not sol:
+            return None
+        mi = getattr(sol, "medico_interno", None)
+        if mi:
+            parts = [getattr(mi, "apellido", ""), getattr(mi, "nombre", "")]
+            label = ", ".join(x for x in parts if x).strip(", ")
+            return f"Dr. {label}" if label else str(mi)
+        return (getattr(sol, "medico_externo_nombre", None) or "").strip() or None
+
+    def get_solicitud_numero(self, obj):
+        sol = getattr(obj, "solicitud", None)
+        return getattr(sol, "numero", None) if sol else None
+
+    def get_muestra_codigo_barra(self, obj):
+        own = getattr(obj, "codigo_barra", None)
+        if own:
+            return own
+        m = getattr(obj, "muestra", None)
+        return getattr(m, "codigo_barra", None) if m else None
+
+    def get_muestra_tipo_nombre(self, obj):
+        tm = getattr(obj, "tipo_muestra_micro", None)
+        if tm:
+            return tm.nombre
+        m = getattr(obj, "muestra", None)
+        if not m:
+            return None
+        lims_tm = getattr(m, "tipo_muestra", None)
+        return getattr(lims_tm, "nombre", None) if lims_tm else None
+
+    def get_tipo_cultivo_nombre(self, obj):
+        tc = getattr(obj, "tipo_cultivo", None)
+        return tc.nombre if tc else None
+
+    def get_tipo_muestra_micro_nombre(self, obj):
+        tm = getattr(obj, "tipo_muestra_micro", None)
+        return tm.nombre if tm else None
+
+    def get_tipo_pedido(self, obj):
+        return "MICROBIOLOGIA"
+
+    def get_sin_etiquetas(self, obj):
+        return bool(getattr(obj, "sin_etiquetas", False))
+
+    def get_esperando_recepcion(self, obj):
+        return bool(getattr(obj, "esperando_recepcion", False))
+
+    def get_origen_solicitud_display(self, obj):
+        from laboratorio.origen_solicitud import label_origen_solicitud
+
+        return label_origen_solicitud(getattr(obj, "origen_solicitud", None) or None)
+
 
 class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
-    solicitud_id = serializers.IntegerField()
-    muestra_id = serializers.IntegerField()
-    tipo_estudio = serializers.ChoiceField(
-        choices=[c[0] for c in EstudioMicrobiologia.TIPO_ESTUDIO_CHOICES],
-        required=False,
-        default="CULTIVO_RUTINA",
+    """
+    Alta de estudio microbiológico independiente de LIMS química.
+
+    Preferido: paciente_id + tipo_cultivo_id + tipo_muestra_micro_id (+ médico).
+    Legado: solicitud_id + muestra_id.
+    """
+
+    paciente_id = serializers.IntegerField(required=False)
+    medico_id = serializers.IntegerField(required=False, allow_null=True)
+    medico_externo_nombre = serializers.CharField(
+        required=False, allow_blank=True, default=""
     )
+    consulta_hc_id = serializers.IntegerField(required=False, allow_null=True)
+    origen_solicitud = serializers.CharField(required=False, allow_blank=True, default="")
+    tipo_cultivo_id = serializers.IntegerField(required=False)
+    tipo_muestra_micro_id = serializers.IntegerField(required=False)
+    # Alias aceptados por compatibilidad con el front anterior.
+    tipo_muestra_id = serializers.IntegerField(required=False)
+    muestra_id = serializers.IntegerField(required=False)
+    solicitud_id = serializers.IntegerField(required=False)
+    tipo_estudio = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate(self, attrs):
-        try:
-            sol = SolicitudExamen.objects.get(pk=attrs["solicitud_id"])
-        except SolicitudExamen.DoesNotExist as exc:
-            raise serializers.ValidationError({"solicitud_id": "Solicitud inexistente."}) from exc
-        try:
-            muestra = Muestra.objects.get(pk=attrs["muestra_id"])
-        except Muestra.DoesNotExist as exc:
-            raise serializers.ValidationError({"muestra_id": "Muestra inexistente."}) from exc
-        if muestra.solicitud_id != sol.pk:
+        from pacientes.models import Paciente
+        from medicos.models import Medico
+        from historias_clinicas.models import Consulta
+        from laboratorio.origen_solicitud import normalizar_origen_solicitud
+
+        solicitud_id = attrs.get("solicitud_id")
+        muestra_id = attrs.get("muestra_id")
+        paciente_id = attrs.get("paciente_id")
+
+        if solicitud_id and muestra_id and not paciente_id:
+            try:
+                sol = SolicitudExamen.objects.get(pk=solicitud_id)
+            except SolicitudExamen.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"solicitud_id": "Solicitud inexistente."}
+                ) from exc
+            try:
+                muestra = Muestra.objects.get(pk=muestra_id)
+            except Muestra.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"muestra_id": "Muestra inexistente."}
+                ) from exc
+            if muestra.solicitud_id != sol.pk:
+                raise serializers.ValidationError(
+                    {"muestra_id": "La muestra no pertenece a la solicitud indicada."}
+                )
+            attrs["_modo"] = "legado"
+            attrs["_solicitud"] = sol
+            attrs["_muestra"] = muestra
+            return attrs
+
+        if not paciente_id:
             raise serializers.ValidationError(
-                {"muestra_id": "La muestra no pertenece a la solicitud indicada."}
+                {"paciente_id": "Indique el paciente."}
             )
-        attrs["_solicitud"] = sol
-        attrs["_muestra"] = muestra
+
+        try:
+            paciente = Paciente.objects.get(pk=paciente_id)
+        except Paciente.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"paciente_id": "Paciente inexistente."}
+            ) from exc
+
+        medico = None
+        medico_id = attrs.get("medico_id")
+        if medico_id:
+            try:
+                medico = Medico.objects.get(pk=medico_id)
+            except Medico.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"medico_id": "Médico inexistente."}
+                ) from exc
+
+        tipo_cultivo_id = attrs.get("tipo_cultivo_id")
+        if not tipo_cultivo_id:
+            raise serializers.ValidationError(
+                {"tipo_cultivo_id": "Indique el tipo de cultivo."}
+            )
+        try:
+            cultivo = TipoCultivoMicrobiologia.objects.get(pk=tipo_cultivo_id, activo=True)
+        except TipoCultivoMicrobiologia.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"tipo_cultivo_id": "Tipo de cultivo inexistente o inactivo."}
+            ) from exc
+
+        tipo_muestra_micro_id = attrs.get("tipo_muestra_micro_id") or attrs.get(
+            "tipo_muestra_id"
+        )
+        if not tipo_muestra_micro_id:
+            raise serializers.ValidationError(
+                {"tipo_muestra_micro_id": "Indique el tipo de muestra."}
+            )
+        try:
+            muestra_micro = TipoMuestraMicrobiologia.objects.get(
+                pk=tipo_muestra_micro_id, activo=True
+            )
+        except TipoMuestraMicrobiologia.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"tipo_muestra_micro_id": "Tipo de muestra inexistente o inactivo."}
+            ) from exc
+
+        consulta = None
+        consulta_hc_id = attrs.get("consulta_hc_id")
+        if consulta_hc_id:
+            try:
+                consulta = Consulta.objects.get(pk=consulta_hc_id)
+            except Consulta.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"consulta_hc_id": "Consulta inexistente."}
+                ) from exc
+
+        origen = normalizar_origen_solicitud(attrs.get("origen_solicitud")) or (
+            attrs.get("origen_solicitud") or ""
+        ).strip()
+
+        attrs["_modo"] = "pedido"
+        attrs["_paciente"] = paciente
+        attrs["_medico"] = medico
+        attrs["_tipo_cultivo"] = cultivo
+        attrs["_tipo_muestra_micro"] = muestra_micro
+        attrs["_consulta_hc"] = consulta
+        attrs["_origen_solicitud"] = origen
         return attrs
+
+
+class EstudioMicroItemSerializer(serializers.Serializer):
+    tipo_cultivo_id = serializers.IntegerField()
+    tipo_muestra_micro_id = serializers.IntegerField()
+
+
+class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
+    paciente_id = serializers.IntegerField()
+    medico_id = serializers.IntegerField(required=False, allow_null=True)
+    medico_externo_nombre = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+    consulta_hc_id = serializers.IntegerField(required=False, allow_null=True)
+    origen_solicitud = serializers.CharField(required=False, allow_blank=True, default="")
+    observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+    items = EstudioMicroItemSerializer(many=True)
+
+    def validate(self, attrs):
+        from pacientes.models import Paciente
+        from medicos.models import Medico
+        from historias_clinicas.models import Consulta
+        from laboratorio.origen_solicitud import normalizar_origen_solicitud
+
+        try:
+            paciente = Paciente.objects.get(pk=attrs["paciente_id"])
+        except Paciente.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"paciente_id": "Paciente inexistente."}
+            ) from exc
+
+        medico = None
+        medico_id = attrs.get("medico_id")
+        if medico_id:
+            try:
+                medico = Medico.objects.get(pk=medico_id)
+            except Medico.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"medico_id": "Médico inexistente."}
+                ) from exc
+
+        consulta = None
+        consulta_hc_id = attrs.get("consulta_hc_id")
+        if consulta_hc_id:
+            try:
+                consulta = Consulta.objects.get(pk=consulta_hc_id)
+            except Consulta.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"consulta_hc_id": "Consulta inexistente."}
+                ) from exc
+
+        items = attrs.get("items") or []
+        if not items:
+            raise serializers.ValidationError({"items": "Indique al menos un cultivo."})
+
+        seen = set()
+        for item in items:
+            key = (item["tipo_cultivo_id"], item["tipo_muestra_micro_id"])
+            if key in seen:
+                raise serializers.ValidationError(
+                    {"items": "Hay cultivos duplicados con la misma muestra."}
+                )
+            seen.add(key)
+            if not TipoCultivoMicrobiologia.objects.filter(
+                pk=item["tipo_cultivo_id"], activo=True
+            ).exists():
+                raise serializers.ValidationError(
+                    {"items": "Tipo de cultivo inexistente o inactivo."}
+                )
+            if not TipoMuestraMicrobiologia.objects.filter(
+                pk=item["tipo_muestra_micro_id"], activo=True
+            ).exists():
+                raise serializers.ValidationError(
+                    {"items": "Tipo de muestra inexistente o inactivo."}
+                )
+
+        origen = normalizar_origen_solicitud(attrs.get("origen_solicitud")) or (
+            attrs.get("origen_solicitud") or ""
+        ).strip()
+
+        attrs["_paciente"] = paciente
+        attrs["_medico"] = medico
+        attrs["_consulta_hc"] = consulta
+        attrs["_origen_solicitud"] = origen
+        return attrs
+
+
+class EstudioMicroImprimirEtiquetasSerializer(serializers.Serializer):
+    estudio_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+    )
 
 
 class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):

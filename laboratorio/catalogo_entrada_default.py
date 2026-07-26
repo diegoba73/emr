@@ -11,11 +11,13 @@ from decimal import Decimal
 EntradaDefault = tuple[str, int, str, str]
 
 ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
-    "LEU": ("TICKET_ENTERO", 1, "1000", "absolute_int"),
+    "LEUCO": ("TICKET_ENTERO", 1, "1000", "absolute_int"),
     "PLAQ": ("TICKET_ENTERO", 0, "1000", "absolute_int"),
     "HEMATIES": ("TICKET_ENTERO", 2, "1", "absolute_millions"),
     "HGB": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "HTO": ("TICKET_ENTERO", 1, "1", "decimal1"),
+    "VCM": ("TICKET_ENTERO", 1, "1", "decimal1"),
+    "CHCM": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "RDW": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "NEUT_CAY": ("FORMULA_PORCENTAJE", 0, "1", "integer"),
     "NEUT_SEG": ("FORMULA_PORCENTAJE", 0, "1", "integer"),

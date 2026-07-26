@@ -31,9 +31,25 @@ from laboratorio.views_microbiologia import (
     MicroorganismoViewSet,
     ResultadoAntibioticoViewSet,
     SiembraMicrobiologiaViewSet,
+    TipoCultivoMicrobiologiaViewSet,
+    TipoMuestraMicrobiologiaViewSet,
 )
+from laboratorio.views_inventario import (
+    InsumoLabViewSet,
+    LoteInsumoViewSet,
+    MovimientoStockViewSet,
+)
+from laboratorio.views_qc import (
+    CalibracionViewSet,
+    CorridaQCViewSet,
+    EquipoAnalizadorViewSet,
+    LoteControlViewSet,
+    MaterialControlViewSet,
+)
+from laboratorio.views_derivacion import LaboratorioDerivacionViewSet
 from usuarios.views import PacienteRegisterView
 from core.views import HealthCheckView
+from .views_bi import BiKpisView
 
 router = DefaultRouter()
 router.register(r'pacientes', PacienteViewSet, basename='pacientes')
@@ -56,6 +72,7 @@ router.register(r'lab/solicitudes', SolicitudExamenViewSet, basename='lab-solici
 router.register(r'lab/examenes', TipoExamenViewSet, basename='lab-examenes')
 router.register(r'lab/muestras', TipoMuestraViewSet, basename='lab-muestras')
 router.register(r'lab/paneles', PanelExamenViewSet, basename='lab-paneles')
+router.register(r'lab/derivaciones', LaboratorioDerivacionViewSet, basename='lab-derivaciones')
 router.register(r'lab/areas', AreaLaboratorioViewSet, basename='lab-areas')
 router.register(r'lab/secciones', SeccionLaboratorioViewSet, basename='lab-secciones')
 router.register(r'lab/contenedores', TipoContenedorViewSet, basename='lab-contenedores')
@@ -75,7 +92,17 @@ router.register(
     MuestraTransaccionalViewSet,
     basename='laboratorio-muestras-transaccionales',
 )
-# Microbiología base B3.1 — /api/lab/microbiologia/...
+# Microbiología — /api/lab/microbiologia/...
+router.register(
+    r'lab/microbiologia/tipos-cultivo',
+    TipoCultivoMicrobiologiaViewSet,
+    basename='lab-micro-tipos-cultivo',
+)
+router.register(
+    r'lab/microbiologia/tipos-muestra',
+    TipoMuestraMicrobiologiaViewSet,
+    basename='lab-micro-tipos-muestra',
+)
 router.register(
     r'lab/microbiologia/medios',
     MedioCultivoViewSet,
@@ -97,6 +124,16 @@ router.register(
     basename='lab-micro-lecturas',
 )
 # Alias /api/laboratorio/microbiologia/... (misma clase ViewSet).
+router.register(
+    r'laboratorio/microbiologia/tipos-cultivo',
+    TipoCultivoMicrobiologiaViewSet,
+    basename='laboratorio-micro-tipos-cultivo',
+)
+router.register(
+    r'laboratorio/microbiologia/tipos-muestra',
+    TipoMuestraMicrobiologiaViewSet,
+    basename='laboratorio-micro-tipos-muestra',
+)
 router.register(
     r'laboratorio/microbiologia/medios',
     MedioCultivoViewSet,
@@ -190,6 +227,48 @@ router.register(
     InformeMicrobiologiaViewSet,
     basename='laboratorio-micro-informes',
 )
+# Inventario de laboratorio
+router.register(
+    r'lab/inventario/insumos',
+    InsumoLabViewSet,
+    basename='lab-inventario-insumos',
+)
+router.register(
+    r'lab/inventario/lotes',
+    LoteInsumoViewSet,
+    basename='lab-inventario-lotes',
+)
+router.register(
+    r'lab/inventario/movimientos',
+    MovimientoStockViewSet,
+    basename='lab-inventario-movimientos',
+)
+# Control de calidad Westgard
+router.register(
+    r'lab/qc/equipos',
+    EquipoAnalizadorViewSet,
+    basename='lab-qc-equipos',
+)
+router.register(
+    r'lab/qc/materiales',
+    MaterialControlViewSet,
+    basename='lab-qc-materiales',
+)
+router.register(
+    r'lab/qc/lotes',
+    LoteControlViewSet,
+    basename='lab-qc-lotes',
+)
+router.register(
+    r'lab/qc/corridas',
+    CorridaQCViewSet,
+    basename='lab-qc-corridas',
+)
+router.register(
+    r'lab/qc/calibraciones',
+    CalibracionViewSet,
+    basename='lab-qc-calibraciones',
+)
 router.register(r'disponibilidades', views.DisponibilidadMedicoViewSet, basename='disponibilidades')
 router.register(r'excepciones', views.ExcepcionMedicoViewSet, basename='excepciones')
 # router.register(r'tipos-examen', views.TipoExamenViewSet)
@@ -211,10 +290,14 @@ router.register(r'registros-quirurgicos', views.RegistroQuirurgicoViewSet)
 router.register(r'estudios-diagnosticos', views.EstudioDiagnosticoViewSet)
 router.register(r'procedimientos-catalogo', views.ProcedimientoCatalogoViewSet)
 router.register(r'documentos', views.DocumentoViewSet)
+router.register(r'signos-vitales', views.SignosVitalesViewSet, basename='signos-vitales')
 
 urlpatterns = [
     # Health check endpoint (sin autenticación requerida)
     path('health/', HealthCheckView.as_view(), name='health_check'),
+
+    # BI / KPIs operativos
+    path('bi/kpis/', BiKpisView.as_view(), name='bi_kpis'),
     
     # Endpoint público para obtener token CSRF
     path('auth/csrf-token/', views.csrf_token_view, name='csrf_token'),

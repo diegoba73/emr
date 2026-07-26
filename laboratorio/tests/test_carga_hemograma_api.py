@@ -20,7 +20,7 @@ HEMO_TICKETS = {
     "HTO": "217",
     "HGB": "73",
     "RDW": "139",
-    "LEU": "93",
+    "LEUCO": "93",
     "NEUT_CAY": "70",
     "NEUT_SEG": "70",
     "EOS": "20",
