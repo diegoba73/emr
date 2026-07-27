@@ -206,7 +206,12 @@ export interface Recurso extends BaseModel {
   nombre: string;
   ubicacion: 'CEHTA' | 'ICPL';
   ubicacion_display?: string;
-  tipo_recurso: 'CONSULTORIO' | 'SALA_PROCEDIMIENTO' | 'SALA_HEMODINAMIA' | 'QUIROFANO';
+  tipo_recurso:
+    | 'CONSULTORIO'
+    | 'GUARDIA'
+    | 'SALA_PROCEDIMIENTO'
+    | 'SALA_HEMODINAMIA'
+    | 'QUIROFANO';
   tipo_recurso_display?: string;
   activo: boolean;
 }

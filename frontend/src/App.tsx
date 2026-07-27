@@ -19,6 +19,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Medicos from './pages/Medicos';
 import GestionUsuarios from './pages/GestionUsuarios';
+import Recursos from './pages/Recursos';
 import DiagnosticosCIE10 from './pages/catalogos/DiagnosticosCIE10';
 import EstudiosDiagnostico from './pages/catalogos/EstudiosDiagnostico';
 import Procedimientos from './pages/catalogos/Procedimientos';
@@ -442,6 +443,19 @@ const AppContent: React.FC = () => {
                 requiredRole="ADMIN"
               >
                 <GestionUsuarios />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recursos"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                requiredRole="ADMIN"
+              >
+                <Recursos />
               </ProtectedRoute>
             }
           />

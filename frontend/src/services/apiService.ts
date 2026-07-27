@@ -10,6 +10,7 @@ import {
   ProcedimientoCatalogo,
   Medicamento,
   Especialidad,
+  Recurso,
   Cama,
   InternacionCama,
   Sector,
@@ -27,28 +28,29 @@ import { apiClient as api, API_BASE_URL } from './apiClient';
  */
 const normalizeUrl = (url: string): string => {
   if (!url) return '';
-  
-  // Si ya es relativa y no empieza con /api/, retornarla tal cual
-  if (url.startsWith('/') && !url.startsWith('/api/')) {
-    return url;
+
+  // DRF "next" suele ser absoluto (http://backend:8000/api/... o el host público).
+  // Con REACT_APP_API_URL=/api hay que quedarse solo con pathname+search.
+  let pathPart = url;
+  if (pathPart.startsWith('http://') || pathPart.startsWith('https://')) {
+    try {
+      const parsed = new URL(pathPart);
+      pathPart = `${parsed.pathname}${parsed.search}`;
+    } catch {
+      // ignore parse errors; fall through
+    }
   }
-  
-  // Si empieza con http://localhost:8000/api/, extraer solo la ruta después de /api
-  if (url.startsWith(API_BASE_URL + '/')) {
-    return url.replace(API_BASE_URL, '') || '/';
+
+  // baseURL del cliente ya incluye /api → quitar el prefijo /api
+  if (pathPart.startsWith('/api/') || pathPart === '/api') {
+    pathPart = pathPart.replace(/^\/api/, '') || '/';
   }
-  
-  // Si empieza con /api/, quitar /api
-  if (url.startsWith('/api/')) {
-    return url.replace('/api', '');
+
+  if (!pathPart.startsWith('/')) {
+    pathPart = `/${pathPart}`;
   }
-  
-  // Si no empieza con /, agregarlo
-  if (!url.startsWith('/')) {
-    return '/' + url;
-  }
-  
-  return url;
+
+  return pathPart;
 };
 
 // Re-exportar la instancia api para compatibilidad
@@ -93,7 +95,7 @@ export const deletePaciente = async (id: number): Promise<void> => {
 // Médicos - SIEMPRE obtener TODOS los registros
 export const getMedicos = async (): Promise<Medico[]> => {
   try {
-    const response = await api.get('/medicos/');
+    const response = await api.get('/medicos/', { params: { page_size: 500 } });
     // Si hay paginación, obtener todas las páginas
     if (response.data.results) {
       let allMedicos = [...response.data.results];
@@ -764,6 +766,53 @@ export const updateEspecialidad = async (id: number, data: Partial<Especialidad>
 export const deleteEspecialidad = async (id: number): Promise<void> => {
   try {
     await api.delete(`/especialidades/${id}/`);
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Recursos físicos (consultorios, salas, hemodinamia, quirófanos) — solo admin escribe
+export const getRecursos = async (): Promise<Recurso[]> => {
+  try {
+    const response = await api.get('/recursos/', { params: { page_size: 500 } });
+    if (response.data.results) {
+      let allItems = [...response.data.results];
+      let nextUrl = response.data.next;
+      while (nextUrl) {
+        const nextResponse = await api.get(normalizeUrl(nextUrl));
+        allItems = [...allItems, ...nextResponse.data.results];
+        nextUrl = nextResponse.data.next;
+      }
+      return allItems;
+    }
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const createRecurso = async (data: Partial<Recurso>): Promise<Recurso> => {
+  try {
+    const response = await api.post('/recursos/', data);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateRecurso = async (id: number, data: Partial<Recurso>): Promise<Recurso> => {
+  try {
+    const response = await api.patch(`/recursos/${id}/`, data);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const deleteRecurso = async (id: number): Promise<void> => {
+  try {
+    // Baja lógica en backend (activo=False) para no cascader turnos históricos.
+    await api.delete(`/recursos/${id}/`);
   } catch (error) {
     throw error;
   }

@@ -29,6 +29,7 @@ import {
   Search,
 } from '@mui/icons-material';
 import { useData } from '../contexts/DataContext';
+import { normalizeRol } from '../utils/permissions';
 import { Medico, Especialidad } from '../types';
 import {
   getMedicos,
@@ -60,7 +61,7 @@ const Medicos: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   // Verificar permisos - solo admin
-  const isAdmin = currentUser?.rol === 'ADMIN' || currentUser?.is_superuser;
+  const isAdmin = normalizeRol(currentUser) === 'admin' || Boolean(currentUser?.is_superuser);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -250,8 +251,12 @@ const Medicos: React.FC = () => {
                   <TableCell>{medico.apellido || '-'}</TableCell>
                   <TableCell>{medico.matricula || '-'}</TableCell>
                   <TableCell>
-                    {medico.especialidad ? (
-                      <Chip label={medico.especialidad.nombre} size="small" color="primary" />
+                    {medico.especialidad?.nombre || (medico as any).especialidad_nombre ? (
+                      <Chip
+                        label={medico.especialidad?.nombre || (medico as any).especialidad_nombre}
+                        size="small"
+                        color="primary"
+                      />
                     ) : (
                       '-'
                     )}

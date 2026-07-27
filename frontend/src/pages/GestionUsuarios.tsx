@@ -36,6 +36,7 @@ import {
   LockOpen,
 } from '@mui/icons-material';
 import { useData } from '../contexts/DataContext';
+import { normalizeRol } from '../utils/permissions';
 import { User, Paciente, Medico, Especialidad } from '../types';
 import { apiService } from '../services/api';
 import { getEspecialidades } from '../services/apiService';
@@ -131,7 +132,7 @@ const GestionUsuarios: React.FC = () => {
   });
 
   // Verificar permisos - solo admin
-  const isAdmin = currentUser?.rol === 'ADMIN' || currentUser?.is_superuser;
+  const isAdmin = normalizeRol(currentUser) === 'admin' || Boolean(currentUser?.is_superuser);
 
   const ROL_CHOICES = [
     { value: 'paciente', label: 'Paciente' },

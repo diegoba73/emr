@@ -232,13 +232,21 @@ function CatalogoBase<T extends CatalogoItem>({
               paginatedItems.map((item) => (
                 <TableRow key={item.id} hover>
                   <TableCell>{(item.nombre || (item as any).codigo || '-')}</TableCell>
-                  {fields.filter(f => f.key !== 'nombre' && f.key !== 'activo').map((field) => (
-                    <TableCell key={field.key}>
-                      {typeof item[field.key] === 'string' && item[field.key].length > 50
-                        ? `${item[field.key].substring(0, 50)}...`
-                        : (item[field.key] || '-')}
-                    </TableCell>
-                  ))}
+                  {fields.filter(f => f.key !== 'nombre' && f.key !== 'activo').map((field) => {
+                    const raw = item[field.key];
+                    let display: React.ReactNode = raw || '-';
+                    if (field.type === 'select' && field.options) {
+                      const match = field.options.find((o) => o.value === raw);
+                      display = match ? match.label : (raw || '-');
+                    } else if (typeof raw === 'string' && raw.length > 50) {
+                      display = `${raw.substring(0, 50)}...`;
+                    }
+                    return (
+                      <TableCell key={field.key}>
+                        {display}
+                      </TableCell>
+                    );
+                  })}
                   <TableCell>
                     <Chip
                       label={item.activo !== false ? 'Activo' : 'Inactivo'}

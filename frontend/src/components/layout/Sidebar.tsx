@@ -30,6 +30,7 @@ import {
   Analytics as QcIcon,
   Insights as BiIcon,
   Timeline as PortalTimelineIcon,
+  MeetingRoom as MeetingRoomIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
@@ -110,6 +111,7 @@ const portalItems: NavItem[] = [
 const adminOnly: NavItem[] = [
   { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios', roles: ['admin'] },
+  { text: 'Recursos', icon: <MeetingRoomIcon />, path: '/recursos', roles: ['admin'] },
   { text: 'Auditoría', icon: <AuditIcon />, path: '/auditoria', canAccess: canAccessAuditoria },
 ];
 
