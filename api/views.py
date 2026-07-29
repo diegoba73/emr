@@ -1649,13 +1649,44 @@ def logout_view(request):
     logout(request)
     return Response({'message': 'Logout exitoso'})
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def current_user(request):
-    """Obtener información del usuario actual"""
-    user = request.user
-    
-    # Construir respuesta básica del usuario
+_PROFILE_EDITABLE_FIELDS = (
+    'fecha_nacimiento',
+    'genero',
+    'direccion',
+    'ciudad',
+    'codigo_postal',
+    'grupo_sanguineo',
+    'alergias',
+    'medicamentos_actuales',
+    'contacto_emergencia_nombre',
+    'contacto_emergencia_telefono',
+    'contacto_emergencia_relacion',
+)
+
+_USER_SELF_EDITABLE_FIELDS = ('first_name', 'last_name', 'email', 'telefono')
+
+
+def _serialize_user_profile(profile):
+    if profile is None:
+        return None
+    return {
+        'fecha_nacimiento': profile.fecha_nacimiento,
+        'genero': profile.genero,
+        'direccion': profile.direccion,
+        'ciudad': profile.ciudad,
+        'codigo_postal': profile.codigo_postal,
+        'grupo_sanguineo': profile.grupo_sanguineo,
+        'alergias': profile.alergias,
+        'medicamentos_actuales': profile.medicamentos_actuales,
+        'contacto_emergencia_nombre': profile.contacto_emergencia_nombre,
+        'contacto_emergencia_telefono': profile.contacto_emergencia_telefono,
+        'contacto_emergencia_relacion': profile.contacto_emergencia_relacion,
+        'edad': profile.get_edad(),
+    }
+
+
+def _build_current_user_payload(user):
+    """Payload compartido para GET/PUT/PATCH de /auth/current-user/."""
     user_data = {
         'id': user.id,
         'username': user.username,
@@ -1668,10 +1699,14 @@ def current_user(request):
         'is_staff': user.is_staff,
         'is_superuser': user.is_superuser,
         'date_joined': user.date_joined,
-        'last_login': user.last_login
+        'last_login': user.last_login,
     }
-    
-    # Agregar información específica según el rol
+
+    try:
+        user_data['profile'] = _serialize_user_profile(user.profile)
+    except UserProfile.DoesNotExist:
+        user_data['profile'] = None
+
     if user.rol == 'medico':
         try:
             from medicos.models import Medico
@@ -1703,8 +1738,73 @@ def current_user(request):
             }
         else:
             user_data['paciente'] = None
-    
-    return Response(user_data)
+
+    return user_data
+
+
+def _apply_self_profile_update(user, data, request=None):
+    """Actualiza datos propios del usuario y su UserProfile. Devuelve Response de error o None."""
+    password_changed = False
+    for field in _USER_SELF_EDITABLE_FIELDS:
+        if field in data:
+            value = data.get(field)
+            setattr(user, field, '' if value is None else value)
+
+    new_password = data.get('new_password')
+    if new_password:
+        old_password = data.get('old_password') or ''
+        if not user.check_password(old_password):
+            return Response(
+                {'error': 'La contraseña actual es incorrecta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        confirm = data.get('new_password_confirm')
+        if confirm is not None and confirm != new_password:
+            return Response(
+                {'error': 'La confirmación de contraseña no coincide.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(str(new_password)) < 8:
+            return Response(
+                {'error': 'La nueva contraseña debe tener al menos 8 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.set_password(new_password)
+        password_changed = True
+
+    user.save()
+    if password_changed and request is not None:
+        from django.contrib.auth import update_session_auth_hash
+        update_session_auth_hash(request, user)
+
+    profile_data = data.get('profile')
+    if isinstance(profile_data, dict):
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        for field in _PROFILE_EDITABLE_FIELDS:
+            if field not in profile_data:
+                continue
+            value = profile_data.get(field)
+            if value == '':
+                value = None
+            setattr(profile, field, value)
+        profile.save()
+
+    return None
+
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def current_user(request):
+    """Obtener o actualizar el perfil del usuario autenticado (self-service)."""
+    user = request.user
+
+    if request.method in ('PUT', 'PATCH'):
+        error_response = _apply_self_profile_update(user, request.data, request=request)
+        if error_response is not None:
+            return error_response
+        user.refresh_from_db()
+
+    return Response(_build_current_user_payload(user))
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

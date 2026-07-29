@@ -109,6 +109,7 @@ const Header: React.FC<AppHeaderProps> = ({ onOpenMobileNav, title }) => {
           <MenuItem
             onClick={() => {
               setAnchorEl(null);
+              navigate('/perfil');
             }}
           >
             <ListItemIcon>

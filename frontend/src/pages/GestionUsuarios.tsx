@@ -710,8 +710,17 @@ const GestionUsuarios: React.FC = () => {
             
             {/* Sección para asociar con médico */}
             {formData.rol === 'medico' && !editingUser && (
-              <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 2, bgcolor: '#f5f5f5' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+              <Box
+                sx={{
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: 'text.primary' }}>
                   Asociar con Médico
                 </Typography>
                 <Tabs
@@ -721,7 +730,12 @@ const GestionUsuarios: React.FC = () => {
                     setMedicoSeleccionado(null);
                     setMedicoInputValue('');
                   }}
-                  sx={{ mb: 2 }}
+                  sx={{
+                    mb: 2,
+                    minHeight: 40,
+                    '& .MuiTab-root': { color: 'text.secondary', minHeight: 40 },
+                    '& .Mui-selected': { color: 'primary.main' },
+                  }}
                 >
                   <Tab label="Buscar Médico Existente" />
                   <Tab label="Crear Nuevo Médico" />
@@ -847,8 +861,17 @@ const GestionUsuarios: React.FC = () => {
             
             {/* Sección para asociar con paciente */}
             {formData.rol === 'paciente' && !editingUser && (
-              <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 2, bgcolor: '#f5f5f5' }}>
-                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+              <Box
+                sx={{
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: 'text.primary' }}>
                   Asociar con Paciente
                 </Typography>
                 <Tabs
@@ -858,7 +881,12 @@ const GestionUsuarios: React.FC = () => {
                     setPacienteSeleccionado(null);
                     setPacienteInputValue('');
                   }}
-                  sx={{ mb: 2 }}
+                  sx={{
+                    mb: 2,
+                    minHeight: 40,
+                    '& .MuiTab-root': { color: 'text.secondary', minHeight: 40 },
+                    '& .Mui-selected': { color: 'primary.main' },
+                  }}
                 >
                   <Tab label="Buscar Paciente Existente" />
                   <Tab label="Crear Nuevo Paciente" />

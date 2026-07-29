@@ -314,7 +314,12 @@ const Navigation: React.FC<NavigationProps> = ({ children }) => {
           horizontal: 'right',
         }}
       >
-        <MenuItem onClick={handleProfileMenuClose}>
+        <MenuItem
+          onClick={() => {
+            handleProfileMenuClose();
+            navigate('/perfil');
+          }}
+        >
           <ListItemIcon>
             <AccountCircle fontSize="small" />
           </ListItemIcon>

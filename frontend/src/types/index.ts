@@ -5,6 +5,22 @@ export interface BaseModel {
   updated_at?: string;
 }
 
+/** Perfil extendido del usuario (UserProfile). */
+export interface UserProfileData {
+  fecha_nacimiento?: string | null;
+  genero?: 'M' | 'F' | 'O' | null;
+  direccion?: string | null;
+  ciudad?: string | null;
+  codigo_postal?: string | null;
+  grupo_sanguineo?: string | null;
+  alergias?: string | null;
+  medicamentos_actuales?: string | null;
+  contacto_emergencia_nombre?: string | null;
+  contacto_emergencia_telefono?: string | null;
+  contacto_emergencia_relacion?: string | null;
+  edad?: number | null;
+}
+
 // Usuario
 export interface User extends BaseModel {
   username: string;
@@ -19,6 +35,7 @@ export interface User extends BaseModel {
   is_superuser?: boolean;
   date_joined?: string;
   last_login?: string;
+  profile?: UserProfileData | null;
   medico?: {
     id: number;
     matricula: string;
@@ -35,6 +52,18 @@ export interface User extends BaseModel {
     fecha_nacimiento?: string;
     sexo?: 'M' | 'F';
   };
+}
+
+/** Payload para actualizar el propio perfil (self-service). */
+export interface UpdateCurrentUserPayload {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  telefono?: string;
+  profile?: Partial<UserProfileData>;
+  old_password?: string;
+  new_password?: string;
+  new_password_confirm?: string;
 }
 
 // Pacientes

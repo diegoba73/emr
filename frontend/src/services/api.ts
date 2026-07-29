@@ -9,6 +9,7 @@ import {
   DashboardStats,
   ApiResponse,
   User,
+  UpdateCurrentUserPayload,
   CentroFisico,
   TipoAtencion,
   AreaInternacion,
@@ -62,6 +63,11 @@ class ApiService {
   // Autenticación
   async getCurrentUser(): Promise<User> {
     const response: AxiosResponse<User> = await this.api.get('/auth/current-user/');
+    return response.data;
+  }
+
+  async updateCurrentUser(payload: UpdateCurrentUserPayload): Promise<User> {
+    const response: AxiosResponse<User> = await this.api.patch('/auth/current-user/', payload);
     return response.data;
   }
 
