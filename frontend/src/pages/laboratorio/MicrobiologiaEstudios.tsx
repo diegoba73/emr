@@ -255,8 +255,9 @@ const MicrobiologiaEstudios: React.FC = () => {
         Estudios de microbiología
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Pedidos de cultivo independientes del laboratorio de química clínica: paciente, médico, tipo
-        de cultivo y tipo de muestra.
+        Workbench técnico de cultivos (siembras, lecturas, antibiograma). Los pedidos también aparecen
+        en <strong>Órdenes LIMS</strong> y <strong>Pendientes</strong> con número{' '}
+        <strong>LAB-…</strong> y tipo Microbiología.
       </Typography>
 
       <Paper sx={{ p: 2, mb: 2 }}>

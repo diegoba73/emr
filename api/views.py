@@ -2782,7 +2782,15 @@ class DocumentoViewSet(viewsets.ModelViewSet):
             except PermissionDenied:
                 raise
             except Exception as exc:
-                raise PermissionDenied('Médico no vinculado.') from exc
+                from archivos_medicos.access import get_medico_perfil
+
+                if get_medico_perfil(user) is None:
+                    raise PermissionDenied(
+                        'Médico no vinculado. Tu usuario no tiene perfil de médico asociado.'
+                    ) from exc
+                raise PermissionDenied(
+                    'No puede adjuntar documentos a atenciones ajenas.'
+                ) from exc
             return
         raise PermissionDenied('No tiene permiso para subir documentos clínicos.')
 

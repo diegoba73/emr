@@ -67,15 +67,47 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'secretaria' || r === 'medico' || r === 'paciente';
+  return (
+    r === 'admin' ||
+    r === 'secretaria' ||
+    r === 'medico' ||
+    r === 'paciente' ||
+    r === 'enfermeria'
+  );
 }
 
-/** Descargar informe PDF desde el portal clínico (médico/paciente). */
-export function canDownloadInformeClinicoPdf(user: User | null): boolean {
+/**
+ * Ver valores de resultados en portal clínico.
+ * Lab/bioquímico/admin (módulo LIMS): siempre.
+ * Resto: solo orden FINALIZADO (validada).
+ */
+export function canSeeResultadosClinicos(
+  user: User | null,
+  estado: string | null | undefined
+): boolean {
+  if (!user) return false;
+  if (canAccessLimsModule(user)) return true;
+  if (!canAccessAnalisisClinicoLab(user)) return false;
+  return String(estado || '').toUpperCase() === 'FINALIZADO';
+}
+
+/** Descargar informe PDF desde el portal clínico (solo orden validada / FINALIZADO). */
+export function canDownloadInformeClinicoPdf(
+  user: User | null,
+  estado?: string | null
+): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'medico' || r === 'paciente';
+  const roleOk =
+    r === 'admin' ||
+    r === 'medico' ||
+    r === 'paciente' ||
+    r === 'secretaria' ||
+    r === 'enfermeria';
+  if (!roleOk) return false;
+  if (estado == null || estado === undefined) return true;
+  return String(estado).toUpperCase() === 'FINALIZADO';
 }
 
 /** Operaciones de laboratorio sobre orden/muestra/resultados (admin + operadores). */

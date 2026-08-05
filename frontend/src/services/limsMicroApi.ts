@@ -57,6 +57,25 @@ export const listEstudiosMicrobiologia = (params?: {
 };
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);
+
+export async function getEstudioMicroPorCodigo(codigo: string): Promise<EstudioMicrobiologia> {
+  const encoded = encodeURIComponent(codigo.trim());
+  const { data } = await apiClient.get<EstudioMicrobiologia>(
+    `${MICRO}/estudios/por-codigo/${encoded}/`
+  );
+  return data;
+}
+
+export async function postRecibirEstudioMicroPorCodigo(body: {
+  codigo_barra: string;
+}): Promise<EstudioMicrobiologia> {
+  const { data } = await apiClient.post<EstudioMicrobiologia>(
+    `${MICRO}/estudios/recibir-por-codigo/`,
+    body
+  );
+  return data;
+}
+
 export const createEstudioMicrobiologia = (body: {
   paciente_id?: number;
   medico_id?: number | null;

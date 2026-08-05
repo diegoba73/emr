@@ -12,6 +12,21 @@ from django.utils import timezone
 from pacientes.models import Paciente
 
 
+class LabProtocoloCounter(models.Model):
+    """Correlativo anual compartido LAB-YYYY-XXXXX (lab clínico + microbiología)."""
+
+    year = models.PositiveIntegerField(primary_key=True, verbose_name="Año")
+    last_n = models.PositiveIntegerField(default=0, verbose_name="Último correlativo")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Contador de protocolo LAB"
+        verbose_name_plural = "Contadores de protocolo LAB"
+
+    def __str__(self):
+        return f"LAB-{self.year}-… (last={self.last_n})"
+
+
 class AreaLaboratorio(models.Model):
     codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
     nombre = models.CharField(max_length=200, unique=True, verbose_name="Nombre")
@@ -96,7 +111,7 @@ class Muestra(models.Model):
         null=True,
         blank=True,
         verbose_name="Código de barras",
-        help_text="Generado automáticamente si se deja vacío (MUE-YYYY-NNNNNN).",
+        help_text="Generado automáticamente si se deja vacío (LAB-YYYY-XXXXX-nn).",
     )
     solicitud = models.ForeignKey(
         "laboratorio.SolicitudExamen",
@@ -202,21 +217,17 @@ class Muestra(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.codigo_barra:
-            year = timezone.now().year
-            prefix = f"MUE-{year}-"
-            last = (
-                Muestra.objects.filter(codigo_barra__startswith=prefix)
-                .order_by("-codigo_barra")
-                .first()
-            )
-            if last and last.codigo_barra:
-                try:
-                    n = int(last.codigo_barra.split("-")[-1]) + 1
-                except (ValueError, IndexError):
-                    n = 1
-            else:
-                n = 1
-            self.codigo_barra = f"MUE-{year}-{n:06d}"
+            from laboratorio.lab_codigo import next_tubo_codigo
+
+            if not self.solicitud_id:
+                raise ValidationError(
+                    {"solicitud": "Se requiere solicitud para generar el código de tubo."}
+                )
+            # Asegurar numero de protocolo en la orden (puede estar en memoria).
+            sol = self.solicitud
+            if not sol.numero:
+                sol.save()  # asigna LAB- vía SolicitudExamen.save
+            self.codigo_barra = next_tubo_codigo(sol)
         self.full_clean()
         super().save(*args, **kwargs)
 

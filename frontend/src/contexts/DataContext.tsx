@@ -203,7 +203,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // OPTIMIZACIÓN: Aumentar PAGE_SIZE para reducir número de requests
   const PAGE_SIZE = 1000; // Aumentado de 200 a 1000 para cargar más datos por request
-  const API_BASE = process.env.REACT_APP_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8000';
+  // Con REACT_APP_API_URL=/api (prod same-origin), replace deja ''.
+  // No usar || fallback: '' es falsy y forzaba localhost:8000, rompiendo TurnoModal.
+  const configuredApiUrl = process.env.REACT_APP_API_URL;
+  const API_BASE =
+    configuredApiUrl === undefined
+      ? 'http://localhost:8000'
+      : configuredApiUrl.replace(/\/api\/?$/, '');
 
   const normalizePaginationUrl = useCallback((url: string): string => {
     if (!url) return url;

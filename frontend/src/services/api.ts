@@ -644,24 +644,14 @@ class ApiService {
       const response: AxiosResponse<SignosVitales> = await this.api.post('/signos-vitales/', payload);
       return response.data;
     } catch (error: unknown) {
-      const err = error as {
-        response?: { data?: { error?: string; detail?: string; details?: unknown } };
-        message?: string;
-      };
-      const details = err?.response?.data?.details;
-      const detailMsg =
-        typeof details === 'object' && details
-          ? Object.values(details as Record<string, string[]>)
-              .flat()
-              .join(' ')
-          : undefined;
-      throw new Error(
-        detailMsg ||
-          err?.response?.data?.error ||
-          err?.response?.data?.detail ||
-          err?.message ||
-          'Error al registrar signos vitales',
-      );
+      const err = error as { response?: { data?: unknown }; message?: string };
+      const fromBody = formatDrfErrorBody(err?.response?.data);
+      const raw = err?.message || '';
+      const useless =
+        !raw ||
+        raw.startsWith('Request failed with status code') ||
+        raw === 'Network Error';
+      throw new Error(fromBody || (!useless ? raw : '') || 'Error al registrar signos vitales');
     }
   }
 

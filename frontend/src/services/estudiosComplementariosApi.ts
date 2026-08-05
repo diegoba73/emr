@@ -184,8 +184,7 @@ export const subirArchivoEstudio = async (
   if (payload.es_principal != null) form.append('es_principal', String(payload.es_principal));
   const response = await api.post(
     `/estudios-complementarios/${estudioId}/subir-archivo/`,
-    form,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    form
   );
   return response.data;
 };

@@ -37,6 +37,11 @@ import {
   useClinicalDrawerDialogTheme,
 } from '../../../utils/layerZIndex';
 import ArchivoMedicoPreviewDialog from '../../../components/archivos/ArchivoMedicoPreviewDialog';
+import {
+  ACCEPT_BY_TIPO_ARCHIVO,
+  archivoCompatibleConTipo,
+  mensajeExtensionesTipo,
+} from '../../../utils/archivoTipoExtensiones';
 
 interface DocumentosAdjuntosProps {
   atencionId: number;
@@ -139,6 +144,16 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
+    setUploadError('');
+    if (file && !archivoCompatibleConTipo(file.name, formState.tipo_archivo)) {
+      setUploadError(
+        `Para «${tipoLabel(formState.tipo_archivo)}» usá: ${mensajeExtensionesTipo(formState.tipo_archivo)}. ` +
+          `El archivo «${file.name}» no coincide.`
+      );
+      event.target.value = '';
+      setFormState((prev) => ({ ...prev, archivo: null }));
+      return;
+    }
     setFormState((prev) => ({
       ...prev,
       archivo: file,
@@ -146,9 +161,29 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
     }));
   };
 
+  const handleTipoChange = (tipo: ArchivoMedico['tipo_archivo']) => {
+    setUploadError('');
+    setFormState((prev) => {
+      if (prev.archivo && !archivoCompatibleConTipo(prev.archivo.name, tipo)) {
+        setUploadError(
+          `El archivo seleccionado no es compatible con «${tipo}». Elegí otro archivo ` +
+            `(${mensajeExtensionesTipo(tipo)}).`
+        );
+        return { ...prev, tipo_archivo: tipo, archivo: null };
+      }
+      return { ...prev, tipo_archivo: tipo };
+    });
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!formState.archivo || !formState.titulo.trim()) {
+      return;
+    }
+    if (!archivoCompatibleConTipo(formState.archivo.name, formState.tipo_archivo)) {
+      setUploadError(
+        `Para «${tipoLabel(formState.tipo_archivo)}» usá: ${mensajeExtensionesTipo(formState.tipo_archivo)}.`
+      );
       return;
     }
     setUploading(true);
@@ -307,11 +342,9 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
                 label="Tipo de archivo"
                 value={formState.tipo_archivo}
                 onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    tipo_archivo: event.target.value as ArchivoMedico['tipo_archivo'],
-                  }))
+                  handleTipoChange(event.target.value as ArchivoMedico['tipo_archivo'])
                 }
+                helperText={`Extensiones: ${mensajeExtensionesTipo(formState.tipo_archivo)}`}
                 SelectProps={{
                   MenuProps: {
                     sx: { zIndex: 2000 },
@@ -336,7 +369,12 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
               />
               <Button variant="outlined" component="label">
                 Seleccionar archivo
-                <input type="file" hidden onChange={handleFileChange} />
+                <input
+                  type="file"
+                  hidden
+                  accept={ACCEPT_BY_TIPO_ARCHIVO[formState.tipo_archivo] || ACCEPT_BY_TIPO_ARCHIVO.OTRO}
+                  onChange={handleFileChange}
+                />
               </Button>
               {formState.archivo && (
                 <Typography variant="caption" color="text.secondary">

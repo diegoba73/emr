@@ -14,7 +14,7 @@ import { useData } from '../../contexts/DataContext';
 import { downloadInformeLimsPdf, listSolicitudesExamen } from '../../services/limsApi';
 import type { SolicitudExamenLims } from '../../types/lims';
 
-const LISTOS = new Set(['FINALIZADO', 'INFORMADO_PARCIAL']);
+const LISTOS = new Set(['FINALIZADO']);
 
 const PortalResultados: React.FC = () => {
   const { currentUser } = useData();

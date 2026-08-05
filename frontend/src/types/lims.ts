@@ -203,6 +203,8 @@ export interface SolicitudExamenLims {
   informe_enviado_email?: boolean;
   informe_enviado_whatsapp?: boolean;
   resultados?: ResultadoExamenLims[];
+  /** False cuando el API omite valores (orden aún no validada para el rol clínico). */
+  resultados_visibles?: boolean;
   /** True si no quedan tubos en PENDIENTE_TOMA. */
   extraccion_completa?: boolean;
   /** PENDIENTE sin etiquetas/tubos — admite agregar exámenes. */

@@ -37,8 +37,7 @@ class BiKpisView(APIView):
 
     def get(self, request):
         role = get_normalized_role(request.user)
-        allowed = {"admin", "bioquimico", "secretaria", "laboratorio"}
-        if not request.user.is_superuser and role not in allowed:
+        if role != "bioquimico":
             return Response({"detail": "Sin permiso."}, status=403)
 
         hoy = timezone.localdate()
@@ -49,14 +48,10 @@ class BiKpisView(APIView):
 
         payload: dict = {"desde": desde.isoformat(), "hasta": hasta.isoformat()}
 
-        include_lims = role in {"admin", "bioquimico", "laboratorio"} or request.user.is_superuser
-        include_ops = role in {"admin", "bioquimico", "secretaria"} or request.user.is_superuser
-
-        if include_lims:
-            payload["lims"] = self._lims_kpis(start, end)
-        if include_ops:
-            payload["turnos"] = self._turnos_kpis(start, end)
-            payload["internacion"] = self._internacion_kpis()
+        # Bioquímico ve el set completo de indicadores.
+        payload["lims"] = self._lims_kpis(start, end)
+        payload["turnos"] = self._turnos_kpis(start, end)
+        payload["internacion"] = self._internacion_kpis()
 
         return Response(payload)
 

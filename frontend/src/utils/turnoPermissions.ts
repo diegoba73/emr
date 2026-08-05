@@ -199,7 +199,7 @@ export function canIniciarAtencionTurno(user?: User | null, turno?: Turno | null
   if (normalizeRol(user) === 'MEDICO') {
     return (
       medicoEsDuenoTurno(user, turno) &&
-      (st === 'CONFIRMADO' || st === 'RESERVADO' || st === 'REALIZADO')
+      (st === 'CONFIRMADO' || st === 'REALIZADO')
     );
   }
   return false;

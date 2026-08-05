@@ -388,6 +388,93 @@ def test_archivo_medico_no_permite_consulta_de_otro_paciente(
 
 
 @pytest.mark.django_db
+def test_upload_con_consulta_hc_de_la_atencion(
+    client, paciente, medico, atencion_vinculada,
+):
+    """Adjunto en consulta: consulta_id + atencion_id del mismo acto clínico."""
+    from historias_clinicas.services import ensure_consulta_hc_desde_atencion
+
+    consulta = ensure_consulta_hc_desde_atencion(atencion_vinculada)
+    client.force_authenticate(user=medico.user)
+    f = SimpleUploadedFile('nota.pdf', b'%PDF-1.4', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {
+            'titulo': 'Nota',
+            'tipo_archivo': 'PDF',
+            'paciente_id': paciente.id,
+            'consulta_id': consulta.id,
+            'atencion_id': atencion_vinculada.id,
+            'archivo': f,
+        },
+        format='multipart',
+    )
+    assert r.status_code == 201, r.data
+    assert ArchivoMedico.objects.filter(
+        consulta_id=consulta.id, atencion_id=atencion_vinculada.id,
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_upload_consulta_sin_medico_hc_usa_atencion(
+    client, paciente, medico, atencion_vinculada,
+):
+    """Si Consulta.medico quedó vacío, valida por medico_principal de la atención."""
+    Consulta.objects.filter(atencion=atencion_vinculada).delete()
+    hc, _ = HistoriaClinica.objects.get_or_create(paciente=paciente)
+    consulta = Consulta.objects.create(
+        historia_clinica=hc,
+        medico=None,
+        atencion=atencion_vinculada,
+        fecha_hora_consulta=timezone.now(),
+        motivo_consulta_detalle='Sin médico HC',
+    )
+    client.force_authenticate(user=medico.user)
+    f = SimpleUploadedFile('img.pdf', b'%PDF-1.4', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {
+            'titulo': 'Img',
+            'tipo_archivo': 'PDF',
+            'paciente_id': paciente.id,
+            'consulta_id': consulta.id,
+            'atencion_id': atencion_vinculada.id,
+            'archivo': f,
+        },
+        format='multipart',
+    )
+    assert r.status_code == 201, r.data
+
+
+@pytest.mark.django_db
+def test_upload_medico_sin_perfil_rechaza_consulta(
+    client, paciente, medico, atencion_vinculada,
+):
+    from historias_clinicas.services import ensure_consulta_hc_desde_atencion
+
+    consulta = ensure_consulta_hc_desde_atencion(atencion_vinculada)
+    user = medico.user
+    medico.user = None
+    medico.save(update_fields=['user'])
+    client.force_authenticate(user=user)
+    f = SimpleUploadedFile('x.pdf', b'%PDF-1.4', content_type='application/pdf')
+    r = client.post(
+        '/api/archivos-medicos/archivos/',
+        {
+            'titulo': 'X',
+            'tipo_archivo': 'PDF',
+            'paciente_id': paciente.id,
+            'consulta_id': consulta.id,
+            'atencion_id': atencion_vinculada.id,
+            'archivo': f,
+        },
+        format='multipart',
+    )
+    assert r.status_code == 400
+    assert 'vinculado' in str(r.data).lower()
+
+
+@pytest.mark.django_db
 def test_archivo_medico_update_no_permite_cambiar_a_paciente_ajeno(
     client, archivo_medico, medico, atencion_vinculada, otro_paciente,
 ):

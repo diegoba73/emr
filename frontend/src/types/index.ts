@@ -92,10 +92,14 @@ export interface Medico extends BaseModel {
   nombre: string;
   apellido: string;
   matricula: string;
-  especialidad: Especialidad;
+  /** Nested en retrieve/detail; ausente en listados light. */
+  especialidad?: Especialidad | null;
+  /** Campo plano del listado light (`MedicoLightSerializer`). */
+  especialidad_nombre?: string | null;
   telefono?: string;
   email?: string;
   activo: boolean;
+  nombre_completo?: string;
 }
 
 export interface Especialidad extends BaseModel {

@@ -383,17 +383,36 @@ class Command(BaseCommand):
                 'is_staff': False,
             },
         )
-        medico_obj, medico_created = Medico.objects.get_or_create(
-            user=medico_user,
-            defaults={
-                'nombre': 'Juan',
-                'apellido': 'Médico',
-                'matricula': 'MAT-001',
-                'especialidad': especialidad_cardio,
-            },
-        )
-        if medico_created:
-            self.stdout.write(self.style.SUCCESS(f'  ✓ Perfil médico: {medico_user.username}'))
+        medico_obj = Medico.objects.filter(user=medico_user).first()
+        if medico_obj is None:
+            orphan = Medico.objects.filter(matricula='MAT-001').first()
+            if orphan is not None and (
+                orphan.user_id is None or orphan.user_id == medico_user.id
+            ):
+                orphan.user = medico_user
+                orphan.nombre = orphan.nombre or 'Juan'
+                orphan.apellido = orphan.apellido or 'Médico'
+                if orphan.especialidad_id is None:
+                    orphan.especialidad = especialidad_cardio
+                orphan.save()
+                medico_obj = orphan
+                self.stdout.write(self.style.SUCCESS(
+                    f'  ✓ Perfil médico vinculado: {medico_user.username} → Medico#{medico_obj.pk}'
+                ))
+            else:
+                matricula = 'MAT-001' if orphan is None else f'MAT-001-{medico_user.id}'
+                medico_obj = Medico.objects.create(
+                    user=medico_user,
+                    nombre='Juan',
+                    apellido='Médico',
+                    matricula=matricula,
+                    especialidad=especialidad_cardio,
+                )
+                self.stdout.write(self.style.SUCCESS(f'  ✓ Perfil médico: {medico_user.username}'))
+        else:
+            self.stdout.write(self.style.SUCCESS(
+                f'  ✓ Perfil médico OK: {medico_user.username} → Medico#{medico_obj.pk}'
+            ))
 
         paciente_user, _ = self._ensure_user(
             'paciente1',

@@ -48,12 +48,14 @@ ROLES_LIMS_CATALOG_READ = frozenset({
     'medico',
 })
 
-# Secretaría/enfermería: bandeja LIMS restringida (pendientes + órdenes finalizadas).
+# Secretaría/enfermería: lectura clínica de órdenes (encabezado siempre;
+# resultados/PDF solo FINALIZADO vía usuario_puede_ver_resultados_lims).
 ROLES_LIMS_OPERATIVA_LIMITADA = frozenset({
     'secretaria',
     'enfermeria',
 })
 
+# Legacy: estados que antes limitaban listados de secretaría/enfermería.
 ESTADOS_LIMS_OPERATIVA_LIMITADA = frozenset({
     'PENDIENTE',
     'FINALIZADO',

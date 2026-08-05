@@ -18,8 +18,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { SolicitudExamenLims } from '../../types/lims';
 import { listSolicitudesExamen } from '../../services/limsApi';
+import { listEstudiosMicrobiologia } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessLimsOrdenes,
@@ -35,7 +35,11 @@ import {
 } from '../../utils/limsOrdenesFecha';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import { ESTADOS_ORDEN_LIMS } from '../../utils/limsEstadosOrden';
-import { mapLabToPendiente } from '../../utils/limsPendientesUnificados';
+import {
+  mapLabToPendiente,
+  mapMicroToPendiente,
+  type PendientePedidoRow,
+} from '../../utils/limsPendientesUnificados';
 
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
@@ -45,10 +49,30 @@ const ESTADOS_BANDEJA_LIMITADA = ['FINALIZADO'] as const;
 
 const DIAS_PESTANAS_INICIAL = 7;
 
+const MICRO_EN_BANDEJA = new Set([
+  'RECIBIDO',
+  'SEMBRADO',
+  'LECTURA_PRELIMINAR',
+  'IDENTIFICACION',
+  'ANTIBIOGRAMA',
+  'LISTO_PARA_VALIDAR',
+  'VALIDADO',
+  'INFORMADO',
+]);
+
+function fechaLocalIso(iso?: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return formatFechaLocal(startOfLocalDay(new Date(iso)));
+  } catch {
+    return null;
+  }
+}
+
 const OrdenesLims: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useData();
-  const [rows, setRows] = useState<SolicitudExamenLims[]>([]);
+  const [rows, setRows] = useState<PendientePedidoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [numeroFiltro, setNumeroFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -72,18 +96,46 @@ const OrdenesLims: React.FC = () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const data = await listSolicitudesExamen({
-        estado: buscarPorNumero ? undefined : estadoFiltro || undefined,
-        numero: buscarPorNumero ? numeroFiltro.trim() : undefined,
-        fecha_muestra: buscarPorNumero ? undefined : fechaApi,
-      });
-      setRows(data);
+      const num = numeroFiltro.trim();
+      if (buscarPorNumero) {
+        const [labs, micros] = await Promise.all([
+          listSolicitudesExamen({ numero: num }),
+          listEstudiosMicrobiologia({ search: num }),
+        ]);
+        const microRows = micros
+          .filter((e) => (e.numero || '').toUpperCase() === num.toUpperCase())
+          .map(mapMicroToPendiente);
+        setRows([...labs.map(mapLabToPendiente), ...microRows]);
+      } else {
+        const [labs, micros] = await Promise.all([
+          listSolicitudesExamen({
+            estado: estadoFiltro || undefined,
+            fecha_muestra: fechaApi,
+          }),
+          listEstudiosMicrobiologia({}),
+        ]);
+        let microRows = micros
+          .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
+          .filter((e) => fechaLocalIso(e.fecha_inicio || e.created_at) === fechaApi)
+          .map(mapMicroToPendiente);
+        if (vistaLimitada) {
+          microRows = microRows.filter((r) => r.estado === 'INFORMADO');
+        } else if (estadoFiltro) {
+          // Filtro de estado lab no aplica 1:1 a micro; si eligió FINALIZADO mostrar INFORMADO.
+          if (estadoFiltro === 'FINALIZADO') {
+            microRows = microRows.filter((r) => r.estado === 'INFORMADO');
+          } else {
+            microRows = [];
+          }
+        }
+        setRows([...labs.map(mapLabToPendiente), ...microRows]);
+      }
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {
       setLoading(false);
     }
-  }, [allowed, estadoFiltro, numeroFiltro, buscarPorNumero, fechaApi]);
+  }, [allowed, estadoFiltro, numeroFiltro, buscarPorNumero, fechaApi, vistaLimitada]);
 
   useEffect(() => {
     load();
@@ -111,6 +163,14 @@ const OrdenesLims: React.FC = () => {
     setDiasPestanas((n) => diasVisiblesParaIncluir(d, n));
   };
 
+  const onVer = (row: PendientePedidoRow) => {
+    if (row.tipo === 'MICROBIOLOGIA') {
+      navigate(`/laboratorio/microbiologia/estudios/${row.id}`);
+      return;
+    }
+    navigate(`/laboratorio/ordenes/${row.id}`);
+  };
+
   if (!allowed) {
     return (
       <Box sx={{ p: 3 }}>
@@ -128,10 +188,10 @@ const OrdenesLims: React.FC = () => {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {buscarPorNumero
-              ? 'Búsqueda por número en todo el historial.'
+              ? 'Búsqueda por número LAB-… (lab clínico y microbiología).'
               : vistaLimitada
-                ? `Órdenes finalizadas con muestra tomada el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
-                : `Muestras tomadas el ${labelDiaOrden(diaSeleccionado)}. Las órdenes pendientes de recepción están en `}
+                ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
+                : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
             {!buscarPorNumero && (
               <Button size="small" sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }} onClick={() => navigate('/laboratorio/pendientes')}>
                 Pendientes
@@ -154,7 +214,7 @@ const OrdenesLims: React.FC = () => {
             gap: 1,
           }}
         >
-          <Typography variant="subtitle2">Día de toma de muestra</Typography>
+          <Typography variant="subtitle2">Día de toma / recepción</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <TextField
               type="date"
@@ -216,17 +276,17 @@ const OrdenesLims: React.FC = () => {
           </FormControl>
           <TextField
             size="small"
-            label="Número exacto"
+            label="Número exacto LAB-…"
             value={numeroFiltro}
             onChange={(e) => setNumeroFiltro(e.target.value)}
-            sx={{ width: 160 }}
+            sx={{ width: 180 }}
             helperText={buscarPorNumero ? 'Ignora filtro por día' : undefined}
           />
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
           {!buscarPorNumero && (
-            <Chip size="small" label={`${filtradas.length} orden(es)`} variant="outlined" />
+            <Chip size="small" label={`${filtradas.length} pedido(s)`} variant="outlined" />
           )}
         </Box>
       </Paper>
@@ -238,14 +298,14 @@ const OrdenesLims: React.FC = () => {
       ) : (
         <Paper>
           <OrdenesLimsTabla
-            rows={filtradas.map(mapLabToPendiente)}
+            rows={filtradas}
             emptyMessage={
               buscarPorNumero
-                ? 'Sin órdenes con ese número.'
-                : `Sin muestras tomadas el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
+                ? 'Sin pedidos con ese número.'
+                : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
             }
             columnaFecha="toma"
-            onVer={(row) => navigate(`/laboratorio/ordenes/${row.id}`)}
+            onVer={onVer}
           />
         </Paper>
       )}

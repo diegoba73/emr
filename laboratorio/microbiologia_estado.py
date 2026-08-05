@@ -389,8 +389,10 @@ def aplicar_iniciar_estudio(
 ) -> EstudioMicrobiologia:
     """Transición PENDIENTE → RECIBIDO. Idempotente si ya está RECIBIDO."""
     with transaction.atomic():
+        # of=("self",): select_related sobre FKs nullable implica OUTER JOIN;
+        # Postgres no permite FOR UPDATE en el lado nullable.
         estudio = (
-            EstudioMicrobiologia.objects.select_for_update()
+            EstudioMicrobiologia.objects.select_for_update(of=("self",))
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )

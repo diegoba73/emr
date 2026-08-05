@@ -18,6 +18,7 @@ import {
   Atencion,
 } from '../types';
 import { apiClient as api, API_BASE_URL } from './apiClient';
+import { getSafeApiErrorMessage } from '../utils/apiError';
 
 /**
  * Normaliza una URL absoluta a una ruta relativa para usar con la instancia de api
@@ -291,26 +292,27 @@ export const getArchivosPorAtencion = async (atencionId: number): Promise<Archiv
 };
 
 export const createArchivoMedico = async (archivoData: FormData | Partial<ArchivoMedico>): Promise<ArchivoMedico> => {
+  const isForm = typeof FormData !== 'undefined' && archivoData instanceof FormData;
   try {
-    const isForm = (typeof FormData !== 'undefined') && archivoData instanceof FormData;
     const response = await api.post('/archivos-medicos/archivos/', archivoData, {
-      headers: isForm ? { 'Content-Type': 'multipart/form-data' } : { 'Content-Type': 'application/json' },
+      // No fijar Content-Type: apiClient lo limpia para FormData y axios agrega el boundary.
+      headers: isForm ? undefined : { 'Content-Type': 'application/json' },
     });
     return response.data;
-  } catch {
-    throw new Error('No se pudo crear el archivo médico.');
+  } catch (err) {
+    throw new Error(getSafeApiErrorMessage(err, 'No se pudo crear el archivo médico.'));
   }
 };
 
 export const updateArchivoMedico = async (id: number, archivoData: FormData | Partial<ArchivoMedico>): Promise<ArchivoMedico> => {
+  const isForm = typeof FormData !== 'undefined' && archivoData instanceof FormData;
   try {
-    const isForm = (typeof FormData !== 'undefined') && archivoData instanceof FormData;
     const response = await api.patch(`/archivos-medicos/archivos/${id}/`, archivoData, {
-      headers: isForm ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      headers: isForm ? undefined : undefined,
     });
     return response.data;
-  } catch {
-    throw new Error('No se pudo actualizar el archivo médico.');
+  } catch (err) {
+    throw new Error(getSafeApiErrorMessage(err, 'No se pudo actualizar el archivo médico.'));
   }
 };
 

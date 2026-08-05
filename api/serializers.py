@@ -621,8 +621,18 @@ class DocumentoSerializer(serializers.ModelSerializer):
             except serializers.ValidationError:
                 raise
             except Exception as exc:
+                from archivos_medicos.access import get_medico_perfil
+
+                if get_medico_perfil(user) is None:
+                    raise serializers.ValidationError(
+                        {
+                            'atencion_id': (
+                                'Médico no vinculado. Tu usuario no tiene perfil de médico asociado.'
+                            )
+                        }
+                    ) from exc
                 raise serializers.ValidationError(
-                    {'atencion_id': 'Médico no vinculado.'}
+                    {'atencion_id': 'No puede adjuntar documentos a atenciones ajenas.'}
                 ) from exc
             return attrs
         raise serializers.ValidationError(

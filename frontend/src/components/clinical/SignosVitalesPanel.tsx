@@ -163,6 +163,8 @@ const SignosVitalesPanel: React.FC<SignosVitalesPanelProps> = ({
               type="number"
               value={form.frecuencia_cardiaca}
               onChange={handleChange('frecuencia_cardiaca')}
+              inputProps={{ min: 30, max: 220 }}
+              helperText="30–220 bpm"
               sx={{ width: { sm: 90 } }}
             />
             <TextField

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db.models import Q
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -82,6 +83,7 @@ from laboratorio.serializers_microbiologia import (
     EstudioMicrobiologiaPartialUpdateSerializer,
     EstudioMicrobiologiaSerializer,
     EstudioMicroImprimirEtiquetasSerializer,
+    EstudioRecibirPorCodigoSerializer,
     IdentificacionMicroorganismoCreateSerializer,
     IdentificacionMicroorganismoSerializer,
     InformeAnularSerializer,
@@ -466,6 +468,66 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 "solicitud_id": instance.solicitud_id,
                 "view": "EstudioMicrobiologiaViewSet.partial_update",
             },
+        )
+
+    def _estudio_por_codigo(self, codigo: str):
+        """Lookup por código de barras (MICB-…) o número de estudio (MIC-…)."""
+        codigo_limpio = (codigo or "").strip()
+        if not codigo_limpio:
+            return None
+        return (
+            self.get_queryset()
+            .filter(Q(codigo_barra=codigo_limpio) | Q(numero=codigo_limpio))
+            .first()
+        )
+
+    @action(detail=False, methods=["get"], url_path=r"por-codigo/(?P<codigo>[^/]+)")
+    def por_codigo(self, request, codigo=None):
+        """Consulta de pedido micro por código de barras o número (escaneo)."""
+        estudio = self._estudio_por_codigo(codigo)
+        if estudio is None:
+            return Response(
+                {"error": "Estudio de microbiología no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        self.check_object_permissions(request, estudio)
+        return Response(
+            EstudioMicrobiologiaSerializer(estudio, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["post"], url_path="recibir-por-codigo")
+    def recibir_por_codigo(self, request):
+        """
+        Escaneo de recepción micro: PENDIENTE → RECIBIDO (misma transición que iniciar).
+        Acepta codigo_barra MICB-… o número MIC-….
+        """
+        ser = EstudioRecibirPorCodigoSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        codigo = ser.validated_data["codigo_barra"]
+        estudio = self._estudio_por_codigo(codigo)
+        if estudio is None:
+            return Response(
+                {"error": "Estudio de microbiología no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        self.check_object_permissions(request, estudio)
+        try:
+            estudio = aplicar_iniciar_estudio(
+                estudio.pk,
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.recibir_por_codigo",
+            )
+        except EstudioMicrobiologia.DoesNotExist:
+            return Response(
+                {"error": "Estudio de microbiología no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            EstudioMicrobiologiaSerializer(estudio, context={"request": request}).data,
+            status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"], url_path="iniciar")

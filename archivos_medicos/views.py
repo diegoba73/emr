@@ -19,7 +19,7 @@ from auditoria.snapshot import safe_model_snapshot
 
 from api.permissions import CanWriteArchivoMedico
 
-from .access import medico_puede_acceder_paciente, paciente_ids_vinculados_a_medico
+from .access import get_medico_perfil, medico_puede_acceder_paciente, paciente_ids_vinculados_a_medico
 from pacientes.models import Paciente
 from .models import ArchivoMedico
 from .serializers import ArchivoMedicoListSerializer, ArchivoMedicoSerializer
@@ -85,9 +85,8 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
             return queryset.none()
 
         if rol == 'medico':
-            try:
-                medico = user.medico
-            except Exception:
+            medico = get_medico_perfil(user)
+            if medico is None:
                 return queryset.none()
             ids = paciente_ids_vinculados_a_medico(medico)
             return queryset.filter(paciente_id__in=ids)
@@ -128,7 +127,12 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
                 paciente = Paciente.objects.get(pk=paciente_id)
             except Paciente.DoesNotExist as exc:
                 raise PermissionDenied('Paciente no encontrado.') from exc
-            if not medico_puede_acceder_paciente(user.medico, paciente):
+            medico = get_medico_perfil(user)
+            if medico is None:
+                raise PermissionDenied(
+                    'Médico no vinculado. Tu usuario no tiene perfil de médico asociado.'
+                )
+            if not medico_puede_acceder_paciente(medico, paciente):
                 raise PermissionDenied(
                     'No puede subir archivos para pacientes sin vínculo clínico.'
                 )
@@ -193,10 +197,10 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
         if rol in ('secretaria', 'enfermeria', 'laboratorio'):
             return False
         if rol == 'medico':
-            try:
-                return medico_puede_acceder_paciente(user.medico, archivo.paciente)
-            except Exception:
+            medico = get_medico_perfil(user)
+            if medico is None:
                 return False
+            return medico_puede_acceder_paciente(medico, archivo.paciente)
         if rol == 'paciente':
             try:
                 return archivo.paciente_id == user.paciente.id

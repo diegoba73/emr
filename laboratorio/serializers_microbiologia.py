@@ -465,6 +465,18 @@ class EstudioIniciarSerializer(serializers.Serializer):
     pass
 
 
+class EstudioRecibirPorCodigoSerializer(serializers.Serializer):
+    """Escaneo de recepción micro: body con código (LAB-… canónico o legacy MICB-/MIC-)."""
+
+    codigo_barra = serializers.CharField()
+
+    def validate_codigo_barra(self, value):
+        cb = (value or "").strip()
+        if not cb:
+            raise serializers.ValidationError("El código de barras es obligatorio.")
+        return cb
+
+
 class EstudioMarcarInformadoSerializer(serializers.Serializer):
     pass
 

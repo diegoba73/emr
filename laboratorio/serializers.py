@@ -538,7 +538,24 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'merged',
             'derivaciones_resumen',
         ]
-    
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        from api.permissions import usuario_puede_ver_resultados_lims
+
+        if user is not None and getattr(user, 'is_authenticated', False):
+            if not usuario_puede_ver_resultados_lims(user, instance):
+                data['resultados'] = []
+                data['resultados_visibles'] = False
+            else:
+                data['resultados_visibles'] = True
+        else:
+            data['resultados'] = []
+            data['resultados_visibles'] = False
+        return data
+
     def get_medico_email(self, obj):
         medico = getattr(obj, 'medico_interno', None)
         if not medico:

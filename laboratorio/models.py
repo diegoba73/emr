@@ -458,27 +458,12 @@ class SolicitudExamen(models.Model):
 
     def save(self, *args, **kwargs):
         """
-        Generador de Protocolo: Si no tiene número, genera uno con formato LAB-YYYY-XXXXX.
+        Generador de Protocolo: Si no tiene número, asigna LAB-YYYY-XXXXX (secuencia compartida).
         """
         if not self.numero:
-            year = timezone.now().year
-            # Buscar el último número del año
-            last_solicitud = SolicitudExamen.objects.filter(
-                numero__startswith=f'LAB-{year}-'
-            ).order_by('-fecha_solicitud').first()
+            from laboratorio.lab_codigo import next_protocolo
 
-            if last_solicitud and last_solicitud.numero:
-                try:
-                    # Extraer el número secuencial (última parte después del último guión)
-                    last_num = int(last_solicitud.numero.split('-')[-1])
-                    new_num = last_num + 1
-                except (ValueError, IndexError):
-                    new_num = 1
-            else:
-                new_num = 1
-
-            # Formato: LAB-YYYY-XXXXX (con padding a 5 dígitos)
-            self.numero = f'LAB-{year}-{new_num:05d}'
+            self.numero = next_protocolo()
 
         # Validar antes de guardar
         self.full_clean()
@@ -697,6 +682,7 @@ class ResultadoExamen(models.Model):
 from laboratorio.models_catalog import (  # noqa: E402,F401
     AreaLaboratorio,
     EventoMuestra,
+    LabProtocoloCounter,
     Muestra,
     SeccionLaboratorio,
     TipoContenedor,

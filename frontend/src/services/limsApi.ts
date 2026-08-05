@@ -436,6 +436,37 @@ export async function getMuestraPorCodigo(codigo: string): Promise<MuestraLookup
   return data;
 }
 
+export type LabCodigoResolve = {
+  tipo: 'tubo' | 'micro';
+  codigo: string;
+  hint?: string;
+  muestra?: MuestraLookupLims;
+  estudio?: import('../types/lims').EstudioMicrobiologia;
+  extraccion_completa?: boolean;
+  tubos_pendientes_extraccion?: Array<{
+    id: number;
+    codigo_barra: string | null;
+    tipo_contenedor_codigo?: string | null;
+    tipo_contenedor_nombre?: string | null;
+  }>;
+};
+
+/** Consulta unificada tubo (LAB-…-nn / MUE) o micro (LAB-… / MICB / MIC). */
+export async function getLabCodigoPorCodigo(codigo: string): Promise<LabCodigoResolve> {
+  const encoded = encodeURIComponent(codigo.trim());
+  const { data } = await apiClient.get<LabCodigoResolve>(`${LAB}/codigos/por-codigo/${encoded}/`);
+  return data;
+}
+
+export async function postRecibirLabCodigo(body: {
+  codigo_barra: string;
+  ubicacion_actual?: string;
+  observaciones?: string;
+}): Promise<LabCodigoResolve> {
+  const { data } = await apiClient.post<LabCodigoResolve>(`${LAB}/codigos/recibir-por-codigo/`, body);
+  return data;
+}
+
 export async function postRecibirMuestraPorCodigo(body: {
   codigo_barra: string;
   ubicacion_actual?: string;

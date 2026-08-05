@@ -133,7 +133,7 @@ class TestEstudioMicrobiologiaModel:
             tipo_estudio="CULTIVO_RUTINA",
         )
         assert estudio.estado == "PENDIENTE"
-        assert estudio.numero and estudio.numero.startswith("MIC-")
+        assert estudio.numero and estudio.numero.startswith("LAB-")
 
     def test_crear_con_muestra_en_proceso(self, base_data):
         m = _muestra_recibida(base_data["sol"], base_data["tm"])

@@ -159,8 +159,9 @@ const TurnosMedico: React.FC = () => {
         return;
       }
 
-      // Si el turno está CONFIRMADO o REALIZADO pero no tiene atención, crear una
-      if (turno.estado === 'CONFIRMADO' || turno.estado === 'REALIZADO') {
+      // Si el turno está CONFIRMADO pero no tiene atención, crear una.
+      // REALIZADO: solo abrir si ya existe atención (no crear desde aquí).
+      if (turno.estado === 'CONFIRMADO') {
         try {
           // Primero buscar si ya existe una atención para este turno
           const atenciones = await apiService.getAtenciones({ turno: turno.id });
@@ -186,11 +187,23 @@ const TurnosMedico: React.FC = () => {
           });
         } catch (error: any) {
           console.error('Error obteniendo/creando atención:', error);
-          const errorMessage = error.message || 'Error al crear la atención. Verifica que el turno esté confirmado o realizado.';
+          const errorMessage = error.message || 'Error al crear la atención. Verifica que el turno esté confirmado.';
           alert(errorMessage);
         }
+      } else if (turno.estado === 'REALIZADO') {
+        try {
+          const atenciones = await apiService.getAtenciones({ turno: turno.id });
+          const atencionExistente = atenciones.results?.[0];
+          if (atencionExistente) {
+            setSelectedAtencionId(atencionExistente.id);
+            return;
+          }
+          alert('El turno está realizado pero no tiene consulta asociada.');
+        } catch (error: any) {
+          alert(error.message || 'Error al abrir la consulta.');
+        }
       } else {
-        alert('El turno debe estar CONFIRMADO o REALIZADO para crear un registro clínico.');
+        alert('El turno debe estar CONFIRMADO para crear un registro clínico.');
       }
     } catch (error: any) {
       console.error('Error abriendo atención:', error);

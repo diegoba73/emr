@@ -20,7 +20,7 @@ import { useData } from '../contexts/DataContext';
 import { downloadInformeLimsPdf, getSolicitudExamen } from '../services/limsApi';
 import type { SolicitudExamenLims } from '../types/lims';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/apiError';
-import { canAccessAnalisisClinicoLab, canDownloadInformeClinicoPdf } from '../utils/limsAccess';
+import { canAccessAnalisisClinicoLab, canDownloadInformeClinicoPdf, canSeeResultadosClinicos } from '../utils/limsAccess';
 import { formatLimsPdfDownloadError } from '../utils/limsDownload';
 import {
   estadoOrdenColor,
@@ -38,7 +38,6 @@ const SolicitudLabDetalle: React.FC = () => {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const allowed = canAccessAnalisisClinicoLab(currentUser);
-  const canPdf = canDownloadInformeClinicoPdf(currentUser);
 
   const load = useCallback(async () => {
     if (!allowed || !id) {
@@ -112,9 +111,8 @@ const SolicitudLabDetalle: React.FC = () => {
   }
 
   const resultados = orden.resultados ?? [];
-  const puedePdf =
-    canPdf &&
-    (orden.estado === 'INFORMADO_PARCIAL' || ordenEsFinalizada(orden.estado));
+  const puedeVerResultados = canSeeResultadosClinicos(currentUser, orden.estado);
+  const puedePdf = canDownloadInformeClinicoPdf(currentUser, orden.estado);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -142,7 +140,13 @@ const SolicitudLabDetalle: React.FC = () => {
         <Typography variant="h6" gutterBottom>
           Resultados
         </Typography>
-        {resultados.length === 0 ? (
+        {!puedeVerResultados ? (
+          <Alert severity="info">
+            {ordenEsFinalizada(orden.estado)
+              ? 'No tiene permiso para ver los resultados de esta orden.'
+              : 'Los resultados solo están disponibles cuando la orden fue validada por el laboratorio.'}
+          </Alert>
+        ) : resultados.length === 0 ? (
           <Typography color="text.secondary">Resultados pendientes.</Typography>
         ) : (
           <Table size="small">

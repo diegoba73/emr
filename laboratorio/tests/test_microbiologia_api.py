@@ -213,7 +213,7 @@ class TestEstudioMicrobiologiaAPI(TestCase):
     def test_laboratorio_crea_estudio(self):
         data = self._crear_estudio()
         self.assertEqual(data["estado"], "PENDIENTE")
-        self.assertTrue(data["numero"].startswith("MIC-"))
+        self.assertTrue(data["numero"].startswith("LAB-"))
         self.assertTrue(
             AuditEvent.objects.filter(
                 entity_type=EstudioMicrobiologia._meta.label,
@@ -423,6 +423,58 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         r2 = self.client.post(f"/api/lab/microbiologia/estudios/{eid}/iniciar/", {}, format="json")
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
         self.assertEqual(r2.json()["estado"], "RECIBIDO")
+
+    def test_por_codigo_y_recibir_por_codigo_micb(self):
+        """Escaneo LAB-/legacy MICB-/MIC- en recepción/consulta micro."""
+        data = self._crear_estudio()
+        eid = data["id"]
+        estudio = EstudioMicrobiologia.objects.get(pk=eid)
+        estudio.ensure_codigo_barra()
+        estudio.save(update_fields=["codigo_barra", "updated_at"])
+        codigo = estudio.codigo_barra
+        self.assertTrue(codigo.startswith("LAB-"))
+        self.assertEqual(codigo, estudio.numero)
+
+        self.client.force_authenticate(self.lab)
+        r_lookup = self.client.get(f"/api/lab/microbiologia/estudios/por-codigo/{codigo}/")
+        self.assertEqual(r_lookup.status_code, status.HTTP_200_OK, r_lookup.content)
+        self.assertEqual(r_lookup.json()["id"], eid)
+        self.assertEqual(r_lookup.json()["estado"], "PENDIENTE")
+
+        r_num = self.client.get(f"/api/lab/microbiologia/estudios/por-codigo/{estudio.numero}/")
+        self.assertEqual(r_num.status_code, status.HTTP_200_OK)
+        self.assertEqual(r_num.json()["id"], eid)
+
+        r_404 = self.client.get("/api/lab/microbiologia/estudios/por-codigo/LAB-9999-99999/")
+        self.assertEqual(r_404.status_code, status.HTTP_404_NOT_FOUND)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r_recv = self.client.post(
+                "/api/lab/microbiologia/estudios/recibir-por-codigo/",
+                {"codigo_barra": codigo},
+                format="json",
+            )
+        self.assertEqual(r_recv.status_code, status.HTTP_200_OK, r_recv.content)
+        self.assertEqual(r_recv.json()["estado"], "RECIBIDO")
+        self.assertEqual(r_recv.json()["codigo_barra"], codigo)
+
+        # Idempotente vía escaneo
+        r_again = self.client.post(
+            "/api/lab/microbiologia/estudios/recibir-por-codigo/",
+            {"codigo_barra": codigo},
+            format="json",
+        )
+        self.assertEqual(r_again.status_code, status.HTTP_200_OK)
+        self.assertEqual(r_again.json()["estado"], "RECIBIDO")
+
+        # API unificada también resuelve micro
+        r_uni = self.client.get(f"/api/lab/codigos/por-codigo/{codigo}/")
+        self.assertEqual(r_uni.status_code, status.HTTP_200_OK)
+        self.assertEqual(r_uni.json()["tipo"], "micro")
+
+        # Tubos MUE path: código LAB sin sufijo de micro no es muestra
+        r_muestra = self.client.get(f"/api/lab/muestras-transaccionales/por-codigo/{codigo}/")
+        self.assertEqual(r_muestra.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_cancelar_estudio_sin_motivo_falla(self):
         data = self._crear_estudio()

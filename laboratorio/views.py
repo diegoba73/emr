@@ -507,9 +507,6 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 queryset = queryset.none()
 
         if getattr(self, 'action', None) == 'list':
-            role = get_normalized_role(user)
-            if role in ('secretaria', 'enfermeria'):
-                queryset = queryset.filter(estado__in=('PENDIENTE', 'FINALIZADO'))
             queryset = queryset.annotate(fecha_toma_muestra=Max('muestras__fecha_toma'))
 
         numero = self.request.query_params.get('numero')
@@ -965,6 +962,13 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         No usa IA; devuelve alertas estructuradas para revisión del laboratorio o médico.
         """
         solicitud = self.get_object()
+        from api.permissions import usuario_puede_ver_resultados_lims
+
+        if not usuario_puede_ver_resultados_lims(request.user, solicitud):
+            return Response(
+                {'detail': 'Los resultados solo están disponibles cuando la orden está validada.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if solicitud.estado == 'PENDIENTE':
             return Response(
                 {'error': 'La orden aún no tiene muestra tomada.'},

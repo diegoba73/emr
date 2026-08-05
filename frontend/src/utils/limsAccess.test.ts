@@ -2,10 +2,12 @@ import {
   ESTADOS_MICRO_CERRADOS,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
+  canDownloadInformeClinicoPdf,
   canDownloadInformeLimsPdf,
   canMarcarMicroEstudioInformado,
   canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
+  canSeeResultadosClinicos,
   canValidarOrdenLims,
   isMicroEstudioCerrado,
 } from './limsAccess';
@@ -117,6 +119,26 @@ describe('canValidarOrdenLims', () => {
     expect(canValidarOrdenLims(adminUser)).toBe(true);
     expect(canValidarOrdenLims(labUser)).toBe(false);
     expect(canValidarOrdenLims(medUser)).toBe(false);
+  });
+});
+
+describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
+  it('operadores LIMS ven resultados aunque no esté finalizada', () => {
+    expect(canSeeResultadosClinicos(labUser, 'EN_PROCESO')).toBe(true);
+    expect(canSeeResultadosClinicos(bioUser, 'LISTO_PARA_VALIDAR')).toBe(true);
+    expect(canSeeResultadosClinicos(adminUser, 'PENDIENTE')).toBe(true);
+  });
+
+  it('médico/secretaría solo ven resultados y PDF si FINALIZADO', () => {
+    expect(canSeeResultadosClinicos(medUser, 'EN_PROCESO')).toBe(false);
+    expect(canSeeResultadosClinicos(medUser, 'INFORMADO_PARCIAL')).toBe(false);
+    expect(canSeeResultadosClinicos(medUser, 'FINALIZADO')).toBe(true);
+    expect(canSeeResultadosClinicos(secUser, 'FINALIZADO')).toBe(true);
+
+    expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(false);
+    expect(canDownloadInformeClinicoPdf(medUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeClinicoPdf(secUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeClinicoPdf(pacUser, 'EN_PROCESO')).toBe(false);
   });
 });
 

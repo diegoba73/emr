@@ -1052,15 +1052,15 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       return;
     }
 
-    if (tv && !['CONFIRMADO', 'REALIZADO', 'RESERVADO'].includes(tv.estado)) {
-      alert('El turno debe estar RESERVADO, CONFIRMADO o REALIZADO para acceder al registro clínico.');
+    if (tv && !['CONFIRMADO', 'REALIZADO'].includes(tv.estado)) {
+      alert('El turno debe estar CONFIRMADO para crear la consulta.');
       return;
     }
 
     const atencionDelTurno = tv?.atencion;
 
     if (atencionDelTurno?.id) {
-      if (tv?.estado === 'CONFIRMADO' || tv?.estado === 'RESERVADO') {
+      if (tv?.estado === 'CONFIRMADO') {
         try {
           await apiService.iniciarAtencionTurno(editingTurno.id);
           queryClient.invalidateQueries({ queryKey: ['turnos'] });
@@ -1089,6 +1089,13 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         }
       } catch {
       }
+      alert('El turno está realizado pero no tiene consulta asociada.');
+      return;
+    }
+
+    if (tv?.estado !== 'CONFIRMADO') {
+      alert('Solo se puede crear la consulta cuando el turno está CONFIRMADO.');
+      return;
     }
 
     if (isTurnoBloqueado()) {
@@ -1104,7 +1111,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     if (!isMedico() || !editingTurno) return false;
     if (!editingTurno.paciente || !editingTurno.medico || !editingTurno.recurso) return false;
     const st = turnoVista?.estado;
-    return st === 'CONFIRMADO' || st === 'REALIZADO' || st === 'RESERVADO';
+    // Ver consulta existente / realizada
+    if (turnoVista?.atencion?.id || st === 'REALIZADO') return true;
+    // Crear consulta: solo turno confirmado
+    return st === 'CONFIRMADO';
   };
 
   /** Con turno bloqueado: mostrar si hay atención en el payload, o si está REALIZADO (se busca atención en API al abrir) */

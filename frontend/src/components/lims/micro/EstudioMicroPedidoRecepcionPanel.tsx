@@ -95,9 +95,18 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
         <Typography variant="caption" color="text.secondary" display="block">
           {tieneEtiqueta ? (
             <>
-              Etiquetas impresas. El pedido queda en <strong>Esperando recepción</strong> hasta que la
-              muestra llegue al laboratorio. Usá <strong>Confirmar recepción de muestra</strong> solo
-              cuando la tengas físicamente. Después podrás sembrar e iniciar el trabajo técnico.
+              Etiquetas impresas
+              {estudio.codigo_barra ? (
+                <>
+                  {' '}
+                  (<strong>{estudio.codigo_barra}</strong>)
+                </>
+              ) : null}
+              . El pedido queda en <strong>Esperando recepción</strong> hasta que la muestra llegue
+              al laboratorio. Escaneá el código en{' '}
+              <strong>Recepción de muestras</strong> o usá{' '}
+              <strong>Confirmar recepción de muestra</strong> cuando la tengas físicamente. Después
+              podrás sembrar e iniciar el trabajo técnico.
             </>
           ) : (
             <>

@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
+import { canAccessBiDashboard } from '../utils/permissions';
 
 interface QuickActionCard {
   title: string;
@@ -130,7 +131,7 @@ const quickActions: QuickActionCard[] = [
     icon: <Insights />,
     path: '/bi',
     color: '#0d9488',
-    roles: ['admin', 'bioquimico', 'secretaria', 'laboratorio'],
+    roles: ['bioquimico'],
   },
 ];
 
@@ -154,8 +155,12 @@ const Dashboard: React.FC = () => {
     const isAdmin = userRole === 'admin' || currentUser.is_superuser;
 
     return quickActions.filter((action) => {
+      // Indicadores: solo bioquímico (no hereda el bypass de admin).
+      if (action.path === '/bi') {
+        return canAccessBiDashboard(currentUser);
+      }
       if (action.roles.includes('all')) return true;
-      if (isAdmin) return true; // Admin ve todo
+      if (isAdmin) return true; // Admin ve el resto
       return action.roles.includes(userRole);
     });
   };

@@ -1,7 +1,6 @@
 from rest_framework import permissions
 
 from usuarios.roles import (
-    ESTADOS_LIMS_OPERATIVA_LIMITADA,
     ROLES_LIMS_CATALOG_READ,
     ROLES_LIMS_OPERADOR,
     ROLES_LIMS_OPERATIVA_LIMITADA,
@@ -86,6 +85,8 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
 
     Médico: órdenes propias **o** de pacientes con vínculo clínico
     (turno / consulta HC / atención), p. ej. cabecera viendo labs de guardia.
+    Secretaría/enfermería: pueden ver el encabezado de todas las órdenes;
+    los resultados clínicos se filtran con ``usuario_puede_ver_resultados_lims``.
     """
     if not user or not user.is_authenticated:
         return False
@@ -97,8 +98,7 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
         return True
 
     if role in ROLES_LIMS_OPERATIVA_LIMITADA:
-        estado = getattr(solicitud, 'estado', None)
-        return estado in ESTADOS_LIMS_OPERATIVA_LIMITADA
+        return True
 
     if role == 'medico':
         medico = getattr(solicitud, 'medico_interno', None)
@@ -125,8 +125,12 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     return False
 
 
-def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
-    """PDF clínico: propias órdenes con resultados informados."""
+def usuario_puede_ver_resultados_lims(user, solicitud) -> bool:
+    """True si el usuario puede ver valores de resultados / análisis longitudinal.
+
+    Operadores LIMS (admin, laboratorio, bioquímico): siempre.
+    Resto de roles clínicos: solo cuando la orden está validada (FINALIZADO).
+    """
     if not usuario_puede_ver_solicitud_lims(user, solicitud):
         return False
     if user.is_superuser:
@@ -134,10 +138,20 @@ def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
     role = get_normalized_role(user)
     if role in ROLES_LIMS_WRITE:
         return True
-    if role in ROLES_LIMS_OPERATIVA_LIMITADA:
-        return solicitud.estado == 'FINALIZADO'
-    if role in ('medico', 'paciente'):
-        return solicitud.estado in ('INFORMADO_PARCIAL', 'FINALIZADO')
+    return getattr(solicitud, 'estado', None) == 'FINALIZADO'
+
+
+def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
+    """PDF clínico: operadores LIMS siempre; resto solo orden FINALIZADO (validada)."""
+    if not usuario_puede_ver_solicitud_lims(user, solicitud):
+        return False
+    if user.is_superuser:
+        return True
+    role = get_normalized_role(user)
+    if role in ROLES_LIMS_WRITE:
+        return True
+    if role in (*ROLES_LIMS_OPERATIVA_LIMITADA, 'medico', 'paciente'):
+        return getattr(solicitud, 'estado', None) == 'FINALIZADO'
     return False
 
 
@@ -256,7 +270,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return usuario_puede_descargar_informe_lims(request.user, obj)
 
         if action == 'analisis_longitudinal':
-            return usuario_puede_ver_solicitud_lims(request.user, obj)
+            return usuario_puede_ver_resultados_lims(request.user, obj)
 
         if action == 'sugerir_conclusion_hemograma':
             return role in ROLES_LIMS_WRITE
@@ -358,10 +372,9 @@ def _atencion_is_staff_or_admin(user) -> bool:
 
 
 def _atencion_user_medico(user):
-    try:
-        return user.medico
-    except Exception:
-        return None
+    from archivos_medicos.access import get_medico_perfil
+
+    return get_medico_perfil(user)
 
 
 def _atencion_user_paciente(user):
@@ -652,6 +665,57 @@ class LimsB0CatalogPermission(permissions.BasePermission):
         return role == "admin"
 
 
+class LimsCodigoPermission(permissions.BasePermission):
+    """
+    Resolución / recepción unificada por código (tubo o micro).
+    Lectura (por_codigo): operadores LIMS + médico.
+    Escritura (recibir_por_codigo): solo operadores LIMS.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        action = getattr(view, "action", None)
+        if action == "por_codigo":
+            return role in (*ROLES_LIMS_WRITE, "medico")
+        if action == "recibir_por_codigo":
+            return role in ROLES_LIMS_WRITE
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        if role in ROLES_LIMS_OPERADOR or role == "admin":
+            return True
+        if role == "medico":
+            action = getattr(view, "action", None)
+            if action != "por_codigo":
+                return False
+            # Tubo: via solicitud; micro: via medico_interno / solicitud.
+            solicitud = getattr(obj, "solicitud", None)
+            if solicitud is not None:
+                return usuario_puede_ver_solicitud_lims(request.user, solicitud)
+            medico_interno_id = getattr(obj, "medico_interno_id", None)
+            if medico_interno_id:
+                try:
+                    if (
+                        hasattr(request.user, "medico")
+                        and request.user.medico
+                        and request.user.medico.pk == medico_interno_id
+                    ):
+                        return True
+                except Exception:
+                    pass
+            return False
+        return False
+
+
 class LimsMuestraTransaccionalPermission(permissions.BasePermission):
     """
     Muestra transaccional (Fase B1).
@@ -759,7 +823,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         if role not in (*ROLES_LIMS_WRITE, "medico"):
             return False
         action = getattr(view, "action", None)
-        if action in ("list", "retrieve"):
+        if action in ("list", "retrieve", "por_codigo"):
             return True
         # Pedido clínico: médico y operadores LIMS (create individual o batch).
         if action in ("create", "batch"):
@@ -774,6 +838,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             "marcar_informado",
             "imprimir_etiquetas",
             "imprimir_etiquetas_batch",
+            "recibir_por_codigo",
         ):
             return role in ROLES_LIMS_WRITE
         if action == "destroy":
@@ -792,7 +857,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             return True
         if role == "medico":
             action = getattr(view, "action", None)
-            if action not in ("retrieve", "list"):
+            if action not in ("retrieve", "list", "por_codigo"):
                 return False
 
             # Pedido directo (sin solicitud LIMS): el médico solicitante puede verlo.

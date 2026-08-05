@@ -12,6 +12,11 @@ from .access import (
     validar_consulta_archivo_para_usuario,
 )
 from .models import ArchivoMedico
+from .validators import (
+    validar_extension_archivo,
+    validar_extension_para_tipo,
+    validar_tamanio_archivo,
+)
 
 
 def _archivo_download_path(obj, request) -> str | None:
@@ -64,17 +69,15 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
     def validate_archivo(self, value):
         if not value:
             return value
-        if value.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError("El archivo no puede ser mayor a 10MB")
-        allowed_extensions = [
-            '.dcm', '.nii', '.nii.gz', '.jpg', '.jpeg', '.png',
-            '.tif', '.tiff', '.pdf', '.doc', '.docx', '.txt',
-        ]
-        file_extension = os.path.splitext(value.name)[1].lower()
-        if file_extension not in allowed_extensions:
-            raise serializers.ValidationError(
-                f"Extensión no permitida. Extensiones permitidas: {', '.join(allowed_extensions)}"
-            )
+        try:
+            validar_tamanio_archivo(value)
+            validar_extension_archivo(value)
+        except Exception as exc:
+            # Django ValidationError → mensaje DRF
+            messages = getattr(exc, 'messages', None)
+            if messages:
+                raise serializers.ValidationError(messages)
+            raise serializers.ValidationError(str(exc)) from exc
         return value
 
     def _paciente_id_efectivo(self, attrs) -> int:
@@ -117,17 +120,9 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
                 ),
             })
 
-        if consulta_id is not None:
-            if not request or not request.user.is_authenticated:
-                raise serializers.ValidationError({
-                    'consulta_id': 'Se requiere autenticación para asociar una consulta.',
-                })
-            try:
-                consulta = resolver_consulta_para_paciente(consulta_id, paciente_id)
-                validar_consulta_archivo_para_usuario(request.user, consulta, paciente_id)
-            except ValueError as exc:
-                raise serializers.ValidationError({'consulta_id': str(exc)}) from exc
-
+        # Validar atención primero: en consulta el médico opera sobre la atención;
+        # la Consulta HC se asocia con ese mismo contexto.
+        atencion = None
         if atencion_id is not None:
             if not request or not request.user.is_authenticated:
                 raise serializers.ValidationError({
@@ -138,6 +133,37 @@ class ArchivoMedicoSerializer(serializers.ModelSerializer):
                 validar_atencion_archivo_para_usuario(request.user, atencion, paciente_id)
             except ValueError as exc:
                 raise serializers.ValidationError({'atencion_id': str(exc)}) from exc
+
+        if consulta_id is not None:
+            if not request or not request.user.is_authenticated:
+                raise serializers.ValidationError({
+                    'consulta_id': 'Se requiere autenticación para asociar una consulta.',
+                })
+            try:
+                consulta = resolver_consulta_para_paciente(consulta_id, paciente_id)
+                validar_consulta_archivo_para_usuario(
+                    request.user,
+                    consulta,
+                    paciente_id,
+                    atencion=atencion,
+                )
+            except ValueError as exc:
+                raise serializers.ValidationError({'consulta_id': str(exc)}) from exc
+
+        archivo = attrs.get('archivo')
+        if archivo is None and self.instance is not None:
+            archivo = self.instance.archivo
+        tipo = attrs.get('tipo_archivo')
+        if tipo is None and self.instance is not None:
+            tipo = self.instance.tipo_archivo
+        if archivo and tipo:
+            try:
+                validar_extension_para_tipo(getattr(archivo, 'name', '') or '', tipo)
+            except Exception as exc:
+                messages = getattr(exc, 'messages', None)
+                raise serializers.ValidationError({
+                    'archivo': messages or [str(exc)],
+                }) from exc
 
         return attrs
 

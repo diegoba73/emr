@@ -93,12 +93,17 @@ export function canAccessPaciente360(user: User | null | undefined): boolean {
   return rol === 'medico' || rol === 'paciente';
 }
 
-/** Solicitudes genéricas EMR (PERM-01): no enfermería/laboratorio/sin rol. */
+/** Solicitudes genéricas EMR (PERM-01): laboratorio/bioquímico usan LIMS. */
 export function canAccessSolicitudes(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'medico' || rol === 'paciente';
+  return (
+    rol === 'secretaria' ||
+    rol === 'medico' ||
+    rol === 'paciente' ||
+    rol === 'enfermeria'
+  );
 }
 
 /** Archivos médicos: admin/médico/paciente (secretaría/enfermería/laboratorio bloqueados). */
@@ -168,12 +173,10 @@ export function canEditCatalogosClinicos(user: User | null | undefined): boolean
   return normalizeRol(user) === 'medico';
 }
 
-/** Dashboard BI / indicadores de calidad. */
+/** Dashboard BI / indicadores de calidad — solo bioquímico. */
 export function canAccessBiDashboard(user: User | null | undefined): boolean {
   if (!user) return false;
-  if (user.is_superuser) return true;
-  const rol = normalizeRol(user);
-  return rol === 'admin' || rol === 'bioquimico' || rol === 'secretaria' || rol === 'laboratorio';
+  return normalizeRol(user) === 'bioquimico';
 }
 
 /** Portal del paciente — acceso base. */

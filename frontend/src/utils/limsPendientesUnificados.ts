@@ -66,6 +66,7 @@ export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow
     origen_solicitud_display: e.origen_solicitud_display,
     estado: e.estado,
     fecha_solicitud: e.created_at,
+    fecha_toma_muestra: e.fecha_inicio || e.created_at,
     sin_etiquetas: Boolean(e.sin_etiquetas ?? (e.estado === 'PENDIENTE' && !e.etiquetas_impresas_at)),
     esperando_recepcion: Boolean(
       e.esperando_recepcion ?? (e.estado === 'PENDIENTE' && e.etiquetas_impresas_at)

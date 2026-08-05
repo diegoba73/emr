@@ -46,6 +46,7 @@ from laboratorio.views_qc import (
     LoteControlViewSet,
     MaterialControlViewSet,
 )
+from laboratorio.views_lab_codigo import LabCodigoViewSet
 from laboratorio.views_derivacion import LaboratorioDerivacionViewSet
 from usuarios.views import PacienteRegisterView
 from core.views import HealthCheckView
@@ -81,6 +82,8 @@ router.register(
     MuestraTransaccionalViewSet,
     basename='lab-muestras-transaccionales',
 )
+router.register(r'lab/codigos', LabCodigoViewSet, basename='lab-codigos')
+router.register(r'laboratorio/codigos', LabCodigoViewSet, basename='laboratorio-codigos')
 # Rutas adicionales según requisitos del usuario
 router.register(r'laboratorio/tipos-examen', TipoExamenViewSet, basename='laboratorio-tipos-examen')
 router.register(r'laboratorio/solicitudes', SolicitudExamenViewSet, basename='laboratorio-solicitudes')

@@ -109,7 +109,7 @@ class EstudioMicrobiologia(models.Model):
         null=True,
         blank=True,
         verbose_name="Número de estudio",
-        help_text="Generado automáticamente si se deja vacío (MIC-YYYY-NNNNNN).",
+        help_text="Generado automáticamente si se deja vacío (LAB-YYYY-XXXXX).",
     )
     solicitud = models.ForeignKey(
         "laboratorio.SolicitudExamen",
@@ -154,7 +154,7 @@ class EstudioMicrobiologia(models.Model):
         null=True,
         blank=True,
         verbose_name="Código de barras",
-        help_text="Generado al imprimir etiqueta (MICB-YYYY-NNNNNN).",
+        help_text="Igual al número de protocolo (LAB-YYYY-XXXXX); se asigna al imprimir etiqueta.",
     )
     etiquetas_impresas_at = models.DateTimeField(
         null=True,
@@ -274,43 +274,21 @@ class EstudioMicrobiologia(models.Model):
             if codigo:
                 self.tipo_estudio = codigo
         if not self.numero:
-            year = timezone.now().year
-            prefix = f"MIC-{year}-"
-            last = (
-                EstudioMicrobiologia.objects.filter(numero__startswith=prefix)
-                .order_by("-numero")
-                .first()
-            )
-            if last and last.numero:
-                try:
-                    n = int(last.numero.split("-")[-1]) + 1
-                except (ValueError, IndexError):
-                    n = 1
-            else:
-                n = 1
-            self.numero = f"{prefix}{n:06d}"
+            from laboratorio.lab_codigo import next_protocolo
+
+            self.numero = next_protocolo()
         self.full_clean()
         super().save(*args, **kwargs)
 
     def ensure_codigo_barra(self) -> str:
-        """Asigna MICB-YYYY-NNNNNN si aún no tiene código de barras."""
+        """Asigna codigo_barra = numero (LAB-YYYY-XXXXX) si aún no tiene."""
         if self.codigo_barra:
             return self.codigo_barra
-        year = timezone.now().year
-        prefix = f"MICB-{year}-"
-        last = (
-            EstudioMicrobiologia.objects.filter(codigo_barra__startswith=prefix)
-            .order_by("-codigo_barra")
-            .first()
-        )
-        if last and last.codigo_barra:
-            try:
-                n = int(last.codigo_barra.split("-")[-1]) + 1
-            except (ValueError, IndexError):
-                n = 1
-        else:
-            n = 1
-        self.codigo_barra = f"{prefix}{n:06d}"
+        if not self.numero:
+            from laboratorio.lab_codigo import next_protocolo
+
+            self.numero = next_protocolo()
+        self.codigo_barra = self.numero
         return self.codigo_barra
 
     @property

@@ -60,6 +60,12 @@ function getErrorStatus(err: unknown): number | undefined {
   return e.response?.status;
 }
 
+/** Especialidad visible: listado light usa `especialidad_nombre`; detail usa `especialidad.nombre`. */
+function getMedicoEspecialidadLabel(medico: Medico | null | undefined): string {
+  if (!medico) return '';
+  return medico.especialidad?.nombre || medico.especialidad_nombre || '';
+}
+
 interface UserFormData {
   username: string;
   email: string;
@@ -749,7 +755,7 @@ const GestionUsuarios: React.FC = () => {
                         const nombre = option.apellido || option.nombre 
                           ? `${option.apellido || ''}, ${option.nombre || ''}`.trim()
                           : `Médico ${option.id}`;
-                        const esp = option.especialidad?.nombre || '';
+                        const esp = getMedicoEspecialidadLabel(option);
                         return `${nombre}${esp ? ` - ${esp}` : ''}`.trim();
                       }}
                       value={medicoSeleccionado}
@@ -804,7 +810,8 @@ const GestionUsuarios: React.FC = () => {
                             <strong>Matrícula:</strong> {medicoSeleccionado.matricula || 'N/A'}
                           </li>
                           <li>
-                            <strong>Especialidad:</strong> {medicoSeleccionado.especialidad?.nombre || 'Sin especialidad'}
+                            <strong>Especialidad:</strong>{' '}
+                            {getMedicoEspecialidadLabel(medicoSeleccionado) || 'Sin especialidad'}
                           </li>
                           {medicoSeleccionado.email && (
                             <li>

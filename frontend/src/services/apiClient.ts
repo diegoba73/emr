@@ -18,6 +18,13 @@ export const apiClient: AxiosInstance = axios.create({
 // Interceptor: agregar CSRF token a peticiones no seguras
 apiClient.interceptors.request.use(
   async (config) => {
+    // FormData: dejar que el runtime ponga multipart + boundary (no application/json).
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      if (config.headers && typeof config.headers === 'object') {
+        delete (config.headers as Record<string, unknown>)['Content-Type'];
+        delete (config.headers as Record<string, unknown>)['content-type'];
+      }
+    }
     const method = (config.method || '').toLowerCase();
     if (['post', 'put', 'patch', 'delete'].includes(method)) {
       let csrfToken = getCSRFToken();

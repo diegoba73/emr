@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Chip,
+  Link,
   Paper,
   Table,
   TableBody,
@@ -13,18 +14,22 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import BarcodeScanInput from '../../components/lims/BarcodeScanInput';
 import MuestraEstadoBadge from '../../components/lims/MuestraEstadoBadge';
-import { postRecibirMuestraPorCodigo } from '../../services/limsApi';
-import type { MuestraLookupLims } from '../../types/lims';
+import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
+import { postRecibirLabCodigo } from '../../services/limsApi';
+import type { EstudioMicrobiologia, MuestraLookupLims } from '../../types/lims';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canOperateLims } from '../../utils/limsAccess';
 
 interface RecepcionSesionItem {
   codigo: string;
-  muestra: MuestraLookupLims;
+  tipo: 'tubo' | 'micro';
+  muestra?: MuestraLookupLims;
+  estudio?: EstudioMicrobiologia;
   recibidaEn: string;
   extraccionCompleta?: boolean;
   tubosPendientes?: Array<{
@@ -49,23 +54,48 @@ const RecepcionMuestrasPage: React.FC = () => {
       if (!canOp || procesando) return;
       setProcesando(true);
       try {
-        const data = await postRecibirMuestraPorCodigo({
+        const data = await postRecibirLabCodigo({
           codigo_barra: codigo,
           ubicacion_actual: ubicacion.trim() || 'Laboratorio',
         });
+
+        if (data.tipo === 'micro' && data.estudio) {
+          const estudio = data.estudio;
+          const item: RecepcionSesionItem = {
+            codigo,
+            tipo: 'micro',
+            estudio,
+            recibidaEn: new Date().toISOString(),
+            extraccionCompleta: true,
+          };
+          setUltimoPendientes([]);
+          setHistorial((prev) =>
+            [item, ...prev.filter((h) => h.codigo !== codigo)].slice(0, MAX_HISTORIAL)
+          );
+          toast.success(
+            `Micro recibida: ${estudio.codigo_barra || estudio.numero || codigo}`
+          );
+          return;
+        }
+
+        if (data.tipo !== 'tubo' || !data.muestra) {
+          toast.error('No se pudo interpretar el código recibido.');
+          return;
+        }
+
+        const muestra = data.muestra;
         const pendientes = data.tubos_pendientes_extraccion || [];
+        const item: RecepcionSesionItem = {
+          codigo,
+          tipo: 'tubo',
+          muestra,
+          recibidaEn: new Date().toISOString(),
+          extraccionCompleta: data.extraccion_completa,
+          tubosPendientes: pendientes,
+        };
         setUltimoPendientes(pendientes);
         setHistorial((prev) =>
-          [
-            {
-              codigo,
-              muestra: data,
-              recibidaEn: new Date().toISOString(),
-              extraccionCompleta: data.extraccion_completa,
-              tubosPendientes: pendientes,
-            },
-            ...prev.filter((h) => h.codigo !== codigo),
-          ].slice(0, MAX_HISTORIAL)
+          [item, ...prev.filter((h) => h.codigo !== codigo)].slice(0, MAX_HISTORIAL)
         );
         if (data.extraccion_completa) {
           toast.success(`Recibida: ${codigo}. Todos los tubos de la orden.`);
@@ -106,9 +136,9 @@ const RecepcionMuestrasPage: React.FC = () => {
         Recepción de muestras
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Escaneá cada tubo al recibirlo. Pasa a <strong>Recibida</strong> (confirma la toma e ingreso
-        en un solo paso). Con el primer tubo la orden entra en proceso; podés cargar resultados de los
-        ya recibidos aunque falten otros.
+        Escaneá tubos <strong>LAB-…-nn</strong> (lab clínico) o etiquetas de microbiología{' '}
+        <strong>LAB-…</strong> (mismo número de protocolo). El backend resuelve el tipo; no hace falta
+        elegir pantalla.
       </Typography>
 
       <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
@@ -118,10 +148,10 @@ const RecepcionMuestrasPage: React.FC = () => {
           onChange={(e) => setUbicacion(e.target.value)}
           fullWidth
           margin="normal"
-          helperText="Se asignará a cada muestra escaneada en esta sesión"
+          helperText="Se asigna a tubos de lab clínico (no aplica a microbiología)"
         />
         <BarcodeScanInput
-          label="Escanear código del tubo"
+          label="Escanear código LAB-…"
           onScan={handleScan}
           disabled={procesando}
           sx={{ mt: 1 }}
@@ -155,23 +185,50 @@ const RecepcionMuestrasPage: React.FC = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Código</TableCell>
+                  <TableCell>Tipo</TableCell>
                   <TableCell>Paciente</TableCell>
-                  <TableCell>Orden</TableCell>
+                  <TableCell>Orden / Pedido</TableCell>
                   <TableCell>Estado</TableCell>
-                  <TableCell>Orden completa</TableCell>
+                  <TableCell>Completa</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {historial.map((h) => (
-                  <TableRow key={h.codigo}>
+                  <TableRow key={`${h.tipo}-${h.codigo}`}>
                     <TableCell>{h.codigo}</TableCell>
-                    <TableCell>{h.muestra.paciente_nombre || '—'}</TableCell>
-                    <TableCell>{h.muestra.solicitud_numero || h.muestra.solicitud}</TableCell>
                     <TableCell>
-                      <MuestraEstadoBadge estado={h.muestra.estado} />
+                      {h.tipo === 'micro' ? (
+                        <Chip size="small" label="Microbiología" color="secondary" variant="outlined" />
+                      ) : (
+                        <Chip size="small" label="Lab. Clínico" color="primary" variant="outlined" />
+                      )}
                     </TableCell>
                     <TableCell>
-                      {h.extraccionCompleta ? (
+                      {h.tipo === 'micro'
+                        ? h.estudio?.paciente_nombre || '—'
+                        : h.muestra?.paciente_nombre || '—'}
+                    </TableCell>
+                    <TableCell>
+                      {h.tipo === 'micro' && h.estudio ? (
+                        <Link
+                          component={RouterLink}
+                          to={`/laboratorio/microbiologia/estudios/${h.estudio.id}`}
+                        >
+                          {h.estudio.numero || `#${h.estudio.id}`}
+                        </Link>
+                      ) : (
+                        h.muestra?.solicitud_numero || h.muestra?.solicitud
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {h.tipo === 'micro' && h.estudio ? (
+                        <EstudioMicrobiologiaEstadoBadge estado={h.estudio.estado} />
+                      ) : h.muestra ? (
+                        <MuestraEstadoBadge estado={h.muestra.estado} />
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      {h.tipo === 'micro' || h.extraccionCompleta ? (
                         <Chip size="small" color="success" label="Completa" />
                       ) : (
                         <Chip

@@ -82,7 +82,7 @@ class TestMuestraModeloYServicio:
             view="test",
         )
         assert m.codigo_barra
-        assert m.codigo_barra.startswith("MUE-")
+        assert m.codigo_barra.startswith(f"{base['sol'].numero}-")
         assert m.estado == "PENDIENTE_TOMA"
         assert m.paciente_id == base["sol"].paciente_id
         assert EventoMuestra.objects.filter(muestra=m, accion="CREADA").exists()
