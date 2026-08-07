@@ -10,6 +10,7 @@ from django.utils import timezone
 from laboratorio.models import SolicitudExamen
 
 _SALT = "lims-informe-entrega-v1"
+_SALT_MICRO = "lims-micro-informe-entrega-v1"
 _MAX_AGE_SECONDS = 72 * 3600  # 72 h
 _TOKEN_VIDA = timedelta(hours=72)
 
@@ -88,3 +89,38 @@ def construir_url_entrega_informe(base_url: str, solicitud: SolicitudExamen) -> 
         solicitud, renovar=True
     )
     return f"{base}{ruta_informe_entrega()}?t={token}"
+
+
+# --- Entrega pública informe microbiológico (token firmado por estudio) ---
+
+
+def crear_token_entrega_informe_micro(estudio_id: int) -> str:
+    return signing.dumps(
+        {"mid": int(estudio_id), "v": 1},
+        salt=_SALT_MICRO,
+        compress=True,
+    )
+
+
+def verificar_token_entrega_informe_micro(token: str) -> int:
+    token = (token or "").strip()
+    if not token:
+        raise InformeEntregaTokenError("Enlace de informe inválido.")
+    try:
+        data = signing.loads(token, salt=_SALT_MICRO, max_age=_MAX_AGE_SECONDS)
+    except signing.BadSignature as exc:
+        raise InformeEntregaTokenError("Enlace de informe inválido o expirado.") from exc
+    mid = data.get("mid")
+    if not mid:
+        raise InformeEntregaTokenError("Enlace de informe inválido.")
+    return int(mid)
+
+
+def ruta_informe_entrega_micro() -> str:
+    return "/api/lab/microbiologia/estudios/informe-entrega/"
+
+
+def construir_url_entrega_informe_micro(base_url: str, estudio_id: int) -> str:
+    base = (base_url or "").rstrip("/")
+    token = crear_token_entrega_informe_micro(estudio_id)
+    return f"{base}{ruta_informe_entrega_micro()}?t={token}"

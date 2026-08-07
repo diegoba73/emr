@@ -18,10 +18,12 @@ import type { EstudioMicrobiologia, InformeMicrobiologia } from '../../../types/
 import {
   anularInformeMicrobiologia,
   createInformeMicrobiologia,
+  downloadInformeMicroPdf,
   emitirInformeMicrobiologia,
   updateInformeMicrobiologia,
   validarInformeMicrobiologia,
 } from '../../../services/limsApi';
+import EnviarInformeMicroDialog from '../EnviarInformeMicroDialog';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { InformeMicrobiologiaEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
@@ -31,18 +33,26 @@ export interface InformesMicrobiologiaPanelProps {
   informes: InformeMicrobiologia[];
   canOperate: boolean;
   canValidar: boolean;
+  canDownloadPdf?: boolean;
+  canEnviar?: boolean;
   onRefresh: () => void;
 }
+
+const ESTADOS_PDF = new Set(['EMITIDO', 'VALIDADO']);
 
 const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   estudio,
   informes,
   canOperate,
   canValidar,
+  canDownloadPdf = false,
+  canEnviar = false,
   onRefresh,
 }) => {
   const [textoNuevo, setTextoNuevo] = useState('');
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [downloading, setDownloading] = useState(false);
+  const [enviarOpen, setEnviarOpen] = useState(false);
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
 
   useEffect(() => {
@@ -54,6 +64,8 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   }, [informes]);
 
   const finalVigente = informes.find((i) => i.tipo === 'FINAL' && i.estado !== 'ANULADO');
+  const finalEntregable =
+    finalVigente && ESTADOS_PDF.has(finalVigente.estado) ? finalVigente : null;
   const faltaFinal = !finalVigente && estudio.estado !== 'CANCELADO';
 
   const crear = async (tipo: 'PRELIMINAR' | 'FINAL') => {
@@ -121,12 +133,42 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
     });
   };
 
+  const descargarPdf = async () => {
+    setDownloading(true);
+    try {
+      await downloadInformeMicroPdf(estudio.id);
+      toast.success('PDF descargado');
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsDescargarInforme));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <Box>
       {faltaFinal && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           No hay informe final vigente. Se requiere informe final validado para marcar el estudio como informado.
         </Alert>
+      )}
+      {finalEntregable && (canDownloadPdf || canEnviar) && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+          {canDownloadPdf && (
+            <Button
+              variant="outlined"
+              onClick={descargarPdf}
+              disabled={downloading}
+            >
+              {downloading ? 'Descargando…' : 'Descargar PDF'}
+            </Button>
+          )}
+          {canEnviar && (
+            <Button variant="contained" onClick={() => setEnviarOpen(true)}>
+              Enviar informe
+            </Button>
+          )}
+        </Box>
       )}
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
         <Table size="small">
@@ -217,6 +259,12 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
         </Paper>
       )}
       <MotivoDialog {...dialogProps} />
+      <EnviarInformeMicroDialog
+        open={enviarOpen}
+        estudio={estudio}
+        onClose={() => setEnviarOpen(false)}
+        onSuccess={onRefresh}
+      />
     </Box>
   );
 };

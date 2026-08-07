@@ -839,8 +839,15 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             "imprimir_etiquetas",
             "imprimir_etiquetas_batch",
             "recibir_por_codigo",
+            "enviar_informe",
         ):
             return role in ROLES_LIMS_WRITE
+        if action == "informe_pdf":
+            # Operadores + médico (object permission filtra vínculo).
+            return role in (*ROLES_LIMS_WRITE, "medico")
+        if action == "informe_entrega":
+            # Público con token; el método no exige auth.
+            return True
         if action == "destroy":
             return False
         return False
@@ -857,7 +864,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             return True
         if role == "medico":
             action = getattr(view, "action", None)
-            if action not in ("retrieve", "list", "por_codigo"):
+            if action not in ("retrieve", "list", "por_codigo", "informe_pdf"):
                 return False
 
             # Pedido directo (sin solicitud LIMS): el médico solicitante puede verlo.

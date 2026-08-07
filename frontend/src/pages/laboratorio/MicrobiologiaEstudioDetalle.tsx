@@ -24,6 +24,8 @@ import { downloadEtiquetasEstudioMicro } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessMicrobiologiaLectura,
+  canDownloadInformeMicroPdf,
+  canEnviarInformeMicro,
   canMarcarMicroEstudioInformado,
   canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
@@ -294,6 +296,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           antibiogramas={bundle.antibiogramas}
           resultados={bundle.resultados}
           antibioticos={bundle.antibioticos}
+          microorganismos={bundle.microorganismos}
           canOperate={canOpEstudio}
           onRefresh={loadAll}
         />
@@ -304,6 +307,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           informes={bundle.informes}
           canOperate={canOpEstudio}
           canValidar={canVal}
+          canDownloadPdf={canDownloadInformeMicroPdf(currentUser)}
+          canEnviar={canEnviarInformeMicro(currentUser)}
           onRefresh={loadAll}
         />
       )}

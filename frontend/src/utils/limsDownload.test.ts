@@ -4,12 +4,20 @@ import {
   assertValidSolicitudId,
   formatLimsPdfDownloadError,
   informeLimsPdfFilename,
+  informeMicroPdfFilename,
 } from './limsDownload';
 
 describe('informeLimsPdfFilename', () => {
   it('genera filename seguro sin PHI', () => {
     expect(informeLimsPdfFilename(42)).toBe('informe-lims-solicitud-42.pdf');
     expect(informeLimsPdfFilename(42)).not.toMatch(/paciente|dni|barra/i);
+  });
+});
+
+describe('informeMicroPdfFilename', () => {
+  it('genera filename seguro sin PHI', () => {
+    expect(informeMicroPdfFilename(7)).toBe('informe-micro-7.pdf');
+    expect(informeMicroPdfFilename(7)).not.toMatch(/paciente|dni|barra/i);
   });
 });
 

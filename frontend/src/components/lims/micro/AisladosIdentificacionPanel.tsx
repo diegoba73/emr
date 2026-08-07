@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
@@ -13,10 +16,16 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
-import type { AisladoMicrobiologico, IdentificacionMicroorganismo, LecturaCultivo, Microorganismo } from '../../../types/lims';
+import type {
+  AisladoMicrobiologico,
+  IdentificacionMicroorganismo,
+  LecturaCultivo,
+  Microorganismo,
+} from '../../../types/lims';
 import {
   createAisladoMicrobiologico,
   createIdentificacionMicroorganismo,
@@ -36,6 +45,23 @@ export interface AisladosIdentificacionPanelProps {
   onRefresh: () => void;
 }
 
+function labelMicroorganismo(m: Microorganismo): string {
+  const code = (m.codigo || '').trim();
+  const name = (m.nombre || '').trim();
+  if (code && name) return `${code} — ${name}`;
+  return name || code || `Micro #${m.id}`;
+}
+
+function microMatchesQuery(m: Microorganismo, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [m.codigo, m.nombre, m.genero, m.especie, m.grupo]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
 const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = ({
   estudioId,
   lecturas,
@@ -46,49 +72,76 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
   onRefresh,
 }) => {
   const [lecturaId, setLecturaId] = useState<number | ''>('');
-  const [microId, setMicroId] = useState<number | ''>('');
-  const [aisladoIdIdent, setAisladoIdIdent] = useState<number | ''>('');
-  const [microIdIdent, setMicroIdIdent] = useState<number | ''>('');
+  const [microSeleccionado, setMicroSeleccionado] = useState<Microorganismo | null>(null);
+  const [metodo, setMetodo] = useState('');
+  const [requiereAb, setRequiereAb] = useState(true);
+  const [saving, setSaving] = useState(false);
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
 
-  const crearAislado = async () => {
+  const microsActivos = useMemo(
+    () => microorganismos.filter((m) => m.activo !== false),
+    [microorganismos],
+  );
+
+  const microById = useMemo(() => {
+    const map = new Map<number, Microorganismo>();
+    for (const m of microorganismos) map.set(m.id, m);
+    return map;
+  }, [microorganismos]);
+
+  const identPorAislado = useMemo(() => {
+    const map = new Map<number, IdentificacionMicroorganismo>();
+    const ordered = [...identificaciones].sort((a, b) => {
+      const ta = a.fecha || a.created_at || '';
+      const tb = b.fecha || b.created_at || '';
+      return tb.localeCompare(ta);
+    });
+    for (const i of ordered) {
+      if (!map.has(i.aislado)) map.set(i.aislado, i);
+    }
+    return map;
+  }, [identificaciones]);
+
+  const nombreMicroDeAislado = (a: AisladoMicrobiologico): string => {
+    const ident = identPorAislado.get(a.id);
+    const microId = ident?.microorganismo ?? a.microorganismo ?? null;
+    if (!microId) return '—';
+    const m = microById.get(microId);
+    return m ? labelMicroorganismo(m) : String(microId);
+  };
+
+  const registrar = async () => {
     if (lecturaId === '') {
       toast.error('Seleccione lectura de origen');
       return;
     }
+    if (!microSeleccionado) {
+      toast.error('Seleccione el microorganismo identificado');
+      return;
+    }
+    setSaving(true);
     try {
-      await createAisladoMicrobiologico({
+      const aislado = await createAisladoMicrobiologico({
         estudio_id: estudioId,
         lectura_id: Number(lecturaId),
-        microorganismo_id: microId === '' ? null : Number(microId),
-        requiere_antibiograma: true,
+        microorganismo_id: microSeleccionado.id,
+        requiere_antibiograma: requiereAb,
       });
-      toast.success('Aislado creado');
+      await createIdentificacionMicroorganismo({
+        aislado_id: aislado.id,
+        microorganismo_id: microSeleccionado.id,
+        metodo: metodo.trim() || undefined,
+      });
+      toast.success('Aislado e identificación registrados');
+      setLecturaId('');
+      setMicroSeleccionado(null);
+      setMetodo('');
+      setRequiereAb(true);
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarAislado));
-    }
-  };
-
-  const identificar = async () => {
-    if (aisladoIdIdent === '' || microIdIdent === '') {
-      toast.error('Aislado y microorganismo requeridos');
-      return;
-    }
-    const a = aislados.find((x) => x.id === Number(aisladoIdIdent));
-    if (a?.estado === 'DESCARTADO') {
-      toast.error('No se puede identificar un aislado descartado');
-      return;
-    }
-    try {
-      await createIdentificacionMicroorganismo({
-        aislado_id: Number(aisladoIdIdent),
-        microorganismo_id: Number(microIdIdent),
-      });
-      toast.success('Identificación registrada');
-      onRefresh();
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarIdentificacion));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -113,154 +166,137 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
 
   return (
     <Box>
-      <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+      <Typography variant="subtitle1" gutterBottom>
+        Aislados e identificación
+      </Typography>
+
+      {canOperate && (
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Nuevo aislado e identificación
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Lectura</InputLabel>
+              <Select
+                label="Lectura"
+                value={lecturaId === '' ? '' : String(lecturaId)}
+                onChange={(e) => setLecturaId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                <MenuItem value="">—</MenuItem>
+                {lecturas.map((l) => (
+                  <MenuItem key={l.id} value={l.id}>
+                    #{l.id} · {l.crecimiento || '—'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Autocomplete
+              size="small"
+              sx={{ minWidth: 280, flex: '1 1 240px' }}
+              options={microsActivos}
+              value={microSeleccionado}
+              onChange={(_e, value) => setMicroSeleccionado(value)}
+              getOptionLabel={(m) => labelMicroorganismo(m)}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              filterOptions={(options, state) =>
+                options.filter((m) => microMatchesQuery(m, state.inputValue))
+              }
+              noOptionsText="Sin coincidencias"
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Microorganismo *"
+                  placeholder="Buscar por código o nombre"
+                />
+              )}
+            />
+
+            <TextField
+              size="small"
+              label="Método (opc.)"
+              value={metodo}
+              onChange={(e) => setMetodo(e.target.value)}
+              sx={{ minWidth: 140 }}
+            />
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={requiereAb}
+                  onChange={(e) => setRequiereAb(e.target.checked)}
+                />
+              }
+              label="Requiere AB"
+            />
+
+            <Button
+              variant="contained"
+              onClick={registrar}
+              disabled={saving || lecturas.length === 0}
+            >
+              Registrar
+            </Button>
+          </Box>
+          {lecturas.length === 0 && (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+              Primero registrá al menos una lectura de cultivo.
+            </Typography>
+          )}
+        </Paper>
+      )}
+
+      <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>ID</TableCell>
               <TableCell>Lectura</TableCell>
               <TableCell>Estado</TableCell>
+              <TableCell>Microorganismo</TableCell>
+              <TableCell>Método</TableCell>
               <TableCell>Significancia</TableCell>
               <TableCell>AB</TableCell>
               <TableCell />
             </TableRow>
           </TableHead>
           <TableBody>
-            {aislados.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell>{a.id}</TableCell>
-                <TableCell>{a.lectura_origen}</TableCell>
-                <TableCell>
-                  <AisladoEstadoBadge estado={a.estado} />
-                </TableCell>
-                <TableCell>{a.significancia}</TableCell>
-                <TableCell>{a.requiere_antibiograma ? 'Sí' : 'No'}</TableCell>
-                <TableCell>
-                  {canOperate && a.estado !== 'DESCARTADO' && (
-                    <Button size="small" color="error" onClick={() => descartar(a.id)}>
-                      Descartar
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        Identificaciones
-      </Typography>
-      <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Aislado</TableCell>
-              <TableCell>Microorganismo</TableCell>
-              <TableCell>Método</TableCell>
-              <TableCell>Fecha</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {identificaciones.length === 0 ? (
+            {aislados.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>
-                  <Typography color="text.secondary">Sin identificaciones.</Typography>
+                <TableCell colSpan={8}>
+                  <Typography color="text.secondary">Sin aislados.</Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              identificaciones.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell>{i.aislado}</TableCell>
-                  <TableCell>
-                    {microorganismos.find((m) => m.id === i.microorganismo)?.nombre || i.microorganismo}
-                  </TableCell>
-                  <TableCell>{i.metodo || '—'}</TableCell>
-                  <TableCell>{i.fecha ? new Date(i.fecha).toLocaleString() : '—'}</TableCell>
-                </TableRow>
-              ))
+              aislados.map((a) => {
+                const ident = identPorAislado.get(a.id);
+                return (
+                  <TableRow key={a.id}>
+                    <TableCell>{a.id}</TableCell>
+                    <TableCell>{a.lectura_origen}</TableCell>
+                    <TableCell>
+                      <AisladoEstadoBadge estado={a.estado} />
+                    </TableCell>
+                    <TableCell>{nombreMicroDeAislado(a)}</TableCell>
+                    <TableCell>{ident?.metodo || '—'}</TableCell>
+                    <TableCell>{a.significancia}</TableCell>
+                    <TableCell>{a.requiere_antibiograma ? 'Sí' : 'No'}</TableCell>
+                    <TableCell>
+                      {canOperate && a.estado !== 'DESCARTADO' && (
+                        <Button size="small" color="error" onClick={() => descartar(a.id)}>
+                          Descartar
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
       </TableContainer>
 
-      {canOperate && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Nuevo aislado
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Lectura</InputLabel>
-              <Select label="Lectura" value={lecturaId === '' ? '' : String(lecturaId)} onChange={(e) => setLecturaId(e.target.value === '' ? '' : Number(e.target.value))}>
-                <MenuItem value="">—</MenuItem>
-                {lecturas.map((l) => (
-                  <MenuItem key={l.id} value={l.id}>
-                    #{l.id}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Micro (opc.)</InputLabel>
-              <Select label="Micro (opc.)" value={microId === '' ? '' : String(microId)} onChange={(e) => setMicroId(e.target.value === '' ? '' : Number(e.target.value))}>
-                <MenuItem value="">—</MenuItem>
-                {microorganismos.filter((m) => m.activo !== false).map((m) => (
-                  <MenuItem key={m.id} value={m.id}>
-                    {m.codigo}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button variant="contained" onClick={crearAislado}>
-              Crear aislado
-            </Button>
-          </Box>
-        </Paper>
-      )}
-
-      {canOperate && (
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Nueva identificación
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Aislado</InputLabel>
-              <Select
-                label="Aislado"
-                value={aisladoIdIdent === '' ? '' : String(aisladoIdIdent)}
-                onChange={(e) => setAisladoIdIdent(e.target.value === '' ? '' : Number(e.target.value))}
-              >
-                <MenuItem value="">—</MenuItem>
-                {aislados.filter((a) => a.estado !== 'DESCARTADO').map((a) => (
-                  <MenuItem key={a.id} value={a.id}>
-                    #{a.id} ({a.estado})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Microorganismo</InputLabel>
-              <Select
-                label="Microorganismo"
-                value={microIdIdent === '' ? '' : String(microIdIdent)}
-                onChange={(e) => setMicroIdIdent(e.target.value === '' ? '' : Number(e.target.value))}
-              >
-                <MenuItem value="">—</MenuItem>
-                {microorganismos.filter((m) => m.activo !== false).map((m) => (
-                  <MenuItem key={m.id} value={m.id}>
-                    {m.codigo} — {m.nombre}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button variant="contained" onClick={identificar}>
-              Identificar
-            </Button>
-          </Box>
-        </Paper>
-      )}
       <MotivoDialog {...dialogProps} />
     </Box>
   );

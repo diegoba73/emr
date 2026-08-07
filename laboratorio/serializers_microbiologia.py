@@ -95,7 +95,11 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
 
     paciente_nombre = serializers.SerializerMethodField()
     paciente_dni = serializers.SerializerMethodField()
+    paciente_email = serializers.SerializerMethodField()
+    paciente_telefono = serializers.SerializerMethodField()
     medico_display = serializers.SerializerMethodField()
+    medico_email = serializers.SerializerMethodField()
+    medico_telefono = serializers.SerializerMethodField()
     solicitud_numero = serializers.SerializerMethodField()
     muestra_codigo_barra = serializers.SerializerMethodField()
     muestra_tipo_nombre = serializers.SerializerMethodField()
@@ -119,9 +123,13 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "paciente",
             "paciente_nombre",
             "paciente_dni",
+            "paciente_email",
+            "paciente_telefono",
             "medico_interno",
             "medico_externo_nombre",
             "medico_display",
+            "medico_email",
+            "medico_telefono",
             "consulta_hc",
             "origen_solicitud",
             "origen_solicitud_display",
@@ -158,6 +166,14 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         p = getattr(obj, "paciente", None)
         return getattr(p, "dni", None) if p else None
 
+    def get_paciente_email(self, obj):
+        p = getattr(obj, "paciente", None)
+        return (getattr(p, "email", None) or "").strip() or None if p else None
+
+    def get_paciente_telefono(self, obj):
+        p = getattr(obj, "paciente", None)
+        return (getattr(p, "telefono", None) or "").strip() or None if p else None
+
     def get_medico_display(self, obj):
         mi = getattr(obj, "medico_interno", None)
         if mi:
@@ -176,6 +192,18 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             label = ", ".join(x for x in parts if x).strip(", ")
             return f"Dr. {label}" if label else str(mi)
         return (getattr(sol, "medico_externo_nombre", None) or "").strip() or None
+
+    def get_medico_email(self, obj):
+        mi = getattr(obj, "medico_interno", None)
+        if not mi:
+            return None
+        return (getattr(mi, "email", None) or "").strip() or None
+
+    def get_medico_telefono(self, obj):
+        mi = getattr(obj, "medico_interno", None)
+        if not mi:
+            return None
+        return (getattr(mi, "telefono", None) or "").strip() or None
 
     def get_solicitud_numero(self, obj):
         sol = getattr(obj, "solicitud", None)

@@ -125,6 +125,7 @@ export const CLINICAL_ACTION_ERRORS = {
   limsActualizarOrden: 'No se pudo actualizar la orden. Intentá nuevamente.',
   limsEnviarInforme:
     'No se pudo enviar el informe. Verificá SMTP o intentá solo WhatsApp / descarga manual del PDF.',
+  limsDescargarInforme: 'No se pudo descargar el informe PDF. Intentá nuevamente.',
   limsCargarOrdenes: 'No se pudieron cargar las órdenes. Intentá nuevamente.',
   limsCargarCatalogo: 'No se pudo cargar el catálogo. Intentá nuevamente.',
   limsGuardarCatalogo: 'No se pudo guardar en el catálogo. Intentá nuevamente.',

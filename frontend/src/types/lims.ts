@@ -395,9 +395,13 @@ export interface EstudioMicrobiologia {
   paciente: number;
   paciente_nombre?: string | null;
   paciente_dni?: string | null;
+  paciente_email?: string | null;
+  paciente_telefono?: string | null;
   medico_interno?: number | null;
   medico_externo_nombre?: string;
   medico_display?: string | null;
+  medico_email?: string | null;
+  medico_telefono?: string | null;
   consulta_hc?: number | null;
   origen_solicitud?: string;
   origen_solicitud_display?: string | null;
@@ -421,6 +425,10 @@ export interface EstudioMicrobiologia {
   motivo_cancelacion?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface EnviarInformeMicroResponse extends EstudioMicrobiologia {
+  envio?: EnvioInformeLimsResultado;
 }
 
 export interface SiembraMicrobiologia {

@@ -148,7 +148,9 @@ class Command(BaseCommand):
                         "GOT", "GPT", "NA_U", "K_U", "CL_U", "CREA_U", "DIUR",
                         "CLEAR_CREA", "MICROALB", "AU", "P", "PROT_T", "VSG",
                         "PCR_US", "AMIL", "LIP", "CPK", "CPK_MB", "DDIM", "B12",
-                        "VITD", "PSA", "CA_ION", "EAB_ART", "EAB_VEN", "LACT",
+                        "VITD", "PSA", "CA_ION", "LACT",
+                        "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
+                        "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
                         "TROP_I", "TROP_US", "PROBNP", "PROT_U_24", "PROT_U_AZ",
                     }
                 ):

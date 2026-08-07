@@ -429,3 +429,290 @@ def enviar_informe_solicitud(
         )
 
     return resultado
+
+
+def _medico_contacto_estudio(estudio) -> tuple[str | None, str | None, str | None]:
+    medico = getattr(estudio, "medico_interno", None)
+    if not medico:
+        return None, None, None
+    nombre = getattr(medico, "nombre_completo", None) or str(medico)
+    email = (getattr(medico, "email", None) or "").strip() or None
+    telefono = (getattr(medico, "telefono", None) or "").strip() or None
+    return nombre, email, telefono
+
+
+def _enviar_email_pdf_micro(
+    *,
+    destino: str,
+    estudio,
+    pdf_bytes: bytes,
+    filename: str,
+    enlace_descarga: str | None,
+    destinatario_label: str,
+) -> None:
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@localhost"
+    numero = estudio.numero or f"#{estudio.pk}"
+    asunto = f"Informe de microbiología — {numero}"
+    cuerpo = f"Adjuntamos el informe PDF de microbiología del estudio {numero}"
+    if destinatario_label == "medico" and estudio.paciente_id:
+        nombre_pac = getattr(estudio.paciente, "nombre_completo", "") or ""
+        if nombre_pac:
+            cuerpo += f" (paciente {nombre_pac})"
+    cuerpo += ".\n\n"
+    if enlace_descarga:
+        cuerpo += f"También puede descargarlo desde: {enlace_descarga}\n\n"
+    cuerpo += "Mensaje generado por el sistema de laboratorio."
+    msg = EmailMessage(
+        subject=asunto,
+        body=cuerpo,
+        from_email=from_email,
+        to=[destino],
+    )
+    msg.attach(filename, pdf_bytes, "application/pdf")
+    try:
+        msg.send(fail_silently=False)
+    except (TimeoutError, socket.timeout) as exc:
+        logger.exception("Timeout enviando email informe micro")
+        raise EnvioInformeError(
+            "El servidor de correo no respondió a tiempo. Verifique la configuración SMTP "
+            "y la conexión de red (puerto 587)."
+        ) from exc
+    except OSError as exc:
+        if "timed out" in str(exc).lower():
+            raise EnvioInformeError(
+                "El servidor de correo no respondió a tiempo. Verifique la configuración SMTP "
+                "y la conexión de red (puerto 587)."
+            ) from exc
+        raise EnvioInformeError(
+            "No se pudo conectar al servidor de correo. Verifique SMTP y red."
+        ) from exc
+    except Exception as exc:
+        logger.exception("Error enviando email informe micro")
+        raise EnvioInformeError(
+            "No se pudo enviar el correo. Verifique la configuración SMTP del servidor."
+        ) from exc
+
+
+def _mensaje_whatsapp_paciente_micro(estudio, enlace_descarga: str | None) -> str:
+    numero = estudio.numero or f"#{estudio.pk}"
+    texto = (
+        f"Hola, le informamos que el informe de microbiología de su estudio {numero} "
+        f"ya está disponible."
+    )
+    if enlace_descarga:
+        texto += f" Descargue su informe PDF aquí: {enlace_descarga}"
+    else:
+        texto += " Puede solicitarlo en la institución."
+    return texto + " Saludos."
+
+
+def _mensaje_whatsapp_medico_micro(estudio, enlace_descarga: str | None) -> str:
+    numero = estudio.numero or f"#{estudio.pk}"
+    paciente_nombre = ""
+    if estudio.paciente_id:
+        paciente_nombre = getattr(estudio.paciente, "nombre_completo", "") or ""
+    texto = f"Informe de microbiología {numero}"
+    if paciente_nombre:
+        texto += f" (paciente {paciente_nombre})"
+    texto += " disponible."
+    if enlace_descarga:
+        texto += f" PDF: {enlace_descarga}"
+    return texto
+
+
+def enviar_informe_estudio_micro(
+    estudio,
+    *,
+    enviar_email: bool = False,
+    enviar_whatsapp: bool = False,
+    enviar_email_medico: bool = False,
+    enviar_whatsapp_medico: bool = False,
+    actor: AbstractUser | None,
+    view: str,
+    public_base_url: str | None = None,
+) -> ResultadoEnvioInforme:
+    """Envía el PDF del informe FINAL micro (EMITIDO/VALIDADO) por email y/o WhatsApp."""
+    from laboratorio.informe_entrega_token import construir_url_entrega_informe_micro
+    from laboratorio.services_informes_micro_pdf import (
+        InformeMicroPdfError,
+        assert_estudio_puede_generar_pdf,
+        generar_informe_micro_pdf_bytes,
+        nombre_archivo_pdf_micro,
+    )
+
+    try:
+        assert_estudio_puede_generar_pdf(estudio)
+    except InformeMicroPdfError as exc:
+        raise EnvioInformeError(str(exc)) from exc
+
+    if not (
+        enviar_email
+        or enviar_whatsapp
+        or enviar_email_medico
+        or enviar_whatsapp_medico
+    ):
+        raise EnvioInformeError(
+            "Indique al menos un canal: email o whatsapp (paciente y/o médico)."
+        )
+
+    paciente = estudio.paciente
+    if paciente is None:
+        raise EnvioInformeError("El estudio no tiene paciente asociado.")
+
+    pdf_bytes = generar_informe_micro_pdf_bytes(estudio)
+    filename = nombre_archivo_pdf_micro(estudio.pk)
+    resultado = ResultadoEnvioInforme()
+
+    base_url = resolver_base_url_publica(public_base_url=public_base_url)
+    if base_url:
+        enlace_descarga = construir_url_entrega_informe_micro(base_url, estudio.pk)
+    else:
+        enlace_descarga = None
+    resultado.informe_enlace_descarga = enlace_descarga
+
+    if not base_url:
+        resultado.advertencias.append(
+            "PUBLIC_API_BASE_URL no configurada: WhatsApp no podrá adjuntar el PDF "
+            "automáticamente (solo enlace en el mensaje si aplica)."
+        )
+
+    medico_nombre, medico_email, medico_tel_raw = _medico_contacto_estudio(estudio)
+
+    if enviar_email:
+        destino = (paciente.email or "").strip()
+        if not destino:
+            resultado.advertencias.append("El paciente no tiene email registrado.")
+        else:
+            _enviar_email_pdf_micro(
+                destino=destino,
+                estudio=estudio,
+                pdf_bytes=pdf_bytes,
+                filename=filename,
+                enlace_descarga=enlace_descarga,
+                destinatario_label="paciente",
+            )
+            resultado.email_enviado = True
+            resultado.email_destinos.append(destino)
+            resultado.email_adjunto_pdf = True
+
+    if enviar_email_medico:
+        if not estudio.medico_interno_id:
+            resultado.advertencias.append(
+                "El estudio no tiene médico interno: no se puede enviar al solicitante."
+            )
+        elif not medico_email:
+            resultado.advertencias.append(
+                "El médico solicitante no tiene email registrado "
+                f"({medico_nombre or 'sin nombre'})."
+            )
+        else:
+            _enviar_email_pdf_micro(
+                destino=medico_email,
+                estudio=estudio,
+                pdf_bytes=pdf_bytes,
+                filename=filename,
+                enlace_descarga=enlace_descarga,
+                destinatario_label="medico",
+            )
+            resultado.email_enviado = True
+            resultado.email_destinos.append(medico_email)
+            resultado.email_adjunto_pdf = True
+
+    if resultado.email_destinos:
+        resultado.email_destino = ", ".join(resultado.email_destinos)
+
+    def _enviar_wa(
+        *,
+        telefono_raw: str | None,
+        mensaje: str,
+        rol: str,
+        sin_tel_msg: str,
+    ) -> None:
+        telefono = _normalize_whatsapp_phone(telefono_raw)
+        if not telefono:
+            resultado.advertencias.append(sin_tel_msg)
+            return
+        media_url = enlace_descarga if enlace_descarga else None
+        enviado_api, error_api = _intentar_twilio_whatsapp(
+            telefono,
+            mensaje,
+            media_url=media_url,
+        )
+        enlace = _enlace_whatsapp_web(telefono, mensaje)
+        resultado.whatsapp_enlaces.append(
+            {"rol": rol, "telefono": telefono, "enlace": enlace}
+        )
+        if not resultado.whatsapp_telefono:
+            resultado.whatsapp_telefono = telefono
+        if not resultado.whatsapp_enlace:
+            resultado.whatsapp_enlace = enlace
+
+        if enviado_api:
+            resultado.whatsapp_enviado = True
+            resultado.whatsapp_pdf_adjunto = bool(media_url) or resultado.whatsapp_pdf_adjunto
+            if not media_url:
+                resultado.advertencias.append(
+                    f"WhatsApp ({rol}) enviado solo como texto (sin URL pública para el PDF)."
+                )
+        else:
+            if error_api and error_api not in resultado.advertencias:
+                resultado.advertencias.append(error_api)
+            resultado.advertencias.append(
+                f"Abra el enlace de WhatsApp ({rol}) y adjunte el PDF descargado manualmente, "
+                "o comparta el enlace de descarga del mensaje."
+            )
+
+    if enviar_whatsapp:
+        _enviar_wa(
+            telefono_raw=getattr(paciente, "telefono", None),
+            mensaje=_mensaje_whatsapp_paciente_micro(estudio, enlace_descarga),
+            rol="paciente",
+            sin_tel_msg="El paciente no tiene teléfono registrado para WhatsApp.",
+        )
+
+    if enviar_whatsapp_medico:
+        if not estudio.medico_interno_id:
+            resultado.advertencias.append(
+                "El estudio no tiene médico interno: no se puede enviar WhatsApp al solicitante."
+            )
+        else:
+            _enviar_wa(
+                telefono_raw=medico_tel_raw,
+                mensaje=_mensaje_whatsapp_medico_micro(estudio, enlace_descarga),
+                rol="medico",
+                sin_tel_msg=(
+                    "El médico solicitante no tiene teléfono registrado para WhatsApp "
+                    f"({medico_nombre or 'sin nombre'})."
+                ),
+            )
+
+    tiene_fallback_wa = bool(resultado.whatsapp_enlaces and enlace_descarga)
+    if (
+        not resultado.email_enviado
+        and not resultado.whatsapp_enviado
+        and not tiene_fallback_wa
+    ):
+        raise EnvioInformeError(
+            "No hay datos de contacto del paciente ni del médico para enviar el informe."
+        )
+
+    before = safe_model_snapshot(estudio)
+    log_update(
+        actor=actor,
+        entity=estudio,
+        before=before,
+        module="laboratorio",
+        metadata={
+            "accion": "enviar_informe_micro",
+            "view": view,
+            "email": resultado.email_enviado,
+            "email_adjunto_pdf": resultado.email_adjunto_pdf,
+            "email_destinos": resultado.email_destinos,
+            "whatsapp": resultado.whatsapp_enviado,
+            "whatsapp_pdf_adjunto": resultado.whatsapp_pdf_adjunto,
+            "whatsapp_roles": [e.get("rol") for e in resultado.whatsapp_enlaces],
+            "estudio_id": estudio.pk,
+            "numero_estudio": estudio.numero,
+        },
+    )
+    return resultado

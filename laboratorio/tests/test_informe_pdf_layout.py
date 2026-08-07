@@ -75,6 +75,15 @@ class TestInformePdfLayout(TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 800)
 
+    def test_firma_trazo_recorta_bloque_inferior(self):
+        from laboratorio.informe_pdf_config import LABORATORIO_STATIC
+        from laboratorio.informe_pdf_layout import _firma_trazo_reader
+
+        path = LABORATORIO_STATIC / "firma_1.png"
+        self.assertTrue(path.is_file())
+        reader = _firma_trazo_reader(str(path))
+        self.assertIsNotNone(reader)
+
     def test_valor_y_unidad_separados(self):
         valor, unidad = _valor_y_unidad(self.r_panel)
         self.assertEqual(valor, "82")

@@ -170,6 +170,16 @@ export function canValidarInformeMicro(user: User | null): boolean {
   return canValidarOrdenLims(user);
 }
 
+/** Descargar PDF de informe micro (operadores LIMS o médico con acceso de lectura). */
+export function canDownloadInformeMicroPdf(user: User | null): boolean {
+  return canAccessMicrobiologiaLectura(user);
+}
+
+/** Enviar informe micro por email/WhatsApp (solo operadores LIMS). */
+export function canEnviarInformeMicro(user: User | null): boolean {
+  return canOperateMicrobiologia(user);
+}
+
 /** Estados en los que no se admiten mutaciones técnicas (B3-frontend-validación-A). */
 export const ESTADOS_MICRO_CERRADOS = ['CANCELADO', 'VALIDADO', 'INFORMADO'] as const;
 

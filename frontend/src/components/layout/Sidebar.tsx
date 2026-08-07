@@ -116,17 +116,20 @@ const adminOnly: NavItem[] = [
 ];
 
 const labItems: NavItem[] = [
-  { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsPendientes },
-  { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsOrdenes },
   { text: 'Consulta muestra', icon: <BarcodeIcon />, path: '/laboratorio/muestras/consulta', canAccess: canAccessLimsModule },
+  { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsPendientes },
   { text: 'Recepción muestras', icon: <RecepcionIcon />, path: '/laboratorio/muestras/recepcion', canAccess: canOperateLims },
+  { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsOrdenes },
+  { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
+  { text: 'Inventario', icon: <InventarioIcon />, path: '/laboratorio/inventario', canAccess: canAccessLimsModule },
+  { text: 'Control calidad', icon: <QcIcon />, path: '/laboratorio/qc', canAccess: canAccessLimsModule },
+];
+
+const labCatalogItems: NavItem[] = [
   { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsCatalogos },
   { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsCatalogos },
   { text: 'Paneles', icon: <CatalogIcon />, path: '/laboratorio/catalogos/paneles', canAccess: canAccessLimsCatalogos },
-  { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
   { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', canAccess: canAccessMicrobiologia },
-  { text: 'Inventario', icon: <InventarioIcon />, path: '/laboratorio/inventario', canAccess: canAccessLimsModule },
-  { text: 'Control calidad', icon: <QcIcon />, path: '/laboratorio/qc', canAccess: canAccessLimsModule },
 ];
 
 const catalogItems: NavItem[] = [
@@ -165,11 +168,58 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
   const adminItems = filterByRole(adminOnly, currentUser);
   const catalogNav = filterByRole(catalogItems, currentUser);
   const labNav = isPacienteRole(currentUser) ? [] : filterByRole(labItems, currentUser);
+  const labCatalogNav = isPacienteRole(currentUser) ? [] : filterByRole(labCatalogItems, currentUser);
 
   const go = (path: string) => {
     navigate(path);
     onNavigate?.();
   };
+
+  const navButtonSx = {
+    mx: 0.5,
+    borderRadius: 2,
+    mb: 0.25,
+    '&.Mui-selected': {
+      backgroundColor: 'primary.main',
+      color: 'primary.contrastText',
+      '& .MuiListItemIcon-root': { color: 'inherit' },
+      '&:hover': { backgroundColor: 'primary.dark' },
+    },
+  } as const;
+
+  const isLabPathSelected = (item: NavItem) => {
+    const p = location.pathname;
+    if (p === item.path || p.startsWith(`${item.path}/`)) return true;
+    // Microbiología: estudios y detalle, sin marcar cuando estás en catálogos micro.
+    if (item.path === '/laboratorio/microbiologia/estudios') {
+      return (
+        p.startsWith('/laboratorio/microbiologia') &&
+        !p.startsWith('/laboratorio/microbiologia/catalogos')
+      );
+    }
+    return false;
+  };
+
+  const renderNavList = (items: NavItem[], selectedFn: (item: NavItem) => boolean) => (
+    <List sx={{ pt: 0.5, px: 0.5 }}>
+      {items.map((item) => {
+        const selected = selectedFn(item);
+        return (
+          <ListItem key={item.path} disablePadding>
+            <ListItemButton selected={selected} onClick={() => go(item.path)} sx={navButtonSx}>
+              <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.resolveLabel ? item.resolveLabel(currentUser) : item.text}
+                primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }}
+              />
+            </ListItemButton>
+          </ListItem>
+        );
+      })}
+    </List>
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -188,87 +238,23 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
         {isPacienteRole(currentUser) ? 'Mi portal' : 'Principal'}
       </Typography>
-      <List sx={{ pt: 0.5, px: 0.5 }}>
-        {primary.map((item) => {
-          const selected = location.pathname === item.path;
-          return (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                selected={selected}
-                onClick={() => go(item.path)}
-                sx={{
-                  mx: 0.5,
-                  borderRadius: 2,
-                  mb: 0.25,
-                  '&.Mui-selected': {
-                    backgroundColor: 'primary.main',
-                    color: 'primary.contrastText',
-                    '& .MuiListItemIcon-root': { color: 'inherit' },
-                    '&:hover': { backgroundColor: 'primary.dark' },
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>{item.icon}</ListItemIcon>
-                <ListItemText
-                  primary={item.resolveLabel ? item.resolveLabel(currentUser) : item.text}
-                  primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }}
-                />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
+      {renderNavList(primary, (item) => location.pathname === item.path)}
       {labNav.length > 0 && (
         <>
           <Divider sx={{ my: 1 }} />
           <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5 }}>
             Laboratorio (LIMS)
           </Typography>
-          <List sx={{ pt: 0.5, px: 0.5 }}>
-            {labNav.map((item) => {
-              const selected =
-                location.pathname === item.path ||
-                (item.path === '/laboratorio/pendientes' &&
-                  location.pathname.startsWith('/laboratorio/pendientes')) ||
-                (item.path === '/laboratorio/ordenes' && location.pathname.startsWith('/laboratorio/ordenes')) ||
-                (item.path === '/laboratorio/muestras/consulta' &&
-                  location.pathname.startsWith('/laboratorio/muestras/consulta')) ||
-                (item.path === '/laboratorio/muestras/recepcion' &&
-                  location.pathname.startsWith('/laboratorio/muestras/recepcion')) ||
-                (item.path === '/laboratorio/catalogos/examenes' &&
-                  location.pathname.startsWith('/laboratorio/catalogos/examenes')) ||
-                (item.path === '/laboratorio/catalogos/tipos-muestra' &&
-                  location.pathname.startsWith('/laboratorio/catalogos/tipos-muestra')) ||
-                (item.path === '/laboratorio/catalogos/paneles' &&
-                  location.pathname.startsWith('/laboratorio/catalogos/paneles')) ||
-                (item.path === '/laboratorio/microbiologia/estudios' &&
-                  location.pathname.startsWith('/laboratorio/microbiologia')) ||
-                (item.path === '/laboratorio/microbiologia/catalogos' &&
-                  location.pathname.startsWith('/laboratorio/microbiologia/catalogos'));
-              return (
-                <ListItem key={item.path} disablePadding>
-                  <ListItemButton
-                    selected={selected}
-                    onClick={() => go(item.path)}
-                    sx={{
-                      mx: 0.5,
-                      borderRadius: 2,
-                      mb: 0.25,
-                      '&.Mui-selected': {
-                        backgroundColor: 'primary.main',
-                        color: 'primary.contrastText',
-                        '& .MuiListItemIcon-root': { color: 'inherit' },
-                        '&:hover': { backgroundColor: 'primary.dark' },
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }} />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
+          {renderNavList(labNav, isLabPathSelected)}
+        </>
+      )}
+      {labCatalogNav.length > 0 && (
+        <>
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5 }}>
+            Catálogos LIMS
+          </Typography>
+          {renderNavList(labCatalogNav, isLabPathSelected)}
         </>
       )}
       {adminItems.length > 0 && (
@@ -296,8 +282,13 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
                       },
                     }}
                   >
-                    <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }} />
+                    <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 15 }}
+                    />
                   </ListItemButton>
                 </ListItem>
               );
@@ -309,25 +300,9 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
         <>
           <Divider sx={{ my: 1 }} />
           <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5 }}>
-            Catálogos
+            Catálogos clínicos
           </Typography>
-          <List sx={{ pt: 0.5, px: 0.5 }}>
-            {catalogNav.map((item) => {
-              const selected = location.pathname === item.path;
-              return (
-                <ListItem key={item.path} disablePadding>
-                  <ListItemButton
-                    selected={selected}
-                    onClick={() => go(item.path)}
-                    sx={{ mx: 0.5, borderRadius: 2, mb: 0.25 }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40, color: selected ? 'primary.main' : 'action.active' }}>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: selected ? 600 : 400, fontSize: 14 }} />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
+          {renderNavList(catalogNav, (item) => location.pathname === item.path)}
         </>
       )}
     </Box>

@@ -26,6 +26,8 @@ IACA_PRODUCTO_A_PANEL: dict[str, str] = {
     "PELLCR": "PAN_ELP",
     "LIPIE": "PAN_LIP",
     "CREAC24": "PAN_CLEAR",
+    "EABA": "PAN_EAB_ART",
+    "EABV": "PAN_EAB_VEN",
 }
 
 # Códigos IACA compuestos extra (perfiles sin panel papel 1:1): solo desactivar como

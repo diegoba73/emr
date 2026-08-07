@@ -12,6 +12,7 @@ from django.db.models import Q
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from api.permissions import (
@@ -585,6 +586,145 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             EstudioMicrobiologiaSerializer(estudio, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["get"], url_path="informe-pdf")
+    def informe_pdf(self, request, pk=None):
+        """Descarga PDF del informe FINAL emitido/validado (en memoria, sin /media/)."""
+        from django.http import HttpResponse
+
+        from laboratorio.services_informes_micro_pdf import (
+            InformeMicroPdfError,
+            auditar_descarga_informe_micro_pdf,
+            generar_informe_micro_pdf_bytes,
+            nombre_archivo_pdf_micro,
+        )
+
+        estudio = self.get_object()
+        try:
+            pdf_bytes = generar_informe_micro_pdf_bytes(estudio)
+        except InformeMicroPdfError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("Error generando informe PDF micro estudio pk=%s", pk)
+            return Response(
+                {"error": "No se pudo generar el informe PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        auditar_descarga_informe_micro_pdf(actor=request.user, estudio=estudio)
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="{nombre_archivo_pdf_micro(estudio.pk)}"'
+        )
+        return resp
+
+    @action(detail=True, methods=["post"], url_path="enviar-informe")
+    def enviar_informe(self, request, pk=None):
+        """Envía el PDF micro por email y/o WhatsApp (paciente / médico)."""
+        from laboratorio.serializers import EnviarInformeOrdenSerializer
+        from laboratorio.services_envio_informe import (
+            EnvioInformeError,
+            enviar_informe_estudio_micro,
+        )
+
+        ser = EnviarInformeOrdenSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        estudio = self.get_object()
+        try:
+            resultado = enviar_informe_estudio_micro(
+                estudio,
+                enviar_email=ser.validated_data.get("email", False),
+                enviar_whatsapp=ser.validated_data.get("whatsapp", False),
+                enviar_email_medico=ser.validated_data.get("email_medico", False),
+                enviar_whatsapp_medico=ser.validated_data.get("whatsapp_medico", False),
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.enviar_informe",
+                public_base_url=request.build_absolute_uri("/").rstrip("/"),
+            )
+        except EnvioInformeError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("Error enviando informe micro estudio pk=%s", pk)
+            return Response(
+                {"error": "Error al enviar el informe."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        data = EstudioMicrobiologiaSerializer(estudio, context={"request": request}).data
+        data["envio"] = {
+            "email_enviado": resultado.email_enviado,
+            "email_destino": resultado.email_destino,
+            "email_destinos": resultado.email_destinos,
+            "email_adjunto_pdf": resultado.email_adjunto_pdf,
+            "whatsapp_enviado": resultado.whatsapp_enviado,
+            "whatsapp_telefono": resultado.whatsapp_telefono,
+            "whatsapp_enlace": resultado.whatsapp_enlace,
+            "whatsapp_enlaces": resultado.whatsapp_enlaces,
+            "whatsapp_pdf_adjunto": resultado.whatsapp_pdf_adjunto,
+            "informe_enlace_descarga": resultado.informe_enlace_descarga,
+            "advertencias": resultado.advertencias or [],
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="informe-entrega",
+        permission_classes=[AllowAny],
+        authentication_classes=[],
+    )
+    def informe_entrega(self, request):
+        """Descarga pública del PDF micro con token firmado (WhatsApp / enlace)."""
+        from django.http import HttpResponse
+
+        from laboratorio.informe_entrega_token import (
+            InformeEntregaTokenError,
+            verificar_token_entrega_informe_micro,
+        )
+        from laboratorio.services_informes_micro_pdf import (
+            InformeMicroPdfError,
+            generar_informe_micro_pdf_bytes,
+            nombre_archivo_pdf_micro,
+        )
+
+        token = (request.query_params.get("t") or "").strip()
+        if not token:
+            return Response(
+                {"error": "Token de entrega requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            estudio_id = verificar_token_entrega_informe_micro(token)
+            estudio = EstudioMicrobiologia.objects.select_related("paciente").get(
+                pk=estudio_id
+            )
+        except InformeEntregaTokenError:
+            return Response(
+                {"error": "Enlace de informe inválido o expirado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except EstudioMicrobiologia.DoesNotExist:
+            return Response(
+                {"error": "Estudio no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            pdf_bytes = generar_informe_micro_pdf_bytes(estudio)
+        except InformeMicroPdfError:
+            return Response(
+                {"error": "El informe no está disponible."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception:
+            logger.exception("Error generando entrega pública PDF micro")
+            return Response(
+                {"error": "No se pudo generar el informe."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="{nombre_archivo_pdf_micro(estudio.pk)}"'
+        )
+        return resp
 
 
 class SiembraMicrobiologiaViewSet(viewsets.ModelViewSet):

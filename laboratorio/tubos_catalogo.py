@@ -73,8 +73,12 @@ _CITRATO_VSG = frozenset({"VSG"})
 
 # Gases / lactato / calcio iónico (sangre total heparina)
 # EAB arterial y venoso = jeringas distintas (no compartir etiqueta)
-_HEPARINA_GASES = frozenset({"EAB_ART", "EAB_VEN", "LACT", "LACPLA", "CA_ION", "CAIISE", "CAIE"})
-_EAB_JERINGA_INDIVIDUAL = frozenset({"EAB_ART", "EAB_VEN"})
+_EAB_ART = frozenset({"PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART"})
+_EAB_VEN = frozenset({"PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN"})
+_EAB_JERINGA_INDIVIDUAL = _EAB_ART | _EAB_VEN
+_HEPARINA_GASES = _EAB_JERINGA_INDIVIDUAL | frozenset(
+    {"LACT", "LACPLA", "CA_ION", "CAIISE", "CAIE"}
+)
 
 # Rutina de química: 1 tubo heparina (plasma) alcanza ~200 µL
 _QUIMICA_RUTINA = frozenset(
@@ -148,8 +152,8 @@ MUESTRA_CANONICA_POR_ANALITO: dict[str, str] = {
     **{c: "PLASMA_CITRATO" for c in _CITRATO},
     **{c: "SANGRE_CITRATO_VSG" for c in _CITRATO_VSG},
     **{c: "SANGRE_HEPARINA" for c in (_HEPARINA_GASES - _EAB_JERINGA_INDIVIDUAL)},
-    "EAB_ART": "SANGRE_HEPARINA_ART",
-    "EAB_VEN": "SANGRE_HEPARINA_VEN",
+    **{c: "SANGRE_HEPARINA_ART" for c in _EAB_ART},
+    **{c: "SANGRE_HEPARINA_VEN" for c in _EAB_VEN},
     **{c: "PLASMA_HEPARINA" for c in _QUIMICA_RUTINA},
     **{c: MUESTRA_ORINA for c in _FRASCO_ORINA},
     **{c: MUESTRA_ORINA_24H for c in _ORINA_24H},

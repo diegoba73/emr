@@ -23,7 +23,8 @@ from laboratorio.tubos_catalogo import (
     BIDON_ORINA_24H,
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
-    _EAB_JERINGA_INDIVIDUAL,
+    _EAB_ART,
+    _EAB_VEN,
     _ORINA_24H,
     _ORINA_DUAL,
     _QUIMICA_RUTINA,
@@ -239,8 +240,13 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
         if not tc_eff.activo:
             raise TubosOrdenError(f"El tipo de tubo {tc_eff.codigo} está inactivo.")
 
-        # EAB art/ven: jeringas distintas aunque compartan heparina
-        split = codigo if codigo in _EAB_JERINGA_INDIVIDUAL else ""
+        # EAB art/ven: una jeringa por panel (todos los componentes del mismo lado)
+        if codigo in _EAB_ART:
+            split = "EAB_ART"
+        elif codigo in _EAB_VEN:
+            split = "EAB_VEN"
+        else:
+            split = ""
         key = (tc_eff.pk, tm_id, split)
         if key in meta:
             meta[key].examenes.append(ex.nombre)

@@ -609,6 +609,36 @@ class TestSiembraLecturaAPI(TestCase):
         estudio.refresh_from_db()
         self.assertEqual(estudio.estado, "SEMBRADO")
 
+    def test_api_crear_siembra_estudio_moderno_sin_muestra_lims(self):
+        """Pedido micro sin muestra LIMS: select_for_update no debe romper en Postgres."""
+        from laboratorio.micro_catalogos_seed import seed_catalogos_microbiologia
+        from laboratorio.models_microbiologia import (
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
+
+        seed_catalogos_microbiologia()
+        cultivo = TipoCultivoMicrobiologia.objects.get(codigo="UROCULTIVO")
+        muestra_micro = TipoMuestraMicrobiologia.objects.get(codigo="ORINA")
+        estudio = EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            tipo_cultivo=cultivo,
+            tipo_muestra_micro=muestra_micro,
+            estado="PENDIENTE",
+        )
+        self.assertIsNone(estudio.muestra_id)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/siembras/",
+                {"estudio_id": estudio.pk, "medio_id": self.medio.pk},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertIsNone(r.json().get("muestra"))
+        estudio.refresh_from_db()
+        self.assertEqual(estudio.estado, "SEMBRADO")
+
     def test_no_sembrar_estudio_cancelado(self):
         EstudioMicrobiologia.objects.filter(pk=self.estudio.pk).update(estado="CANCELADO")
         r = self.client.post(
@@ -644,6 +674,38 @@ class TestSiembraLecturaAPI(TestCase):
             {"siembra_id": s["id"], "crecimiento": "SIN_DESARROLLO"},
             format="json",
         )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+
+    def test_crear_lectura_estudio_moderno_sin_solicitud_lims(self):
+        """Pedido micro sin solicitud LIMS: metadata de auditoría no debe crashear."""
+        from laboratorio.micro_catalogos_seed import seed_catalogos_microbiologia
+        from laboratorio.models_microbiologia import (
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
+
+        seed_catalogos_microbiologia()
+        cultivo = TipoCultivoMicrobiologia.objects.get(codigo="UROCULTIVO")
+        muestra_micro = TipoMuestraMicrobiologia.objects.get(codigo="ORINA")
+        estudio = EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            tipo_cultivo=cultivo,
+            tipo_muestra_micro=muestra_micro,
+            estado="PENDIENTE",
+        )
+        r_s = self.client.post(
+            "/api/lab/microbiologia/siembras/",
+            {"estudio_id": estudio.pk, "medio_id": self.medio.pk},
+            format="json",
+        )
+        self.assertEqual(r_s.status_code, status.HTTP_201_CREATED, r_s.content)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/lecturas/",
+                {"siembra_id": r_s.json()["id"], "crecimiento": "PENDIENTE"},
+                format="json",
+            )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
 
     def test_lectura_preliminar_avanza_estudio(self):

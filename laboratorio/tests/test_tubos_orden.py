@@ -66,7 +66,7 @@ class TestCantidadTubos(TestCase):
         assert len(quimica) >= 10
         assert unidades_para_calculo_tubos(quimica) == 1
         assert unidades_para_calculo_tubos(quimica + [_E("AU")]) == 2
-        assert unidades_para_calculo_tubos(quimica + [_E("EAB_ART")]) == 2
+        assert unidades_para_calculo_tubos(quimica + [_E("PH_ART")]) == 2
 
 
 @pytest.mark.django_db
@@ -391,34 +391,54 @@ class TestResolverTubosOrden(TestCase):
         tm_ven = TipoMuestra.objects.create(
             codigo=f"VEN{self.suf}", nombre="Sangre heparina venosa", activo=True
         )
-        eab_a, _ = TipoExamen.objects.update_or_create(
-            codigo="EAB_ART",
-            defaults={
-                "nombre": "EAB arterial",
-                "tipo_muestra_requerida": tm_art,
-                "tipo_contenedor": self.hep,
-                "precio": 1,
-                "activo": True,
-            },
-        )
-        eab_v, _ = TipoExamen.objects.update_or_create(
-            codigo="EAB_VEN",
-            defaults={
-                "nombre": "EAB venoso",
-                "tipo_muestra_requerida": tm_ven,
-                "tipo_contenedor": self.hep,
-                "precio": 1,
-                "activo": True,
-            },
-        )
-        eab_a.tipo_muestra_requerida = tm_art
-        eab_a.tipo_contenedor = self.hep
-        eab_a.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
-        eab_v.tipo_muestra_requerida = tm_ven
-        eab_v.tipo_contenedor = self.hep
-        eab_v.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        comps_art = []
+        for codigo, nombre in (
+            ("PH_ART", "pH (arterial)"),
+            ("PO2_ART", "pO2 (arterial)"),
+            ("PCO2_ART", "pCO2 (arterial)"),
+            ("SAT_O2_ART", "Sat. de O2 (arterial)"),
+            ("HCO3_ART", "Bicarbonato (arterial)"),
+            ("BE_ART", "Exceso de base (arterial)"),
+        ):
+            ex, _ = TipoExamen.objects.update_or_create(
+                codigo=codigo,
+                defaults={
+                    "nombre": nombre,
+                    "tipo_muestra_requerida": tm_art,
+                    "tipo_contenedor": self.hep,
+                    "precio": 1,
+                    "activo": True,
+                },
+            )
+            ex.tipo_muestra_requerida = tm_art
+            ex.tipo_contenedor = self.hep
+            ex.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+            comps_art.append(ex)
+        comps_ven = []
+        for codigo, nombre in (
+            ("PH_VEN", "pH (venoso)"),
+            ("PO2_VEN", "pO2 (venoso)"),
+            ("PCO2_VEN", "pCO2 (venoso)"),
+            ("SAT_O2_VEN", "Sat. de O2 (venoso)"),
+            ("HCO3_VEN", "Bicarbonato (venoso)"),
+            ("BE_VEN", "Exceso de base (venoso)"),
+        ):
+            ex, _ = TipoExamen.objects.update_or_create(
+                codigo=codigo,
+                defaults={
+                    "nombre": nombre,
+                    "tipo_muestra_requerida": tm_ven,
+                    "tipo_contenedor": self.hep,
+                    "precio": 1,
+                    "activo": True,
+                },
+            )
+            ex.tipo_muestra_requerida = tm_ven
+            ex.tipo_contenedor = self.hep
+            ex.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+            comps_ven.append(ex)
 
-        sol = self._solicitud(eab_a, eab_v)
+        sol = self._solicitud(*(comps_art + comps_ven))
         grupos = resolver_tubos_para_solicitud(sol)
         assert len(grupos) == 2
         assert all(g.cantidad == 1 for g in grupos)

@@ -2,10 +2,12 @@
  * API microbiología LIMS — /lab/microbiologia/...
  */
 import { apiClient } from './apiClient';
+import { triggerBlobDownload } from './estudiosComplementariosApi';
 import type {
   AisladoMicrobiologico,
   Antibiograma,
   Antibiotico,
+  EnviarInformeMicroResponse,
   EstudioMicrobiologia,
   IdentificacionMicroorganismo,
   InformeMicrobiologia,
@@ -18,6 +20,7 @@ import type {
   TipoEstudioMicrobiologia,
   TipoMuestraMicrobiologia,
 } from '../types/lims';
+import { informeMicroPdfFilename } from '../utils/limsDownload';
 import { getPaginatedAll } from './limsApi';
 
 const MICRO = '/lab/microbiologia';
@@ -297,3 +300,28 @@ export const validarInformeMicrobiologia = (id: number) =>
   apiClient.post<InformeMicrobiologia>(`${MICRO}/informes/${id}/validar/`, {}).then((r) => r.data);
 export const anularInformeMicrobiologia = (id: number, motivo: string) =>
   apiClient.post<InformeMicrobiologia>(`${MICRO}/informes/${id}/anular/`, { motivo }).then((r) => r.data);
+
+export async function downloadInformeMicroPdf(estudioId: number): Promise<void> {
+  const { data } = await apiClient.get(`${MICRO}/estudios/${estudioId}/informe-pdf/`, {
+    responseType: 'blob',
+    timeout: 60_000,
+  });
+  await triggerBlobDownload(data as Blob, informeMicroPdfFilename(estudioId));
+}
+
+export async function postEnviarInformeMicro(
+  estudioId: number,
+  body: {
+    email?: boolean;
+    whatsapp?: boolean;
+    email_medico?: boolean;
+    whatsapp_medico?: boolean;
+  }
+): Promise<EnviarInformeMicroResponse> {
+  const { data } = await apiClient.post<EnviarInformeMicroResponse>(
+    `${MICRO}/estudios/${estudioId}/enviar-informe/`,
+    body,
+    { timeout: 45_000 }
+  );
+  return data;
+}

@@ -49,10 +49,10 @@ class TestSeedCatalogoSolicitudPapel:
 
     def test_creatininemia_compartida_clearance_y_suelto(self):
         call_command("seed_catalogo_solicitud_papel")
-        crea = TipoExamen.objects.get(codigo="CREA")
+        crea = TipoExamen.objects.get(codigo="CREATI")
         clear = PanelExamen.objects.get(codigo="PAN_CLEAR")
         assert clear.tipos_examen.filter(pk=crea.pk).exists()
-        assert "CREA" in EXAMENES_SUELTOS_PDF
+        assert "CREATI" in EXAMENES_SUELTOS_PDF
 
     def test_ionograma_urinario_comparte_electrolitos(self):
         call_command("seed_catalogo_solicitud_papel")
@@ -77,6 +77,39 @@ class TestSeedCatalogoSolicitudPapel:
         )
         call_command("seed_catalogo_solicitud_papel")
         assert not TipoExamen.objects.get(codigo="HEMO").activo
+
+    def test_eab_paneles_y_legacy_desactivado(self):
+        from laboratorio.models import TipoMuestra
+
+        muestra, _ = TipoMuestra.objects.get_or_create(
+            codigo="SANGRE_HEPARINA_ART",
+            defaults={"nombre": "Sangre heparina arterial", "activo": True},
+        )
+        TipoExamen.objects.create(
+            codigo="EAB_ART",
+            nombre="EAB arterial (legacy)",
+            tipo_muestra_requerida=muestra,
+            activo=True,
+        )
+        TipoExamen.objects.create(
+            codigo="EAB_VEN",
+            nombre="EAB venoso (legacy)",
+            tipo_muestra_requerida=muestra,
+            activo=True,
+        )
+        call_command("seed_catalogo_solicitud_papel")
+        assert not TipoExamen.objects.get(codigo="EAB_ART").activo
+        assert not TipoExamen.objects.get(codigo="EAB_VEN").activo
+        pan_art = PanelExamen.objects.get(codigo="PAN_EAB_ART")
+        pan_ven = PanelExamen.objects.get(codigo="PAN_EAB_VEN")
+        assert [te.codigo for te in ordenar_queryset_panel(pan_art)] == [
+            "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
+        ]
+        assert [te.codigo for te in ordenar_queryset_panel(pan_ven)] == [
+            "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
+        ]
+        assert "EAB_ART" not in EXAMENES_SUELTOS_PDF
+        assert "EAB_VEN" not in EXAMENES_SUELTOS_PDF
 
     def test_referencias_cargadas_en_catalogo(self):
         call_command("seed_catalogo_solicitud_papel")

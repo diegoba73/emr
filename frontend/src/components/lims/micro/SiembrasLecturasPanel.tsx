@@ -98,6 +98,27 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
       <Typography variant="subtitle1" gutterBottom>
         Siembras
       </Typography>
+      {canOperate && (
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Nueva siembra
+          </Typography>
+          <FormControl size="small" sx={{ minWidth: 220, mr: 2 }}>
+            <InputLabel>Medio</InputLabel>
+            <Select label="Medio" value={medioId === '' ? '' : String(medioId)} onChange={(ev) => setMedioId(ev.target.value === '' ? '' : Number(ev.target.value))}>
+              <MenuItem value="">—</MenuItem>
+              {medios.filter((m) => m.activo !== false).map((m) => (
+                <MenuItem key={m.id} value={m.id}>
+                  {m.codigo} — {m.nombre}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="contained" onClick={crearSiembra}>
+            Registrar siembra
+          </Button>
+        </Paper>
+      )}
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
         <Table size="small">
           <TableHead>
@@ -129,66 +150,11 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
         </Table>
       </TableContainer>
 
-      {canOperate && (
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Nueva siembra
-          </Typography>
-          <FormControl size="small" sx={{ minWidth: 220, mr: 2 }}>
-            <InputLabel>Medio</InputLabel>
-            <Select label="Medio" value={medioId === '' ? '' : String(medioId)} onChange={(ev) => setMedioId(ev.target.value === '' ? '' : Number(ev.target.value))}>
-              <MenuItem value="">—</MenuItem>
-              {medios.filter((m) => m.activo !== false).map((m) => (
-                <MenuItem key={m.id} value={m.id}>
-                  {m.codigo} — {m.nombre}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={crearSiembra}>
-            Registrar siembra
-          </Button>
-        </Paper>
-      )}
-
       <Typography variant="subtitle1" gutterBottom>
         Lecturas
       </Typography>
-      <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Siembra</TableCell>
-              <TableCell>Crecimiento</TableCell>
-              <TableCell>Preliminar</TableCell>
-              <TableCell>Colonias</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {lecturas.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5}>
-                  <Typography color="text.secondary">Sin lecturas.</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              lecturas.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell>{l.id}</TableCell>
-                  <TableCell>{l.siembra}</TableCell>
-                  <TableCell>{l.crecimiento}</TableCell>
-                  <TableCell>{l.es_preliminar ? 'Sí' : 'No'}</TableCell>
-                  <TableCell>{l.descripcion_colonias || '—'}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
       {canOperate && siembras.length > 0 && (
-        <Paper sx={{ p: 2 }}>
+        <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
             Nueva lectura
           </Typography>
@@ -259,6 +225,38 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
           </Button>
         </Paper>
       )}
+      <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>Siembra</TableCell>
+              <TableCell>Crecimiento</TableCell>
+              <TableCell>Preliminar</TableCell>
+              <TableCell>Colonias</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {lecturas.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <Typography color="text.secondary">Sin lecturas.</Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              lecturas.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell>{l.id}</TableCell>
+                  <TableCell>{l.siembra}</TableCell>
+                  <TableCell>{l.crecimiento}</TableCell>
+                  <TableCell>{l.es_preliminar ? 'Sí' : 'No'}</TableCell>
+                  <TableCell>{l.descripcion_colonias || '—'}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Box>
   );
 };

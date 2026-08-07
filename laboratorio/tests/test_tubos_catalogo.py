@@ -19,8 +19,10 @@ def test_tubo_coag_citrato():
 
 
 def test_tubo_heparina_eab():
-    assert tubo_codigo_para_examen("EAB_ART") == "HEPARINA"
-    assert tubo_codigo_para_examen("EAB_VEN") == "HEPARINA"
+    assert tubo_codigo_para_examen("PH_ART") == "HEPARINA"
+    assert tubo_codigo_para_examen("PH_VEN") == "HEPARINA"
+    assert tubo_codigo_para_examen("HCO3_ART") == "HEPARINA"
+    assert tubo_codigo_para_examen("BE_VEN") == "HEPARINA"
     assert tubo_codigo_para_examen("LACT") == "HEPARINA"
 
 

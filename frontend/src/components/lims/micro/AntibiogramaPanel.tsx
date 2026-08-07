@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   FormControl,
@@ -17,7 +18,13 @@ import {
   Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
-import type { AisladoMicrobiologico, Antibiograma, Antibiotico, ResultadoAntibiotico } from '../../../types/lims';
+import type {
+  AisladoMicrobiologico,
+  Antibiograma,
+  Antibiotico,
+  Microorganismo,
+  ResultadoAntibiotico,
+} from '../../../types/lims';
 import {
   cancelarAntibiograma,
   completarAntibiograma,
@@ -35,8 +42,33 @@ export interface AntibiogramaPanelProps {
   antibiogramas: Antibiograma[];
   resultados: ResultadoAntibiotico[];
   antibioticos: Antibiotico[];
+  microorganismos?: Microorganismo[];
   canOperate: boolean;
   onRefresh: () => void;
+}
+
+function labelMicroorganismo(m: Microorganismo): string {
+  const code = (m.codigo || '').trim();
+  const name = (m.nombre || '').trim();
+  if (code && name) return `${code} — ${name}`;
+  return name || code || `Micro #${m.id}`;
+}
+
+function labelAntibiotico(a: Antibiotico): string {
+  const code = (a.codigo || '').trim();
+  const name = (a.nombre || '').trim();
+  if (code && name) return `${code} — ${name}`;
+  return name || code || `AB #${a.id}`;
+}
+
+function antibioticoMatchesQuery(a: Antibiotico, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [a.codigo, a.nombre, a.familia]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
 }
 
 const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
@@ -44,17 +76,56 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
   antibiogramas,
   resultados,
   antibioticos,
+  microorganismos = [],
   canOperate,
   onRefresh,
 }) => {
   const [aisladoId, setAisladoId] = useState<number | ''>('');
   const [abId, setAbId] = useState<number | ''>('');
-  const [antibioticoId, setAntibioticoId] = useState<number | ''>('');
+  const [antibioticoSel, setAntibioticoSel] = useState<Antibiotico | null>(null);
   const [interp, setInterp] = useState('S');
   const [mic, setMic] = useState('');
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
 
+  const microById = useMemo(() => {
+    const map = new Map<number, Microorganismo>();
+    for (const m of microorganismos) map.set(m.id, m);
+    return map;
+  }, [microorganismos]);
+
+  const antibioticoById = useMemo(() => {
+    const map = new Map<number, Antibiotico>();
+    for (const a of antibioticos) map.set(a.id, a);
+    return map;
+  }, [antibioticos]);
+
   const aisladosElegibles = aislados.filter((a) => a.estado === 'IDENTIFICADO' && a.microorganismo);
+
+  const labelAislado = (a: AisladoMicrobiologico): string => {
+    const microId = a.microorganismo ?? null;
+    const micro = microId != null ? microById.get(microId) : undefined;
+    const microLabel = micro
+      ? labelMicroorganismo(micro)
+      : microId != null
+        ? `Micro #${microId}`
+        : 'Sin microorganismo';
+    return `#${a.id} · ${microLabel}`;
+  };
+
+  const labelAisladoDeAb = (ab: Antibiograma): string => {
+    const aislado = aislados.find((a) => a.id === ab.aislado);
+    if (!aislado) return `#${ab.aislado}`;
+    return labelAislado(aislado);
+  };
+
+  const antibioticosActivos = useMemo(
+    () => antibioticos.filter((a) => a.activo !== false),
+    [antibioticos],
+  );
+
+  const antibiogramasAbiertos = antibiogramas.filter(
+    (a) => !['COMPLETO', 'CANCELADO'].includes(a.estado),
+  );
 
   const crearAb = async () => {
     if (aisladoId === '') {
@@ -64,6 +135,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
     try {
       await createAntibiograma({ aislado_id: Number(aisladoId) });
       toast.success('Antibiograma creado');
+      setAisladoId('');
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarAntibiograma));
@@ -71,7 +143,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
   };
 
   const agregarResultado = async () => {
-    if (abId === '' || antibioticoId === '') {
+    if (abId === '' || !antibioticoSel) {
       toast.error('Antibiograma y antibiótico requeridos');
       return;
     }
@@ -83,11 +155,13 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
     try {
       await createResultadoAntibiotico({
         antibiograma_id: Number(abId),
-        antibiotico_id: Number(antibioticoId),
+        antibiotico_id: antibioticoSel.id,
         interpretacion: interp,
         mic,
       });
       toast.success('Resultado agregado');
+      setAntibioticoSel(null);
+      setMic('');
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultadoAntibiograma));
@@ -125,6 +199,100 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
 
   return (
     <Box>
+      {canOperate && (
+        <>
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Nuevo antibiograma
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 280, mr: 2 }}>
+              <InputLabel>Aislado identificado</InputLabel>
+              <Select
+                label="Aislado identificado"
+                value={aisladoId === '' ? '' : String(aisladoId)}
+                onChange={(e) => setAisladoId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                <MenuItem value="">—</MenuItem>
+                {aisladosElegibles.map((a) => (
+                  <MenuItem key={a.id} value={a.id}>
+                    {labelAislado(a)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button variant="contained" onClick={crearAb} disabled={aisladosElegibles.length === 0}>
+              Crear antibiograma
+            </Button>
+          </Paper>
+
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Agregar resultado
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>Antibiograma</InputLabel>
+                <Select
+                  label="Antibiograma"
+                  value={abId === '' ? '' : String(abId)}
+                  onChange={(e) => setAbId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <MenuItem value="">—</MenuItem>
+                  {antibiogramasAbiertos.map((a) => (
+                    <MenuItem key={a.id} value={a.id}>
+                      #{a.id} · {labelAisladoDeAb(a)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Autocomplete
+                size="small"
+                sx={{ minWidth: 280, flex: '1 1 240px' }}
+                options={antibioticosActivos}
+                value={antibioticoSel}
+                onChange={(_e, value) => setAntibioticoSel(value)}
+                getOptionLabel={(a) => labelAntibiotico(a)}
+                isOptionEqualToValue={(x, y) => x.id === y.id}
+                filterOptions={(options, state) =>
+                  options.filter((a) => antibioticoMatchesQuery(a, state.inputValue))
+                }
+                noOptionsText="Sin coincidencias"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Antibiótico *"
+                    placeholder="Buscar por código o nombre"
+                  />
+                )}
+              />
+
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Interp.</InputLabel>
+                <Select label="Interp." value={interp} onChange={(e) => setInterp(e.target.value)}>
+                  {INTERPRETACIONES.map((i) => (
+                    <MenuItem key={i} value={i}>
+                      {i}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField size="small" label="MIC" value={mic} onChange={(e) => setMic(e.target.value)} />
+              <Button
+                variant="contained"
+                onClick={agregarResultado}
+                disabled={antibiogramasAbiertos.length === 0}
+              >
+                Agregar
+              </Button>
+            </Box>
+          </Paper>
+        </>
+      )}
+
+      <Typography variant="subtitle1" gutterBottom>
+        Antibiogramas
+      </Typography>
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
         <Table size="small">
           <TableHead>
@@ -137,33 +305,41 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {antibiogramas.map((ab) => (
-              <TableRow key={ab.id}>
-                <TableCell>{ab.id}</TableCell>
-                <TableCell>{ab.aislado}</TableCell>
-                <TableCell>
-                  <AntibiogramaEstadoBadge estado={ab.estado} />
-                </TableCell>
-                <TableCell>{ab.metodo || '—'}</TableCell>
-                <TableCell>
-                  {canOperate && ab.estado !== 'COMPLETO' && ab.estado !== 'CANCELADO' && (
-                    <>
-                      <Button size="small" onClick={() => completar(ab.id)}>
-                        Completar
-                      </Button>
-                      <Button size="small" color="error" onClick={() => cancelar(ab.id)}>
-                        Cancelar
-                      </Button>
-                    </>
-                  )}
+            {antibiogramas.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <Typography color="text.secondary">Sin antibiogramas.</Typography>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              antibiogramas.map((ab) => (
+                <TableRow key={ab.id}>
+                  <TableCell>{ab.id}</TableCell>
+                  <TableCell>{labelAisladoDeAb(ab)}</TableCell>
+                  <TableCell>
+                    <AntibiogramaEstadoBadge estado={ab.estado} />
+                  </TableCell>
+                  <TableCell>{ab.metodo || '—'}</TableCell>
+                  <TableCell>
+                    {canOperate && ab.estado !== 'COMPLETO' && ab.estado !== 'CANCELADO' && (
+                      <>
+                        <Button size="small" onClick={() => completar(ab.id)}>
+                          Completar
+                        </Button>
+                        <Button size="small" color="error" onClick={() => cancelar(ab.id)}>
+                          Cancelar
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
 
-      <Typography variant="subtitle2" gutterBottom>
+      <Typography variant="subtitle1" gutterBottom>
         Resultados
       </Typography>
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
@@ -177,96 +353,31 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {resultados.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell>{r.antibiograma}</TableCell>
-                <TableCell>{antibioticos.find((a) => a.id === r.antibiotico)?.codigo || r.antibiotico}</TableCell>
-                <TableCell>{r.mic || '—'}</TableCell>
-                <TableCell>
-                  <InterpretacionAntibioticoBadge interpretacion={r.interpretacion} />
+            {resultados.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4}>
+                  <Typography color="text.secondary">Sin resultados.</Typography>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              resultados.map((r) => {
+                const ab = antibioticoById.get(r.antibiotico);
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell>{r.antibiograma}</TableCell>
+                    <TableCell>{ab ? labelAntibiotico(ab) : r.antibiotico}</TableCell>
+                    <TableCell>{r.mic || '—'}</TableCell>
+                    <TableCell>
+                      <InterpretacionAntibioticoBadge interpretacion={r.interpretacion} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </TableContainer>
 
-      {canOperate && (
-        <>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Nuevo antibiograma
-            </Typography>
-            <FormControl size="small" sx={{ minWidth: 200, mr: 2 }}>
-              <InputLabel>Aislado identificado</InputLabel>
-              <Select
-                label="Aislado identificado"
-                value={aisladoId === '' ? '' : String(aisladoId)}
-                onChange={(e) => setAisladoId(e.target.value === '' ? '' : Number(e.target.value))}
-              >
-                <MenuItem value="">—</MenuItem>
-                {aisladosElegibles.map((a) => (
-                  <MenuItem key={a.id} value={a.id}>
-                    #{a.id}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button variant="contained" onClick={crearAb}>
-              Crear antibiograma
-            </Button>
-          </Paper>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Agregar resultado
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>Antibiograma</InputLabel>
-                <Select label="Antibiograma" value={abId === '' ? '' : String(abId)} onChange={(e) => setAbId(e.target.value === '' ? '' : Number(e.target.value))}>
-                  <MenuItem value="">—</MenuItem>
-                  {antibiogramas
-                    .filter((a) => !['COMPLETO', 'CANCELADO'].includes(a.estado))
-                    .map((a) => (
-                      <MenuItem key={a.id} value={a.id}>
-                        #{a.id}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel>Antibiótico</InputLabel>
-                <Select
-                  label="Antibiótico"
-                  value={antibioticoId === '' ? '' : String(antibioticoId)}
-                  onChange={(e) => setAntibioticoId(e.target.value === '' ? '' : Number(e.target.value))}
-                >
-                  <MenuItem value="">—</MenuItem>
-                  {antibioticos.filter((a) => a.activo !== false).map((a) => (
-                    <MenuItem key={a.id} value={a.id}>
-                      {a.codigo}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Interp.</InputLabel>
-                <Select label="Interp." value={interp} onChange={(e) => setInterp(e.target.value)}>
-                  {INTERPRETACIONES.map((i) => (
-                    <MenuItem key={i} value={i}>
-                      {i}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField size="small" label="MIC" value={mic} onChange={(e) => setMic(e.target.value)} />
-              <Button variant="contained" onClick={agregarResultado}>
-                Agregar
-              </Button>
-            </Box>
-          </Paper>
-        </>
-      )}
       <MotivoDialog {...dialogProps} />
     </Box>
   );

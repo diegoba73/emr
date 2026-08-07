@@ -5,6 +5,10 @@ export function informeLimsPdfFilename(solicitudId: number): string {
   return `informe-lims-solicitud-${solicitudId}.pdf`;
 }
 
+export function informeMicroPdfFilename(estudioId: number): string {
+  return `informe-micro-${estudioId}.pdf`;
+}
+
 export function assertValidSolicitudId(solicitudId: number): void {
   if (!Number.isInteger(solicitudId) || solicitudId <= 0) {
     throw new Error('Identificador de solicitud inválido.');

@@ -43,8 +43,19 @@ from laboratorio.procedencia_display import resolver_procedencia_solicitud
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
 HEADER_HEIGHT = 4.2 * cm
-FOOTER_HEIGHT = 3.6 * cm
+# Reserva vertical del pie (firmas + leyendas + dirección/contacto).
+FOOTER_HEIGHT = 5.2 * cm
 CONTENT_TOP_PAD = 0.2 * cm
+# Solo el trazo manuscrito (se recorta el texto embebido del PNG).
+FIRMA_IMG_W = 6.0 * cm
+FIRMA_IMG_H = 2.15 * cm
+FIRMA_IMG_BOTTOM = 2.55 * cm
+FIRMA_NOMBRE_Y = 2.25 * cm
+FIRMA_MP_Y = 1.95 * cm
+PIE_LINEA_Y = 1.55 * cm
+PIE_DIR_Y = 1.22 * cm
+PIE_CONTACTO_Y = 0.92 * cm
+PIE_PAGINA_Y = 0.52 * cm
 
 # Anchos de columna (total ≈ 17.2 cm útiles en A4 con márgenes 1.8 cm)
 COL_EXAMEN = 5.6 * cm
@@ -77,6 +88,80 @@ def _asset_path(filename: str | None) -> str | None:
         return None
     path = LABORATORIO_STATIC / filename
     return str(path) if path.is_file() else None
+
+
+def _firma_trazo_reader(path: str) -> ImageReader | None:
+    """Carga la firma recortando leyendas/pie embebidos en el PNG.
+
+    Los assets originales (360×200) traen nombre/M.P./laboratorio (y a veces
+    restos de dirección) en la franja inferior; al dibujarlos enteros eso
+    aparece como texto “fantasma” bajo las firmas. También el trazo toca el
+    borde superior: se agrega padding para que no se vea cortado.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return ImageReader(path)
+
+    try:
+        im = Image.open(path).convert("RGBA")
+    except Exception:
+        return ImageReader(path)
+
+    w, h = im.size
+    # Conservar ~78 % superior (trazo); descartar bloque de texto inferior.
+    cut_y = max(1, int(h * 0.78))
+    im = im.crop((0, 0, w, cut_y))
+
+    # Recorte horizontal a tinta no blanca / no transparente.
+    px = im.load()
+    minx, miny, maxx, maxy = w, cut_y, 0, 0
+    found = False
+    for y in range(cut_y):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a < 16:
+                continue
+            if r > 248 and g > 248 and b > 248:
+                continue
+            found = True
+            minx = min(minx, x)
+            miny = min(miny, y)
+            maxx = max(maxx, x)
+            maxy = max(maxy, y)
+    if found and maxx > minx and maxy > miny:
+        pad = 4
+        im = im.crop(
+            (
+                max(0, minx - pad),
+                max(0, miny - pad),
+                min(w, maxx + pad + 1),
+                min(cut_y, maxy + pad + 1),
+            )
+        )
+
+    # Padding superior transparente: el trazo no queda pegado al borde.
+    pad_top = max(10, im.size[1] // 8)
+    canvas_im = Image.new(
+        "RGBA",
+        (im.size[0], im.size[1] + pad_top),
+        (255, 255, 255, 0),
+    )
+    canvas_im.paste(im, (0, pad_top), im)
+
+    # Blancos opacos → transparentes para no tapar el pie.
+    px = canvas_im.load()
+    cw, ch = canvas_im.size
+    for y in range(ch):
+        for x in range(cw):
+            r, g, b, a = px[x, y]
+            if a > 0 and r > 248 and g > 248 and b > 248:
+                px[x, y] = (255, 255, 255, 0)
+
+    buf = BytesIO()
+    canvas_im.save(buf, format="PNG")
+    buf.seek(0)
+    return ImageReader(buf)
 
 
 def formatear_fecha_larga(dt: datetime | date) -> str:
@@ -235,11 +320,15 @@ class _InformeIcplDoc(BaseDocTemplate):
     def __init__(self, buffer, ctx: dict[str, Any], **kwargs):
         self.ctx = ctx
         super().__init__(buffer, **kwargs)
+        # topMargin ya reserva HEADER_HEIGHT + CONTENT_TOP_PAD (vía self.height).
+        # bottomMargin es el margen de página; el pie de firmas se reserva alzando
+        # el Frame con FOOTER_HEIGHT (una sola vez). No restar HEADER otra vez:
+        # eso dejaba un hueco enorme entre la caja de datos y el cuerpo.
         frame = Frame(
             self.leftMargin,
             self.bottomMargin + FOOTER_HEIGHT,
             self.width,
-            self.height - HEADER_HEIGHT - FOOTER_HEIGHT - CONTENT_TOP_PAD,
+            self.height - FOOTER_HEIGHT,
             id="content",
             leftPadding=0,
             rightPadding=0,
@@ -247,7 +336,15 @@ class _InformeIcplDoc(BaseDocTemplate):
             bottomPadding=0,
         )
         self.addPageTemplates(
-            [PageTemplate(id="All", frames=[frame], onPage=self._on_page)]
+            [
+                PageTemplate(
+                    id="All",
+                    frames=[frame],
+                    # onPageEnd: encabezado/pie DESPUÉS del cuerpo. Con onPage el
+                    # story tapaba firmas y dirección (efecto “borrado”).
+                    onPageEnd=self._on_page,
+                )
+            ]
         )
 
     def _on_page(self, canvas, doc):
@@ -256,6 +353,14 @@ class _InformeIcplDoc(BaseDocTemplate):
         typo = INFORME_TYPO
         w, h = A4
         canvas.saveState()
+
+        # Limpiar zonas de encabezado/pie por si el cuerpo derramó flowables.
+        canvas.setFillColor(colors.white)
+        canvas.setStrokeColor(colors.white)
+        canvas.rect(0, h - HEADER_HEIGHT - 0.15 * cm, w, HEADER_HEIGHT + 0.15 * cm, fill=1, stroke=0)
+        canvas.rect(0, 0, w, doc.bottomMargin + FOOTER_HEIGHT, fill=1, stroke=0)
+        canvas.setFillColor(colors.black)
+        canvas.setStrokeColor(colors.black)
 
         logo = _asset_path(cfg.get("logo"))
         if logo:
@@ -317,41 +422,49 @@ class _InformeIcplDoc(BaseDocTemplate):
         canvas.setLineWidth(0.8)
         canvas.line(doc.leftMargin, box_bottom - 0.08 * cm, w - doc.rightMargin, box_bottom - 0.08 * cm)
 
-        footer_y = 2.9 * cm
         firmas = cfg.get("firmas") or []
         slot_w = (w - doc.leftMargin - doc.rightMargin) / max(len(firmas), 1)
         for i, firma in enumerate(firmas):
             cx = doc.leftMargin + slot_w * i + slot_w / 2
-            img = _asset_path(firma.get("imagen"))
-            if img:
+            img_path = _asset_path(firma.get("imagen"))
+            drew_img = False
+            if img_path:
                 try:
-                    canvas.drawImage(
-                        ImageReader(img),
-                        cx - 2.86 * cm,
-                        footer_y - 0.1 * cm,
-                        width=5.72 * cm,
-                        height=1.95 * cm,
-                        preserveAspectRatio=True,
-                        mask="auto",
-                    )
+                    reader = _firma_trazo_reader(img_path)
+                    if reader is not None:
+                        canvas.drawImage(
+                            reader,
+                            cx - FIRMA_IMG_W / 2,
+                            FIRMA_IMG_BOTTOM,
+                            width=FIRMA_IMG_W,
+                            height=FIRMA_IMG_H,
+                            preserveAspectRatio=True,
+                            mask="auto",
+                        )
+                        drew_img = True
                 except Exception:
-                    pass
+                    drew_img = False
+            # Nombre / M.P. siempre desde config (el PNG ya no aporta ese texto).
             canvas.setFont("Helvetica", 8)
-            canvas.drawCentredString(cx, footer_y - 0.55 * cm, firma.get("nombre", ""))
-            canvas.drawCentredString(cx, footer_y - 0.85 * cm, f"M.P. {firma.get('mp', '')}")
+            canvas.setFillColor(colors.black)
+            canvas.drawCentredString(cx, FIRMA_NOMBRE_Y, firma.get("nombre", ""))
+            canvas.drawCentredString(cx, FIRMA_MP_Y, f"M.P. {firma.get('mp', '')}")
+            if not drew_img:
+                # Sin imagen: el bloque de texto ya actúa como firma.
+                pass
 
         canvas.setStrokeColor(colors.HexColor(typo["color_rule"]))
         canvas.setLineWidth(0.4)
-        canvas.line(doc.leftMargin, 1.75 * cm, w - doc.rightMargin, 1.75 * cm)
+        canvas.line(doc.leftMargin, PIE_LINEA_Y, w - doc.rightMargin, PIE_LINEA_Y)
 
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(colors.HexColor(typo["color_meta"]))
-        canvas.drawCentredString(w / 2, 1.45 * cm, cfg["direccion_linea"])
-        canvas.drawCentredString(w / 2, 1.15 * cm, cfg["contacto_linea"])
+        canvas.drawCentredString(w / 2, PIE_DIR_Y, cfg["direccion_linea"])
+        canvas.drawCentredString(w / 2, PIE_CONTACTO_Y, cfg["contacto_linea"])
         canvas.setFillColor(colors.black)
 
         canvas.setFont("Helvetica", 8)
-        canvas.drawRightString(w - doc.rightMargin, 0.75 * cm, f"Página {doc.page}")
+        canvas.drawRightString(w - doc.rightMargin, PIE_PAGINA_Y, f"Página {doc.page}")
 
         canvas.restoreState()
 
@@ -747,3 +860,29 @@ def generar_pdf_icpl_bytes(
     story = construir_story_icpl(solicitud, resultados, estudios_micro=estudios_micro)
     doc.build(story)
     return buffer.getvalue()
+
+
+def generar_pdf_icpl_desde_contexto(ctx: dict[str, Any], story: list[Any]) -> bytes:
+    """PDF con encabezado/pie ICPL y cuerpo arbitrario (p. ej. informe micro)."""
+    buffer = BytesIO()
+    doc = _InformeIcplDoc(
+        buffer,
+        ctx,
+        pagesize=A4,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        topMargin=HEADER_HEIGHT + CONTENT_TOP_PAD,
+        bottomMargin=1.0 * cm,
+        title=f"Informe {ctx.get('protocolo') or ''}".strip(),
+    )
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def estilos_informe_icpl() -> dict[str, ParagraphStyle]:
+    """Estilos tipográficos del informe (reutilizables fuera del layout LIMS)."""
+    return _styles()
+
+
+def escape_texto_informe(text: str) -> str:
+    return _escape(text)

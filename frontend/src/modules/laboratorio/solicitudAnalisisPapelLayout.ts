@@ -44,8 +44,8 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: e('GGT'), right: e('T4L') },
   { left: e('LDH'), right: e('B12') },
   { left: null, right: e('VITD') },
-  { left: null, right: e('EAB_ART') },
-  { left: null, right: e('EAB_VEN') },
+  { left: null, right: p('PAN_EAB_ART') },
+  { left: null, right: p('PAN_EAB_VEN') },
   { left: null, right: e('LACT') },
 ];
 

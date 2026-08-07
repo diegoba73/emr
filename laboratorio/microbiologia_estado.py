@@ -432,8 +432,10 @@ def aplicar_cancelar_estudio(
     if not (motivo or "").strip():
         raise MicrobiologiaAccionError("El motivo de cancelación es obligatorio.")
     with transaction.atomic():
+        # of=("self",): FKs nullable (solicitud/muestra) → OUTER JOIN; Postgres
+        # no permite FOR UPDATE en el lado nullable del join.
         estudio = (
-            EstudioMicrobiologia.objects.select_for_update()
+            EstudioMicrobiologia.objects.select_for_update(of=("self",))
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )
@@ -579,8 +581,10 @@ def crear_siembra(
     view: str,
 ) -> SiembraMicrobiologia:
     with transaction.atomic():
+        # of=("self",): estudios modernos sin solicitud/muestra LIMS no deben
+        # fallar con FOR UPDATE sobre OUTER JOIN (Postgres).
         estudio = (
-            EstudioMicrobiologia.objects.select_for_update()
+            EstudioMicrobiologia.objects.select_for_update(of=("self",))
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )
@@ -679,7 +683,7 @@ def crear_lectura(
 ) -> LecturaCultivo:
     with transaction.atomic():
         siembra = (
-            SiembraMicrobiologia.objects.select_for_update()
+            SiembraMicrobiologia.objects.select_for_update(of=("self",))
             .select_related("estudio", "estudio__solicitud", "estudio__muestra")
             .get(pk=siembra_id)
         )
@@ -710,7 +714,7 @@ def crear_lectura(
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
-            "numero_solicitud": estudio.solicitud.numero,
+            "numero_solicitud": estudio.solicitud.numero if estudio.solicitud_id else None,
             "muestra_id": estudio.muestra_id,
             "crecimiento": lectura.crecimiento,
             "es_preliminar": lectura.es_preliminar,
@@ -752,9 +756,9 @@ def _base_aislado_metadata(
         "aislado_id": aislado.pk,
         "estudio_id": estudio.pk,
         "numero_estudio": estudio.numero,
-        "solicitud_id": sol.pk,
-        "numero_solicitud": sol.numero,
-        "muestra_id": muestra.pk,
+        "solicitud_id": sol.pk if sol else None,
+        "numero_solicitud": sol.numero if sol else None,
+        "muestra_id": muestra.pk if muestra else None,
         "lectura_id": aislado.lectura_origen_id,
         "microorganismo_id": aislado.microorganismo_id,
         "estado_anterior": estado_anterior,
@@ -788,7 +792,7 @@ def crear_aislado(
     """
     with transaction.atomic():
         estudio = (
-            EstudioMicrobiologia.objects.select_for_update()
+            EstudioMicrobiologia.objects.select_for_update(of=("self",))
             .select_related("solicitud", "muestra")
             .get(pk=estudio_id)
         )
@@ -851,7 +855,7 @@ def aplicar_descartar_aislado(
         raise MicrobiologiaAccionError("El motivo de descarte es obligatorio.")
     with transaction.atomic():
         aislado = (
-            AisladoMicrobiologico.objects.select_for_update()
+            AisladoMicrobiologico.objects.select_for_update(of=("self",))
             .select_related("estudio", "estudio__solicitud", "estudio__muestra")
             .get(pk=aislado_id)
         )
@@ -908,7 +912,7 @@ def crear_identificacion(
     """
     with transaction.atomic():
         aislado = (
-            AisladoMicrobiologico.objects.select_for_update()
+            AisladoMicrobiologico.objects.select_for_update(of=("self",))
             .select_related("estudio", "estudio__solicitud", "estudio__muestra")
             .get(pk=aislado_id)
         )
@@ -944,7 +948,7 @@ def crear_identificacion(
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
-            "numero_solicitud": estudio.solicitud.numero,
+            "numero_solicitud": estudio.solicitud.numero if estudio.solicitud_id else None,
             "muestra_id": estudio.muestra_id,
             "resultado_presente": bool(identificacion.resultado),
             "observacion_presente": bool(identificacion.observaciones),
@@ -1012,9 +1016,9 @@ def _base_antibiograma_metadata(
         "aislado_id": aislado.pk,
         "estudio_id": estudio.pk,
         "numero_estudio": estudio.numero,
-        "solicitud_id": sol.pk,
-        "numero_solicitud": sol.numero,
-        "muestra_id": muestra.pk,
+        "solicitud_id": sol.pk if sol else None,
+        "numero_solicitud": sol.numero if sol else None,
+        "muestra_id": muestra.pk if muestra else None,
         "estado_anterior": estado_anterior,
         "estado_nuevo": estado_nuevo,
         "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
@@ -1184,7 +1188,7 @@ def crear_resultado_antibiotico(
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
-            "numero_solicitud": estudio.solicitud.numero,
+            "numero_solicitud": estudio.solicitud.numero if estudio.solicitud_id else None,
             "muestra_id": estudio.muestra_id,
             "sensibilidad_presente": bool(resultado.interpretacion),
             "resultado_presente": bool(resultado.mic or resultado.halo_mm is not None),
@@ -1259,7 +1263,7 @@ def actualizar_resultado_antibiotico(
             "estudio_id": estudio.pk,
             "numero_estudio": estudio.numero,
             "solicitud_id": estudio.solicitud_id,
-            "numero_solicitud": estudio.solicitud.numero,
+            "numero_solicitud": estudio.solicitud.numero if estudio.solicitud_id else None,
             "muestra_id": estudio.muestra_id,
             "sensibilidad_presente": bool(resultado.interpretacion),
             "resultado_presente": bool(resultado.mic or resultado.halo_mm is not None),
@@ -1398,9 +1402,9 @@ def _base_informe_metadata(
         "tipo_informe": informe.tipo,
         "estudio_id": estudio.pk,
         "numero_estudio": estudio.numero,
-        "solicitud_id": sol.pk,
-        "numero_solicitud": sol.numero,
-        "muestra_id": muestra.pk,
+        "solicitud_id": sol.pk if sol else None,
+        "numero_solicitud": sol.numero if sol else None,
+        "muestra_id": muestra.pk if muestra else None,
         "estado_anterior": estado_anterior,
         "estado_nuevo": estado_nuevo,
         "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,

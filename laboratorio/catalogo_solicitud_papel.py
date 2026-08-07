@@ -151,16 +151,36 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "T4L", "nombre": "T4 libre", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "B12", "nombre": "Vitamina B12", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "VITD", "nombre": "Vitamina D", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
-    {"codigo": "EAB_ART", "nombre": "EAB arterial", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "TEXTO"},
-    {"codigo": "EAB_VEN", "nombre": "EAB venoso", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "TEXTO"},
+    # —— EAB arterial (panel PAN_EAB_ART) ——
+    {"codigo": "PH_ART", "nombre": "pH (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "pH"},
+    {"codigo": "PO2_ART", "nombre": "pO2 (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "pO2"},
+    {"codigo": "PCO2_ART", "nombre": "pCO2 (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "pCO2"},
+    {"codigo": "SAT_O2_ART", "nombre": "Sat. de O2 (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "SatO2"},
+    {"codigo": "HCO3_ART", "nombre": "Bicarbonato (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "HCO3"},
+    {"codigo": "BE_ART", "nombre": "Exceso de base (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "BE"},
+    # —— EAB venoso (panel PAN_EAB_VEN) ——
+    {"codigo": "PH_VEN", "nombre": "pH (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "pH"},
+    {"codigo": "PO2_VEN", "nombre": "pO2 (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "pO2"},
+    {"codigo": "PCO2_VEN", "nombre": "pCO2 (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "pCO2"},
+    {"codigo": "SAT_O2_VEN", "nombre": "Sat. de O2 (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "SatO2"},
+    {"codigo": "HCO3_VEN", "nombre": "Bicarbonato (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "HCO3"},
+    {"codigo": "BE_VEN", "nombre": "Exceso de base (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "BE"},
     {"codigo": "LACT", "nombre": "Ácido láctico / Lactato", "muestra": "SANGRE_HEPARINA", "tipo_resultado": "NUMERICO"},
 ]
 
 # Códigos legacy del seed demo que se reemplazan por panel + componentes
-LEGACY_CODIGOS_DESACTIVAR = frozenset({"HEMO", "COL", "HEM", "COA"})
+LEGACY_CODIGOS_DESACTIVAR = frozenset({"HEMO", "COL", "HEM", "COA", "EAB_ART", "EAB_VEN"})
+
+# Componentes EAB (jeringas art/ven)
+COMPONENTES_EAB_ART: list[str] = [
+    "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
+]
+COMPONENTES_EAB_VEN: list[str] = [
+    "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
+]
 
 # ---------------------------------------------------------------------------
-# 14 paneles prioritarios + nombres alineados al papel
+# Paneles prioritarios + nombres alineados al papel
 # ---------------------------------------------------------------------------
 
 PANELES: list[PanelDef] = [
@@ -236,6 +256,16 @@ PANELES: list[PanelDef] = [
         "nombre": "Microalbuminuria al azar",
         "componentes": ["MICROALB", "CREA_U"],
     },
+    {
+        "codigo": "PAN_EAB_ART",
+        "nombre": "EAB arterial",
+        "componentes": list(COMPONENTES_EAB_ART),
+    },
+    {
+        "codigo": "PAN_EAB_VEN",
+        "nombre": "EAB venoso",
+        "componentes": list(COMPONENTES_EAB_VEN),
+    },
 ]
 
 # Exámenes sueltos solicitables (aparecen en el papel fuera de paneles)
@@ -244,5 +274,5 @@ EXAMENES_SUELTOS_PDF: list[str] = [
     "PROT_T", "ALB", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
     "CPK", "CPK_MB", "TROP_I", "TROP_US", "MIOG", "PROBNP", "DDIM",
     "PROT_U_24", "PROT_U_AZ", "LPA", "PSA", "TSH", "T3", "T4", "T4L",
-    "B12", "VITD", "EAB_ART", "EAB_VEN", "LACT",
+    "B12", "VITD", "LACT",
 ]

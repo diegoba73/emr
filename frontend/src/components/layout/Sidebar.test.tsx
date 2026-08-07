@@ -135,6 +135,8 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
     expect(screen.getByText('Laboratorio (LIMS)')).toBeInTheDocument();
     expect(screen.getByText('Órdenes LIMS')).toBeInTheDocument();
     expect(screen.getByText('Microbiología')).toBeInTheDocument();
+    expect(screen.getByText('Catálogos LIMS')).toBeInTheDocument();
+    expect(screen.getByText('Exámenes')).toBeInTheDocument();
   });
 
   it('no muestra Turnos ni agenda', () => {
