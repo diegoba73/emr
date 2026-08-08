@@ -28,7 +28,6 @@ import { getCurrentMedicoId, shouldLockMedicoField } from '../../utils/turnoPerm
 import {
   agregarExamenesSolicitudLims,
   createSolicitudExamenLims,
-  formatDrfError,
   getOrdenAbiertaPaciente,
   getTiposExamenMap,
   listPanelesLims,
@@ -202,7 +201,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     }
     Promise.all(loaders)
       .catch((e) => {
-        if (!cancelled) setError(formatDrfError(e));
+        if (!cancelled) setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
       })
       .finally(() => {
         if (!cancelled) setCatalogLoading(false);
@@ -415,8 +414,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         onCreated?.(orden.id);
         onClose();
       } catch (e) {
-        const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes);
-        setError(msg || formatDrfError(e));
+        setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
       } finally {
         setSaving(false);
       }

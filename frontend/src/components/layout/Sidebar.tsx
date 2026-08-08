@@ -49,6 +49,7 @@ import {
   canAccessPortalResultados,
   canAccessPortalTurnos,
   canAccessSolicitudes,
+  isLaboratorioRole,
   isPacienteRole,
 } from '../../utils/permissions';
 import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
@@ -78,7 +79,7 @@ export interface NavItem {
 
 const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
-  { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
+  { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: (u) => canAccessPacientes(u) && !isLaboratorioRole(u) },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessAtenciones },

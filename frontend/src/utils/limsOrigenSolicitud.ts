@@ -46,7 +46,16 @@ export function formatOrigenProcedenciaCell(row: {
 }): OrigenProcedenciaCell {
   const titulo = labelOrigenSolicitudLims(row.origen_solicitud, row.origen_solicitud_display);
   const detalle = (row.procedencia_display || '').trim();
-  if (!detalle || detalle === titulo || detalle === row.origen_solicitud) {
+  const detalleNorm = detalle.toLowerCase();
+  const tituloNorm = titulo.toLowerCase();
+  const detalleRepiteTitulo =
+    !detalle ||
+    detalleNorm === tituloNorm ||
+    detalle === row.origen_solicitud ||
+    tituloNorm.startsWith(detalleNorm + ' —') ||
+    tituloNorm.startsWith(detalleNorm + ' -') ||
+    tituloNorm.startsWith(detalleNorm + ' ');
+  if (detalleRepiteTitulo) {
     return { titulo };
   }
   return { titulo, detalle };

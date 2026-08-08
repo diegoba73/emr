@@ -33,7 +33,6 @@ import { useData } from '../../contexts/DataContext';
 import type { LimsPanelExamen, LimsTipoExamen } from '../../types/lims';
 import {
   createPanelExamenLims,
-  formatDrfError,
   listPanelesLims,
   listTiposExamenLims,
   patchPanelExamenLims,
@@ -177,7 +176,7 @@ const PanelesCatalogo: React.FC = () => {
       setDialogOpen(false);
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e) || CLINICAL_ACTION_ERRORS.limsGuardarCatalogo);
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setSaving(false);
     }
@@ -192,7 +191,7 @@ const PanelesCatalogo: React.FC = () => {
       setDeleteTarget(null);
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e) || CLINICAL_ACTION_ERRORS.limsGuardarCatalogo);
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setDeleting(false);
     }

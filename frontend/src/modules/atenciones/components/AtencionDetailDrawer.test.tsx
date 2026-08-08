@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import AtencionDetailDrawer from './AtencionDetailDrawer';
 import type { User } from '../../../types';
@@ -67,17 +68,19 @@ function mockUser(overrides: Partial<User> & Pick<User, 'rol'>): User {
 function renderDrawer(user: User | null, canOperate?: boolean) {
   useData.mockReturnValue({ currentUser: user });
   return render(
-    <QueryClientProvider client={client}>
-      <ThemeProvider theme={theme}>
-        <AtencionDetailDrawer
-          atencionId={1}
-          open
-          onClose={jest.fn()}
-          currentUser={user}
-          canOperate={canOperate}
-        />
-      </ThemeProvider>
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <ThemeProvider theme={theme}>
+          <AtencionDetailDrawer
+            atencionId={1}
+            open
+            onClose={jest.fn()}
+            currentUser={user}
+            canOperate={canOperate}
+          />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 

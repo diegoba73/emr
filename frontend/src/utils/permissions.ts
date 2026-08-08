@@ -98,12 +98,7 @@ export function canAccessSolicitudes(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return (
-    rol === 'secretaria' ||
-    rol === 'medico' ||
-    rol === 'paciente' ||
-    rol === 'enfermeria'
-  );
+  return rol === 'secretaria' || rol === 'medico' || rol === 'paciente';
 }
 
 /** Archivos médicos: admin/médico/paciente (secretaría/enfermería/laboratorio bloqueados). */

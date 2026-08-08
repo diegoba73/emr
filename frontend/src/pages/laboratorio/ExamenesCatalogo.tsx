@@ -30,7 +30,6 @@ import { useData } from '../../contexts/DataContext';
 import type { LimsTipoContenedor, LimsTipoExamen, LimsTipoMuestra, TipoExamenLimsWriteBody } from '../../types/lims';
 import {
   createTipoExamenLims,
-  formatDrfError,
   listContenedoresLims,
   listTiposExamenLims,
   listTiposMuestraLims,
@@ -248,7 +247,7 @@ const ExamenesCatalogo: React.FC = () => {
       setDialogOpen(false);
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e) || CLINICAL_ACTION_ERRORS.limsGuardarCatalogo);
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setSaving(false);
     }

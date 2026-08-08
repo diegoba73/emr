@@ -29,7 +29,6 @@ import {
   createAntibiotico,
   createMedioCultivo,
   createMicroorganismo,
-  formatDrfError,
   listAntibioticos,
   listMediosCultivo,
   listMicroorganismos,
@@ -256,7 +255,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
       setDialogOpen(false);
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e) || CLINICAL_ACTION_ERRORS.limsGuardarCatalogo);
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setSaving(false);
     }

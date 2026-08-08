@@ -32,7 +32,6 @@ import { useData } from '../../contexts/DataContext';
 import type { LimsTipoMuestra } from '../../types/lims';
 import {
   createTipoMuestraLims,
-  formatDrfError,
   listTiposMuestraLims,
   patchTipoMuestraLims,
 } from '../../services/limsApi';
@@ -147,7 +146,7 @@ const TiposMuestraCatalogo: React.FC = () => {
       setDialogOpen(false);
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e) || CLINICAL_ACTION_ERRORS.limsGuardarCatalogo);
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setSaving(false);
     }
@@ -162,7 +161,7 @@ const TiposMuestraCatalogo: React.FC = () => {
       setDeleteTarget(null);
       await load();
     } catch (e) {
-      toast.error(formatDrfError(e) || CLINICAL_ACTION_ERRORS.limsGuardarCatalogo);
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setDeleting(false);
     }

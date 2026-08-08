@@ -143,7 +143,7 @@ def test_resultado_examen_snapshot_redacta_valor_clinico():
     sol = SolicitudExamen.objects.create(
         paciente=pac,
         medico_interno=med,
-        origen_solicitud="EMR",
+        origen_solicitud="AMBULATORIO_CEHTA",
         estado="EN_PROCESO",
     )
     sol.tipos_examen.add(te)

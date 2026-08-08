@@ -29,6 +29,9 @@ jest.mock('../services/api', () => ({
 jest.mock('../contexts/DataContext', () => ({
   useData: () => ({
     recursos: [{ id: 1, nombre: 'Consultorio 1', tipo_recurso: 'CONSULTORIO', activo: true }],
+    pacientes: [],
+    loadPacientes: jest.fn().mockResolvedValue(undefined),
+    loadRecursos: jest.fn().mockResolvedValue(undefined),
     currentUser: { id: 1, rol: 'ADMIN', is_staff: true, is_superuser: true },
     refreshAll: jest.fn().mockResolvedValue(undefined),
     refreshTurnos: jest.fn().mockResolvedValue(undefined),
@@ -86,7 +89,7 @@ function renderTurnoModal(props: Partial<React.ComponentProps<typeof TurnoModal>
 
 async function waitForTurnoFormReady() {
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: 'Actualizar Turno' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualizar turno' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('10:00')).toBeInTheDocument();
   });
 }
@@ -94,7 +97,7 @@ async function waitForTurnoFormReady() {
 async function submitReprogramacionForm() {
   await waitForTurnoFormReady();
   fireEvent.change(screen.getByDisplayValue('10:00'), { target: { value: '11:00' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar Turno' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar turno' }));
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Reprogramar turno' })).toBeInTheDocument();
   });

@@ -88,21 +88,21 @@ describe('Sidebar paciente', () => {
     });
   });
 
-  it('muestra Inicio, Turnos y módulos propios sin Pacientes', () => {
+  it('muestra portal propio sin Pacientes ni módulos EMR generales', () => {
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.getByText('Inicio')).toBeInTheDocument();
-    expect(screen.getByText('Turnos')).toBeInTheDocument();
-    expect(screen.getByText('Atenciones Clínicas')).toBeInTheDocument();
-    expect(screen.getByText('Archivos')).toBeInTheDocument();
-    expect(screen.getByText('Estudios complementarios')).toBeInTheDocument();
-    expect(screen.getByText('Análisis Clínico')).toBeInTheDocument();
+    expect(screen.getAllByText('Mi portal').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Mis turnos')).toBeInTheDocument();
+    expect(screen.getByText('Mis resultados')).toBeInTheDocument();
+    expect(screen.getByText('Mis documentos')).toBeInTheDocument();
+    expect(screen.getByText('Mi historia')).toBeInTheDocument();
     expect(screen.queryByText('Pacientes')).not.toBeInTheDocument();
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
   });
 });
 

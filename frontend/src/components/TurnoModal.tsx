@@ -108,13 +108,15 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   initialEstudio = null,
 }) => {
   const {
-    recursos,
+    recursos: recursosRaw,
     currentUser,
     loadRecursos,
     refreshTurnos,
-    pacientes,
+    pacientes: pacientesRaw,
     loadPacientes,
   } = useData();
+  const recursos = recursosRaw ?? [];
+  const pacientes = pacientesRaw ?? [];
   const queryClient = useQueryClient();
   const { openMotivoDialog, dialogProps: motivoDialogProps } = useMotivoDialog();
 

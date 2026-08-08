@@ -142,5 +142,15 @@ export const CLINICAL_ACTION_ERRORS = {
 
 /** Mensaje seguro para UI clínica: solo status HTTP conocido + fallback por acción. */
 export function getSafeClinicalActionMessage(error: unknown, fallback: string): string {
-  return getSafeApiErrorMessage(error, fallback);
+  const status = responseStatus(error);
+  if (status === 403) {
+    return 'No tiene permisos para realizar esta acción.';
+  }
+  if (status === 404) {
+    return 'El recurso solicitado no está disponible.';
+  }
+  if (status === 401) {
+    return 'Debe iniciar sesión para continuar.';
+  }
+  return fallback;
 }
