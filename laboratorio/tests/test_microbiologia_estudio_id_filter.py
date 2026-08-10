@@ -210,11 +210,12 @@ class TestMicroEstudioIdFilter(TestCase):
             antibiotico=cls.antibiotico,
             interpretacion="R",
         )
+        # Lab/médico solo ven informes VALIDADO (contenido liberado).
         cls.informe_a = InformeMicrobiologia.objects.create(
-            estudio=cls.estudio_a, tipo="PRELIMINAR", texto="a"
+            estudio=cls.estudio_a, tipo="PRELIMINAR", texto="a", estado="VALIDADO"
         )
         cls.informe_b = InformeMicrobiologia.objects.create(
-            estudio=cls.estudio_b, tipo="PRELIMINAR", texto="b"
+            estudio=cls.estudio_b, tipo="PRELIMINAR", texto="b", estado="VALIDADO"
         )
         cls.identificacion_a = IdentificacionMicroorganismo.objects.create(
             aislado=cls.aislado_a,
