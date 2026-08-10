@@ -405,6 +405,7 @@ export interface EstudioMicrobiologia {
   consulta_hc?: number | null;
   origen_solicitud?: string;
   origen_solicitud_display?: string | null;
+  procedencia_display?: string | null;
   codigo_barra?: string | null;
   etiquetas_impresas_at?: string | null;
   sin_etiquetas?: boolean;
@@ -554,6 +555,7 @@ export interface InformeMicrobiologia {
   tipo: TipoInformeMicrobiologia;
   estado: EstadoInformeMicrobiologia;
   texto?: string;
+  contenido_visible?: boolean;
   version?: number;
   emitido_por?: number | null;
   fecha_emision?: string | null;

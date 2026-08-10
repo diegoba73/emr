@@ -4,9 +4,14 @@ import {
   canAccessMicrobiologiaLectura,
   canDownloadInformeClinicoPdf,
   canDownloadInformeLimsPdf,
+  canDownloadInformeMicroPdf,
+  canEnviarInformeLims,
+  canEnviarInformeMicro,
   canMarcarMicroEstudioInformado,
+  canOperateInformeMicro,
   canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
+  canSeeInformeMicro,
   canSeeResultadosClinicos,
   canValidarOrdenLims,
   isMicroEstudioCerrado,
@@ -94,11 +99,16 @@ const adminUser: User = { ...labUser, id: 10, username: 'admin', rol: 'ADMIN', i
 const secUser: User = { ...labUser, id: 11, username: 'sec', rol: 'SECRETARIA' };
 const enfUser: User = { ...labUser, id: 12, username: 'enf', rol: 'ENFERMERIA' };
 
-describe('canDownloadInformeLimsPdf', () => {
-  it('admin, laboratorio y bioquímico pueden descargar', () => {
-    expect(canDownloadInformeLimsPdf(adminUser)).toBe(true);
-    expect(canDownloadInformeLimsPdf(labUser)).toBe(true);
-    expect(canDownloadInformeLimsPdf(bioUser)).toBe(true);
+describe('canDownloadInformeLimsPdf / canEnviarInformeLims', () => {
+  it('admin, laboratorio y bioquímico solo tras FINALIZADO', () => {
+    expect(canDownloadInformeLimsPdf(adminUser, 'LISTO_PARA_VALIDAR')).toBe(false);
+    expect(canDownloadInformeLimsPdf(labUser, 'EN_PROCESO')).toBe(false);
+    expect(canDownloadInformeLimsPdf(bioUser, 'INFORMADO_PARCIAL')).toBe(false);
+    expect(canDownloadInformeLimsPdf(adminUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeLimsPdf(labUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeLimsPdf(bioUser, 'FINALIZADO')).toBe(true);
+    expect(canEnviarInformeLims(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
+    expect(canEnviarInformeLims(labUser, 'FINALIZADO')).toBe(true);
   });
 
   it('médico, secretaría y enfermería no descargan desde módulo LIMS', () => {
@@ -113,12 +123,33 @@ describe('canDownloadInformeLimsPdf', () => {
   });
 });
 
-describe('canValidarOrdenLims', () => {
-  it('solo bioquímico y admin validan', () => {
-    expect(canValidarOrdenLims(bioUser)).toBe(true);
-    expect(canValidarOrdenLims(adminUser)).toBe(true);
-    expect(canValidarOrdenLims(labUser)).toBe(false);
-    expect(canValidarOrdenLims(medUser)).toBe(false);
+describe('canOperateInformeMicro / canSeeInformeMicro / canDownloadInformeMicroPdf', () => {
+  it('solo bioquímico y admin operan informes', () => {
+    expect(canOperateInformeMicro(bioUser)).toBe(true);
+    expect(canOperateInformeMicro(adminUser)).toBe(true);
+    expect(canOperateInformeMicro(labUser)).toBe(false);
+    expect(canOperateInformeMicro(medUser)).toBe(false);
+  });
+
+  it('lab y médico no ven contenido hasta VALIDADO', () => {
+    expect(canSeeInformeMicro(labUser, 'EMITIDO')).toBe(false);
+    expect(canSeeInformeMicro(medUser, 'BORRADOR')).toBe(false);
+    expect(canSeeInformeMicro(labUser, 'VALIDADO')).toBe(true);
+    expect(canSeeInformeMicro(medUser, 'VALIDADO')).toBe(true);
+    expect(canSeeInformeMicro(bioUser, 'BORRADOR')).toBe(true);
+  });
+
+  it('PDF: bio puede con emitido; lab/médico solo validado', () => {
+    expect(canDownloadInformeMicroPdf(bioUser, 'LISTO_PARA_VALIDAR')).toBe(true);
+    expect(canDownloadInformeMicroPdf(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
+    expect(canDownloadInformeMicroPdf(medUser, 'LISTO_PARA_VALIDAR')).toBe(false);
+    expect(canDownloadInformeMicroPdf(labUser, 'VALIDADO')).toBe(true);
+    expect(canDownloadInformeMicroPdf(medUser, 'VALIDADO')).toBe(true);
+  });
+
+  it('enviar solo tras VALIDADO/INFORMADO', () => {
+    expect(canEnviarInformeMicro(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
+    expect(canEnviarInformeMicro(labUser, 'VALIDADO')).toBe(true);
   });
 });
 

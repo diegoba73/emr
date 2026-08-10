@@ -473,12 +473,15 @@ class SolicitudExamen(models.Model):
     def medico_display(self):
         """
         Retorna el nombre del médico (interno o externo) para display.
+        Formato unificado LIMS: «Dr. Apellido, Nombre».
         """
-        if self.medico_interno:
-            return self.medico_interno.nombre_completo
-        elif self.medico_externo_nombre:
-            return self.medico_externo_nombre
-        return "Sin médico asignado"
+        from laboratorio.display_names import format_medico_display
+
+        return format_medico_display(
+            self.medico_interno,
+            externo_nombre=self.medico_externo_nombre,
+            fallback="Sin médico asignado",
+        )
 
 
 class ResultadoExamen(models.Model):

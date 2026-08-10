@@ -64,6 +64,7 @@ export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow
     medico_display: e.medico_display || e.medico_externo_nombre || null,
     origen_solicitud: e.origen_solicitud,
     origen_solicitud_display: e.origen_solicitud_display,
+    procedencia_display: e.procedencia_display,
     estado: e.estado,
     fecha_solicitud: e.created_at,
     fecha_toma_muestra: e.fecha_inicio || e.created_at,

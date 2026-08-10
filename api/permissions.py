@@ -142,8 +142,10 @@ def usuario_puede_ver_resultados_lims(user, solicitud) -> bool:
 
 
 def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
-    """PDF clínico: operadores LIMS siempre; resto solo orden FINALIZADO (validada)."""
+    """PDF LIMS: solo orden FINALIZADO (validada por bioquímico). Sin borradores ni parciales."""
     if not usuario_puede_ver_solicitud_lims(user, solicitud):
+        return False
+    if getattr(solicitud, 'estado', None) != 'FINALIZADO':
         return False
     if user.is_superuser:
         return True
@@ -151,8 +153,90 @@ def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
     if role in ROLES_LIMS_WRITE:
         return True
     if role in (*ROLES_LIMS_OPERATIVA_LIMITADA, 'medico', 'paciente'):
-        return getattr(solicitud, 'estado', None) == 'FINALIZADO'
+        return True
     return False
+
+
+def usuario_puede_operar_informe_micro(user) -> bool:
+    """Crear / editar / emitir / anular / validar informes de microbiología.
+
+    Solo bioquímico y admin (misma regla que validar en Lab. Clínico).
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser:
+        return True
+    return get_normalized_role(user) in ROLES_LIMS_VALIDAR
+
+
+def _medico_puede_ver_estudio_micro(user, estudio) -> bool:
+    """Médico solicitante o con vínculo a la solicitud LIMS asociada."""
+    if estudio is None:
+        return False
+    medico_interno_id = getattr(estudio, 'medico_interno_id', None)
+    if medico_interno_id:
+        try:
+            if (
+                hasattr(user, 'medico')
+                and user.medico
+                and user.medico.pk == medico_interno_id
+            ):
+                return True
+        except Exception:
+            pass
+    solicitud = getattr(estudio, 'solicitud', None)
+    if solicitud is None:
+        return False
+    return usuario_puede_ver_solicitud_lims(user, solicitud)
+
+
+def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
+    """Contenido del informe micro.
+
+    Bioquímico/admin: siempre (borrador, emitido, validado).
+    Técnico laboratorio / médico: solo cuando el informe está VALIDADO.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser:
+        return True
+    role = get_normalized_role(user)
+    if role in ROLES_LIMS_VALIDAR:
+        return True
+
+    if getattr(informe, 'estado', None) != 'VALIDADO':
+        return False
+
+    estudio = getattr(informe, 'estudio', None)
+    if role == 'laboratorio':
+        return True
+    if role == 'medico':
+        return _medico_puede_ver_estudio_micro(user, estudio)
+    return False
+
+
+def usuario_puede_descargar_informe_micro(user, estudio) -> bool:
+    """PDF micro: bio/admin con FINAL EMITIDO o VALIDADO; resto solo VALIDADO."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser:
+        return True
+    role = get_normalized_role(user)
+
+    if role == 'medico':
+        if not _medico_puede_ver_estudio_micro(user, estudio):
+            return False
+    elif role not in ROLES_LIMS_WRITE:
+        return False
+
+    from laboratorio.models_microbiologia import InformeMicrobiologia
+
+    estados = ('EMITIDO', 'VALIDADO') if role in ROLES_LIMS_VALIDAR else ('VALIDADO',)
+    return InformeMicrobiologia.objects.filter(
+        estudio_id=estudio.pk,
+        tipo='FINAL',
+        estado__in=estados,
+    ).exists()
 
 
 _LIMS_SOLICITUD_READ_ROLES = frozenset({
@@ -241,8 +325,14 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'cargar_resultados':
             return role in ROLES_LIMS_WRITE
 
-        if action in ('tomar_muestra', 'enviar_informe'):
+        if action == 'tomar_muestra':
             return role in ROLES_LIMS_WRITE
+
+        if action == 'enviar_informe':
+            return (
+                role in ROLES_LIMS_WRITE
+                and getattr(obj, 'estado', None) == 'FINALIZADO'
+            )
 
         if action == 'agregar_examenes':
             if role in ROLES_LIMS_WRITE:
@@ -825,9 +915,14 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         action = getattr(view, "action", None)
         if action in ("list", "retrieve", "por_codigo"):
             return True
-        # Pedido clínico: médico y operadores LIMS (create individual o batch).
+        # Pedido clínico: médico solo puede crear estudios (no siembras/lecturas/etc.).
         if action in ("create", "batch"):
-            return role in (*ROLES_LIMS_WRITE, "medico")
+            if role in ROLES_LIMS_WRITE:
+                return True
+            if role == "medico":
+                view_name = type(view).__name__
+                return view_name == "EstudioMicrobiologiaViewSet"
+            return False
         if action in ("update", "partial_update"):
             return role in ROLES_LIMS_WRITE
         if action in (
@@ -843,7 +938,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         ):
             return role in ROLES_LIMS_WRITE
         if action == "informe_pdf":
-            # Operadores + médico (object permission filtra vínculo).
+            # Operadores + médico; object permission exige VALIDADO (salvo bio/admin).
             return role in (*ROLES_LIMS_WRITE, "medico")
         if action == "informe_entrega":
             # Público con token; el método no exige auth.
@@ -858,12 +953,35 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         role = get_normalized_role(request.user)
+        action = getattr(view, "action", None)
+
+        if action == "informe_pdf":
+            estudio = obj if hasattr(obj, "medico_interno_id") else getattr(obj, "estudio", None)
+            if estudio is None:
+                return False
+            # Bio/admin: pueden intentar (la vista responde 400 si aún no hay FINAL emitido).
+            if role in ROLES_LIMS_VALIDAR:
+                return True
+            return usuario_puede_descargar_informe_micro(request.user, estudio)
+
+        if action == "enviar_informe":
+            # Envío al paciente/médico solo con informe FINAL VALIDADO.
+            estudio = obj if hasattr(obj, "medico_interno_id") else getattr(obj, "estudio", None)
+            if estudio is None or role not in ROLES_LIMS_WRITE:
+                return False
+            from laboratorio.models_microbiologia import InformeMicrobiologia
+
+            return InformeMicrobiologia.objects.filter(
+                estudio_id=estudio.pk,
+                tipo="FINAL",
+                estado="VALIDADO",
+            ).exists()
+
         if role == "admin":
             return True
         if role in ROLES_LIMS_OPERADOR:
             return True
         if role == "medico":
-            action = getattr(view, "action", None)
             if action not in ("retrieve", "list", "por_codigo", "informe_pdf"):
                 return False
 
@@ -918,15 +1036,13 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
     """
     Informes de microbiología (B3.4).
 
-    - admin / superuser: acceso total (incluye ``validar``).
-    - laboratorio / bioquímico: crear/editar borradores, emitir, anular.
-    - solo bioquímico / admin: ``validar`` (única diferencia operativa).
-    - médico: list/retrieve de informes de órdenes propias o pacientes vinculados.
+    - bioquímico / admin: crear, completar (emitir), anular y validar; ven todo.
+    - laboratorio / médico: solo list/retrieve de informes **VALIDADO**;
+      no ven borradores ni emitidos pendientes de validación.
     - secretaría / enfermería / paciente / anónimo: sin acceso.
     """
 
     _read_roles = frozenset({*ROLES_LIMS_WRITE, "medico"})
-    _write_roles = ROLES_LIMS_WRITE
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -935,12 +1051,17 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
             return True
         role = get_normalized_role(request.user)
         action = getattr(view, "action", None)
-        if action == "validar":
+        if action in (
+            "create",
+            "partial_update",
+            "update",
+            "emitir",
+            "anular",
+            "validar",
+        ):
             return role in ROLES_LIMS_VALIDAR
         if action in ("list", "retrieve"):
             return role in self._read_roles
-        if action in ("create", "partial_update", "update", "emitir", "anular"):
-            return role in self._write_roles
         if action == "destroy":
             return False
         return False
@@ -952,18 +1073,16 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
             return True
         role = get_normalized_role(request.user)
         action = getattr(view, "action", None)
-        if action == "validar":
+        if action in (
+            "partial_update",
+            "update",
+            "emitir",
+            "anular",
+            "validar",
+        ):
             return role in ROLES_LIMS_VALIDAR
-        if role in ROLES_LIMS_WRITE:
-            return True
-        if role == "medico":
-            if action not in ("retrieve", "list"):
-                return False
-            estudio = getattr(obj, "estudio", None)
-            solicitud = getattr(estudio, "solicitud", None) if estudio else None
-            if solicitud is None:
-                return False
-            return usuario_puede_ver_solicitud_lims(request.user, solicitud)
+        if action in ("retrieve", "list"):
+            return usuario_puede_ver_contenido_informe_micro(request.user, obj)
         return False
 
 

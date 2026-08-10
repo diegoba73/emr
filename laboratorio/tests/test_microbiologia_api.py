@@ -1493,6 +1493,10 @@ class TestInformeMicrobiologiaAPI(TestCase):
             username=f"lab_inf_{self.suf}", email=f"linf{self.suf}@t.com",
             password="x", rol="laboratorio", is_staff=True,
         )
+        self.bio = User.objects.create_user(
+            username=f"bio_inf_{self.suf}", email=f"binf{self.suf}@t.com",
+            password="x", rol="bioquimico", is_staff=True,
+        )
         self.admin = User.objects.create_user(
             username=f"adm_inf_{self.suf}", email=f"ainf{self.suf}@t.com",
             password="x", rol="admin", is_staff=True,
@@ -1522,15 +1526,20 @@ class TestInformeMicrobiologiaAPI(TestCase):
         }
         return self.client.post("/api/lab/microbiologia/informes/", body, format="json")
 
-    def test_laboratorio_crea_preliminar(self):
+    def test_laboratorio_no_crea_informe(self):
         self.client.force_authenticate(self.lab)
+        r = self._post_informe(tipo="PRELIMINAR", texto="nota")
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_bioquimico_crea_preliminar(self):
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="PRELIMINAR", texto="nota")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
         self.assertEqual(r.json()["tipo"], "PRELIMINAR")
         self.assertEqual(r.json()["estado"], "BORRADOR")
 
     def test_final_sin_preliminar_emit_y_estudio_listo(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="borrador final")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
         iid = r.json()["id"]
@@ -1544,14 +1553,14 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.assertEqual(self.ctx["estudio"].estado, "LISTO_PARA_VALIDAR")
 
     def test_segundo_final_devuelve_400(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="a")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         r2 = self._post_informe(tipo="FINAL", texto="b")
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_laboratorio_validar_falla_403(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         self.client.post(
@@ -1559,11 +1568,12 @@ class TestInformeMicrobiologiaAPI(TestCase):
             {"texto": "Final emitido."},
             format="json",
         )
+        self.client.force_authenticate(self.lab)
         r2 = self.client.post(f"/api/lab/microbiologia/informes/{iid}/validar/", {}, format="json")
         self.assertEqual(r2.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_admin_valida_final(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         self.client.post(
@@ -1578,8 +1588,42 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.ctx["estudio"].refresh_from_db()
         self.assertEqual(self.ctx["estudio"].estado, "VALIDADO")
 
-    def test_medico_lee_informe_final(self):
+    def test_medico_no_lee_antes_de_validar(self):
+        self.client.force_authenticate(self.bio)
+        r = self._post_informe(tipo="FINAL", texto="secreto")
+        iid = r.json()["id"]
+        self.client.post(
+            f"/api/lab/microbiologia/informes/{iid}/emitir/",
+            {"texto": "Texto final pendiente."},
+            format="json",
+        )
+        self.client.force_authenticate(self.med_user)
+        r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")
+        self.assertEqual(r2.status_code, status.HTTP_404_NOT_FOUND)
+        r_list = self.client.get(
+            f"/api/lab/microbiologia/informes/?estudio_id={self.ctx['estudio'].pk}"
+        )
+        self.assertEqual(r_list.status_code, status.HTTP_200_OK)
+        results = r_list.json().get("results", r_list.json())
+        if isinstance(results, dict):
+            results = results.get("results", [])
+        self.assertEqual(len(results), 0)
+
+    def test_laboratorio_no_lee_antes_de_validar(self):
+        self.client.force_authenticate(self.bio)
+        r = self._post_informe(tipo="FINAL", texto="secreto")
+        iid = r.json()["id"]
+        self.client.post(
+            f"/api/lab/microbiologia/informes/{iid}/emitir/",
+            {"texto": "Pendiente."},
+            format="json",
+        )
         self.client.force_authenticate(self.lab)
+        r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")
+        self.assertEqual(r2.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_medico_lee_informe_final(self):
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         self.client.post(
@@ -1592,9 +1636,12 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.client.force_authenticate(self.med_user)
         r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertEqual(r2.json().get("estado"), "VALIDADO")
+        self.assertTrue(r2.json().get("contenido_visible"))
+        self.assertIn("Texto final", r2.json().get("texto") or "")
 
     def test_medico_ajeno_no_lee(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         self.client.post(
@@ -1602,6 +1649,8 @@ class TestInformeMicrobiologiaAPI(TestCase):
             {"texto": "Texto."},
             format="json",
         )
+        self.client.force_authenticate(self.admin)
+        self.client.post(f"/api/lab/microbiologia/informes/{iid}/validar/", {}, format="json")
         self.client.force_authenticate(self.med_user_otro)
         r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")
         self.assertEqual(r2.status_code, status.HTTP_404_NOT_FOUND)
@@ -1612,14 +1661,14 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_anular_exige_motivo(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="PRELIMINAR", texto="x")
         iid = r.json()["id"]
         r2 = self.client.post(f"/api/lab/microbiologia/informes/{iid}/anular/", {}, format="json")
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_anular_con_motivo_audita(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="PRELIMINAR", texto="x")
         iid = r.json()["id"]
         with self.captureOnCommitCallbacks(execute=True):
@@ -1640,7 +1689,7 @@ class TestInformeMicrobiologiaAPI(TestCase):
         )
 
     def test_no_patch_informe_validado(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         self.client.post(
@@ -1650,7 +1699,7 @@ class TestInformeMicrobiologiaAPI(TestCase):
         )
         self.client.force_authenticate(self.admin)
         self.client.post(f"/api/lab/microbiologia/informes/{iid}/validar/", {}, format="json")
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r2 = self.client.patch(
             f"/api/lab/microbiologia/informes/{iid}/",
             {"texto": "cambio no permitido"},
@@ -1659,7 +1708,7 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_emitir_audita(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         with self.captureOnCommitCallbacks(execute=True):
@@ -1679,7 +1728,7 @@ class TestInformeMicrobiologiaAPI(TestCase):
         )
 
     def test_marcar_informado_estudio(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
         self.client.post(
@@ -1709,8 +1758,8 @@ class TestInformeMicrobiologiaAPI(TestCase):
 # ---------------------------------------------------------------------------
 
 
-def _promover_estudio_a_validado(client, lab, admin, estudio_pk):
-    client.force_authenticate(lab)
+def _promover_estudio_a_validado(client, bio, admin, estudio_pk):
+    client.force_authenticate(bio)
     r = client.post(
         "/api/lab/microbiologia/informes/",
         {"estudio_id": estudio_pk, "tipo": "FINAL", "texto": "x"},
@@ -1731,8 +1780,8 @@ def _promover_estudio_a_validado(client, lab, admin, estudio_pk):
     return estudio
 
 
-def _promover_estudio_a_informado(client, lab, admin, estudio_pk):
-    _promover_estudio_a_validado(client, lab, admin, estudio_pk)
+def _promover_estudio_a_informado(client, bio, admin, lab, estudio_pk):
+    _promover_estudio_a_validado(client, bio, admin, estudio_pk)
     client.force_authenticate(lab)
     r = client.post(
         f"/api/lab/microbiologia/estudios/{estudio_pk}/marcar-informado/",
@@ -1755,6 +1804,10 @@ class TestEstudioMicroCerradoOperacionAPI(TestCase):
             username=f"lab_cerr_{self.suf}", email=f"lc{self.suf}@t.com",
             password="x", rol="laboratorio", is_staff=True,
         )
+        self.bio = User.objects.create_user(
+            username=f"bio_cerr_{self.suf}", email=f"bc{self.suf}@t.com",
+            password="x", rol="bioquimico", is_staff=True,
+        )
         self.admin = User.objects.create_user(
             username=f"adm_cerr_{self.suf}", email=f"ac{self.suf}@t.com",
             password="x", rol="admin", is_staff=True,
@@ -1774,7 +1827,7 @@ class TestEstudioMicroCerradoOperacionAPI(TestCase):
 
     def test_validado_bloquea_operaciones_tecnicas(self):
         estudio_pk = self.ctx["estudio"].pk
-        _promover_estudio_a_validado(self.client, self.lab, self.admin, estudio_pk)
+        _promover_estudio_a_validado(self.client, self.bio, self.admin, estudio_pk)
         n_siembras = SiembraMicrobiologia.objects.filter(estudio_id=estudio_pk).count()
         n_audit_siembra = AuditEvent.objects.filter(
             entity_type=SiembraMicrobiologia._meta.label, action="CREATE"
@@ -1821,7 +1874,7 @@ class TestEstudioMicroCerradoOperacionAPI(TestCase):
 
     def test_informado_bloquea_operaciones_tecnicas(self):
         estudio_pk = self.ctx["estudio"].pk
-        _promover_estudio_a_informado(self.client, self.lab, self.admin, estudio_pk)
+        _promover_estudio_a_informado(self.client, self.bio, self.admin, self.lab, estudio_pk)
 
         r_siembra = self.client.post(
             "/api/lab/microbiologia/siembras/",
@@ -1852,7 +1905,7 @@ class TestEstudioMicroCerradoOperacionAPI(TestCase):
 
     def test_validado_permite_marcar_informado(self):
         estudio_pk = self.ctx["estudio"].pk
-        _promover_estudio_a_validado(self.client, self.lab, self.admin, estudio_pk)
+        _promover_estudio_a_validado(self.client, self.bio, self.admin, estudio_pk)
         r = self.client.post(
             f"/api/lab/microbiologia/estudios/{estudio_pk}/marcar-informado/",
             {},

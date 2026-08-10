@@ -118,9 +118,14 @@ export function canOperateLims(user: User | null): boolean {
   return r === 'admin' || isOperadorLimsRole(r);
 }
 
-/** Enviar informe al paciente (admin y operadores LIMS). */
-export function canEnviarInformeLims(user: User | null): boolean {
-  return canOperateLims(user);
+/** Enviar informe al paciente: operadores LIMS, solo orden FINALIZADO (validada). */
+export function canEnviarInformeLims(
+  user: User | null,
+  estado?: string | null
+): boolean {
+  if (!canOperateLims(user)) return false;
+  if (estado == null || estado === undefined) return true;
+  return String(estado).toUpperCase() === 'FINALIZADO';
 }
 
 /** @deprecated Usar canEnviarInformeLims */
@@ -135,12 +140,14 @@ export function canValidarOrdenLims(user: User | null): boolean {
   return puedeValidarLimsRole(normalizeRol(user));
 }
 
-/** Descargar informe PDF LIMS (PDF-1-FE): solo operadores del módulo LIMS. */
+/** Descargar informe PDF LIMS: solo tras validación (FINALIZADO). */
 export function canDownloadInformeLimsPdf(
   user: User | null,
-  _estado?: string | null
+  estado?: string | null
 ): boolean {
-  return canAccessLimsModule(user);
+  if (!canAccessLimsModule(user)) return false;
+  if (estado == null || estado === undefined) return false;
+  return String(estado).toUpperCase() === 'FINALIZADO';
 }
 
 /** Misma visibilidad que el módulo LIMS (admin, laboratorio, bioquímico). */
@@ -170,14 +177,62 @@ export function canValidarInformeMicro(user: User | null): boolean {
   return canValidarOrdenLims(user);
 }
 
-/** Descargar PDF de informe micro (operadores LIMS o médico con acceso de lectura). */
-export function canDownloadInformeMicroPdf(user: User | null): boolean {
-  return canAccessMicrobiologiaLectura(user);
+/**
+ * Crear / completar (emitir) / anular informes de microbiología.
+ * Solo bioquímico y admin — el técnico no opera esta pestaña.
+ */
+export function canOperateInformeMicro(user: User | null): boolean {
+  return canValidarOrdenLims(user);
 }
 
-/** Enviar informe micro por email/WhatsApp (solo operadores LIMS). */
-export function canEnviarInformeMicro(user: User | null): boolean {
-  return canOperateMicrobiologia(user);
+/**
+ * Ver contenido de un informe micro.
+ * Bio/admin: siempre. Resto (lab, médico): solo VALIDADO.
+ */
+export function canSeeInformeMicro(
+  user: User | null,
+  estadoInforme: string | null | undefined
+): boolean {
+  if (!user) return false;
+  if (canOperateInformeMicro(user)) return true;
+  if (!canAccessMicrobiologiaLectura(user)) return false;
+  return String(estadoInforme || '').toUpperCase() === 'VALIDADO';
+}
+
+/**
+ * Descargar PDF de informe micro.
+ * Bio/admin: EMITIDO o VALIDADO (revisión previa).
+ * Lab / médico: solo cuando el estudio/informe está VALIDADO (o INFORMADO).
+ */
+export function canDownloadInformeMicroPdf(
+  user: User | null,
+  estadoEstudio?: string | null
+): boolean {
+  if (!canAccessMicrobiologiaLectura(user)) return false;
+  if (canOperateInformeMicro(user)) {
+    if (estadoEstudio == null || estadoEstudio === undefined) return true;
+    const e = String(estadoEstudio).toUpperCase();
+    return (
+      e === 'EMITIDO' ||
+      e === 'LISTO_PARA_VALIDAR' ||
+      e === 'VALIDADO' ||
+      e === 'INFORMADO'
+    );
+  }
+  if (estadoEstudio == null || estadoEstudio === undefined) return false;
+  const e = String(estadoEstudio).toUpperCase();
+  return e === 'VALIDADO' || e === 'INFORMADO';
+}
+
+/** Enviar informe micro por email/WhatsApp (operadores LIMS, solo tras VALIDADO). */
+export function canEnviarInformeMicro(
+  user: User | null,
+  estadoEstudio?: string | null
+): boolean {
+  if (!canOperateMicrobiologia(user)) return false;
+  if (estadoEstudio == null || estadoEstudio === undefined) return true;
+  const e = String(estadoEstudio).toUpperCase();
+  return e === 'VALIDADO' || e === 'INFORMADO';
 }
 
 /** Estados en los que no se admiten mutaciones técnicas (B3-frontend-validación-A). */

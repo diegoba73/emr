@@ -15,7 +15,6 @@ import toast from 'react-hot-toast';
 import type { SolicitudExamenLims } from '../../types/lims';
 import { downloadInformeLimsPdf, postEnviarInformeOrden } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
-import { countResultadosConValor } from '../../utils/limsOrdenResultados';
 
 export interface EnviarInformeOrdenDialogProps {
   open: boolean;
@@ -44,9 +43,7 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
   const medicoLabel =
     orden.medico_interno_nombre || orden.medico_display || 'Médico solicitante';
 
-  const esInformeParcial = orden.estado === 'INFORMADO_PARCIAL';
-  const esBorradorListo = orden.estado === 'LISTO_PARA_VALIDAR';
-  const progreso = countResultadosConValor(orden);
+  const ordenValidada = orden.estado === 'FINALIZADO';
 
   useEffect(() => {
     if (!open) return;
@@ -60,6 +57,10 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
     emailPaciente || whatsappPaciente || emailMedico || whatsappMedico;
 
   const handleEnviar = async () => {
+    if (!ordenValidada) {
+      toast.error('Solo se puede enviar el informe después de la validación del bioquímico.');
+      return;
+    }
     if (!algunoSeleccionado) {
       toast.error('Seleccioná al menos un canal de envío.');
       return;
@@ -76,27 +77,18 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
 
       if (envio?.email_enviado) {
         const adj = envio.email_adjunto_pdf !== false;
-        const tipo = esInformeParcial ? 'Informe parcial' : 'Informe';
         toast.success(
           adj
-            ? `${tipo} enviado por correo a ${envio.email_destino || 'destinatarios'} con PDF adjunto.`
-            : `${tipo} enviado por correo a ${envio.email_destino || 'destinatarios'}.`
+            ? `Informe enviado por correo a ${envio.email_destino || 'destinatarios'} con PDF adjunto.`
+            : `Informe enviado por correo a ${envio.email_destino || 'destinatarios'}.`
         );
       }
 
       if (envio?.whatsapp_enviado) {
         if (envio.whatsapp_pdf_adjunto) {
-          toast.success(
-            esInformeParcial
-              ? 'WhatsApp enviado con el informe parcial en PDF.'
-              : 'WhatsApp enviado con el informe PDF adjunto.'
-          );
+          toast.success('WhatsApp enviado con el informe PDF adjunto.');
         } else {
-          toast.success(
-            esInformeParcial
-              ? 'WhatsApp enviado con enlace de descarga del informe parcial.'
-              : 'WhatsApp enviado con enlace de descarga del informe.'
-          );
+          toast.success('WhatsApp enviado con enlace de descarga del informe.');
         }
       }
 
@@ -144,29 +136,16 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={sending ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        {esInformeParcial
-          ? 'Enviar informe parcial'
-          : esBorradorListo
-            ? 'Enviar borrador PDF'
-            : 'Enviar informe'}
-      </DialogTitle>
+      <DialogTitle>Enviar informe</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Orden {orden.numero || orden.id} — {orden.paciente_nombre || 'Paciente'}
           {medicoLabel ? ` · ${medicoLabel}` : ''}
         </Typography>
-        {esInformeParcial && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Informe parcial.</strong> El PDF incluye {progreso.conValor} de {progreso.total}{' '}
-            resultados cargados. Los exámenes pendientes figuran sin valor y el documento indica que el
-            informe no está completo. Podés enviar un informe definitivo cuando finalice la orden.
-          </Alert>
-        )}
-        {esBorradorListo && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <strong>Borrador.</strong> La orden está lista para validar pero aún no fue liberada por el
-            bioquímico. El PDF puede marcarse como no validado.
+        {!ordenValidada && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            La orden aún no está validada. Solo se puede enviar el informe después de{' '}
+            <strong>Validar y liberar</strong>.
           </Alert>
         )}
         {!tieneEmailPac && !tieneTelPac && (
@@ -280,9 +259,9 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
           variant="contained"
           color="primary"
           onClick={handleEnviar}
-          disabled={sending || !algunoSeleccionado}
+          disabled={sending || !algunoSeleccionado || !ordenValidada}
         >
-          {sending ? 'Enviando…' : esInformeParcial ? 'Enviar informe parcial' : 'Enviar informe'}
+          {sending ? 'Enviando…' : 'Enviar informe'}
         </Button>
       </DialogActions>
     </Dialog>

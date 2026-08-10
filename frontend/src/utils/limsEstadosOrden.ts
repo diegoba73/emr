@@ -71,12 +71,9 @@ export function ordenListaParaValidar(
   return estado === 'LISTO_PARA_VALIDAR';
 }
 
+/** Solo informe validado (FINALIZADO): sin borradores ni parciales. */
 export function ordenPuedeEnviarInforme(estado: EstadoSolicitudLims): boolean {
-  return (
-    estado === 'FINALIZADO' ||
-    estado === 'INFORMADO_PARCIAL' ||
-    estado === 'LISTO_PARA_VALIDAR'
-  );
+  return estado === 'FINALIZADO';
 }
 
 export function ordenEsFinalizada(estado: EstadoSolicitudLims): boolean {

@@ -88,13 +88,11 @@ def _cargar_estudio(estudio_id: int) -> EstudioMicrobiologia:
 
 
 def _medico_label(estudio: EstudioMicrobiologia) -> str:
+    from laboratorio.display_names import format_medico_display
+
     mi = estudio.medico_interno
     if mi is not None:
-        parts = [getattr(mi, "apellido", "") or "", getattr(mi, "nombre", "") or ""]
-        label = ", ".join(x for x in parts if x).strip(", ")
-        if label:
-            return f"Dr. {label}"
-        return str(mi)
+        return format_medico_display(mi, fallback=str(mi)) or "—"
     ext = (estudio.medico_externo_nombre or "").strip()
     if ext:
         return ext
@@ -102,10 +100,7 @@ def _medico_label(estudio: EstudioMicrobiologia) -> str:
     if sol is not None:
         mi = getattr(sol, "medico_interno", None)
         if mi is not None:
-            parts = [getattr(mi, "apellido", "") or "", getattr(mi, "nombre", "") or ""]
-            label = ", ".join(x for x in parts if x).strip(", ")
-            if label:
-                return f"Dr. {label}"
+            return format_medico_display(mi, fallback=str(mi)) or "—"
         return (getattr(sol, "medico_externo_nombre", None) or "").strip() or "—"
     return "—"
 

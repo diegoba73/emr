@@ -20,6 +20,7 @@ from api.permissions import (
     LimsMicrobiologiaInformePermission,
     LimsMicrobiologiaPermission,
     get_normalized_role,
+    usuario_puede_operar_informe_micro,
 )
 from usuarios.roles import ROLES_LIMS_WRITE
 from auditoria.audit_service import log_create, log_update
@@ -708,6 +709,17 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
         try:
+            from laboratorio.models_microbiologia import InformeMicrobiologia
+
+            if not InformeMicrobiologia.objects.filter(
+                estudio_id=estudio.pk,
+                tipo="FINAL",
+                estado="VALIDADO",
+            ).exists():
+                return Response(
+                    {"error": "El informe no está disponible."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             pdf_bytes = generar_informe_micro_pdf_bytes(estudio)
         except InformeMicroPdfError:
             return Response(
@@ -1376,7 +1388,7 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
 
 
 class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
-    """Informes preliminares y finales (B3.4). Validación profesional solo admin."""
+    """Informes preliminares y finales (B3.4). Autoría y validación: bioquímico/admin."""
 
     queryset = InformeMicrobiologia.objects.select_related(
         "estudio",
@@ -1407,17 +1419,24 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        if not user.is_superuser:
+        if not user.is_superuser and not usuario_puede_operar_informe_micro(user):
             role = get_normalized_role(user)
-            if role in ROLES_LIMS_WRITE:
-                pass
-            elif role == "medico":
-                from laboratorio.access import filtrar_lectura_lims_medico
+            # Técnico y médico: solo informes ya validados (contenido liberado).
+            qs = qs.filter(estado="VALIDADO")
+            if role == "medico":
+                from django.db.models import Q
 
-                qs = filtrar_lectura_lims_medico(
-                    qs, user, solicitud_path="estudio__solicitud"
+                from laboratorio.access import q_lectura_lims_medico
+
+                q_via_solicitud = Q(estudio__solicitud__isnull=False) & q_lectura_lims_medico(
+                    user, solicitud_path="estudio__solicitud"
                 )
-            else:
+                q_directo = Q(
+                    estudio__solicitud__isnull=True,
+                    estudio__medico_interno__user_id=user.pk,
+                )
+                qs = qs.filter(q_via_solicitud | q_directo).distinct()
+            elif role != "laboratorio":
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
 

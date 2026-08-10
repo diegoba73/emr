@@ -18,6 +18,7 @@ from pacientes.models import Paciente
 from medicos.models import Medico
 from historias_clinicas.models import Consulta
 from laboratorio.panel_componentes_orden import ordenar_ids_por_panel, ordenar_queryset_panel
+from laboratorio.display_names import format_apellido_nombre, format_medico_display
 from laboratorio.procedencia_display import resolver_procedencia_solicitud
 from laboratorio.origen_solicitud import (
     es_origen_ambulatorio_externo,
@@ -429,10 +430,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     Serializer de lectura para SolicitudExamen.
     Incluye paciente (nombre, dni), medico (lógica híbrida), y resultados (nested many=True).
     """
-    paciente_nombre = serializers.CharField(
-        source='paciente.nombre_completo',
-        read_only=True
-    )
+    paciente_nombre = serializers.SerializerMethodField()
     paciente_dni = serializers.CharField(
         source='paciente.dni',
         read_only=True
@@ -446,10 +444,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     medico_display = serializers.CharField(read_only=True)
-    medico_interno_nombre = serializers.CharField(
-        source='medico_interno.nombre_completo',
-        read_only=True
-    )
+    medico_interno_nombre = serializers.SerializerMethodField()
     medico_email = serializers.SerializerMethodField()
     medico_telefono = serializers.SerializerMethodField()
     resultados = ResultadoExamenSerializer(many=True, read_only=True)
@@ -555,6 +550,15 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             data['resultados'] = []
             data['resultados_visibles'] = False
         return data
+
+    def get_paciente_nombre(self, obj):
+        return format_apellido_nombre(getattr(obj, 'paciente', None))
+
+    def get_medico_interno_nombre(self, obj):
+        mi = getattr(obj, 'medico_interno', None)
+        if not mi:
+            return None
+        return format_medico_display(mi, fallback=None)
 
     def get_medico_email(self, obj):
         medico = getattr(obj, 'medico_interno', None)

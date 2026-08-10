@@ -42,7 +42,7 @@ class TestSolicitudExamenModel:
         )
         return Medico.objects.create(
             matricula='MAT-001',
-            nombre='Dr. Carlos',
+            nombre='Carlos',
             apellido='García',
             especialidad=especialidad
         )
@@ -258,7 +258,7 @@ class TestSolicitudExamenModel:
             medico_interno=medico_test,
             origen_solicitud='AMBULATORIO_CEHTA'
         )
-        assert solicitud_interno.medico_display == medico_test.nombre_completo
+        assert solicitud_interno.medico_display == "Dr. García, Carlos"
         
         # Test con médico externo
         solicitud_externo = SolicitudExamen.objects.create(

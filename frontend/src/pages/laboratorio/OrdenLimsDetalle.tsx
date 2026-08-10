@@ -67,7 +67,7 @@ const OrdenLimsDetalle: React.FC = () => {
   const canVerOrden = orden ? canAccessLimsOrdenDetalle(currentUser, orden.estado) : true;
   const canOp = canOperateLims(currentUser);
   const canValidar = canValidarOrdenLims(currentUser);
-  const canEnviar = canEnviarInformeLims(currentUser);
+  const canEnviar = canEnviarInformeLims(currentUser, orden?.estado);
   const canPdf = canDownloadInformeLimsPdf(currentUser, orden?.estado);
 
   const refreshMuestras = async (oid: number, numero?: string | null) => {
@@ -286,23 +286,9 @@ const OrdenLimsDetalle: React.FC = () => {
               Enviar informe
             </Button>
           )}
-          {puedeEnviarInforme && !resultadosCompletos && canEnviar && (
-            <Button variant="contained" color="info" onClick={() => setOpenEnviarInforme(true)}>
-              Enviar informe parcial
-            </Button>
-          )}
-          {puedeEnviarInforme && listaParaValidar && canEnviar && (
-            <Button variant="outlined" color="primary" onClick={() => setOpenEnviarInforme(true)}>
-              Enviar borrador PDF
-            </Button>
-          )}
-          {puedeEnviarInforme && canPdf && (
+          {finalizada && canPdf && (
             <Button variant="outlined" disabled={downloadingPdf} onClick={handleDownloadPdf}>
-              {downloadingPdf
-                ? 'Descargando…'
-                : informadoParcial
-                  ? 'Descargar informe parcial PDF'
-                  : 'Descargar informe PDF'}
+              {downloadingPdf ? 'Descargando…' : 'Descargar informe PDF'}
             </Button>
           )}
         </Box>
@@ -377,15 +363,16 @@ const OrdenLimsDetalle: React.FC = () => {
             {informadoParcial ? (
               <>
                 Orden <strong>informada parcialmente</strong> ({progreso.conValor} de {progreso.total}{' '}
-                resultados). El PDF refleja solo lo cargado. Seguí completando en Resultados; al
-                completar todos pasa a <strong>Listo para validar</strong>.
+                resultados). Seguí completando en Resultados; al completar todos pasa a{' '}
+                <strong>Listo para validar</strong>. El PDF y el envío solo están disponibles tras la
+                validación del bioquímico.
               </>
             ) : (
               <>
-                Podés guardar resultados de a poco en Resultados. Si el médico solicita anticipar la
-                entrega, usá <strong>Guardar e informar parcialmente</strong> y luego{' '}
-                <strong>Enviar informe parcial</strong>. Al completar todos, la orden pasa a{' '}
-                <strong>Listo para validar</strong>.
+                Podés guardar resultados de a poco en Resultados. Si querés marcar avance interno,
+                usá <strong>Guardar e informar parcialmente</strong>. Al completar todos, la orden
+                pasa a <strong>Listo para validar</strong>. Descarga y envío del informe recién
+                después de <strong>Validar y liberar</strong>.
               </>
             )}
           </Typography>
@@ -393,7 +380,8 @@ const OrdenLimsDetalle: React.FC = () => {
         {listaParaValidar && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Resultados completos — estado <strong>Listo para validar</strong>. Un bioquímico debe{' '}
-            <strong>Validar y liberar</strong> para finalizar. Podés corregir valores si hace falta.
+            <strong>Validar y liberar</strong> para finalizar. Hasta entonces no se puede descargar ni
+            enviar el informe.
           </Typography>
         )}
         {finalizada && resultadosCompletos && (

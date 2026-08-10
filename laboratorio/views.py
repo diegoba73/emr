@@ -1134,11 +1134,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'error': 'Orden no encontrada.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        if solicitud.estado not in (
-            'FINALIZADO',
-            'INFORMADO_PARCIAL',
-            'LISTO_PARA_VALIDAR',
-        ):
+        if solicitud.estado != 'FINALIZADO':
             return Response(
                 {'error': 'El informe no está disponible.'},
                 status=status.HTTP_404_NOT_FOUND,

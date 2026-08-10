@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from laboratorio.display_names import format_apellido_nombre, format_medico_display
 from laboratorio.models import Muestra, SolicitudExamen
 from laboratorio.models_microbiologia import (
     AisladoMicrobiologico,
@@ -109,6 +110,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     sin_etiquetas = serializers.SerializerMethodField()
     esperando_recepcion = serializers.SerializerMethodField()
     origen_solicitud_display = serializers.SerializerMethodField()
+    procedencia_display = serializers.SerializerMethodField()
 
     class Meta:
         model = EstudioMicrobiologia
@@ -133,6 +135,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "consulta_hc",
             "origen_solicitud",
             "origen_solicitud_display",
+            "procedencia_display",
             "codigo_barra",
             "etiquetas_impresas_at",
             "sin_etiquetas",
@@ -157,10 +160,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_paciente_nombre(self, obj):
-        p = getattr(obj, "paciente", None)
-        if not p:
-            return None
-        return f"{getattr(p, 'apellido', '')}, {getattr(p, 'nombre', '')}".strip(", ")
+        return format_apellido_nombre(getattr(obj, "paciente", None))
 
     def get_paciente_dni(self, obj):
         p = getattr(obj, "paciente", None)
@@ -177,9 +177,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     def get_medico_display(self, obj):
         mi = getattr(obj, "medico_interno", None)
         if mi:
-            parts = [getattr(mi, "apellido", ""), getattr(mi, "nombre", "")]
-            label = ", ".join(x for x in parts if x).strip(", ")
-            return f"Dr. {label}" if label else str(mi)
+            return format_medico_display(mi, fallback=str(mi))
         ext = (getattr(obj, "medico_externo_nombre", None) or "").strip()
         if ext:
             return ext
@@ -188,9 +186,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             return None
         mi = getattr(sol, "medico_interno", None)
         if mi:
-            parts = [getattr(mi, "apellido", ""), getattr(mi, "nombre", "")]
-            label = ", ".join(x for x in parts if x).strip(", ")
-            return f"Dr. {label}" if label else str(mi)
+            return format_medico_display(mi, fallback=str(mi))
         return (getattr(sol, "medico_externo_nombre", None) or "").strip() or None
 
     def get_medico_email(self, obj):
@@ -247,6 +243,33 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         from laboratorio.origen_solicitud import label_origen_solicitud
 
         return label_origen_solicitud(getattr(obj, "origen_solicitud", None) or None)
+
+    def get_procedencia_display(self, obj):
+        """Misma procedencia que Lab. Clínico cuando hay solicitud o consulta HC."""
+        from laboratorio.procedencia_display import resolver_procedencia_solicitud
+
+        sol = getattr(obj, "solicitud", None)
+        if sol is not None:
+            return resolver_procedencia_solicitud(sol).get("procedencia_display")
+
+        consulta = getattr(obj, "consulta_hc", None)
+        if consulta is None:
+            from laboratorio.origen_solicitud import label_origen_solicitud
+
+            return label_origen_solicitud(getattr(obj, "origen_solicitud", None) or None)
+
+        class _Proxy:
+            pass
+
+        proxy = _Proxy()
+        proxy.consulta_hc = consulta
+        proxy.paciente_id = getattr(obj, "paciente_id", None)
+        proxy.origen_solicitud = getattr(obj, "origen_solicitud", "") or ""
+        proxy.fecha_solicitud = getattr(obj, "created_at", None) or getattr(
+            obj, "fecha_inicio", None
+        )
+        proxy.medico_externo_nombre = getattr(obj, "medico_externo_nombre", None) or ""
+        return resolver_procedencia_solicitud(proxy).get("procedencia_display")
 
 
 class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
@@ -860,6 +883,8 @@ class ResultadoAntibioticoPartialUpdateSerializer(serializers.Serializer):
 
 
 class InformeMicrobiologiaSerializer(serializers.ModelSerializer):
+    contenido_visible = serializers.SerializerMethodField()
+
     class Meta:
         model = InformeMicrobiologia
         fields = (
@@ -868,6 +893,7 @@ class InformeMicrobiologiaSerializer(serializers.ModelSerializer):
             "tipo",
             "estado",
             "texto",
+            "contenido_visible",
             "version",
             "emitido_por",
             "fecha_emision",
@@ -882,6 +908,22 @@ class InformeMicrobiologiaSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    def get_contenido_visible(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if user is None:
+            return False
+        from api.permissions import usuario_puede_ver_contenido_informe_micro
+
+        return usuario_puede_ver_contenido_informe_micro(user, obj)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data.get("contenido_visible"):
+            data["texto"] = ""
+            data["observaciones"] = ""
+        return data
 
 
 class InformeMicrobiologiaCreateSerializer(serializers.Serializer):

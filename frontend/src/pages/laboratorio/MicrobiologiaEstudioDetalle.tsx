@@ -27,6 +27,7 @@ import {
   canDownloadInformeMicroPdf,
   canEnviarInformeMicro,
   canMarcarMicroEstudioInformado,
+  canOperateInformeMicro,
   canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
   canValidarInformeMicro,
@@ -65,6 +66,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const allowed = canAccessMicrobiologiaLectura(currentUser);
   const canOp = canOperateMicrobiologia(currentUser);
   const canVal = canValidarInformeMicro(currentUser);
+  const canOpInforme = canOperateInformeMicro(currentUser);
   const estudioCerrado = estudio ? isMicroEstudioCerrado(estudio.estado) : false;
   const canOpEstudio = canOperateMicroEstudioTecnico(currentUser, estudio?.estado);
   const canMarcarInformado = canMarcarMicroEstudioInformado(currentUser, estudio?.estado);
@@ -305,10 +307,10 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         <InformesMicrobiologiaPanel
           estudio={estudio}
           informes={bundle.informes}
-          canOperate={canOpEstudio}
+          canOperate={canOpInforme && !estudioCerrado}
           canValidar={canVal}
-          canDownloadPdf={canDownloadInformeMicroPdf(currentUser)}
-          canEnviar={canEnviarInformeMicro(currentUser)}
+          canDownloadPdf={canDownloadInformeMicroPdf(currentUser, estudio.estado)}
+          canEnviar={canEnviarInformeMicro(currentUser, estudio.estado)}
           onRefresh={loadAll}
         />
       )}

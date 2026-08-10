@@ -116,6 +116,8 @@ class TestLimsPdfInforme(TestCase):
         return f"/api/lab/solicitudes/{sol_id or self.sol.pk}/informe-pdf/"
 
     def test_laboratorio_puede_descargar_informe_pdf(self):
+        self.sol.estado = "FINALIZADO"
+        self.sol.save(update_fields=["estado"])
         self.client.force_authenticate(self.lab)
         audit_antes = AuditEvent.objects.filter(
             metadata__accion="lims_informe_pdf_download",
@@ -137,6 +139,12 @@ class TestLimsPdfInforme(TestCase):
             ).count(),
             audit_antes + 1,
         )
+
+    def test_laboratorio_no_descarga_antes_de_validar(self):
+        self.assertEqual(self.sol.estado, "EN_PROCESO")
+        self.client.force_authenticate(self.lab)
+        r = self.client.get(self._url())
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_medico_con_acceso_puede_descargar_informe_pdf(self):
         self.sol.estado = "FINALIZADO"
@@ -175,9 +183,9 @@ class TestLimsPdfInforme(TestCase):
         for user in (sec, enf, pac):
             self.client.force_authenticate(user)
             r = self.client.get(self._url())
-            self.assertEqual(
+            self.assertIn(
                 r.status_code,
-                status.HTTP_403_FORBIDDEN,
+                (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
                 msg=f"rol={user.rol}",
             )
 
@@ -213,12 +221,16 @@ class TestLimsPdfInforme(TestCase):
         self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_pdf_no_expone_codigo_barra(self):
+        self.sol.estado = "FINALIZADO"
+        self.sol.save(update_fields=["estado"])
         self.client.force_authenticate(self.lab)
         r = self.client.get(self._url())
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertNotIn(SENSITIVE_BARCODE.encode(), r.content)
 
     def test_auditoria_segura_sin_phi_ni_codigo_barra(self):
+        self.sol.estado = "FINALIZADO"
+        self.sol.save(update_fields=["estado"])
         self.client.force_authenticate(self.admin)
         with self.captureOnCommitCallbacks(execute=True):
             r = self.client.get(self._url())
@@ -249,6 +261,8 @@ class TestLimsPdfInforme(TestCase):
         )
 
     def test_descarga_no_cambia_estado(self):
+        self.sol.estado = "FINALIZADO"
+        self.sol.save(update_fields=["estado"])
         estado_sol_antes = self.sol.estado
         estado_res_antes = self.resultado.valor_obtenido
         estado_muestra_antes = Muestra.objects.get(pk=self.muestra.pk).estado

@@ -54,6 +54,13 @@ class TestMicroPdfInforme(TestCase):
             rol="laboratorio",
             is_staff=True,
         )
+        self.bio = User.objects.create_user(
+            username=f"bio_mpdf_{self.suf}",
+            email=f"bmpdf{self.suf}@t.com",
+            password="x",
+            rol="bioquimico",
+            is_staff=True,
+        )
         self.admin = User.objects.create_user(
             username=f"adm_mpdf_{self.suf}",
             email=f"ampdf{self.suf}@t.com",
@@ -96,7 +103,7 @@ class TestMicroPdfInforme(TestCase):
         return f"/api/lab/microbiologia/estudios/{eid}/enviar-informe/"
 
     def _emitir_final(self, texto="Informe final cultivo negativo."):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self.client.post(
             "/api/lab/microbiologia/informes/",
             {
@@ -116,18 +123,26 @@ class TestMicroPdfInforme(TestCase):
         self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
         return iid
 
+    def _validar_final(self, iid=None):
+        if iid is None:
+            iid = self._emitir_final()
+        self.client.force_authenticate(self.admin)
+        r = self.client.post(f"/api/lab/microbiologia/informes/{iid}/validar/", {}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        return iid
+
     def test_sin_informe_emitido_devuelve_400(self):
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         r = self.client.get(self._url_pdf())
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_laboratorio_descarga_pdf_con_final_emitido(self):
+    def test_bioquimico_descarga_pdf_con_final_emitido(self):
         self._emitir_final()
         audit_antes = AuditEvent.objects.filter(
             metadata__accion="lims_micro_informe_pdf_download",
             metadata__estudio_id=self.ctx["estudio"].pk,
         ).count()
-        self.client.force_authenticate(self.lab)
+        self.client.force_authenticate(self.bio)
         with self.captureOnCommitCallbacks(execute=True):
             r = self.client.get(self._url_pdf())
         self.assertEqual(r.status_code, status.HTTP_200_OK)
@@ -146,15 +161,27 @@ class TestMicroPdfInforme(TestCase):
             audit_antes + 1,
         )
 
-    def test_medico_vinculado_descarga_pdf(self):
+    def test_laboratorio_no_descarga_pdf_antes_de_validar(self):
         self._emitir_final()
+        self.client.force_authenticate(self.lab)
+        r = self.client.get(self._url_pdf())
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_medico_vinculado_no_descarga_antes_de_validar(self):
+        self._emitir_final()
+        self.client.force_authenticate(self.med_user)
+        r = self.client.get(self._url_pdf())
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_medico_vinculado_descarga_pdf_validado(self):
+        self._validar_final()
         self.client.force_authenticate(self.med_user)
         r = self.client.get(self._url_pdf())
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertTrue(r.content.startswith(b"%PDF"))
 
     def test_medico_ajeno_no_descarga(self):
-        self._emitir_final()
+        self._validar_final()
         self.client.force_authenticate(self.med_otro)
         r = self.client.get(self._url_pdf())
         self.assertIn(
@@ -163,7 +190,7 @@ class TestMicroPdfInforme(TestCase):
         )
 
     def test_auditoria_sin_phi(self):
-        self._emitir_final()
+        self._validar_final()
         self.client.force_authenticate(self.admin)
         with self.captureOnCommitCallbacks(execute=True):
             r = self.client.get(self._url_pdf())
@@ -187,7 +214,7 @@ class TestMicroPdfInforme(TestCase):
 
     @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
     def test_enviar_email_smoke(self, mock_send):
-        self._emitir_final()
+        self._validar_final()
         self.client.force_authenticate(self.lab)
         r = self.client.post(
             self._url_enviar(),
@@ -207,10 +234,11 @@ class TestMicroPdfInforme(TestCase):
             {"email": True},
             format="json",
         )
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        # Sin FINAL VALIDADO el object-permission deniega (403) o la vista responde 400.
+        self.assertIn(r.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN))
 
     def test_entrega_publica_con_token(self):
-        self._emitir_final()
+        self._validar_final()
         tok = crear_token_entrega_informe_micro(self.ctx["estudio"].pk)
         self.client.logout()
         r = self.client.get(

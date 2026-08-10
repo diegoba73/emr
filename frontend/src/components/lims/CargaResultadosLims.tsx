@@ -852,9 +852,10 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           {progreso.conValor < progreso.total && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Guardá solo los valores que tengas listos. Usá{' '}
-            <strong>Guardar e informar parcialmente</strong> cuando el médico solicite los resultados
-            disponibles antes de completar la orden; después podés enviar el PDF desde acciones de orden.
-            Al completar todos, la orden pasa a <strong>Listo para validar</strong>.
+            <strong>Guardar e informar parcialmente</strong> para marcar avance interno
+            (estado informado parcialmente). El PDF y el envío al paciente solo están
+            disponibles después de <strong>Validar y liberar</strong>. Al completar todos,
+            la orden pasa a <strong>Listo para validar</strong>.
           </Typography>
           )}
           {orden.estado === 'LISTO_PARA_VALIDAR' && (
@@ -875,8 +876,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             </>
           ) : orden.estado === 'INFORMADO_PARCIAL' && !permitirEdicion ? (
             <>
-              La orden está <strong>informada parcialmente</strong>. Podés seguir cargando resultados o enviar el
-              informe parcial al paciente desde acciones de orden.
+              La orden está <strong>informada parcialmente</strong>. Podés seguir cargando resultados.
+              El informe PDF solo se descarga o envía después de la validación del bioquímico.
             </>
           ) : orden.estado === 'FINALIZADO' ? (
             <>

@@ -59,6 +59,10 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
     emailPaciente || whatsappPaciente || emailMedico || whatsappMedico;
 
   const handleEnviar = async () => {
+    if (pendienteValidacion) {
+      toast.error('Solo se puede enviar el informe después de la validación del bioquímico.');
+      return;
+    }
     if (!algunoSeleccionado) {
       toast.error('Seleccioná al menos un canal de envío.');
       return;
@@ -138,9 +142,9 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
           {medicoLabel ? ` · ${medicoLabel}` : ''}
         </Typography>
         {pendienteValidacion && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            El informe final está emitido pero el estudio aún no está validado. El PDF puede
-            indicar que falta la validación del bioquímico.
+          <Alert severity="error" sx={{ mb: 2 }}>
+            El estudio aún no está validado. Solo se puede enviar el informe final cuando el
+            bioquímico lo haya validado.
           </Alert>
         )}
         {!tieneEmailPac && !tieneTelPac && (
@@ -254,7 +258,7 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
           variant="contained"
           color="primary"
           onClick={handleEnviar}
-          disabled={sending || !algunoSeleccionado}
+          disabled={sending || !algunoSeleccionado || pendienteValidacion}
         >
           {sending ? 'Enviando…' : 'Enviar informe'}
         </Button>

@@ -31,6 +31,7 @@ import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 export interface InformesMicrobiologiaPanelProps {
   estudio: EstudioMicrobiologia;
   informes: InformeMicrobiologia[];
+  /** Solo bioquímico/admin: crear, editar, emitir, anular. */
   canOperate: boolean;
   canValidar: boolean;
   canDownloadPdf?: boolean;
@@ -38,7 +39,8 @@ export interface InformesMicrobiologiaPanelProps {
   onRefresh: () => void;
 }
 
-const ESTADOS_PDF = new Set(['EMITIDO', 'VALIDADO']);
+const ESTADOS_PDF_BIO = new Set(['EMITIDO', 'VALIDADO']);
+const ESTADOS_PDF_PUBLICO = new Set(['VALIDADO']);
 
 const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   estudio,
@@ -64,9 +66,11 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   }, [informes]);
 
   const finalVigente = informes.find((i) => i.tipo === 'FINAL' && i.estado !== 'ANULADO');
+  const estadosPdf = canOperate || canValidar ? ESTADOS_PDF_BIO : ESTADOS_PDF_PUBLICO;
   const finalEntregable =
-    finalVigente && ESTADOS_PDF.has(finalVigente.estado) ? finalVigente : null;
+    finalVigente && estadosPdf.has(finalVigente.estado) ? finalVigente : null;
   const faltaFinal = !finalVigente && estudio.estado !== 'CANCELADO';
+  const lecturasolo = !canOperate && !canValidar;
 
   const crear = async (tipo: 'PRELIMINAR' | 'FINAL') => {
     try {
@@ -145,21 +149,33 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
     }
   };
 
+  if (lecturasolo && informes.length === 0) {
+    return (
+      <Box>
+        <Alert severity="info">
+          El informe estará disponible para consulta y descarga cuando el bioquímico lo valide.
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
-      {faltaFinal && (
+      {canOperate && faltaFinal && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          No hay informe final vigente. Se requiere informe final validado para marcar el estudio como informado.
+          No hay informe final vigente. Se requiere informe final validado para marcar el estudio
+          como informado.
+        </Alert>
+      )}
+      {lecturasolo && finalEntregable && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Informe final validado. Ya puede consultarlo o descargar el PDF.
         </Alert>
       )}
       {finalEntregable && (canDownloadPdf || canEnviar) && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
           {canDownloadPdf && (
-            <Button
-              variant="outlined"
-              onClick={descargarPdf}
-              disabled={downloading}
-            >
+            <Button variant="outlined" onClick={descargarPdf} disabled={downloading}>
               {downloading ? 'Descargando…' : 'Descargar PDF'}
             </Button>
           )}
@@ -182,54 +198,64 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {informes.map((inf) => (
-              <TableRow key={inf.id}>
-                <TableCell>{inf.id}</TableCell>
-                <TableCell>{inf.tipo}</TableCell>
-                <TableCell>
-                  <InformeMicrobiologiaEstadoBadge estado={inf.estado} tipo={inf.tipo} />
-                </TableCell>
-                <TableCell sx={{ maxWidth: 280 }}>
-                  {inf.estado === 'BORRADOR' && canOperate ? (
-                    <TextField
-                      fullWidth
-                      multiline
-                      minRows={2}
-                      size="small"
-                      value={drafts[inf.id] ?? ''}
-                      onChange={(e) => setDrafts((d) => ({ ...d, [inf.id]: e.target.value }))}
-                    />
-                  ) : (
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                      {(inf.texto || '').slice(0, 200)}
-                      {(inf.texto || '').length > 200 ? '…' : ''}
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {canOperate && inf.estado === 'BORRADOR' && (
-                    <>
-                      <Button size="small" onClick={() => guardarBorrador(inf)}>
-                        Guardar
-                      </Button>
-                      <Button size="small" variant="contained" onClick={() => emitir(inf.id)}>
-                        Emitir
-                      </Button>
-                    </>
-                  )}
-                  {canOperate && inf.estado === 'EMITIDO' && (
-                    <Button size="small" color="error" onClick={() => anular(inf.id)}>
-                      Anular
-                    </Button>
-                  )}
-                  {canValidar && inf.tipo === 'FINAL' && inf.estado === 'EMITIDO' && (
-                    <Button size="small" color="success" onClick={() => validar(inf.id)}>
-                      Validar
-                    </Button>
-                  )}
+            {informes.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <Typography color="text.secondary">Sin informes cargados.</Typography>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              informes.map((inf) => (
+                <TableRow key={inf.id}>
+                  <TableCell>{inf.id}</TableCell>
+                  <TableCell>{inf.tipo}</TableCell>
+                  <TableCell>
+                    <InformeMicrobiologiaEstadoBadge estado={inf.estado} tipo={inf.tipo} />
+                  </TableCell>
+                  <TableCell sx={{ maxWidth: 280 }}>
+                    {inf.estado === 'BORRADOR' && canOperate ? (
+                      <TextField
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        size="small"
+                        value={drafts[inf.id] ?? ''}
+                        onChange={(e) =>
+                          setDrafts((d) => ({ ...d, [inf.id]: e.target.value }))
+                        }
+                      />
+                    ) : (
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {(inf.texto || '').slice(0, 200)}
+                        {(inf.texto || '').length > 200 ? '…' : ''}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {canOperate && inf.estado === 'BORRADOR' && (
+                      <>
+                        <Button size="small" onClick={() => guardarBorrador(inf)}>
+                          Guardar
+                        </Button>
+                        <Button size="small" variant="contained" onClick={() => emitir(inf.id)}>
+                          Emitir
+                        </Button>
+                      </>
+                    )}
+                    {canOperate && inf.estado === 'EMITIDO' && (
+                      <Button size="small" color="error" onClick={() => anular(inf.id)}>
+                        Anular
+                      </Button>
+                    )}
+                    {canValidar && inf.tipo === 'FINAL' && inf.estado === 'EMITIDO' && (
+                      <Button size="small" color="success" onClick={() => validar(inf.id)}>
+                        Validar
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>

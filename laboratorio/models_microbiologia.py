@@ -963,8 +963,9 @@ class InformeMicrobiologia(models.Model):
     """Informe preliminar (opcional) o final (obligatorio para cierre) — LIMS B3.4.
 
     Flujo: borrador → ``emitir`` → ``EMITIDO``; el informe **final** emitido
-    lleva el estudio a ``LISTO_PARA_VALIDAR``. La validación profesional
-    (solo admin) pasa el informe final y el estudio a ``VALIDADO``. La acción
+    lleva el estudio a ``LISTO_PARA_VALIDAR``. Solo bioquímico/admin crean,
+    completan y validan informes; la validación pasa el informe y el estudio
+    a ``VALIDADO``. La acción
     ``marcar-informado`` sobre el estudio pasa a ``INFORMADO``.
 
     No se borran filas; ``ANULADO`` libera el cupo de informe final vigente

@@ -227,10 +227,9 @@ def enviar_informe_solicitud(
     view: str,
     public_base_url: str | None = None,
 ) -> ResultadoEnvioInforme:
-    if solicitud.estado not in ("FINALIZADO", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"):
+    if solicitud.estado != "FINALIZADO":
         raise EnvioInformeError(
-            "Solo se puede enviar el informe de órdenes finalizadas, "
-            "listas para validar o informadas parcialmente."
+            "Solo se puede enviar el informe de una orden validada (FINALIZADO)."
         )
     if not solicitud_tiene_algun_resultado(solicitud):
         raise EnvioInformeError(
@@ -531,14 +530,24 @@ def enviar_informe_estudio_micro(
     view: str,
     public_base_url: str | None = None,
 ) -> ResultadoEnvioInforme:
-    """Envía el PDF del informe FINAL micro (EMITIDO/VALIDADO) por email y/o WhatsApp."""
+    """Envía el PDF del informe FINAL micro **VALIDADO** por email y/o WhatsApp."""
     from laboratorio.informe_entrega_token import construir_url_entrega_informe_micro
+    from laboratorio.models_microbiologia import InformeMicrobiologia
     from laboratorio.services_informes_micro_pdf import (
         InformeMicroPdfError,
         assert_estudio_puede_generar_pdf,
         generar_informe_micro_pdf_bytes,
         nombre_archivo_pdf_micro,
     )
+
+    if not InformeMicrobiologia.objects.filter(
+        estudio_id=estudio.pk,
+        tipo="FINAL",
+        estado="VALIDADO",
+    ).exists():
+        raise EnvioInformeError(
+            "Solo se puede enviar un informe FINAL validado por el bioquímico."
+        )
 
     try:
         assert_estudio_puede_generar_pdf(estudio)
