@@ -877,6 +877,11 @@ export const darAltaInternacion = async (id: number, fecha_alta?: string): Promi
   }
 };
 
+export const getInternacion = async (id: number): Promise<InternacionCama> => {
+  const response = await api.get(`/internacion/internaciones/${id}/`);
+  return response.data;
+};
+
 export const getInternaciones = async (params?: { paciente?: number; historico?: boolean }): Promise<InternacionCama[]> => {
   try {
     const response = await api.get('/internacion/internaciones/', { params });

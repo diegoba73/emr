@@ -22,6 +22,7 @@ export function canAccessEstudiosModule(user: User | null | undefined): boolean 
     rol === 'medico' ||
     rol === 'paciente' ||
     rol === 'secretaria' ||
+    rol === 'enfermeria' ||
     isProfesionalEstudioRole(rol)
   );
 }
@@ -82,6 +83,29 @@ export function canDownloadArchivoEstudio(
   const rol = normalizedRol(user);
   if (rol === 'paciente') {
     return estudio.estado === 'ENTREGADO';
+  }
+  if (rol === 'secretaria' || rol === 'enfermeria') {
+    return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO';
+  }
+  return false;
+}
+
+export function canDownloadPdfInformeEstudio(
+  user: User | null | undefined,
+  estudio: EstudioComplementario,
+  informe: InformeEstudioComplementario
+): boolean {
+  if (!user) return false;
+  if (!informe.es_vigente || informe.estado !== 'VALIDADO') return false;
+  if (canWriteEstudio(user)) {
+    return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO' || estudio.estado === 'INFORMADO';
+  }
+  const rol = normalizedRol(user);
+  if (rol === 'paciente') {
+    return estudio.estado === 'ENTREGADO';
+  }
+  if (rol === 'secretaria' || rol === 'enfermeria') {
+    return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO';
   }
   return false;
 }
@@ -145,7 +169,10 @@ export function canEntregarEstudio(
   user: User | null | undefined,
   estudio: EstudioComplementario
 ): boolean {
-  return estudio.estado === 'VALIDADO' && canModificarContenidoEstudio(user, estudio);
+  if (estudio.estado !== 'VALIDADO') return false;
+  if (canModificarContenidoEstudio(user, estudio)) return true;
+  const rol = normalizedRol(user);
+  return rol === 'secretaria' || rol === 'admin';
 }
 
 export function canAsociarArchivo(

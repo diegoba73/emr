@@ -199,6 +199,12 @@ export interface Sector extends BaseModel {
   nombre: string;
 }
 
+export interface TipoDieta extends BaseModel {
+  nombre: string;
+  descripcion?: string | null;
+  activo?: boolean;
+}
+
 export interface Cama extends BaseModel {
   id: number;
   nombre: string;
@@ -213,6 +219,7 @@ export interface Cama extends BaseModel {
     diagnostico: string;
     fecha_ingreso: string;
     dias_internacion: number;
+    tipo_dieta?: string | null;
   };
 }
 
@@ -227,6 +234,9 @@ export interface InternacionCama extends BaseModel {
   fecha_alta: string | null;
   diagnostico_ingreso: string;
   diagnostico_cie?: DiagnosticoCIE10 | null;
+  diagnostico_cie_id?: number | null;
+  tipo_dieta?: TipoDieta | null;
+  tipo_dieta_id?: number | null;
   activo: boolean;
   nombre_paciente?: string;
   nombre_medico?: string | null;

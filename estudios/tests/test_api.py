@@ -196,6 +196,36 @@ def test_flujo_estados(client, admin_user, estudio_solicitado):
 
 
 @pytest.mark.django_db
+def test_secretaria_entrega_estudio_validado(client, admin_user, secretaria, estudio_solicitado):
+    client.force_authenticate(user=admin_user)
+    eid = estudio_solicitado.id
+    with capture_on_commit_callbacks(execute=True):
+        client.post(f'{BASE}{eid}/marcar-realizado/')
+        r = client.post(f'{BASE}{eid}/informes/', {'texto': 'Hallazgos secretaria'}, format='json')
+        informe_id = r.data['id']
+        client.post(f'{BASE}{eid}/informes/{informe_id}/emitir/')
+        client.post(f'{BASE}{eid}/informes/{informe_id}/validar/')
+
+    client.force_authenticate(user=secretaria)
+    r_list = client.get(f'{BASE}{eid}/informes/')
+    assert r_list.status_code == 200
+    textos = [i.get('texto') for i in r_list.data]
+    assert any(t == 'Hallazgos secretaria' for t in textos)
+
+    with capture_on_commit_callbacks(execute=True):
+        r = client.post(f'{BASE}{eid}/entregar/')
+    assert r.status_code == 200
+    assert r.data['estado'] == 'ENTREGADO'
+
+
+@pytest.mark.django_db
+def test_secretaria_no_entrega_estudio_no_validado(client, secretaria, estudio_solicitado):
+    client.force_authenticate(user=secretaria)
+    r = client.post(f'{BASE}{estudio_solicitado.id}/entregar/')
+    assert r.status_code in (400, 403)
+
+
+@pytest.mark.django_db
 def test_anular_requiere_motivo(client, admin_user, estudio_solicitado):
     client.force_authenticate(user=admin_user)
     r = client.post(f'{BASE}{estudio_solicitado.id}/anular/', {}, format='json')

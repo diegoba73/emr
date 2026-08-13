@@ -15,6 +15,7 @@ import { useLocation } from 'react-router-dom';
 import { Cama } from '../types';
 import { getCamas, moverPacienteCama } from '../services/apiService';
 import { useData } from '../contexts/DataContext';
+import { canManageInternacionInfra } from '../utils/permissions';
 import BedCard from '../components/internacion/BedCard';
 import ModalIngresarPaciente from '../components/internacion/ModalIngresarPaciente';
 import ModalGestionarPaciente from '../components/internacion/ModalGestionarPaciente';
@@ -45,7 +46,7 @@ const InternacionDashboard: React.FC = () => {
   const [modalCrearCamaOpen, setModalCrearCamaOpen] = useState(false);
   
   // Verificar si el usuario puede gestionar infraestructura
-  const canManageInfra = ['admin', 'medico', 'enfermeria'].includes((currentUser?.rol || '').toLowerCase());
+  const canManageInfra = canManageInternacionInfra(currentUser);
   
   // Estado para recordar qué cama se estaba editando (para restaurar scroll)
   const camaToScrollRef = useRef<number | null>(null);

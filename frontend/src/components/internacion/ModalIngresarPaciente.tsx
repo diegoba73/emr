@@ -11,9 +11,9 @@ import {
   Box,
   Autocomplete,
 } from '@mui/material';
-import { Cama, Paciente, Medico, DiagnosticoCIE10 } from '../../types';
+import { Cama, Paciente, Medico, DiagnosticoCIE10, TipoDieta } from '../../types';
 import { buscarDiagnosticosCIE10 } from '../../services/apiService';
-import { createInternacion } from '../../services/internacion';
+import { createInternacion, getTiposDieta } from '../../services/internacion';
 import { apiService } from '../../services/api';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
@@ -41,6 +41,8 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
   const [selectedDiagnostico, setSelectedDiagnostico] = useState<DiagnosticoCIE10 | null>(null);
   const [diagnosticoTextoLibre, setDiagnosticoTextoLibre] = useState('');
+  const [selectedTipoDieta, setSelectedTipoDieta] = useState<TipoDieta | null>(null);
+  const [tiposDieta, setTiposDieta] = useState<TipoDieta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -65,6 +67,8 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       setSelectedMedico(null);
       setSelectedDiagnostico(null);
       setDiagnosticoTextoLibre('');
+      setSelectedTipoDieta(null);
+      setTiposDieta([]);
       setError(null);
       setPacienteOptions([]);
       setMedicoOptions([]);
@@ -96,6 +100,21 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       setDiagnosticoTextoLibre(prefill.motivoIngreso);
     }
   }, [open, prefill]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getTiposDieta()
+      .then((tipos) => {
+        if (active) setTiposDieta(tipos);
+      })
+      .catch(() => {
+        if (active) setTiposDieta([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   // Búsqueda de pacientes en el servidor
   useEffect(() => {
@@ -260,6 +279,10 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       
       if (diagnosticoTextoLibre.trim()) {
         internacionData.diagnostico_ingreso = diagnosticoTextoLibre.trim();
+      }
+
+      if (selectedTipoDieta) {
+        internacionData.tipo_dieta_id = selectedTipoDieta.id;
       }
 
       if (prefill?.atencionOrigenId) {
@@ -463,6 +486,24 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
             sx={{ mb: 2 }}
             placeholder="Opcional: agregue información adicional al diagnóstico CIE-10"
             helperText="Use este campo solo si necesita agregar información adicional al diagnóstico CIE-10 seleccionado"
+          />
+
+          <Autocomplete
+            options={tiposDieta}
+            getOptionLabel={(option) => option.nombre}
+            value={selectedTipoDieta}
+            onChange={(_, newValue) => setSelectedTipoDieta(newValue)}
+            size="small"
+            fullWidth
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Tipo de dieta"
+                placeholder="Opcional: hiposódica, diabética, hipotónica…"
+              />
+            )}
+            isOptionEqualToValue={(option, value) => option.id === value?.id}
+            noOptionsText="No hay tipos de dieta cargados"
           />
         </>
       </DialogContent>

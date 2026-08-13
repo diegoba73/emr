@@ -53,6 +53,21 @@ class Cama(models.Model):
         return f"{self.nombre} - {self.sector.nombre}"
 
 
+class TipoDieta(models.Model):
+    """Catálogo de tipos terapéuticos de dieta (no el menú)."""
+    nombre = models.CharField(max_length=80, unique=True, verbose_name="Nombre")
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+
+    class Meta:
+        verbose_name = "Tipo de dieta"
+        verbose_name_plural = "Tipos de dieta"
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
 class Internacion(models.Model):
     """Internaciones de pacientes"""
     numero_internacion = models.CharField(
@@ -102,6 +117,14 @@ class Internacion(models.Model):
         verbose_name="Diagnóstico CIE-10"
     )
     diagnostico_ingreso = models.TextField(null=True, blank=True, verbose_name="Diagnóstico de Ingreso (texto libre)")
+    tipo_dieta = models.ForeignKey(
+        TipoDieta,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='internaciones',
+        verbose_name="Tipo de dieta",
+    )
     activo = models.BooleanField(default=True, verbose_name="Activa")
     
     class Meta:

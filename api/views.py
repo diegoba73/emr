@@ -3,7 +3,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, SAFE_METHODS
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
@@ -18,6 +18,7 @@ from .permissions import (
     CanWriteSignosVitales,
     IsEMRClinician,
     IsMedicoOrEnfermeriaOrAdmin,
+    IsInternacionStaff,
     AtencionPermission,
     filter_atencion_queryset_for_user,
 )
@@ -757,6 +758,11 @@ class DiagnosticoCIE10ViewSet(viewsets.ModelViewSet):
     search_fields = ['codigo', 'descripcion', 'enfermedad', 'capitulo']
     ordering_fields = ['codigo', 'descripcion']
     ordering = ['codigo']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated(), IsInternacionStaff()]
+        return [IsAuthenticated(), IsMedicoOrEnfermeriaOrAdmin()]
 
     @action(detail=False, methods=['get'])
     def buscar(self, request):

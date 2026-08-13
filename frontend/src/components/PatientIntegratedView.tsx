@@ -189,8 +189,8 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
     loadAtenciones();
   }, [paciente.id, loadAtenciones]);
 
-  const loadAnalisisLims = useCallback(async () => {
-    setLoadingAnalisis(true);
+  const loadAnalisisLims = useCallback(async (silent = false) => {
+    if (!silent) setLoadingAnalisis(true);
     try {
       const rows = await listSolicitudesExamen({ paciente: paciente.id });
       rows.sort((a, b) => {
@@ -202,7 +202,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
     } catch {
       setAnalisisLims([]);
     } finally {
-      setLoadingAnalisis(false);
+      if (!silent) setLoadingAnalisis(false);
     }
   }, [paciente.id]);
 
@@ -212,6 +212,21 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
       loadAnalisisLims();
     }
   }, [paciente.id, loadAnalisisLims]);
+
+  useEffect(() => {
+    if (!paciente?.id) return;
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void loadAnalisisLims(true);
+    };
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
+    const id = window.setInterval(refreshIfVisible, 20000);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
+      window.clearInterval(id);
+    };
+  }, [paciente?.id, loadAnalisisLims]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

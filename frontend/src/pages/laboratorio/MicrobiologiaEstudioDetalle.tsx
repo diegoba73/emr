@@ -78,7 +78,10 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
 
   const loadAll = useCallback(async () => {
-    if (!allowed || Number.isNaN(estudioId)) return;
+    if (!allowed || Number.isNaN(estudioId)) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const filterParams = { estudio_id: estudioId };
@@ -217,10 +220,21 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     );
   }
 
-  if (loading || !estudio) {
+  if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!estudio) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Button size="small" onClick={handleVolver} sx={{ mb: 1 }}>
+          ← Volver
+        </Button>
+        <Alert severity="error">No se pudo cargar el estudio de microbiología.</Alert>
       </Box>
     );
   }

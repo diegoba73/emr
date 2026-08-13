@@ -40,7 +40,10 @@ async function fetchAllPages<T>(initialPath: string, params?: Record<string, str
   const q = qs.toString();
   let path: string | null = `${initialPath}${q ? `?${q}` : ''}`;
   const out: T[] = [];
-  while (path) {
+  const seen = new Set<string>();
+  while (path && seen.size < 8) {
+    if (seen.has(path)) break;
+    seen.add(path);
     const response: AxiosResponse<ApiResponse<T> | T[]> = await api.get(path);
     const body = response.data;
     if (Array.isArray(body)) {
@@ -249,6 +252,17 @@ export const validarInformeEstudio = async (
 ): Promise<InformeEstudioComplementario> => {
   const response = await api.post(
     `/estudios-complementarios/${estudioId}/informes/${informeId}/validar/`
+  );
+  return response.data;
+};
+
+export const downloadInformeEstudioPdf = async (
+  estudioId: number,
+  informeId: number
+): Promise<Blob> => {
+  const response = await api.get(
+    `/estudios-complementarios/${estudioId}/informes/${informeId}/download-pdf/`,
+    { responseType: 'blob' }
   );
   return response.data;
 };

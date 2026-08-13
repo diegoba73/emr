@@ -54,6 +54,7 @@ import {
   canAsociarArchivo,
   canCrearInforme,
   canDownloadArchivoEstudio,
+  canDownloadPdfInformeEstudio,
   canEmitirInforme,
   canEntregarEstudio,
   canMarcarRealizado,
@@ -69,6 +70,7 @@ import {
   anularEstudio,
   crearInformeEstudio,
   downloadArchivoEstudio,
+  downloadInformeEstudioPdf,
   emitirInformeEstudio,
   entregarEstudio,
   listArchivosEstudio,
@@ -412,7 +414,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
                 Validar estudio
               </Button>
             )}
-          {writeAccess && canEntregarEstudio(currentUser, estudio) && (
+          {canEntregarEstudio(currentUser, estudio) && (
             <Button
               variant="contained"
               color="success"
@@ -633,13 +635,35 @@ const EstudioComplementarioDetalle: React.FC = () => {
                   }
                   secondary={
                     <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
-                      {(inf.texto || '(sin texto)').slice(0, 500)}
-                      {(inf.texto?.length || 0) > 500 ? '…' : ''}
+                      {inf.texto
+                        ? `${inf.texto.slice(0, 500)}${(inf.texto.length || 0) > 500 ? '…' : ''}`
+                        : inf.estado === 'VALIDADO'
+                          ? '(sin texto)'
+                          : 'Informe en proceso. El contenido se muestra cuando está validado.'}
                     </Typography>
                   }
                 />
                 <ListItemSecondaryAction sx={{ position: 'relative', transform: 'none', top: 0, right: 0 }}>
                   <Stack direction="row" spacing={0.5} flexWrap="wrap" justifyContent="flex-end">
+                    {canDownloadPdfInformeEstudio(currentUser, estudio, inf) && (
+                      <Button
+                        size="small"
+                        startIcon={<Download />}
+                        disabled={actionLoading}
+                        onClick={() =>
+                          void (async () => {
+                            try {
+                              const blob = await downloadInformeEstudioPdf(estudio.id, inf.id);
+                              await triggerBlobDownload(blob, `informe-estudio-${estudio.id}-v${inf.version}.pdf`);
+                            } catch (e) {
+                              setError(parseEstudiosApiError(e, 'No se pudo descargar el PDF del informe.'));
+                            }
+                          })()
+                        }
+                      >
+                        PDF
+                      </Button>
+                    )}
                     {writeAccess && canEmitirInforme(currentUser, estudio, inf) && (
                       <Button
                         size="small"

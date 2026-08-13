@@ -178,4 +178,15 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
     expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
     expect(screen.queryByText('Órdenes LIMS')).not.toBeInTheDocument();
   });
+
+  it('enfermería ve Laboratorio clínico y no el bloque LIMS', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'ENFERMERIA' }) });
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Laboratorio')).toBeInTheDocument();
+    expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
+  });
 });

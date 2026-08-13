@@ -338,6 +338,22 @@ class InformeEstudioComplementarioSerializer(serializers.ModelSerializer):
             f'/api/estudios-complementarios/{estudio_id}/informes/{obj.pk}/download-pdf/'
         )
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        rol = str(getattr(user, 'rol', '') or '').lower() if user else ''
+        if rol in ('secretaria', 'enfermeria'):
+            validado = (
+                instance.estado == InformeEstudioComplementario.EstadoInforme.VALIDADO
+                and instance.es_vigente
+            )
+            if not validado:
+                data['texto'] = ''
+            if not validado or not instance.archivo_pdf:
+                data['download_pdf_url'] = ''
+        return data
+
     def validate(self, attrs):
         if self.instance and self.instance.estado == InformeEstudioComplementario.EstadoInforme.VALIDADO:
             raise serializers.ValidationError(

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -73,6 +73,7 @@ const EstudiosComplementarios: React.FC = () => {
     descripcion_clinica: '',
     centro_realizador: '',
   });
+  const initialLoadDone = useRef(false);
 
   const writeAccess = canWriteEstudio(currentUser);
   const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
@@ -83,7 +84,7 @@ const EstudiosComplementarios: React.FC = () => {
   };
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!initialLoadDone.current) setLoading(true);
     setError(null);
     try {
       const params: Record<string, string | number> = {};
@@ -96,6 +97,7 @@ const EstudiosComplementarios: React.FC = () => {
       setError(parseEstudiosApiError(e, 'No se pudieron cargar los estudios complementarios.'));
       setEstudios([]);
     } finally {
+      initialLoadDone.current = true;
       setLoading(false);
     }
   }, [filtroEstado, filtroModalidad, busquedaPacienteDebounced]);
@@ -110,6 +112,21 @@ const EstudiosComplementarios: React.FC = () => {
   useEffect(() => {
     if (!canAccessEstudiosModule(currentUser)) return;
     load();
+  }, [currentUser, load]);
+
+  useEffect(() => {
+    if (!canAccessEstudiosModule(currentUser)) return;
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
+    const id = window.setInterval(refreshIfVisible, 20000);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
+      window.clearInterval(id);
+    };
   }, [currentUser, load]);
 
   useEffect(() => {

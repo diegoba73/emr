@@ -6,6 +6,9 @@ import {
   canAccessPacientes,
   canAccessPaciente360,
   canAccessSolicitudes,
+  canAccessInternacion,
+  canManageInternacionInfra,
+  canOperateInternacionClinica,
   canCreatePaciente,
   canDownloadArchivoMedico,
   canWriteArchivoMedico,
@@ -76,15 +79,15 @@ describe('canCreatePaciente', () => {
 });
 
 describe('canAccessSolicitudes', () => {
-  it('permite admin, secretaría, médico y paciente', () => {
+  it('permite admin, secretaría, enfermería, médico y paciente', () => {
     expect(canAccessSolicitudes(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canAccessSolicitudes(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canAccessSolicitudes(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canAccessSolicitudes(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canAccessSolicitudes(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('bloquea enfermería, laboratorio y anónimo', () => {
-    expect(canAccessSolicitudes(user({ rol: 'ENFERMERIA' }))).toBe(false);
+  it('bloquea laboratorio y anónimo', () => {
     expect(canAccessSolicitudes(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canAccessSolicitudes(null)).toBe(false);
   });
@@ -220,5 +223,28 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(canAccessPacientes(enfStaff)).toBe(true);
     expect(canAccessAtenciones(enfStaff)).toBe(true);
     expect(canAccessAuditoria(enfStaff)).toBe(true);
+  });
+});
+
+describe('canAccessInternacion', () => {
+  it('permite médico, enfermería, admin y secretaría', () => {
+    expect(canAccessInternacion(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canAccessInternacion(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canAccessInternacion(user({ rol: 'ADMIN' }))).toBe(true);
+    expect(canAccessInternacion(user({ rol: 'SECRETARIA' }))).toBe(true);
+  });
+
+  it('bloquea paciente, laboratorio y anónimo', () => {
+    expect(canAccessInternacion(user({ rol: 'PACIENTE' }))).toBe(false);
+    expect(canAccessInternacion(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canAccessInternacion(null)).toBe(false);
+  });
+
+  it('secretaría no gestiona infraestructura ni evoluciones clínicas', () => {
+    const sec = user({ rol: 'SECRETARIA' });
+    expect(canManageInternacionInfra(sec)).toBe(false);
+    expect(canOperateInternacionClinica(sec)).toBe(false);
+    expect(canManageInternacionInfra(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canOperateInternacionClinica(user({ rol: 'MEDICO' }))).toBe(true);
   });
 });

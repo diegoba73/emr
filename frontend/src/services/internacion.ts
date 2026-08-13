@@ -2,7 +2,7 @@
  * Servicio para gestión de infraestructura de internación (Sectores y Camas)
  */
 import { api } from './apiService';
-import { Sector, Cama, InternacionCama } from '../types';
+import { Sector, Cama, InternacionCama, TipoDieta } from '../types';
 
 // Tipo para respuestas paginadas de la API
 interface PaginatedResponse<T> {
@@ -193,6 +193,7 @@ export const createInternacion = async (data: {
   diagnostico_cie_id?: number | null;
   atencion_origen?: number;
   motivo_ingreso?: string;
+  tipo_dieta_id?: number | null;
 }): Promise<InternacionCama> => {
   try {
     const response = await api.post<InternacionCama>('/internacion/internaciones/', data);
@@ -201,5 +202,36 @@ export const createInternacion = async (data: {
     console.error('Error creating internacion:', error);
     throw error;
   }
+};
+
+const unwrapList = <T>(data: T[] | PaginatedResponse<T>): T[] => {
+  const page = data as PaginatedResponse<T>;
+  if (Array.isArray(page.results)) {
+    return page.results;
+  }
+  return Array.isArray(data) ? data : [];
+};
+
+export const getTiposDieta = async (todos = false): Promise<TipoDieta[]> => {
+  const params = todos ? { todos: '1', page_size: 200 } : { page_size: 200 };
+  const response = await api.get<TipoDieta[] | PaginatedResponse<TipoDieta>>(
+    '/internacion/tipos-dieta/',
+    { params },
+  );
+  return unwrapList(response.data);
+};
+
+export const createTipoDieta = async (data: Partial<TipoDieta>): Promise<TipoDieta> => {
+  const response = await api.post<TipoDieta>('/internacion/tipos-dieta/', data);
+  return response.data;
+};
+
+export const updateTipoDieta = async (id: number, data: Partial<TipoDieta>): Promise<TipoDieta> => {
+  const response = await api.patch<TipoDieta>(`/internacion/tipos-dieta/${id}/`, data);
+  return response.data;
+};
+
+export const deleteTipoDieta = async (id: number): Promise<void> => {
+  await api.delete(`/internacion/tipos-dieta/${id}/`);
 };
 

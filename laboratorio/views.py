@@ -496,6 +496,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         else:
             role = get_normalized_role(user)
             if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria'):
+                # Lectura institucional: todos los estados (PENDIENTE, EN_PROCESO, …).
                 pass
             elif role == 'medico':
                 from django.db.models import Q

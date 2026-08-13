@@ -123,7 +123,7 @@ const quickActions: QuickActionCard[] = [
     icon: <Hotel />,
     path: '/internacion',
     color: '#9f7aea',
-    roles: ['medico', 'admin', 'enfermeria'],
+    roles: ['medico', 'admin', 'enfermeria', 'secretaria'],
   },
   {
     title: 'Indicadores de calidad',

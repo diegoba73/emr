@@ -51,7 +51,7 @@ export const listEstudiosMicrobiologia = (params?: {
   sin_etiquetas?: boolean;
   esperando_recepcion?: boolean;
 }) => {
-  const q: Record<string, string | number | undefined> = { page_size: 200 };
+  const q: Record<string, string | number | undefined> = { page_size: 80 };
   if (params?.search) q.search = params.search;
   if (params?.estado) q.estado = params.estado;
   if (params?.sin_etiquetas) q.sin_etiquetas = '1';

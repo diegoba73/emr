@@ -4,7 +4,7 @@ from turnos.situacion_paciente import (
     assert_puede_admitir_internacion,
     finalizar_atencion_por_derivacion,
 )
-from .models import Sector, Cama, Internacion
+from .models import Sector, Cama, Internacion, TipoDieta
 from pacientes.models import Paciente
 from medicos.models import Medico
 from catalogos.models import DiagnosticoCIE10
@@ -22,6 +22,14 @@ class DiagnosticoCIESerializer(serializers.ModelSerializer):
     class Meta:
         model = DiagnosticoCIE10
         fields = ['id', 'codigo', 'descripcion', 'categoria', 'capitulo', 'enfermedad']
+
+
+class TipoDietaSerializer(serializers.ModelSerializer):
+    """Catálogo de tipos terapéuticos de dieta."""
+
+    class Meta:
+        model = TipoDieta
+        fields = ['id', 'nombre', 'descripcion', 'activo']
 
 
 class InternacionSerializer(serializers.ModelSerializer):
@@ -45,6 +53,14 @@ class InternacionSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    tipo_dieta = TipoDietaSerializer(read_only=True)
+    tipo_dieta_id = serializers.PrimaryKeyRelatedField(
+        queryset=TipoDieta.objects.all(),
+        source='tipo_dieta',
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     
     class Meta:
         model = Internacion
@@ -61,6 +77,8 @@ class InternacionSerializer(serializers.ModelSerializer):
             'diagnostico_cie',
             'diagnostico_cie_id',
             'diagnostico_ingreso',
+            'tipo_dieta',
+            'tipo_dieta_id',
             'activo',
             'nombre_paciente',
             'paciente_nombre',
@@ -132,6 +150,11 @@ class InternacionSerializer(serializers.ModelSerializer):
         # Validación 3: Diagnóstico (al menos uno debe estar presente)
         diagnostico_cie = data.get('diagnostico_cie')
         diagnostico_ingreso = data.get('diagnostico_ingreso')
+        if self.instance is not None:
+            if 'diagnostico_cie' not in data:
+                diagnostico_cie = self.instance.diagnostico_cie
+            if 'diagnostico_ingreso' not in data:
+                diagnostico_ingreso = self.instance.diagnostico_ingreso
         
         if not diagnostico_cie and not diagnostico_ingreso:
             raise serializers.ValidationError({
@@ -180,7 +203,7 @@ class CamaSerializer(serializers.ModelSerializer):
                 internacion = Internacion.objects.filter(
                     cama=obj,
                     activo=True
-                ).select_related('paciente', 'medico').first()
+                ).select_related('paciente', 'medico', 'diagnostico_cie', 'tipo_dieta').first()
                 
                 if internacion:
                     from datetime import datetime
@@ -205,6 +228,7 @@ class CamaSerializer(serializers.ModelSerializer):
                         'diagnostico': diagnostico_display,
                         'fecha_ingreso': internacion.fecha_ingreso,
                         'dias_internacion': dias,
+                        'tipo_dieta': internacion.tipo_dieta.nombre if internacion.tipo_dieta else None,
                     }
             except Exception:
                 pass

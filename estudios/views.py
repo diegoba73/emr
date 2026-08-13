@@ -21,6 +21,7 @@ from .access import (
     usuario_puede_descargar_archivo_estudio,
     usuario_puede_descargar_pdf_informe,
     usuario_puede_escribir_estudio,
+    usuario_puede_entregar_estudio,
     usuario_puede_ver_estudio,
     usuario_puede_ver_estudio_clinico,
 )
@@ -113,7 +114,10 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         if rol == 'secretaria':
             return qs
 
-        if rol in ('enfermeria', 'laboratorio'):
+        if rol == 'enfermeria':
+            return qs
+
+        if rol == 'laboratorio':
             return qs.none()
 
         if rol == 'medico':
@@ -252,6 +256,8 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='entregar')
     def entregar(self, request, pk=None):
         estudio = self.get_object()
+        if not usuario_puede_entregar_estudio(request.user, estudio):
+            raise PermissionDenied('No tiene permiso para entregar este estudio.')
         try:
             services.entregar_estudio(estudio, user=request.user)
         except DjangoValidationError as exc:
@@ -496,11 +502,6 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
                     return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
             except Exception:
                 return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
-        elif rol in ('secretaria', 'enfermeria', 'laboratorio'):
-            return Response(
-                {'detail': 'No tiene permiso para descargar este informe.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         elif not usuario_puede_ver_estudio_clinico(request.user, estudio) and rol != 'paciente':
             return Response({'detail': 'No encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 

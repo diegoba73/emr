@@ -118,12 +118,16 @@ export function canOperateLims(user: User | null): boolean {
   return r === 'admin' || isOperadorLimsRole(r);
 }
 
-/** Enviar informe al paciente: operadores LIMS, solo orden FINALIZADO (validada). */
+/** Enviar informe al paciente/médico: operadores LIMS y secretaría, solo FINALIZADO. */
 export function canEnviarInformeLims(
   user: User | null,
   estado?: string | null
 ): boolean {
-  if (!canOperateLims(user)) return false;
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  const roleOk = r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
+  if (!roleOk) return false;
   if (estado == null || estado === undefined) return true;
   return String(estado).toUpperCase() === 'FINALIZADO';
 }
@@ -165,7 +169,13 @@ export function canAccessMicrobiologiaLectura(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'medico' || isOperadorLimsRole(r);
+  return (
+    r === 'admin' ||
+    r === 'medico' ||
+    r === 'secretaria' ||
+    r === 'enfermeria' ||
+    isOperadorLimsRole(r)
+  );
 }
 
 export function canOperateMicrobiologia(user: User | null): boolean {
@@ -224,12 +234,16 @@ export function canDownloadInformeMicroPdf(
   return e === 'VALIDADO' || e === 'INFORMADO';
 }
 
-/** Enviar informe micro por email/WhatsApp (operadores LIMS, solo tras VALIDADO). */
+/** Enviar informe micro por email/WhatsApp (operadores LIMS y secretaría, solo tras VALIDADO). */
 export function canEnviarInformeMicro(
   user: User | null,
   estadoEstudio?: string | null
 ): boolean {
-  if (!canOperateMicrobiologia(user)) return false;
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  const roleOk = r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
+  if (!roleOk) return false;
   if (estadoEstudio == null || estadoEstudio === undefined) return true;
   const e = String(estadoEstudio).toUpperCase();
   return e === 'VALIDADO' || e === 'INFORMADO';

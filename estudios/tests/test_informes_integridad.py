@@ -430,13 +430,14 @@ def test_patch_paciente_key_rechaza_payload(
 
 
 @pytest.mark.django_db
-def test_enfermeria_no_accede_estudios(client, db, estudio_solicitado):
+def test_enfermeria_lee_estudios(client, db, estudio_solicitado):
     from usuarios.models import User
 
     u = User.objects.create_user(username='enf_c641a', password='x', rol='enfermeria')
     client.force_authenticate(user=u)
     r = client.get(f'{BASE}{estudio_solicitado.id}/')
-    assert r.status_code in (403, 404)
+    assert r.status_code == 200
+    assert r.data['id'] == estudio_solicitado.id
 
 
 @pytest.mark.django_db

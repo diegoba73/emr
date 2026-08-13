@@ -109,6 +109,9 @@ describe('canDownloadInformeLimsPdf / canEnviarInformeLims', () => {
     expect(canDownloadInformeLimsPdf(bioUser, 'FINALIZADO')).toBe(true);
     expect(canEnviarInformeLims(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canEnviarInformeLims(labUser, 'FINALIZADO')).toBe(true);
+    expect(canEnviarInformeLims(secUser, 'EN_PROCESO')).toBe(false);
+    expect(canEnviarInformeLims(secUser, 'FINALIZADO')).toBe(true);
+    expect(canEnviarInformeLims(enfUser, 'FINALIZADO')).toBe(false);
   });
 
   it('médico, secretaría y enfermería no descargan desde módulo LIMS', () => {
@@ -150,6 +153,8 @@ describe('canOperateInformeMicro / canSeeInformeMicro / canDownloadInformeMicroP
   it('enviar solo tras VALIDADO/INFORMADO', () => {
     expect(canEnviarInformeMicro(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canEnviarInformeMicro(labUser, 'VALIDADO')).toBe(true);
+    expect(canEnviarInformeMicro(secUser, 'VALIDADO')).toBe(true);
+    expect(canEnviarInformeMicro(enfUser, 'VALIDADO')).toBe(false);
   });
 });
 
@@ -174,9 +179,11 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
 });
 
 describe('canAccessMicrobiologiaLectura', () => {
-  it('permite médico y operadores LIMS, no el menú LIMS completo al médico', () => {
+  it('permite médico, operadores LIMS, secretaría y enfermería', () => {
     expect(canAccessMicrobiologiaLectura(labUser)).toBe(true);
     expect(canAccessMicrobiologiaLectura(medUser)).toBe(true);
+    expect(canAccessMicrobiologiaLectura(secUser)).toBe(true);
+    expect(canAccessMicrobiologiaLectura(enfUser)).toBe(true);
     expect(canAccessMicrobiologia(medUser)).toBe(false);
   });
 

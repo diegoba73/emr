@@ -2,8 +2,8 @@ from rest_framework import permissions
 
 from .access import (
     usuario_puede_asignar_turno_estudio,
-    usuario_puede_crear_estudio,
     usuario_puede_escribir_estudio,
+    usuario_puede_entregar_estudio,
     usuario_puede_ver_estudio,
     usuario_puede_ver_estudio_clinico,
     usuario_puede_ver_estudios_agenda,
@@ -25,6 +25,10 @@ class EstudioComplementarioPermission(permissions.BasePermission):
         action = getattr(view, 'action', None)
         if action in ('asignar_turno', 'agendar_turno'):
             return usuario_puede_asignar_turno_estudio(request.user)
+        if action == 'entregar':
+            return usuario_puede_escribir_estudio(request.user) or (
+                str(getattr(request.user, 'rol', '') or '').lower() == 'secretaria'
+            )
         return usuario_puede_escribir_estudio(request.user)
 
     def has_object_permission(self, request, view, obj):
@@ -38,10 +42,11 @@ class EstudioComplementarioPermission(permissions.BasePermission):
             return usuario_puede_ver_estudio_clinico(request.user, obj) and usuario_puede_asignar_turno_estudio(
                 request.user
             )
+        if action == 'entregar':
+            return usuario_puede_entregar_estudio(request.user, obj)
         if action in (
             'marcar_realizado',
             'anular',
-            'entregar',
             'agregar_archivo',
             'subir_archivo',
             'quitar_archivo',

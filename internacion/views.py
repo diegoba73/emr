@@ -2,15 +2,15 @@ import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 
-from .models import Sector, Cama, Internacion
-from .serializers import SectorSerializer, CamaSerializer, InternacionSerializer
+from .models import Sector, Cama, Internacion, TipoDieta
+from .serializers import SectorSerializer, CamaSerializer, InternacionSerializer, TipoDietaSerializer
 from .services import InternacionClinicalService, InternacionClinicalError
-from api.permissions import IsMedicoOrAdmin, IsMedicoOrEnfermeriaOrAdmin
+from api.permissions import IsInternacionClinica, IsInternacionStaff
 from api.serializers import AtencionSerializer
 
 logger = logging.getLogger(__name__)
@@ -20,11 +20,16 @@ class SectorViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar sectores (CRUD completo)"""
     queryset = Sector.objects.all()
     serializer_class = SectorSerializer
-    permission_classes = [IsAuthenticated, IsMedicoOrEnfermeriaOrAdmin]
+    permission_classes = [IsAuthenticated, IsInternacionStaff]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nombre']
     ordering_fields = ['nombre']
     ordering = ['nombre']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated(), IsInternacionStaff()]
+        return [IsAuthenticated(), IsInternacionClinica()]
     
     def perform_create(self, serializer):
         """Log de creación de sector"""
@@ -48,11 +53,16 @@ class CamaViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar camas (CRUD completo)"""
     queryset = Cama.objects.select_related('sector').prefetch_related('internaciones').all()
     serializer_class = CamaSerializer
-    permission_classes = [IsAuthenticated, IsMedicoOrEnfermeriaOrAdmin]
+    permission_classes = [IsAuthenticated, IsInternacionStaff]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nombre', 'sector__nombre']
     ordering_fields = ['nombre', 'sector__nombre']
     ordering = ['sector', 'nombre']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated(), IsInternacionStaff()]
+        return [IsAuthenticated(), IsInternacionClinica()]
     
     def perform_create(self, serializer):
         """Log de creación de cama"""
@@ -143,27 +153,57 @@ class CamaViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class TipoDietaViewSet(viewsets.ModelViewSet):
+    """Catálogo de tipos terapéuticos de dieta."""
+    queryset = TipoDieta.objects.all()
+    serializer_class = TipoDietaSerializer
+    permission_classes = [IsAuthenticated, IsInternacionStaff]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nombre', 'descripcion']
+    ordering_fields = ['nombre']
+    ordering = ['nombre']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated(), IsInternacionStaff()]
+        return [IsAuthenticated(), IsInternacionClinica()]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if getattr(self, 'action', None) == 'list':
+            todos = str(self.request.query_params.get('todos', '')).lower() in ('1', 'true', 'yes')
+            if not todos:
+                queryset = queryset.filter(activo=True)
+        return queryset
+
+
 class InternacionViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar internaciones"""
-    queryset = Internacion.objects.select_related('paciente', 'cama', 'medico', 'cama__sector').filter(activo=True)
+    queryset = Internacion.objects.select_related(
+        'paciente', 'cama', 'medico', 'cama__sector', 'diagnostico_cie', 'tipo_dieta'
+    ).filter(activo=True)
     serializer_class = InternacionSerializer
-    permission_classes = [IsAuthenticated, IsMedicoOrEnfermeriaOrAdmin]
+    permission_classes = [IsAuthenticated, IsInternacionStaff]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['activo', 'cama__sector', 'medico', 'paciente']
     search_fields = ['paciente__nombre', 'paciente__apellido', 'diagnostico_ingreso']
     ordering_fields = ['fecha_ingreso', 'fecha_alta']
     ordering = ['-fecha_ingreso']
     
+    def get_permissions(self):
+        if getattr(self, 'action', None) in ('iniciar_evolucion', 'iniciar_nota', 'evoluciones'):
+            return [IsAuthenticated(), IsInternacionClinica()]
+        return [IsAuthenticated(), IsInternacionStaff()]
+
     def get_queryset(self):
         """Filtrar por usuario según rol y por defecto solo activas"""
         user = self.request.user
         paciente_param = self.request.query_params.get('paciente')
         incluir_historico = self.request.query_params.get('historico', '').lower() in ('1', 'true', 'yes')
+        related = ('paciente', 'cama', 'medico', 'cama__sector', 'diagnostico_cie', 'tipo_dieta')
 
         if paciente_param or incluir_historico:
-            queryset = Internacion.objects.select_related(
-                'paciente', 'cama', 'medico', 'cama__sector'
-            ).all()
+            queryset = Internacion.objects.select_related(*related).all()
             if paciente_param:
                 queryset = queryset.filter(paciente_id=paciente_param)
             if not incluir_historico and not paciente_param:
@@ -173,10 +213,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
         
         if hasattr(user, 'rol') and user.rol:
             rol_upper = str(user.rol).strip().upper()
-            if rol_upper == 'MEDICO':
-                if not (paciente_param or incluir_historico):
-                    queryset = queryset.filter(activo=True)
-            elif rol_upper == 'ENFERMERIA':
+            if rol_upper in ('MEDICO', 'ENFERMERIA', 'SECRETARIA'):
                 if not (paciente_param or incluir_historico):
                     queryset = queryset.filter(activo=True)
             elif rol_upper == 'ADMIN':
@@ -221,11 +258,10 @@ class InternacionViewSet(viewsets.ModelViewSet):
                     from rest_framework.exceptions import NotFound
                     raise NotFound('No Internacion matches the given query.')
         
-        # Si es MEDICO o ENFERMERIA, puede acceder a todas las internaciones activas para ver/editar
-        # (Esto permite que los médicos y enfermería gestionen internaciones desde el panel)
+        # Médico, enfermería y secretaría: internaciones activas (diagnóstico visible en la cama)
         if hasattr(user, 'rol') and user.rol:
             rol_upper = str(user.rol).strip().upper()
-            if rol_upper in ['MEDICO', 'ENFERMERIA']:
+            if rol_upper in ['MEDICO', 'ENFERMERIA', 'SECRETARIA']:
                 try:
                     internacion = Internacion.objects.get(pk=pk)
                     # Permitir acceso a internaciones activas

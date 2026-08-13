@@ -26,6 +26,7 @@ import EstudiosDiagnostico from './pages/catalogos/EstudiosDiagnostico';
 import Procedimientos from './pages/catalogos/Procedimientos';
 import Medicamentos from './pages/catalogos/Medicamentos';
 import Especialidades from './pages/catalogos/Especialidades';
+import TiposDieta from './pages/catalogos/TiposDieta';
 import { DataProvider, useData } from './contexts/DataContext';
 import { ThemeModeProvider, useThemeMode } from './contexts/ThemeModeContext';
 import { buildAppTheme } from './theme/buildAppTheme';
@@ -64,6 +65,7 @@ import {
   canAccessCatalogosClinicos,
   canAccessPaciente360,
   canAccessPacientes,
+  canAccessInternacion,
   canAccessPortal,
   canAccessPortalDocumentos,
   canAccessPortalHistoria,
@@ -349,7 +351,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole={['ADMIN', 'MEDICO', 'ENFERMERIA']}
+                canAccess={canAccessInternacion}
               >
                 <InternacionDashboard />
               </ProtectedRoute>
@@ -528,6 +530,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessCatalogosClinicos}
               >
                 <Especialidades />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/catalogos/tipos-dieta"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessInternacion}
+              >
+                <TiposDieta />
               </ProtectedRoute>
             }
           />

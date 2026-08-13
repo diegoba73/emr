@@ -555,7 +555,7 @@ class TestLimsAuthorization(APITestCase):
         )
         assert r.status_code == status.HTTP_200_OK
 
-    def test_secretaria_y_enfermeria_listan_solo_pendiente_y_finalizado(self):
+    def test_secretaria_y_enfermeria_listan_todos_los_estados(self):
         sec = User.objects.create_user(
             username='sec_lims',
             email='sec@test.com',
@@ -574,14 +574,18 @@ class TestLimsAuthorization(APITestCase):
         self.client.force_authenticate(user=sec)
         r = self.client.get('/api/lab/solicitudes/')
         assert r.status_code == status.HTTP_200_OK
-        estados = {item['estado'] for item in r.data}
-        assert estados.issubset({'PENDIENTE', 'FINALIZADO'})
+        payload = r.data['results'] if isinstance(r.data, dict) else r.data
+        ids = {item['id'] for item in payload}
+        assert self.sol_medico.id in ids
+        estados = {item['estado'] for item in payload if item['id'] == self.sol_medico.id}
+        assert estados == {'EN_PROCESO'}
 
         self.client.force_authenticate(user=enf)
         r2 = self.client.get('/api/lab/solicitudes/')
         assert r2.status_code == status.HTTP_200_OK
-        estados2 = {item['estado'] for item in r2.data}
-        assert estados2.issubset({'PENDIENTE', 'FINALIZADO'})
+        payload2 = r2.data['results'] if isinstance(r2.data, dict) else r2.data
+        ids2 = {item['id'] for item in payload2}
+        assert self.sol_medico.id in ids2
 
     def test_secretaria_y_enfermeria_no_leen_catalogo_lims(self):
         sec = User.objects.create_user(

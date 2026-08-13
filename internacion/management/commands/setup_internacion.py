@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.core.management import call_command
 from django.utils import timezone
 from datetime import timedelta
 import random
@@ -15,6 +16,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('=' * 60))
         self.stdout.write(self.style.SUCCESS('INICIANDO SETUP DE INTERNACIÓN'))
         self.stdout.write(self.style.SUCCESS('=' * 60))
+
+        self.stdout.write('\n🍽  Cargando tipos de dieta...')
+        call_command('poblar_tipos_dieta')
         
         # 1. Crear Sectores
         self.stdout.write('\n📋 Creando sectores...')

@@ -535,10 +535,26 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         ]
 
     def to_representation(self, instance):
-        data = super().to_representation(instance)
+        view = self.context.get('view')
+        is_list = getattr(view, 'action', None) == 'list'
+        resultados_field = None
+        if is_list:
+            # El listado no necesita valores clínicos (y serializarlos traba la bandeja).
+            resultados_field = self.fields.pop('resultados', None)
+        try:
+            data = super().to_representation(instance)
+        finally:
+            if resultados_field is not None:
+                self.fields['resultados'] = resultados_field
+
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
         from api.permissions import usuario_puede_ver_resultados_lims
+
+        if is_list:
+            data['resultados'] = []
+            data['resultados_visibles'] = False
+            return data
 
         if user is not None and getattr(user, 'is_authenticated', False):
             if not usuario_puede_ver_resultados_lims(user, instance):

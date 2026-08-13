@@ -35,7 +35,7 @@ def usuario_puede_ver_estudios_agenda(user) -> bool:
     if user.is_superuser:
         return True
     rol = _rol(user)
-    return rol in {'admin', 'secretaria', 'medico', *ROLES_ESTUDIO_COMPLEMENTARIO}
+    return rol in {'admin', 'secretaria', 'enfermeria', 'medico', *ROLES_ESTUDIO_COMPLEMENTARIO}
 
 
 def usuario_puede_ver_estudio(user, estudio) -> bool:
@@ -50,7 +50,9 @@ def usuario_puede_ver_estudio(user, estudio) -> bool:
         return True
     if rol == 'secretaria':
         return True
-    if rol in ('enfermeria', 'laboratorio'):
+    if rol == 'enfermeria':
+        return True
+    if rol == 'laboratorio':
         return False
     if rol == 'medico':
         try:
@@ -82,7 +84,9 @@ def usuario_puede_ver_estudio_clinico(user, estudio) -> bool:
         return True
     if rol == 'secretaria':
         return True
-    if rol in ('enfermeria', 'laboratorio'):
+    if rol == 'enfermeria':
+        return True
+    if rol == 'laboratorio':
         return False
     if rol == 'medico':
         try:
@@ -104,8 +108,10 @@ def usuario_puede_descargar_archivo_estudio(user, estudio) -> bool:
     if not user.is_authenticated:
         return False
     rol = _rol(user)
-    if rol in ('secretaria', 'enfermeria', 'laboratorio'):
+    if rol == 'laboratorio':
         return False
+    if rol in ('secretaria', 'enfermeria'):
+        return estudio.estado in (estudio.Estado.VALIDADO, estudio.Estado.ENTREGADO)
     if rol == 'paciente':
         try:
             return (
@@ -140,10 +146,16 @@ def usuario_puede_descargar_pdf_informe(user, estudio, informe) -> bool:
     if not user.is_authenticated:
         return False
     rol = _rol(user)
-    if rol in ('secretaria', 'enfermeria', 'laboratorio'):
+    if rol == 'laboratorio':
         return False
     if informe.estudio_id != estudio.pk:
         return False
+    if rol in ('secretaria', 'enfermeria'):
+        return (
+            estudio.estado in (estudio.Estado.VALIDADO, estudio.Estado.ENTREGADO)
+            and informe.estado == informe.EstadoInforme.VALIDADO
+            and informe.es_vigente
+        )
     if rol == 'paciente':
         try:
             return (
@@ -200,6 +212,20 @@ def usuario_puede_modificar_contenido_estudio(user, estudio) -> bool:
             return True
         return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
     return True
+
+
+def usuario_puede_entregar_estudio(user, estudio) -> bool:
+    """Marcar ENTREGADO (visible al paciente): realizador/admin, o secretaría si VALIDADO."""
+    if not user.is_authenticated:
+        return False
+    if estudio.estado != estudio.Estado.VALIDADO:
+        return False
+    if not usuario_puede_ver_estudio_clinico(user, estudio):
+        return False
+    rol = _rol(user)
+    if user.is_superuser or rol in ('admin', 'secretaria'):
+        return True
+    return usuario_puede_modificar_contenido_estudio(user, estudio)
 
 
 def usuario_es_realizador_o_admin(user, estudio) -> bool:

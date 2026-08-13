@@ -49,6 +49,7 @@ import {
   canAccessPortalResultados,
   canAccessPortalTurnos,
   canAccessSolicitudes,
+  canAccessInternacion,
   isLaboratorioRole,
   isPacienteRole,
 } from '../../utils/permissions';
@@ -97,7 +98,7 @@ const navItems: NavItem[] = [
     canAccess: canAccessSolicitudes,
     resolveLabel: getSolicitudesModuleLabel,
   },
-  { text: 'Internación', icon: <LocalHospital />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria'] },
+  { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },
   { text: 'Indicadores', icon: <BiIcon />, path: '/bi', canAccess: canAccessBiDashboard },
 ];
 
@@ -139,6 +140,7 @@ const catalogItems: NavItem[] = [
   { text: 'Procedimientos', icon: <CatalogIcon />, path: '/catalogos/procedimientos', canAccess: canAccessCatalogosClinicos },
   { text: 'Medicamentos', icon: <CatalogIcon />, path: '/catalogos/medicamentos', canAccess: canAccessCatalogosClinicos },
   { text: 'Especialidades', icon: <CatalogIcon />, path: '/catalogos/especialidades', canAccess: canAccessCatalogosClinicos },
+  { text: 'Tipos de dieta', icon: <CatalogIcon />, path: '/catalogos/tipos-dieta', canAccess: canAccessInternacion },
 ];
 
 const filterByRole = (items: NavItem[], currentUser: User | null): NavItem[] => {

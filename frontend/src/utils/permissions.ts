@@ -98,7 +98,7 @@ export function canAccessSolicitudes(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'medico' || rol === 'paciente';
+  return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico' || rol === 'paciente';
 }
 
 /** Archivos médicos: admin/médico/paciente (secretaría/enfermería/laboratorio bloqueados). */
@@ -172,6 +172,29 @@ export function canEditCatalogosClinicos(user: User | null | undefined): boolean
 export function canAccessBiDashboard(user: User | null | undefined): boolean {
   if (!user) return false;
   return normalizeRol(user) === 'bioquimico';
+}
+
+/** Panel de internación: médico, enfermería, admin y secretaría (diagnóstico al abrir la cama). */
+export function canAccessInternacion(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  if (isLaboratorioRole(user)) return false;
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria';
+}
+
+/** Infraestructura de camas/sectores: sin secretaría. */
+export function canManageInternacionInfra(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  if (isLaboratorioRole(user)) return false;
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'enfermeria';
+}
+
+/** Evoluciones clínicas de internación: sin secretaría. */
+export function canOperateInternacionClinica(user: User | null | undefined): boolean {
+  return canManageInternacionInfra(user);
 }
 
 /** Portal del paciente — acceso base. */

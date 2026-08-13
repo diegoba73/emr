@@ -94,7 +94,11 @@ export async function getPaginatedAll<T>(
   const q = qs.toString();
   let path: string | null = `${initialPath}${q ? `?${q}` : ''}`;
   const out: T[] = [];
-  while (path) {
+  const seen = new Set<string>();
+  const maxPages = 8;
+  while (path && seen.size < maxPages) {
+    if (seen.has(path)) break;
+    seen.add(path);
     const res = await apiClient.get<Paginated<T> | T[]>(path);
     const body = res.data;
     if (Array.isArray(body)) {
@@ -127,7 +131,7 @@ export async function listSolicitudesExamen(params?: {
 }): Promise<SolicitudExamenLims[]> {
   return getPaginatedAll<SolicitudExamenLims>(`${LAB}/solicitudes/`, {
     ...params,
-    page_size: 200,
+    page_size: 80,
   });
 }
 

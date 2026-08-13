@@ -191,18 +191,25 @@ const BedCard: React.FC<BedCardProps> = ({
               </Typography>
             )}
             <Typography
+              variant="caption"
+              sx={{ display: 'block', color: '#8a1c1c', fontWeight: 700, letterSpacing: 0.3 }}
+            >
+              Diagnóstico
+            </Typography>
+            <Typography
               variant="body2"
               sx={{
                 mb: 1,
-                color: '#666',
+                color: '#b71c1c',
+                fontWeight: 600,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
-                WebkitLineClamp: 2,
+                WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
               }}
             >
-              {internacion.diagnostico}
+              {internacion.diagnostico || 'Sin diagnóstico'}
             </Typography>
             <Chip
               label={`${internacion.dias_internacion} días`}
@@ -210,6 +217,14 @@ const BedCard: React.FC<BedCardProps> = ({
               color="primary"
               sx={{ fontWeight: 600 }}
             />
+            {internacion.tipo_dieta && (
+              <Chip
+                label={internacion.tipo_dieta}
+                size="small"
+                variant="outlined"
+                sx={{ fontWeight: 600, ml: 0.5, mt: 0.5 }}
+              />
+            )}
           </Box>
         )}
 

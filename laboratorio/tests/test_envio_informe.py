@@ -183,6 +183,63 @@ class TestEnvioInformeAPI(APITestCase):
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn(b"%PDF", r.content[:10])
 
+    @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
+    def test_secretaria_envia_informe_finalizado(self, mock_send):
+        sec = User.objects.create_user(
+            username="sec_env",
+            email="sec.env@test.com",
+            password="x",
+            rol="secretaria",
+        )
+        sol = self._sol_finalizada()
+        self.client.force_authenticate(user=sec)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
+            {"email": True, "whatsapp": False},
+            format="json",
+            HTTP_HOST="localhost:8000",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertTrue(r.json()["envio"]["email_enviado"])
+        mock_send.assert_called_once()
+
+    def test_secretaria_no_envia_si_no_finalizado(self):
+        sec = User.objects.create_user(
+            username="sec_env2",
+            email="sec.env2@test.com",
+            password="x",
+            rol="secretaria",
+        )
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        self.client.force_authenticate(user=sec)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
+            {"email": True, "whatsapp": False},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enfermeria_no_envia_informe(self):
+        enf = User.objects.create_user(
+            username="enf_env",
+            email="enf.env@test.com",
+            password="x",
+            rol="enfermeria",
+        )
+        sol = self._sol_finalizada()
+        self.client.force_authenticate(user=enf)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
+            {"email": True, "whatsapp": False},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
 
 @pytest.mark.django_db
 class TestEnvioInformeServicio:

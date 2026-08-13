@@ -67,6 +67,21 @@ ROLES_SIN_BYPASS_EMR_STAFF = frozenset({
     *ROLES_ESTUDIO_COMPLEMENTARIO,
 })
 
+# Internación: secretaría ve el diagnóstico al abrir la cama y opera admisión/alta.
+ROLES_INTERNACION = frozenset({
+    'admin',
+    'medico',
+    'enfermeria',
+    'secretaria',
+})
+
+# Infraestructura (sectores/camas) y evoluciones clínicas: sin secretaría.
+ROLES_INTERNACION_CLINICA = frozenset({
+    'admin',
+    'medico',
+    'enfermeria',
+})
+
 
 def normalize_rol(user_or_str) -> str:
     if hasattr(user_or_str, 'rol'):

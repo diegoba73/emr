@@ -12,16 +12,23 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import OrdenLimsResumenPanel from '../components/lims/OrdenLimsResumenPanel';
 import ResultadosOrdenLista from '../components/lims/ResultadosOrdenLista';
+import EnviarInformeOrdenDialog from '../components/lims/EnviarInformeOrdenDialog';
 import { useData } from '../contexts/DataContext';
 import { downloadInformeLimsPdf, getSolicitudExamen } from '../services/limsApi';
 import type { SolicitudExamenLims } from '../types/lims';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/apiError';
-import { canAccessAnalisisClinicoLab, canDownloadInformeClinicoPdf, canSeeResultadosClinicos } from '../utils/limsAccess';
+import {
+  canAccessAnalisisClinicoLab,
+  canDownloadInformeClinicoPdf,
+  canEnviarInformeLims,
+  canSeeResultadosClinicos,
+} from '../utils/limsAccess';
 import { formatLimsPdfDownloadError } from '../utils/limsDownload';
 import {
   estadoOrdenColor,
   labelEstadoOrdenLims,
   ordenEsFinalizada,
+  ordenPuedeEnviarInforme,
 } from '../utils/limsEstadosOrden';
 import { resolveNavBack } from '../utils/navBack';
 
@@ -34,6 +41,7 @@ const SolicitudLabDetalle: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
 
   const allowed = canAccessAnalisisClinicoLab(currentUser);
   const back = resolveNavBack(location.state, {
@@ -117,6 +125,8 @@ const SolicitudLabDetalle: React.FC = () => {
   const resultados = orden.resultados ?? [];
   const puedeVerResultados = canSeeResultadosClinicos(currentUser, orden.estado);
   const puedePdf = canDownloadInformeClinicoPdf(currentUser, orden.estado);
+  const puedeEnviar =
+    ordenPuedeEnviarInforme(orden.estado) && canEnviarInformeLims(currentUser, orden.estado);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -129,6 +139,11 @@ const SolicitudLabDetalle: React.FC = () => {
           Orden {orden.numero || `#${orden.id}`}
         </Typography>
         <Chip label={labelEstadoOrdenLims(orden.estado)} color={estadoOrdenColor(orden.estado)} />
+        {puedeEnviar && (
+          <Button variant="contained" onClick={() => setOpenEnviarInforme(true)}>
+            Enviar informe
+          </Button>
+        )}
         {puedePdf && (
           <Button variant="outlined" disabled={downloadingPdf} onClick={handleDownloadPdf}>
             {downloadingPdf ? 'Descargando…' : 'Descargar informe PDF'}
@@ -164,6 +179,16 @@ const SolicitudLabDetalle: React.FC = () => {
           />
         )}
       </Paper>
+
+      <EnviarInformeOrdenDialog
+        open={openEnviarInforme}
+        orden={orden}
+        onClose={() => setOpenEnviarInforme(false)}
+        onSuccess={(updated) => {
+          setOrden(updated);
+          setOpenEnviarInforme(false);
+        }}
+      />
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -47,6 +47,7 @@ const Solicitudes: React.FC = () => {
   const allowed = canAccessAnalisisClinicoLab(currentUser);
   const puedeVerMicro = canAccessMicrobiologiaLectura(currentUser);
   const esPaciente = isPacienteRole(currentUser);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setBusquedaDebounced(busqueda), 400);
@@ -58,7 +59,7 @@ const Solicitudes: React.FC = () => {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!initialLoadDone.current) setLoading(true);
     setError(null);
     try {
       const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
@@ -104,12 +105,27 @@ const Solicitudes: React.FC = () => {
       setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
       setRows([]);
     } finally {
+      initialLoadDone.current = true;
       setLoading(false);
     }
   }, [allowed, puedeVerMicro, filtroEstado, filtroTipo, busquedaDebounced]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
+    const id = window.setInterval(refreshIfVisible, 20000);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
+      window.clearInterval(id);
+    };
   }, [load]);
 
   const stats = useMemo(() => {
@@ -136,7 +152,7 @@ const Solicitudes: React.FC = () => {
   const pageTitle = esPaciente ? 'Mis análisis clínico' : 'Análisis de laboratorio';
   const pageDescription = esPaciente
     ? 'Pedidos de laboratorio realizados desde consultas y sus resultados.'
-    : 'Órdenes de Lab. Clínico y Microbiología generadas al cerrar consultas.';
+    : 'Órdenes de Lab. Clínico y Microbiología. Se actualiza sola; el pedido aparece al guardar y cerrar la consulta.';
 
   const handleVer = (row: PendientePedidoRow) => {
     if (row.tipo === 'MICROBIOLOGIA') {

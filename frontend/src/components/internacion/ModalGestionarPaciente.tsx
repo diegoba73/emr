@@ -23,11 +23,14 @@ import {
   Edit,
   Save,
   Cancel,
+  RestaurantMenu,
 } from '@mui/icons-material';
-import { Cama, InternacionCama, Paciente, DiagnosticoCIE10 } from '../../types';
-import { darAltaInternacion, getInternaciones, updateInternacion, buscarDiagnosticosCIE10, getInternacionEvoluciones, iniciarEvolucionDiariaInternacion, iniciarNotaInternacion } from '../../services/apiService';
+import { Cama, InternacionCama, Paciente, DiagnosticoCIE10, TipoDieta } from '../../types';
+import { darAltaInternacion, getInternacion, getInternaciones, updateInternacion, buscarDiagnosticosCIE10, getInternacionEvoluciones, iniciarEvolucionDiariaInternacion, iniciarNotaInternacion } from '../../services/apiService';
+import { getTiposDieta } from '../../services/internacion';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
+import { canOperateInternacionClinica } from '../../utils/permissions';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import AtencionDetailDrawer from '../../modules/atenciones/components/AtencionDetailDrawer';
 import { Atencion } from '../../types';
@@ -46,7 +49,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   cama,
   onSuccess,
 }) => {
-  const { medicos: medicosContext } = useData();
+  const { medicos: medicosContext, currentUser } = useData();
   const [internacion, setInternacion] = useState<InternacionCama | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
@@ -66,12 +69,15 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     medico: number | null;
     diagnostico_ingreso: string;
     diagnostico_cie_id: number | null;
+    tipo_dieta_id: number | null;
   }>({
     paciente: null,
     medico: null,
     diagnostico_ingreso: '',
     diagnostico_cie_id: null,
+    tipo_dieta_id: null,
   });
+  const [tiposDieta, setTiposDieta] = useState<TipoDieta[]>([]);
   
   // Estados para búsqueda de pacientes con API
   const [pacienteOptions, setPacienteOptions] = useState<Paciente[]>([]);
@@ -99,8 +105,24 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       setDiagnosticoInputValue('');
       setPacienteOptions([]);
       setPacienteInputValue('');
+      setTiposDieta([]);
     }
   }, [open, cama]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getTiposDieta()
+      .then((tipos) => {
+        if (active) setTiposDieta(tipos);
+      })
+      .catch(() => {
+        if (active) setTiposDieta([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
   
   // Búsqueda de pacientes en el servidor (igual que ModalIngresarPaciente)
   useEffect(() => {
@@ -248,49 +270,32 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     setLoadingData(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:8000/api/internacion/internaciones/${internacionId}/`, {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const found = await response.json();
-        setInternacion(found);
-        setEditedData({
-          paciente: found.paciente,
-          medico: found.medico,
-          diagnostico_ingreso: found.diagnostico_ingreso || '',
-          diagnostico_cie_id: found.diagnostico_cie?.id || null,
-        });
-        
-        // Si hay un diagnóstico CIE, establecer el input value
-        if (found.diagnostico_cie) {
-          setDiagnosticoInputValue(`${found.diagnostico_cie.codigo} - ${found.diagnostico_cie.descripcion}`);
-        } else {
-          setDiagnosticoInputValue('');
-        }
-        await loadEvoluciones(internacionId);
-      } else {
-        // Fallback: buscar en la lista
+      let found: InternacionCama | undefined;
+      try {
+        found = await getInternacion(internacionId);
+      } catch {
         const internaciones = await getInternaciones();
-        const found = internaciones.find((i) => i.id === internacionId);
-        if (found) {
-          setInternacion(found);
-          setEditedData({
-            paciente: found.paciente,
-            medico: found.medico,
-            diagnostico_ingreso: found.diagnostico_ingreso || '',
-            diagnostico_cie_id: found.diagnostico_cie?.id || null,
-          });
-          
-          // Si hay un diagnóstico CIE, establecer el input value
-          if (found.diagnostico_cie) {
-            setDiagnosticoInputValue(`${found.diagnostico_cie.codigo} - ${found.diagnostico_cie.descripcion}`);
-          } else {
-            setDiagnosticoInputValue('');
-          }
-          await loadEvoluciones(internacionId);
-        } else {
-          setError('No se encontró la internación');
-        }
+        found = internaciones.find((i) => i.id === internacionId);
+      }
+      if (!found) {
+        setError('No se encontró la internación');
+        return;
+      }
+      setInternacion(found);
+      setEditedData({
+        paciente: found.paciente,
+        medico: found.medico,
+        diagnostico_ingreso: found.diagnostico_ingreso || '',
+        diagnostico_cie_id: found.diagnostico_cie?.id || null,
+        tipo_dieta_id: found.tipo_dieta?.id || null,
+      });
+      if (found.diagnostico_cie) {
+        setDiagnosticoInputValue(`${found.diagnostico_cie.codigo} - ${found.diagnostico_cie.descripcion}`);
+      } else {
+        setDiagnosticoInputValue('');
+      }
+      if (canOperateInternacionClinica(currentUser)) {
+        await loadEvoluciones(internacionId);
       }
     } catch (err: unknown) {
       setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.internacionCargar));
@@ -314,6 +319,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           medico: internacion.medico,
           diagnostico_ingreso: internacion.diagnostico_ingreso || '',
           diagnostico_cie_id: internacion.diagnostico_cie?.id || null,
+          tipo_dieta_id: internacion.tipo_dieta?.id || null,
         });
         
         // Restaurar input value del diagnóstico CIE
@@ -367,6 +373,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         updateData.diagnostico_ingreso = editedData.diagnostico_ingreso.trim();
       }
 
+      updateData.tipo_dieta_id = editedData.tipo_dieta_id;
+
       const updated = await updateInternacion(internacionId, updateData);
       
       // Actualizar el estado local
@@ -376,6 +384,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         medico: updated.medico,
         diagnostico_ingreso: updated.diagnostico_ingreso || '',
         diagnostico_cie_id: updated.diagnostico_cie?.id || null,
+        tipo_dieta_id: updated.tipo_dieta?.id || null,
       });
       
       // Actualizar input value del diagnóstico CIE
@@ -488,6 +497,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   }
 
   const internacionData = cama.internacion_actual;
+  const canSeeClinica = canOperateInternacionClinica(currentUser);
+  const diagnosticoVisible =
+    internacion?.diagnostico_cie
+      ? `${internacion.diagnostico_cie.codigo} - ${internacion.diagnostico_cie.descripcion}`
+      : internacion?.diagnostico_ingreso || internacionData.diagnostico || '';
   const medicoId = editedData.medico !== null && editedData.medico !== undefined
     ? editedData.medico
     : (internacion?.medico || null);
@@ -538,6 +552,17 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
             {confirmAlta && (
               <Alert severity="warning" sx={{ mb: 2 }}>
                 ¿Está seguro que desea dar de alta a este paciente? La cama pasará a estado "Limpieza" y todos los datos quedarán registrados en el historial.
+              </Alert>
+            )}
+
+            {diagnosticoVisible && (
+              <Alert severity="info" sx={{ mb: 2 }} icon={<DescriptionIcon />}>
+                <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.25 }}>
+                  Diagnóstico
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>
+                  {diagnosticoVisible}
+                </Typography>
               </Alert>
             )}
 
@@ -768,8 +793,47 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
               )}
             </Box>
 
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <RestaurantMenu sx={{ mr: 1, fontSize: 20, color: 'text.secondary' }} />
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
+                  Tipo de dieta:
+                </Typography>
+              </Box>
+              {isEditing ? (
+                <Autocomplete
+                  options={
+                    internacion?.tipo_dieta && !tiposDieta.some((t) => t.id === internacion.tipo_dieta?.id)
+                      ? [...tiposDieta, internacion.tipo_dieta]
+                      : tiposDieta
+                  }
+                  getOptionLabel={(option) => option.nombre}
+                  value={
+                    tiposDieta.find((t) => t.id === editedData.tipo_dieta_id)
+                    || (internacion?.tipo_dieta?.id === editedData.tipo_dieta_id ? internacion.tipo_dieta : null)
+                    || null
+                  }
+                  onChange={(_, newValue) => {
+                    setEditedData((prev) => ({ ...prev, tipo_dieta_id: newValue?.id ?? null }));
+                  }}
+                  size="small"
+                  fullWidth
+                  renderInput={(params) => (
+                    <TextField {...params} label="Tipo de dieta" placeholder="Sin dieta asignada" />
+                  )}
+                  isOptionEqualToValue={(option, value) => option.id === value?.id}
+                  noOptionsText="No hay tipos de dieta cargados"
+                />
+              ) : (
+                <Typography variant="body1" sx={{ ml: 4 }}>
+                  {internacion?.tipo_dieta?.nombre || internacionData.tipo_dieta || 'Sin dieta asignada'}
+                </Typography>
+              )}
+            </Box>
+
             <Divider sx={{ my: 2 }} />
 
+            {canSeeClinica && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 Seguimiento clínico
@@ -845,6 +909,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                 </Stack>
               )}
             </Box>
+            )}
           </>
         )}
       </DialogContent>

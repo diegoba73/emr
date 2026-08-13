@@ -405,6 +405,40 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         r = self.client.get("/api/lab/microbiologia/estudios/")
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_secretaria_lista_estudio_en_cualquier_estado(self):
+        data = self._crear_estudio()
+        sec = User.objects.create_user(
+            username=f"sec_em_{self.suf}",
+            email=f"sem{self.suf}@t.com",
+            password="x",
+            rol="secretaria",
+        )
+        self.client.force_authenticate(sec)
+        r = self.client.get("/api/lab/microbiologia/estudios/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        payload = r.json()
+        results = payload["results"] if isinstance(payload, dict) else payload
+        ids = {row["id"] for row in results}
+        self.assertIn(data["id"], ids)
+        r2 = self.client.get(f"/api/lab/microbiologia/estudios/{data['id']}/")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+
+    def test_secretaria_no_inicia_estudio(self):
+        data = self._crear_estudio()
+        sec = User.objects.create_user(
+            username=f"sec_em2_{self.suf}",
+            email=f"sem2{self.suf}@t.com",
+            password="x",
+            rol="secretaria",
+        )
+        self.client.force_authenticate(sec)
+        r = self.client.post(
+            f"/api/lab/microbiologia/estudios/{data['id']}/iniciar/",
+            {},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_medico_ve_su_estudio(self):
         data = self._crear_estudio()
         self.client.force_authenticate(self.med_user)

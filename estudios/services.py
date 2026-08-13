@@ -19,6 +19,7 @@ from auditoria.snapshot import safe_model_snapshot
 from .access import (
     usuario_es_realizador_o_admin,
     usuario_puede_descargar_pdf_informe,
+    usuario_puede_entregar_estudio,
     usuario_puede_modificar_contenido_estudio,
     usuario_puede_validar_informe,
 )
@@ -393,7 +394,8 @@ def _informe_vigente_validado(estudio: EstudioComplementario) -> InformeEstudioC
 
 @transaction.atomic
 def entregar_estudio(estudio: EstudioComplementario, *, user):
-    _assert_puede_modificar_contenido(estudio, user)
+    if not usuario_puede_entregar_estudio(user, estudio):
+        raise PermissionDenied('No tiene permiso para entregar este estudio.')
     if not _informe_vigente_validado(estudio):
         raise ValidationError('Entregar requiere un informe validado vigente.')
     if estudio.estado != EstudioComplementario.Estado.VALIDADO:

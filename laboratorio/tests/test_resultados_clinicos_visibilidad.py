@@ -117,3 +117,12 @@ class TestResultadosClinicosVisibilidad:
         results = data["results"] if isinstance(data, dict) else data
         ids = {row["id"] for row in results}
         assert self.sol.pk in ids
+
+    def test_secretaria_detalle_sin_resultados_si_no_finalizado(self):
+        self.client.force_authenticate(self.sec)
+        r = self.client.get(self._url())
+        assert r.status_code == status.HTTP_200_OK
+        body = r.json()
+        assert body["estado"] == "EN_PROCESO"
+        assert body["resultados"] == []
+        assert body.get("resultados_visibles") is False
