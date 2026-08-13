@@ -908,7 +908,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
               variant="outlined"
               size="small"
               startIcon={<Refresh />}
-              onClick={loadAnalisisLims}
+              onClick={() => { void loadAnalisisLims(); }}
               disabled={loadingAnalisis}
               sx={{ ml: 2 }}
             >
