@@ -201,7 +201,7 @@ export interface Sector extends BaseModel {
 
 export interface TipoDieta extends BaseModel {
   nombre: string;
-  descripcion?: string | null;
+  descripcion?: string;
   activo?: boolean;
 }
 
