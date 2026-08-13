@@ -37,15 +37,16 @@ function pacienteToFormValues(p: Paciente): PacienteDemographicsFormValues {
 }
 
 function formToPayload(values: PacienteDemographicsFormValues): Record<string, string> {
+  const upper = (s: string) => s.trim().toUpperCase();
   const payload: Record<string, string> = {
-    nombre: values.nombre.trim(),
-    apellido: values.apellido.trim(),
+    nombre: upper(values.nombre),
+    apellido: upper(values.apellido),
     dni: values.dni.trim(),
     telefono: values.telefono.trim(),
     email: values.email.trim(),
-    direccion: values.direccion.trim(),
-    obra_social: values.obra_social.trim(),
-    numero_afiliado: values.numero_afiliado.trim(),
+    direccion: upper(values.direccion),
+    obra_social: upper(values.obra_social),
+    numero_afiliado: upper(values.numero_afiliado),
     observaciones: values.observaciones.trim(),
   };
   if (values.fecha_nacimiento) payload.fecha_nacimiento = values.fecha_nacimiento;

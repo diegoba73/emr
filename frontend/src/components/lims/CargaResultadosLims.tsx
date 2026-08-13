@@ -22,8 +22,15 @@ import {
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import toast from 'react-hot-toast';
-import type { LimsTipoExamen, LimsTipoMuestra, MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
+import type {
+  HistorialAnalitoPrevioLims,
+  LimsTipoExamen,
+  LimsTipoMuestra,
+  MuestraTransaccional,
+  SolicitudExamenLims,
+} from '../../types/lims';
 import {
+  getHistorialAnalitos,
   getTiposExamenMap,
   listTiposMuestraLims,
   patchOrdenInformeOrden,
@@ -118,6 +125,13 @@ function focusCargaField(key: string): boolean {
   return true;
 }
 
+function formatFechaHistorialCorta(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
 const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   orden,
   muestras,
@@ -136,6 +150,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   } | null>(null);
   const [tiposExamenMap, setTiposExamenMap] = useState<Map<number, LimsTipoExamen>>(new Map());
   const [tiposMuestraMap, setTiposMuestraMap] = useState<Map<number, LimsTipoMuestra>>(new Map());
+  const [previosPorTipo, setPreviosPorTipo] = useState<Map<number, HistorialAnalitoPrevioLims[]>>(
+    new Map()
+  );
 
   const esHemograma = useMemo(
     () =>
@@ -227,6 +244,26 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getHistorialAnalitos(orden.id, 10);
+        if (cancelled) return;
+        const map = new Map<number, HistorialAnalitoPrevioLims[]>();
+        for (const a of data.analitos || []) {
+          map.set(a.tipo_examen_id, a.previos || []);
+        }
+        setPreviosPorTipo(map);
+      } catch {
+        if (!cancelled) setPreviosPorTipo(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orden.id]);
 
   useEffect(() => {
     indicesManualRef.current = new Set();
@@ -455,6 +492,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       const esFormula = isFormulaPercent(te, r.tipo_examen_codigo);
       const mostrarIndicadorFormula = esFormula && focusedSysmexKey === sysmexFocusKey;
       const showOrden = ordenOpts?.ordenRowSpan !== undefined;
+      const previos = previosPorTipo.get(r.tipo_examen) || [];
 
       return (
         <TableRow key={r.id}>
@@ -485,6 +523,22 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                 />
               )}
             </Box>
+            {previos.length > 0 && (
+              <Box sx={{ mt: 0.75, display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }}>
+                  Previos:
+                </Typography>
+                {previos.slice(0, 10).map((p) => (
+                  <Chip
+                    key={p.resultado_id}
+                    size="small"
+                    variant="outlined"
+                    label={`${formatFechaHistorialCorta(p.fecha)} ${p.valor}${p.unidad ? ` ${p.unidad}` : ''}`}
+                    sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
+                  />
+                ))}
+              </Box>
+            )}
           </TableCell>
           <TableCell sx={{ maxWidth: 140 }}>
             <ResultadoRangoInfo resultado={r} />
@@ -625,6 +679,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       moveGrupoInforme,
       ordenGrupos.length,
       savingOrden,
+      previosPorTipo,
     ]
   );
 

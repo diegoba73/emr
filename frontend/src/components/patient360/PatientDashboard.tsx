@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -23,6 +23,7 @@ import { getInternaciones } from '../../services/apiService';
 import PatientIntegratedView from '../PatientIntegratedView';
 import PacienteFormDialog from '../PacienteFormDialog';
 import { canUpdatePacienteDemographics } from '../../utils/permissions';
+import { pacienteFichaAnalisisPath, withNavBack } from '../../utils/navBack';
 import SectionCard from './SectionCard';
 import InfoCard from './InfoCard';
 import Timeline, { TimelineItem, TimelineItemType } from './Timeline';
@@ -31,6 +32,7 @@ import { patientAgeYears } from './patientAge';
 function mapTimelineEvent(
   ev: PacienteTimelineEvent,
   navigate: (path: string, opts?: { state?: unknown }) => void,
+  pacienteId: number,
 ): TimelineItem | null {
   const date = ev.date ? new Date(ev.date) : new Date(0);
   if (Number.isNaN(date.getTime())) return null;
@@ -50,9 +52,23 @@ function mapTimelineEvent(
       const openId = ev.atencion_id || (ev.meta?.openAtencionId as number | undefined);
       if (openId) {
         navigate(path, { state: { openAtencionId: openId } });
-      } else {
-        navigate(path);
+        return;
       }
+      if (path.startsWith('/solicitudes/')) {
+        navigate(
+          path,
+          withNavBack(pacienteFichaAnalisisPath(pacienteId), '← Volver a la ficha')
+        );
+        return;
+      }
+      if (path.startsWith('/estudios-complementarios/')) {
+        navigate(
+          path,
+          withNavBack(`/paciente/${pacienteId}`, '← Volver a la ficha')
+        );
+        return;
+      }
+      navigate(path);
     },
   };
 }
@@ -60,6 +76,7 @@ function mapTimelineEvent(
 const PatientDashboard: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     pacientes,
     loadPacientes,
@@ -78,6 +95,7 @@ const PatientDashboard: React.FC = () => {
   const [showEditPaciente, setShowEditPaciente] = useState(false);
 
   const pid = Number(id);
+  const fichaLabTab = searchParams.get('tab') === 'analisis' ? 2 : 0;
   const paciente: Paciente | undefined = useMemo(
     () => pacientes.find((p) => p.id === pid),
     [pacientes, pid]
@@ -115,7 +133,7 @@ const PatientDashboard: React.FC = () => {
       const events = await apiService.getPacienteTimeline(paciente.id);
       setTimelineItems(
         events
-          .map((ev) => mapTimelineEvent(ev, navigate))
+          .map((ev) => mapTimelineEvent(ev, navigate, pid))
           .filter((x): x is TimelineItem => Boolean(x)),
       );
     } catch {
@@ -123,7 +141,7 @@ const PatientDashboard: React.FC = () => {
     } finally {
       setLoadingTimeline(false);
     }
-  }, [paciente?.id, navigate]);
+  }, [paciente?.id, navigate, pid]);
 
   useEffect(() => {
     loadAtenciones();
@@ -383,7 +401,16 @@ const PatientDashboard: React.FC = () => {
               title="Análisis de laboratorio"
               dense
               action={
-                <Button size="small" onClick={() => navigate('/solicitudes')}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSearchParams({ tab: 'analisis' });
+                    document.getElementById('ficha-paciente-detalle')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
+                  }}
+                >
                   Ver
                 </Button>
               }
@@ -400,7 +427,12 @@ const PatientDashboard: React.FC = () => {
                       size="small"
                       label={s.numero ? `${s.numero} · ${s.estado}` : s.estado}
                       variant="outlined"
-                      onClick={() => navigate(`/solicitudes/${s.id}`)}
+                      onClick={() =>
+                        navigate(
+                          `/solicitudes/${s.id}`,
+                          withNavBack(pacienteFichaAnalisisPath(pid), '← Volver a la ficha')
+                        )
+                      }
                     />
                   ))}
                 </Stack>
@@ -431,7 +463,13 @@ const PatientDashboard: React.FC = () => {
           Información completa, atenciones y laboratorio
         </Typography>
       </Box>
-      <PatientIntegratedView paciente={paciente} variant="page" />
+      <Box id="ficha-paciente-detalle">
+        <PatientIntegratedView
+          paciente={paciente}
+          variant="page"
+          initialTab={fichaLabTab}
+        />
+      </Box>
     </Box>
   );
 };

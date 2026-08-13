@@ -84,7 +84,9 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     """True si el usuario puede leer la orden LIMS (list/retrieve).
 
     Médico: órdenes propias **o** de pacientes con vínculo clínico
-    (turno / consulta HC / atención), p. ej. cabecera viendo labs de guardia.
+    (turno / consulta HC / atención), **o** órdenes ya informadas
+    (FINALIZADO / INFORMADO_PARCIAL) — historial en ficha sin exigir
+    ``medico_interno`` (p. ej. LabWin).
     Secretaría/enfermería: pueden ver el encabezado de todas las órdenes;
     los resultados clínicos se filtran con ``usuario_puede_ver_resultados_lims``.
     """
@@ -101,6 +103,10 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
         return True
 
     if role == 'medico':
+        from laboratorio.access import ESTADOS_LECTURA_HISTORIAL_MEDICO
+
+        if getattr(solicitud, 'estado', None) in ESTADOS_LECTURA_HISTORIAL_MEDICO:
+            return True
         medico = getattr(solicitud, 'medico_interno', None)
         if medico and getattr(medico, 'user_id', None) == user.id:
             return True
@@ -298,6 +304,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'analisis_longitudinal':
             return role in _LIMS_SOLICITUD_READ_ROLES
+        if action == 'historial_analitos':
+            return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'sugerir_conclusion_hemograma':
             return role in ROLES_LIMS_WRITE
         if action == 'orden_informe':
@@ -361,6 +369,10 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
 
         if action == 'analisis_longitudinal':
             return usuario_puede_ver_resultados_lims(request.user, obj)
+
+        if action == 'historial_analitos':
+            # Pre-carga: basta con poder ver la orden (no exige FINALIZADO).
+            return usuario_puede_ver_solicitud_lims(request.user, obj)
 
         if action == 'sugerir_conclusion_hemograma':
             return role in ROLES_LIMS_WRITE

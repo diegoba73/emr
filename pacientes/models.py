@@ -1,6 +1,9 @@
 from django.db import models
 from django.conf import settings
 
+from pacientes.texto import aplicar_mayusculas_paciente
+
+
 class Paciente(models.Model):
     """
     Modelo para pacientes del sistema.
@@ -77,7 +80,11 @@ class Paciente(models.Model):
 
     def __str__(self):
         return f"{self.apellido}, {self.nombre} ({self.dni})"
-    
+
+    def save(self, *args, **kwargs):
+        aplicar_mayusculas_paciente(self)
+        super().save(*args, **kwargs)
+
     @property
     def nombre_completo(self):
         """Nombre completo del paciente. Tolera valores ``None``.

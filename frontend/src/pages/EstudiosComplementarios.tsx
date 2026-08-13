@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import { Add, CalendarMonth, Clear, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { withNavBack } from '../utils/navBack';
 import AsyncAutocomplete from '../components/common/AsyncAutocomplete';
 import { useData } from '../contexts/DataContext';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
@@ -151,7 +152,10 @@ const EstudiosComplementarios: React.FC = () => {
     try {
       const created = await createEstudioComplementario(form);
       setCreateOpen(false);
-      navigate(`/estudios-complementarios/${created.id}`);
+      navigate(
+        `/estudios-complementarios/${created.id}`,
+        withNavBack('/estudios-complementarios', '← Volver al listado')
+      );
     } catch (e) {
       setError(parseEstudiosApiError(e, 'No se pudo crear el estudio.'));
     } finally {
@@ -346,7 +350,10 @@ const EstudiosComplementarios: React.FC = () => {
                       startIcon={<Visibility />}
                       onClick={(ev) => {
                         ev.stopPropagation();
-                        navigate(`/estudios-complementarios/${row.id}`);
+                        navigate(
+                          `/estudios-complementarios/${row.id}`,
+                          withNavBack('/estudios-complementarios', '← Volver al listado')
+                        );
                       }}
                     >
                       Ver

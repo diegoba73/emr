@@ -6,16 +6,12 @@ import {
   Chip,
   CircularProgress,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import OrdenLimsResumenPanel from '../components/lims/OrdenLimsResumenPanel';
+import ResultadosOrdenLista from '../components/lims/ResultadosOrdenLista';
 import { useData } from '../contexts/DataContext';
 import { downloadInformeLimsPdf, getSolicitudExamen } from '../services/limsApi';
 import type { SolicitudExamenLims } from '../types/lims';
@@ -27,10 +23,12 @@ import {
   labelEstadoOrdenLims,
   ordenEsFinalizada,
 } from '../utils/limsEstadosOrden';
+import { resolveNavBack } from '../utils/navBack';
 
 const SolicitudLabDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useData();
   const [orden, setOrden] = useState<SolicitudExamenLims | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +36,12 @@ const SolicitudLabDetalle: React.FC = () => {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const allowed = canAccessAnalisisClinicoLab(currentUser);
+  const back = resolveNavBack(location.state, {
+    path: '/solicitudes',
+    label: '← Volver al listado',
+  });
+
+  const goBack = () => navigate(back.path);
 
   const load = useCallback(async () => {
     if (!allowed || !id) {
@@ -100,8 +104,8 @@ const SolicitudLabDetalle: React.FC = () => {
   if (!orden) {
     return (
       <Box sx={{ p: 3 }}>
-        <Button size="small" onClick={() => navigate('/solicitudes')} sx={{ mb: 2 }}>
-          ← Volver al listado
+        <Button size="small" onClick={goBack} sx={{ mb: 2 }}>
+          {back.label}
         </Button>
         <Alert severity={loadError ? 'error' : 'info'}>
           {loadError ? 'No se pudo cargar la orden.' : 'Orden no encontrada.'}
@@ -116,8 +120,8 @@ const SolicitudLabDetalle: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Button size="small" onClick={() => navigate('/solicitudes')} sx={{ mb: 2 }}>
-        ← Volver al listado
+      <Button size="small" onClick={goBack} sx={{ mb: 2 }}>
+        {back.label}
       </Button>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
@@ -140,6 +144,9 @@ const SolicitudLabDetalle: React.FC = () => {
         <Typography variant="h6" gutterBottom>
           Resultados
         </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Agrupados por perfil (hemograma, orina, ionograma, EAB, etc.)
+        </Typography>
         {!puedeVerResultados ? (
           <Alert severity="info">
             {ordenEsFinalizada(orden.estado)
@@ -149,30 +156,12 @@ const SolicitudLabDetalle: React.FC = () => {
         ) : resultados.length === 0 ? (
           <Typography color="text.secondary">Resultados pendientes.</Typography>
         ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Examen</TableCell>
-                <TableCell>Resultado</TableCell>
-                <TableCell>Referencia</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {resultados.map((res) => (
-                <TableRow key={res.id}>
-                  <TableCell>{res.tipo_examen_nombre || '—'}</TableCell>
-                  <TableCell>
-                    {res.valor_obtenido || '—'}
-                    {res.unidad ? ` ${res.unidad}` : ''}
-                    {res.es_patologico ? (
-                      <Chip label="Fuera de rango" size="small" color="warning" sx={{ ml: 1 }} />
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{res.rango_referencia_snapshot || res.tipo_examen_rango_referencia || '—'}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ResultadosOrdenLista
+            resultados={resultados}
+            orden={orden}
+            observaciones={orden.observaciones}
+            modo="clinico"
+          />
         )}
       </Paper>
     </Box>

@@ -47,7 +47,10 @@ from api.permissions import (
     LimsTipoExamenCatalogPermission,
 )
 from .solicitud_estado import SolicitudEstadoTransitionError
-from .analisis_longitudinal import analizar_solicitud_optimizado
+from .analisis_longitudinal import (
+    analizar_solicitud_optimizado,
+    historial_analitos_solicitud,
+)
 from .orden_grupos_informe import claves_grupos_validas, validar_orden_grupos
 from .solicitud_cierre import (
     SolicitudCierreError,
@@ -495,9 +498,31 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria'):
                 pass
             elif role == 'medico':
-                from laboratorio.access import filtrar_lectura_lims_medico
+                from django.db.models import Q
 
-                queryset = filtrar_lectura_lims_medico(queryset, user)
+                from laboratorio.access import (
+                    ESTADOS_LECTURA_HISTORIAL_MEDICO,
+                    filtrar_lectura_lims_medico,
+                    q_lectura_lims_medico,
+                )
+
+                paciente_param = self.request.query_params.get('paciente')
+                paciente_id = None
+                if paciente_param not in (None, ''):
+                    try:
+                        paciente_id = int(paciente_param)
+                    except (TypeError, ValueError):
+                        paciente_id = None
+                if getattr(self, 'action', None) == 'list':
+                    queryset = filtrar_lectura_lims_medico(
+                        queryset, user, paciente_id=paciente_id
+                    )
+                else:
+                    # Detalle/acciones: localizar informadas (LabWin) + propias/vínculo.
+                    queryset = queryset.filter(
+                        q_lectura_lims_medico(user, paciente_id=paciente_id)
+                        | Q(estado__in=ESTADOS_LECTURA_HISTORIAL_MEDICO)
+                    ).distinct()
             elif role == 'paciente':
                 try:
                     queryset = queryset.filter(paciente_id=user.paciente.id)
@@ -975,6 +1000,30 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         data = analizar_solicitud_optimizado(solicitud)
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='historial-analitos')
+    def historial_analitos(self, request, pk=None):
+        """
+        Últimos N valores previos por analito de la orden (antes de guardar).
+
+        Pensado para la grilla de carga: mismo paciente + mismo tipo_examen.
+        Query param ``n`` (default 10, máx. 20).
+        """
+        solicitud = self.get_object()
+        from api.permissions import usuario_puede_ver_solicitud_lims
+
+        if not usuario_puede_ver_solicitud_lims(request.user, solicitud):
+            return Response(
+                {'detail': 'No tenés permiso para ver el historial de esta orden.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        raw_n = request.query_params.get('n', '10')
+        try:
+            n = int(raw_n)
+        except (TypeError, ValueError):
+            n = 10
+        data = historial_analitos_solicitud(solicitud, limit=n)
         return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='sugerir-conclusion-hemograma')

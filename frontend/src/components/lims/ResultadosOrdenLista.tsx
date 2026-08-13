@@ -20,10 +20,15 @@ export interface ResultadosOrdenListaProps {
   resultados: ResultadoExamenLims[];
   muestras?: MuestraTransaccional[];
   tiposMuestraMap?: Map<number, LimsTipoMuestra>;
-  /** Si se pasa, agrupa filas por panel de la orden. */
-  orden?: Pick<SolicitudExamenLims, 'paneles_resumen' | 'tipos_examen'>;
+  /** Si se pasa, agrupa filas por panel / perfil inferido. */
+  orden?: Pick<SolicitudExamenLims, 'paneles_resumen' | 'tipos_examen' | 'orden_grupos_informe'>;
   /** Conclusión/observaciones: bajo hemograma si hay PAN_HEMO; si no, al final. */
   observaciones?: string | null;
+  /**
+   * `laboratorio`: muestra + columnas operativas.
+   * `clinico`: compacto para ficha médica (valor+unidad juntos, sin muestra).
+   */
+  modo?: 'laboratorio' | 'clinico';
 }
 
 function muestraLabel(
@@ -47,13 +52,16 @@ function ResultadoRow({
   r,
   muestras,
   tiposMuestraMap,
+  modo,
 }: {
   r: ResultadoExamenLims;
   muestras: MuestraTransaccional[];
   tiposMuestraMap: Map<number, LimsTipoMuestra>;
+  modo: 'laboratorio' | 'clinico';
 }) {
   const valor = (r.valor_obtenido ?? '').trim();
-  const unidad = (r.unidad ?? '').trim() || '—';
+  const unidad = (r.unidad ?? '').trim();
+  const clinico = modo === 'clinico';
 
   return (
     <TableRow
@@ -66,21 +74,45 @@ function ResultadoRow({
             : undefined
       }
     >
-      <TableCell>
-        <Typography variant="body2" fontWeight={600}>
+      <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
+        <Typography variant="body2" fontWeight={600} component="span">
           {r.tipo_examen_nombre || r.tipo_examen}
         </Typography>
-        <Typography variant="caption" display="block">
-          {r.tipo_examen_codigo}
+        {r.tipo_examen_codigo ? (
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            {r.tipo_examen_codigo}
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell sx={{ py: clinico ? 0.75 : undefined, whiteSpace: 'nowrap' }}>
+        <Typography
+          variant="body2"
+          fontWeight={valor ? 700 : 400}
+          component="span"
+          sx={{ fontVariantNumeric: 'tabular-nums' }}
+        >
+          {valor || '—'}
         </Typography>
+        {valor && unidad ? (
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
+            {unidad}
+          </Typography>
+        ) : null}
       </TableCell>
-      <TableCell>{valor || '—'}</TableCell>
-      <TableCell>{unidad}</TableCell>
-      <TableCell>
-        <ResultadoRangoInfo resultado={r} />
+      {!clinico && <TableCell>{unidad || '—'}</TableCell>}
+      <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
+        {clinico ? (
+          <Typography variant="caption" color="text.secondary">
+            {r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}
+          </Typography>
+        ) : (
+          <ResultadoRangoInfo resultado={r} />
+        )}
       </TableCell>
-      <TableCell>{muestraLabel(r, muestras, tiposMuestraMap)}</TableCell>
-      <TableCell>
+      {!clinico && (
+        <TableCell>{muestraLabel(r, muestras, tiposMuestraMap)}</TableCell>
+      )}
+      <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
         <ResultadoEstadoBadge resultado={r} />
       </TableCell>
     </TableRow>
@@ -93,6 +125,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   tiposMuestraMap = new Map(),
   orden,
   observaciones,
+  modo = 'laboratorio',
 }) => {
   const grupos = useMemo(
     () => (orden ? groupResultadosPorPanel(orden, resultados) : [{ key: 'all', titulo: '', resultados }]),
@@ -100,6 +133,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   );
   const obs = (observaciones || '').trim();
   const tieneHemograma = grupos.some((g) => g.codigo === PANEL_HEMOGRAMA);
+  const clinico = modo === 'clinico';
 
   if (resultados.length === 0) {
     return (
@@ -110,55 +144,76 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {grupos.map((grupo) => (
-        <Box key={grupo.key}>
-          {grupo.titulo && (
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-              {grupo.titulo}
-              {grupo.codigo ? (
-                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                  ({grupo.codigo})
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: clinico ? 1.5 : 2 }}>
+      {grupos.map((grupo) => {
+        const esPerfil = Boolean(grupo.codigo) || grupo.resultados.length > 1;
+        return (
+          <Box key={grupo.key}>
+            {grupo.titulo && (
+              <Box
+                sx={{
+                  mb: 0.75,
+                  px: esPerfil ? 1.25 : 0,
+                  py: esPerfil ? 0.75 : 0,
+                  borderRadius: 1,
+                  bgcolor: esPerfil ? 'action.hover' : 'transparent',
+                  borderLeft: esPerfil ? 3 : 0,
+                  borderColor: 'primary.main',
+                }}
+              >
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {grupo.titulo}
+                  {grupo.codigo ? (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                      {grupo.codigo}
+                    </Typography>
+                  ) : null}
+                  {esPerfil && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                      · {grupo.resultados.length} analitos
+                    </Typography>
+                  )}
                 </Typography>
-              ) : null}
-            </Typography>
-          )}
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Examen</TableCell>
-                  <TableCell>Valor</TableCell>
-                  <TableCell>Unidad</TableCell>
-                  <TableCell>Referencia</TableCell>
-                  <TableCell>Muestra</TableCell>
-                  <TableCell>Estado</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {grupo.resultados.map((r) => (
-                  <ResultadoRow
-                    key={r.id}
-                    r={r}
-                    muestras={muestras}
-                    tiposMuestraMap={tiposMuestraMap}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          {obs && grupo.codigo === PANEL_HEMOGRAMA && (
-            <Box sx={{ mt: 1.5 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Conclusión / observaciones del hemograma
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {obs}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      ))}
+              </Box>
+            )}
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Examen</TableCell>
+                    <TableCell>{clinico ? 'Resultado' : 'Valor'}</TableCell>
+                    {!clinico && <TableCell>Unidad</TableCell>}
+                    <TableCell>Referencia</TableCell>
+                    {!clinico && <TableCell>Muestra</TableCell>}
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {grupo.resultados.map((r) => (
+                    <ResultadoRow
+                      key={r.id}
+                      r={r}
+                      muestras={muestras}
+                      tiposMuestraMap={tiposMuestraMap}
+                      modo={modo}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {obs && grupo.codigo === PANEL_HEMOGRAMA && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Conclusión / observaciones del hemograma
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {obs}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
       {obs && !tieneHemograma && (
         <Box>
           <Typography variant="subtitle2" gutterBottom>

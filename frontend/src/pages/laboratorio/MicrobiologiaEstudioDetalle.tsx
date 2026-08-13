@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Tab, Tabs, Typography } from '@mui/material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { EstudioMicrobiologia } from '../../types/lims';
+import { readNavBackState } from '../../utils/navBack';
 import {
   cancelarEstudioMicrobiologia,
   getEstudioMicrobiologia,
@@ -44,6 +45,7 @@ import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/Motiv
 const MicrobiologiaEstudioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useData();
   const [tab, setTab] = useState(0);
   const [estudio, setEstudio] = useState<EstudioMicrobiologia | null>(null);
@@ -187,6 +189,11 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   };
 
   const handleVolver = () => {
+    const { from } = readNavBackState(location.state);
+    if (from) {
+      navigate(from);
+      return;
+    }
     if (canOperateMicrobiologia(currentUser)) {
       if (modoPedidoPendiente) {
         const tabPend =

@@ -119,7 +119,7 @@ class TestPacienteAPICreacionIdentidadMinima:
         response = client.post("/api/pacientes/", data, format="json")
         assert response.status_code == status.HTTP_201_CREATED, response.data
         paciente = Paciente.objects.get(dni="API-OK-0")
-        assert paciente.nombre == "Juan"
+        assert paciente.nombre == "JUAN"
         assert paciente.fecha_nacimiento == date(1990, 5, 15)
 
     def test_patch_legacy_sin_reenviar_identidad(self):
@@ -159,8 +159,8 @@ class TestPacienteAPINormalizacion:
 
         assert response.status_code == status.HTTP_201_CREATED, response.data
         paciente = Paciente.objects.get(dni="API-NRM-0")
-        assert paciente.nombre == "Juan"
-        assert paciente.apellido == "Perez"
+        assert paciente.nombre == "JUAN"
+        assert paciente.apellido == "PEREZ"
 
 
 @pytest.mark.django_db
@@ -183,7 +183,7 @@ class TestPacienteAPIBusquedaPermisos:
         assert response.status_code == status.HTTP_200_OK
         results = response.data["results"]
         assert len(results) >= 3
-        assert all("Perez" in r["apellido"] for r in results)
+        assert all("PEREZ" in r["apellido"].upper() for r in results)
 
     def test_admin_busca_por_dni_parcial(self):
         client = APIClient()

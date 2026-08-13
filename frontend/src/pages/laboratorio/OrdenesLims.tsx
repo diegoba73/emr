@@ -35,6 +35,7 @@ import {
 } from '../../utils/limsOrdenesFecha';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import { ESTADOS_ORDEN_LIMS } from '../../utils/limsEstadosOrden';
+import { withNavBack } from '../../utils/navBack';
 import {
   mapLabToPendiente,
   mapMicroToPendiente,
@@ -165,10 +166,16 @@ const OrdenesLims: React.FC = () => {
 
   const onVer = (row: PendientePedidoRow) => {
     if (row.tipo === 'MICROBIOLOGIA') {
-      navigate(`/laboratorio/microbiologia/estudios/${row.id}`);
+      navigate(
+        `/laboratorio/microbiologia/estudios/${row.id}`,
+        withNavBack('/laboratorio/ordenes', '← Volver al listado')
+      );
       return;
     }
-    navigate(`/laboratorio/ordenes/${row.id}`);
+    navigate(
+      `/laboratorio/ordenes/${row.id}`,
+      withNavBack('/laboratorio/ordenes', '← Volver al listado')
+    );
   };
 
   if (!allowed) {

@@ -22,8 +22,9 @@ import {
   Typography,
 } from '@mui/material';
 import { Add, Delete, OpenInNew } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { formatDrfError } from '../../../services/limsApi';
+import { withNavBack } from '../../../utils/navBack';
 import { getConsultaDetalle } from '../../../services/apiService';
 import {
   listEstudiosComplementarios,
@@ -99,6 +100,12 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   usePendingDraft = false,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const backFromHere = () =>
+    withNavBack(
+      `${location.pathname}${location.search}`,
+      '← Volver a la atención'
+    );
   const dialogTheme = useClinicalDrawerDialogTheme();
   const [detalle, setDetalle] = useState<ConsultaDetalle | null>(null);
   const [loading, setLoading] = useState(!canEdit && !usePendingDraft);
@@ -852,7 +859,9 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                     <Button
                       size="small"
                       endIcon={<OpenInNew fontSize="small" />}
-                      onClick={() => navigate(`/estudios-complementarios/${est.id}`)}
+                      onClick={() =>
+                        navigate(`/estudios-complementarios/${est.id}`, backFromHere())
+                      }
                     >
                       Ver
                     </Button>
@@ -915,7 +924,9 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                       <Button
                         size="small"
                         endIcon={<OpenInNew fontSize="small" />}
-                        onClick={() => navigate(`/estudios-complementarios/${est.id}`)}
+                        onClick={() =>
+                        navigate(`/estudios-complementarios/${est.id}`, backFromHere())
+                      }
                       >
                         Ver
                       </Button>

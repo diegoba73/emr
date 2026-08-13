@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { withNavBack } from '../../utils/navBack';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { SolicitudExamenLims } from '../../types/lims';
@@ -139,10 +140,11 @@ const OrdenesLimsPendientes: React.FC = () => {
   );
 
   const handleVer = (row: PendientePedidoRow) => {
+    const back = withNavBack('/laboratorio/pendientes', '← Volver a pendientes');
     if (row.tipo === 'MICROBIOLOGIA') {
-      navigate(`/laboratorio/microbiologia/estudios/${row.id}`);
+      navigate(`/laboratorio/microbiologia/estudios/${row.id}`, back);
     } else {
-      navigate(`/laboratorio/ordenes/${row.id}`);
+      navigate(`/laboratorio/ordenes/${row.id}`, back);
     }
   };
 

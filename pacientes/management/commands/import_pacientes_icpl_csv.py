@@ -8,6 +8,7 @@ from pacientes.icpl_csv import (
     summarize_icpl_coverage,
 )
 from pacientes.models import Paciente
+from pacientes.texto import mayusculas_en_dict
 
 
 class Command(BaseCommand):
@@ -116,6 +117,7 @@ class Command(BaseCommand):
                 "numero_afiliado": row.numero_afiliado or None,
                 "observaciones": build_observaciones(row),
             }
+            defaults = mayusculas_en_dict(defaults)
 
             if dni in existing:
                 if not options["update_existing"]:

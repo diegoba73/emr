@@ -82,10 +82,11 @@ def _clean(value: str | None) -> str:
 
 
 def _title_name(value: str) -> str:
+    """Nombre/apellido demográficos en mayúsculas (histórico: título)."""
     text = _clean(value)
     if not text:
         return ""
-    return text.title()
+    return text.upper()
 
 
 def _normalize_dni(value: str) -> str:
@@ -222,10 +223,10 @@ def parse_icpl_csv_row(row: list[str], *, line_no: int) -> IcplPatientRow | None
         telefono=_first_phone(_row_get(row, 4)),
         dni=dni,
         obra_social=_normalize_obra_social(_row_get(row, 6)),
-        numero_afiliado=_row_get(row, 7)[:50],
+        numero_afiliado=_clean(_row_get(row, 7)).upper()[:50],
         fecha_nacimiento=_parse_birth_date(_row_get(row, 8)),
         sexo=_parse_sexo(_row_get(row, 10)),
-        direccion=_row_get(row, 13),
+        direccion=_clean(_row_get(row, 13)).upper(),
         responsable=_row_get(row, 12),
         diagnostico=_row_get(row, 11),
         source_line=line_no,
@@ -260,7 +261,7 @@ def _normalize_obra_social(value: str) -> str:
         "SANCOR SALUD": "SANCOR SALUD",
         "PREVENCION SALUD": "PREVENCIÓN SALUD",
     }
-    normalized = aliases.get(upper, text)
+    normalized = aliases.get(upper, upper)
     return normalized[:100]
 
 

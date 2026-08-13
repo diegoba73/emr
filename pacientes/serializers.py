@@ -6,16 +6,12 @@ paciente. No mueve campos hacia ``User`` ni hacia ``UserProfile``.
 from rest_framework import serializers
 
 from .models import Paciente
+from .texto import normalizar_texto_paciente
 
 
 def _normalize_name(value):
-    """Normaliza un nombre/apellido: ``strip`` + ``title``. Tolera ``None``."""
-    if value is None:
-        return value
-    text = str(value).strip()
-    if not text:
-        return ""
-    return text.title()
+    """Normaliza un nombre/apellido: ``strip`` + mayúsculas. Tolera ``None``."""
+    return normalizar_texto_paciente(value)
 
 
 class PacienteLightSerializer(serializers.ModelSerializer):
@@ -51,7 +47,7 @@ class PacienteLightSerializer(serializers.ModelSerializer):
 class PacienteSerializer(serializers.ModelSerializer):
     """Serializer completo del modelo ``Paciente``.
 
-    Normaliza ``nombre`` y ``apellido`` (``strip`` + ``title``). En **creación**
+    Normaliza datos demográficos (``strip`` + mayúsculas). En **creación**
     exige identidad mínima: ``dni``, ``nombre``, ``apellido`` y
     ``fecha_nacimiento``. En actualización no obliga a completar campos legacy
     vacíos. Expone ``nombre_completo`` y ``edad`` como campos derivados de
@@ -112,6 +108,15 @@ class PacienteSerializer(serializers.ModelSerializer):
 
     def validate_apellido(self, value):
         return _normalize_name(value)
+
+    def validate_direccion(self, value):
+        return normalizar_texto_paciente(value)
+
+    def validate_obra_social(self, value):
+        return normalizar_texto_paciente(value)
+
+    def validate_numero_afiliado(self, value):
+        return normalizar_texto_paciente(value)
 
     def validate_dni(self, value):
         # Validación mínima y conservadora: rechaza cadenas vacías o solo

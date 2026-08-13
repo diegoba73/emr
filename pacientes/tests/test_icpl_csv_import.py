@@ -31,8 +31,8 @@ class IcplCsvParserTests(SimpleTestCase):
         self.assertIsNotNone(parsed)
         assert parsed is not None
         self.assertEqual(parsed.dni, "10571475")
-        self.assertEqual(parsed.apellido, "Ramirez")
-        self.assertEqual(parsed.nombre, "Florentino")
+        self.assertEqual(parsed.apellido, "RAMIREZ")
+        self.assertEqual(parsed.nombre, "FLORENTINO")
         self.assertEqual(parsed.fecha_nacimiento, date(1953, 4, 5))
         self.assertEqual(parsed.telefono, "2945694671")
         self.assertEqual(parsed.obra_social, "PAMI")
@@ -43,8 +43,8 @@ class IcplCsvParserTests(SimpleTestCase):
         parsed = parse_icpl_csv_row(row, line_no=10)
         self.assertIsNotNone(parsed)
         assert parsed is not None
-        self.assertEqual(parsed.apellido, "Nieva")
-        self.assertEqual(parsed.nombre, "Gabriel")
+        self.assertEqual(parsed.apellido, "NIEVA")
+        self.assertEqual(parsed.nombre, "GABRIEL")
         self.assertEqual(parsed.sexo, "M")
 
     def test_parse_birth_month_year(self):
@@ -142,4 +142,4 @@ class IcplCsvFileTests(SimpleTestCase):
         self.assertEqual(stats.rows_parsed, 2)
         self.assertEqual(stats.unique_patients, 2)
         self.assertIn("10571475", patients)
-        self.assertEqual(patients["3456018"].nombre, "Gorgonio Nicolas")
+        self.assertEqual(patients["3456018"].nombre, "GORGONIO NICOLAS")

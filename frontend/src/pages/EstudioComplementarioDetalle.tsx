@@ -36,8 +36,9 @@ import {
   UploadFile,
   Visibility,
 } from '@mui/icons-material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { turnosAgendarEstudioPath } from '../utils/agendarEstudioNavigation';
+import { resolveNavBack } from '../utils/navBack';
 import { useData } from '../contexts/DataContext';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import {
@@ -96,8 +97,14 @@ import { inferTipoArchivoFromFileName } from '../utils/archivoMedicoPreview';
 const EstudioComplementarioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser, pacientes, loadPacientes } = useData();
   const estudioId = Number(id);
+  const back = resolveNavBack(location.state, {
+    path: '/estudios-complementarios',
+    label: 'Volver al listado',
+  });
+  const goBack = () => navigate(back.path);
 
   const [estudio, setEstudio] = useState<EstudioComplementario | null>(null);
   const [archivos, setArchivos] = useState<ArchivoEstudioComplementario[]>([]);
@@ -303,8 +310,8 @@ const EstudioComplementarioDetalle: React.FC = () => {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{error || 'Estudio no encontrado.'}</Alert>
-        <Button sx={{ mt: 2 }} onClick={() => navigate('/estudios-complementarios')}>
-          Volver al listado
+        <Button sx={{ mt: 2 }} onClick={goBack}>
+          {back.label}
         </Button>
       </Box>
     );
@@ -315,8 +322,8 @@ const EstudioComplementarioDetalle: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Button startIcon={<ArrowBack />} onClick={() => navigate('/estudios-complementarios')} sx={{ mb: 2 }}>
-        Volver
+      <Button startIcon={<ArrowBack />} onClick={goBack} sx={{ mb: 2 }}>
+        {back.label.replace(/^←\s*/, '') || 'Volver'}
       </Button>
 
       {error && (

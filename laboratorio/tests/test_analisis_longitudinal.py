@@ -16,6 +16,8 @@ from laboratorio.analisis_longitudinal import (
     analizar_resultado,
     analizar_solicitud,
     buscar_resultado_historico,
+    buscar_resultados_historicos,
+    historial_analitos_solicitud,
 )
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from medicos.models import Especialidad, Medico
@@ -64,10 +66,8 @@ class TestAnalisisLongitudinalServicio:
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             origen_solicitud="AMBULATORIO_CEHTA",
-            estado="FINALIZADO",
+            estado="EN_PROCESO",
         )
-        SolicitudExamen.objects.filter(pk=sol.pk).update(fecha_solicitud=fecha)
-        sol.refresh_from_db()
         res = ResultadoExamen.objects.create(
             solicitud=sol,
             tipo_examen=self.tipo_hgb,
@@ -82,6 +82,10 @@ class TestAnalisisLongitudinalServicio:
             es_critico=hgb_num <= Decimal("7"),
             fecha_validacion=fecha,
         )
+        SolicitudExamen.objects.filter(pk=sol.pk).update(
+            fecha_solicitud=fecha, estado="FINALIZADO"
+        )
+        sol.refresh_from_db()
         return sol, res
 
     def test_sin_historial_previo(self):
@@ -259,9 +263,8 @@ class TestAnalisisLongitudinalAPI(APITestCase):
         sol_ant = SolicitudExamen.objects.create(
             paciente=self.paciente,
             origen_solicitud="AMBULATORIO_CEHTA",
-            estado="FINALIZADO",
+            estado="EN_PROCESO",
         )
-        SolicitudExamen.objects.filter(pk=sol_ant.pk).update(fecha_solicitud=fecha_ant)
         ResultadoExamen.objects.create(
             solicitud=sol_ant,
             tipo_examen=self.tipo_hgb,
@@ -269,6 +272,9 @@ class TestAnalisisLongitudinalAPI(APITestCase):
             valor_numerico=Decimal("13.5"),
             unidad="g/dL",
             fecha_validacion=fecha_ant,
+        )
+        SolicitudExamen.objects.filter(pk=sol_ant.pk).update(
+            fecha_solicitud=fecha_ant, estado="FINALIZADO"
         )
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
@@ -310,6 +316,60 @@ class TestAnalisisLongitudinalAPI(APITestCase):
             rango_min_snapshot=Decimal("12"),
             rango_max_snapshot=Decimal("16"),
         )
+        SolicitudExamen.objects.filter(pk=sol.pk).update(estado="FINALIZADO")
         self.client.force_authenticate(user=self.user_med)
         r = self.client.get(f"/api/lab/solicitudes/{sol.pk}/analisis-longitudinal/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+    def test_historial_analitos_incluye_labwin_y_limita_n(self):
+        """Previos EXTERNO_ICPL visibles al cargar; n acota la lista."""
+        for i, val in enumerate(["10", "11", "12", "13"], start=1):
+            fecha = timezone.now() - timedelta(days=100 - i * 10)
+            sol_ant = SolicitudExamen.objects.create(
+                paciente=self.paciente,
+                origen_solicitud="EXTERNO_ICPL",
+                estado="EN_PROCESO",
+                numero=f"LW-2025-{i:05d}",
+            )
+            ResultadoExamen.objects.create(
+                solicitud=sol_ant,
+                tipo_examen=self.tipo_hgb,
+                valor_obtenido=val,
+                valor_numerico=Decimal(val),
+                unidad="g/dL",
+                fecha_validacion=fecha,
+            )
+            SolicitudExamen.objects.filter(pk=sol_ant.pk).update(
+                fecha_solicitud=fecha, estado="FINALIZADO"
+            )
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        ResultadoExamen.objects.create(
+            solicitud=sol,
+            tipo_examen=self.tipo_hgb,
+            valor_obtenido="",
+            unidad="g/dL",
+        )
+        previos = buscar_resultados_historicos(
+            paciente_id=self.paciente.id,
+            tipo_examen_id=self.tipo_hgb.id,
+            excluir_solicitud_id=sol.pk,
+            limit=3,
+        )
+        self.assertEqual(len(previos), 3)
+        self.assertEqual(previos[0].valor_obtenido, "13")
+
+        payload = historial_analitos_solicitud(sol, limit=10)
+        self.assertEqual(len(payload["analitos"]), 1)
+        self.assertEqual(len(payload["analitos"][0]["previos"]), 4)
+        self.assertTrue(
+            all(p["solicitud_numero"].startswith("LW-") for p in payload["analitos"][0]["previos"])
+        )
+
+        r = self.client.get(f"/api/lab/solicitudes/{sol.pk}/historial-analitos/?n=2")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data["limit"], 2)
+        self.assertEqual(len(r.data["analitos"][0]["previos"]), 2)

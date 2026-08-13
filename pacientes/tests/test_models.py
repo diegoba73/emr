@@ -85,21 +85,21 @@ class TestPacienteNombreCompleto:
             nombre="Pedro",
             apellido="Sánchez",
         )
-        assert paciente.nombre_completo == "Pedro Sánchez"
+        assert paciente.nombre_completo == "PEDRO SÁNCHEZ"
 
     def test_nombre_completo_solo_apellido(self):
         paciente = Paciente.objects.create(
             dni="NC-OK-1",
             apellido="Sánchez",
         )
-        assert paciente.nombre_completo == "Sánchez"
+        assert paciente.nombre_completo == "SÁNCHEZ"
 
     def test_nombre_completo_solo_nombre(self):
         paciente = Paciente.objects.create(
             dni="NC-OK-2",
             nombre="Pedro",
         )
-        assert paciente.nombre_completo == "Pedro"
+        assert paciente.nombre_completo == "PEDRO"
 
     def test_nombre_completo_sin_nombre_ni_apellido_devuelve_dni(self):
         """Bug fix: con ``nombre=None`` y ``apellido=None`` no debe devolver

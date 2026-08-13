@@ -90,17 +90,27 @@ class PacienteViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
+        action = getattr(self, "action", None)
+        # Lectura de ficha puntual: el médico puede abrir cualquier paciente
+        # localizado por búsqueda (mismo alcance que ``buscar``). El listado
+        # paginado sigue restringido a vínculos clínicos.
+        _detalle_lectura = frozenset(
+            {"retrieve", "timeline", "portal_resumen", "partial_update", "update"}
+        )
 
         if _user_tiene_lectura_global(user):
             base_queryset = queryset
         elif getattr(user, "medico", None):
-            base_queryset = self._queryset_para_medico(queryset, user)
+            if action in _detalle_lectura:
+                base_queryset = queryset
+            else:
+                base_queryset = self._queryset_para_medico(queryset, user)
         elif getattr(user, "paciente", None):
             base_queryset = queryset.filter(id=user.paciente.id)
         else:
             return queryset.none()
 
-        if self.action in ("list", "buscar"):
+        if action in ("list", "buscar"):
             base_queryset = base_queryset.defer(
                 "antecedentes_personales",
                 "antecedentes_familiares",

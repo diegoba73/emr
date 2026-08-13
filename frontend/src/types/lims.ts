@@ -633,3 +633,28 @@ export interface AnalisisLongitudinalOrden {
   total_con_historial: number;
   total_cambios_significativos: number;
 }
+
+/** Valor previo del mismo analito (historial-analitos, pre-carga). */
+export interface HistorialAnalitoPrevioLims {
+  resultado_id: number;
+  valor: string;
+  valor_numerico?: string | null;
+  unidad?: string | null;
+  fecha: string | null;
+  solicitud_id: number;
+  solicitud_numero: string | null;
+}
+
+export interface HistorialAnalitoItemLims {
+  tipo_examen_id: number;
+  tipo_examen_codigo: string;
+  tipo_examen_nombre: string;
+  previos: HistorialAnalitoPrevioLims[];
+}
+
+export interface HistorialAnalitosOrdenLims {
+  solicitud_id: number;
+  paciente_id: number;
+  limit: number;
+  analitos: HistorialAnalitoItemLims[];
+}

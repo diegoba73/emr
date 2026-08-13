@@ -86,18 +86,21 @@ def _analisis_referencia(resultado: ResultadoExamen) -> dict[str, Any]:
     }
 
 
-def buscar_resultado_historico(
+def buscar_resultados_historicos(
     *,
     paciente_id: int,
     tipo_examen_id: int,
     excluir_solicitud_id: int,
     antes_de: datetime | None = None,
-) -> ResultadoExamen | None:
+    limit: int = 10,
+) -> list[ResultadoExamen]:
     """
-    Último resultado previo del mismo analito para el paciente.
+    Últimos N resultados previos del mismo analito para el paciente.
 
     Solo considera órdenes informadas (finalizadas o parciales) con valor cargado.
     """
+    if limit < 1:
+        return []
     qs = (
         ResultadoExamen.objects.filter(
             solicitud__paciente_id=paciente_id,
@@ -111,7 +114,80 @@ def buscar_resultado_historico(
     )
     if antes_de is not None:
         qs = qs.filter(solicitud__fecha_solicitud__lt=antes_de)
-    return qs.first()
+    return list(qs[:limit])
+
+
+def buscar_resultado_historico(
+    *,
+    paciente_id: int,
+    tipo_examen_id: int,
+    excluir_solicitud_id: int,
+    antes_de: datetime | None = None,
+) -> ResultadoExamen | None:
+    """
+    Último resultado previo del mismo analito para el paciente.
+
+    Solo considera órdenes informadas (finalizadas o parciales) con valor cargado.
+    """
+    rows = buscar_resultados_historicos(
+        paciente_id=paciente_id,
+        tipo_examen_id=tipo_examen_id,
+        excluir_solicitud_id=excluir_solicitud_id,
+        antes_de=antes_de,
+        limit=1,
+    )
+    return rows[0] if rows else None
+
+
+def serializar_historial_analito(resultado: ResultadoExamen) -> dict[str, Any]:
+    """Payload compacto para UI de carga (fecha + valor + orden)."""
+    sol = resultado.solicitud
+    fecha = resultado.fecha_validacion or sol.fecha_solicitud
+    return {
+        "resultado_id": resultado.pk,
+        "valor": resultado.valor_obtenido,
+        "valor_numerico": _decimal_a_json(resultado.valor_numerico),
+        "unidad": (resultado.unidad or "").strip() or None,
+        "fecha": _fecha_a_json(fecha),
+        "solicitud_id": sol.pk,
+        "solicitud_numero": sol.numero,
+    }
+
+
+def historial_analitos_solicitud(
+    solicitud: SolicitudExamen,
+    *,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """
+    Previa a guardar: últimos N valores por cada tipo_examen de la orden.
+    """
+    limit = max(1, min(int(limit or 10), 20))
+    resultados = list(
+        ResultadoExamen.objects.filter(solicitud=solicitud).select_related("tipo_examen")
+    )
+    por_tipo: dict[str, Any] = {}
+    for res in resultados:
+        te = res.tipo_examen
+        previos = buscar_resultados_historicos(
+            paciente_id=solicitud.paciente_id,
+            tipo_examen_id=te.id,
+            excluir_solicitud_id=solicitud.pk,
+            antes_de=solicitud.fecha_solicitud,
+            limit=limit,
+        )
+        por_tipo[str(te.id)] = {
+            "tipo_examen_id": te.id,
+            "tipo_examen_codigo": te.codigo,
+            "tipo_examen_nombre": te.nombre,
+            "previos": [serializar_historial_analito(p) for p in previos],
+        }
+    return {
+        "solicitud_id": solicitud.pk,
+        "paciente_id": solicitud.paciente_id,
+        "limit": limit,
+        "analitos": list(por_tipo.values()),
+    }
 
 
 def _calcular_delta_porcentual(

@@ -8,6 +8,7 @@ import {
 import type {
   AnalisisLongitudinalOrden,
   CargarResultadoPayload,
+  HistorialAnalitosOrdenLims,
   LimsPanelExamen,
   LimsTipoContenedor,
   LimsTipoExamen,
@@ -194,6 +195,18 @@ export async function patchOrdenInformeOrden(
 export async function getAnalisisLongitudinal(id: number): Promise<AnalisisLongitudinalOrden> {
   const { data } = await apiClient.get<AnalisisLongitudinalOrden>(
     `${LAB}/solicitudes/${id}/analisis-longitudinal/`
+  );
+  return data;
+}
+
+/** Últimos N valores previos por analito (antes de guardar). Default n=10. */
+export async function getHistorialAnalitos(
+  id: number,
+  n = 10
+): Promise<HistorialAnalitosOrdenLims> {
+  const { data } = await apiClient.get<HistorialAnalitosOrdenLims>(
+    `${LAB}/solicitudes/${id}/historial-analitos/`,
+    { params: { n } }
   );
   return data;
 }

@@ -10,10 +10,11 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
+import { resolveNavBack } from '../../utils/navBack';
 import {
   downloadInformeLimsPdf,
   getSolicitudExamen,
@@ -50,6 +51,7 @@ import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useData();
   const [tab, setTab] = useState(0);
   const [orden, setOrden] = useState<SolicitudExamenLims | null>(null);
@@ -69,6 +71,11 @@ const OrdenLimsDetalle: React.FC = () => {
   const canValidar = canValidarOrdenLims(currentUser);
   const canEnviar = canEnviarInformeLims(currentUser, orden?.estado);
   const canPdf = canDownloadInformeLimsPdf(currentUser, orden?.estado);
+  const back = resolveNavBack(location.state, {
+    path: '/laboratorio/ordenes',
+    label: '← Volver al listado',
+  });
+  const goBack = () => navigate(back.path);
 
   const refreshMuestras = async (oid: number, numero?: string | null) => {
     const m = await listMuestrasPorSolicitud(oid, numero ?? undefined);
@@ -165,8 +172,8 @@ const OrdenLimsDetalle: React.FC = () => {
   if (!loading && orden && !canVerOrden) {
     return (
       <Box sx={{ p: 3 }}>
-        <Button size="small" onClick={() => navigate('/laboratorio/ordenes')} sx={{ mb: 1 }}>
-          ← Volver al listado
+        <Button size="small" onClick={goBack} sx={{ mb: 1 }}>
+          {back.label}
         </Button>
         <Typography>No tiene permisos para ver esta orden en su estado actual.</Typography>
       </Box>
@@ -176,8 +183,8 @@ const OrdenLimsDetalle: React.FC = () => {
   if (!loading && !orden && allowed) {
     return (
       <Box sx={{ p: 3 }}>
-        <Button size="small" onClick={() => navigate('/laboratorio/ordenes')} sx={{ mb: 1 }}>
-          ← Volver al listado
+        <Button size="small" onClick={goBack} sx={{ mb: 1 }}>
+          {back.label}
         </Button>
         <Typography>{loadError ? 'No se pudo cargar la orden.' : 'Orden no encontrada.'}</Typography>
       </Box>
@@ -207,8 +214,8 @@ const OrdenLimsDetalle: React.FC = () => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Button size="small" onClick={() => navigate(-1)} sx={{ mb: 1 }}>
-        ← Volver
+      <Button size="small" onClick={goBack} sx={{ mb: 1 }}>
+        {back.label}
       </Button>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h5">Orden {orden.numero || orden.id}</Typography>

@@ -54,7 +54,7 @@ class TestPacienteSerializerCreacionIdentidadMinima:
         assert serializer.is_valid(), serializer.errors
         instance = serializer.save()
         assert instance.dni == "SER-OK-0"
-        assert instance.nombre == "Juan"
+        assert instance.nombre == "JUAN"
         assert instance.fecha_nacimiento == date(1990, 5, 15)
 
 
@@ -70,8 +70,8 @@ class TestPacienteSerializerNormalizacion:
         )
         assert serializer.is_valid(), serializer.errors
         instance = serializer.save()
-        assert instance.nombre == "Juan"
-        assert instance.apellido == "Perez"
+        assert instance.nombre == "JUAN"
+        assert instance.apellido == "PEREZ"
 
     def test_create_rechaza_nombre_y_apellido_none(self):
         """Creación API ya no admite nombre/apellido nulos (legacy solo en BD)."""
@@ -136,7 +136,7 @@ class TestPacienteSerializerCamposDerivados:
             dni="SER-DRV-0", nombre="Pedro", apellido="Sánchez"
         )
         data = PacienteSerializer(paciente).data
-        assert data["nombre_completo"] == "Pedro Sánchez"
+        assert data["nombre_completo"] == "PEDRO SÁNCHEZ"
         assert "edad" in data
 
     def test_light_serializer_expone_nombre_completo(self):

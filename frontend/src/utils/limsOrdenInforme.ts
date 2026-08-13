@@ -47,7 +47,12 @@ export function prioridadGrupoDefault(grupo: GrupoResultadosOrden): number {
   if (esOrinaGrupo(grupo)) {
     return 3;
   }
-  if (grupo.key.startsWith('panel-')) {
+  // Paneles solicitados o perfiles inferidos (EAB, ionograma, etc.)
+  if (
+    grupo.key.startsWith('panel-') ||
+    grupo.key.startsWith('inferido-') ||
+    (Boolean(grupo.codigo) && grupo.resultados.length > 1)
+  ) {
     return 1;
   }
   return 2;

@@ -25,6 +25,7 @@ import {
   canAccessMicrobiologiaLectura,
 } from '../utils/limsAccess';
 import { ESTADOS_ORDEN_LIMS, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import { withNavBack } from '../utils/navBack';
 import {
   mapLabToPendiente,
   mapMicroToPendiente,
@@ -139,10 +140,16 @@ const Solicitudes: React.FC = () => {
 
   const handleVer = (row: PendientePedidoRow) => {
     if (row.tipo === 'MICROBIOLOGIA') {
-      navigate(`/laboratorio/microbiologia/estudios/${row.id}`);
+      navigate(
+        `/laboratorio/microbiologia/estudios/${row.id}`,
+        withNavBack('/solicitudes', '← Volver al listado')
+      );
       return;
     }
-    navigate(`/solicitudes/${row.id}`);
+    navigate(
+      `/solicitudes/${row.id}`,
+      withNavBack('/solicitudes', '← Volver al listado')
+    );
   };
 
   return (

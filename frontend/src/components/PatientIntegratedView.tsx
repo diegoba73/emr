@@ -56,9 +56,31 @@ import {
 import { Paciente, Atencion } from '../types';
 import { updatePaciente } from '../services/apiService';
 import { apiService } from '../services/api';
+import { getSolicitudExamen, listSolicitudesExamen } from '../services/limsApi';
+import type { ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
 import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
+import ResultadosOrdenLista from './lims/ResultadosOrdenLista';
+
+function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string {
+  if (!s) return 'N/A';
+  return (
+    s.medico_display ||
+    s.medico_interno_nombre ||
+    s.medico_externo_nombre ||
+    'N/A'
+  );
+}
+
+function chipColorEstado(estado: string): 'success' | 'warning' | 'info' | 'default' {
+  if (estado === 'FINALIZADO' || estado === 'COMPLETADA') return 'success';
+  if (estado === 'EN_PROCESO' || estado === 'INFORMADO_PARCIAL' || estado === 'LISTO_PARA_VALIDAR') {
+    return 'warning';
+  }
+  if (estado === 'PENDIENTE') return 'info';
+  return 'default';
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -92,21 +114,30 @@ interface PatientIntegratedViewProps {
   onClose?: () => void;
   /** dialog: ficha en modal. page: ficha embebida en Patient 360 */
   variant?: 'dialog' | 'page';
+  /** Pestaña inicial: 0 demografía, 1 atenciones, 2 análisis lab */
+  initialTab?: number;
 }
 
-const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente, onClose, variant = 'dialog' }) => {
+const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
+  paciente,
+  onClose,
+  variant = 'dialog',
+  initialTab = 0,
+}) => {
   const isPage = variant === 'page';
   const { currentUser } = useData();
   const canEditDemographics = canUpdatePacienteDemographics(currentUser);
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(() =>
+    initialTab >= 0 && initialTab <= 2 ? initialTab : 0
+  );
   const [atenciones, setAtenciones] = useState<Atencion[]>([]);
   const [loadingAtenciones, setLoadingAtenciones] = useState(false);
   const [selectedAtencionId, setSelectedAtencionId] = useState<number | null>(null);
-  const [analisisLims, setAnalisisLims] = useState<any[]>([]);
+  const [analisisLims, setAnalisisLims] = useState<SolicitudExamenLims[]>([]);
   const [loadingAnalisis, setLoadingAnalisis] = useState(false);
   const [showResultadosDialog, setShowResultadosDialog] = useState(false);
-  const [selectedAnalisis, setSelectedAnalisis] = useState<any>(null);
-  const [resultadosDetallados, setResultadosDetallados] = useState<any[]>([]);
+  const [selectedAnalisis, setSelectedAnalisis] = useState<SolicitudExamenLims | null>(null);
+  const [resultadosDetallados, setResultadosDetallados] = useState<ResultadoExamenLims[]>([]);
   const [loadingResultados, setLoadingResultados] = useState(false);
   
   // Estados para edición
@@ -131,110 +162,16 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
     }
   }, [paciente.id]);
 
-  const loadResultadosDetallados = useCallback(async (solicitudId: number, solicitudInfo?: any) => {
+  const loadResultadosDetallados = useCallback(async (solicitudId: number) => {
     setLoadingResultados(true);
     try {
-      const response = await fetch(`http://localhost:8001/api/laboratorio/resultados/?solicitud=${solicitudId}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const orden = await getSolicitudExamen(solicitudId);
+      setSelectedAnalisis(orden);
+      if (orden.resultados_visibles === false) {
+        setResultadosDetallados([]);
+      } else {
+        setResultadosDetallados(orden.resultados || []);
       }
-      
-      const data = await response.json();
-      
-      // Extraer todos los detalles de todos los resultados y aplanar el array
-      const resultados = data.results || data || [];
-      
-      // Crear un mapa para poder acceder a la fecha del resultado
-      const resultadosMap = new Map();
-      resultados.forEach((resultado: any) => {
-        resultadosMap.set(resultado.id, resultado);
-      });
-      
-      const detallesPlanos = resultados.flatMap((resultado: any) => {
-        // Agregar referencia a la fecha del resultado padre
-        return (resultado.detalles || []).map((detalle: any) => ({
-          ...detalle,
-          _resultado_fecha: resultado.fecha_inicio_procesamiento,
-          _resultado_id: resultado.id
-        }));
-      });
-      
-      // Filtrar resultados duplicados: mantener solo el más reciente por tipo de examen
-      const detallesPorExamen = new Map();
-      detallesPlanos.forEach((detalle: any) => {
-        const examenId = detalle.tipo_examen_detail?.id || detalle.tipo_examen;
-        const detalleActual = detallesPorExamen.get(examenId);
-        const fechaActual = new Date(detalle._resultado_fecha || 0);
-        const fechaExistente = new Date(detalleActual?._resultado_fecha || 0);
-        
-        if (!detalleActual || fechaActual > fechaExistente) {
-          detallesPorExamen.set(examenId, detalle);
-        }
-      });
-      
-      const detallesFiltrados = Array.from(detallesPorExamen.values());
-      
-      // Filtrar solo los exámenes presentes en la solicitud actual
-      // (exámenes individuales + todos los exámenes de los paneles actuales)
-      let detallesFinales = detallesFiltrados;
-      if (solicitudInfo) {
-        try {
-          // Obtener IDs de exámenes individuales
-          const examenesIndividuales = new Set<number>();
-          solicitudInfo.tipos_examen_detalle?.forEach((examen: any) => {
-            const idNum = typeof examen.id === 'number' ? examen.id : Number(examen.id);
-            if (!isNaN(idNum)) examenesIndividuales.add(idNum);
-          });
-          
-          // Para los paneles, necesitamos cargar los componentes de cada panel
-          const examenesPaneles = new Set<number>();
-          if (solicitudInfo.paneles_detalle && solicitudInfo.paneles_detalle.length > 0) {
-            const panelPromises = solicitudInfo.paneles_detalle.map(async (panel: any) => {
-              try {
-                const response = await fetch(`http://localhost:8001/api/laboratorio/componentes_panel/?panel=${panel.id}`);
-                const data = await response.json();
-                const componentes = data.results || data;
-                if (Array.isArray(componentes)) {
-                  componentes.forEach((comp: any) => {
-                    const examenId = comp.tipo_examen?.id;
-                    const idNum = typeof examenId === 'number' ? examenId : Number(examenId);
-                    if (!isNaN(idNum)) {
-                      examenesPaneles.add(idNum);
-                    }
-                  });
-                }
-              } catch {
-                // Panel sin componentes cargables; continuar con el resto
-              }
-            });
-            
-            await Promise.all(panelPromises);
-          }
-          
-          // Combinar exámenes individuales y de paneles (sin usar spread en Set para compatibilidad TS)
-          const examenesSolicitados = new Set<number>();
-          examenesIndividuales.forEach((id: number) => examenesSolicitados.add(id));
-          examenesPaneles.forEach((id: number) => examenesSolicitados.add(id));
-          
-          // Filtrar detalles por exámenes solicitados
-          detallesFinales = detallesFiltrados.filter((detalle: any) => {
-            const examenId = detalle.tipo_examen_detail?.id || detalle.tipo_examen;
-            return examenesSolicitados.has(examenId);
-          });
-        } catch {
-          // Si hay error, usar todos los detalles (comportamiento anterior)
-          detallesFinales = detallesFiltrados;
-        }
-      }
-      
-      setResultadosDetallados(detallesFinales);
     } catch {
       setResultadosDetallados([]);
     } finally {
@@ -242,35 +179,26 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
     }
   }, []);
 
-  // Cargar atenciones del paciente
+  useEffect(() => {
+    if (initialTab >= 0 && initialTab <= 2) {
+      setTabValue(initialTab);
+    }
+  }, [initialTab, paciente.id]);
+
   useEffect(() => {
     loadAtenciones();
   }, [paciente.id, loadAtenciones]);
 
-  // Función para recargar análisis manualmente
   const loadAnalisisLims = useCallback(async () => {
     setLoadingAnalisis(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/integracion-lims/analisis/paciente/${paciente.id}/`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        credentials: 'same-origin',
+      const rows = await listSolicitudesExamen({ paciente: paciente.id });
+      rows.sort((a, b) => {
+        const fa = a.fecha_solicitud || '';
+        const fb = b.fecha_solicitud || '';
+        return fb.localeCompare(fa);
       });
-      
-      if (!response.ok) {
-        // Si es un 502, el LIMS no está disponible (esperado si no está corriendo)
-        if (response.status === 502) {
-          setAnalisisLims([]);
-          return;
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setAnalisisLims(data.analisis || []);
+      setAnalisisLims(rows);
     } catch {
       setAnalisisLims([]);
     } finally {
@@ -986,7 +914,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Número</TableCell>
+                    <TableCell>Número / perfiles</TableCell>
                     <TableCell>Fecha</TableCell>
                     <TableCell>Estado</TableCell>
                     <TableCell>Médico</TableCell>
@@ -1000,6 +928,22 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {analisis.numero || analisis.id}
                         </Typography>
+                        <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(analisis.paneles_nombres || []).slice(0, 4).map((nombre) => (
+                            <Chip key={nombre} size="small" label={nombre} variant="outlined" />
+                          ))}
+                          {(analisis.paneles_nombres?.length || 0) > 4 && (
+                            <Chip
+                              size="small"
+                              label={`+${(analisis.paneles_nombres?.length || 0) - 4}`}
+                              variant="outlined"
+                            />
+                          )}
+                          {!analisis.paneles_nombres?.length &&
+                            (analisis.tipos_examen_nombres || []).slice(0, 3).map((nombre) => (
+                              <Chip key={nombre} size="small" label={nombre} variant="outlined" />
+                            ))}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
@@ -1009,17 +953,13 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                       <TableCell>
                         <Chip
                           label={analisis.estado}
-                          color={
-                            analisis.estado === 'COMPLETADA' ? 'success' :
-                            analisis.estado === 'EN_PROCESO' ? 'warning' :
-                            analisis.estado === 'PENDIENTE' ? 'info' : 'default'
-                          }
+                          color={chipColorEstado(analisis.estado)}
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {analisis.medico_nombre || 'N/A'}
+                          {medicoSolicitudLabel(analisis)}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -1030,7 +970,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                           onClick={async () => {
                             setSelectedAnalisis(analisis);
                             setShowResultadosDialog(true);
-                            await loadResultadosDetallados(analisis.id, analisis);
+                            await loadResultadosDetallados(analisis.id);
                           }}
                         >
                           Ver Resultados
@@ -1131,7 +1071,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
         <DialogContent>
           {selectedAnalisis && (
             <Box sx={{ mt: 2 }}>
-              {/* Información general */}
               <Card sx={{ mb: 3 }}>
                 <CardHeader title="Información General" />
                 <CardContent>
@@ -1155,34 +1094,46 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                         <Typography variant="subtitle2" color="textSecondary">Estado</Typography>
                         <Chip
                           label={selectedAnalisis.estado}
-                          color={
-                            selectedAnalisis.estado === 'COMPLETADA' ? 'success' :
-                            selectedAnalisis.estado === 'EN_PROCESO' ? 'warning' :
-                            selectedAnalisis.estado === 'PENDIENTE' ? 'info' : 'default'
-                          }
+                          color={chipColorEstado(selectedAnalisis.estado)}
                           size="small"
                         />
                       </Box>
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="subtitle2" color="textSecondary">Médico</Typography>
                         <Typography variant="body1">
-                          {selectedAnalisis.medico_nombre || 'N/A'}
+                          {medicoSolicitudLabel(selectedAnalisis)}
                         </Typography>
                       </Box>
                     </Box>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Prioridad</Typography>
-                      <Typography variant="body1">
-                        {selectedAnalisis.prioridad || 'NORMAL'}
-                      </Typography>
-                    </Box>
+                    {(selectedAnalisis.paneles_nombres?.length || selectedAnalisis.origen_solicitud_display) && (
+                      <Box sx={{ display: 'flex', gap: 4 }}>
+                        {selectedAnalisis.origen_solicitud_display && (
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" color="textSecondary">Origen</Typography>
+                            <Typography variant="body1">
+                              {selectedAnalisis.origen_solicitud_display}
+                            </Typography>
+                          </Box>
+                        )}
+                        {!!selectedAnalisis.paneles_nombres?.length && (
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" color="textSecondary">Paneles</Typography>
+                            <Typography variant="body1">
+                              {selectedAnalisis.paneles_nombres.join(', ')}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
                   </Box>
                 </CardContent>
               </Card>
 
-              {/* Exámenes agrupados por panel */}
               <Card sx={{ mb: 3 }}>
-                <CardHeader title="🔬 Exámenes por Panel" />
+                <CardHeader
+                  title="Resultados"
+                  subheader="Agrupados por perfil (hemograma, EAB, ionograma, etc.)"
+                />
                 <CardContent>
                   {loadingResultados ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -1191,134 +1142,17 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                         Cargando resultados...
                       </Typography>
                     </Box>
+                  ) : selectedAnalisis.resultados_visibles === false ? (
+                    <Alert severity="info">
+                      Los valores se muestran cuando la orden está validada (FINALIZADO).
+                    </Alert>
                   ) : resultadosDetallados.length > 0 ? (
-                    <>
-                      {/* Agrupar exámenes por panel */}
-                      {(() => {
-                        // Crear un mapa de paneles con sus exámenes
-                        const examenesPorPanel: { [key: string]: any[] } = {};
-                        const panelInfo: { [key: string]: any } = {};
-                        
-                        // Primero, obtener info de paneles
-                        selectedAnalisis.paneles_detalle?.forEach((panel: any) => {
-                          panelInfo[panel.id] = panel;
-                          examenesPorPanel[panel.id] = [];
-                        });
-                        
-                        // Agrupar exámenes por panel
-                        resultadosDetallados.forEach((resultado: any) => {
-                          // Buscar a qué panel pertenece este examen
-                          let panelId = 'individual'; // Para exámenes individuales
-                          
-                          selectedAnalisis.paneles_detalle?.forEach((panel: any) => {
-                            const tipoExamenId = resultado.tipo_examen_detail?.id || resultado.tipo_examen?.id || resultado.tipo_examen;
-                            if (panel.componentes?.some((comp: any) => comp.tipo_examen?.id === tipoExamenId)) {
-                              panelId = panel.id;
-                            }
-                          });
-                          
-                          if (!examenesPorPanel[panelId]) {
-                            examenesPorPanel[panelId] = [];
-                          }
-                          examenesPorPanel[panelId].push(resultado);
-                        });
-                        
-                        return Object.entries(examenesPorPanel).map(([panelId, examenes]) => {
-                          if (examenes.length === 0) return null;
-                          
-                          const panel = panelInfo[panelId];
-                          
-                          return (
-                            <Box key={panelId} sx={{ mb: 3 }}>
-                              {/* Encabezado del panel */}
-                              {panel && (
-                                <Box sx={{ 
-                                  backgroundColor: 'primary.main', 
-                                  color: 'white', 
-                                  p: 1.5, 
-                                  borderRadius: '4px 4px 0 0',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1
-                                }}>
-                                  <Science />
-                                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                    {panel.codigo} - {panel.nombre}
-                                  </Typography>
-                                </Box>
-                              )}
-                              
-                              {/* Tabla de exámenes del panel */}
-                              <TableContainer component={Paper} variant="outlined" sx={{ 
-                                borderRadius: panel ? '0 0 4px 4px' : '4px',
-                                borderTop: panel ? 'none' : undefined
-                              }}>
-                                <Table size="small">
-                                  {!panel && (
-                                    <TableHead>
-                                      <TableRow>
-                                        <TableCell><strong>Examen</strong></TableCell>
-                                        <TableCell><strong>Resultado</strong></TableCell>
-                                        <TableCell><strong>Unidad</strong></TableCell>
-                                        <TableCell><strong>Rango Normal</strong></TableCell>
-                                        <TableCell><strong>Estado</strong></TableCell>
-                                      </TableRow>
-                                    </TableHead>
-                                  )}
-                                  <TableBody>
-                                    {examenes.map((resultado: any, index: number) => {
-                                      // Soporte para tipo_examen_detail o tipo_examen
-                                      const tipoExamen = resultado.tipo_examen_detail || resultado.tipo_examen;
-                                      const esObjeto = typeof tipoExamen === 'object';
-                                      return (
-                                        <TableRow key={index} hover sx={{ 
-                                          backgroundColor: (t) =>
-                                            panel ? t.palette.action.hover : t.palette.background.paper
-                                        }}>
-                                          <TableCell>
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                              {esObjeto ? (tipoExamen.codigo || 'N/A') : 'N/A'} - {esObjeto ? (tipoExamen.nombre || 'Sin nombre') : 'Sin nombre'}
-                                            </Typography>
-                                          </TableCell>
-                                          <TableCell>
-                                            <Typography variant="body2" sx={{
-                                              fontWeight: 600,
-                                              color: resultado.valor_resultado ? 'primary.main' : 'text.secondary'
-                                            }}>
-                                              {resultado.valor_resultado || 'Sin resultado'}
-                                            </Typography>
-                                          </TableCell>
-                                          <TableCell>
-                                            <Typography variant="body2">
-                                              {esObjeto ? (tipoExamen.unidad_medida || 'N/A') : 'N/A'}
-                                            </Typography>
-                                          </TableCell>
-                                          <TableCell>
-                                            <Typography variant="body2">
-                                              {esObjeto && tipoExamen.rango_referencia_min && tipoExamen.rango_referencia_max
-                                                ? `${tipoExamen.rango_referencia_min} - ${tipoExamen.rango_referencia_max}`
-                                                : esObjeto ? (tipoExamen.rango_referencia_texto || 'N/A') : 'N/A'
-                                              }
-                                            </Typography>
-                                          </TableCell>
-                                          <TableCell>
-                                            <Chip
-                                              label={resultado.valor_resultado ? 'Completado' : 'Pendiente'}
-                                              color={resultado.valor_resultado ? 'success' : 'warning'}
-                                              size="small"
-                                            />
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </TableContainer>
-                            </Box>
-                          );
-                        }).filter(Boolean);
-                      })()}
-                    </>
+                    <ResultadosOrdenLista
+                      resultados={resultadosDetallados}
+                      orden={selectedAnalisis}
+                      observaciones={selectedAnalisis.observaciones}
+                      modo="clinico"
+                    />
                   ) : (
                     <Alert severity="info">
                       No hay resultados disponibles para esta solicitud.
@@ -1326,18 +1160,6 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({ paciente,
                   )}
                 </CardContent>
               </Card>
-
-              {/* Observaciones */}
-              {selectedAnalisis.observaciones && (
-                <Card>
-                  <CardHeader title="📝 Observaciones" />
-                  <CardContent>
-                    <Typography variant="body2" sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                      {selectedAnalisis.observaciones || 'Sin observaciones'}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              )}
             </Box>
           )}
         </DialogContent>
