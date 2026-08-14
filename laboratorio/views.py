@@ -480,8 +480,10 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Restringe solicitudes por rol.
-        Médico: propias (medico_interno) o de pacientes con vínculo clínico.
+        Lectura por rol.
+        Admin / laboratorio / bioquímico / médico / secretaría / enfermería:
+        todas las órdenes, todos los estados.
+        Paciente: solo las propias.
         Filtros adicionales por query params:
         - numero: Búsqueda exacta para código de barras
         - fecha: Filtro por fecha de solicitud (creación)
@@ -495,35 +497,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             pass
         else:
             role = get_normalized_role(user)
-            if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria'):
-                # Lectura institucional: todos los estados (PENDIENTE, EN_PROCESO, …).
+            if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria', 'medico'):
+                # Lectura institucional: todas las órdenes, todos los estados.
                 pass
-            elif role == 'medico':
-                from django.db.models import Q
-
-                from laboratorio.access import (
-                    ESTADOS_LECTURA_HISTORIAL_MEDICO,
-                    filtrar_lectura_lims_medico,
-                    q_lectura_lims_medico,
-                )
-
-                paciente_param = self.request.query_params.get('paciente')
-                paciente_id = None
-                if paciente_param not in (None, ''):
-                    try:
-                        paciente_id = int(paciente_param)
-                    except (TypeError, ValueError):
-                        paciente_id = None
-                if getattr(self, 'action', None) == 'list':
-                    queryset = filtrar_lectura_lims_medico(
-                        queryset, user, paciente_id=paciente_id
-                    )
-                else:
-                    # Detalle/acciones: localizar informadas (LabWin) + propias/vínculo.
-                    queryset = queryset.filter(
-                        q_lectura_lims_medico(user, paciente_id=paciente_id)
-                        | Q(estado__in=ESTADOS_LECTURA_HISTORIAL_MEDICO)
-                    ).distinct()
             elif role == 'paciente':
                 try:
                     queryset = queryset.filter(paciente_id=user.paciente.id)

@@ -75,10 +75,13 @@ const OrdenesLimsPendientes: React.FC = () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const [labs, micros] = await Promise.all([
-        listSolicitudesExamen({ estado: 'PENDIENTE' }),
-        listEstudiosMicrobiologia({ estado: 'PENDIENTE' }),
-      ]);
+      const labs = await listSolicitudesExamen({ estado: 'PENDIENTE' });
+      let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
+      try {
+        micros = await listEstudiosMicrobiologia({ estado: 'PENDIENTE' });
+      } catch {
+        micros = [];
+      }
       const merged = [
         ...labs.map(mapLabToPendiente),
         ...micros.map(mapMicroToPendiente),

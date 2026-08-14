@@ -534,18 +534,20 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'derivaciones_resumen',
         ]
 
+    def get_fields(self):
+        fields = super().get_fields()
+        view = self.context.get('view')
+        # Listado: omitir nested resultados (performance / payload).
+        # No usar pop+restore en to_representation: re-bind del mismo Field
+        # dispara AssertionError en DRF ("redundant source='resultados'").
+        if getattr(view, 'action', None) == 'list':
+            fields.pop('resultados', None)
+        return fields
+
     def to_representation(self, instance):
+        data = super().to_representation(instance)
         view = self.context.get('view')
         is_list = getattr(view, 'action', None) == 'list'
-        resultados_field = None
-        if is_list:
-            # El listado no necesita valores clínicos (y serializarlos traba la bandeja).
-            resultados_field = self.fields.pop('resultados', None)
-        try:
-            data = super().to_representation(instance)
-        finally:
-            if resultados_field is not None:
-                self.fields['resultados'] = resultados_field
 
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None

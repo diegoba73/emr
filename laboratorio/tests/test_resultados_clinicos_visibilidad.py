@@ -118,6 +118,19 @@ class TestResultadosClinicosVisibilidad:
         results = data["results"] if isinstance(data, dict) else data
         ids = {row["id"] for row in results}
         assert self.sol.pk in ids
+        row = next(item for item in results if item["id"] == self.sol.pk)
+        # Listado no serializa valores clínicos (y no debe 500 por re-bind DRF).
+        assert row.get("resultados") == []
+        assert row.get("resultados_visibles") is False
+
+    def test_lab_lista_no_falla_con_resultados_existentes(self):
+        """Regresión: pop+restore de 'resultados' en list rompía DRF (AssertionError)."""
+        self.client.force_authenticate(self.lab)
+        r = self.client.get("/api/lab/solicitudes/")
+        assert r.status_code == status.HTTP_200_OK
+        data = r.json()
+        results = data["results"] if isinstance(data, dict) else data
+        assert any(row["id"] == self.sol.pk for row in results)
 
     def test_secretaria_detalle_ve_resultados_aunque_no_finalizado(self):
         self.client.force_authenticate(self.sec)

@@ -180,14 +180,12 @@ class TestMicroPdfInforme(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertTrue(r.content.startswith(b"%PDF"))
 
-    def test_medico_ajeno_no_descarga(self):
+    def test_medico_ajeno_descarga_pdf_validado(self):
         self._validar_final()
         self.client.force_authenticate(self.med_otro)
         r = self.client.get(self._url_pdf())
-        self.assertIn(
-            r.status_code,
-            (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
-        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertTrue(r.content.startswith(b"%PDF"))
 
     def test_auditoria_sin_phi(self):
         self._validar_final()

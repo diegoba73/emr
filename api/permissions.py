@@ -86,11 +86,8 @@ class LimsTipoExamenCatalogPermission(permissions.BasePermission):
 def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     """True si el usuario puede leer la orden LIMS (list/retrieve).
 
-    Médico: órdenes propias **o** de pacientes con vínculo clínico
-    (turno / consulta HC / atención), **o** órdenes ya informadas
-    (FINALIZADO / INFORMADO_PARCIAL) — historial en ficha sin exigir
-    ``medico_interno`` (p. ej. LabWin).
-    Secretaría/enfermería: ven órdenes en todos los estados (encabezado y resultados).
+    Admin, operadores LIMS, médico, secretaría y enfermería: todas las órdenes
+    en cualquier estado. Paciente: solo las propias.
     PDF / envío del informe: solo FINALIZADO.
     """
     if not user or not user.is_authenticated:
@@ -102,28 +99,8 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     if role in ROLES_LIMS_WRITE:
         return True
 
-    if role in ROLES_LIMS_OPERATIVA_LIMITADA:
+    if role in ROLES_LIMS_OPERATIVA_LIMITADA or role == 'medico':
         return True
-
-    if role == 'medico':
-        from laboratorio.access import ESTADOS_LECTURA_HISTORIAL_MEDICO
-
-        if getattr(solicitud, 'estado', None) in ESTADOS_LECTURA_HISTORIAL_MEDICO:
-            return True
-        medico = getattr(solicitud, 'medico_interno', None)
-        if medico and getattr(medico, 'user_id', None) == user.id:
-            return True
-        try:
-            from archivos_medicos.access import medico_puede_acceder_paciente
-            from pacientes.models import Paciente
-
-            profile = user.medico
-            paciente = getattr(solicitud, 'paciente', None)
-            if paciente is None and getattr(solicitud, 'paciente_id', None):
-                paciente = Paciente.objects.get(pk=solicitud.paciente_id)
-            return bool(paciente and medico_puede_acceder_paciente(profile, paciente))
-        except Exception:
-            return False
 
     if role == 'paciente':
         try:
@@ -185,27 +162,6 @@ def usuario_puede_operar_informe_micro(user) -> bool:
     return get_normalized_role(user) in ROLES_LIMS_VALIDAR
 
 
-def _medico_puede_ver_estudio_micro(user, estudio) -> bool:
-    """Médico solicitante o con vínculo a la solicitud LIMS asociada."""
-    if estudio is None:
-        return False
-    medico_interno_id = getattr(estudio, 'medico_interno_id', None)
-    if medico_interno_id:
-        try:
-            if (
-                hasattr(user, 'medico')
-                and user.medico
-                and user.medico.pk == medico_interno_id
-            ):
-                return True
-        except Exception:
-            pass
-    solicitud = getattr(estudio, 'solicitud', None)
-    if solicitud is None:
-        return False
-    return usuario_puede_ver_solicitud_lims(user, solicitud)
-
-
 def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
     """Contenido del informe micro.
 
@@ -223,11 +179,8 @@ def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
     if getattr(informe, 'estado', None) != 'VALIDADO':
         return False
 
-    estudio = getattr(informe, 'estudio', None)
-    if role == 'laboratorio' or role in ROLES_LIMS_OPERATIVA_LIMITADA:
+    if role == 'laboratorio' or role in ROLES_LIMS_OPERATIVA_LIMITADA or role == 'medico':
         return True
-    if role == 'medico':
-        return _medico_puede_ver_estudio_micro(user, estudio)
     return False
 
 
@@ -239,10 +192,7 @@ def usuario_puede_descargar_informe_micro(user, estudio) -> bool:
         return True
     role = get_normalized_role(user)
 
-    if role == 'medico':
-        if not _medico_puede_ver_estudio_micro(user, estudio):
-            return False
-    elif role in ROLES_LIMS_OPERATIVA_LIMITADA:
+    if role in (*ROLES_LIMS_OPERATIVA_LIMITADA, 'medico'):
         pass
     elif role not in ROLES_LIMS_WRITE:
         return False
@@ -1039,58 +989,12 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             return True
         if role in ROLES_LIMS_OPERADOR:
             return True
-        if role in ROLES_LIMS_OPERATIVA_LIMITADA:
+        if role in ROLES_LIMS_OPERATIVA_LIMITADA or role == "medico":
             if action not in ("retrieve", "list", "por_codigo", "informe_pdf", "enviar_informe"):
                 return False
+            if role == "medico" and action == "enviar_informe":
+                return False
             return True
-        if role == "medico":
-            if action not in ("retrieve", "list", "por_codigo", "informe_pdf"):
-                return False
-
-            # Pedido directo (sin solicitud LIMS): el médico solicitante puede verlo.
-            estudio = obj if hasattr(obj, "medico_interno_id") else None
-            if estudio is None:
-                estudio = getattr(obj, "estudio", None)
-                if estudio is None:
-                    aislado = getattr(obj, "aislado", None)
-                    if aislado is None:
-                        antibiograma = getattr(obj, "antibiograma", None)
-                        aislado = (
-                            getattr(antibiograma, "aislado", None) if antibiograma else None
-                        )
-                    estudio = getattr(aislado, "estudio", None) if aislado else None
-            if estudio is not None:
-                medico_interno_id = getattr(estudio, "medico_interno_id", None)
-                if medico_interno_id:
-                    try:
-                        if (
-                            hasattr(request.user, "medico")
-                            and request.user.medico
-                            and request.user.medico.pk == medico_interno_id
-                        ):
-                            return True
-                    except Exception:
-                        pass
-
-            # Resolver solicitud caminando: estudio → aislado → antibiograma → resultado.
-            solicitud = getattr(obj, "solicitud", None)
-            if solicitud is None:
-                if estudio is None:
-                    estudio = getattr(obj, "estudio", None)
-                    if estudio is None:
-                        aislado = getattr(obj, "aislado", None)
-                        if aislado is None:
-                            antibiograma = getattr(obj, "antibiograma", None)
-                            aislado = (
-                                getattr(antibiograma, "aislado", None)
-                                if antibiograma
-                                else None
-                            )
-                        estudio = getattr(aislado, "estudio", None) if aislado else None
-                solicitud = getattr(estudio, "solicitud", None) if estudio else None
-            if solicitud is None:
-                return False
-            return usuario_puede_ver_solicitud_lims(request.user, solicitud)
         return False
 
 

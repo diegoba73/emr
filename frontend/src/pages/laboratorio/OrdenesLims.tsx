@@ -98,23 +98,28 @@ const OrdenesLims: React.FC = () => {
     setLoading(true);
     try {
       const num = numeroFiltro.trim();
+      const labs = await listSolicitudesExamen(
+        buscarPorNumero
+          ? { numero: num }
+          : {
+              estado: estadoFiltro || undefined,
+              fecha_muestra: fechaApi,
+            }
+      );
+      let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
+      try {
+        micros = await listEstudiosMicrobiologia(
+          buscarPorNumero ? { search: num } : {}
+        );
+      } catch {
+        micros = [];
+      }
       if (buscarPorNumero) {
-        const [labs, micros] = await Promise.all([
-          listSolicitudesExamen({ numero: num }),
-          listEstudiosMicrobiologia({ search: num }),
-        ]);
         const microRows = micros
           .filter((e) => (e.numero || '').toUpperCase() === num.toUpperCase())
           .map(mapMicroToPendiente);
         setRows([...labs.map(mapLabToPendiente), ...microRows]);
       } else {
-        const [labs, micros] = await Promise.all([
-          listSolicitudesExamen({
-            estado: estadoFiltro || undefined,
-            fecha_muestra: fechaApi,
-          }),
-          listEstudiosMicrobiologia({}),
-        ]);
         let microRows = micros
           .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
           .filter((e) => fechaLocalIso(e.fecha_inicio || e.created_at) === fechaApi)
@@ -122,7 +127,6 @@ const OrdenesLims: React.FC = () => {
         if (vistaLimitada) {
           microRows = microRows.filter((r) => r.estado === 'INFORMADO');
         } else if (estadoFiltro) {
-          // Filtro de estado lab no aplica 1:1 a micro; si eligió FINALIZADO mostrar INFORMADO.
           if (estadoFiltro === 'FINALIZADO') {
             microRows = microRows.filter((r) => r.estado === 'INFORMADO');
           } else {

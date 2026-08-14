@@ -81,19 +81,19 @@ class TestMedicoHistorialLabwinFicha(APITestCase):
         ids = {row["id"] for row in r_list.data.get("results", [])}
         self.assertNotIn(self.paciente.id, ids)
 
-    def test_medico_lista_finalizado_por_paciente_sin_vinculo(self):
+    def test_medico_lista_todas_las_ordenes_del_paciente(self):
         self.client.force_authenticate(user=self.user_med)
         r_global = self.client.get("/api/lab/solicitudes/")
         self.assertEqual(r_global.status_code, status.HTTP_200_OK)
         ids_global = {row["id"] for row in r_global.data["results"]}
-        self.assertNotIn(self.sol_lw.id, ids_global)
-        self.assertNotIn(self.sol_pendiente_ajena.id, ids_global)
+        self.assertIn(self.sol_lw.id, ids_global)
+        self.assertIn(self.sol_pendiente_ajena.id, ids_global)
 
         r = self.client.get(f"/api/lab/solicitudes/?paciente={self.paciente.id}")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         ids = {row["id"] for row in r.data["results"]}
         self.assertIn(self.sol_lw.id, ids)
-        self.assertNotIn(self.sol_pendiente_ajena.id, ids)
+        self.assertIn(self.sol_pendiente_ajena.id, ids)
 
         r_detail = self.client.get(f"/api/lab/solicitudes/{self.sol_lw.id}/")
         self.assertEqual(r_detail.status_code, status.HTTP_200_OK)

@@ -271,30 +271,8 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             return qs.none()
         if not user.is_superuser:
             role = get_normalized_role(user)
-            if role in ROLES_LIMS_WRITE or role in ROLES_LIMS_OPERATIVA_LIMITADA:
+            if role in ROLES_LIMS_WRITE or role in ROLES_LIMS_OPERATIVA_LIMITADA or role == "medico":
                 pass
-            elif role == "medico":
-                from django.db.models import Q
-
-                from laboratorio.access import q_lectura_lims_medico
-
-                # Combinar con Q (no con | entre QuerySets): filtrar_lectura_lims_medico
-                # aplica .distinct() y Django no permite OR unique + non-unique.
-                q_via_solicitud = Q(solicitud__isnull=False) & q_lectura_lims_medico(
-                    user, solicitud_path="solicitud"
-                )
-                q_directo = Q(solicitud__isnull=True, medico_interno__user_id=user.pk)
-                try:
-                    from archivos_medicos.access import paciente_ids_vinculados_a_medico
-
-                    ids = paciente_ids_vinculados_a_medico(user.medico)
-                    if ids:
-                        q_directo = q_directo | Q(
-                            solicitud__isnull=True, paciente_id__in=ids
-                        )
-                except Exception:
-                    pass
-                qs = qs.filter(q_via_solicitud | q_directo).distinct()
             else:
                 return qs.none()
 

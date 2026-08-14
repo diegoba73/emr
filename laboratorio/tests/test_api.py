@@ -444,15 +444,15 @@ class TestLimsAuthorization(APITestCase):
         r_cat = self.client.get('/api/lab/muestras/')
         assert r_cat.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_medico_lista_solo_sus_solicitudes_sin_vinculo_paciente(self):
-        """Sin turno/consulta/atención, el médico solo ve órdenes propias."""
+    def test_medico_lista_todas_las_solicitudes(self):
+        """Médico ve órdenes propias y de otros, en cualquier estado."""
         otro = Medico.objects.create(
             nombre='Otro',
             apellido='Médico',
             matricula='MAT-OT-LAUTH',
             especialidad=self.especialidad,
         )
-        SolicitudExamen.objects.create(
+        ajena = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=otro,
             origen_solicitud='AMBULATORIO_CEHTA',
@@ -460,8 +460,9 @@ class TestLimsAuthorization(APITestCase):
         self.client.force_authenticate(user=self.user_medico)
         r = self.client.get('/api/lab/solicitudes/')
         assert r.status_code == status.HTTP_200_OK
-        assert len(r.data['results']) == 1
-        assert r.data['results'][0]['id'] == self.sol_medico.id
+        ids = {row['id'] for row in r.data['results']}
+        assert self.sol_medico.id in ids
+        assert ajena.id in ids
 
     def test_medico_con_vinculo_ve_ordenes_de_otros_del_paciente(self):
         """Cabecera con vínculo clínico puede leer labs pedidos por otro médico."""

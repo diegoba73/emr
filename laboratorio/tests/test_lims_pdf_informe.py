@@ -203,7 +203,7 @@ class TestLimsPdfInforme(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertTrue(r.content.startswith(b"%PDF"))
 
-    def test_medico_sin_acceso_recibe_404(self):
+    def test_medico_sin_orden_validada_no_descarga_informe_pdf_ajeno(self):
         otro_med = Medico.objects.create(
             nombre="Otro",
             apellido="Med",
@@ -216,9 +216,10 @@ class TestLimsPdfInforme(TestCase):
                 rol="medico",
             ),
         )
+        self.assertEqual(self.sol.estado, "EN_PROCESO")
         self.client.force_authenticate(otro_med.user)
         r = self.client.get(self._url())
-        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_pdf_no_expone_codigo_barra(self):
         self.sol.estado = "FINALIZADO"
