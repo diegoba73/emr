@@ -2,6 +2,7 @@ from rest_framework import permissions
 
 from usuarios.roles import (
     ROLES_INTERNACION,
+    ROLES_INTERNACION_ALTA,
     ROLES_INTERNACION_CLINICA,
     ROLES_LIMS_CATALOG_READ,
     ROLES_LIMS_OPERADOR,
@@ -89,8 +90,8 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     (turno / consulta HC / atención), **o** órdenes ya informadas
     (FINALIZADO / INFORMADO_PARCIAL) — historial en ficha sin exigir
     ``medico_interno`` (p. ej. LabWin).
-    Secretaría/enfermería: pueden ver el encabezado de todas las órdenes;
-    los resultados clínicos se filtran con ``usuario_puede_ver_resultados_lims``.
+    Secretaría/enfermería: ven órdenes en todos los estados (encabezado y resultados).
+    PDF / envío del informe: solo FINALIZADO.
     """
     if not user or not user.is_authenticated:
         return False
@@ -136,17 +137,10 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
 def usuario_puede_ver_resultados_lims(user, solicitud) -> bool:
     """True si el usuario puede ver valores de resultados / análisis longitudinal.
 
-    Operadores LIMS (admin, laboratorio, bioquímico): siempre.
-    Resto de roles clínicos: solo cuando la orden está validada (FINALIZADO).
+    Quien puede ver la orden puede ver sus resultados en cualquier estado.
+    El PDF / envío del informe sigue restringido a FINALIZADO.
     """
-    if not usuario_puede_ver_solicitud_lims(user, solicitud):
-        return False
-    if user.is_superuser:
-        return True
-    role = get_normalized_role(user)
-    if role in ROLES_LIMS_WRITE:
-        return True
-    return getattr(solicitud, 'estado', None) == 'FINALIZADO'
+    return usuario_puede_ver_solicitud_lims(user, solicitud)
 
 
 def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
@@ -466,7 +460,7 @@ class IsInternacionStaff(permissions.BasePermission):
 
 
 class IsInternacionClinica(permissions.BasePermission):
-    """Evoluciones clínicas e infraestructura de internación: sin secretaría."""
+    """Ingreso, edición e infraestructura de internación: médico, enfermería y admin."""
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -474,6 +468,17 @@ class IsInternacionClinica(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         return get_normalized_role(request.user) in ROLES_INTERNACION_CLINICA
+
+
+class IsInternacionAlta(permissions.BasePermission):
+    """Alta de internación: solo médico y admin."""
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return get_normalized_role(request.user) in ROLES_INTERNACION_ALTA
 
 
 class ConsultaPermission(permissions.BasePermission):

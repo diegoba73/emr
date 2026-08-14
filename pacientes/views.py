@@ -43,6 +43,7 @@ _AUDIT_AVAILABLE = log_create is not None and log_update is not None
 from usuarios.roles import ROLES_LECTURA_OPERATIVA
 
 _ROLES_LECTURA_GLOBAL = frozenset({"admin", "secretaria", "enfermeria"})
+_ROLES_EDICION_PACIENTE = frozenset({"admin", "secretaria", "medico"})
 
 
 def _user_rol(user) -> str:
@@ -155,6 +156,15 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return queryset
         return self.get_queryset()
 
+    def _deny_si_no_puede_editar_paciente(self) -> None:
+        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return
+        rol = _user_rol(user)
+        if rol in _ROLES_EDICION_PACIENTE:
+            return
+        raise PermissionDenied("No tiene permiso para editar datos del paciente.")
+
     def _deny_operativo_solo_lectura(self) -> None:
         if _user_rol(self.request.user) in ROLES_LECTURA_OPERATIVA:
             raise PermissionDenied('Su rol solo tiene permiso de lectura sobre pacientes.')
@@ -168,16 +178,19 @@ class PacienteViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         self._deny_operativo_solo_lectura()
         self._deny_paciente_mutations()
+        self._deny_si_no_puede_editar_paciente()
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         self._deny_operativo_solo_lectura()
         self._deny_paciente_mutations()
+        self._deny_si_no_puede_editar_paciente()
         return super().partial_update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         self._deny_operativo_solo_lectura()
         self._deny_paciente_mutations()
+        self._deny_si_no_puede_editar_paciente()
         instance = serializer.save(
             creado_por=self.request.user,
             modificado_por=self.request.user,

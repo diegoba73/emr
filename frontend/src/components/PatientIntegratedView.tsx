@@ -1159,7 +1159,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                     </Box>
                   ) : selectedAnalisis.resultados_visibles === false ? (
                     <Alert severity="info">
-                      Los valores se muestran cuando la orden está validada (FINALIZADO).
+                      No hay resultados visibles para esta orden.
                     </Alert>
                   ) : resultadosDetallados.length > 0 ? (
                     <ResultadosOrdenLista

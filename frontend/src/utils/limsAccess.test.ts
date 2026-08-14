@@ -165,10 +165,11 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
     expect(canSeeResultadosClinicos(adminUser, 'PENDIENTE')).toBe(true);
   });
 
-  it('médico/secretaría solo ven resultados y PDF si FINALIZADO', () => {
-    expect(canSeeResultadosClinicos(medUser, 'EN_PROCESO')).toBe(false);
-    expect(canSeeResultadosClinicos(medUser, 'INFORMADO_PARCIAL')).toBe(false);
+  it('médico/secretaría ven resultados en cualquier estado; PDF solo FINALIZADO', () => {
+    expect(canSeeResultadosClinicos(medUser, 'EN_PROCESO')).toBe(true);
+    expect(canSeeResultadosClinicos(medUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'FINALIZADO')).toBe(true);
+    expect(canSeeResultadosClinicos(secUser, 'EN_PROCESO')).toBe(true);
     expect(canSeeResultadosClinicos(secUser, 'FINALIZADO')).toBe(true);
 
     expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(false);

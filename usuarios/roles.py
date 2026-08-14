@@ -48,8 +48,8 @@ ROLES_LIMS_CATALOG_READ = frozenset({
     'medico',
 })
 
-# Secretaría/enfermería: lectura clínica de órdenes (encabezado siempre;
-# resultados/PDF solo FINALIZADO vía usuario_puede_ver_resultados_lims).
+# Secretaría/enfermería: lectura de órdenes LIMS en todos los estados.
+# PDF / envío del informe: solo FINALIZADO (usuario_puede_descargar/enviar_informe_lims).
 ROLES_LIMS_OPERATIVA_LIMITADA = frozenset({
     'secretaria',
     'enfermeria',
@@ -67,7 +67,7 @@ ROLES_SIN_BYPASS_EMR_STAFF = frozenset({
     *ROLES_ESTUDIO_COMPLEMENTARIO,
 })
 
-# Internación: secretaría ve el diagnóstico al abrir la cama y opera admisión/alta.
+# Internación: lectura para secretaría, médico, enfermería y admin.
 ROLES_INTERNACION = frozenset({
     'admin',
     'medico',
@@ -75,11 +75,17 @@ ROLES_INTERNACION = frozenset({
     'secretaria',
 })
 
-# Infraestructura (sectores/camas) y evoluciones clínicas: sin secretaría.
+# Ingreso, edición de episodio e infraestructura (camas/sectores): sin secretaría.
 ROLES_INTERNACION_CLINICA = frozenset({
     'admin',
     'medico',
     'enfermeria',
+})
+
+# Alta de internación: solo médico y admin.
+ROLES_INTERNACION_ALTA = frozenset({
+    'admin',
+    'medico',
 })
 
 

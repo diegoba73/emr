@@ -988,11 +988,11 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         No usa IA; devuelve alertas estructuradas para revisión del laboratorio o médico.
         """
         solicitud = self.get_object()
-        from api.permissions import usuario_puede_ver_resultados_lims
+        from api.permissions import usuario_puede_ver_solicitud_lims
 
-        if not usuario_puede_ver_resultados_lims(request.user, solicitud):
+        if not usuario_puede_ver_solicitud_lims(request.user, solicitud):
             return Response(
-                {'detail': 'Los resultados solo están disponibles cuando la orden está validada.'},
+                {'detail': 'No tenés permiso para ver el análisis de esta orden.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         if solicitud.estado == 'PENDIENTE':

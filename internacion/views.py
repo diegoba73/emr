@@ -10,7 +10,7 @@ from rest_framework import filters
 from .models import Sector, Cama, Internacion, TipoDieta
 from .serializers import SectorSerializer, CamaSerializer, InternacionSerializer, TipoDietaSerializer
 from .services import InternacionClinicalService, InternacionClinicalError
-from api.permissions import IsInternacionClinica, IsInternacionStaff
+from api.permissions import IsInternacionAlta, IsInternacionClinica, IsInternacionStaff
 from api.serializers import AtencionSerializer
 
 logger = logging.getLogger(__name__)
@@ -191,9 +191,18 @@ class InternacionViewSet(viewsets.ModelViewSet):
     ordering = ['-fecha_ingreso']
     
     def get_permissions(self):
-        if getattr(self, 'action', None) in ('iniciar_evolucion', 'iniciar_nota', 'evoluciones'):
+        action = getattr(self, 'action', None)
+        if action == 'alta':
+            return [IsAuthenticated(), IsInternacionAlta()]
+        if action in ('iniciar_evolucion', 'iniciar_nota'):
             return [IsAuthenticated(), IsInternacionClinica()]
-        return [IsAuthenticated(), IsInternacionStaff()]
+        if action == 'evoluciones':
+            if self.request.method in SAFE_METHODS:
+                return [IsAuthenticated(), IsInternacionStaff()]
+            return [IsAuthenticated(), IsInternacionClinica()]
+        if action in ('list', 'retrieve') or self.request.method in SAFE_METHODS:
+            return [IsAuthenticated(), IsInternacionStaff()]
+        return [IsAuthenticated(), IsInternacionClinica()]
 
     def get_queryset(self):
         """Filtrar por usuario según rol y por defecto solo activas"""

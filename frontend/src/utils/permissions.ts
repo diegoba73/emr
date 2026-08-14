@@ -75,13 +75,13 @@ export function canAccessPacientes(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Alta de paciente: secretaría, enfermería, médico y admin (no operativos solo lectura). */
+/** Alta de paciente: secretaría, médico y admin. */
 export function canCreatePaciente(user: User | null | undefined): boolean {
   if (!user) return false;
-  if (isStaffOrAdmin(user)) return true;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
   if (isLecturaOperativaRole(rol)) return false;
-  return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico';
+  return rol === 'secretaria' || rol === 'medico';
 }
 
 /** Vista 360 / detalle de paciente (médico/admin o paciente sobre su ficha). */
@@ -116,12 +116,12 @@ export function canWriteArchivoMedico(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Actualización demográfica de pacientes. Paciente: solo lectura. */
+/** Actualización demográfica de pacientes: secretaría, médico y admin. */
 export function canUpdatePacienteDemographics(user: User | null | undefined): boolean {
   if (!user) return false;
-  if (isStaffOrAdmin(user)) return true;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico';
+  return rol === 'secretaria' || rol === 'medico';
 }
 
 /** Descarga de archivo (misma política de módulo; objeto validado en backend). */
@@ -192,9 +192,22 @@ export function canManageInternacionInfra(user: User | null | undefined): boolea
   return rol === 'medico' || rol === 'enfermeria';
 }
 
-/** Evoluciones clínicas de internación: sin secretaría. */
+/** Ingreso, edición y evoluciones de internación: médico, enfermería y admin. */
 export function canOperateInternacionClinica(user: User | null | undefined): boolean {
   return canManageInternacionInfra(user);
+}
+
+/** Ingresar paciente a cama: médico, enfermería y admin. */
+export function canAdmitirInternacion(user: User | null | undefined): boolean {
+  return canOperateInternacionClinica(user);
+}
+
+/** Alta de internación: solo médico y admin. */
+export function canDarAltaInternacion(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  if (isLaboratorioRole(user)) return false;
+  return normalizeRol(user) === 'medico';
 }
 
 /** Portal del paciente — acceso base. */

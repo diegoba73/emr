@@ -15,7 +15,11 @@ import { useLocation } from 'react-router-dom';
 import { Cama } from '../types';
 import { getCamas, moverPacienteCama } from '../services/apiService';
 import { useData } from '../contexts/DataContext';
-import { canManageInternacionInfra } from '../utils/permissions';
+import {
+  canAdmitirInternacion,
+  canManageInternacionInfra,
+  canOperateInternacionClinica,
+} from '../utils/permissions';
 import BedCard from '../components/internacion/BedCard';
 import ModalIngresarPaciente from '../components/internacion/ModalIngresarPaciente';
 import ModalGestionarPaciente from '../components/internacion/ModalGestionarPaciente';
@@ -45,8 +49,9 @@ const InternacionDashboard: React.FC = () => {
   const [modalGestionarCamaOpen, setModalGestionarCamaOpen] = useState(false);
   const [modalCrearCamaOpen, setModalCrearCamaOpen] = useState(false);
   
-  // Verificar si el usuario puede gestionar infraestructura
   const canManageInfra = canManageInternacionInfra(currentUser);
+  const canAdmitir = canAdmitirInternacion(currentUser);
+  const canMoverCamas = canOperateInternacionClinica(currentUser);
   
   // Estado para recordar qué cama se estaba editando (para restaurar scroll)
   const camaToScrollRef = useRef<number | null>(null);
@@ -143,9 +148,16 @@ const InternacionDashboard: React.FC = () => {
 
   const handleCamaClick = (cama: Cama) => {
     setSelectedCama(cama);
-    // Guardar el ID de la cama para restaurar scroll después
     camaToScrollRef.current = cama.id;
     if (cama.estado === 'DISPONIBLE') {
+      if (!canAdmitir) {
+        setSnackbar({
+          open: true,
+          message: 'Solo médicos y enfermería pueden ingresar pacientes.',
+          severity: 'error',
+        });
+        return;
+      }
       if (derivacionPrefill) {
         setIngresoPrefill({
           pacienteId: derivacionPrefill.pacienteId,
@@ -157,6 +169,9 @@ const InternacionDashboard: React.FC = () => {
     } else if (cama.estado === 'OCUPADA') {
       setModalGestionarOpen(true);
     } else if (cama.estado === 'LIMPIEZA' || cama.estado === 'MANTENIMIENTO') {
+      if (!canManageInfra) {
+        return;
+      }
       setModalGestionarCamaOpen(true);
     }
   };
@@ -176,6 +191,7 @@ const InternacionDashboard: React.FC = () => {
   };
 
   const handleDragStart = (e: React.DragEvent, cama: Cama) => {
+    if (!canMoverCamas) return;
     if (cama.estado === 'OCUPADA' && cama.internacion_actual) {
       setDraggingCama(cama);
     }
@@ -196,7 +212,11 @@ const InternacionDashboard: React.FC = () => {
 
   const handleDrop = async (e: React.DragEvent, camaDestino: Cama) => {
     e.preventDefault();
-    
+    if (!canMoverCamas) {
+      setDragOverCama(null);
+      return;
+    }
+
     if (!draggingCama || !draggingCama.internacion_actual) {
       setDragOverCama(null);
       return;
@@ -316,6 +336,7 @@ const InternacionDashboard: React.FC = () => {
                       <BedCard 
                         cama={cama} 
                         onClick={() => handleCamaClick(cama)}
+                        enableDrag={canMoverCamas}
                         onDragStart={handleDragStart}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}
@@ -351,6 +372,7 @@ const InternacionDashboard: React.FC = () => {
                       <BedCard 
                         cama={cama} 
                         onClick={() => handleCamaClick(cama)}
+                        enableDrag={canMoverCamas}
                         onDragStart={handleDragStart}
                         onDragOver={handleDragOver}
                         onDrop={handleDrop}

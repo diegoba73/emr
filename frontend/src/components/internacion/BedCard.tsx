@@ -19,6 +19,7 @@ import { Cama } from '../../types';
 interface BedCardProps {
   cama: Cama;
   onClick: () => void;
+  enableDrag?: boolean;
   onDragStart?: (e: React.DragEvent, cama: Cama) => void;
   onDragOver?: (e: React.DragEvent, cama: Cama) => void;
   onDrop?: (e: React.DragEvent, cama: Cama) => void;
@@ -30,6 +31,7 @@ interface BedCardProps {
 const BedCard: React.FC<BedCardProps> = ({ 
   cama, 
   onClick, 
+  enableDrag = true,
   onDragStart, 
   onDragOver, 
   onDrop,
@@ -91,6 +93,7 @@ const BedCard: React.FC<BedCardProps> = ({
   const internacion = cama.internacion_actual;
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (!enableDrag) return;
     if (cama.estado === 'OCUPADA' && onDragStart) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', cama.id.toString());
@@ -125,7 +128,7 @@ const BedCard: React.FC<BedCardProps> = ({
       sx={{
         p: 2,
         height: '100%',
-        cursor: cama.estado === 'OCUPADA' ? 'grab' : 'pointer',
+        cursor: enableDrag && cama.estado === 'OCUPADA' ? 'grab' : 'pointer',
         transition: 'all 0.3s ease',
         ...styles,
         opacity: isDragging ? 0.5 : 1,
@@ -137,7 +140,7 @@ const BedCard: React.FC<BedCardProps> = ({
         },
       }}
       onClick={onClick}
-      draggable={cama.estado === 'OCUPADA'}
+      draggable={Boolean(enableDrag && cama.estado === 'OCUPADA')}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDrop={handleDrop}

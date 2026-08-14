@@ -1,4 +1,4 @@
-"""Secretaría: diagnóstico visible al abrir la cama; sin evoluciones ni infra."""
+"""Secretaría: ve internación; no ingresa, no edita infra ni da alta."""
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
@@ -94,12 +94,90 @@ class SecretariaInternacionAccesoTestCase(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_secretaria_no_lista_evoluciones(self):
+    def test_secretaria_lista_evoluciones(self):
         self.client.force_authenticate(user=self.secretaria)
         response = self.client.get(
             f'/api/internacion/internaciones/{self.internacion.id}/evoluciones/'
         )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_secretaria_no_ingresa_paciente(self):
+        cama_libre = Cama.objects.create(
+            nombre=f'C-libre-{unique_suffix()}',
+            sector=self.sector,
+            estado='DISPONIBLE',
+        )
+        paciente_libre = Paciente.objects.create(
+            nombre='Luis',
+            apellido='Sosa',
+            dni=f'SEC-IN-{unique_suffix()}',
+        )
+        self.client.force_authenticate(user=self.secretaria)
+        response = self.client.post(
+            '/api/internacion/internaciones/',
+            {
+                'paciente': paciente_libre.id,
+                'cama': cama_libre.id,
+                'diagnostico_ingreso': 'Intento de ingreso',
+            },
+            format='json',
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_secretaria_no_da_alta(self):
+        self.client.force_authenticate(user=self.secretaria)
+        response = self.client.post(
+            f'/api/internacion/internaciones/{self.internacion.id}/alta/'
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enfermeria_puede_ingresar_no_da_alta(self):
+        enfermeria = User.objects.create_user(
+            username=f'enf-int-{unique_suffix()}',
+            password='x',
+            email=f'enf-int-{unique_suffix()}@test.com',
+            rol='enfermeria',
+        )
+        cama_libre = Cama.objects.create(
+            nombre=f'C-enf-{unique_suffix()}',
+            sector=self.sector,
+            estado='DISPONIBLE',
+        )
+        paciente_libre = Paciente.objects.create(
+            nombre='Nora',
+            apellido='Vega',
+            dni=f'ENF-IN-{unique_suffix()}',
+        )
+        self.client.force_authenticate(user=enfermeria)
+        ingresar = self.client.post(
+            '/api/internacion/internaciones/',
+            {
+                'paciente': paciente_libre.id,
+                'cama': cama_libre.id,
+                'diagnostico_ingreso': 'Ingreso de enfermería',
+            },
+            format='json',
+        )
+        self.assertEqual(ingresar.status_code, status.HTTP_201_CREATED)
+        alta = self.client.post(
+            f'/api/internacion/internaciones/{self.internacion.id}/alta/'
+        )
+        self.assertEqual(alta.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_medico_puede_dar_alta(self):
+        medico = User.objects.create_user(
+            username=f'med-int-{unique_suffix()}',
+            password='x',
+            email=f'med-int-{unique_suffix()}@test.com',
+            rol='medico',
+        )
+        self.client.force_authenticate(user=medico)
+        response = self.client.post(
+            f'/api/internacion/internaciones/{self.internacion.id}/alta/'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.internacion.refresh_from_db()
+        self.assertFalse(self.internacion.activo)
 
     def test_paciente_no_lista_camas(self):
         self.client.force_authenticate(user=self.paciente_rol)

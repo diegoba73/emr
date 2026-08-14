@@ -77,18 +77,16 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
 }
 
 /**
- * Ver valores de resultados en portal clínico.
- * Lab/bioquímico/admin (módulo LIMS): siempre.
- * Resto: solo orden FINALIZADO (validada).
+ * Ver valores de resultados en portal clínico (cualquier estado).
+ * PDF / envío del informe: solo FINALIZADO (`canDownloadInformeClinicoPdf`).
  */
 export function canSeeResultadosClinicos(
   user: User | null,
-  estado: string | null | undefined
+  _estado?: string | null
 ): boolean {
   if (!user) return false;
   if (canAccessLimsModule(user)) return true;
-  if (!canAccessAnalisisClinicoLab(user)) return false;
-  return String(estado || '').toUpperCase() === 'FINALIZADO';
+  return canAccessAnalisisClinicoLab(user);
 }
 
 /** Descargar informe PDF desde el portal clínico (solo orden validada / FINALIZADO). */

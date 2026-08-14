@@ -27,7 +27,6 @@ import { formatLimsPdfDownloadError } from '../utils/limsDownload';
 import {
   estadoOrdenColor,
   labelEstadoOrdenLims,
-  ordenEsFinalizada,
   ordenPuedeEnviarInforme,
 } from '../utils/limsEstadosOrden';
 import { resolveNavBack } from '../utils/navBack';
@@ -164,9 +163,7 @@ const SolicitudLabDetalle: React.FC = () => {
         </Typography>
         {!puedeVerResultados ? (
           <Alert severity="info">
-            {ordenEsFinalizada(orden.estado)
-              ? 'No tiene permiso para ver los resultados de esta orden.'
-              : 'Los resultados solo están disponibles cuando la orden fue validada por el laboratorio.'}
+            No tiene permiso para ver los resultados de esta orden.
           </Alert>
         ) : resultados.length === 0 ? (
           <Typography color="text.secondary">Resultados pendientes.</Typography>

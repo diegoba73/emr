@@ -30,7 +30,7 @@ import { darAltaInternacion, getInternacion, getInternaciones, updateInternacion
 import { getTiposDieta } from '../../services/internacion';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
-import { canOperateInternacionClinica } from '../../utils/permissions';
+import { canDarAltaInternacion, canOperateInternacionClinica } from '../../utils/permissions';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import AtencionDetailDrawer from '../../modules/atenciones/components/AtencionDetailDrawer';
 import { Atencion } from '../../types';
@@ -294,9 +294,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       } else {
         setDiagnosticoInputValue('');
       }
-      if (canOperateInternacionClinica(currentUser)) {
-        await loadEvoluciones(internacionId);
-      }
+      await loadEvoluciones(internacionId);
     } catch (err: unknown) {
       setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.internacionCargar));
     } finally {
@@ -497,7 +495,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   }
 
   const internacionData = cama.internacion_actual;
-  const canSeeClinica = canOperateInternacionClinica(currentUser);
+  const canOperateClinica = canOperateInternacionClinica(currentUser);
+  const canDarAlta = canDarAltaInternacion(currentUser);
   const diagnosticoVisible =
     internacion?.diagnostico_cie
       ? `${internacion.diagnostico_cie.codigo} - ${internacion.diagnostico_cie.descripcion}`
@@ -516,7 +515,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           <Typography variant="h6">
             Gestionar Paciente - {cama.nombre} ({typeof cama.sector === 'object' ? cama.sector.nombre : cama.sector_nombre || 'N/A'})
           </Typography>
-          {!isEditing && (
+          {!isEditing && canOperateClinica && (
             <Button
               variant="outlined"
               color="primary"
@@ -833,11 +832,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
 
             <Divider sx={{ my: 2 }} />
 
-            {canSeeClinica && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 Seguimiento clínico
               </Typography>
+              {canOperateClinica && (
               <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                 <Button
                   variant="contained"
@@ -858,7 +857,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                   Interconsulta / nota
                 </Button>
               </Stack>
-              {evolucionDiariaHoy && (
+              )}
+              {canOperateClinica && evolucionDiariaHoy && (
                 <Alert severity="info" sx={{ mb: 1 }}>
                   Ya existe una evolución diaria registrada para hoy.
                 </Alert>
@@ -881,10 +881,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                         border: '1px solid',
                         borderColor: 'divider',
                         borderRadius: 1,
-                        cursor: 'pointer',
-                        '&:hover': { bgcolor: 'action.hover' },
+                        cursor: canOperateClinica ? 'pointer' : 'default',
+                        '&:hover': canOperateClinica ? { bgcolor: 'action.hover' } : undefined,
                       }}
                       onClick={() => {
+                        if (!canOperateClinica) return;
                         setSelectedAtencionId(evo.id);
                         setDrawerOpen(true);
                       }}
@@ -909,7 +910,6 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                 </Stack>
               )}
             </Box>
-            )}
           </>
         )}
       </DialogContent>
@@ -938,6 +938,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
             <Button onClick={onClose} disabled={loading}>
               Cerrar
             </Button>
+            {canDarAlta && (
             <Button
               onClick={handleDarAlta}
               variant="contained"
@@ -952,6 +953,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                 'Dar de Alta'
               )}
             </Button>
+            )}
           </>
         )}
       </DialogActions>
@@ -960,7 +962,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         atencionId={selectedAtencionId}
         open={drawerOpen}
         onClose={handleDrawerClose}
-        forceEdit
+        forceEdit={canOperateClinica}
         onIntervencionSaved={() => {
           if (internacionIdActual) {
             loadEvoluciones(internacionIdActual);

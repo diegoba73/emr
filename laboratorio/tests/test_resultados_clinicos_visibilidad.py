@@ -1,4 +1,4 @@
-"""Visibilidad clínica de resultados LIMS: solo FINALIZADO para no-operadores."""
+"""Visibilidad clínica de resultados LIMS: quien ve la orden ve los valores."""
 from __future__ import annotations
 
 import uuid
@@ -81,14 +81,15 @@ class TestResultadosClinicosVisibilidad:
     def _url(self):
         return f"/api/lab/solicitudes/{self.sol.pk}/"
 
-    def test_medico_ve_orden_sin_resultados_si_no_finalizado(self):
+    def test_medico_ve_resultados_aunque_no_finalizado(self):
         self.client.force_authenticate(self.med_user)
         r = self.client.get(self._url())
         assert r.status_code == status.HTTP_200_OK
         body = r.json()
         assert body["estado"] == "EN_PROCESO"
-        assert body["resultados"] == []
-        assert body.get("resultados_visibles") is False
+        assert len(body["resultados"]) == 1
+        assert body["resultados"][0]["valor_obtenido"] == "99.9"
+        assert body.get("resultados_visibles") is True
 
     def test_medico_ve_resultados_si_finalizado(self):
         self.sol.estado = "FINALIZADO"
@@ -118,11 +119,12 @@ class TestResultadosClinicosVisibilidad:
         ids = {row["id"] for row in results}
         assert self.sol.pk in ids
 
-    def test_secretaria_detalle_sin_resultados_si_no_finalizado(self):
+    def test_secretaria_detalle_ve_resultados_aunque_no_finalizado(self):
         self.client.force_authenticate(self.sec)
         r = self.client.get(self._url())
         assert r.status_code == status.HTTP_200_OK
         body = r.json()
         assert body["estado"] == "EN_PROCESO"
-        assert body["resultados"] == []
-        assert body.get("resultados_visibles") is False
+        assert len(body["resultados"]) == 1
+        assert body["resultados"][0]["valor_obtenido"] == "99.9"
+        assert body.get("resultados_visibles") is True

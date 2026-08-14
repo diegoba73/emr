@@ -9,7 +9,10 @@ import {
   canAccessInternacion,
   canManageInternacionInfra,
   canOperateInternacionClinica,
+  canAdmitirInternacion,
+  canDarAltaInternacion,
   canCreatePaciente,
+  canUpdatePacienteDemographics,
   canDownloadArchivoMedico,
   canWriteArchivoMedico,
   canAccessLims,
@@ -65,16 +68,29 @@ describe('canAccessPacientes', () => {
 });
 
 describe('canCreatePaciente', () => {
-  it('permite admin, secretaría, enfermería y médico', () => {
+  it('permite admin, secretaría y médico', () => {
     expect(canCreatePaciente(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'SECRETARIA' }))).toBe(true);
-    expect(canCreatePaciente(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'MEDICO' }))).toBe(true);
   });
 
-  it('no permite paciente ni laboratorio', () => {
+  it('no permite paciente, enfermería ni laboratorio', () => {
     expect(canCreatePaciente(user({ rol: 'PACIENTE' }))).toBe(false);
+    expect(canCreatePaciente(user({ rol: 'ENFERMERIA' }))).toBe(false);
     expect(canCreatePaciente(user({ rol: 'LABORATORIO' }))).toBe(false);
+  });
+});
+
+describe('canUpdatePacienteDemographics', () => {
+  it('permite secretaría, médico y admin', () => {
+    expect(canUpdatePacienteDemographics(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canUpdatePacienteDemographics(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canUpdatePacienteDemographics(user({ rol: 'ADMIN' }))).toBe(true);
+  });
+
+  it('bloquea enfermería y paciente', () => {
+    expect(canUpdatePacienteDemographics(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canUpdatePacienteDemographics(user({ rol: 'PACIENTE' }))).toBe(false);
   });
 });
 
@@ -244,7 +260,13 @@ describe('canAccessInternacion', () => {
     const sec = user({ rol: 'SECRETARIA' });
     expect(canManageInternacionInfra(sec)).toBe(false);
     expect(canOperateInternacionClinica(sec)).toBe(false);
+    expect(canAdmitirInternacion(sec)).toBe(false);
+    expect(canDarAltaInternacion(sec)).toBe(false);
     expect(canManageInternacionInfra(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canOperateInternacionClinica(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canAdmitirInternacion(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canDarAltaInternacion(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canDarAltaInternacion(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canDarAltaInternacion(user({ rol: 'ADMIN' }))).toBe(true);
   });
 });

@@ -381,3 +381,47 @@ class TestPacienteAPIReadOnlyDemographics:
         client.force_authenticate(user=user)
         response = client.post("/api/pacientes/", _payload_create(dni="PAC-RO-2"), format="json")
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_enfermeria_no_puede_patch_paciente(self):
+        paciente = Paciente.objects.create(
+            dni="ENF-RO-1",
+            nombre="Eva",
+            apellido="Enfer",
+        )
+        enf = User.objects.create_user(
+            username="enf.readonly.patch",
+            email="enf.readonly.patch@example.com",
+            password="x",
+            rol="enfermeria",
+        )
+        client = APIClient()
+        client.force_authenticate(user=enf)
+        response = client.patch(
+            f"/api/pacientes/{paciente.id}/",
+            {"telefono": "2222222222"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_secretaria_puede_patch_paciente(self):
+        paciente = Paciente.objects.create(
+            dni="SEC-ED-1",
+            nombre="Sara",
+            apellido="Secre",
+        )
+        sec = User.objects.create_user(
+            username="sec.edit.patch",
+            email="sec.edit.patch@example.com",
+            password="x",
+            rol="secretaria",
+        )
+        client = APIClient()
+        client.force_authenticate(user=sec)
+        response = client.patch(
+            f"/api/pacientes/{paciente.id}/",
+            {"telefono": "3333333333"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        paciente.refresh_from_db()
+        assert paciente.telefono == "3333333333"
