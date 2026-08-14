@@ -57,4 +57,16 @@ describe('getSafeClinicalActionMessage', () => {
       'Debe iniciar sesión para continuar.'
     );
   });
+
+  it('muestra el detalle de validación 400 sin usar el fallback', () => {
+    const err = {
+      response: {
+        status: 400,
+        data: { detail: 'El paciente tiene una atención de guardia abierta (#12).' },
+      },
+    };
+    expect(
+      getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.turnoIniciarAtencion)
+    ).toBe('El paciente tiene una atención de guardia abierta (#12).');
+  });
 });

@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
 
 from turnos.models import Turno, Atencion, ConsultaAmbulatoria, RegistroProcedimiento, RegistroQuirurgico, Recurso
 
 from turnos.situacion_paciente import (
     SituacionPacienteConflictError,
     assert_puede_iniciar_atencion_ambulatoria_o_guardia,
+    finalizar_ambulatorias_abiertas_previas,
 )
 
 
@@ -46,6 +48,19 @@ def resolve_contexto_atencion_from_recurso(tipo_recurso: str) -> str:
     return Atencion.ContextoAtencion.AMBULATORIA
 
 logger = logging.getLogger(__name__)
+
+
+def _detail_from_django_validation(exc: DjangoValidationError) -> str:
+    if getattr(exc, "message_dict", None):
+        parts: list[str] = []
+        for key, msgs in exc.message_dict.items():
+            joined = " ".join(str(m) for m in msgs)
+            parts.append(joined if key == "__all__" else f"{key}: {joined}")
+        return " ".join(parts).strip() or str(exc)
+    messages = getattr(exc, "messages", None)
+    if messages:
+        return " ".join(str(m) for m in messages)
+    return str(exc)
 
 
 class BusinessLogicError(Exception):
@@ -88,6 +103,18 @@ class AtencionService:
             assert_puede_iniciar_atencion_ambulatoria_o_guardia(paciente_id, contexto)
         except SituacionPacienteConflictError as exc:
             raise BusinessLogicError(str(exc)) from exc
+
+    @staticmethod
+    def _liberar_ambulatorias_previas_si_aplica(paciente_id: int, contexto: str) -> None:
+        """Cierra consultas ambulatorias ABIERTAS residuales antes de un nuevo encuentro de agenda."""
+        if contexto != Atencion.ContextoAtencion.AMBULATORIA:
+            return
+        cerradas = finalizar_ambulatorias_abiertas_previas(paciente_id)
+        if cerradas:
+            logger.info(
+                "Cerradas atenciones ambulatorias previas %s para iniciar nueva consulta.",
+                cerradas,
+            )
 
     @staticmethod
     def iniciar_atencion_desde_turno(
@@ -180,6 +207,9 @@ class AtencionService:
                 tipo_atencion = turno.recurso.tipo_recurso
                 tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
                 contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
+                AtencionService._liberar_ambulatorias_previas_si_aplica(
+                    turno.paciente_id, contexto_atencion
+                )
                 AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
 
                 logger.info(
@@ -260,6 +290,9 @@ class AtencionService:
             tipo_atencion = turno.recurso.tipo_recurso
             tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
             contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
+            AtencionService._liberar_ambulatorias_previas_si_aplica(
+                turno.paciente_id, contexto_atencion
+            )
             AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
 
             atencion = Atencion.objects.create(
@@ -336,24 +369,41 @@ class AtencionService:
         if not turno.recurso:
             raise BusinessLogicError("El turno no tiene un recurso asociado")
 
-        turno.estado = Turno.Estado.REALIZADO
-        turno.save(update_fields=["estado", "updated_at"])
+        try:
+            turno.estado = Turno.Estado.REALIZADO
+            turno.save(update_fields=["estado", "updated_at"])
 
-        tipo_atencion = turno.recurso.tipo_recurso
-        tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
-        contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
-        AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
+            tipo_atencion = turno.recurso.tipo_recurso
+            tipo_intervencion = resolve_tipo_intervencion_from_recurso(tipo_atencion)
+            contexto_atencion = resolve_contexto_atencion_from_recurso(tipo_atencion)
+            AtencionService._liberar_ambulatorias_previas_si_aplica(
+                turno.paciente_id, contexto_atencion
+            )
+            AtencionService._assert_situacion_libre(turno.paciente_id, contexto_atencion)
 
-        atencion = Atencion.objects.create(
-            turno=turno,
-            paciente=turno.paciente,
-            medico_principal=turno.medico,
-            contexto_atencion=contexto_atencion,
-            tipo_atencion=tipo_atencion,
-            tipo_intervencion=tipo_intervencion,
-            estado_clinico=Atencion.EstadoClinico.ABIERTA,
-        )
-        AtencionService._crear_registro_hijo(atencion, tipo_atencion)
+            atencion = Atencion.objects.create(
+                turno=turno,
+                paciente=turno.paciente,
+                medico_principal=turno.medico,
+                contexto_atencion=contexto_atencion,
+                tipo_atencion=tipo_atencion,
+                tipo_intervencion=tipo_intervencion,
+                estado_clinico=Atencion.EstadoClinico.ABIERTA,
+            )
+            AtencionService._crear_registro_hijo(atencion, tipo_atencion)
+        except BusinessLogicError:
+            raise
+        except DjangoValidationError as exc:
+            raise BusinessLogicError(_detail_from_django_validation(exc)) from exc
+        except IntegrityError as exc:
+            logger.exception(
+                "IntegrityError al iniciar atención clínica desde turno_id=%s",
+                turno.pk,
+            )
+            raise BusinessLogicError(
+                "No se pudo iniciar la atención por un conflicto de datos. "
+                "Verificá si el paciente ya tiene una consulta abierta e intentá nuevamente."
+            ) from exc
 
         return IniciarAtencionClinicaOutcome(
             atencion=atencion,

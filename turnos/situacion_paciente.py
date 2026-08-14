@@ -173,6 +173,28 @@ def assert_puede_admitir_internacion(
             )
 
 
+def finalizar_ambulatorias_abiertas_previas(paciente_id: int) -> list[int]:
+    """
+    Cierra atenciones ambulatorias ABIERTAS de encuentros anteriores.
+
+    En agenda, el médico suele cerrar el drawer sin «Guardar y cerrar».
+    Esa atención queda ABIERTA y bloqueaba el próximo turno del mismo paciente.
+    No toca guardia ni internación.
+    """
+    from turnos.models import Atencion
+
+    ids: list[int] = []
+    qs = Atencion.objects.filter(
+        paciente_id=paciente_id,
+        estado_clinico=Atencion.EstadoClinico.ABIERTA,
+        contexto_atencion=CONTEXTO_AMBULATORIA,
+    ).order_by("id")
+    for atencion in qs:
+        if finalizar_atencion_por_derivacion(atencion):
+            ids.append(atencion.pk)
+    return ids
+
+
 def finalizar_atencion_por_derivacion(atencion) -> bool:
     """
     Cierra una atención ambulatoria/guardia al derivarla a internación.

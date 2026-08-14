@@ -4,6 +4,7 @@ import { Turno } from '../types';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/apiError';
 import './TurnosMedico.css';
 
 /** Pantalla legacy: no está enrutada en App.tsx (agenda médica usa /turnos + TurnoModal). */
@@ -185,10 +186,11 @@ const TurnosMedico: React.FC = () => {
           refreshAll().catch((err: any) => {
             console.warn('Error en refreshAll:', err);
           });
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Error obteniendo/creando atención:', error);
-          const errorMessage = error.message || 'Error al crear la atención. Verifica que el turno esté confirmado.';
-          alert(errorMessage);
+          alert(
+            getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoIniciarAtencion)
+          );
         }
       } else if (turno.estado === 'REALIZADO') {
         try {

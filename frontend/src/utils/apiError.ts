@@ -140,7 +140,29 @@ export const CLINICAL_ACTION_ERRORS = {
   genericClinicalAction: 'No se pudo completar la operación. Intentá nuevamente.',
 } as const;
 
-/** Mensaje seguro para UI clínica: solo status HTTP conocido + fallback por acción. */
+/** Extrae un mensaje de validación 400 sin volcar 500 ni PHI de servidor. */
+function validationMessageFrom400(error: unknown): string | null {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+  const o = data as Record<string, unknown>;
+  if (typeof o.detail === 'string' && o.detail.trim()) {
+    return o.detail.trim();
+  }
+  if (Array.isArray(o.detail)) {
+    const msgs = o.detail.filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
+    if (msgs.length) {
+      return msgs.join(' · ');
+    }
+  }
+  if (typeof o.error === 'string' && o.error.trim()) {
+    return o.error.trim();
+  }
+  return flattenDrfFieldErrors(o);
+}
+
+/** Mensaje seguro para UI clínica: 400 de validación + status conocido; 500 usa fallback. */
 export function getSafeClinicalActionMessage(error: unknown, fallback: string): string {
   const status = responseStatus(error);
   if (status === 403) {
@@ -151,6 +173,12 @@ export function getSafeClinicalActionMessage(error: unknown, fallback: string): 
   }
   if (status === 401) {
     return 'Debe iniciar sesión para continuar.';
+  }
+  if (status === 400) {
+    const validation = validationMessageFrom400(error);
+    if (validation) {
+      return validation;
+    }
   }
   return fallback;
 }

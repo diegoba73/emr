@@ -1636,3 +1636,25 @@ class TestIniciarAtencionTurno(APITestCase):
             action='UPDATE',
             metadata__accion='iniciar_atencion_turno',
         ).exists()
+
+    def test_segundo_turno_cierra_consulta_ambulatoria_previa(self):
+        from turnos.models import Atencion
+
+        self._auth_medico_a()
+        turno_previo = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 14)
+        first = self.client.post(
+            f'/api/turnos/{turno_previo.id}/iniciar-atencion/', {}, format='json'
+        )
+        assert first.status_code == status.HTTP_201_CREATED
+        atencion_previa_id = first.data['atencion']['id']
+
+        turno_nuevo = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 15)
+        second = self.client.post(
+            f'/api/turnos/{turno_nuevo.id}/iniciar-atencion/', {}, format='json'
+        )
+        assert second.status_code == status.HTTP_201_CREATED, second.data
+        assert second.data['created_new'] is True
+        assert second.data['atencion']['id'] != atencion_previa_id
+        previa = Atencion.objects.get(pk=atencion_previa_id)
+        assert previa.estado_clinico == Atencion.EstadoClinico.FINALIZADA
+        assert previa.fecha_cierre is not None

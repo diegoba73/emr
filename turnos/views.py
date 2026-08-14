@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
 from django.db.models import Q
 from datetime import datetime
 from archivos_medicos.access import paciente_ids_vinculados_a_medico
@@ -20,7 +20,7 @@ from medicos.models import Medico
 from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria, EvolucionInternacion
 from . import turno_estado
 from .access import medico_es_dueno_turno
-from .services import AtencionService, BusinessLogicError
+from .services import AtencionService, BusinessLogicError, _detail_from_django_validation
 from .serializers import (
     TurnoSerializer,
     RecursoSerializer,
@@ -559,6 +559,8 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 outcome = AtencionService.iniciar_atencion_clinica_desde_turno(turno)
             except BusinessLogicError as exc:
                 raise ValidationError({'detail': str(exc)}) from exc
+            except DjangoValidationError as exc:
+                raise ValidationError({'detail': _detail_from_django_validation(exc)}) from exc
 
             if outcome.created_new:
                 _safe_audit(

@@ -108,6 +108,43 @@ def test_guardia_abierta_bloquea_ambulatoria(paciente, medico):
 
 
 @pytest.mark.django_db
+def test_nueva_consulta_desde_turno_cierra_ambulatoria_previa(paciente, medico):
+    recurso = Recurso.objects.create(
+        nombre=f"Cons-{unique_suffix()}",
+        ubicacion=Recurso.Ubicacion.ICPL,
+        tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
+        activo=True,
+    )
+    ahora = timezone.now()
+    turno_previo = Turno.objects.create(
+        paciente=paciente,
+        medico=medico,
+        recurso=recurso,
+        estado=Turno.Estado.CONFIRMADO,
+        fecha_hora_inicio=ahora + timedelta(days=1),
+        fecha_hora_fin=ahora + timedelta(days=1, minutes=30),
+    )
+    previo = AtencionService.iniciar_atencion_clinica_desde_turno(turno_previo).atencion
+    assert previo.estado_clinico == Atencion.EstadoClinico.ABIERTA
+
+    turno_nuevo = Turno.objects.create(
+        paciente=paciente,
+        medico=medico,
+        recurso=recurso,
+        estado=Turno.Estado.CONFIRMADO,
+        fecha_hora_inicio=ahora + timedelta(days=8),
+        fecha_hora_fin=ahora + timedelta(days=8, minutes=30),
+    )
+    nuevo = AtencionService.iniciar_atencion_clinica_desde_turno(turno_nuevo).atencion
+    previo.refresh_from_db()
+    assert previo.estado_clinico == Atencion.EstadoClinico.FINALIZADA
+    assert previo.fecha_cierre is not None
+    assert nuevo.pk != previo.pk
+    assert nuevo.estado_clinico == Atencion.EstadoClinico.ABIERTA
+    assert nuevo.turno_id == turno_nuevo.pk
+
+
+@pytest.mark.django_db
 def test_ambulatoria_abierta_bloquea_guardia(paciente, medico):
     recurso = Recurso.objects.create(
         nombre=f"Cons-{unique_suffix()}",
