@@ -57,7 +57,7 @@ const QuitarExamenesOrdenDialog: React.FC<QuitarExamenesOrdenDialogProps> = ({
     [paneles]
   );
 
-  const sueltos = useMemo(() => {
+  const sueltos = useMemo((): ResultadoExamenLims[] => {
     const fromResultados = resultados.filter((r) => !panelExamIds.has(r.tipo_examen));
     if (fromResultados.length > 0 || resultados.length > 0) return fromResultados;
     const ids = orden.tipos_examen ?? [];
