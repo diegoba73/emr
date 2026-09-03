@@ -381,6 +381,18 @@ export async function agregarExamenesSolicitudLims(
   return data;
 }
 
+export async function quitarExamenesSolicitudLims(
+  solicitudId: number,
+  body: { examenes_ids?: number[]; paneles_ids?: number[] }
+): Promise<SolicitudExamenLims> {
+  assertValidSolicitudId(solicitudId);
+  const { data } = await apiClient.post<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${solicitudId}/quitar-examenes/`,
+    body
+  );
+  return data;
+}
+
 /** PDF LIMS básico (PDF-1): blob protegido, sin /media/. */
 export async function getInformeLimsPdfBlob(solicitudId: number): Promise<Blob> {
   assertValidSolicitudId(solicitudId);

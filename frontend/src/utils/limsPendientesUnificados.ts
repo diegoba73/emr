@@ -21,6 +21,7 @@ export interface PendientePedidoRow {
   orden_abierta?: boolean;
   pedido_adicional?: boolean;
   puede_agregar_examenes?: boolean;
+  puede_quitar_examenes?: boolean;
   tubos_pendientes_extraccion?: SolicitudExamenLims['tubos_pendientes_extraccion'];
   cultivo_nombre?: string | null;
   muestra_nombre?: string | null;
@@ -50,6 +51,7 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
     orden_abierta: Boolean(r.orden_abierta),
     pedido_adicional: Boolean(r.pedido_adicional),
     puede_agregar_examenes: Boolean(r.puede_agregar_examenes),
+    puede_quitar_examenes: Boolean(r.puede_quitar_examenes),
     tubos_pendientes_extraccion: r.tubos_pendientes_extraccion,
     labOrden: r,
   };

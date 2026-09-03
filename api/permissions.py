@@ -239,6 +239,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in (*ROLES_LIMS_WRITE, 'medico')
         if action == 'agregar_examenes':
             return role in (*ROLES_LIMS_WRITE, 'medico')
+        if action == 'quitar_examenes':
+            return role in ROLES_LIMS_WRITE
         if action == 'orden_abierta':
             return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria', 'enfermeria')
         if action == 'marcar_derivacion':
@@ -310,6 +312,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             if role == 'medico':
                 return usuario_puede_ver_solicitud_lims(request.user, obj)
             return False
+
+        if action == 'quitar_examenes':
+            return role in ROLES_LIMS_WRITE
 
         if action == 'marcar_derivacion':
             return role in ROLES_LIMS_WRITE

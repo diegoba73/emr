@@ -1,6 +1,6 @@
 import type { EstadoSolicitudLims, SolicitudExamenLims } from '../types/lims';
 
-/** Lab/bioquímico pueden intentar agregar (API valida si cabe en tubos tras etiquetas). */
+/** Lab/bioquímico pueden intentar agregar (API valida si cabe en tubos tras etiquetas / en curso). */
 export function ordenPuedeAgregarExamenes(orden: Pick<
   SolicitudExamenLims,
   'puede_agregar_examenes' | 'orden_abierta' | 'esperando_recepcion'
@@ -9,6 +9,14 @@ export function ordenPuedeAgregarExamenes(orden: Pick<
     return orden.puede_agregar_examenes;
   }
   return Boolean(orden.orden_abierta || orden.esperando_recepcion);
+}
+
+/** Lab write: quitar exámenes/paneles vacíos en PENDIENTE o en curso. */
+export function ordenPuedeQuitarExamenes(orden: Pick<SolicitudExamenLims, 'puede_quitar_examenes' | 'estado'>): boolean {
+  if (typeof orden.puede_quitar_examenes === 'boolean') {
+    return orden.puede_quitar_examenes;
+  }
+  return orden.estado !== 'FINALIZADO';
 }
 
 export const ESTADOS_ORDEN_LIMS: EstadoSolicitudLims[] = [

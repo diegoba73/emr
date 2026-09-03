@@ -308,7 +308,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='agregar-examenes')
     def agregar_examenes(self, request, pk=None):
-        """Agrega exámenes/paneles a orden abierta, o post-etiquetas si caben en tubos impresos."""
+        """Agrega exámenes/paneles a orden abierta, post-etiquetas o en curso si caben en tubos."""
         from laboratorio.solicitud_orden_abierta import (
             OrdenNoAbiertaError,
             TuboNuevoRequeridoError,
@@ -350,6 +350,50 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         )
         data = SolicitudExamenSerializer(actualizada, context=self.get_serializer_context()).data
         data['merged'] = True
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='quitar-examenes')
+    def quitar_examenes(self, request, pk=None):
+        """Quita exámenes/paneles de orden PENDIENTE o en curso (sin resultado/validado)."""
+        from laboratorio.solicitud_orden_abierta import (
+            QuitarExamenError,
+            quitar_examenes_de_solicitud,
+        )
+
+        solicitud = self.get_object()
+        examenes_ids = request.data.get('examenes_ids') or []
+        paneles_ids = request.data.get('paneles_ids') or []
+        if not isinstance(examenes_ids, list) or not isinstance(paneles_ids, list):
+            return Response(
+                {'detail': 'examenes_ids y paneles_ids deben ser listas.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not examenes_ids and not paneles_ids:
+            return Response(
+                {'detail': 'Indique al menos un examen o panel.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            actualizada = quitar_examenes_de_solicitud(
+                solicitud,
+                examenes_ids=examenes_ids,
+                paneles_ids=paneles_ids,
+            )
+        except QuitarExamenError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        log_update(
+            actor=getattr(request, "user", None),
+            entity=actualizada,
+            before=None,
+            module="laboratorio",
+            metadata={
+                "view": "SolicitudExamenViewSet.quitar_examenes",
+                "examenes_ids": examenes_ids,
+                "paneles_ids": paneles_ids,
+            },
+        )
+        data = SolicitudExamenSerializer(actualizada, context=self.get_serializer_context()).data
         return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='orden-abierta')

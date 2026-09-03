@@ -48,6 +48,7 @@ import {
   ordenPuedeAgregarExamenes,
   ordenPuedeCargarResultados,
   ordenPuedeEnviarInforme,
+  ordenPuedeQuitarExamenes,
 } from '../../utils/limsEstadosOrden';
 import { countResultadosConValor, ordenResultadosCompletos } from '../../utils/limsOrdenResultados';
 import CargaResultadosLims from '../../components/lims/CargaResultadosLims';
@@ -56,6 +57,7 @@ import OrdenLimsResumenPanel from '../../components/lims/OrdenLimsResumenPanel';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
 import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDialog';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
+import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
 
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -72,6 +74,7 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openTomarMuestra, setOpenTomarMuestra] = useState(false);
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
+  const [openQuitarExamenes, setOpenQuitarExamenes] = useState(false);
   const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
   const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
   const [qcOverrideOpen, setQcOverrideOpen] = useState(false);
@@ -322,6 +325,11 @@ const OrdenLimsDetalle: React.FC = () => {
               Agregar exámenes
             </Button>
           )}
+          {canOp && ordenPuedeQuitarExamenes(orden) && (
+            <Button variant="outlined" color="secondary" onClick={() => setOpenQuitarExamenes(true)}>
+              Quitar exámenes
+            </Button>
+          )}
           {enProceso && canOp && !resultadosCompletos && (
             <Button variant="contained" onClick={() => setTab(2)}>
               Cargar resultados
@@ -361,10 +369,11 @@ const OrdenLimsDetalle: React.FC = () => {
             </Button>
           )}
         </Box>
-        {canOp && ordenPuedeAgregarExamenes(orden) && (
+        {canOp && (ordenPuedeAgregarExamenes(orden) || ordenPuedeQuitarExamenes(orden)) && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            <strong>Agregar exámenes</strong>: sin etiquetas, libre; con etiquetas impresas, solo si
-            caben en los tubos ya generados (sin nueva extracción).
+            <strong>Agregar / quitar</strong>: sin etiquetas, libre; con etiquetas o en proceso, solo
+            si el examen cabe en los tubos ya generados (sin nueva extracción). No se pueden quitar
+            exámenes con resultado cargado o validados, ni órdenes finalizadas.
           </Typography>
         )}
         {canOp && e === 'PENDIENTE' && (
@@ -535,6 +544,20 @@ const OrdenLimsDetalle: React.FC = () => {
             setOrden(fresh);
           } catch {
             /* ignore */
+          }
+        }}
+      />
+      <QuitarExamenesOrdenDialog
+        open={openQuitarExamenes}
+        orden={orden}
+        onClose={() => setOpenQuitarExamenes(false)}
+        onSuccess={async (o) => {
+          setOrden(o);
+          try {
+            const fresh = await getSolicitudExamen(o.id);
+            setOrden(fresh);
+          } catch {
+            /* keep o */
           }
         }}
       />

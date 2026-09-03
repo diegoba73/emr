@@ -1,4 +1,4 @@
-"""Orden LIMS única abierta por paciente: merge de exámenes (y post-etiquetas si cabe en tubos)."""
+"""Orden LIMS única abierta por paciente: merge de exámenes (y post-etiquetas / en curso si cabe en tubos)."""
 from __future__ import annotations
 
 import logging
@@ -39,6 +39,10 @@ class OrdenNoAbiertaError(ValueError):
 
 class TuboNuevoRequeridoError(ValueError):
     """El examen no cabe en tubos impresos; requeriría una nueva extracción."""
+
+
+class QuitarExamenError(ValueError):
+    """No se pueden quitar exámenes o paneles de la orden."""
 
 
 def _iter_muestras(solicitud: SolicitudExamen):
@@ -84,13 +88,28 @@ def orden_esperando_recepcion(solicitud: SolicitudExamen) -> bool:
     return False
 
 
+def orden_en_curso(solicitud: SolicitudExamen) -> bool:
+    """True si la orden está en el circuito de lab (no PENDIENTE ni FINALIZADO)."""
+    return getattr(solicitud, "estado", None) in ESTADOS_ORDEN_EN_CURSO
+
+
 def orden_permite_intentar_agregar_examenes(solicitud: SolicitudExamen) -> bool:
     """UI/API: se puede abrir el flujo de agregar (validación de tubos en el backend)."""
     if orden_esta_abierta(solicitud):
         return True
-    return orden_esperando_recepcion(solicitud) and _muestras_activas_solo_pendiente_toma(
+    if orden_esperando_recepcion(solicitud) and _muestras_activas_solo_pendiente_toma(
         solicitud
-    )
+    ):
+        return True
+    return orden_en_curso(solicitud)
+
+
+def orden_permite_quitar_examenes(solicitud: SolicitudExamen) -> bool:
+    """PENDIENTE o en curso: se puede intentar quitar (el backend valida resultados)."""
+    estado = getattr(solicitud, "estado", None)
+    if estado == "FINALIZADO":
+        return False
+    return estado == "PENDIENTE" or estado in ESTADOS_ORDEN_EN_CURSO
 
 
 MENSAJE_LAB_INTERNACION_SIN_FINALIZAR = (
@@ -207,7 +226,7 @@ def _assert_caben_en_tubos_impresos(
 ) -> None:
     """
     Dry-run: los nuevos tipos/paneles no deben exigir tubos adicionales
-    respecto de las muestras ya impresas (PENDIENTE_TOMA).
+    respecto de las muestras ya existentes (impresas o en curso).
     """
     from laboratorio.tubos_orden import TubosOrdenError, expandir_items_crear_muestras
 
@@ -276,31 +295,25 @@ def agregar_examenes_a_solicitud(
     Agrega paneles/exámenes faltantes a una orden.
 
     - Sin etiquetas (orden abierta): siempre permitido.
-    - Con etiquetas (PENDIENTE_TOMA): solo si no hace falta un tubo nuevo.
-    - Tras toma/recepción: rechazado.
+    - Con etiquetas o en curso: solo si no hace falta un tubo nuevo.
+    - FINALIZADO: rechazado.
     """
     sol = (
         SolicitudExamen.objects.select_for_update()
         .prefetch_related("muestras", "tipos_examen", "paneles", "resultados")
         .get(pk=solicitud.pk)
     )
-    abierta = orden_esta_abierta(sol)
-    post_etiquetas = (
-        not abierta
-        and orden_esperando_recepcion(sol)
-        and _muestras_activas_solo_pendiente_toma(sol)
-    )
-    if not abierta and not post_etiquetas:
+    if not orden_permite_intentar_agregar_examenes(sol):
         raise OrdenNoAbiertaError(
-            f"La orden {sol.numero or sol.pk} ya no admite exámenes "
-            "(muestra en curso o estado distinto de pendiente). "
+            f"La orden {sol.numero or sol.pk} no admite agregar exámenes "
+            "(finalizada o estado no editable). "
             "Creá una orden nueva para ese paciente."
         )
 
     tipos_nuevos, paneles_nuevos = _resolver_tipo_examen_ids(examenes_ids or [], paneles_ids or [])
     existentes = set(sol.resultados.values_list("tipo_examen_id", flat=True))
 
-    if post_etiquetas:
+    if not orden_esta_abierta(sol) and orden_tiene_muestras_activas(sol):
         _assert_caben_en_tubos_impresos(sol, tipos_nuevos, paneles_nuevos)
 
     tipos_map = {
@@ -330,6 +343,13 @@ def agregar_examenes_a_solicitud(
         actuales_p = set(sol.paneles.values_list("id", flat=True))
         sol.paneles.set(actuales_p | paneles_nuevos)
 
+    if orden_en_curso(sol):
+        _sincronizar_estado_tras_cambio_items(sol, view="agregar_examenes")
+
+    return _solicitud_refrescada(sol.pk)
+
+
+def _solicitud_refrescada(pk: int) -> SolicitudExamen:
     return (
         SolicitudExamen.objects.select_related(
             "paciente",
@@ -343,5 +363,145 @@ def agregar_examenes_a_solicitud(
             "resultados__muestra",
             "muestras",
         )
-        .get(pk=sol.pk)
+        .get(pk=pk)
     )
+
+
+def _sincronizar_estado_tras_cambio_items(sol: SolicitudExamen, *, view: str) -> None:
+    """Si se agregan vacíos o se quitan ítems, reabre / cierra carga según corresponda."""
+    from laboratorio.solicitud_cierre import SolicitudCierreError, sincronizar_estado_tras_carga
+    from laboratorio.solicitud_estado import SolicitudEstadoTransitionError
+
+    try:
+        sincronizar_estado_tras_carga(sol, actor=None, view=view)
+    except (SolicitudCierreError, SolicitudEstadoTransitionError) as exc:
+        logger.warning("No se pudo sincronizar estado tras %s: %s", view, exc)
+
+
+def _ids_tipos_de_paneles(panel_ids: set[int]) -> set[int]:
+    if not panel_ids:
+        return set()
+    ids: set[int] = set()
+    for panel in PanelExamen.objects.filter(pk__in=panel_ids).prefetch_related("tipos_examen"):
+        ids.update(panel.tipos_examen.values_list("id", flat=True))
+    return ids
+
+
+def _resultado_es_vacio(res: ResultadoExamen) -> bool:
+    if (res.valor_obtenido or "").strip():
+        return False
+    if res.valor_numerico is not None:
+        return False
+    if res.validado_por_id or res.fecha_validacion:
+        return False
+    return True
+
+
+def _podar_orden_grupos_informe(sol: SolicitudExamen) -> None:
+    orden_custom = list(sol.orden_grupos_informe or [])
+    if not orden_custom:
+        return
+    from laboratorio.orden_grupos_informe import claves_grupos_validas
+
+    remaining = list(
+        ResultadoExamen.objects.filter(solicitud=sol).select_related("tipo_examen")
+    )
+    valid = claves_grupos_validas(sol, remaining)
+    pruned = [k for k in orden_custom if k in valid]
+    if pruned != orden_custom:
+        sol.orden_grupos_informe = pruned
+        sol.save(update_fields=["orden_grupos_informe"])
+
+
+@transaction.atomic
+def quitar_examenes_de_solicitud(
+    solicitud: SolicitudExamen,
+    examenes_ids: Iterable[int] | None = None,
+    paneles_ids: Iterable[int] | None = None,
+) -> SolicitudExamen:
+    """
+    Quita paneles/exámenes de una orden PENDIENTE o en curso.
+
+    - FINALIZADO: rechazado.
+    - Resultado con valor o validado: rechazado (toda la operación).
+    - Al quitar un panel, se quitan los componentes que no sigan cubiertos
+      por otro panel restante.
+    - Un examen pedido explícitamente no se quita si sigue cubierto por un
+      panel que permanece en la orden.
+    """
+    sol = (
+        SolicitudExamen.objects.select_for_update()
+        .prefetch_related("muestras", "tipos_examen", "paneles", "resultados__tipo_examen")
+        .get(pk=solicitud.pk)
+    )
+    if not orden_permite_quitar_examenes(sol):
+        raise QuitarExamenError(
+            f"La orden {sol.numero or sol.pk} no admite quitar exámenes "
+            "(finalizada o estado no editable)."
+        )
+
+    exam_ids = {int(x) for x in (examenes_ids or []) if x is not None}
+    panel_ids_req = {int(x) for x in (paneles_ids or []) if x is not None}
+
+    paneles_actuales = set(sol.paneles.values_list("id", flat=True))
+    tipos_actuales = set(sol.tipos_examen.values_list("id", flat=True))
+    tipos_en_resultados = set(sol.resultados.values_list("tipo_examen_id", flat=True))
+
+    paneles_quitar = panel_ids_req & paneles_actuales
+    examenes_explicitos = exam_ids & (tipos_actuales | tipos_en_resultados)
+
+    if not paneles_quitar and not examenes_explicitos:
+        raise QuitarExamenError(
+            "Ninguno de los exámenes o paneles indicados está en la orden."
+        )
+
+    paneles_restantes = paneles_actuales - paneles_quitar
+    cubiertos_restantes = _ids_tipos_de_paneles(paneles_restantes)
+
+    conflictos = sorted(examenes_explicitos & cubiertos_restantes)
+    if conflictos:
+        nombres = list(
+            TipoExamen.objects.filter(pk__in=conflictos).values_list("nombre", flat=True)[:8]
+        )
+        raise QuitarExamenError(
+            "No se puede quitar un examen que sigue formando parte de un panel "
+            "de la orden. Quitá el panel o dejá el examen"
+            + (f" ({', '.join(nombres)})." if nombres else ".")
+        )
+
+    tipos_por_panel = _ids_tipos_de_paneles(paneles_quitar) - cubiertos_restantes
+    tipos_a_quitar = examenes_explicitos | tipos_por_panel
+
+    bloqueados: list[str] = []
+    a_borrar: list[int] = []
+    for res in sol.resultados.filter(tipo_examen_id__in=tipos_a_quitar).select_related(
+        "tipo_examen"
+    ):
+        nombre = res.tipo_examen.nombre if res.tipo_examen_id else str(res.pk)
+        if not _resultado_es_vacio(res):
+            if res.validado_por_id or res.fecha_validacion:
+                bloqueados.append(f"{nombre} (validado)")
+            else:
+                bloqueados.append(f"{nombre} (con resultado)")
+        else:
+            a_borrar.append(res.pk)
+
+    if bloqueados:
+        raise QuitarExamenError(
+            "No se pueden quitar exámenes con resultado cargado o validados: "
+            + ", ".join(bloqueados)
+        )
+
+    if paneles_quitar:
+        sol.paneles.remove(*paneles_quitar)
+    if tipos_a_quitar:
+        sol.tipos_examen.remove(*tipos_a_quitar)
+    if a_borrar:
+        ResultadoExamen.objects.filter(pk__in=a_borrar).delete()
+
+    _podar_orden_grupos_informe(sol)
+
+    if orden_en_curso(sol):
+        _sincronizar_estado_tras_cambio_items(sol, view="quitar_examenes")
+
+    return _solicitud_refrescada(sol.pk)

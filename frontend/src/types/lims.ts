@@ -214,8 +214,10 @@ export interface SolicitudExamenLims {
   orden_abierta?: boolean;
   /** PENDIENTE con etiquetas impresas, esperando recepción de tubos. */
   esperando_recepcion?: boolean;
-  /** Abierta o esperando recepción (agregar post-etiquetas solo si cabe en tubos). */
+  /** Abierta, esperando recepción o en curso (agregar post-etiquetas/en proceso solo si cabe en tubos). */
   puede_agregar_examenes?: boolean;
+  /** Lab/bioquímico/admin: PENDIENTE o en curso (no FINALIZADO). */
+  puede_quitar_examenes?: boolean;
   /** PENDIENTE editable mientras el paciente ya tiene otra orden en curso. */
   pedido_adicional?: boolean;
   /** Respuesta de create/agregar: se fusionó en orden existente. */

@@ -475,6 +475,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     orden_abierta = serializers.SerializerMethodField()
     esperando_recepcion = serializers.SerializerMethodField()
     puede_agregar_examenes = serializers.SerializerMethodField()
+    puede_quitar_examenes = serializers.SerializerMethodField()
     pedido_adicional = serializers.SerializerMethodField()
     merged = serializers.SerializerMethodField()
     derivaciones_resumen = serializers.SerializerMethodField()
@@ -520,6 +521,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'orden_abierta',
             'esperando_recepcion',
             'puede_agregar_examenes',
+            'puede_quitar_examenes',
             'pedido_adicional',
             'merged',
             'derivaciones_resumen',
@@ -544,6 +546,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'orden_abierta',
             'esperando_recepcion',
             'puede_agregar_examenes',
+            'puede_quitar_examenes',
             'pedido_adicional',
             'merged',
             'derivaciones_resumen',
@@ -679,6 +682,20 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         from laboratorio.solicitud_orden_abierta import orden_permite_intentar_agregar_examenes
 
         return orden_permite_intentar_agregar_examenes(obj)
+
+    def get_puede_quitar_examenes(self, obj):
+        from laboratorio.solicitud_orden_abierta import orden_permite_quitar_examenes
+        from usuarios.roles import puede_escribir_lims
+
+        if not orden_permite_quitar_examenes(obj):
+            return False
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if user is None or not getattr(user, 'is_authenticated', False):
+            return False
+        if getattr(user, 'is_superuser', False):
+            return True
+        return puede_escribir_lims(user)
 
     def get_pedido_adicional(self, obj):
         """

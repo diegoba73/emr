@@ -485,6 +485,12 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         <DialogContent dividers sx={scrollableClinicalDialogContentSx}>
           <Stack spacing={2} sx={{ mt: 0.5 }}>
             {error && <Alert severity="error">{error}</Alert>}
+            {agregarAOrdenId ? (
+              <Alert severity="info" sx={{ py: 0.5 }}>
+                Con etiquetas o en proceso, el examen tiene que caber en los tubos ya generados
+                (sin nueva extracción).
+              </Alert>
+            ) : null}
 
             {showPacientePicker && (
               <Autocomplete

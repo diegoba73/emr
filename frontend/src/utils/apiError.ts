@@ -134,6 +134,7 @@ export const CLINICAL_ACTION_ERRORS = {
   limsCrearEstudioMicro: 'No se pudo crear el estudio. Intentá nuevamente.',
   limsGuardarResultado: 'No se pudo guardar el resultado. Intentá nuevamente.',
   limsCargarExamenes: 'No se pudieron cargar los exámenes. Intentá nuevamente.',
+  limsQuitarExamenes: 'No se pudieron quitar los exámenes. Intentá nuevamente.',
   limsRegistrarCorridaQc:
     'No se pudo registrar la corrida QC. Revisá lote, valor y equipo e intentá nuevamente.',
   limsQcCatalogo: 'No se pudo guardar en el catálogo QC. Revisá los datos e intentá nuevamente.',
