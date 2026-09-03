@@ -276,11 +276,25 @@ export async function postEnviarInformeOrden(
 /** Validar y liberar informe (bioquímico / admin). Bloquea resultados. */
 export async function postValidarSolicitud(
   id: number,
-  options?: { confirmar_criticos?: boolean }
+  options?: {
+    confirmar_criticos?: boolean;
+    confirmar_qc_override?: boolean;
+    motivo_qc_override?: string;
+  }
 ): Promise<SolicitudExamenLims> {
-  const body: { confirmar_criticos?: boolean } = {};
+  const body: {
+    confirmar_criticos?: boolean;
+    confirmar_qc_override?: boolean;
+    motivo_qc_override?: string;
+  } = {};
   if (options?.confirmar_criticos) {
     body.confirmar_criticos = true;
+  }
+  if (options?.confirmar_qc_override) {
+    body.confirmar_qc_override = true;
+  }
+  if (options?.motivo_qc_override) {
+    body.motivo_qc_override = options.motivo_qc_override;
   }
   const { data } = await apiClient.post<SolicitudExamenLims>(
     `${LAB}/solicitudes/${id}/validar/`,
@@ -803,6 +817,9 @@ export interface MaterialControl {
   tipo_examen: number;
   tipo_examen_codigo: string;
   tipo_examen_nombre: string;
+  equipo: number | null;
+  equipo_codigo: string | null;
+  equipo_nombre: string | null;
   media_target: string;
   de_target: string;
   activo: boolean;
@@ -824,8 +841,46 @@ export interface PuntoCurvaCalibracion {
   unidad?: string;
 }
 
+export interface ProductoControl {
+  id: number;
+  codigo: string;
+  nombre: string;
+  marca: string;
+  equipo: number;
+  equipo_codigo: string;
+  equipo_nombre: string;
+  modo: 'MULTIPARAM' | 'POR_ENSAYO';
+  activo: boolean;
+}
+
+export interface TargetLoteControl {
+  id: number;
+  lote: number;
+  tipo_examen: number;
+  tipo_examen_codigo: string;
+  tipo_examen_nombre: string;
+  nivel: 'N1' | 'N2' | 'N3';
+  media_target: string;
+  de_target: string;
+}
+
+export interface LoteProductoControl {
+  id: number;
+  producto: number;
+  producto_codigo: string;
+  producto_nombre: string;
+  equipo: number;
+  equipo_codigo: string;
+  codigo_lote: string;
+  vencimiento: string;
+  activo: boolean;
+  targets: TargetLoteControl[];
+}
+
 export interface PuntoQC {
   id: number;
+  tipo_examen?: number | null;
+  tipo_examen_codigo?: string | null;
   valor: string;
   z_score: number | null;
   reglas_disparadas: string[];
@@ -837,9 +892,12 @@ export interface PuntoQC {
 export interface CorridaQC {
   id: number;
   equipo: number | null;
-  lote_control: number;
+  lote_control: number | null;
+  lote_producto: number | null;
+  nivel: string;
   lote_codigo: string;
   material_nombre: string;
+  producto_nombre?: string;
   fecha: string;
   estado: 'PENDIENTE' | 'ACEPTADA' | 'RECHAZADA';
   observaciones: string;
@@ -865,8 +923,9 @@ export interface Calibracion {
 }
 
 export interface LeveyJenningsSeries {
-  material_id: number;
+  material_id: number | null;
   material_nombre: string;
+  tipo_examen_id?: number;
   tipo_examen_codigo: string;
   media_target: number;
   de_target: number;
@@ -879,6 +938,31 @@ export interface LeveyJenningsSeries {
     warning: boolean;
     reglas: string[];
   }>;
+}
+
+export interface IqcPrecheckResult {
+  solicitud_id?: number;
+  ok: boolean;
+  aplicable: boolean;
+  problemas: string[];
+  equipo: { id: number; codigo: string; nombre: string } | null;
+  equipos?: Array<{ id: number; codigo: string; nombre: string }>;
+}
+
+export async function getIqcPrecheck(solicitudId: number): Promise<IqcPrecheckResult> {
+  const { data } = await apiClient.get<IqcPrecheckResult>(`${LAB}/qc/precheck/`, {
+    params: { solicitud: solicitudId },
+  });
+  return data;
+}
+
+export async function postIqcPrecheckBatch(solicitudIds: number[]): Promise<IqcPrecheckResult[]> {
+  if (!solicitudIds.length) return [];
+  const { data } = await apiClient.post<{ results: IqcPrecheckResult[] }>(
+    `${LAB}/qc/precheck-batch/`,
+    { solicitud_ids: solicitudIds }
+  );
+  return data.results || [];
 }
 
 export async function listEquiposQc(): Promise<EquipoAnalizador[]> {
@@ -909,9 +993,61 @@ export async function createMaterialQc(body: {
   de_target: number | string;
   marca?: string;
   producto?: string;
+  equipo?: number | null;
   activo?: boolean;
 }): Promise<MaterialControl> {
   const { data } = await apiClient.post<MaterialControl>(`${LAB}/qc/materiales/`, body);
+  return data;
+}
+
+export async function listProductosQc(): Promise<ProductoControl[]> {
+  return getPaginatedAll<ProductoControl>(`${LAB}/qc/productos/`, { page_size: 200 });
+}
+
+export async function createProductoQc(body: {
+  codigo: string;
+  nombre: string;
+  marca?: string;
+  equipo: number;
+  modo?: 'MULTIPARAM' | 'POR_ENSAYO';
+  activo?: boolean;
+}): Promise<ProductoControl> {
+  const { data } = await apiClient.post<ProductoControl>(`${LAB}/qc/productos/`, body);
+  return data;
+}
+
+export async function listLotesProductoQc(params?: {
+  producto_id?: number;
+}): Promise<LoteProductoControl[]> {
+  return getPaginatedAll<LoteProductoControl>(`${LAB}/qc/lotes-producto/`, {
+    page_size: 200,
+    producto_id: params?.producto_id,
+  });
+}
+
+export async function createLoteProductoQc(body: {
+  producto: number;
+  codigo_lote: string;
+  vencimiento: string;
+  activo?: boolean;
+}): Promise<LoteProductoControl> {
+  const { data } = await apiClient.post<LoteProductoControl>(`${LAB}/qc/lotes-producto/`, body);
+  return data;
+}
+
+export async function putTargetsLoteProducto(
+  loteId: number,
+  targets: Array<{
+    tipo_examen: number;
+    nivel: 'N1' | 'N2' | 'N3';
+    media_target: number | string;
+    de_target: number | string;
+  }>
+): Promise<TargetLoteControl[]> {
+  const { data } = await apiClient.put<TargetLoteControl[]>(
+    `${LAB}/qc/lotes-producto/${loteId}/targets/`,
+    targets
+  );
   return data;
 }
 
@@ -960,13 +1096,23 @@ export async function getLeveyJenningsMaterial(materialId: number): Promise<Leve
   return data;
 }
 
+export async function getLeveyJenningsExamen(tipoExamenId: number): Promise<LeveyJenningsSeries> {
+  const { data } = await apiClient.get<LeveyJenningsSeries>(`${LAB}/qc/levey-jennings/`, {
+    params: { tipo_examen: tipoExamenId },
+  });
+  return data;
+}
+
 export async function createCorridaQc(body: {
-  lote_control: number;
+  lote_control?: number | null;
+  lote_producto?: number | null;
+  nivel?: string;
   equipo?: number | null;
   fecha: string;
   observaciones?: string;
-  /** Si se envía, el backend evalúa Westgard y finaliza la corrida en un solo POST. */
+  modo?: 'ACEPTAR_NIVEL' | 'VALORES';
   valor?: number | string;
+  valores?: Array<{ tipo_examen: number; valor: number | string }>;
 }) {
   const { data } = await apiClient.post<CorridaQC>(`${LAB}/qc/corridas/`, body);
   return data;
@@ -974,7 +1120,7 @@ export async function createCorridaQc(body: {
 
 export async function addPuntoCorridaQc(
   corridaId: number,
-  body: { valor: number | string; finalize?: boolean }
+  body: { valor: number | string; tipo_examen?: number; finalize?: boolean }
 ) {
   const { data } = await apiClient.post<{ punto: PuntoQC; corrida: CorridaQC }>(
     `${LAB}/qc/corridas/${corridaId}/puntos/`,

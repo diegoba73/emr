@@ -15,6 +15,8 @@ import {
   canSeeResultadosClinicos,
   canValidarOrdenLims,
   isMicroEstudioCerrado,
+  canOpenDetalleOrdenLab,
+  pathDetalleOrdenLab,
 } from './limsAccess';
 import type { User } from '../types';
 
@@ -155,6 +157,29 @@ describe('canOperateInformeMicro / canSeeInformeMicro / canDownloadInformeMicroP
     expect(canEnviarInformeMicro(labUser, 'VALIDADO')).toBe(true);
     expect(canEnviarInformeMicro(secUser, 'VALIDADO')).toBe(true);
     expect(canEnviarInformeMicro(enfUser, 'VALIDADO')).toBe(false);
+  });
+});
+
+describe('pathDetalleOrdenLab / canOpenDetalleOrdenLab', () => {
+  it('médico, secretaría y enfermería abren el portal clínico', () => {
+    expect(canOpenDetalleOrdenLab(medUser)).toBe(true);
+    expect(pathDetalleOrdenLab(medUser, 42)).toBe('/solicitudes/42');
+    expect(pathDetalleOrdenLab(secUser, 7)).toBe('/solicitudes/7');
+    expect(pathDetalleOrdenLab(enfUser, 3)).toBe('/solicitudes/3');
+  });
+
+  it('operadores LIMS y admin abren el detalle operativo', () => {
+    expect(canOpenDetalleOrdenLab(labUser)).toBe(true);
+    expect(pathDetalleOrdenLab(labUser, 42)).toBe('/laboratorio/ordenes/42');
+    expect(pathDetalleOrdenLab(bioUser, 42)).toBe('/laboratorio/ordenes/42');
+    expect(pathDetalleOrdenLab(adminUser, 42)).toBe('/laboratorio/ordenes/42');
+  });
+
+  it('kinesiólogo y anónimo no abren detalle de orden', () => {
+    const kine: User = { ...labUser, id: 30, username: 'kine', rol: 'KINESIOLOGO' };
+    expect(canOpenDetalleOrdenLab(kine)).toBe(false);
+    expect(canOpenDetalleOrdenLab(null)).toBe(false);
+    expect(pathDetalleOrdenLab(kine, 1)).toBe('/solicitudes/1');
   });
 });
 

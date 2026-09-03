@@ -10,7 +10,12 @@ from rest_framework import filters
 from .models import Sector, Cama, Internacion, TipoDieta
 from .serializers import SectorSerializer, CamaSerializer, InternacionSerializer, TipoDietaSerializer
 from .services import InternacionClinicalService, InternacionClinicalError
-from api.permissions import IsInternacionAlta, IsInternacionClinica, IsInternacionStaff
+from api.permissions import (
+    IsInternacionAlta,
+    IsInternacionClinica,
+    IsInternacionHcMedico,
+    IsInternacionStaff,
+)
 from api.serializers import AtencionSerializer
 
 logger = logging.getLogger(__name__)
@@ -158,6 +163,7 @@ class TipoDietaViewSet(viewsets.ModelViewSet):
     queryset = TipoDieta.objects.all()
     serializer_class = TipoDietaSerializer
     permission_classes = [IsAuthenticated, IsInternacionStaff]
+    pagination_class = None
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nombre', 'descripcion']
     ordering_fields = ['nombre']
@@ -181,7 +187,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar internaciones"""
     queryset = Internacion.objects.select_related(
         'paciente', 'cama', 'medico', 'cama__sector', 'diagnostico_cie', 'tipo_dieta'
-    ).filter(activo=True)
+    ).prefetch_related('medicaciones_habituales').filter(activo=True)
     serializer_class = InternacionSerializer
     permission_classes = [IsAuthenticated, IsInternacionStaff]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -194,9 +200,11 @@ class InternacionViewSet(viewsets.ModelViewSet):
         action = getattr(self, 'action', None)
         if action == 'alta':
             return [IsAuthenticated(), IsInternacionAlta()]
-        if action in ('iniciar_evolucion', 'iniciar_nota'):
+        if action == 'iniciar_evolucion':
+            return [IsAuthenticated(), IsInternacionHcMedico()]
+        if action == 'iniciar_nota':
             return [IsAuthenticated(), IsInternacionClinica()]
-        if action == 'evoluciones':
+        if action in ('evoluciones', 'contexto_revista'):
             if self.request.method in SAFE_METHODS:
                 return [IsAuthenticated(), IsInternacionStaff()]
             return [IsAuthenticated(), IsInternacionClinica()]
@@ -212,7 +220,9 @@ class InternacionViewSet(viewsets.ModelViewSet):
         related = ('paciente', 'cama', 'medico', 'cama__sector', 'diagnostico_cie', 'tipo_dieta')
 
         if paciente_param or incluir_historico:
-            queryset = Internacion.objects.select_related(*related).all()
+            queryset = Internacion.objects.select_related(*related).prefetch_related(
+                'medicaciones_habituales'
+            ).all()
             if paciente_param:
                 queryset = queryset.filter(paciente_id=paciente_param)
             if not incluir_historico and not paciente_param:
@@ -222,7 +232,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
         
         if hasattr(user, 'rol') and user.rol:
             rol_upper = str(user.rol).strip().upper()
-            if rol_upper in ('MEDICO', 'ENFERMERIA', 'SECRETARIA'):
+            if rol_upper in ('MEDICO', 'ENFERMERIA', 'SECRETARIA', 'KINESIOLOGO'):
                 if not (paciente_param or incluir_historico):
                     queryset = queryset.filter(activo=True)
             elif rol_upper == 'ADMIN':
@@ -270,7 +280,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
         # Médico, enfermería y secretaría: internaciones activas (diagnóstico visible en la cama)
         if hasattr(user, 'rol') and user.rol:
             rol_upper = str(user.rol).strip().upper()
-            if rol_upper in ['MEDICO', 'ENFERMERIA', 'SECRETARIA']:
+            if rol_upper in ['MEDICO', 'ENFERMERIA', 'SECRETARIA', 'KINESIOLOGO']:
                 try:
                     internacion = Internacion.objects.get(pk=pk)
                     # Permitir acceso a internaciones activas
@@ -467,9 +477,18 @@ class InternacionViewSet(viewsets.ModelViewSet):
             'atenciones': serializer.data,
         })
 
+    @action(detail=True, methods=['get'], url_path='contexto-revista')
+    def contexto_revista(self, request, pk=None):
+        """Insumos para revista de sala: evoluciones SOAP, laboratorio y estudios."""
+        internacion = self.get_object()
+        internacion = Internacion.objects.select_related(
+            'paciente', 'medico', 'cama', 'cama__sector', 'diagnostico_cie', 'tipo_dieta'
+        ).get(pk=internacion.pk)
+        return Response(InternacionClinicalService.construir_contexto_revista(internacion))
+
     @action(detail=True, methods=['post'], url_path='iniciar-evolucion')
     def iniciar_evolucion(self, request, pk=None):
-        """Inicia evolución diaria de internación."""
+        """Inicia o reabre la evolución diaria de internación de hoy."""
         internacion = self.get_object()
         try:
             medico = self._resolve_medico_from_request(request, internacion)
@@ -483,7 +502,10 @@ class InternacionViewSet(viewsets.ModelViewSet):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = AtencionSerializer(outcome.atencion, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        http_status = (
+            status.HTTP_201_CREATED if outcome.created_new else status.HTTP_200_OK
+        )
+        return Response(serializer.data, status=http_status)
 
     @action(detail=True, methods=['post'], url_path='iniciar-nota')
     def iniciar_nota(self, request, pk=None):

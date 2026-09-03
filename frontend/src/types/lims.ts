@@ -56,6 +56,9 @@ export interface LimsTipoExamen {
   tipo_contenedor?: number | null;
   tipo_contenedor_codigo?: string | null;
   tipo_contenedor_nombre?: string | null;
+  equipo_analizador?: number | null;
+  equipo_analizador_codigo?: string | null;
+  equipo_analizador_nombre?: string | null;
   /** B2-B: obligatoriedad progresiva en carga de resultados (lectura API catálogo). */
   requiere_muestra?: boolean;
   metodo?: string;

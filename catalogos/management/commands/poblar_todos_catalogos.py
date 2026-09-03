@@ -1,8 +1,9 @@
 """
 Ejecuta la carga de todos los catálogos clínicos desde fuentes oficiales.
 
-Incluye: CIE-10, procedimientos, estudios, medicamentos (ATC), especialidades
-y catálogos de microbiología (medios, microorganismos, antibióticos).
+Incluye: CIE-10, procedimientos, estudios, medicamentos (ATC), especialidades,
+tipos de dieta de internación y catálogos de microbiología
+(medios, microorganismos, antibióticos).
 """
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -10,8 +11,8 @@ from django.core.management.base import BaseCommand
 
 class Command(BaseCommand):
     help = (
-        'Pobla CIE-10, procedimientos, estudios, medicamentos, especialidades '
-        'y catálogos de microbiología'
+        'Pobla CIE-10, procedimientos, estudios, medicamentos, especialidades, '
+        'tipos de dieta de internación y catálogos de microbiología'
     )
 
     def add_arguments(self, parser):
@@ -37,6 +38,7 @@ class Command(BaseCommand):
                 ('poblar_estudios', 'Estudios RadLex'),
                 ('poblar_medicamentos', 'Medicamentos ATC/DDD'),
                 ('poblar_especialidades', 'Especialidades médicas AR'),
+                ('poblar_tipos_dieta', 'Internación — Tipos de dieta'),
                 ('poblar_microbiologia_medios', 'Microbiología — Medios de cultivo'),
                 ('poblar_microbiologia_microorganismos', 'Microbiología — Microorganismos'),
                 ('poblar_microbiologia_antibioticos', 'Microbiología — Antibióticos'),
@@ -45,6 +47,9 @@ class Command(BaseCommand):
 
         for cmd, label in steps:
             self.stdout.write(self.style.MIGRATE_HEADING(f'\n=== {label} ==='))
-            call_command(cmd, *clear)
+            if cmd == 'poblar_tipos_dieta':
+                call_command(cmd)
+            else:
+                call_command(cmd, *clear)
 
         self.stdout.write(self.style.SUCCESS('\n✅ Todos los catálogos cargados.'))

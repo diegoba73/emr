@@ -140,8 +140,9 @@ class TiposDietaAPITestCase(APITestCase):
 
     def test_listado_default_omite_inactivos(self):
         self.client.force_authenticate(user=self.user_medico)
-        response = self.client.get('/api/internacion/tipos-dieta/?page_size=100')
+        response = self.client.get('/api/internacion/tipos-dieta/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
         nombres = {item['nombre'] for item in _list_payload(response)}
         self.assertIn(self.tipo_hiposodica.nombre, nombres)
         self.assertNotIn(self.tipo_inactiva.nombre, nombres)

@@ -63,16 +63,25 @@ class EvolucionInternacionTestCase(APITestCase):
             EvolucionInternacion.TipoEvolucion.EVOLUCION_DIARIA,
         )
 
-    def test_solo_una_evolucion_diaria_por_dia(self):
-        InternacionClinicalService.iniciar_evolucion_internacion(
+    def test_iniciar_evolucion_diaria_reutiliza_la_de_hoy(self):
+        first = InternacionClinicalService.iniciar_evolucion_internacion(
             self.internacion,
             medico=self.medico,
         )
-        with self.assertRaises(InternacionClinicalError):
-            InternacionClinicalService.iniciar_evolucion_internacion(
-                self.internacion,
-                medico=self.medico,
-            )
+        second = InternacionClinicalService.iniciar_evolucion_internacion(
+            self.internacion,
+            medico=self.medico,
+        )
+        self.assertTrue(first.created_new)
+        self.assertFalse(second.created_new)
+        self.assertEqual(first.atencion.pk, second.atencion.pk)
+        self.assertEqual(
+            EvolucionInternacion.objects.filter(
+                atencion__internacion=self.internacion,
+                tipo_evolucion=EvolucionInternacion.TipoEvolucion.EVOLUCION_DIARIA,
+            ).count(),
+            1,
+        )
 
     def test_interconsulta_sin_limite_diario(self):
         InternacionClinicalService.iniciar_evolucion_internacion(
@@ -96,6 +105,9 @@ class EvolucionInternacionTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['contexto_atencion'], 'INTERNACION')
         self.assertIn('evolucion_internacion', response.data)
+        second = self.client.post(url, {}, format='json')
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.data['id'], response.data['id'])
 
     def test_api_evoluciones_lista_por_internacion(self):
         InternacionClinicalService.iniciar_evolucion_internacion(
@@ -136,3 +148,71 @@ class EvolucionInternacionTestCase(APITestCase):
         results = response.data.get('results', response.data)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['contexto_atencion'], 'INTERNACION')
+
+    def test_api_contexto_revista_incluye_labs_estudios_y_soap(self):
+        from estudios.models import EstudioComplementario, TipoEstudioComplementario
+        from laboratorio.models import TipoMuestra, TipoExamen, SolicitudExamen, ResultadoExamen
+        from laboratorio.origen_solicitud import AMBULATORIO_CEHTA, INTERNACION_UCO
+
+        outcome = InternacionClinicalService.iniciar_evolucion_internacion(
+            self.internacion,
+            medico=self.medico,
+        )
+        outcome.evolucion.analisis = 'Mejora clínica'
+        outcome.evolucion.save(update_fields=['analisis'])
+
+        suffix = unique_suffix()
+        tipo_muestra = TipoMuestra.objects.create(
+            codigo=f'SNG{suffix}'[:20],
+            nombre='Sangre',
+        )
+        tipo_examen = TipoExamen.objects.create(
+            codigo=f'GLU{suffix}'[:20],
+            nombre='Glucosa',
+            tipo_muestra_requerida=tipo_muestra,
+            precio=10,
+            activo=True,
+        )
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud=INTERNACION_UCO,
+            estado='FINALIZADO',
+        )
+        solicitud.tipos_examen.add(tipo_examen)
+        ResultadoExamen.objects.create(
+            solicitud=solicitud,
+            tipo_examen=tipo_examen,
+            valor_obtenido='110',
+            unidad='mg/dL',
+        )
+        ambulatoria = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud=AMBULATORIO_CEHTA,
+            estado='FINALIZADO',
+        )
+        ambulatoria.tipos_examen.add(tipo_examen)
+        tipo_est = TipoEstudioComplementario.objects.create(
+            nombre=f'RX torax {suffix}',
+            modalidad=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
+        )
+        EstudioComplementario.objects.create(
+            paciente=self.paciente,
+            tipo_estudio=tipo_est,
+            modalidad=tipo_est.modalidad,
+            estado=EstudioComplementario.Estado.SOLICITADO,
+            medico_solicitante=self.medico,
+        )
+
+        self.client.force_authenticate(user=self.user)
+        url = f'/api/internacion/internaciones/{self.internacion.pk}/contexto-revista/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['paciente_id'], self.paciente.pk)
+        self.assertIsNotNone(response.data['evolucion_hoy'])
+        self.assertEqual(response.data['evolucion_hoy']['analisis'], 'Mejora clínica')
+        self.assertEqual(len(response.data['laboratorio']), 1)
+        self.assertEqual(response.data['laboratorio'][0]['id'], solicitud.pk)
+        self.assertTrue(response.data['laboratorio'][0]['es_de_hoy'])
+        self.assertEqual(len(response.data['estudios']), 1)

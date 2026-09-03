@@ -354,14 +354,3 @@ export function suggestMuestraIdForResultado(
   if (te?.requiere_muestra && opciones.length > 0) return opciones[0].id;
   return null;
 }
-
-export function formatMuestraSelectLabel(
-  m: MuestraTransaccional,
-  tipoMuestraNombre?: string
-): string {
-  const tipo = tipoMuestraNombre || `tipo #${m.tipo_muestra}`;
-  const cont = m.tipo_contenedor != null ? `cont. #${m.tipo_contenedor}` : '';
-  const contPart = cont ? ` · ${cont}` : '';
-  const code = m.codigo_barra ? ` · ${m.codigo_barra}` : '';
-  return `#${m.id}${code} · ${tipo}${contPart} · ${m.estado}`;
-}

@@ -55,7 +55,7 @@ const menuItems: MenuItemConfig[] = [
   { text: 'Estudios complementarios', icon: <MedicalServices />, path: '/estudios-complementarios', roles: ['medico', 'admin', 'paciente', 'secretaria'] },
   { text: 'Laboratorio', icon: <Schedule />, path: '/solicitudes', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', roles: ['medico', 'admin', 'secretaria', 'enfermeria'] },
-  { text: 'Internación', icon: <Hotel />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria', 'secretaria'] },
+  { text: 'Internación', icon: <Hotel />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria', 'secretaria', 'kinesiologo'] },
   { text: 'Médicos', icon: <Person />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <Person />, path: '/usuarios', roles: ['admin'] },
   { text: 'Auditoría', icon: <FactCheck />, path: '/auditoria', roles: ['admin'] },

@@ -30,6 +30,7 @@ import {
   mapMicroToPendiente,
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
+import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
@@ -90,7 +91,7 @@ const OrdenesLimsPendientes: React.FC = () => {
         const tb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
         return tb - ta;
       });
-      setRows(merged);
+      setRows(await attachIqcStatusToRows(merged));
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {

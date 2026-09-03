@@ -61,10 +61,43 @@ def _role_operacion(actor) -> str:
 
 
 def resolver_base_url_publica(*, public_base_url: str | None = None) -> str:
-    explicit = (public_base_url or os.getenv("PUBLIC_API_BASE_URL", "")).strip().rstrip("/")
-    if explicit:
-        return explicit
-    return getattr(settings, "PUBLIC_API_BASE_URL", "").strip().rstrip("/")
+    """URL para enlaces de descarga del PDF (mail / WhatsApp).
+
+    Prioridad: ``PUBLIC_API_BASE_URL`` (settings/env) sobre el host del request.
+    El request suele ser localhost o IP interna; el celular del paciente no lo alcanza.
+    """
+    configured = (getattr(settings, "PUBLIC_API_BASE_URL", None) or "").strip().rstrip("/")
+    if configured:
+        return configured
+    env_url = (os.getenv("PUBLIC_API_BASE_URL", "") or "").strip().rstrip("/")
+    if env_url:
+        return env_url
+    return (public_base_url or "").strip().rstrip("/")
+
+
+def url_alcanzable_por_destinatario(url: str | None) -> str | None:
+    """None si el celular/WhatsApp no podría abrirla (localhost, IP privada, host Docker)."""
+    from urllib.parse import urlparse
+    import ipaddress
+
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    parsed = urlparse(raw)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if not host:
+        return None
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1", "backend"}:
+        return None
+    if host.endswith(".local") or host.endswith(".localhost"):
+        return None
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return None
+    except ValueError:
+        pass
+    return raw
 
 
 def _normalize_whatsapp_phone(telefono: str | None) -> str | None:
@@ -80,17 +113,22 @@ def _normalize_whatsapp_phone(telefono: str | None) -> str | None:
     return digits
 
 
+def _mensaje_whatsapp_con_enlace(intro: str, enlace: str | None, fallback: str) -> str:
+    """El URL va solo en la última línea: así WhatsApp lo vuelve enlace tocable."""
+    if enlace:
+        return f"{intro}\n\n{enlace.strip()}"
+    return f"{intro} {fallback}"
+
+
 def _mensaje_whatsapp_paciente(solicitud: SolicitudExamen, enlace_descarga: str | None) -> str:
     numero = solicitud.numero or f"#{solicitud.pk}"
-    texto = (
+    intro = (
         f"Hola, le informamos que los resultados de laboratorio de su orden {numero} "
         f"ya están disponibles."
     )
-    if enlace_descarga:
-        texto += f" Descargue su informe PDF aquí: {enlace_descarga}"
-    else:
-        texto += " Puede solicitarlo en la institución."
-    return texto + " Saludos."
+    return _mensaje_whatsapp_con_enlace(
+        intro, enlace_descarga, "Puede solicitarlo en la institución."
+    )
 
 
 def _mensaje_whatsapp_medico(solicitud: SolicitudExamen, enlace_descarga: str | None) -> str:
@@ -98,16 +136,14 @@ def _mensaje_whatsapp_medico(solicitud: SolicitudExamen, enlace_descarga: str | 
     paciente_nombre = ""
     if solicitud.paciente_id:
         paciente_nombre = getattr(solicitud.paciente, "nombre_completo", "") or ""
-    texto = (
+    intro = (
         f"Hola, los resultados de laboratorio de la orden {numero}"
         + (f" del paciente {paciente_nombre}" if paciente_nombre else "")
         + " ya están disponibles."
     )
-    if enlace_descarga:
-        texto += f" Descargue el informe PDF aquí: {enlace_descarga}"
-    else:
-        texto += " Puede consultarlo en el sistema."
-    return texto + " Saludos."
+    return _mensaje_whatsapp_con_enlace(
+        intro, enlace_descarga, "Puede consultarlo en el sistema."
+    )
 
 
 def _enlace_whatsapp_web(telefono: str, mensaje: str) -> str:
@@ -126,7 +162,8 @@ def _intentar_twilio_whatsapp(
     token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
     from_wa = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
     if not (sid and token and from_wa):
-        return False, "Twilio no configurado (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM)."
+        # Sin Twilio: el frontend abre wa.me. No es un error para el operador.
+        return False, None
     try:
         from twilio.rest import Client  # type: ignore[import-untyped]
     except ImportError:
@@ -258,11 +295,18 @@ def enviar_informe_solicitud(
     else:
         enlace_descarga = None
     resultado.informe_enlace_descarga = enlace_descarga
+    enlace_wa = url_alcanzable_por_destinatario(enlace_descarga)
 
     if not base_url:
         resultado.advertencias.append(
-            "PUBLIC_API_BASE_URL no configurada: WhatsApp no podrá adjuntar el PDF "
-            "automáticamente (solo enlace en el mensaje si aplica)."
+            "PUBLIC_API_BASE_URL no configurada: el mensaje de WhatsApp no incluirá "
+            "un enlace de descarga. Se abre el chat y se descarga el PDF para adjuntarlo."
+        )
+    elif enlace_descarga and not enlace_wa:
+        resultado.advertencias.append(
+            "El enlace de descarga es local (localhost): WhatsApp no lo vuelve clicable "
+            "y el celular no podría abrirlo. Adjuntá el PDF descargado al chat. "
+            "En el servidor público el mensaje sí lleva el link."
         )
 
     before = safe_model_snapshot(solicitud)
@@ -280,7 +324,7 @@ def enviar_informe_solicitud(
                 solicitud=solicitud,
                 pdf_bytes=pdf_bytes,
                 filename=filename,
-                enlace_descarga=enlace_descarga,
+                enlace_descarga=enlace_wa,
                 destinatario_label="paciente",
             )
             resultado.email_enviado = True
@@ -306,7 +350,7 @@ def enviar_informe_solicitud(
                 solicitud=solicitud,
                 pdf_bytes=pdf_bytes,
                 filename=filename,
-                enlace_descarga=enlace_descarga,
+                enlace_descarga=enlace_wa,
                 destinatario_label="medico",
             )
             resultado.email_enviado = True
@@ -329,7 +373,7 @@ def enviar_informe_solicitud(
         if not telefono:
             resultado.advertencias.append(sin_tel_msg)
             return
-        media_url = enlace_descarga if enlace_descarga else None
+        media_url = enlace_wa
         enviado_api, error_api = _intentar_twilio_whatsapp(
             telefono,
             mensaje,
@@ -357,14 +401,14 @@ def enviar_informe_solicitud(
             if error_api and error_api not in resultado.advertencias:
                 resultado.advertencias.append(error_api)
             resultado.advertencias.append(
-                f"Abra el enlace de WhatsApp ({rol}) y adjunte el PDF descargado manualmente, "
-                "o comparta el enlace de descarga del mensaje."
+                f"Se abrirá WhatsApp ({rol}): confirmá Enviar. "
+                "El PDF se descarga para adjuntarlo si hace falta."
             )
 
     if enviar_whatsapp:
         _enviar_wa(
             telefono_raw=paciente.telefono,
-            mensaje=_mensaje_whatsapp_paciente(solicitud, enlace_descarga),
+            mensaje=_mensaje_whatsapp_paciente(solicitud, enlace_wa),
             rol="paciente",
             sin_tel_msg="El paciente no tiene teléfono registrado.",
         )
@@ -377,7 +421,7 @@ def enviar_informe_solicitud(
         else:
             _enviar_wa(
                 telefono_raw=medico_tel_raw,
-                mensaje=_mensaje_whatsapp_medico(solicitud, enlace_descarga),
+                mensaje=_mensaje_whatsapp_medico(solicitud, enlace_wa),
                 rol="medico",
                 sin_tel_msg=(
                     "El médico solicitante no tiene teléfono registrado "
@@ -417,7 +461,7 @@ def enviar_informe_solicitud(
             },
         )
 
-    tiene_fallback_wa = bool(resultado.whatsapp_enlaces and enlace_descarga)
+    tiene_fallback_wa = bool(resultado.whatsapp_enlaces)
     if (
         not resultado.email_enviado
         and not resultado.whatsapp_enviado
@@ -494,15 +538,13 @@ def _enviar_email_pdf_micro(
 
 def _mensaje_whatsapp_paciente_micro(estudio, enlace_descarga: str | None) -> str:
     numero = estudio.numero or f"#{estudio.pk}"
-    texto = (
+    intro = (
         f"Hola, le informamos que el informe de microbiología de su estudio {numero} "
         f"ya está disponible."
     )
-    if enlace_descarga:
-        texto += f" Descargue su informe PDF aquí: {enlace_descarga}"
-    else:
-        texto += " Puede solicitarlo en la institución."
-    return texto + " Saludos."
+    return _mensaje_whatsapp_con_enlace(
+        intro, enlace_descarga, "Puede solicitarlo en la institución."
+    )
 
 
 def _mensaje_whatsapp_medico_micro(estudio, enlace_descarga: str | None) -> str:
@@ -510,13 +552,11 @@ def _mensaje_whatsapp_medico_micro(estudio, enlace_descarga: str | None) -> str:
     paciente_nombre = ""
     if estudio.paciente_id:
         paciente_nombre = getattr(estudio.paciente, "nombre_completo", "") or ""
-    texto = f"Informe de microbiología {numero}"
+    intro = f"Informe de microbiología {numero}"
     if paciente_nombre:
-        texto += f" (paciente {paciente_nombre})"
-    texto += " disponible."
-    if enlace_descarga:
-        texto += f" PDF: {enlace_descarga}"
-    return texto
+        intro += f" (paciente {paciente_nombre})"
+    intro += " disponible."
+    return _mensaje_whatsapp_con_enlace(intro, enlace_descarga, "Puede consultarlo en el sistema.")
 
 
 def enviar_informe_estudio_micro(
@@ -578,11 +618,18 @@ def enviar_informe_estudio_micro(
     else:
         enlace_descarga = None
     resultado.informe_enlace_descarga = enlace_descarga
+    enlace_wa = url_alcanzable_por_destinatario(enlace_descarga)
 
     if not base_url:
         resultado.advertencias.append(
-            "PUBLIC_API_BASE_URL no configurada: WhatsApp no podrá adjuntar el PDF "
-            "automáticamente (solo enlace en el mensaje si aplica)."
+            "PUBLIC_API_BASE_URL no configurada: el mensaje de WhatsApp no incluirá "
+            "un enlace de descarga. Se abre el chat y se descarga el PDF para adjuntarlo."
+        )
+    elif enlace_descarga and not enlace_wa:
+        resultado.advertencias.append(
+            "El enlace de descarga es local (localhost): WhatsApp no lo vuelve clicable "
+            "y el celular no podría abrirlo. Adjuntá el PDF descargado al chat. "
+            "En el servidor público el mensaje sí lleva el link."
         )
 
     medico_nombre, medico_email, medico_tel_raw = _medico_contacto_estudio(estudio)
@@ -597,7 +644,7 @@ def enviar_informe_estudio_micro(
                 estudio=estudio,
                 pdf_bytes=pdf_bytes,
                 filename=filename,
-                enlace_descarga=enlace_descarga,
+                enlace_descarga=enlace_wa,
                 destinatario_label="paciente",
             )
             resultado.email_enviado = True
@@ -620,7 +667,7 @@ def enviar_informe_estudio_micro(
                 estudio=estudio,
                 pdf_bytes=pdf_bytes,
                 filename=filename,
-                enlace_descarga=enlace_descarga,
+                enlace_descarga=enlace_wa,
                 destinatario_label="medico",
             )
             resultado.email_enviado = True
@@ -641,7 +688,7 @@ def enviar_informe_estudio_micro(
         if not telefono:
             resultado.advertencias.append(sin_tel_msg)
             return
-        media_url = enlace_descarga if enlace_descarga else None
+        media_url = enlace_wa
         enviado_api, error_api = _intentar_twilio_whatsapp(
             telefono,
             mensaje,
@@ -667,14 +714,14 @@ def enviar_informe_estudio_micro(
             if error_api and error_api not in resultado.advertencias:
                 resultado.advertencias.append(error_api)
             resultado.advertencias.append(
-                f"Abra el enlace de WhatsApp ({rol}) y adjunte el PDF descargado manualmente, "
-                "o comparta el enlace de descarga del mensaje."
+                f"Se abrirá WhatsApp ({rol}): confirmá Enviar. "
+                "El PDF se descarga para adjuntarlo si hace falta."
             )
 
     if enviar_whatsapp:
         _enviar_wa(
             telefono_raw=getattr(paciente, "telefono", None),
-            mensaje=_mensaje_whatsapp_paciente_micro(estudio, enlace_descarga),
+            mensaje=_mensaje_whatsapp_paciente_micro(estudio, enlace_wa),
             rol="paciente",
             sin_tel_msg="El paciente no tiene teléfono registrado para WhatsApp.",
         )
@@ -687,7 +734,7 @@ def enviar_informe_estudio_micro(
         else:
             _enviar_wa(
                 telefono_raw=medico_tel_raw,
-                mensaje=_mensaje_whatsapp_medico_micro(estudio, enlace_descarga),
+                mensaje=_mensaje_whatsapp_medico_micro(estudio, enlace_wa),
                 rol="medico",
                 sin_tel_msg=(
                     "El médico solicitante no tiene teléfono registrado para WhatsApp "
@@ -695,7 +742,7 @@ def enviar_informe_estudio_micro(
                 ),
             )
 
-    tiene_fallback_wa = bool(resultado.whatsapp_enlaces and enlace_descarga)
+    tiene_fallback_wa = bool(resultado.whatsapp_enlaces)
     if (
         not resultado.email_enviado
         and not resultado.whatsapp_enviado

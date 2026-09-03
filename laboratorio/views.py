@@ -59,7 +59,7 @@ from .solicitud_cierre import (
     solicitud_resultados_completos,
     solicitud_tiene_algun_resultado,
 )
-from .qc_service import QcGateError
+from .qc_service import QcGateError, verificar_iqc_para_solicitud
 from .informe_entrega_token import InformeEntregaTokenError, verificar_token_entrega_informe
 from .etiquetas_muestra import (
     generar_etiquetas_muestras_pdf_bytes,
@@ -588,6 +588,16 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+
+                # Gate IQC temprano: sin QC ACEPTADO hoy en equipo default no se cargan valores.
+                try:
+                    verificar_iqc_para_solicitud(
+                        solicitud,
+                        actor=request.user,
+                        permitir_override=False,
+                    )
+                except QcGateError as exc:
+                    return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
                 before_solicitud = safe_model_snapshot(solicitud)
 
@@ -1130,18 +1140,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{nombre}"'
         return response
 
-    @action(
-        detail=False,
-        methods=['get'],
-        url_path='informe-entrega',
-        permission_classes=[AllowAny],
-        authentication_classes=[],
-    )
-    def informe_entrega(self, request):
-        """
-        Descarga pública del PDF con token firmado (entrega WhatsApp / enlace al paciente).
-        """
-        token = (request.query_params.get('t') or '').strip()
+    def _responder_informe_entrega(self, token: str):
+        token = (token or '').strip()
         if not token:
             return Response(
                 {'error': 'Token de entrega requerido.'},
@@ -1177,6 +1177,28 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="{nombre}"'
         return response
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='informe-entrega/(?P<token>[^/]+)',
+        permission_classes=[AllowAny],
+        authentication_classes=[],
+    )
+    def informe_entrega_por_token(self, request, token=None):
+        """Descarga pública del PDF (path). WhatsApp autolinkea mejor sin `?t=`."""
+        return self._responder_informe_entrega(token or '')
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='informe-entrega',
+        permission_classes=[AllowAny],
+        authentication_classes=[],
+    )
+    def informe_entrega(self, request):
+        """Compat: descarga pública con `?t=` (enlaces viejos)."""
+        return self._responder_informe_entrega((request.query_params.get('t') or '').strip())
 
     @action(detail=True, methods=['get'], url_path='etiqueta')
     def etiqueta(self, request, pk=None):

@@ -647,12 +647,23 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["get"],
+        url_path="informe-entrega/(?P<token>[^/]+)",
+        permission_classes=[AllowAny],
+        authentication_classes=[],
+    )
+    def informe_entrega_por_token(self, request, token=None):
+        """Descarga pública PDF micro (path, sin query: WhatsApp lo autolinkea)."""
+        return self.informe_entrega(request)
+
+    @action(
+        detail=False,
+        methods=["get"],
         url_path="informe-entrega",
         permission_classes=[AllowAny],
         authentication_classes=[],
     )
     def informe_entrega(self, request):
-        """Descarga pública del PDF micro con token firmado (WhatsApp / enlace)."""
+        """Descarga pública del PDF micro con token (path o `?t=`)."""
         from django.http import HttpResponse
 
         from laboratorio.informe_entrega_token import (
@@ -665,7 +676,14 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             nombre_archivo_pdf_micro,
         )
 
-        token = (request.query_params.get("t") or "").strip()
+        token = (getattr(self, "kwargs", {}) or {}).get("token") or (
+            request.query_params.get("t") or ""
+        )
+        token = (token or "").strip()
+        if token and ":" not in token:
+            from laboratorio.informe_entrega_token import token_micro_desde_segmento
+
+            token = token_micro_desde_segmento(token)
         if not token:
             return Response(
                 {"error": "Token de entrega requerido."},

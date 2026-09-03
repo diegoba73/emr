@@ -4,6 +4,7 @@ Idempotente: usa get_or_create para no duplicar datos si se corre dos veces.
 """
 from datetime import timedelta
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -164,6 +165,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         """Ejecuta el comando."""
         self.stdout.write(self.style.SUCCESS('Iniciando seeding de datos...'))
+
+        self.stdout.write('Cargando tipos de dieta de internación...')
+        call_command('poblar_tipos_dieta')
         
         # ========================================================================
         # 1. INFRAESTRUCTURA

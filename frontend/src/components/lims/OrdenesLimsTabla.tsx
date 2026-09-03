@@ -47,6 +47,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
           <TableCell>Médico</TableCell>
           <TableCell sx={{ minWidth: 180 }}>Origen</TableCell>
           <TableCell>Estado</TableCell>
+          <TableCell>IQC</TableCell>
           <TableCell>{columnaFecha === 'toma' ? 'Muestra tomada' : 'Fecha pedido'}</TableCell>
           <TableCell align="right">Acción</TableCell>
         </TableRow>
@@ -54,7 +55,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={8}>
+            <TableCell colSpan={9}>
               <Typography color="text.secondary">{emptyMessage}</Typography>
             </TableCell>
           </TableRow>
@@ -132,6 +133,17 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     <Typography variant="caption" display="block" color="warning.main">
                       Faltan {r.tubos_pendientes_extraccion.length} tubo(s)
                     </Typography>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {r.tipo !== 'LAB_CLINICO' || !r.iqcStatus || r.iqcStatus === 'na' ? (
+                    <Typography variant="caption" color="text.secondary">
+                      —
+                    </Typography>
+                  ) : r.iqcStatus === 'ok' ? (
+                    <Chip size="small" label="IQC OK" color="success" variant="outlined" />
+                  ) : (
+                    <Chip size="small" label="Falta IQC" color="warning" variant="outlined" />
                   )}
                 </TableCell>
                 <TableCell>{fechaMostrar ? new Date(fechaMostrar).toLocaleString() : '—'}</TableCell>

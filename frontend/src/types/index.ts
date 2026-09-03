@@ -223,6 +223,34 @@ export interface Cama extends BaseModel {
   };
 }
 
+export interface PacienteCabeceraInternacion {
+  paciente_id: number | null;
+  nombre: string;
+  apellido: string;
+  dni: string;
+  edad: number | null;
+  estado_civil: string;
+  obra_social?: string | null;
+  numero_afiliado?: string | null;
+  direccion?: string | null;
+  telefono?: string | null;
+  familiar_nombre: string;
+  familiar_telefono: string;
+  numero_internacion?: string | null;
+  cama?: string | null;
+  sector?: string | null;
+  fecha_ingreso?: string | null;
+  fecha_alta?: string | null;
+}
+
+export interface MedicacionHabitualInternacion {
+  id: number;
+  medicamento: string;
+  dosis_mg_dia: string;
+  fecha: string;
+  registrado_por_nombre?: string | null;
+}
+
 export interface InternacionCama extends BaseModel {
   numero_internacion?: string | null;
   paciente: number;
@@ -237,6 +265,14 @@ export interface InternacionCama extends BaseModel {
   diagnostico_cie_id?: number | null;
   tipo_dieta?: TipoDieta | null;
   tipo_dieta_id?: number | null;
+  alergias?: string;
+  tiene_alergias?: boolean | null;
+  anamnesis_ingreso?: string;
+  examen_fisico_ingreso?: string;
+  medicacion_habitual?: string;
+  plan_estudio_tratamiento?: string;
+  paciente_cabecera?: PacienteCabeceraInternacion;
+  medicaciones_habituales?: MedicacionHabitualInternacion[];
   activo: boolean;
   nombre_paciente?: string;
   nombre_medico?: string | null;

@@ -80,7 +80,7 @@ export interface NavItem {
 
 const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
-  { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: (u) => canAccessPacientes(u) && !isLaboratorioRole(u) },
+  { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessAtenciones },
@@ -89,13 +89,13 @@ const navItems: NavItem[] = [
     text: 'Estudios complementarios',
     icon: <Description />,
     path: '/estudios-complementarios',
-    canAccess: canAccessEstudiosModule,
+    canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),
   },
   {
     text: 'Laboratorio',
     icon: <SolicitudIcon />,
     path: '/solicitudes',
-    canAccess: canAccessSolicitudes,
+    canAccess: (u) => canAccessSolicitudes(u) && !isLaboratorioRole(u),
     resolveLabel: getSolicitudesModuleLabel,
   },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },
@@ -168,8 +168,9 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
   const { currentUser } = useData();
 
   const primary = filterByRole(isPacienteRole(currentUser) ? portalItems : navItems, currentUser);
-  const adminItems = filterByRole(adminOnly, currentUser);
-  const catalogNav = filterByRole(catalogItems, currentUser);
+  // Operadores LIMS: sin Administración ni catálogos clínicos EMR (sí Catálogos LIMS).
+  const adminItems = isLaboratorioRole(currentUser) ? [] : filterByRole(adminOnly, currentUser);
+  const catalogNav = isLaboratorioRole(currentUser) ? [] : filterByRole(catalogItems, currentUser);
   const labNav = isPacienteRole(currentUser) ? [] : filterByRole(labItems, currentUser);
   const labCatalogNav = isPacienteRole(currentUser) ? [] : filterByRole(labCatalogItems, currentUser);
 

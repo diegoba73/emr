@@ -84,11 +84,12 @@ def ruta_informe_entrega() -> str:
 
 
 def construir_url_entrega_informe(base_url: str, solicitud: SolicitudExamen) -> str:
+    """URL de descarga sin query string: WhatsApp no autolinkea `?t=` en el chat."""
     base = (base_url or "").rstrip("/")
     token = solicitud.informe_entrega_token or asignar_token_entrega(
         solicitud, renovar=True
     )
-    return f"{base}{ruta_informe_entrega()}?t={token}"
+    return f"{base}{ruta_informe_entrega()}{token}/"
 
 
 # --- Entrega pública informe microbiológico (token firmado por estudio) ---
@@ -120,7 +121,30 @@ def ruta_informe_entrega_micro() -> str:
     return "/api/lab/microbiologia/estudios/informe-entrega/"
 
 
+def segmento_path_token_micro(token: str) -> str:
+    """El token firmado trae ':'; WhatsApp corta el enlace ahí. Va en base64 url-safe."""
+    from base64 import urlsafe_b64encode
+
+    return urlsafe_b64encode((token or "").encode("ascii")).decode("ascii").rstrip("=")
+
+
+def token_micro_desde_segmento(segmento: str) -> str:
+    from base64 import urlsafe_b64decode
+
+    raw = (segmento or "").strip()
+    if not raw:
+        return raw
+    if ":" in raw:
+        return raw
+    try:
+        pad = "=" * (-len(raw) % 4)
+        decoded = urlsafe_b64decode(raw + pad).decode("ascii")
+    except Exception:
+        return raw
+    return decoded if decoded else raw
+
+
 def construir_url_entrega_informe_micro(base_url: str, estudio_id: int) -> str:
     base = (base_url or "").rstrip("/")
     token = crear_token_entrega_informe_micro(estudio_id)
-    return f"{base}{ruta_informe_entrega_micro()}?t={token}"
+    return f"{base}{ruta_informe_entrega_micro()}{segmento_path_token_micro(token)}/"

@@ -245,6 +245,14 @@ class TestMicroPdfInforme(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertTrue(r.content.startswith(b"%PDF"))
+        from laboratorio.informe_entrega_token import segmento_path_token_micro
+
+        seg = segmento_path_token_micro(tok)
+        r2 = self.client.get(
+            f"/api/lab/microbiologia/estudios/informe-entrega/{seg}/"
+        )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertTrue(r2.content.startswith(b"%PDF"))
 
     def test_entrega_publica_token_invalido(self):
         self.client.logout()

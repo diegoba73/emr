@@ -77,6 +77,22 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
 }
 
 /**
+ * Puede abrir el detalle de una orden (módulo LIMS o portal clínico /solicitudes).
+ * No habilita el listado operativo ni mutaciones de laboratorio.
+ */
+export function canOpenDetalleOrdenLab(user: User | null): boolean {
+  return canAccessLimsModule(user) || canAccessAnalisisClinicoLab(user);
+}
+
+/** Ruta de detalle según rol: operadores LIMS vs lectura clínica. */
+export function pathDetalleOrdenLab(user: User | null, ordenId: number): string {
+  if (canAccessLimsModule(user)) {
+    return `/laboratorio/ordenes/${ordenId}`;
+  }
+  return `/solicitudes/${ordenId}`;
+}
+
+/**
  * Ver valores de resultados en portal clínico (cualquier estado).
  * PDF / envío del informe: solo FINALIZADO (`canDownloadInformeClinicoPdf`).
  */

@@ -32,6 +32,12 @@ class Paciente(models.Model):
         null=True,
         verbose_name="Sexo"
     )
+    estado_civil = models.CharField(
+        max_length=30,
+        blank=True,
+        default='',
+        verbose_name="Estado civil",
+    )
     telefono = models.CharField(max_length=20, blank=True, null=True, verbose_name="Teléfono")
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
     direccion = models.TextField(blank=True, null=True, verbose_name="Dirección")
@@ -39,6 +45,18 @@ class Paciente(models.Model):
     # Información de obra social
     obra_social = models.CharField(max_length=100, blank=True, null=True, verbose_name="Obra Social")
     numero_afiliado = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número de Afiliado")
+    familiar_nombre = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        verbose_name="Familiar (nombre y apellido)",
+    )
+    familiar_telefono = models.CharField(
+        max_length=30,
+        blank=True,
+        default='',
+        verbose_name="Teléfono del familiar",
+    )
     
     # Información médica
     observaciones = models.TextField(blank=True, null=True, verbose_name="Observaciones")

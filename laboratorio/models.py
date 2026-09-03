@@ -81,6 +81,15 @@ class TipoExamen(models.Model):
         related_name="tipos_examen",
         verbose_name="Sección",
     )
+    equipo_analizador = models.ForeignKey(
+        "laboratorio.EquipoAnalizador",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tipos_examen",
+        verbose_name="Equipo analizador",
+        help_text="Analizador donde se procesa esta determinación (CM260, Sysmex, etc.).",
+    )
     tipo_resultado = models.CharField(
         max_length=32,
         choices=TIPO_RESULTADO_CHOICES,
@@ -716,8 +725,11 @@ from laboratorio.models_qc import (  # noqa: E402,F401
     CorridaQC,
     EquipoAnalizador,
     LoteControl,
+    LoteProductoControl,
     MaterialControl,
+    ProductoControl,
     PuntoQC,
+    TargetLoteControl,
 )
 from laboratorio.models_derivacion import (  # noqa: E402,F401
     EstadoDerivacion,

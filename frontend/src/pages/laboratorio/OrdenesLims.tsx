@@ -41,6 +41,7 @@ import {
   mapMicroToPendiente,
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
+import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
 
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
@@ -114,11 +115,12 @@ const OrdenesLims: React.FC = () => {
       } catch {
         micros = [];
       }
+      let merged: PendientePedidoRow[];
       if (buscarPorNumero) {
         const microRows = micros
           .filter((e) => (e.numero || '').toUpperCase() === num.toUpperCase())
           .map(mapMicroToPendiente);
-        setRows([...labs.map(mapLabToPendiente), ...microRows]);
+        merged = [...labs.map(mapLabToPendiente), ...microRows];
       } else {
         let microRows = micros
           .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
@@ -133,8 +135,9 @@ const OrdenesLims: React.FC = () => {
             microRows = [];
           }
         }
-        setRows([...labs.map(mapLabToPendiente), ...microRows]);
+        merged = [...labs.map(mapLabToPendiente), ...microRows];
       }
+      setRows(await attachIqcStatusToRows(merged));
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {

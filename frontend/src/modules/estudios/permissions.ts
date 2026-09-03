@@ -1,6 +1,6 @@
 import type { User } from '../../types';
 import type { EstudioComplementario, InformeEstudioComplementario } from '../../types/estudios';
-import { isProfesionalEstudioRole } from '../../utils/roles';
+import { isOperadorLimsRole, isProfesionalEstudioRole } from '../../utils/roles';
 
 function normalizedRol(user: User | null | undefined): string {
   return (user?.rol || '').toLowerCase();
@@ -8,6 +8,7 @@ function normalizedRol(user: User | null | undefined): string {
 
 function puedeOperarEstudios(user: User | null | undefined): boolean {
   if (!user) return false;
+  if (isOperadorLimsRole(normalizedRol(user))) return false;
   if (user.is_superuser) return true;
   const rol = normalizedRol(user);
   return rol === 'admin' || rol === 'medico' || isProfesionalEstudioRole(rol);
@@ -15,6 +16,8 @@ function puedeOperarEstudios(user: User | null | undefined): boolean {
 
 export function canAccessEstudiosModule(user: User | null | undefined): boolean {
   if (!user) return false;
+  // Laboratorio/bioquímico no usan este módulo: trabajan en LIMS.
+  if (isOperadorLimsRole(normalizedRol(user))) return false;
   if (user.is_superuser) return true;
   const rol = normalizedRol(user);
   return (

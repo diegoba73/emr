@@ -82,6 +82,7 @@ import {
   canAccessLimsOrdenes,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
+  canOpenDetalleOrdenLab,
   canOperateLims,
 } from './utils/limsAccess';
 import { canAccessTurnosAgenda } from './utils/turnoPermissions';
@@ -566,7 +567,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessLimsOrdenes}
+                canAccess={canOpenDetalleOrdenLab}
               >
                 <OrdenLimsDetalle />
               </ProtectedRoute>

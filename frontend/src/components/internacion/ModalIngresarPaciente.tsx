@@ -43,6 +43,7 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   const [diagnosticoTextoLibre, setDiagnosticoTextoLibre] = useState('');
   const [selectedTipoDieta, setSelectedTipoDieta] = useState<TipoDieta | null>(null);
   const [tiposDieta, setTiposDieta] = useState<TipoDieta[]>([]);
+  const [loadingTiposDieta, setLoadingTiposDieta] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -69,6 +70,7 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       setDiagnosticoTextoLibre('');
       setSelectedTipoDieta(null);
       setTiposDieta([]);
+      setLoadingTiposDieta(false);
       setError(null);
       setPacienteOptions([]);
       setMedicoOptions([]);
@@ -104,12 +106,19 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   useEffect(() => {
     if (!open) return;
     let active = true;
+    setLoadingTiposDieta(true);
     getTiposDieta()
       .then((tipos) => {
         if (active) setTiposDieta(tipos);
       })
       .catch(() => {
-        if (active) setTiposDieta([]);
+        if (active) {
+          setTiposDieta([]);
+          setError('No se pudieron cargar los tipos de dieta.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingTiposDieta(false);
       });
     return () => {
       active = false;
@@ -490,20 +499,35 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
 
           <Autocomplete
             options={tiposDieta}
-            getOptionLabel={(option) => option.nombre}
+            getOptionLabel={(option) => option.nombre || ''}
             value={selectedTipoDieta}
             onChange={(_, newValue) => setSelectedTipoDieta(newValue)}
             size="small"
             fullWidth
+            loading={loadingTiposDieta}
+            slotProps={{
+              popper: { sx: { zIndex: 1400 } },
+            }}
             renderInput={(params) => (
               <TextField
                 {...params}
                 label="Tipo de dieta"
                 placeholder="Opcional: hiposódica, diabética, hipotónica…"
+                helperText={
+                  loadingTiposDieta
+                    ? 'Cargando tipos de dieta…'
+                    : tiposDieta.length === 0
+                      ? 'No hay tipos de dieta activos. Revisá Catálogos → Tipos de dieta.'
+                      : undefined
+                }
               />
             )}
             isOptionEqualToValue={(option, value) => option.id === value?.id}
-            noOptionsText="No hay tipos de dieta cargados"
+            noOptionsText={
+              loadingTiposDieta
+                ? 'Cargando tipos de dieta…'
+                : 'No hay tipos de dieta cargados'
+            }
           />
         </>
       </DialogContent>

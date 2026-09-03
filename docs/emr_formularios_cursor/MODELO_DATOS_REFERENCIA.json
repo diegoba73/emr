@@ -1,0 +1,418 @@
+{
+  "metadata": {
+    "source": "Formularios físicos de Historia Clínica de Internación — Instituto de Cardiología Pueblo de Luis",
+    "purpose": "Referencia funcional para comparar y actualizar el EMR",
+    "patient_data_present": false
+  },
+  "forms": [
+    {
+      "id": "01",
+      "name": "Historia Clínica de Internación - ingreso",
+      "image": "imagenes/01_historia_clinica_ingreso_p1.png",
+      "sections": {
+        "admission": [
+          {
+            "field": "record_number",
+            "type": "string"
+          },
+          {
+            "field": "patient_name",
+            "type": "string"
+          },
+          {
+            "field": "age",
+            "type": "integer"
+          },
+          {
+            "field": "marital_status",
+            "type": "string"
+          },
+          {
+            "field": "insurance",
+            "type": "string"
+          },
+          {
+            "field": "insurance_number_or_dni",
+            "type": "string"
+          },
+          {
+            "field": "address",
+            "type": "string"
+          },
+          {
+            "field": "phone",
+            "type": "string"
+          },
+          {
+            "field": "family_contact_name",
+            "type": "string"
+          },
+          {
+            "field": "family_contact_phone",
+            "type": "string"
+          },
+          {
+            "field": "attending_physician",
+            "type": "reference"
+          },
+          {
+            "field": "admitted_at",
+            "type": "datetime"
+          },
+          {
+            "field": "discharged_at",
+            "type": "datetime"
+          }
+        ],
+        "allergies": [
+          {
+            "field": "has_allergies",
+            "type": "boolean"
+          },
+          {
+            "field": "allergy_detail",
+            "type": "text"
+          }
+        ],
+        "clinical": [
+          {
+            "field": "chief_complaint",
+            "type": "text"
+          },
+          {
+            "field": "present_illness",
+            "type": "text"
+          }
+        ],
+        "home_medications": [
+          {
+            "field": "medication",
+            "type": "string",
+            "cardinality": "0..*"
+          },
+          {
+            "field": "dose_mg_day",
+            "type": "decimal",
+            "cardinality": "0..*"
+          }
+        ]
+      }
+    },
+    {
+      "id": "02",
+      "name": "Historia Clínica de Internación - antecedentes y examen inicial",
+      "image": "imagenes/02_historia_clinica_ingreso_p2.png",
+      "sections": {
+        "personal_history_boolean": [
+          "IC",
+          "Angor_IAM",
+          "HTA",
+          "ACV",
+          "EAOP",
+          "Valvulopatias",
+          "Diabetes",
+          "Dislipidemia",
+          "Tabaquismo",
+          "Obesidad",
+          "Gota",
+          "Alcoholismo",
+          "EPOC",
+          "Enfermedad_tiroidea",
+          "Alergias",
+          "Enfermedades_digestivas",
+          "Enfermedades_reumaticas",
+          "Enfermedades_oncologicas",
+          "IRC",
+          "Enfermedades_psiquiatricas",
+          "Cirugias",
+          "Arritmias"
+        ],
+        "family_history": [
+          {
+            "field": "AHF",
+            "type": "text"
+          }
+        ],
+        "physical_exam": [
+          "Estado_general",
+          "Piel",
+          "Psiquis",
+          "Cabeza_cara",
+          "Cuello",
+          "Torax",
+          "Semiologia_pulmonar",
+          "Abdomen",
+          "Examen_neurologico",
+          "Examen_osteoarticular",
+          "Sentidos"
+        ],
+        "cardiovascular": [
+          {
+            "field": "blood_pressure",
+            "type": "blood_pressure"
+          },
+          {
+            "field": "heart_rate",
+            "type": "integer"
+          },
+          {
+            "field": "rhythm",
+            "type": "string"
+          },
+          {
+            "field": "R1",
+            "type": "string"
+          },
+          {
+            "field": "R2",
+            "type": "string"
+          },
+          {
+            "field": "R3",
+            "type": "string"
+          },
+          {
+            "field": "R4",
+            "type": "string"
+          },
+          {
+            "field": "murmur_present",
+            "type": "boolean"
+          },
+          {
+            "field": "murmur_detail",
+            "type": "text"
+          },
+          {
+            "field": "peripheral_pulses",
+            "type": "structured"
+          }
+        ],
+        "assessment_plan": [
+          {
+            "field": "diagnosis",
+            "type": "text"
+          },
+          {
+            "field": "study_treatment_plan",
+            "type": "text"
+          },
+          {
+            "field": "attending_physician",
+            "type": "reference"
+          },
+          {
+            "field": "signature",
+            "type": "signature"
+          }
+        ]
+      }
+    },
+    {
+      "id": "03",
+      "name": "Evolución médica",
+      "image": "imagenes/03_evolucion_medica.png",
+      "record_model": {
+        "repeatable": true,
+        "fields": [
+          "patient",
+          "encounter",
+          "performed_at",
+          "note",
+          "author",
+          "signature_status"
+        ]
+      }
+    },
+    {
+      "id": "04",
+      "name": "Kinesiología",
+      "image": "imagenes/04_kinesiologia.png",
+      "record_model": {
+        "repeatable": true,
+        "fields": [
+          "patient",
+          "encounter",
+          "performed_at",
+          "note",
+          "professional",
+          "signature_status"
+        ]
+      }
+    },
+    {
+      "id": "05",
+      "name": "Indicaciones médicas",
+      "image": "imagenes/05_indicaciones_medicas.png",
+      "record_model": {
+        "repeatable": true,
+        "fields": [
+          "patient",
+          "encounter",
+          "ordered_at",
+          "order_text",
+          "schedule",
+          "prescriber",
+          "status"
+        ]
+      }
+    },
+    {
+      "id": "06",
+      "name": "Controles de enfermería",
+      "image": "imagenes/06_controles_enfermeria.png",
+      "observations": [
+        "temperature",
+        "pulse",
+        "systolic_bp",
+        "diastolic_bp",
+        "respiratory_rate",
+        "glucose",
+        "catarsis"
+      ],
+      "additional_fields": [
+        "glucose_device",
+        "insulin_type",
+        "glucose_test_frequency",
+        "insulin_units_by_result"
+      ]
+    },
+    {
+      "id": "07",
+      "name": "Cumplimiento de Indicaciones Médicas",
+      "image": "imagenes/07_cumplimiento_indicaciones_medicas.png",
+      "record_model": {
+        "repeatable": true,
+        "fields": [
+          "patient",
+          "encounter",
+          "medication_order",
+          "scheduled_at",
+          "administered_at",
+          "dose",
+          "route",
+          "status",
+          "observations",
+          "performed_by",
+          "signature_status"
+        ]
+      }
+    },
+    {
+      "id": "08",
+      "name": "Balance de Terapia Intensiva",
+      "image": "imagenes/08_balance_terapia_intensiva.png",
+      "header_fields": [
+        "patient",
+        "previous_weight",
+        "current_weight",
+        "date",
+        "insurance",
+        "admission_date",
+        "clinical_record_number",
+        "box_number"
+      ],
+      "record_model": {
+        "repeatable": true,
+        "fields": [
+          "event_at",
+          "direction",
+          "category_code",
+          "route_or_source",
+          "volume",
+          "unit",
+          "shift",
+          "note",
+          "recorded_by"
+        ]
+      },
+      "computed": [
+        "hourly_input",
+        "hourly_output",
+        "shift_input",
+        "shift_output",
+        "daily_input",
+        "daily_output",
+        "net_balance"
+      ]
+    },
+    {
+      "id": "09",
+      "name": "Comentarios de enfermería",
+      "image": "imagenes/09_comentarios_enfermeria.png",
+      "record_model": {
+        "repeatable": true,
+        "fields": [
+          "patient",
+          "encounter",
+          "performed_at",
+          "note",
+          "nurse",
+          "signature_status"
+        ]
+      }
+    },
+    {
+      "id": "10",
+      "name": "Laboratorio",
+      "image": "imagenes/10_laboratorio.png",
+      "design_rule": "catalog_of_analytes_plus_results_not_wide_table",
+      "analytes": [
+        "Eritrocitos",
+        "Hematocrito",
+        "Hemoglobina",
+        "Plaquetas",
+        "Leucocitos totales",
+        "Neutrófilos segmentados",
+        "Neutrófilos en cayado",
+        "Eosinófilos",
+        "Monocitos",
+        "Linfocitos",
+        "Basófilos",
+        "Eritrosedimentación",
+        "Quick",
+        "KPTT",
+        "Tiempo de protrombina",
+        "% Protrombina",
+        "RIN",
+        "Urea",
+        "Creatinina",
+        "Uricemia",
+        "Glucemia",
+        "Cuerpos cetónicos",
+        "Bilirrubina directa",
+        "Bilirrubina indirecta",
+        "Bilirrubina total",
+        "Proteínas totales",
+        "Albúmina",
+        "Globulina",
+        "Fosfatasa alcalina",
+        "GGT",
+        "Amilasa",
+        "pH",
+        "PO2",
+        "PCO2",
+        "CO3H",
+        "EB",
+        "Saturación O2",
+        "Na en plasma",
+        "K en plasma",
+        "Calcemia",
+        "Fosfatemia",
+        "CPK",
+        "CPK-MB",
+        "GOT",
+        "LDH",
+        "Troponina T",
+        "Orina - densidad",
+        "Orina - aspecto",
+        "Sedimento urinario",
+        "Proteinuria",
+        "Piuria",
+        "Hematuria",
+        "Cilindros",
+        "Otros"
+      ]
+    }
+  ]
+}

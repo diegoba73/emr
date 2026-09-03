@@ -8,6 +8,7 @@ from .models import Sector, Cama, Internacion, TipoDieta
 from pacientes.models import Paciente
 from medicos.models import Medico
 from catalogos.models import DiagnosticoCIE10
+from internacion.serializers_hc import MedicacionHabitualInternacionSerializer
 
 
 class SectorSerializer(serializers.ModelSerializer):
@@ -61,6 +62,12 @@ class InternacionSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    tiene_alergias = serializers.BooleanField(required=False, allow_null=True)
+    paciente_cabecera = serializers.SerializerMethodField()
+    medicaciones_habituales = MedicacionHabitualInternacionSerializer(many=True, read_only=True)
+    estado_civil = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    familiar_nombre = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    familiar_telefono = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     class Meta:
         model = Internacion
@@ -79,6 +86,17 @@ class InternacionSerializer(serializers.ModelSerializer):
             'diagnostico_ingreso',
             'tipo_dieta',
             'tipo_dieta_id',
+            'alergias',
+            'tiene_alergias',
+            'anamnesis_ingreso',
+            'examen_fisico_ingreso',
+            'medicacion_habitual',
+            'plan_estudio_tratamiento',
+            'paciente_cabecera',
+            'medicaciones_habituales',
+            'estado_civil',
+            'familiar_nombre',
+            'familiar_telefono',
             'activo',
             'nombre_paciente',
             'paciente_nombre',
@@ -114,6 +132,30 @@ class InternacionSerializer(serializers.ModelSerializer):
             elif obj.medico.user:
                 return f"{obj.medico.user.last_name}, {obj.medico.user.first_name}"
         return None
+
+    def get_paciente_cabecera(self, obj):
+        paciente = obj.paciente
+        cama = obj.cama
+        sector = cama.sector.nombre if cama and cama.sector_id else None
+        return {
+            'paciente_id': paciente.pk if paciente else None,
+            'nombre': getattr(paciente, 'nombre', '') or '',
+            'apellido': getattr(paciente, 'apellido', '') or '',
+            'dni': getattr(paciente, 'dni', '') or '',
+            'edad': getattr(paciente, 'edad', None),
+            'estado_civil': getattr(paciente, 'estado_civil', '') or '',
+            'obra_social': getattr(paciente, 'obra_social', None),
+            'numero_afiliado': getattr(paciente, 'numero_afiliado', None),
+            'direccion': getattr(paciente, 'direccion', None),
+            'telefono': getattr(paciente, 'telefono', None),
+            'familiar_nombre': getattr(paciente, 'familiar_nombre', '') or '',
+            'familiar_telefono': getattr(paciente, 'familiar_telefono', '') or '',
+            'numero_internacion': obj.numero_internacion,
+            'cama': cama.nombre if cama else None,
+            'sector': sector,
+            'fecha_ingreso': obj.fecha_ingreso.isoformat() if obj.fecha_ingreso else None,
+            'fecha_alta': obj.fecha_alta.isoformat() if obj.fecha_alta else None,
+        }
     
     def validate(self, data):
         """
@@ -161,8 +203,54 @@ class InternacionSerializer(serializers.ModelSerializer):
                 'diagnostico_cie': 'Debe proporcionar un diagnóstico CIE-10 o un diagnóstico de ingreso (texto libre).',
                 'diagnostico_ingreso': 'Debe proporcionar un diagnóstico CIE-10 o un diagnóstico de ingreso (texto libre).'
             })
-        
+
+        if self.instance is not None:
+            hc_keys = (
+                'alergias',
+                'tiene_alergias',
+                'anamnesis_ingreso',
+                'examen_fisico_ingreso',
+                'medicacion_habitual',
+                'plan_estudio_tratamiento',
+                'motivo_ingreso',
+                'estado_civil',
+                'familiar_nombre',
+                'familiar_telefono',
+            )
+            if any(key in data for key in hc_keys):
+                from api.permissions import get_normalized_role
+                request = self.context.get('request')
+                user = getattr(request, 'user', None)
+                rol = get_normalized_role(user) if user else ''
+                allowed = bool(user and (user.is_superuser or rol in ('admin', 'medico')))
+                if not allowed:
+                    raise serializers.ValidationError(
+                        'Solo el médico puede cargar o editar anamnesis, examen físico, alergias y medicación habitual.'
+                    )
+
         return data
+
+    def update(self, instance, validated_data):
+        estado_civil = validated_data.pop('estado_civil', None)
+        familiar_nombre = validated_data.pop('familiar_nombre', None)
+        familiar_telefono = validated_data.pop('familiar_telefono', None)
+        internacion = super().update(instance, validated_data)
+        paciente = internacion.paciente
+        if paciente is None:
+            return internacion
+        changed = []
+        if estado_civil is not None:
+            paciente.estado_civil = estado_civil
+            changed.append('estado_civil')
+        if familiar_nombre is not None:
+            paciente.familiar_nombre = familiar_nombre
+            changed.append('familiar_nombre')
+        if familiar_telefono is not None:
+            paciente.familiar_telefono = familiar_telefono
+            changed.append('familiar_telefono')
+        if changed:
+            paciente.save(update_fields=changed)
+        return internacion
 
 
     def create(self, validated_data):

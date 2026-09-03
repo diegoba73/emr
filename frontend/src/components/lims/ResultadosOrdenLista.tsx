@@ -10,7 +10,7 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import type { LimsTipoMuestra, MuestraTransaccional, ResultadoExamenLims, SolicitudExamenLims } from '../../types/lims';
+import type { ResultadoExamenLims, SolicitudExamenLims } from '../../types/lims';
 import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
 import { PANEL_HEMOGRAMA } from '../../utils/limsOrdenInforme';
 import ResultadoEstadoBadge from './ResultadoEstadoBadge';
@@ -18,45 +18,22 @@ import ResultadoRangoInfo from './ResultadoRangoInfo';
 
 export interface ResultadosOrdenListaProps {
   resultados: ResultadoExamenLims[];
-  muestras?: MuestraTransaccional[];
-  tiposMuestraMap?: Map<number, LimsTipoMuestra>;
   /** Si se pasa, agrupa filas por panel / perfil inferido. */
   orden?: Pick<SolicitudExamenLims, 'paneles_resumen' | 'tipos_examen' | 'orden_grupos_informe'>;
   /** Conclusión/observaciones: bajo hemograma si hay PAN_HEMO; si no, al final. */
   observaciones?: string | null;
   /**
-   * `laboratorio`: muestra + columnas operativas.
-   * `clinico`: compacto para ficha médica (valor+unidad juntos, sin muestra).
+   * `laboratorio`: columnas operativas (unidad aparte, rango detallado).
+   * `clinico`: compacto para ficha médica (valor+unidad juntos).
    */
   modo?: 'laboratorio' | 'clinico';
 }
 
-function muestraLabel(
-  r: ResultadoExamenLims,
-  muestras: MuestraTransaccional[],
-  tiposMuestraMap: Map<number, LimsTipoMuestra>
-): string {
-  if (r.muestra_id == null) return '—';
-  if (r.tipo_muestra_nombre) {
-    return `#${r.muestra_id} · ${r.tipo_muestra_nombre}${r.muestra_estado ? ` (${r.muestra_estado})` : ''}`;
-  }
-  const m = muestras.find((x) => x.id === r.muestra_id);
-  const tipoNom = m ? tiposMuestraMap.get(m.tipo_muestra)?.nombre : undefined;
-  if (m) {
-    return `#${m.id} · ${tipoNom || `tipo #${m.tipo_muestra}`} · ${m.estado}`;
-  }
-  return `#${r.muestra_id}`;
-}
-
 function ResultadoRow({
   r,
-  muestras,
-  tiposMuestraMap,
   modo,
 }: {
   r: ResultadoExamenLims;
-  muestras: MuestraTransaccional[];
-  tiposMuestraMap: Map<number, LimsTipoMuestra>;
   modo: 'laboratorio' | 'clinico';
 }) {
   const valor = (r.valor_obtenido ?? '').trim();
@@ -109,9 +86,6 @@ function ResultadoRow({
           <ResultadoRangoInfo resultado={r} />
         )}
       </TableCell>
-      {!clinico && (
-        <TableCell>{muestraLabel(r, muestras, tiposMuestraMap)}</TableCell>
-      )}
       <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
         <ResultadoEstadoBadge resultado={r} />
       </TableCell>
@@ -121,8 +95,6 @@ function ResultadoRow({
 
 const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   resultados,
-  muestras = [],
-  tiposMuestraMap = new Map(),
   orden,
   observaciones,
   modo = 'laboratorio',
@@ -177,14 +149,21 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
               </Box>
             )}
             <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
+              <Table
+                size="small"
+                sx={{
+                  '& .MuiTableCell-root': {
+                    textAlign: 'left',
+                    verticalAlign: 'middle',
+                  },
+                }}
+              >
                 <TableHead>
                   <TableRow>
                     <TableCell>Examen</TableCell>
                     <TableCell>{clinico ? 'Resultado' : 'Valor'}</TableCell>
                     {!clinico && <TableCell>Unidad</TableCell>}
                     <TableCell>Referencia</TableCell>
-                    {!clinico && <TableCell>Muestra</TableCell>}
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
@@ -193,8 +172,6 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
                     <ResultadoRow
                       key={r.id}
                       r={r}
-                      muestras={muestras}
-                      tiposMuestraMap={tiposMuestraMap}
                       modo={modo}
                     />
                   ))}

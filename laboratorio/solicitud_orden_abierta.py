@@ -93,6 +93,26 @@ def orden_permite_intentar_agregar_examenes(solicitud: SolicitudExamen) -> bool:
     )
 
 
+MENSAJE_LAB_INTERNACION_SIN_FINALIZAR = (
+    'No se puede solicitar un nuevo análisis: el paciente ya tiene un análisis '
+    'de internación en proceso (no finalizado). Esperá a que el laboratorio lo complete.'
+)
+
+
+def paciente_tiene_analisis_internacion_sin_finalizar(paciente_id: int) -> bool:
+    """True si hay alguna orden de internación que aún no está FINALIZADO."""
+    from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
+
+    return (
+        SolicitudExamen.objects.filter(
+            paciente_id=paciente_id,
+            origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
+        )
+        .exclude(estado='FINALIZADO')
+        .exists()
+    )
+
+
 def paciente_tiene_orden_en_curso(
     paciente_id: int,
     *,

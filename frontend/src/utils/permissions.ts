@@ -96,6 +96,8 @@ export function canAccessPaciente360(user: User | null | undefined): boolean {
 /** Solicitudes genéricas EMR (PERM-01): laboratorio/bioquímico usan LIMS. */
 export function canAccessSolicitudes(user: User | null | undefined): boolean {
   if (!user) return false;
+  // Portal clínico /solicitudes: no para operadores LIMS (ya tienen Laboratorio LIMS).
+  if (isLaboratorioRole(user)) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
   return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico' || rol === 'paciente';
@@ -154,16 +156,16 @@ export function canOperateAtenciones(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico (sin secretaría/enfermería). */
+/** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico (sin secretaría/enfermería/LIMS). */
 export function canAccessCatalogosClinicos(user: User | null | undefined): boolean {
-  if (!user) return false;
+  if (!user || isLaboratorioRole(user)) return false;
   if (isStaffOrAdmin(user)) return true;
   return normalizeRol(user) === 'medico';
 }
 
 /** Edición de catálogos clínicos (secretaría: solo lectura). */
 export function canEditCatalogosClinicos(user: User | null | undefined): boolean {
-  if (!user) return false;
+  if (!user || isLaboratorioRole(user)) return false;
   if (isStaffOrAdmin(user)) return true;
   return normalizeRol(user) === 'medico';
 }
@@ -174,13 +176,13 @@ export function canAccessBiDashboard(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'bioquimico';
 }
 
-/** Panel de internación: médico, enfermería, admin y secretaría (diagnóstico al abrir la cama). */
+/** Panel de internación: médico, enfermería, kinesiólogo, admin y secretaría. */
 export function canAccessInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria';
+  return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria' || rol === 'kinesiologo';
 }
 
 /** Infraestructura de camas/sectores: sin secretaría. */
@@ -208,6 +210,35 @@ export function canDarAltaInternacion(user: User | null | undefined): boolean {
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
   return normalizeRol(user) === 'medico';
+}
+
+/** Hojas médicas de internación (indicaciones, medicación, ingreso, SOAP). */
+export function canWriteHcMedico(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  return normalizeRol(user) === 'medico';
+}
+
+/** Controles, balance y notas de enfermería. */
+export function canWriteHcEnfermeria(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  return normalizeRol(user) === 'enfermeria';
+}
+
+/** Hoja de kinesiología. */
+export function canWriteHcKinesiologia(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  return normalizeRol(user) === 'kinesiologo';
+}
+
+/** Pestaña inicial del modal Gestionar Paciente (0=datos, 1=HC, 2=revista). */
+export function getDefaultInternacionModalTab(user: User | null | undefined): number {
+  if (canWriteHcEnfermeria(user) || canWriteHcKinesiologia(user)) {
+    return 2;
+  }
+  return 0;
 }
 
 /** Portal del paciente — acceso base. */

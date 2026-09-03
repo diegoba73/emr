@@ -114,16 +114,21 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
     useData.mockReturnValue({ currentUser: labStaff });
   });
 
-  it('no muestra enlaces EMR generales', () => {
+  it('no muestra enlaces EMR generales (salvo Pacientes)', () => {
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.queryByText('Pacientes')).not.toBeInTheDocument();
+    expect(screen.getByText('Pacientes')).toBeInTheDocument();
     expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoría')).not.toBeInTheDocument();
+    expect(screen.queryByText('Administración')).not.toBeInTheDocument();
+    expect(screen.queryByText('Catálogos clínicos')).not.toBeInTheDocument();
     expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
+    // Portal clínico (duplicado de LIMS) y estudios: fuera del menú principal.
+    expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Estudios complementarios')).not.toBeInTheDocument();
   });
 
   it('muestra enlaces LIMS', () => {
@@ -146,6 +151,28 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
       </MemoryRouter>
     );
     expect(screen.queryByText('Turnos')).not.toBeInTheDocument();
+  });
+});
+
+describe('Sidebar bioquímico: sin Laboratorio clínico ni Estudios', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'BIOQUIMICO', is_staff: true }) });
+  });
+
+  it('ve Pacientes y LIMS; oculta Estudios, Laboratorio clínico, Administración y catálogos clínicos', () => {
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Pacientes')).toBeInTheDocument();
+    expect(screen.queryByText('Estudios complementarios')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Administración')).not.toBeInTheDocument();
+    expect(screen.queryByText('Catálogos clínicos')).not.toBeInTheDocument();
+    expect(screen.getByText('Laboratorio (LIMS)')).toBeInTheDocument();
+    expect(screen.getByText('Órdenes LIMS')).toBeInTheDocument();
   });
 });
 

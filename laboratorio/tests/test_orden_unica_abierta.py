@@ -284,3 +284,35 @@ class TestOrdenUnicaAbierta(TestCase):
             ResultadoExamen.objects.filter(solicitud_id=sol_id).count(),
             2,
         )
+
+    def test_internacion_bloquea_nueva_orden_si_hay_analisis_en_proceso(self):
+        from laboratorio.origen_solicitud import INTERNACION_UCO
+
+        r1 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.glu.id],
+                "origen_solicitud": INTERNACION_UCO,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        sol = SolicitudExamen.objects.get(pk=r1.data["id"])
+        sol.estado = "EN_PROCESO"
+        sol.save(update_fields=["estado"])
+
+        r2 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.crea.id],
+                "origen_solicitud": INTERNACION_UCO,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
+        self.assertIn("en proceso", str(r2.data).lower())

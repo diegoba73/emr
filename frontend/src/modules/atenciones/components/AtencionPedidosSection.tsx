@@ -8,6 +8,8 @@ interface AtencionPedidosSectionProps {
   canEdit: boolean;
   variant?: 'compact' | 'full';
   pacienteId?: number;
+  showLab?: boolean;
+  showEstudios?: boolean;
 }
 
 /**
@@ -18,6 +20,8 @@ const AtencionPedidosSection: React.FC<AtencionPedidosSectionProps> = ({
   canEdit,
   variant = 'compact',
   pacienteId,
+  showLab = true,
+  showEstudios = true,
 }) => {
   const { consultaHcId, ensuring, error, retry } = useConsultaHcForAtencion(atencionId, canEdit);
 
@@ -73,7 +77,9 @@ const AtencionPedidosSection: React.FC<AtencionPedidosSectionProps> = ({
       pacienteId={pacienteId}
       canEdit={canEdit}
       variant={variant}
-      key={`pedidos-${consultaHcId}-${variant}`}
+      showLab={showLab}
+      showEstudios={showEstudios}
+      key={`pedidos-${consultaHcId}-${variant}-${showLab}-${showEstudios}`}
     />
   );
 };

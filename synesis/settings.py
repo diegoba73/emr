@@ -307,6 +307,9 @@ MEDGEMMA_BASE_URL = os.getenv('MEDGEMMA_BASE_URL', 'http://localhost:11434').str
 MEDGEMMA_MODEL = os.getenv('MEDGEMMA_MODEL', 'medgemma-1.5').strip() or 'medgemma-1.5'
 MEDGEMMA_TIMEOUT_SECONDS = int(os.getenv('MEDGEMMA_TIMEOUT_SECONDS', '30'))
 
+# IQC Fase 1: equipo analizador por defecto (corridas sin equipo no cuentan para el gate).
+IQC_EQUIPO_DEFAULT_CODIGO = os.getenv('IQC_EQUIPO_DEFAULT_CODIGO', 'CM260').strip() or 'CM260'
+
 # Configuración del modelo de usuario personalizado
 AUTH_USER_MODEL = 'usuarios.User'
 

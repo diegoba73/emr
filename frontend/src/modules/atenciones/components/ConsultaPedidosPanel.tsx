@@ -59,6 +59,10 @@ interface ConsultaPedidosPanelProps {
   variant?: 'full' | 'compact';
   /** Borrador local para guardia walk-in (sin consulta HC aún). */
   usePendingDraft?: boolean;
+  /** Mostrar bloque laboratorio (y microbiología). Default true. */
+  showLab?: boolean;
+  /** Mostrar bloque estudios complementarios. Default true. */
+  showEstudios?: boolean;
 }
 
 function buildEstudioCatalogOptions(catalog: TipoEstudioComplementario[]): TipoEstudioComplementario[] {
@@ -98,6 +102,8 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   canEdit,
   variant = 'full',
   usePendingDraft = false,
+  showLab = true,
+  showEstudios = true,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -458,7 +464,9 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
       );
     }
 
-    const totalPendientes = draftLab.length + draftMicro.length + draftEstudios.length;
+    const totalPendientes =
+      (showLab ? draftLab.length + draftMicro.length : 0) +
+      (showEstudios ? draftEstudios.length : 0);
 
     return (
       <Box
@@ -484,6 +492,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
 
           {canEdit && (
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {showLab && (
               <Button
                 size="small"
                 variant="outlined"
@@ -492,6 +501,8 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
               >
                 Solicitar laboratorio
               </Button>
+              )}
+              {showEstudios && (
               <Button
                 size="small"
                 variant="outlined"
@@ -500,12 +511,13 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
               >
                 Solicitar estudio
               </Button>
+              )}
             </Stack>
           )}
 
           {totalPendientes > 0 && (
             <Stack spacing={1}>
-              {draftLab.map((sol) => (
+              {showLab && draftLab.map((sol) => (
                 <Stack
                   key={sol.id}
                   direction="row"
@@ -537,7 +549,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                   )}
                 </Stack>
               ))}
-              {draftMicro.map((sol) => (
+              {showLab && draftMicro.map((sol) => (
                 <Stack
                   key={sol.id}
                   direction="row"
@@ -568,7 +580,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                   )}
                 </Stack>
               ))}
-              {draftEstudios.map((est) => (
+              {showEstudios && draftEstudios.map((est) => (
                 <Stack
                   key={est.id}
                   direction="row"
@@ -628,6 +640,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         </Alert>
       )}
 
+      {showLab && (
       <Box>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>
@@ -734,8 +747,9 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
           </Stack>
         )}
       </Box>
+      )}
 
-      {canEdit && draftMicro.length > 0 && (
+      {showLab && canEdit && draftMicro.length > 0 && (
         <Box>
           <Typography variant="subtitle1" fontWeight={600} mb={1}>
             Microbiología (borrador)
@@ -770,6 +784,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         </Box>
       )}
 
+      {showEstudios && (
       <Box>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>
@@ -872,8 +887,9 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
           </Table>
         )}
       </Box>
+      )}
 
-      {variant === 'full' && pacienteIdEfectivo ? (
+      {showEstudios && variant === 'full' && pacienteIdEfectivo ? (
         <Box>
           <Typography variant="subtitle1" fontWeight={600} mb={1}>
             Estudios del paciente

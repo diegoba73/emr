@@ -127,6 +127,16 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    equipo_analizador_codigo = serializers.CharField(
+        source='equipo_analizador.codigo',
+        read_only=True,
+        allow_null=True,
+    )
+    equipo_analizador_nombre = serializers.CharField(
+        source='equipo_analizador.nombre',
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = TipoExamen
@@ -142,6 +152,9 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'tipo_contenedor_codigo',
             'tipo_contenedor_nombre',
             'seccion',
+            'equipo_analizador',
+            'equipo_analizador_codigo',
+            'equipo_analizador_nombre',
             'tipo_resultado',
             'metodo',
             'unidad_default',
@@ -168,6 +181,8 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'tipo_muestra_codigo',
             'tipo_contenedor_codigo',
             'tipo_contenedor_nombre',
+            'equipo_analizador_codigo',
+            'equipo_analizador_nombre',
             'laboratorio_derivacion_codigo',
             'laboratorio_derivacion_nombre',
         ]
@@ -794,9 +809,12 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         - Si el paciente ya tiene orden abierta (PENDIENTE sin toma), fusiona exámenes.
         - Si no: crea Solicitud + ResultadoExamen (directos y de paneles, sin duplicados).
         """
+        from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
         from laboratorio.solicitud_orden_abierta import (
+            MENSAJE_LAB_INTERNACION_SIN_FINALIZAR,
             agregar_examenes_a_solicitud,
             buscar_orden_abierta,
+            paciente_tiene_analisis_internacion_sin_finalizar,
         )
 
         examenes_ids = validated_data.pop('examenes_ids', [])
@@ -819,6 +837,12 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             )
             solicitud._orden_merged = True
             return solicitud
+
+        origen = validated_data.get('origen_solicitud')
+        if origen in (INTERNACION_UCO, INTERNACION_UCE) and paciente_tiene_analisis_internacion_sin_finalizar(
+            paciente.pk
+        ):
+            raise serializers.ValidationError(MENSAJE_LAB_INTERNACION_SIN_FINALIZAR)
 
         solicitud = SolicitudExamen.objects.create(**validated_data)
         solicitud._orden_merged = False

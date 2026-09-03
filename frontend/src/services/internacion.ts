@@ -205,11 +205,14 @@ export const createInternacion = async (data: {
 };
 
 const unwrapList = <T>(data: T[] | PaginatedResponse<T>): T[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
   const page = data as PaginatedResponse<T>;
   if (Array.isArray(page.results)) {
     return page.results;
   }
-  return Array.isArray(data) ? data : [];
+  return [];
 };
 
 export const getTiposDieta = async (todos = false): Promise<TipoDieta[]> => {
@@ -234,4 +237,114 @@ export const updateTipoDieta = async (id: number, data: Partial<TipoDieta>): Pro
 export const deleteTipoDieta = async (id: number): Promise<void> => {
   await api.delete(`/internacion/tipos-dieta/${id}/`);
 };
+
+export interface RevistaEvolucionItem {
+  atencion_id: number;
+  estado_clinico: string;
+  fecha_admision: string | null;
+  medico_nombre: string | null;
+  tipo_evolucion: string;
+  tipo_evolucion_display: string;
+  fecha_evolucion: string | null;
+  subjetivo?: string | null;
+  objetivo?: string | null;
+  analisis?: string | null;
+  plan?: string | null;
+  signos_vitales_resumen?: string | null;
+  diagnostico_actualizado?: string | null;
+  plan_manejo?: string | null;
+  observaciones?: string | null;
+}
+
+export interface RevistaLabItem {
+  id: number;
+  numero: string | null;
+  estado: string;
+  fecha_solicitud: string | null;
+  es_de_hoy: boolean;
+  tiene_resultados: boolean;
+  examenes: string[];
+  paneles: string[];
+  resultados: Array<{
+    id: number;
+    examen: string | null;
+    valor: string;
+    unidad: string;
+    es_patologico: boolean;
+  }>;
+}
+
+export interface RevistaEstudioItem {
+  id: number;
+  estado: string;
+  modalidad: string;
+  tipo_nombre: string | null;
+  fecha_solicitud: string | null;
+  fecha_realizacion: string | null;
+}
+
+export interface RevistaInternacionContexto {
+  internacion_id: number;
+  paciente_id: number;
+  fecha_ingreso: string | null;
+  diagnostico: string | null;
+  tipo_dieta: string | null;
+  dias_internacion: number | null;
+  evolucion_hoy: RevistaEvolucionItem | null;
+  evoluciones: RevistaEvolucionItem[];
+  laboratorio: RevistaLabItem[];
+  estudios: RevistaEstudioItem[];
+}
+
+export const getRevistaInternacionContexto = async (
+  internacionId: number,
+): Promise<RevistaInternacionContexto> => {
+  const response = await api.get<RevistaInternacionContexto>(
+    `/internacion/internaciones/${internacionId}/contexto-revista/`,
+  );
+  return response.data;
+};
+
+const internacionHc = (internacionId: number, resource: string) =>
+  `/internacion/internaciones/${internacionId}/${resource}/`;
+
+export async function listHcResource<T>(internacionId: number, resource: string): Promise<T[]> {
+  const response = await api.get<T[] | PaginatedResponse<T>>(internacionHc(internacionId, resource));
+  return unwrapList(response.data);
+}
+
+export async function createHcResource<T>(
+  internacionId: number,
+  resource: string,
+  data: Record<string, unknown>,
+): Promise<T> {
+  const response = await api.post<T>(internacionHc(internacionId, resource), data);
+  return response.data;
+}
+
+export async function patchInternacionHcIngreso(
+  internacionId: number,
+  data: {
+    alergias?: string;
+    tiene_alergias?: boolean | null;
+    anamnesis_ingreso?: string;
+    examen_fisico_ingreso?: string;
+    medicacion_habitual?: string;
+    plan_estudio_tratamiento?: string;
+    motivo_ingreso?: string;
+    estado_civil?: string;
+    familiar_nombre?: string;
+    familiar_telefono?: string;
+  },
+): Promise<InternacionCama> {
+  const response = await api.patch<InternacionCama>(
+    `/internacion/internaciones/${internacionId}/`,
+    data,
+  );
+  return response.data;
+}
+
+export async function deleteHcResource(internacionId: number, resource: string, id: number): Promise<void> {
+  await api.delete(internacionHc(internacionId, `${resource.replace(/\/$/, '')}/${id}`));
+}
 

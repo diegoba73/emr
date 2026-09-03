@@ -43,8 +43,13 @@ from laboratorio.views_qc import (
     CalibracionViewSet,
     CorridaQCViewSet,
     EquipoAnalizadorViewSet,
+    IqcPrecheckView,
+    LeveyJenningsExamenView,
     LoteControlViewSet,
+    LoteProductoControlViewSet,
     MaterialControlViewSet,
+    ProductoControlViewSet,
+    TargetLoteControlViewSet,
 )
 from laboratorio.views_lab_codigo import LabCodigoViewSet
 from laboratorio.views_derivacion import LaboratorioDerivacionViewSet
@@ -253,6 +258,21 @@ router.register(
     basename='lab-qc-equipos',
 )
 router.register(
+    r'lab/qc/productos',
+    ProductoControlViewSet,
+    basename='lab-qc-productos',
+)
+router.register(
+    r'lab/qc/lotes-producto',
+    LoteProductoControlViewSet,
+    basename='lab-qc-lotes-producto',
+)
+router.register(
+    r'lab/qc/targets',
+    TargetLoteControlViewSet,
+    basename='lab-qc-targets',
+)
+router.register(
     r'lab/qc/materiales',
     MaterialControlViewSet,
     basename='lab-qc-materiales',
@@ -301,6 +321,11 @@ urlpatterns = [
 
     # BI / KPIs operativos
     path('bi/kpis/', BiKpisView.as_view(), name='bi_kpis'),
+
+    # IQC precheck (gate temprano / bandeja)
+    path('lab/qc/precheck/', IqcPrecheckView.as_view(), name='lab-qc-precheck'),
+    path('lab/qc/precheck-batch/', IqcPrecheckView.as_view(), name='lab-qc-precheck-batch'),
+    path('lab/qc/levey-jennings/', LeveyJenningsExamenView.as_view(), name='lab-qc-levey-jennings'),
     
     # Endpoint público para obtener token CSRF
     path('auth/csrf-token/', views.csrf_token_view, name='csrf_token'),

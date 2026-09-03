@@ -24,12 +24,15 @@ interface EvolucionInternacionFormProps {
   atencionId: number;
   canEdit: boolean;
   onSaveSuccess?: () => void;
+  /** En revista: sin pedidos embebidos; Guardar no cierra la atención. */
+  variant?: 'default' | 'revista';
 }
 
 const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
   atencionId,
   canEdit,
   onSaveSuccess,
+  variant = 'default',
 }) => {
   const { data: atencion, isLoading } = useAtencionQuery(atencionId);
   const [evolucion, setEvolucion] = useState<EvolucionInternacionRecord | null>(null);
@@ -93,9 +96,9 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
   }, [atencion, readDraft]);
 
   useEffect(() => {
-    if (!canEdit || atencion?.fecha_cierre) return;
+    if (!initializedRef.current) return;
     persistDraft(formState);
-  }, [formState, canEdit, atencion?.fecha_cierre, persistDraft]);
+  }, [formState, persistDraft]);
 
   const atencionCerrada = Boolean(atencion?.fecha_cierre || atencion?.estado_clinico === 'FINALIZADA');
   const canSave = canEdit && !atencionCerrada;
@@ -108,6 +111,10 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    await persistEvolucion(variant !== 'revista');
+  };
+
+  const persistEvolucion = async (closeAfter: boolean) => {
     if (!canSave) return;
     try {
       await saveMutation.mutateAsync({
@@ -145,11 +152,13 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
         }
       }
 
-      await closeMutation.mutateAsync(atencionId);
-      try {
-        sessionStorage.removeItem(draftKey);
-      } catch {
-        /* ignore */
+      if (closeAfter) {
+        await closeMutation.mutateAsync(atencionId);
+        try {
+          sessionStorage.removeItem(draftKey);
+        } catch {
+          /* ignore */
+        }
       }
       onSaveSuccess?.();
     } catch {
@@ -182,6 +191,7 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
         </Alert>
       )}
 
+      {variant !== 'revista' && (
       <AtencionPedidosSection
         atencionId={atencionId}
         canEdit={canSave}
@@ -193,6 +203,7 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
               : undefined
         }
       />
+      )}
 
       <Box sx={{ mb: 2 }}>
         <SignosVitalesPanel
@@ -279,18 +290,47 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
       </Stack>
 
       {canSave && (
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={saveMutation.isPending || closeMutation.isPending}
-          >
-            {saveMutation.isPending || closeMutation.isPending ? (
-              <CircularProgress size={22} color="inherit" />
-            ) : (
-              'Guardar y cerrar evolución'
-            )}
-          </Button>
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+          {variant === 'revista' ? (
+            <>
+              <Button
+                type="button"
+                variant="outlined"
+                disabled={saveMutation.isPending || closeMutation.isPending}
+                onClick={() => persistEvolucion(false)}
+              >
+                {saveMutation.isPending ? (
+                  <CircularProgress size={22} color="inherit" />
+                ) : (
+                  'Guardar'
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="contained"
+                disabled={saveMutation.isPending || closeMutation.isPending}
+                onClick={() => persistEvolucion(true)}
+              >
+                {closeMutation.isPending ? (
+                  <CircularProgress size={22} color="inherit" />
+                ) : (
+                  'Cerrar evolución del día'
+                )}
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={saveMutation.isPending || closeMutation.isPending}
+            >
+              {saveMutation.isPending || closeMutation.isPending ? (
+                <CircularProgress size={22} color="inherit" />
+              ) : (
+                'Guardar y cerrar evolución'
+              )}
+            </Button>
+          )}
         </Box>
       )}
     </Box>

@@ -26,6 +26,8 @@ export interface PendientePedidoRow {
   muestra_nombre?: string | null;
   /** Solo Lab: fila original para TomarMuestra / agregar. */
   labOrden?: SolicitudExamenLims;
+  /** IQC Fase 1: ok / falta / na (sin materiales QC). */
+  iqcStatus?: 'ok' | 'falta' | 'na';
 }
 
 export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {

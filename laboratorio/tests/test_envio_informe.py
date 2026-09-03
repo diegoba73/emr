@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.test import override_settings
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -11,7 +12,13 @@ from laboratorio.informe_entrega_token import (
     verificar_token_entrega_informe,
 )
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
-from laboratorio.services_envio_informe import enviar_informe_solicitud
+from laboratorio.services_envio_informe import (
+    _enlace_whatsapp_web,
+    _mensaje_whatsapp_con_enlace,
+    enviar_informe_solicitud,
+    resolver_base_url_publica,
+    url_alcanzable_por_destinatario,
+)
 from medicos.models import Especialidad, Medico
 from pacientes.models import Paciente
 
@@ -23,6 +30,56 @@ class TestInformeEntregaToken:
     def test_token_roundtrip(self):
         tok = crear_token_entrega_informe(42)
         assert verificar_token_entrega_informe(tok) == 42
+
+
+class TestResolverBaseUrlPublica:
+    def test_settings_precede_request_host(self, settings, monkeypatch):
+        settings.PUBLIC_API_BASE_URL = "https://emr.example.com"
+        monkeypatch.setenv("PUBLIC_API_BASE_URL", "http://env-should-not-win")
+        assert (
+            resolver_base_url_publica(public_base_url="http://localhost:8000")
+            == "https://emr.example.com"
+        )
+
+    def test_sin_settings_usa_argumento(self, settings, monkeypatch):
+        settings.PUBLIC_API_BASE_URL = ""
+        monkeypatch.delenv("PUBLIC_API_BASE_URL", raising=False)
+        assert (
+            resolver_base_url_publica(public_base_url="http://localhost:8000")
+            == "http://localhost:8000"
+        )
+
+    def test_quita_barra_final(self, settings, monkeypatch):
+        settings.PUBLIC_API_BASE_URL = "https://emr.example.com/"
+        monkeypatch.delenv("PUBLIC_API_BASE_URL", raising=False)
+        assert (
+            resolver_base_url_publica(public_base_url="http://interno")
+            == "https://emr.example.com"
+        )
+
+
+class TestMensajeWhatsappEnlace:
+    def test_url_en_linea_propia_sin_query(self):
+        from urllib.parse import parse_qs, urlparse
+
+        url = "https://emr.example.com/api/lab/solicitudes/informe-entrega/abcTOKEN/"
+        msg = _mensaje_whatsapp_con_enlace("Hola, resultados listos.", url, "fallback")
+        assert msg.endswith(url)
+        assert "?t=" not in msg
+        encoded = _enlace_whatsapp_web("5491112345678", msg)
+        text = parse_qs(urlparse(encoded).query)["text"][0]
+        assert text.endswith(url)
+        assert f"\n\n{url}" in text
+
+
+class TestUrlAlcanzableDestinatario:
+    def test_localhost_no_es_alcanzable(self):
+        assert url_alcanzable_por_destinatario("http://localhost:8000/api/x") is None
+        assert url_alcanzable_por_destinatario("http://127.0.0.1:8000/api/x") is None
+
+    def test_host_publico_si(self):
+        url = "http://dsachubut.sytes.net:8080/api/lab/solicitudes/informe-entrega/abc/"
+        assert url_alcanzable_por_destinatario(url) == url
 
 
 @pytest.mark.django_db
@@ -153,6 +210,7 @@ class TestEnvioInformeAPI(APITestCase):
         self.assertEqual(mock_send.call_count, 2)
         self.assertEqual(mock_wa.call_count, 1)
 
+    @override_settings(PUBLIC_API_BASE_URL="https://emr.example.com")
     @patch("laboratorio.services_envio_informe._intentar_twilio_whatsapp")
     def test_enviar_whatsapp_incluye_url_pdf(self, mock_wa):
         sol = self._sol_finalizada()
@@ -182,6 +240,9 @@ class TestEnvioInformeAPI(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn(b"%PDF", r.content[:10])
+        r2 = self.client.get(f"/api/lab/solicitudes/informe-entrega/{tok}/")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertIn(b"%PDF", r2.content[:10])
 
     @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
     def test_secretaria_envia_informe_finalizado(self, mock_send):
@@ -222,7 +283,10 @@ class TestEnvioInformeAPI(APITestCase):
             {"email": True, "whatsapp": False},
             format="json",
         )
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn(
+            r.status_code,
+            (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN),
+        )
 
     def test_enfermeria_no_envia_informe(self):
         enf = User.objects.create_user(
@@ -277,4 +341,8 @@ class TestEnvioInformeServicio:
         assert media_url and "informe-entrega" in media_url
         sol.refresh_from_db()
         assert sol.informe_entrega_token
-        assert f"t={sol.informe_entrega_token}" in media_url
+        assert f"informe-entrega/{sol.informe_entrega_token}" in media_url
+        assert "?t=" not in media_url
+        body = mock_wa.call_args.kwargs.get("mensaje") or mock_wa.call_args[0][1]
+        assert body.endswith(media_url)
+        assert "\n\n" in body

@@ -4,26 +4,34 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   Tab,
   Tabs,
+  TextField,
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
 import { resolveNavBack } from '../../utils/navBack';
 import {
   downloadInformeLimsPdf,
+  getIqcPrecheck,
   getSolicitudExamen,
   listMuestrasPorSolicitud,
   postMarcarDerivacion,
   postValidarSolicitud,
+  type IqcPrecheckResult,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
+  canAccessAnalisisClinicoLab,
   canAccessLimsModule,
   canAccessLimsOrdenDetalle,
   canDownloadInformeLimsPdf,
@@ -31,6 +39,7 @@ import {
   canOperateLims,
   canValidarOrdenLims,
 } from '../../utils/limsAccess';
+import { normalizeRol } from '../../utils/permissions';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import {
   estadoOrdenColor,
@@ -64,11 +73,17 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
   const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
+  const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
+  const [qcOverrideOpen, setQcOverrideOpen] = useState(false);
+  const [qcOverrideMotivo, setQcOverrideMotivo] = useState('');
+  const [pendingCriticos, setPendingCriticos] = useState(false);
 
   const allowed = canAccessLimsModule(currentUser);
   const canVerOrden = orden ? canAccessLimsOrdenDetalle(currentUser, orden.estado) : true;
   const canOp = canOperateLims(currentUser);
   const canValidar = canValidarOrdenLims(currentUser);
+  const canQcOverride =
+    Boolean(currentUser?.is_superuser) || normalizeRol(currentUser) === 'admin';
   const canEnviar = canEnviarInformeLims(currentUser, orden?.estado);
   const canPdf = canDownloadInformeLimsPdf(currentUser, orden?.estado);
   const back = resolveNavBack(location.state, {
@@ -105,6 +120,11 @@ const OrdenLimsDetalle: React.FC = () => {
       const m = await listMuestrasPorSolicitud(oid, o.numero);
       setOrden(o);
       setMuestras(m);
+      try {
+        setIqcPrecheck(await getIqcPrecheck(oid));
+      } catch {
+        setIqcPrecheck(null);
+      }
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrden));
       setOrden(null);
@@ -131,6 +151,40 @@ const OrdenLimsDetalle: React.FC = () => {
     }
   };
 
+  const runValidar = async (opts: {
+    confirmar_criticos?: boolean;
+    confirmar_qc_override?: boolean;
+    motivo_qc_override?: string;
+  }) => {
+    if (!orden) return;
+    setValidando(true);
+    try {
+      const updated = await postValidarSolicitud(orden.id, opts);
+      setOrden(updated);
+      toast.success('Orden validada y liberada');
+      setQcOverrideOpen(false);
+      setQcOverrideMotivo('');
+      try {
+        const fresh = await getSolicitudExamen(updated.id);
+        setOrden(fresh);
+        setIqcPrecheck(await getIqcPrecheck(fresh.id));
+      } catch {
+        /* keep updated */
+      }
+    } catch (e) {
+      const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado);
+      if (canQcOverride && /control de calidad no vigente/i.test(msg)) {
+        setPendingCriticos(Boolean(opts.confirmar_criticos));
+        setQcOverrideOpen(true);
+        toast.error(msg);
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setValidando(false);
+    }
+  };
+
   const handleValidar = async () => {
     if (!orden) return;
     const resultados = orden.resultados || [];
@@ -141,25 +195,12 @@ const OrdenLimsDetalle: React.FC = () => {
       );
       if (!ok) return;
     }
-    setValidando(true);
-    try {
-      const updated = await postValidarSolicitud(orden.id, {
-        confirmar_criticos: tieneAlertas,
-      });
-      setOrden(updated);
-      toast.success('Orden validada y liberada');
-      try {
-        const fresh = await getSolicitudExamen(updated.id);
-        setOrden(fresh);
-      } catch {
-        /* keep updated */
-      }
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado));
-    } finally {
-      setValidando(false);
-    }
+    await runValidar({ confirmar_criticos: tieneAlertas });
   };
+
+  if (!allowed && canAccessAnalisisClinicoLab(currentUser) && id) {
+    return <Navigate to={`/solicitudes/${id}`} replace state={location.state} />;
+  }
 
   if (!allowed) {
     return (
@@ -220,6 +261,14 @@ const OrdenLimsDetalle: React.FC = () => {
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h5">Orden {orden.numero || orden.id}</Typography>
         <Chip label={labelEstadoOrdenLims(e)} color={estadoOrdenColor(e)} />
+        <Typography variant="body1" fontWeight={600}>
+          {orden.paciente_nombre || `Paciente #${orden.paciente}`}
+          {orden.paciente_dni ? (
+            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+              DNI {orden.paciente_dni}
+            </Typography>
+          ) : null}
+        </Typography>
         {!resultadosCompletos && progreso.conValor > 0 && (
           <Chip
             size="small"
@@ -244,6 +293,19 @@ const OrdenLimsDetalle: React.FC = () => {
           </Typography>
         )}
       </Box>
+
+      {iqcPrecheck?.aplicable && !iqcPrecheck.ok && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          IQC no vigente
+          {iqcPrecheck.equipos?.length
+            ? ` (${iqcPrecheck.equipos.map((e) => e.codigo).join(', ')})`
+            : iqcPrecheck.equipo
+              ? ` (${iqcPrecheck.equipo.codigo})`
+              : ''}
+          : {iqcPrecheck.problemas.join('; ')}. Registrá corridas ACEPTADAS en el equipo
+          correspondiente (Control de calidad) antes de cargar o liberar.
+        </Alert>
+      )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" gutterBottom>
@@ -482,6 +544,43 @@ const OrdenLimsDetalle: React.FC = () => {
         onClose={() => setOpenEnviarInforme(false)}
         onSuccess={(o) => setOrden(o)}
       />
+
+      <Dialog open={qcOverrideOpen} onClose={() => !validando && setQcOverrideOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Forzar liberación sin IQC vigente</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Solo administrador. Indicá el motivo (queda auditado).
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            label="Motivo del override"
+            value={qcOverrideMotivo}
+            onChange={(e) => setQcOverrideMotivo(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQcOverrideOpen(false)} disabled={validando}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={validando || !qcOverrideMotivo.trim()}
+            onClick={() =>
+              void runValidar({
+                confirmar_criticos: pendingCriticos,
+                confirmar_qc_override: true,
+                motivo_qc_override: qcOverrideMotivo.trim(),
+              })
+            }
+          >
+            {validando ? 'Validando…' : 'Forzar y liberar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

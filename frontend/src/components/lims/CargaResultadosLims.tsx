@@ -4,12 +4,8 @@ import {
   Box,
   Button,
   Chip,
-  FormControl,
   IconButton,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Table,
   TableBody,
   TableCell,
@@ -25,17 +21,17 @@ import toast from 'react-hot-toast';
 import type {
   HistorialAnalitoPrevioLims,
   LimsTipoExamen,
-  LimsTipoMuestra,
   MuestraTransaccional,
   SolicitudExamenLims,
 } from '../../types/lims';
 import {
   getHistorialAnalitos,
+  getIqcPrecheck,
   getTiposExamenMap,
-  listTiposMuestraLims,
   patchOrdenInformeOrden,
   postCargarResultados,
   postSugerirConclusionHemograma,
+  type IqcPrecheckResult,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
@@ -55,9 +51,7 @@ import {
   draftRowHasValue,
   draftSysmexTicketFromResultado,
   filterMuestrasProcesables,
-  formatMuestraSelectLabel,
   getTipoExamenCatalog,
-  muestrasCompatiblesParaTipo,
   suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
   validateCargaResultadosValores,
@@ -81,6 +75,21 @@ export interface CargaResultadosLimsProps {
   /** Si false, oculta el formulario de carga/edición (solo lectura). */
   permitirEdicion?: boolean;
   onGuardado: (o: SolicitudExamenLims) => void;
+}
+
+/** Anchos fijos para que Valor/Unidad/Referencia alineen entre paneles. */
+const CARGA_COL_WIDTHS_STD = ['34%', '28%', '12%', '20%', '52px'] as const;
+const CARGA_COL_WIDTHS_TICKET = ['28%', '18%', '14%', '12%', '20%', '52px'] as const;
+
+function CargaColGroup({ ticket }: { ticket: boolean }) {
+  const widths = ticket ? CARGA_COL_WIDTHS_TICKET : CARGA_COL_WIDTHS_STD;
+  return (
+    <colgroup>
+      {widths.map((w, i) => (
+        <col key={i} style={{ width: w }} />
+      ))}
+    </colgroup>
+  );
 }
 
 /** Claves de foco para navegación con Enter en la grilla de carga. */
@@ -143,13 +152,13 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   const [draft, setDraft] = useState<Record<number, DraftCargaRow>>({});
   const [observacionesOrden, setObservacionesOrden] = useState('');
   const [saving, setSaving] = useState(false);
+  const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
   const [sugeriendo, setSugeriendo] = useState(false);
   const [sugerenciaMeta, setSugerenciaMeta] = useState<{
     fuente: string;
     marcado: boolean;
   } | null>(null);
   const [tiposExamenMap, setTiposExamenMap] = useState<Map<number, LimsTipoExamen>>(new Map());
-  const [tiposMuestraMap, setTiposMuestraMap] = useState<Map<number, LimsTipoMuestra>>(new Map());
   const [previosPorTipo, setPreviosPorTipo] = useState<Map<number, HistorialAnalitoPrevioLims[]>>(
     new Map()
   );
@@ -230,10 +239,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        const [te, tm] = await Promise.all([getTiposExamenMap(), listTiposMuestraLims()]);
+        const te = await getTiposExamenMap();
         if (cancelled) return;
         setTiposExamenMap(te);
-        setTiposMuestraMap(new Map(tm.map((t) => [t.id, t])));
       } catch {
         if (!cancelled) {
           toast.error('No se pudo cargar el catálogo de exámenes.');
@@ -318,6 +326,23 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
 
   const progreso = useMemo(() => countResultadosConValor(orden), [orden]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const p = await getIqcPrecheck(orden.id);
+        if (!cancelled) setIqcPrecheck(p);
+      } catch {
+        if (!cancelled) setIqcPrecheck(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orden.id, orden.estado]);
+
+  const iqcBloqueaCarga = Boolean(iqcPrecheck?.aplicable && !iqcPrecheck.ok);
+
   const editable =
     permitirEdicion &&
     canOperate &&
@@ -392,6 +417,15 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   };
 
   const handleGuardar = async (informarParcial = false) => {
+    if (iqcBloqueaCarga) {
+      toast.error(
+        iqcPrecheck?.problemas?.length
+          ? `IQC no vigente: ${iqcPrecheck.problemas.join('; ')}`
+          : 'IQC no vigente. Ejecutá control de calidad antes de cargar resultados.'
+      );
+      return;
+    }
+
     const filasAGuardar = resultados.filter((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const row = draft[r.id] || emptyDraft();
@@ -475,13 +509,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     ) => {
       const row = draft[r.id] || emptyDraft();
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
-      const requiereMuestra = !!te?.requiere_muestra;
-      const opcionesMuestra = muestrasCompatiblesParaTipo(
-        muestrasProcesables,
-        te?.tipo_muestra_requerida,
-        te?.tipo_contenedor
-      );
-      const sinOpciones = requiereMuestra && opcionesMuestra.length === 0;
       const ticketEntry = usesTicketEntry(te, r.tipo_examen_codigo);
       const informePreview = ticketEntry
         ? previewTicketInforme(te, row.valor_sysmex, r.tipo_examen_codigo)
@@ -503,14 +530,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             <Typography variant="caption" color="text.secondary" display="block">
               {r.tipo_examen_codigo}
             </Typography>
-            <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {requiereMuestra && (
-                <Chip size="small" color="warning" label="Requiere muestra" variant="outlined" />
-              )}
-              {te?.tipo_muestra_nombre && (
-                <Chip size="small" label={`Tipo requerido: ${te.tipo_muestra_nombre}`} variant="outlined" />
-              )}
-              {r.estado_derivacion && r.estado_derivacion !== 'LOCAL' && (
+            {r.estado_derivacion && r.estado_derivacion !== 'LOCAL' && (
+              <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                 <Chip
                   size="small"
                   color="info"
@@ -521,8 +542,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                       : ''
                   }`}
                 />
-              )}
-            </Box>
+              </Box>
+            )}
             {previos.length > 0 && (
               <Box sx={{ mt: 0.75, display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }}>
@@ -539,12 +560,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                 ))}
               </Box>
             )}
-          </TableCell>
-          <TableCell sx={{ maxWidth: 140 }}>
-            <ResultadoRangoInfo resultado={r} />
-          </TableCell>
-          <TableCell sx={{ whiteSpace: 'nowrap' }}>
-            <Typography variant="body2">{unidadLabel}</Typography>
           </TableCell>
           {ticketEntry ? (
             <>
@@ -567,7 +582,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                         ? 'Enter → siguiente'
                         : 'Ticket Sysmex sin decimal · Enter → siguiente'
                     }
-                    sx={{ minWidth: 88, flex: '1 1 auto' }}
+                    sx={{ minWidth: 88, flex: '1 1 auto', width: '100%' }}
                   />
                   {mostrarIndicadorFormula && (
                     <Chip
@@ -593,56 +608,31 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               </TableCell>
             </>
           ) : (
-            <>
-              <TableCell>
-                <TextField
-                  size="small"
-                  value={row.valor}
-                  onChange={(ev) => setRow(r.id, { valor: ev.target.value })}
-                  onKeyDown={handleEnterNext(valorFocusKey)}
-                  placeholder="Ej. 120 o Positivo · Enter → siguiente"
-                  inputProps={{ 'data-carga-focus': valorFocusKey }}
-                />
-              </TableCell>
-            </>
+            <TableCell>
+              <TextField
+                size="small"
+                fullWidth
+                value={row.valor}
+                onChange={(ev) => setRow(r.id, { valor: ev.target.value })}
+                onKeyDown={handleEnterNext(valorFocusKey)}
+                placeholder="Ej. 120 o Positivo · Enter → siguiente"
+                inputProps={{ 'data-carga-focus': valorFocusKey }}
+              />
+            </TableCell>
           )}
-          <TableCell sx={{ minWidth: 220 }}>
-            <FormControl size="small" fullWidth error={sinOpciones && row.muestra_id == null}>
-              <InputLabel>Muestra</InputLabel>
-              <Select
-                label="Muestra"
-                value={row.muestra_id == null ? '' : String(row.muestra_id)}
-                onChange={(ev) => {
-                  const raw = ev.target.value;
-                  const str = typeof raw === 'number' ? String(raw) : raw;
-                  setRow(r.id, { muestra_id: str === '' ? null : Number(str) });
-                }}
-              >
-                {!requiereMuestra && (
-                  <MenuItem value="">
-                    <em>Sin muestra</em>
-                  </MenuItem>
-                )}
-                {opcionesMuestra.map((m) => (
-                  <MenuItem key={m.id} value={m.id}>
-                    {formatMuestraSelectLabel(m, tiposMuestraMap.get(m.tipo_muestra)?.nombre)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {sinOpciones && (
-              <Typography variant="caption" color="error" display="block">
-                Sin muestras compatibles. Tomá la muestra desde acciones de orden.
-              </Typography>
-            )}
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+            <Typography variant="body2">{unidadLabel}</Typography>
+          </TableCell>
+          <TableCell>
+            <ResultadoRangoInfo resultado={r} />
           </TableCell>
           {showOrden && (
             <TableCell
               rowSpan={ordenOpts.ordenRowSpan}
-              align="right"
+              align="left"
               sx={{ verticalAlign: 'middle', width: 52, px: 0.5 }}
             >
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                 <IconButton
                   size="small"
                   aria-label="Subir en informe"
@@ -669,9 +659,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     },
     [
       draft,
-      muestrasProcesables,
       tiposExamenMap,
-      tiposMuestraMap,
       resolveUnidad,
       handleEnterNext,
       formulaProgress,
@@ -693,34 +681,10 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
 
   return (
     <Box>
-      <Typography variant="h6" sx={{ mb: 1 }}>
-        Resultados cargados
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Fuera de rango y crítico se calculan automáticamente al guardar cuando el valor es numérico
-        (o viene del ticket Sysmex), según las referencias del catálogo.
-      </Typography>
-      <Box sx={{ mb: 3 }}>
-        <ResultadosOrdenLista
-          resultados={resultados}
-          muestras={muestras}
-          tiposMuestraMap={tiposMuestraMap}
-          orden={orden}
-          observaciones={orden.observaciones}
-        />
-      </Box>
-
-      <AnalisisLongitudinalPanel
-        ordenId={orden.id}
-        estadoOrden={orden.estado}
-        totalResultados={progreso.conValor}
-        resultadosFingerprint={analisisFingerprint}
-      />
-
-      {editable && (
+      {editable ? (
         <>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
-            <Typography variant="h6">Cargar / editar</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Typography variant="h6">Resultados</Typography>
             <Chip
               size="small"
               label={`${progreso.conValor}/${progreso.total} resultados`}
@@ -729,13 +693,31 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             />
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Usá las flechas a la derecha para ordenar paneles y exámenes en el informe (los paneles se
-            mueven completos). Por defecto: hemograma primero, orina al final.
+            Fuera de rango y crítico se calculan al guardar. Usá las flechas a la derecha para ordenar
+            paneles en el informe (por defecto: hemograma primero, orina al final).
           </Typography>
           {muestrasProcesables.length === 0 && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               No hay muestras listas para asociar. Usá <strong>Imprimir etiquetas</strong> y luego
               confirmá el ingreso escaneando en <strong>Recepción</strong>.
+            </Alert>
+          )}
+          {iqcBloqueaCarga && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight={600}>
+                IQC no vigente — no se pueden guardar resultados
+                {iqcPrecheck?.equipos?.length
+                  ? ` (${iqcPrecheck.equipos.map((e) => e.codigo).join(', ')})`
+                  : iqcPrecheck?.equipo
+                    ? ` (${iqcPrecheck.equipo.codigo})`
+                    : ''}
+                .
+              </Typography>
+              <Typography variant="body2" component="span">
+                {(iqcPrecheck?.problemas || []).join('; ')}. Andá a{' '}
+                <strong>Control de calidad</strong>, registrá corridas ACEPTADAS en cada equipo
+                indicado y volvé a intentar.
+              </Typography>
             </Alert>
           )}
           {grupos.map((grupo) => {
@@ -774,12 +756,24 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                   </Alert>
                 )}
                 <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
-                  <Table size="small">
+                  <Table
+                    size="small"
+                    sx={{
+                      tableLayout: 'fixed',
+                      width: '100%',
+                      '& .MuiTableCell-root': {
+                        textAlign: 'left',
+                        verticalAlign: 'top',
+                      },
+                      '& tbody .MuiTableCell-root[rowspan]': {
+                        verticalAlign: 'middle',
+                      },
+                    }}
+                  >
+                    <CargaColGroup ticket={usaTicket} />
                     <TableHead>
                       <TableRow>
                         <TableCell>Examen</TableCell>
-                        <TableCell>Referencia</TableCell>
-                        <TableCell>Unidad</TableCell>
                         {usaTicket ? (
                           <>
                             <TableCell>Valor ticket</TableCell>
@@ -788,10 +782,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                         ) : (
                           <TableCell>Valor</TableCell>
                         )}
-                        <TableCell>Muestra</TableCell>
-                        <TableCell align="right" sx={{ width: 52 }}>
-                          Informe
-                        </TableCell>
+                        <TableCell>Unidad</TableCell>
+                        <TableCell>Referencia</TableCell>
+                        <TableCell align="left">Informe</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -885,9 +878,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               ref={guardarBtnRef}
               variant="contained"
               onClick={() => void handleGuardar(false)}
-              disabled={saving}
+              disabled={saving || iqcBloqueaCarga}
               onKeyDown={(ev) => {
-                if (ev.key === 'Enter' && !saving) {
+                if (ev.key === 'Enter' && !saving && !iqcBloqueaCarga) {
                   ev.preventDefault();
                   void handleGuardar(false);
                 }
@@ -899,7 +892,12 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               variant="outlined"
               color="info"
               onClick={() => void handleGuardar(true)}
-              disabled={saving || progreso.conValor === 0 || progreso.conValor >= progreso.total}
+              disabled={
+                saving ||
+                iqcBloqueaCarga ||
+                progreso.conValor === 0 ||
+                progreso.conValor >= progreso.total
+              }
             >
               Guardar e informar parcialmente
             </Button>
@@ -920,47 +918,65 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           </Typography>
           )}
         </>
+      ) : (
+        <>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Resultados
+          </Typography>
+          <Box sx={{ mb: 2 }}>
+            <ResultadosOrdenLista
+              resultados={resultados}
+              orden={orden}
+              observaciones={orden.observaciones}
+              modo="clinico"
+            />
+          </Box>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {orden.estado === 'PENDIENTE' ? (
+              <>
+                La orden está <strong>pendiente</strong>. Usá <strong>Imprimir etiquetas</strong> y confirmá
+                la recepción escaneando cada tubo en <strong>Recepción</strong> antes de cargar resultados.
+              </>
+            ) : orden.estado === 'INFORMADO_PARCIAL' && !permitirEdicion ? (
+              <>
+                La orden está <strong>informada parcialmente</strong>. Podés seguir cargando resultados.
+                El informe PDF solo se descarga o envía después de la validación del bioquímico.
+              </>
+            ) : orden.estado === 'FINALIZADO' ? (
+              <>
+                Orden <strong>validada y bloqueada</strong>
+                {(() => {
+                  const val = (orden.resultados || []).find((r) => r.validado_por_nombre || r.fecha_validacion);
+                  if (!val) return null;
+                  const quien = val.validado_por_nombre || 'bioquímico';
+                  const cuando = val.fecha_validacion
+                    ? new Date(val.fecha_validacion).toLocaleString('es-AR')
+                    : '';
+                  return (
+                    <>
+                      {' '}
+                      — Validado por <strong>{quien}</strong>
+                      {cuando ? ` (${cuando})` : ''}.
+                    </>
+                  );
+                })()}{' '}
+                Los resultados no se pueden modificar.
+              </>
+            ) : !canOperate ? (
+              'Solo lectura: se requiere rol laboratorio, bioquímico o administrador para cargar resultados.'
+            ) : (
+              'La carga de valores no está disponible en el estado actual de la orden.'
+            )}
+          </Alert>
+        </>
       )}
 
-      {!editable && (
-        <Alert severity="info" sx={{ mt: 2 }}>
-          {orden.estado === 'PENDIENTE' ? (
-            <>
-              La orden está <strong>pendiente</strong>. Usá <strong>Imprimir etiquetas</strong> y confirmá
-              la recepción escaneando cada tubo en <strong>Recepción</strong> antes de cargar resultados.
-            </>
-          ) : orden.estado === 'INFORMADO_PARCIAL' && !permitirEdicion ? (
-            <>
-              La orden está <strong>informada parcialmente</strong>. Podés seguir cargando resultados.
-              El informe PDF solo se descarga o envía después de la validación del bioquímico.
-            </>
-          ) : orden.estado === 'FINALIZADO' ? (
-            <>
-              Orden <strong>validada y bloqueada</strong>
-              {(() => {
-                const val = (orden.resultados || []).find((r) => r.validado_por_nombre || r.fecha_validacion);
-                if (!val) return null;
-                const quien = val.validado_por_nombre || 'bioquímico';
-                const cuando = val.fecha_validacion
-                  ? new Date(val.fecha_validacion).toLocaleString('es-AR')
-                  : '';
-                return (
-                  <>
-                    {' '}
-                    — Validado por <strong>{quien}</strong>
-                    {cuando ? ` (${cuando})` : ''}.
-                  </>
-                );
-              })()}{' '}
-              Los resultados no se pueden modificar.
-            </>
-          ) : !canOperate ? (
-            'Solo lectura: se requiere rol laboratorio, bioquímico o administrador para cargar resultados.'
-          ) : (
-            'La carga de valores no está disponible en el estado actual de la orden.'
-          )}
-        </Alert>
-      )}
+      <AnalisisLongitudinalPanel
+        ordenId={orden.id}
+        estadoOrden={orden.estado}
+        totalResultados={progreso.conValor}
+        resultadosFingerprint={analisisFingerprint}
+      />
     </Box>
   );
 };

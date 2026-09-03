@@ -11,6 +11,9 @@ import {
   canOperateInternacionClinica,
   canAdmitirInternacion,
   canDarAltaInternacion,
+  canWriteHcMedico,
+  canWriteHcEnfermeria,
+  canWriteHcKinesiologia,
   canCreatePaciente,
   canUpdatePacienteDemographics,
   canDownloadArchivoMedico,
@@ -55,8 +58,9 @@ describe('canAccessPacientes', () => {
     expect(canAccessPaciente360(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('permite laboratorio y profesionales de estudio en listado operativo', () => {
+  it('permite laboratorio, bioquímico y profesionales de estudio en listado operativo', () => {
     expect(canAccessPacientes(user({ rol: 'LABORATORIO' }))).toBe(true);
+    expect(canAccessPacientes(user({ rol: 'BIOQUIMICO' }))).toBe(true);
     expect(canAccessPacientes(user({ rol: 'RADIOLOGO' }))).toBe(true);
     expect(canAccessPacientes(user({ rol: 'KINESIOLOGO' }))).toBe(true);
     expect(canAccessPacientes(null)).toBe(false);
@@ -103,8 +107,11 @@ describe('canAccessSolicitudes', () => {
     expect(canAccessSolicitudes(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('bloquea laboratorio y anónimo', () => {
+  it('bloquea laboratorio, bioquímico y anónimo', () => {
     expect(canAccessSolicitudes(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canAccessSolicitudes(user({ rol: 'BIOQUIMICO' }))).toBe(false);
+    expect(canAccessSolicitudes(user({ rol: 'LABORATORIO', is_staff: true }))).toBe(false);
+    expect(canAccessSolicitudes(user({ rol: 'BIOQUIMICO', is_staff: true }))).toBe(false);
     expect(canAccessSolicitudes(null)).toBe(false);
   });
 });
@@ -248,6 +255,7 @@ describe('canAccessInternacion', () => {
     expect(canAccessInternacion(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canAccessInternacion(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canAccessInternacion(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canAccessInternacion(user({ rol: 'KINESIOLOGO' }))).toBe(true);
   });
 
   it('bloquea paciente, laboratorio y anónimo', () => {
@@ -268,5 +276,15 @@ describe('canAccessInternacion', () => {
     expect(canDarAltaInternacion(user({ rol: 'ENFERMERIA' }))).toBe(false);
     expect(canDarAltaInternacion(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canDarAltaInternacion(user({ rol: 'ADMIN' }))).toBe(true);
+  });
+
+  it('escritura de formularios HC según rol', () => {
+    expect(canWriteHcMedico(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canWriteHcMedico(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canWriteHcEnfermeria(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canWriteHcEnfermeria(user({ rol: 'MEDICO' }))).toBe(false);
+    expect(canWriteHcKinesiologia(user({ rol: 'KINESIOLOGO' }))).toBe(true);
+    expect(canWriteHcKinesiologia(user({ rol: 'MEDICO' }))).toBe(false);
+    expect(canOperateInternacionClinica(user({ rol: 'KINESIOLOGO' }))).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 from rest_framework import permissions
 
 from usuarios.roles import (
+    ROLES_HC_MEDICO,
     ROLES_INTERNACION,
     ROLES_INTERNACION_ALTA,
     ROLES_INTERNACION_CLINICA,
@@ -429,6 +430,17 @@ class IsInternacionAlta(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         return get_normalized_role(request.user) in ROLES_INTERNACION_ALTA
+
+
+class IsInternacionHcMedico(permissions.BasePermission):
+    """Evolución SOAP / hojas médicas de internación."""
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return get_normalized_role(request.user) in ROLES_HC_MEDICO
 
 
 class ConsultaPermission(permissions.BasePermission):
@@ -948,7 +960,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         if action == "informe_pdf":
             # Operadores + médico + secretaría/enfermería; object permission exige VALIDADO.
             return role in (*ROLES_LIMS_WRITE, "medico", *ROLES_LIMS_OPERATIVA_LIMITADA)
-        if action == "informe_entrega":
+        if action in ("informe_entrega", "informe_entrega_por_token"):
             # Público con token; el método no exige auth.
             return True
         if action == "destroy":
