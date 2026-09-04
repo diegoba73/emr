@@ -1650,6 +1650,10 @@ def aplicar_validar_informe_final(
             raise MicrobiologiaAccionError(
                 "El estudio debe estar LISTO_PARA_VALIDAR para validar el informe final."
             )
+        from laboratorio.obra_social import MENSAJE_NO_AUTORIZADA, obra_social_permite_liberar
+
+        if not obra_social_permite_liberar(estudio):
+            raise MicrobiologiaAccionError(MENSAJE_NO_AUTORIZADA)
         verificar_completitud_para_informe_final(estudio)
         prev_inf = informe.estado
         before_inf = safe_model_snapshot(informe)

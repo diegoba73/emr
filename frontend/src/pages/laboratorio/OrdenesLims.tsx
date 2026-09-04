@@ -23,6 +23,7 @@ import { listEstudiosMicrobiologia } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessLimsOrdenes,
+  canOperateLims,
   isLimsOperativaLimitada,
 } from '../../utils/limsAccess';
 import {
@@ -83,6 +84,7 @@ const OrdenesLims: React.FC = () => {
 
   const allowed = canAccessLimsOrdenes(currentUser);
   const vistaLimitada = isLimsOperativaLimitada(currentUser);
+  const puedeObraSocial = canOperateLims(currentUser);
   const estadosBandeja = vistaLimitada ? ESTADOS_BANDEJA_LIMITADA : ESTADOS_BANDEJA;
 
   const [estadoFiltro, setEstadoFiltro] = useState<string>(() =>
@@ -320,6 +322,8 @@ const OrdenesLims: React.FC = () => {
             }
             columnaFecha="toma"
             onVer={onVer}
+            puedeObraSocial={puedeObraSocial}
+            onObraSocialSaved={load}
           />
         </Paper>
       )}

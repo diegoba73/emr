@@ -661,6 +661,7 @@ class TestValidarConMuestraAPI(APITestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="LISTO_PARA_VALIDAR",
+            estado_obra_social="AUTORIZADO",
         )
         sol.tipos_examen.add(self.tipo_examen)
         ResultadoExamen.objects.create(
@@ -678,6 +679,7 @@ class TestValidarConMuestraAPI(APITestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="LISTO_PARA_VALIDAR",
+            estado_obra_social="AUTORIZADO",
         )
         sol.tipos_examen.add(self.tipo_examen)
         m = crear_muestra(
@@ -711,6 +713,7 @@ class TestValidarConMuestraAPI(APITestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="LISTO_PARA_VALIDAR",
+            estado_obra_social="AUTORIZADO",
         )
         sol.tipos_examen.add(self.tipo_examen)
         m = crear_muestra(
@@ -777,6 +780,7 @@ class TestValidarConMuestraAPI(APITestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="LISTO_PARA_VALIDAR",
+            estado_obra_social="AUTORIZADO",
         )
         sol.tipos_examen.add(self.tipo_examen)
         m = crear_muestra(

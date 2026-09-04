@@ -78,6 +78,7 @@ class TestResultadosClinicosAPI(APITestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
+            estado_obra_social="AUTORIZADO",
         )
         sol.tipos_examen.add(self.tipo_examen)
         res = ResultadoExamen.objects.create(

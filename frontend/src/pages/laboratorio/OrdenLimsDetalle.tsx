@@ -12,6 +12,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
   CircularProgress,
 } from '@mui/material';
@@ -25,6 +26,7 @@ import {
   getIqcPrecheck,
   getSolicitudExamen,
   listMuestrasPorSolicitud,
+  patchEstadoObraSocialSolicitud,
   postMarcarDerivacion,
   postValidarSolicitud,
   type IqcPrecheckResult,
@@ -58,6 +60,8 @@ import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDial
 import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDialog';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
+import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
+import { colorEstadoObraSocial, labelEstadoObraSocial, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -75,6 +79,7 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
   const [openQuitarExamenes, setOpenQuitarExamenes] = useState(false);
+  const [openObraSocial, setOpenObraSocial] = useState(false);
   const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
   const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
   const [qcOverrideOpen, setQcOverrideOpen] = useState(false);
@@ -190,6 +195,12 @@ const OrdenLimsDetalle: React.FC = () => {
 
   const handleValidar = async () => {
     if (!orden) return;
+    if (!ordenPuedeValidarObraSocial(orden)) {
+      toast.error(
+        'En órdenes ambulatorias la obra social tiene que estar Autorizada antes de validar.'
+      );
+      return;
+    }
     const resultados = orden.resultados || [];
     const tieneAlertas = resultados.some((r) => r.es_patologico || r.es_critico);
     if (tieneAlertas) {
@@ -252,6 +263,8 @@ const OrdenLimsDetalle: React.FC = () => {
   const listaParaValidar = ordenListaParaValidar(e, resultadosCompletos);
   const puedeEnviarInforme = ordenPuedeEnviarInforme(e) && progreso.conValor > 0;
   const informeEnviado = Boolean(orden.fecha_informe_enviado);
+  const osPermiteValidar = ordenPuedeValidarObraSocial(orden);
+  const bloqueoObraSocial = !osPermiteValidar && e !== 'FINALIZADO';
   const validadorInfo = (orden.resultados || []).find(
     (r) => r.validado_por_nombre || r.fecha_validacion
   );
@@ -264,6 +277,14 @@ const OrdenLimsDetalle: React.FC = () => {
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h5">Orden {orden.numero || orden.id}</Typography>
         <Chip label={labelEstadoOrdenLims(e)} color={estadoOrdenColor(e)} />
+        {orden.estado_obra_social ? (
+          <Chip
+            size="small"
+            label={`Obra social: ${labelEstadoObraSocial(orden.estado_obra_social)}`}
+            color={colorEstadoObraSocial(orden.estado_obra_social)}
+            variant="outlined"
+          />
+        ) : null}
         <Typography variant="body1" fontWeight={600}>
           {orden.paciente_nombre || `Paciente #${orden.paciente}`}
           {orden.paciente_dni ? (
@@ -320,6 +341,11 @@ const OrdenLimsDetalle: React.FC = () => {
               Imprimir etiquetas
             </Button>
           )}
+          {canOp && (
+            <Button variant="outlined" onClick={() => setOpenObraSocial(true)}>
+              Obra social
+            </Button>
+          )}
           {canOp && ordenPuedeAgregarExamenes(orden) && (
             <Button variant="contained" color="secondary" onClick={() => setOpenAgregarExamenes(true)}>
               Agregar exámenes
@@ -341,14 +367,24 @@ const OrdenLimsDetalle: React.FC = () => {
             </Button>
           )}
           {listaParaValidar && canValidar && (
-            <Button
-              variant="contained"
-              color="success"
-              disabled={validando}
-              onClick={() => void handleValidar()}
+            <Tooltip
+              title={
+                osPermiteValidar
+                  ? ''
+                  : 'La obra social tiene que estar Autorizada para validar y emitir el informe.'
+              }
             >
-              {validando ? 'Validando…' : 'Validar y liberar'}
-            </Button>
+              <span>
+                <Button
+                  variant="contained"
+                  color="success"
+                  disabled={validando || !osPermiteValidar}
+                  onClick={() => void handleValidar()}
+                >
+                  {validando ? 'Validando…' : 'Validar y liberar'}
+                </Button>
+              </span>
+            </Tooltip>
           )}
           {listaParaValidar && !canValidar && canOp && (
             <Chip
@@ -381,6 +417,12 @@ const OrdenLimsDetalle: React.FC = () => {
             Pendiente de recepción. <strong>Imprimir etiquetas</strong> genera los tubos con código de
             barras; confirmá el ingreso escaneando en <strong>Recepción</strong>.
           </Typography>
+        )}
+        {bloqueoObraSocial && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            En órdenes ambulatorias la obra social tiene que estar <strong>Autorizada</strong> para
+            validar y emitir el informe. Usá <strong>Obra social</strong> y elegí Autorizado.
+          </Alert>
         )}
         {orden.tubos_pendientes_extraccion && orden.tubos_pendientes_extraccion.length > 0 && (
           <Alert severity="warning" sx={{ mt: 1.5 }}>
@@ -559,6 +601,16 @@ const OrdenLimsDetalle: React.FC = () => {
           } catch {
             /* keep o */
           }
+        }}
+      />
+      <EstadoObraSocialDialog
+        open={openObraSocial}
+        numero={orden.numero}
+        value={orden.estado_obra_social}
+        onClose={() => setOpenObraSocial(false)}
+        onSave={async (estado) => {
+          const fresh = await patchEstadoObraSocialSolicitud(orden.id, estado);
+          setOrden(fresh);
         }}
       />
       <EnviarInformeOrdenDialog

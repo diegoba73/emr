@@ -251,6 +251,11 @@ def finalizar_solicitud_manual(
             "No se puede finalizar una solicitud con resultados vacíos."
         )
 
+    from laboratorio.obra_social import MENSAJE_NO_AUTORIZADA, obra_social_permite_liberar
+
+    if not obra_social_permite_liberar(solicitud):
+        raise SolicitudCierreError(MENSAJE_NO_AUTORIZADA)
+
     from laboratorio.qc_service import validar_qc_para_cierre
 
     validar_qc_para_cierre(

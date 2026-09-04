@@ -111,6 +111,9 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     esperando_recepcion = serializers.SerializerMethodField()
     origen_solicitud_display = serializers.SerializerMethodField()
     procedencia_display = serializers.SerializerMethodField()
+    estado_obra_social_display = serializers.SerializerMethodField()
+    requiere_autorizacion_obra_social = serializers.SerializerMethodField()
+    obra_social_permite_validar = serializers.SerializerMethodField()
 
     class Meta:
         model = EstudioMicrobiologia
@@ -147,6 +150,10 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "tipo_muestra_micro_nombre",
             "tipo_estudio",
             "estado",
+            "estado_obra_social",
+            "estado_obra_social_display",
+            "requiere_autorizacion_obra_social",
+            "obra_social_permite_validar",
             "observaciones",
             "fecha_inicio",
             "fecha_cierre",
@@ -270,6 +277,19 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         )
         proxy.medico_externo_nombre = getattr(obj, "medico_externo_nombre", None) or ""
         return resolver_procedencia_solicitud(proxy).get("procedencia_display")
+
+    def get_estado_obra_social_display(self, obj):
+        return obj.get_estado_obra_social_display() or ""
+
+    def get_requiere_autorizacion_obra_social(self, obj):
+        from laboratorio.obra_social import origen_requiere_autorizacion_obra_social
+
+        return origen_requiere_autorizacion_obra_social(getattr(obj, "origen_solicitud", None))
+
+    def get_obra_social_permite_validar(self, obj):
+        from laboratorio.obra_social import obra_social_permite_liberar
+
+        return obra_social_permite_liberar(obj)
 
 
 class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):

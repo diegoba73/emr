@@ -67,6 +67,7 @@ class TestValidacionLimsFaseA(APITestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
+            estado_obra_social="AUTORIZADO",
         )
         sol.tipos_examen.add(self.te)
         res = ResultadoExamen.objects.create(

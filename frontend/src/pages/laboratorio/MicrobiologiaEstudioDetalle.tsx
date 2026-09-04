@@ -21,7 +21,7 @@ import {
   listSiembrasMicrobiologia,
   marcarEstudioMicrobiologiaInformado,
 } from '../../services/limsApi';
-import { downloadEtiquetasEstudioMicro } from '../../services/limsMicroApi';
+import { downloadEtiquetasEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessMicrobiologiaLectura,
@@ -41,6 +41,8 @@ import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIde
 import AntibiogramaPanel from '../../components/lims/micro/AntibiogramaPanel';
 import InformesMicrobiologiaPanel from '../../components/lims/micro/InformesMicrobiologiaPanel';
 import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/MotivoDialog';
+import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
+import { ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 
 const MicrobiologiaEstudioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,6 +54,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [reprinting, setReprinting] = useState(false);
   const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
+  const [openObraSocial, setOpenObraSocial] = useState(false);
   const [bundle, setBundle] = useState({
     siembras: [] as Awaited<ReturnType<typeof listSiembrasMicrobiologia>>,
     lecturas: [] as Awaited<ReturnType<typeof listLecturasCultivo>>,
@@ -253,8 +256,21 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onReimprimirEtiquetas={() => void onReimprimir()}
           onConfirmarRecepcion={() => void onConfirmarRecepcion()}
           onCancelar={onCancelar}
+          onObraSocial={canOp ? () => setOpenObraSocial(true) : undefined}
         />
         <MotivoDialog {...dialogProps} />
+        {estudio && (
+          <EstadoObraSocialDialog
+            open={openObraSocial}
+            numero={estudio.numero}
+            value={estudio.estado_obra_social}
+            onClose={() => setOpenObraSocial(false)}
+            onSave={async (estado) => {
+              const fresh = await patchEstadoObraSocialEstudio(estudio.id, estado);
+              setEstudio(fresh);
+            }}
+          />
+        )}
       </Box>
     );
   }
@@ -277,6 +293,14 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           El estudio microbiológico está cerrado. Las operaciones técnicas están bloqueadas.
         </Alert>
       )}
+      {!ordenPuedeValidarObraSocial(estudio) &&
+        estudio.estado !== 'VALIDADO' &&
+        estudio.estado !== 'INFORMADO' && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            En órdenes ambulatorias la obra social tiene que estar <strong>Autorizada</strong> para
+            validar y emitir el informe. Usá <strong>Obra social</strong> y elegí Autorizado.
+          </Alert>
+        )}
 
       {tab === 0 && (
         <EstudioMicroResumenTab
@@ -290,6 +314,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onMarcarInformado={() =>
             void runEstudio(() => marcarEstudioMicrobiologiaInformado(estudioId))
           }
+          canEditarObraSocial={canOp}
+          onObraSocial={() => setOpenObraSocial(true)}
         />
       )}
       {tab === 1 && (
@@ -336,6 +362,16 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         />
       )}
       <MotivoDialog {...dialogProps} />
+      <EstadoObraSocialDialog
+        open={openObraSocial}
+        numero={estudio.numero}
+        value={estudio.estado_obra_social}
+        onClose={() => setOpenObraSocial(false)}
+        onSave={async (estado) => {
+          const fresh = await patchEstadoObraSocialEstudio(estudio.id, estado);
+          setEstudio(fresh);
+        }}
+      />
     </Box>
   );
 };

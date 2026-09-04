@@ -263,7 +263,8 @@ class TestSolicitudExamenAPI(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud='AMBULATORIO_CEHTA',
-            estado='LISTO_PARA_VALIDAR'
+            estado='LISTO_PARA_VALIDAR',
+            estado_obra_social='AUTORIZADO',
         )
         solicitud.tipos_examen.add(self.tipo_examen_1)
         
@@ -355,7 +356,37 @@ class TestSolicitudExamenAPI(APITestCase):
         assert 'protocolo' in response.data
         assert response.data['protocolo'] == solicitud.numero
         assert response.data['paciente'] == solicitud.paciente.nombre_completo
-    
+
+    def test_estado_obra_social_pendiente_y_en_proceso(self):
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud='AMBULATORIO_CEHTA',
+        )
+        url = f'/api/lab/solicitudes/{solicitud.id}/estado-obra-social/'
+        r = self.client.patch(url, {'estado_obra_social': 'FALTA_AUTORIZACION'}, format='json')
+        assert r.status_code == status.HTTP_200_OK
+        assert r.data['estado_obra_social'] == 'FALTA_AUTORIZACION'
+        assert r.data['estado_obra_social_display'] == 'Falta autorización'
+        solicitud.refresh_from_db()
+        assert solicitud.estado == 'PENDIENTE'
+        assert solicitud.estado_obra_social == 'FALTA_AUTORIZACION'
+
+        solicitud.estado = 'EN_PROCESO'
+        solicitud.save(update_fields=['estado'])
+        r2 = self.client.patch(url, {'estado_obra_social': 'AUTORIZADO'}, format='json')
+        assert r2.status_code == status.HTTP_200_OK
+        solicitud.refresh_from_db()
+        assert solicitud.estado_obra_social == 'AUTORIZADO'
+
+        r3 = self.client.patch(url, {'estado_obra_social': 'INVALIDO'}, format='json')
+        assert r3.status_code == status.HTTP_400_BAD_REQUEST
+
+        r4 = self.client.patch(url, {'estado_obra_social': ''}, format='json')
+        assert r4.status_code == status.HTTP_200_OK
+        solicitud.refresh_from_db()
+        assert solicitud.estado_obra_social == ''
+
     def test_filtro_por_numero(self):
         """
         Test que el filtro por número funciona para código de barras.
@@ -434,6 +465,7 @@ class TestLimsAuthorization(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud='AMBULATORIO_CEHTA',
+            estado_obra_social='AUTORIZADO',
         )
         self.sol_medico.tipos_examen.add(self.tipo_examen)
 
@@ -688,6 +720,7 @@ class TestLimsAuditTrail(APITestCase):
             medico_interno=self.medico,
             origen_solicitud='AMBULATORIO_CEHTA',
             estado='LISTO_PARA_VALIDAR',
+            estado_obra_social='AUTORIZADO',
         )
         solicitud.tipos_examen.add(self.tipo_examen)
         resultado = ResultadoExamen.objects.create(
@@ -837,8 +870,11 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
             },
             format='json',
         )
-        assert r.status_code == status.HTTP_201_CREATED, r.data
-        return SolicitudExamen.objects.get(id=r.data['id'])
+        assert r.status_code in (status.HTTP_201_CREATED, status.HTTP_200_OK), r.data
+        sol = SolicitudExamen.objects.get(id=r.data['id'])
+        sol.estado_obra_social = 'AUTORIZADO'
+        sol.save(update_fields=['estado_obra_social'])
+        return sol
 
     def test_flujo_completo_estados(self):
         sol = self._crear_solicitud_api(examenes_ids=[self.tipo_examen_a.id, self.tipo_examen_b.id])
@@ -1209,6 +1245,11 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         self.client.force_authenticate(user=self.user_medico)
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json').status_code == 403
         assert self.client.post(f'/api/lab/solicitudes/{sol.id}/finalizar/', {}, format='json').status_code == 403
+        assert self.client.patch(
+            f'/api/lab/solicitudes/{sol.id}/estado-obra-social/',
+            {'estado_obra_social': 'AUTORIZADO'},
+            format='json',
+        ).status_code == 403
 
 
 @pytest.mark.django_db
@@ -1266,6 +1307,8 @@ class TestSolicitudExamenEstadoAuditoria(APITestCase):
         )
         sol = SolicitudExamen.objects.get(pk=sid)
         self.assertEqual(sol.estado, 'LISTO_PARA_VALIDAR')
+        sol.estado_obra_social = 'AUTORIZADO'
+        sol.save(update_fields=['estado_obra_social'])
 
         user_bio = User.objects.create_user(
             username='bio_audit_fsm',

@@ -91,10 +91,11 @@ class SolicitudExamenAdmin(admin.ModelAdmin):
         'medico_display',
         'origen_solicitud',
         'estado',
+        'estado_obra_social',
         'fecha_solicitud',
         'fecha_entrega_prometida',
     )
-    list_filter = ('estado', 'origen_solicitud', 'fecha_solicitud')
+    list_filter = ('estado', 'estado_obra_social', 'origen_solicitud', 'fecha_solicitud')
     search_fields = (
         'numero',
         'paciente__nombre',
@@ -115,6 +116,7 @@ class SolicitudExamenAdmin(admin.ModelAdmin):
                 'paciente',
                 'origen_solicitud',
                 'estado',
+                'estado_obra_social',
             )
         }),
         ('Médico (Híbrido)', {

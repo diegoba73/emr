@@ -432,6 +432,28 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         )
         return resp
 
+    @action(detail=True, methods=["patch"], url_path="estado-obra-social")
+    def estado_obra_social(self, request, pk=None):
+        """Carga o actualiza la situación de obra social del estudio (pendiente o no)."""
+        from laboratorio.obra_social import guardar_estado_obra_social
+
+        estudio = self.get_object()
+        if "estado_obra_social" not in request.data:
+            return Response(
+                {"detail": "estado_obra_social es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        error = guardar_estado_obra_social(
+            estudio,
+            request.data.get("estado_obra_social", ""),
+            actor=request.user,
+            view_name="EstudioMicrobiologiaViewSet.estado_obra_social",
+        )
+        if error is not None:
+            return error
+        ser = EstudioMicrobiologiaSerializer(estudio, context=self.get_serializer_context())
+        return Response(ser.data, status=status.HTTP_200_OK)
+
     def perform_update(self, serializer):
         _guard_estudio_micro_operable_entity(serializer.instance)
         before = safe_model_snapshot(serializer.instance)

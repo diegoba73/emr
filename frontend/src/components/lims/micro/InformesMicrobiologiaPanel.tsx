@@ -11,6 +11,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
@@ -27,6 +28,7 @@ import EnviarInformeMicroDialog from '../EnviarInformeMicroDialog';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { InformeMicrobiologiaEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
+import { ordenPuedeValidarObraSocial } from '../../../utils/limsObraSocial';
 
 export interface InformesMicrobiologiaPanelProps {
   estudio: EstudioMicrobiologia;
@@ -71,6 +73,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
     finalVigente && estadosPdf.has(finalVigente.estado) ? finalVigente : null;
   const faltaFinal = !finalVigente && estudio.estado !== 'CANCELADO';
   const lecturasolo = !canOperate && !canValidar;
+  const osPermiteValidar = ordenPuedeValidarObraSocial(estudio);
 
   const crear = async (tipo: 'PRELIMINAR' | 'FINAL') => {
     try {
@@ -109,6 +112,12 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   };
 
   const validar = async (id: number) => {
+    if (!osPermiteValidar) {
+      toast.error(
+        'En órdenes ambulatorias la obra social tiene que estar Autorizada antes de validar.'
+      );
+      return;
+    }
     try {
       await validarInformeMicrobiologia(id);
       toast.success('Informe final validado');
@@ -161,6 +170,12 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
 
   return (
     <Box>
+      {!osPermiteValidar && estudio.estado !== 'VALIDADO' && estudio.estado !== 'INFORMADO' && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          En órdenes ambulatorias la obra social tiene que estar <strong>Autorizada</strong> para
+          validar y emitir el informe.
+        </Alert>
+      )}
       {canOperate && faltaFinal && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           No hay informe final vigente. Se requiere informe final validado para marcar el estudio
@@ -248,9 +263,24 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
                       </Button>
                     )}
                     {canValidar && inf.tipo === 'FINAL' && inf.estado === 'EMITIDO' && (
-                      <Button size="small" color="success" onClick={() => validar(inf.id)}>
-                        Validar
-                      </Button>
+                      <Tooltip
+                        title={
+                          osPermiteValidar
+                            ? ''
+                            : 'La obra social tiene que estar Autorizada para validar el informe.'
+                        }
+                      >
+                        <span>
+                          <Button
+                            size="small"
+                            color="success"
+                            disabled={!osPermiteValidar}
+                            onClick={() => validar(inf.id)}
+                          >
+                            Validar
+                          </Button>
+                        </span>
+                      </Tooltip>
                     )}
                   </TableCell>
                 </TableRow>

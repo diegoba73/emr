@@ -49,6 +49,7 @@ from laboratorio.views_qc import (
     LoteProductoControlViewSet,
     MaterialControlViewSet,
     ProductoControlViewSet,
+    TableroIqcHoyView,
     TargetLoteControlViewSet,
 )
 from laboratorio.views_lab_codigo import LabCodigoViewSet
@@ -325,6 +326,7 @@ urlpatterns = [
     # IQC precheck (gate temprano / bandeja)
     path('lab/qc/precheck/', IqcPrecheckView.as_view(), name='lab-qc-precheck'),
     path('lab/qc/precheck-batch/', IqcPrecheckView.as_view(), name='lab-qc-precheck-batch'),
+    path('lab/qc/tablero-hoy/', TableroIqcHoyView.as_view(), name='lab-qc-tablero-hoy'),
     path('lab/qc/levey-jennings/', LeveyJenningsExamenView.as_view(), name='lab-qc-levey-jennings'),
     
     # Endpoint público para obtener token CSRF

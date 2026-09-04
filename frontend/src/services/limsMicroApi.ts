@@ -61,6 +61,17 @@ export const listEstudiosMicrobiologia = (params?: {
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);
 
+export async function patchEstadoObraSocialEstudio(
+  id: number,
+  estado_obra_social: string
+): Promise<EstudioMicrobiologia> {
+  const { data } = await apiClient.patch<EstudioMicrobiologia>(
+    `${MICRO}/estudios/${id}/estado-obra-social/`,
+    { estado_obra_social }
+  );
+  return data;
+}
+
 export async function getEstudioMicroPorCodigo(codigo: string): Promise<EstudioMicrobiologia> {
   const encoded = encodeURIComponent(codigo.trim());
   const { data } = await apiClient.get<EstudioMicrobiologia>(

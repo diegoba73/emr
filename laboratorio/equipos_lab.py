@@ -205,5 +205,24 @@ def equipo_codigo_para_examen(codigo_examen: str) -> str | None:
     return EXAMEN_A_EQUIPO.get((codigo_examen or "").strip().upper())
 
 
+# Códigos operativos que en prod no coinciden con el canónico (ej. HEMO vs SYSMEX_XP300).
+ALIAS_CODIGO_EQUIPO: dict[str, str] = {
+    "HEMO": "SYSMEX_XP300",
+    "SYSMEX": "SYSMEX_XP300",
+    "XP300": "SYSMEX_XP300",
+    "VIDAS": "VIDAS_KUBE",
+    "FINECARE": "FINECARE",
+}
+
+
+def codigo_equipo_canonico(codigo_equipo: str) -> str:
+    c = (codigo_equipo or "").strip().upper()
+    return ALIAS_CODIGO_EQUIPO.get(c, c)
+
+
 def es_equipo_multiparam(codigo_equipo: str) -> bool:
-    return (codigo_equipo or "").strip().upper() in EQUIPOS_MULTIPARAM
+    return codigo_equipo_canonico(codigo_equipo) in EQUIPOS_MULTIPARAM
+
+
+def es_equipo_por_ensayo(codigo_equipo: str) -> bool:
+    return codigo_equipo_canonico(codigo_equipo) in EQUIPOS_POR_ENSAYO

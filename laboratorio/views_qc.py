@@ -1,4 +1,6 @@
 """ViewSets QC Westgard."""
+import logging
+
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -8,6 +10,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.permissions import LimsQcPermission
+
+logger = logging.getLogger(__name__)
 from laboratorio.models import SolicitudExamen, TipoExamen
 from laboratorio.models_qc import (
     Calibracion,
@@ -29,6 +33,7 @@ from laboratorio.qc_service import (
     levey_jennings_por_examen,
     levey_jennings_series,
 )
+from laboratorio.qc_tablero import tablero_iqc_hoy
 from laboratorio.serializers_qc import (
     CalibracionSerializer,
     CorridaQCSerializer,
@@ -183,6 +188,13 @@ class CorridaQCViewSet(viewsets.ModelViewSet):
         )
         lote_producto = corrida.lote_producto
         try:
+            if modo == "RECHAZAR_NIVEL":
+                obs = (corrida.observaciones or "").strip()
+                if not obs:
+                    corrida.observaciones = "control no OK"
+                corrida.estado = CorridaQC.Estado.RECHAZADA
+                corrida.save(update_fields=["estado", "observaciones", "updated_at"])
+                return
             if lote_producto is not None:
                 if modo == "VALORES":
                     for item in valores:
@@ -192,9 +204,11 @@ class CorridaQCViewSet(viewsets.ModelViewSet):
                 else:
                     aceptar_nivel_rapido(corrida)
                 return
-            if valor is not None:
-                evaluar_y_guardar_punto(corrida, valor)
-                finalizar_corrida(corrida)
+            if modo == "ACEPTAR_NIVEL" or valor is None:
+                aceptar_nivel_rapido(corrida)
+                return
+            evaluar_y_guardar_punto(corrida, valor)
+            finalizar_corrida(corrida)
         except TipoExamen.DoesNotExist as e:
             raise DrfValidationError({"tipo_examen": "Examen inexistente."}) from e
         except ValueError as e:
@@ -302,3 +316,20 @@ class LeveyJenningsExamenView(APIView):
             return Response({"detail": "Parámetro tipo_examen requerido."}, status=400)
         examen = get_object_or_404(TipoExamen, pk=tid)
         return Response(levey_jennings_por_examen(examen))
+
+
+class TableroIqcHoyView(APIView):
+    """GET — tablero visual de la mañana (equipos + ensayos)."""
+
+    permission_classes = [LimsQcPermission]
+
+    def get(self, request):
+        try:
+            return Response(tablero_iqc_hoy())
+        except Exception:
+            logger.exception("GET tablero-hoy")
+            return Response(
+                {"detail": "No se pudo armar el tablero de QC de hoy. Revisá logs del backend."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+

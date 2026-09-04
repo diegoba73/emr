@@ -197,6 +197,12 @@ export interface SolicitudExamenLims {
   procedencia_tipo?: ProcedenciaOrdenLims;
   procedencia_display?: string | null;
   estado: EstadoSolicitudLims;
+  estado_obra_social?: string | null;
+  estado_obra_social_display?: string | null;
+  /** Ambulatorio: hay que autorizar obra social antes de validar. */
+  requiere_autorizacion_obra_social?: boolean;
+  /** False si es ambulatoria y aún no está Autorizado. */
+  obra_social_permite_validar?: boolean;
   fecha_solicitud: string;
   /** Última fecha de toma física (anotación en listado). */
   fecha_toma_muestra?: string | null;
@@ -422,6 +428,10 @@ export interface EstudioMicrobiologia {
   tipo_muestra_micro_nombre?: string | null;
   tipo_estudio: TipoEstudioMicrobiologia | string;
   estado: EstadoEstudioMicrobiologia;
+  estado_obra_social?: string | null;
+  estado_obra_social_display?: string | null;
+  requiere_autorizacion_obra_social?: boolean;
+  obra_social_permite_validar?: boolean;
   observaciones?: string;
   fecha_inicio?: string | null;
   fecha_cierre?: string | null;

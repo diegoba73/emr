@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Chip, Divider, Paper, Typography } from '@mui/material';
 import type { SolicitudExamenLims } from '../../types/lims';
 import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../utils/limsObraSocial';
 import { formatOrigenProcedenciaCell } from '../../utils/limsOrigenSolicitud';
 
 export interface OrdenLimsResumenPanelProps {
@@ -87,6 +88,15 @@ const OrdenLimsResumenPanel: React.FC<OrdenLimsResumenPanelProps> = ({ orden }) 
             Estado
           </Typography>
           <Chip size="small" label={labelEstadoOrdenLims(orden.estado)} />
+          {orden.estado_obra_social ? (
+            <Chip
+              size="small"
+              sx={{ ml: 0.5, mt: 0.5 }}
+              label={`Obra social: ${labelEstadoObraSocial(orden.estado_obra_social)}`}
+              color={colorEstadoObraSocial(orden.estado_obra_social)}
+              variant="outlined"
+            />
+          ) : null}
           {orden.fecha_solicitud && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Solicitud: {new Date(orden.fecha_solicitud).toLocaleString('es-AR')}

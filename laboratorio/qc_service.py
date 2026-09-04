@@ -11,7 +11,11 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from laboratorio.equipos_lab import EXAMENES_POR_EQUIPO, es_equipo_multiparam
+from laboratorio.equipos_lab import (
+    EXAMENES_POR_EQUIPO,
+    codigo_equipo_canonico,
+    es_equipo_multiparam,
+)
 from laboratorio.models import TipoExamen
 from laboratorio.models_qc import (
     CorridaQC,
@@ -76,7 +80,7 @@ def _producto_multiparam_para_examen(examen: TipoExamen) -> ProductoControl | No
     eq = getattr(examen, "equipo_analizador", None)
     if eq is None or not eq.activo:
         return None
-    codigo_eq = (eq.codigo or "").strip().upper()
+    codigo_eq = codigo_equipo_canonico(eq.codigo)
     if not es_equipo_multiparam(codigo_eq):
         return None
 
@@ -206,6 +210,26 @@ def _problemas_iqc_materiales(materiales, *, equipo_forzado: EquipoAnalizador | 
     return problemas
 
 
+def materiales_iqc_canonicos(exam_ids: set[int]) -> list[MaterialControl]:
+    """Un material activo con equipo por (ensayo, nivel). Ignora duplicados sin equipo."""
+    if not exam_ids:
+        return []
+    mats = list(
+        MaterialControl.objects.filter(
+            activo=True,
+            tipo_examen_id__in=exam_ids,
+            equipo__isnull=False,
+        ).select_related("tipo_examen", "tipo_examen__equipo_analizador", "equipo")
+    )
+    best: dict[tuple[int, str], MaterialControl] = {}
+    for mat in mats:
+        key = (mat.tipo_examen_id, mat.nivel)
+        prev = best.get(key)
+        if prev is None or mat.id < prev.id:
+            best[key] = mat
+    return list(best.values())
+
+
 def estado_iqc_solicitud(solicitud, *, equipo: EquipoAnalizador | None = None) -> dict[str, Any]:
     """Precheck sin raise: {ok, aplicable, equipo, equipos, problemas}.
 
@@ -233,11 +257,7 @@ def estado_iqc_solicitud(solicitud, *, equipo: EquipoAnalizador | None = None) -
         productos_por_key[(prod.id, eq.id)] = (prod, eq)
 
     exam_ids_material = set(exam_ids) - exam_ids_multiparam
-    materiales = list(
-        MaterialControl.objects.filter(
-            activo=True, tipo_examen_id__in=exam_ids_material
-        ).select_related("tipo_examen", "tipo_examen__equipo_analizador", "equipo")
-    )
+    materiales = materiales_iqc_canonicos(exam_ids_material)
 
     if not productos_por_key and not materiales:
         return {

@@ -908,7 +908,29 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         )
         serializer = self.get_serializer(solicitud)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
+
+    @action(detail=True, methods=['patch'], url_path='estado-obra-social')
+    def estado_obra_social(self, request, pk=None):
+        """Carga o actualiza la situación de obra social de la orden (pendiente o no)."""
+        from laboratorio.obra_social import guardar_estado_obra_social
+
+        solicitud = self.get_object()
+        if 'estado_obra_social' not in request.data:
+            return Response(
+                {'detail': 'estado_obra_social es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        error = guardar_estado_obra_social(
+            solicitud,
+            request.data.get('estado_obra_social', ''),
+            actor=request.user,
+            view_name='SolicitudExamenViewSet.estado_obra_social',
+        )
+        if error is not None:
+            return error
+        serializer = self.get_serializer(solicitud)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='finalizar')
     def finalizar(self, request, pk=None):
         """Alias de validar: liberación clínica (bioquímico / admin)."""

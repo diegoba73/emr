@@ -10,6 +10,7 @@ from pacientes.models import Paciente
 from medicos.models import Medico
 
 from .origen_solicitud import ORIGEN_CHOICES, AMBULATORIO_CEHTA as ORIGEN_DEFAULT
+from .obra_social import ESTADO_OBRA_SOCIAL_CHOICES
 
 
 # ============================================================================
@@ -377,6 +378,14 @@ class SolicitudExamen(models.Model):
         choices=ESTADO_CHOICES,
         default='PENDIENTE',
         verbose_name="Estado"
+    )
+    estado_obra_social = models.CharField(
+        max_length=24,
+        choices=ESTADO_OBRA_SOCIAL_CHOICES,
+        blank=True,
+        default='',
+        verbose_name="Estado obra social",
+        help_text="Situación de cobertura: autorizado, debe orden, falta autorización o debe abonar.",
     )
 
     # Fechas

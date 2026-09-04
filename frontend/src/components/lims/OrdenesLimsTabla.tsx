@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Button,
   Chip,
@@ -15,6 +15,10 @@ import type { EstadoSolicitudLims, SolicitudExamenLims } from '../../types/lims'
 import { estadoOrdenColor, labelEstadoOrdenLims, ordenPuedeAgregarExamenes } from '../../utils/limsEstadosOrden';
 import type { PendientePedidoRow } from '../../utils/limsPendientesUnificados';
 import OrigenProcedenciaCellView from './OrigenProcedenciaCell';
+import EstadoObraSocialDialog from './EstadoObraSocialDialog';
+import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../utils/limsObraSocial';
+import { patchEstadoObraSocialSolicitud } from '../../services/limsApi';
+import { patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
 
 export interface OrdenesLimsTablaProps {
   rows: PendientePedidoRow[];
@@ -26,6 +30,10 @@ export interface OrdenesLimsTablaProps {
   onAgregarExamenes?: (orden: SolicitudExamenLims) => void;
   columnaFecha?: 'solicitud' | 'toma';
   accionLabel?: string;
+  /** Botón «Obra social» junto a imprimir / ver. */
+  puedeObraSocial?: boolean;
+  /** Tras guardar el estado de cobertura (para refrescar el listado). */
+  onObraSocialSaved?: () => void;
 }
 
 const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
@@ -36,7 +44,23 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
   onAgregarExamenes,
   columnaFecha = 'solicitud',
   accionLabel = 'Ver',
-}) => (
+  puedeObraSocial = false,
+  onObraSocialSaved,
+}) => {
+  const [obraSocialRow, setObraSocialRow] = useState<PendientePedidoRow | null>(null);
+
+  const handleGuardarObraSocial = async (estado: string) => {
+    if (!obraSocialRow) return;
+    if (obraSocialRow.tipo === 'MICROBIOLOGIA') {
+      await patchEstadoObraSocialEstudio(obraSocialRow.id, estado);
+    } else {
+      await patchEstadoObraSocialSolicitud(obraSocialRow.id, estado);
+    }
+    onObraSocialSaved?.();
+  };
+
+  return (
+  <>
   <TableContainer>
     <Table size="small">
       <TableHead>
@@ -134,6 +158,15 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       Faltan {r.tubos_pendientes_extraccion.length} tubo(s)
                     </Typography>
                   )}
+                  {r.estado_obra_social ? (
+                    <Chip
+                      size="small"
+                      label={labelEstadoObraSocial(r.estado_obra_social)}
+                      color={colorEstadoObraSocial(r.estado_obra_social)}
+                      variant="outlined"
+                      sx={{ mt: 0.5 }}
+                    />
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   {r.tipo !== 'LAB_CLINICO' || !r.iqcStatus || r.iqcStatus === 'na' ? (
@@ -170,6 +203,15 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                         Ver
                       </Button>
                     )}
+                    {puedeObraSocial && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setObraSocialRow(r)}
+                      >
+                        Obra social
+                      </Button>
+                    )}
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -179,6 +221,15 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
       </TableBody>
     </Table>
   </TableContainer>
-);
+  <EstadoObraSocialDialog
+    open={!!obraSocialRow}
+    numero={obraSocialRow?.numero}
+    value={obraSocialRow?.estado_obra_social}
+    onClose={() => setObraSocialRow(null)}
+    onSave={handleGuardarObraSocial}
+  />
+  </>
+  );
+};
 
 export default OrdenesLimsTabla;

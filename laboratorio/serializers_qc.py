@@ -169,7 +169,7 @@ class CorridaQCSerializer(serializers.ModelSerializer):
         max_digits=14, decimal_places=4, write_only=True, required=False
     )
     modo = serializers.ChoiceField(
-        choices=["ACEPTAR_NIVEL", "VALORES"],
+        choices=["ACEPTAR_NIVEL", "VALORES", "RECHAZAR_NIVEL"],
         write_only=True,
         required=False,
         default=None,
@@ -243,9 +243,9 @@ class CorridaQCSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {"valores": "Modo VALORES requiere al menos un valor por ensayo."}
                     )
-            elif modo == "ACEPTAR_NIVEL":
+            elif modo == "VALORES" and not attrs.get("valor"):
                 raise serializers.ValidationError(
-                    {"modo": "ACEPTAR_NIVEL solo aplica a corridas de producto multiparámetro."}
+                    {"valor": "Modo VALORES en control por ensayo requiere el valor medido."}
                 )
         return attrs
 

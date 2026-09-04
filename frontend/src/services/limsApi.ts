@@ -140,6 +140,17 @@ export async function getSolicitudExamen(id: number): Promise<SolicitudExamenLim
   return data;
 }
 
+export async function patchEstadoObraSocialSolicitud(
+  id: number,
+  estado_obra_social: string
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.patch<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${id}/estado-obra-social/`,
+    { estado_obra_social }
+  );
+  return data;
+}
+
 export async function postTomarMuestraOrden(
   id: number,
   body: {
@@ -977,6 +988,62 @@ export async function postIqcPrecheckBatch(solicitudIds: number[]): Promise<IqcP
   return data.results || [];
 }
 
+export type IqcNivelEstado = 'aceptada' | 'rechazada' | 'pendiente' | 'falta';
+
+export interface IqcNivelHoy {
+  estado: IqcNivelEstado;
+  corrida_id?: number | null;
+  material_id?: number | null;
+  lote_control_id?: number | null;
+  lote_producto_id?: number | null;
+  lote_codigo?: string | null;
+}
+
+export interface IqcEnsayoHoy {
+  tipo_examen: number;
+  codigo: string;
+  nombre: string;
+  estado: 'liberado' | 'falta' | 'no_ok' | 'sin_trabajo';
+  resumen: string;
+  pedido_hoy: boolean;
+  s1: IqcNivelHoy;
+  s2: IqcNivelHoy;
+}
+
+export interface IqcEquipoHoy {
+  id: number;
+  codigo: string;
+  nombre: string;
+  modo: 'MULTIPARAM' | 'POR_ENSAYO';
+  estado: 'liberado' | 'falta' | 'no_ok' | 'sin_trabajo';
+  resumen: string;
+  tiene_trabajo: boolean;
+  calibracion_hoy: { id: number; fecha: string; observaciones: string } | null;
+  producto: { id: number; codigo: string; nombre: string } | null;
+  lote_producto_id: number | null;
+  lote_codigo: string | null;
+  s1: IqcNivelHoy | null;
+  s2: IqcNivelHoy | null;
+  ensayos_hoy: Array<{
+    id: number;
+    codigo: string;
+    nombre: string;
+    liberado?: boolean;
+    razon?: string | null;
+  }>;
+  ensayos: IqcEnsayoHoy[];
+}
+
+export interface IqcTableroHoy {
+  fecha: string;
+  equipos: IqcEquipoHoy[];
+}
+
+export async function getTableroIqcHoy(): Promise<IqcTableroHoy> {
+  const { data } = await apiClient.get<IqcTableroHoy>(`${LAB}/qc/tablero-hoy/`);
+  return data;
+}
+
 export async function listEquiposQc(): Promise<EquipoAnalizador[]> {
   return getPaginatedAll<EquipoAnalizador>(`${LAB}/qc/equipos/`, { page_size: 200 });
 }
@@ -1122,7 +1189,7 @@ export async function createCorridaQc(body: {
   equipo?: number | null;
   fecha: string;
   observaciones?: string;
-  modo?: 'ACEPTAR_NIVEL' | 'VALORES';
+  modo?: 'ACEPTAR_NIVEL' | 'VALORES' | 'RECHAZAR_NIVEL';
   valor?: number | string;
   valores?: Array<{ tipo_examen: number; valor: number | string }>;
 }) {

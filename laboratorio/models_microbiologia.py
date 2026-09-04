@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from pacientes.models import Paciente
 
+from .obra_social import ESTADO_OBRA_SOCIAL_CHOICES
+
 # Reglas legado (solo si el estudio aún tiene muestra LIMS vinculada).
 MUESTRA_ESTADOS_VALIDOS_INICIAR_MICRO = frozenset({"RECIBIDA", "CONSERVADA", "EN_PROCESO"})
 MUESTRA_ESTADOS_BLOQUEAN_MICRO = frozenset(
@@ -202,6 +204,14 @@ class EstudioMicrobiologia(models.Model):
         choices=ESTADO_CHOICES,
         default="PENDIENTE",
         verbose_name="Estado",
+    )
+    estado_obra_social = models.CharField(
+        max_length=24,
+        choices=ESTADO_OBRA_SOCIAL_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Estado obra social",
+        help_text="Situación de cobertura: autorizado, debe orden, falta autorización o debe abonar.",
     )
     observaciones = models.TextField(blank=True, default="", verbose_name="Observaciones")
 

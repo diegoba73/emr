@@ -11,6 +11,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import { labelOrigenSolicitudLims } from '../../../utils/limsOrigenSolicitud';
+import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
 
 export interface EstudioMicroPedidoRecepcionPanelProps {
   estudio: EstudioMicrobiologia;
@@ -20,6 +21,7 @@ export interface EstudioMicroPedidoRecepcionPanelProps {
   onReimprimirEtiquetas: () => void;
   onConfirmarRecepcion: () => void;
   onCancelar: () => void;
+  onObraSocial?: () => void;
 }
 
 /**
@@ -35,6 +37,7 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
   onReimprimirEtiquetas,
   onConfirmarRecepcion,
   onCancelar,
+  onObraSocial,
 }) => {
   const tieneEtiqueta = Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
 
@@ -44,6 +47,14 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
           <Typography variant="h5">Pedido {estudio.numero || estudio.id}</Typography>
           <EstudioMicrobiologiaEstadoBadge estado={estudio.estado} />
+          {estudio.estado_obra_social ? (
+            <Chip
+              size="small"
+              label={`Obra social: ${labelEstadoObraSocial(estudio.estado_obra_social)}`}
+              color={colorEstadoObraSocial(estudio.estado_obra_social)}
+              variant="outlined"
+            />
+          ) : null}
           <Chip size="small" label="Microbiología" color="secondary" variant="outlined" />
           {tieneEtiqueta ? (
             <Chip size="small" label="Esperando recepción" color="info" variant="outlined" />
@@ -56,6 +67,11 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           Acciones del pedido
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+          {canOperate && onObraSocial && (
+            <Button variant="outlined" onClick={onObraSocial}>
+              Obra social
+            </Button>
+          )}
           {canOperate && (
             <Button
               variant="outlined"

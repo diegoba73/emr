@@ -277,6 +277,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in ROLES_LIMS_WRITE
         if action == 'orden_informe':
             return role in ROLES_LIMS_WRITE
+        if action == 'estado_obra_social':
+            return role in ROLES_LIMS_WRITE
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -345,6 +347,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in ROLES_LIMS_WRITE
 
         if action == 'orden_informe':
+            return role in ROLES_LIMS_WRITE
+
+        if action == 'estado_obra_social':
             return role in ROLES_LIMS_WRITE
 
         return False
@@ -958,6 +963,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             "imprimir_etiquetas",
             "imprimir_etiquetas_batch",
             "recibir_por_codigo",
+            "estado_obra_social",
         ):
             return role in ROLES_LIMS_WRITE
         if action == "enviar_informe":

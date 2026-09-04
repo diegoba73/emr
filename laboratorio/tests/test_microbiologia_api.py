@@ -1956,3 +1956,54 @@ class TestEstudioMicroCerradoOperacionAPI(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+@pytest.mark.django_db
+class TestEstadoObraSocialMicroAPI(TestCase):
+    def setUp(self):
+        self.suf = uuid.uuid4().hex[:8]
+        self.lab = User.objects.create_user(
+            username=f"lab_os_{self.suf}",
+            email=f"los{self.suf}@t.com",
+            password="x",
+            rol="laboratorio",
+            is_staff=True,
+        )
+        self.med_user = User.objects.create_user(
+            username=f"med_os_{self.suf}",
+            email=f"mos{self.suf}@t.com",
+            password="x",
+            rol="medico",
+        )
+        self.paciente = Paciente.objects.create(
+            dni=f"D{self.suf}", nombre="P", apellido="X"
+        )
+        self.estudio = EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_externo_nombre="Dr Externo",
+        )
+        self.client = APIClient(enforce_csrf_checks=False)
+        self.client.force_authenticate(self.lab)
+
+    def test_cargar_estado_obra_social(self):
+        url = f"/api/lab/microbiologia/estudios/{self.estudio.pk}/estado-obra-social/"
+        r = self.client.patch(url, {"estado_obra_social": "DEBE_ABONAR"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["estado_obra_social"], "DEBE_ABONAR")
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.estado, "PENDIENTE")
+        self.assertEqual(self.estudio.estado_obra_social, "DEBE_ABONAR")
+
+        r2 = self.client.patch(url, {"estado_obra_social": "DEBE_ORDEN"}, format="json")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.estado_obra_social, "DEBE_ORDEN")
+
+    def test_medico_no_puede_cargar(self):
+        self.client.force_authenticate(self.med_user)
+        r = self.client.patch(
+            f"/api/lab/microbiologia/estudios/{self.estudio.pk}/estado-obra-social/",
+            {"estado_obra_social": "AUTORIZADO"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)

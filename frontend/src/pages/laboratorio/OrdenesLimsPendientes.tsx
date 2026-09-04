@@ -282,6 +282,8 @@ const OrdenesLimsPendientes: React.FC = () => {
               puedeAgregar ? (orden) => setOrdenAgregar(orden) : undefined
             }
             onAccion={puedeImprimir ? handleAccionEtiquetas : undefined}
+            puedeObraSocial={puedeImprimir}
+            onObraSocialSaved={load}
           />
         </Paper>
       )}

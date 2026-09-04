@@ -60,6 +60,7 @@ import {
 } from '../../../services/limsApi';
 import type { LimsTipoExamen } from '../../../types/lims';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import QcHoyPage from './QcHoyPage';
 
 const EQUIPOS_POR_ENSAYO = new Set(['VIDAS_KUBE', 'FINECARE']);
 
@@ -269,6 +270,7 @@ function LjChart({ series }: { series: LeveyJenningsSeries }) {
 }
 
 const QcHubPage: React.FC = () => {
+  const [mainTab, setMainTab] = useState(0);
   const [tab, setTab] = useState(0);
   const [equipos, setEquipos] = useState<EquipoAnalizador[]>([]);
   const [materiales, setMateriales] = useState<MaterialControl[]>([]);
@@ -318,6 +320,10 @@ const QcHubPage: React.FC = () => {
     vencimiento: plusDaysISO(365),
   });
   const [loteTargetsEdit, setLoteTargetsEdit] = useState('');
+  /** Ensayos elegidos a mano por lote (sesión) cuando falta equipo_analizador. */
+  const [examenesManualPorLote, setExamenesManualPorLote] = useState<Record<string, number[]>>(
+    {}
+  );
   const [targetDraft, setTargetDraft] = useState<
     Record<string, { media: string; de: string }>
   >({});
@@ -402,35 +408,6 @@ const QcHubPage: React.FC = () => {
     [lotesProducto, loteTargetsEdit]
   );
 
-  const examenesDeLoteTargets = useMemo(() => {
-    if (!loteTargetsSeleccionado) return [] as LimsTipoExamen[];
-    const ids = new Set(loteTargetsSeleccionado.targets.map((t) => t.tipo_examen));
-    const delEquipo = examenes.filter((ex) => {
-      if (ids.has(ex.id)) return true;
-      const prod = productos.find((p) => p.id === loteTargetsSeleccionado.producto);
-      return prod != null && ex.equipo_analizador === prod.equipo;
-    });
-    const seen = new Set<number>();
-    const out: LimsTipoExamen[] = [];
-    for (const ex of delEquipo.sort((a, b) => a.codigo.localeCompare(b.codigo))) {
-      if (seen.has(ex.id)) continue;
-      seen.add(ex.id);
-      out.push(ex);
-    }
-    return out;
-  }, [loteTargetsSeleccionado, examenes, productos]);
-
-  const margenesFormMaterial = useMemo(
-    () => margenesDeMaterial(formMaterial),
-    [formMaterial]
-  );
-
-  const helperValorCorrida = useMemo(() => {
-    if (!materialCorridaSeleccionada) return ' ';
-    const mg = margenesDeMaterial(materialCorridaSeleccionada);
-    return mg ? `Aceptable ±2s: ${rangoTxt(mg.warnLow, mg.warnHigh)}` : ' ';
-  }, [materialCorridaSeleccionada]);
-
   const examenesOrdenados = useMemo(
     () => [...examenes].sort((a, b) => a.codigo.localeCompare(b.codigo)),
     [examenes]
@@ -443,6 +420,68 @@ const QcHubPage: React.FC = () => {
       ),
     [examenesOrdenados]
   );
+
+  const examenesAutoDeLoteTargets = useMemo(() => {
+    if (!loteTargetsSeleccionado) return [] as LimsTipoExamen[];
+    const ids = new Set(loteTargetsSeleccionado.targets.map((t) => t.tipo_examen));
+    const prod = productos.find((p) => p.id === loteTargetsSeleccionado.producto);
+    const delEquipo = examenes.filter((ex) => {
+      if (ids.has(ex.id)) return true;
+      return prod != null && ex.equipo_analizador === prod.equipo;
+    });
+    const seen = new Set<number>();
+    const out: LimsTipoExamen[] = [];
+    for (const ex of delEquipo.sort((a, b) => a.codigo.localeCompare(b.codigo))) {
+      if (seen.has(ex.id)) continue;
+      seen.add(ex.id);
+      out.push(ex);
+    }
+    return out;
+  }, [loteTargetsSeleccionado, examenes, productos]);
+
+  const examenesDeLoteTargets = useMemo(() => {
+    if (!loteTargetsSeleccionado) return [] as LimsTipoExamen[];
+    const manualIds = new Set(
+      examenesManualPorLote[String(loteTargetsSeleccionado.id)] || []
+    );
+    const seen = new Set<number>();
+    const out: LimsTipoExamen[] = [];
+    for (const ex of examenesAutoDeLoteTargets) {
+      seen.add(ex.id);
+      out.push(ex);
+    }
+    for (const ex of examenesOrdenados) {
+      if (!manualIds.has(ex.id) || seen.has(ex.id)) continue;
+      seen.add(ex.id);
+      out.push(ex);
+    }
+    return out.sort((a, b) => a.codigo.localeCompare(b.codigo));
+  }, [
+    loteTargetsSeleccionado,
+    examenesAutoDeLoteTargets,
+    examenesManualPorLote,
+    examenesOrdenados,
+  ]);
+
+  const examenesManualSeleccionados = useMemo(() => {
+    if (!loteTargetsSeleccionado) return [] as LimsTipoExamen[];
+    const ids = new Set(examenesManualPorLote[String(loteTargetsSeleccionado.id)] || []);
+    return examenesOrdenados.filter((ex) => ids.has(ex.id));
+  }, [loteTargetsSeleccionado, examenesManualPorLote, examenesOrdenados]);
+
+  const faltaMapeoEquipoTargets =
+    !!loteTargetsSeleccionado && examenesAutoDeLoteTargets.length === 0;
+
+  const margenesFormMaterial = useMemo(
+    () => margenesDeMaterial(formMaterial),
+    [formMaterial]
+  );
+
+  const helperValorCorrida = useMemo(() => {
+    if (!materialCorridaSeleccionada) return ' ';
+    const mg = margenesDeMaterial(materialCorridaSeleccionada);
+    return mg ? `Aceptable ±2s: ${rangoTxt(mg.warnLow, mg.warnHigh)}` : ' ';
+  }, [materialCorridaSeleccionada]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -744,8 +783,14 @@ const QcHubPage: React.FC = () => {
 
   const submitTargets = async () => {
     const loteId = Number(loteTargetsEdit);
-    if (!loteId || !examenesDeLoteTargets.length) {
-      toast.error('Seleccioná un lote con ensayos.');
+    if (!loteId) {
+      toast.error('Seleccioná un lote.');
+      return;
+    }
+    if (!examenesDeLoteTargets.length) {
+      toast.error(
+        'No hay ensayos en la grilla. Elegí ensayos manualmente o asigná equipo analizador (p. ej. CM260) a los TipoExamen de química.'
+      );
       return;
     }
     const rows: Array<{
@@ -767,7 +812,7 @@ const QcHubPage: React.FC = () => {
       }
     }
     if (!rows.length) {
-      toast.error('Completá al menos un target (media y DE).');
+      toast.error('Completá al menos media y DE de un nivel (S1 o S2).');
       return;
     }
     setSaving(true);
@@ -855,8 +900,15 @@ const QcHubPage: React.FC = () => {
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="h5" fontWeight={700} gutterBottom>
-        Control de calidad (Westgard)
+        Control de calidad
       </Typography>
+      <Tabs value={mainTab} onChange={(_e, v) => setMainTab(v)} sx={{ mb: 2 }}>
+        <Tab label="Hoy" />
+        <Tab label="Catálogo / lotes" />
+      </Tabs>
+      {mainTab === 0 && <QcHoyPage />}
+      {mainTab === 1 && (
+        <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         IQC híbrido: productos multiparámetro (Standatrol, Sysmex, Coatron, Diestro, EDAN) habilitan
         el equipo con S1+S2. VIDAS y Finecare siguen con control por ensayo.
@@ -1326,65 +1378,128 @@ const QcHubPage: React.FC = () => {
             </Select>
           </FormControl>
           {loteTargetsSeleccionado && (
-            <Box sx={{ mb: 3, overflowX: 'auto' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Ensayo</TableCell>
-                    <TableCell>S1 media</TableCell>
-                    <TableCell>S1 DE</TableCell>
-                    <TableCell>S2 media</TableCell>
-                    <TableCell>S2 DE</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {examenesDeLoteTargets.map((ex) => {
-                    const s1 = targetDraft[`${ex.id}-N1`] || { media: '', de: '' };
-                    const s2 = targetDraft[`${ex.id}-N2`] || { media: '', de: '' };
-                    return (
-                      <TableRow key={ex.id}>
-                        <TableCell>{ex.codigo}</TableCell>
-                        {(['N1', 'N2'] as const).map((nivel) => {
-                          const d = nivel === 'N1' ? s1 : s2;
-                          return (
-                            <React.Fragment key={nivel}>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  type="number"
-                                  value={d.media}
-                                  onChange={(e) =>
-                                    setTargetDraft((prev) => ({
-                                      ...prev,
-                                      [`${ex.id}-${nivel}`]: { ...d, media: e.target.value },
-                                    }))
-                                  }
-                                  sx={{ width: 90 }}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  type="number"
-                                  value={d.de}
-                                  onChange={(e) =>
-                                    setTargetDraft((prev) => ({
-                                      ...prev,
-                                      [`${ex.id}-${nivel}`]: { ...d, de: e.target.value },
-                                    }))
-                                  }
-                                  sx={{ width: 80 }}
-                                />
-                              </TableCell>
-                            </React.Fragment>
-                          );
-                        })}
+            <Box sx={{ mb: 3 }}>
+              {faltaMapeoEquipoTargets && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                  Los ensayos de química no tienen <strong>equipo analizador</strong> asignado
+                  (p. ej. CM260) y este lote aún no tiene targets guardados: por eso la grilla
+                  queda vacía. Elegí los ensayos abajo para cargar filas ahora, o mapeá
+                  el equipo en el servidor (<code>mapear_examenes_equipo</code> / shell) para
+                  que aparezcan solos la próxima vez.
+                </Alert>
+              )}
+              <Autocomplete
+                multiple
+                size="small"
+                options={examenesOrdenados}
+                value={examenesManualSeleccionados}
+                onChange={(_, value) => {
+                  const loteKey = String(loteTargetsSeleccionado.id);
+                  setExamenesManualPorLote((prev) => ({
+                    ...prev,
+                    [loteKey]: value.map((ex) => ex.id),
+                  }));
+                }}
+                getOptionLabel={(ex) =>
+                  `${ex.codigo} — ${ex.nombre}${
+                    ex.equipo_analizador_codigo ? ` · ${ex.equipo_analizador_codigo}` : ''
+                  }`
+                }
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                filterSelectedOptions
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Agregar ensayos a la grilla"
+                    placeholder="Buscar por código o nombre…"
+                    helperText={
+                      faltaMapeoEquipoTargets
+                        ? 'Selección de sesión (no se guarda hasta “Guardar targets”).'
+                        : 'Opcional: sumá ensayos que no estén mapeados al equipo del producto.'
+                    }
+                  />
+                )}
+                sx={{ mb: 1.5, maxWidth: 720 }}
+              />
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ensayo</TableCell>
+                      <TableCell>S1 media</TableCell>
+                      <TableCell>S1 DE</TableCell>
+                      <TableCell>S2 media</TableCell>
+                      <TableCell>S2 DE</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {examenesDeLoteTargets.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5}>
+                          <Typography variant="body2" color="text.secondary">
+                            Sin ensayos en la grilla. Usá el selector de arriba o asigná equipo
+                            analizador a los TipoExamen.
+                          </Typography>
+                        </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              <Button variant="contained" onClick={submitTargets} disabled={saving} sx={{ mt: 1 }}>
+                    ) : (
+                      examenesDeLoteTargets.map((ex) => {
+                        const s1 = targetDraft[`${ex.id}-N1`] || { media: '', de: '' };
+                        const s2 = targetDraft[`${ex.id}-N2`] || { media: '', de: '' };
+                        return (
+                          <TableRow key={ex.id}>
+                            <TableCell>{ex.codigo}</TableCell>
+                            {(['N1', 'N2'] as const).map((nivel) => {
+                              const d = nivel === 'N1' ? s1 : s2;
+                              return (
+                                <React.Fragment key={nivel}>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      value={d.media}
+                                      onChange={(e) =>
+                                        setTargetDraft((prev) => ({
+                                          ...prev,
+                                          [`${ex.id}-${nivel}`]: {
+                                            ...d,
+                                            media: e.target.value,
+                                          },
+                                        }))
+                                      }
+                                      sx={{ width: 90 }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      value={d.de}
+                                      onChange={(e) =>
+                                        setTargetDraft((prev) => ({
+                                          ...prev,
+                                          [`${ex.id}-${nivel}`]: { ...d, de: e.target.value },
+                                        }))
+                                      }
+                                      sx={{ width: 80 }}
+                                    />
+                                  </TableCell>
+                                </React.Fragment>
+                              );
+                            })}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+              <Button
+                variant="contained"
+                onClick={submitTargets}
+                disabled={saving || !examenesDeLoteTargets.length}
+                sx={{ mt: 1 }}
+              >
                 Guardar targets
               </Button>
             </Box>
@@ -1850,6 +1965,8 @@ const QcHubPage: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+        </Box>
+      )}
         </Box>
       )}
     </Box>

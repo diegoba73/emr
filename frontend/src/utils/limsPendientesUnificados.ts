@@ -14,6 +14,7 @@ export interface PendientePedidoRow {
   origen_solicitud_display?: string | null;
   procedencia_display?: string | null;
   estado: string;
+  estado_obra_social?: string | null;
   fecha_solicitud?: string | null;
   fecha_toma_muestra?: string | null;
   sin_etiquetas: boolean;
@@ -44,6 +45,7 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
     origen_solicitud_display: r.origen_solicitud_display,
     procedencia_display: r.procedencia_display,
     estado: r.estado,
+    estado_obra_social: r.estado_obra_social || '',
     fecha_solicitud: r.fecha_solicitud,
     fecha_toma_muestra: r.fecha_toma_muestra,
     sin_etiquetas: Boolean(r.orden_abierta),
@@ -70,6 +72,7 @@ export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow
     origen_solicitud_display: e.origen_solicitud_display,
     procedencia_display: e.procedencia_display,
     estado: e.estado,
+    estado_obra_social: e.estado_obra_social || '',
     fecha_solicitud: e.created_at,
     fecha_toma_muestra: e.fecha_inicio || e.created_at,
     sin_etiquetas: Boolean(e.sin_etiquetas ?? (e.estado === 'PENDIENTE' && !e.etiquetas_impresas_at)),

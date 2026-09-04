@@ -1,24 +1,29 @@
 import React from 'react';
-import { Box, Button, Paper, Typography } from '@mui/material';
+import { Box, Button, Chip, Paper, Typography } from '@mui/material';
 import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
+import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
 
 export interface EstudioMicroResumenTabProps {
   estudio: EstudioMicrobiologia;
   canOperateTecnico: boolean;
   canMarcarInformado: boolean;
+  canEditarObraSocial?: boolean;
   onIniciar: () => void;
   onCancelar: () => void;
   onMarcarInformado: () => void;
+  onObraSocial?: () => void;
 }
 
 const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   estudio,
   canOperateTecnico,
   canMarcarInformado,
+  canEditarObraSocial = false,
   onIniciar,
   onCancelar,
   onMarcarInformado,
+  onObraSocial,
 }) => {
   const e = estudio.estado;
   return (
@@ -26,6 +31,14 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Estudio {estudio.numero || estudio.id}</Typography>
         <EstudioMicrobiologiaEstadoBadge estado={e} />
+        {estudio.estado_obra_social ? (
+          <Chip
+            size="small"
+            label={`Obra social: ${labelEstadoObraSocial(estudio.estado_obra_social)}`}
+            color={colorEstadoObraSocial(estudio.estado_obra_social)}
+            variant="outlined"
+          />
+        ) : null}
       </Box>
       <Typography>
         <strong>Paciente:</strong> {estudio.paciente_nombre || `#${estudio.paciente}`}
@@ -57,8 +70,13 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       <Typography sx={{ mt: 2 }} variant="body2" color="text.secondary">
         {estudio.observaciones || 'Sin observaciones.'}
       </Typography>
-      {(canOperateTecnico || canMarcarInformado) && (
+      {(canOperateTecnico || canMarcarInformado || canEditarObraSocial) && (
         <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {canEditarObraSocial && onObraSocial && (
+            <Button variant="outlined" onClick={onObraSocial}>
+              Obra social
+            </Button>
+          )}
           {canOperateTecnico && e === 'PENDIENTE' && (
             <Button variant="contained" onClick={onIniciar}>
               Confirmar recepción

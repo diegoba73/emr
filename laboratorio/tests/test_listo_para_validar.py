@@ -58,6 +58,7 @@ class ListoParaValidarFsmTests(TestCase):
             medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="EN_PROCESO",
+            estado_obra_social="AUTORIZADO",
         )
         for te in examenes:
             sol.tipos_examen.add(te)

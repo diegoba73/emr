@@ -479,6 +479,9 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     pedido_adicional = serializers.SerializerMethodField()
     merged = serializers.SerializerMethodField()
     derivaciones_resumen = serializers.SerializerMethodField()
+    estado_obra_social_display = serializers.SerializerMethodField()
+    requiere_autorizacion_obra_social = serializers.SerializerMethodField()
+    obra_social_permite_validar = serializers.SerializerMethodField()
     
     class Meta:
         model = SolicitudExamen
@@ -506,6 +509,10 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'procedencia_tipo',
             'procedencia_display',
             'estado',
+            'estado_obra_social',
+            'estado_obra_social_display',
+            'requiere_autorizacion_obra_social',
+            'obra_social_permite_validar',
             'fecha_solicitud',
             'fecha_toma_muestra',
             'fecha_entrega_prometida',
@@ -531,6 +538,10 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'numero',
             'fecha_solicitud',
             'estado',
+            'estado_obra_social',
+            'estado_obra_social_display',
+            'requiere_autorizacion_obra_social',
+            'obra_social_permite_validar',
             'paciente_nombre',
             'paciente_dni',
             'paciente_email',
@@ -736,6 +747,19 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
                 }
             )
         return out
+
+    def get_estado_obra_social_display(self, obj):
+        return obj.get_estado_obra_social_display() or ''
+
+    def get_requiere_autorizacion_obra_social(self, obj):
+        from laboratorio.obra_social import origen_requiere_autorizacion_obra_social
+
+        return origen_requiere_autorizacion_obra_social(getattr(obj, 'origen_solicitud', None))
+
+    def get_obra_social_permite_validar(self, obj):
+        from laboratorio.obra_social import obra_social_permite_liberar
+
+        return obra_social_permite_liberar(obj)
 
 
 class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
