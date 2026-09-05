@@ -44,6 +44,9 @@ synesis_db
 .env
 .env.*
 !.env.example
+!.env.demo.example
+!.env.production.example
+
 
 # OS
 .DS_Store

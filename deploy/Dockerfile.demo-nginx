@@ -1,0 +1,17 @@
+# Imagen Nginx del stack DEMO: build React (same-origin /api) + conf nginx.demo.
+# Contexto de build: raíz del repo EMR.
+
+FROM node:20-alpine AS frontend_build
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --legacy-peer-deps
+COPY frontend/ ./
+ENV REACT_APP_API_URL=/api
+ENV CI=false
+ENV DISABLE_ESLINT_PLUGIN=true
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY deploy/nginx/nginx.demo.conf /etc/nginx/conf.d/default.conf
+COPY --from=frontend_build /frontend/build /usr/share/nginx/html
+EXPOSE 80

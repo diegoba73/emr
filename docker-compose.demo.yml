@@ -1,0 +1,91 @@
+# SYNESIS EMR — stack DEMO aislado (local y servidor).
+# NO usa emr_postgres ni volúmenes del stack de desarrollo/clínico.
+#
+# Local:
+#   cp .env.demo.example .env.demo
+#   docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo up -d --build
+#   docker compose -p emr-demo -f docker-compose.demo.yml exec backend python manage.py seed_data
+#   docker compose -p emr-demo -f docker-compose.demo.yml exec backend python manage.py seed_demo_marketing
+#   Abrir http://localhost:8081/demo
+#
+# Ver docs/demo-stack.md
+
+name: emr-demo
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: emr_demo_postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-synesis_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-demo_postgres_change_me}
+    volumes:
+      - postgres_data_demo:/var/lib/postgresql/data
+    # Sin publish de 5432 al host → no choca con emr_postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: .
+    container_name: emr_demo_backend
+    expose:
+      - "8000"
+    env_file:
+      - .env.demo
+    environment:
+      PATH: /usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
+      DJANGO_RUNTIME: gunicorn
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-demo-local-secret-change-me-not-for-prod}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+      DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:-http://localhost:8081,http://127.0.0.1:8081}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8081,http://127.0.0.1:8081}
+      DJANGO_SESSION_COOKIE_SECURE: ${DJANGO_SESSION_COOKIE_SECURE:-False}
+      DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-False}
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-False}
+      DJANGO_USE_PROXY_SSL_HEADER: ${DJANGO_USE_PROXY_SSL_HEADER:-False}
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ${DB_NAME:-synesis_db}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-demo_postgres_change_me}
+      DB_HOST: db
+      DB_PORT: "5432"
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      RUN_SEED: ${RUN_SEED:-false}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=5)\"",
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.demo-nginx
+    container_name: emr_demo_nginx
+    ports:
+      - "${DEMO_HTTP_PORT:-8081}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data_demo:
+    name: emr_demo_postgres_data
