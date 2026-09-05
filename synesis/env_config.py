@@ -81,11 +81,15 @@ DEV_ALLOWED_HOSTS = ('localhost', '127.0.0.1', '0.0.0.0')
 DEV_CORS_ORIGINS = (
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
 )
 
 DEV_CSRF_ORIGINS = (
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 )

@@ -44,7 +44,7 @@ const PortalHistoria: React.FC = () => {
   }, [pacienteId]);
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2 }} data-demo="page-portal-historia">
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Mi historia clínica
       </Typography>

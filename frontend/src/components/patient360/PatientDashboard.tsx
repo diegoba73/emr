@@ -213,7 +213,7 @@ const PatientDashboard: React.FC = () => {
   const canEditDemographics = canUpdatePacienteDemographics(currentUser);
 
   return (
-    <Box className="fade-in">
+    <Box className="fade-in" data-demo="page-paciente-360">
       <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
         <Button startIcon={<ArrowBack />} onClick={() => navigate('/pacientes')} size="small" variant="text">
           Pacientes

@@ -6,6 +6,7 @@
 #   ./emrctl up --full       db + backend + frontend en Docker
 #   ./emrctl up --seed       primera vez con datos demo + catálogo LIMS
 #   ./emrctl seed            recargar demo/catálogo LIMS
+#   ./emrctl seed-demo       datos ficticios MKTG + internación (demo marketing)
 #
 # Modo híbrido (solo si necesitás runserver en terminal):
 #   ./emrctl up --hybrid     solo Postgres en Docker
@@ -380,11 +381,36 @@ cmd_seed() {
   run_seed_docker
 }
 
+run_seed_demo_docker() {
+  local run_py
+  if backend_running_in_docker; then
+    run_py() { docker_compose exec -T backend python manage.py "$@"; }
+  else
+    info "Backend no está estable; ejecutando comandos con docker compose run..."
+    run_py() {
+      docker_compose run --rm -e RUN_MIGRATIONS=false -e RUN_SEED=false --entrypoint "" backend \
+        python manage.py "$@"
+    }
+  fi
+  info "Ejecutando seed_demo_marketing (idempotente, contenedor backend)..."
+  run_py seed_demo_marketing
+  ok "Demo marketing lista. Abrí http://localhost:3000/demo"
+}
+
+cmd_seed_demo() {
+  wait_for_docker
+  if ! db_running_in_docker; then
+    die "Postgres no está corriendo. Ejecutá: ./emrctl up"
+  fi
+  run_seed_demo_docker
+}
+
 cmd_help() {
   sed -n '3,21p' "$0" | sed 's/^# \?//'
   echo ""
   echo "Ejemplos:"
   echo "  ./emrctl up --seed       # Docker: db + backend + datos demo"
+  echo "  ./emrctl seed-demo       # datos ficticios MKTG para demo marketing"
   echo "  ./emrctl up --full       # incluye frontend React"
   echo "  ./emrctl up --hybrid     # solo Postgres (runserver manual)"
 }
@@ -402,6 +428,7 @@ main() {
     status|ps) cmd_status ;;
     logs) cmd_logs "${1:-db}" ;;
     seed) cmd_seed ;;
+    seed-demo|seed_demo) cmd_seed_demo ;;
     repair-migrations|repair) cmd_repair_migrations ;;
     help|-h|--help) cmd_help ;;
     *)

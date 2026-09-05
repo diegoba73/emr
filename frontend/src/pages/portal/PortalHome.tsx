@@ -32,7 +32,7 @@ const PortalHome: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2 }} data-demo="page-portal">
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Portal del paciente
       </Typography>

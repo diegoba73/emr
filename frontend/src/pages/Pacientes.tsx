@@ -161,7 +161,7 @@ const Pacientes: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }} className="fade-in">
+    <Box sx={{ p: 3 }} className="fade-in" data-demo="page-pacientes">
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
           Gestión de Pacientes

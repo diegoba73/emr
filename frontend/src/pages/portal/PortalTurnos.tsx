@@ -49,7 +49,7 @@ const PortalTurnos: React.FC = () => {
     );
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2 }} data-demo="page-portal-turnos">
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Mis turnos
       </Typography>

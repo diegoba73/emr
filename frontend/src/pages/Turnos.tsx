@@ -757,7 +757,7 @@ const Turnos: React.FC = () => {
 	}
 
 	  return (
-    <div className="dashboard fade-in">
+    <div className="dashboard fade-in" data-demo="page-turnos">
       <div className="container">
         {/* Header */}
         <div className="turnos-header">

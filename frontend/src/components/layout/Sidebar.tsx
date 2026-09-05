@@ -210,7 +210,12 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
         const selected = selectedFn(item);
         return (
           <ListItem key={item.path} disablePadding>
-            <ListItemButton selected={selected} onClick={() => go(item.path)} sx={navButtonSx}>
+            <ListItemButton
+              selected={selected}
+              onClick={() => go(item.path)}
+              sx={navButtonSx}
+              data-demo-nav={item.path}
+            >
               <ListItemIcon sx={{ minWidth: 40, color: selected ? 'inherit' : 'action.active' }}>
                 {item.icon}
               </ListItemIcon>
@@ -226,7 +231,7 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
   );
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }} data-demo="sidebar">
       <Box
         sx={{
           display: 'flex',

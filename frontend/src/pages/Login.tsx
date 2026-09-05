@@ -28,6 +28,7 @@ import { isPacienteRole } from '../utils/navLabels';
 import { useThemeMode } from '../contexts/ThemeModeContext';
 import ThemeModeToggle from '../components/ThemeModeToggle';
 import { authPageGradient } from '../theme/buildAppTheme';
+import { consumeDemoPrefillUsername } from '../demo/demoStorage';
 
 // Esquema de validación con Yup
 const loginSchema = yup.object({
@@ -56,7 +57,7 @@ const Login: React.FC = () => {
   } = useForm<LoginFormData>({
     resolver: yupResolver(loginSchema),
     defaultValues: {
-      username: '',
+      username: consumeDemoPrefillUsername(),
       password: '',
     },
   });
@@ -172,6 +173,17 @@ const Login: React.FC = () => {
               }
             >
               {isSubmitting || isLoading ? 'Iniciando sesión...' : 'Ingresar'}
+            </Button>
+
+            <Button
+              component={Link}
+              to="/demo"
+              fullWidth
+              variant="outlined"
+              sx={{ mb: 2, py: 1.25 }}
+              disabled={isSubmitting || isLoading}
+            >
+              Probar demo guiada
             </Button>
 
             <Box sx={{ textAlign: 'center', mt: 2 }}>

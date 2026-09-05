@@ -196,7 +196,7 @@ const OrdenesLims: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2 }} data-demo="page-lims-ordenes">
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h5" gutterBottom>

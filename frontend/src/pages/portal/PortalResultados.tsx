@@ -42,7 +42,7 @@ const PortalResultados: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2 }} data-demo="page-portal-resultados">
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Resultados de laboratorio
       </Typography>

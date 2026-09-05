@@ -270,7 +270,7 @@ const OrdenLimsDetalle: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2 }} data-demo="page-lims-detalle">
       <Button size="small" onClick={goBack} sx={{ mb: 1 }}>
         {back.label}
       </Button>

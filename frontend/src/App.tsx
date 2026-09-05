@@ -17,6 +17,8 @@ import EstudiosComplementarios from './pages/EstudiosComplementarios';
 import EstudioComplementarioDetalle from './pages/EstudioComplementarioDetalle';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import DemoLanding from './pages/DemoLanding';
+import DemoTourHost from './demo/DemoTourHost';
 import Medicos from './pages/Medicos';
 import GestionUsuarios from './pages/GestionUsuarios';
 import Perfil from './pages/Perfil';
@@ -171,6 +173,7 @@ const AppContent: React.FC = () => {
         {/* Rutas públicas */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/demo" element={<DemoLanding />} />
 
         {/* Rutas protegidas con layout (sidebar + header) */}
         <Route
@@ -771,6 +774,7 @@ const AppThemedTree: React.FC = () => {
       <QueryClientProvider client={queryClient}>
         <DataProvider>
           <AppContent />
+          <DemoTourHost />
           <Toaster
             position="top-right"
             toastOptions={{

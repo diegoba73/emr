@@ -82,7 +82,7 @@ const MuestraConsultaPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 2, maxWidth: 900, mx: 'auto' }}>
+    <Box sx={{ p: 2, maxWidth: 900, mx: 'auto' }} data-demo="page-muestras">
       <Typography variant="h5" gutterBottom>
         Consulta de muestra
       </Typography>
