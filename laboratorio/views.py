@@ -679,6 +679,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                         prev_muestra_id = resultado.muestra_id
                         muestra_meta_aplica = False
                         muestra_iniciar_proceso_id: int | None = None
+                        era_vacio = not (resultado.valor_obtenido or "").strip()
 
                         if "muestra_id" in resultado_item:
                             if resultado.validado_por_id or resultado.fecha_validacion:
@@ -777,6 +778,21 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                             else:
                                 msg = str(exc)
                             return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+                        # Primera carga con valor → egreso soft de reactivos (receta del ensayo).
+                        if era_vacio and (resultado.valor_obtenido or "").strip():
+                            try:
+                                from laboratorio.inventario_service import egresar_por_resultado
+
+                                inv = egresar_por_resultado(resultado, user=request.user)
+                                for w in inv.get("warnings") or []:
+                                    logger.warning("inventario (carga resultado %s): %s", resultado.pk, w)
+                            except Exception:
+                                logger.exception(
+                                    "inventario: fallo egreso por resultado %s",
+                                    resultado.pk,
+                                )
+
                         muestra_transitioned_en_proceso = False
                         muestra_estado_antes_proceso: str | None = None
                         if muestra_iniciar_proceso_id is not None:

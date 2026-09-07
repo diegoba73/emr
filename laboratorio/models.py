@@ -725,6 +725,7 @@ from laboratorio.models_microbiologia import (  # noqa: E402,F401
     TipoMuestraMicrobiologia,
 )
 from laboratorio.models_inventario import (  # noqa: E402,F401
+    ConsumoInsumoExamen,
     InsumoLab,
     LoteInsumo,
     MovimientoStock,

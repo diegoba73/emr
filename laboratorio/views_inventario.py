@@ -1,5 +1,4 @@
 """ViewSets inventario LIMS."""
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import F
 from rest_framework import status, viewsets
@@ -8,8 +7,14 @@ from rest_framework.response import Response
 
 from api.permissions import LimsInventarioPermission
 from laboratorio.inventario_service import alertas, registrar_ingreso
-from laboratorio.models_inventario import InsumoLab, LoteInsumo, MovimientoStock
+from laboratorio.models_inventario import (
+    ConsumoInsumoExamen,
+    InsumoLab,
+    LoteInsumo,
+    MovimientoStock,
+)
 from laboratorio.serializers_inventario import (
+    ConsumoInsumoExamenSerializer,
     InsumoLabSerializer,
     LoteInsumoSerializer,
     MovimientoStockSerializer,
@@ -17,12 +22,29 @@ from laboratorio.serializers_inventario import (
 
 
 class InsumoLabViewSet(viewsets.ModelViewSet):
-    queryset = InsumoLab.objects.select_related("tipo_contenedor", "medio_cultivo").all()
+    queryset = InsumoLab.objects.select_related(
+        "tipo_contenedor", "medio_cultivo", "equipo"
+    ).all()
     serializer_class = InsumoLabSerializer
     permission_classes = [LimsInventarioPermission]
-    filterset_fields = ["tipo", "activo", "tipo_contenedor", "medio_cultivo"]
-    search_fields = ["codigo", "nombre"]
+    filterset_fields = [
+        "tipo",
+        "activo",
+        "tipo_contenedor",
+        "medio_cultivo",
+        "canal_analizador",
+        "composicion",
+        "equipo",
+    ]
+    search_fields = ["codigo", "nombre", "proveedor"]
     ordering = ["codigo"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        canal = self.request.query_params.get("canal")
+        if canal:
+            qs = qs.filter(canal_analizador=canal)
+        return qs
 
     @action(detail=False, methods=["get"])
     def alertas(self, request):
@@ -41,6 +63,9 @@ class LoteInsumoViewSet(viewsets.ModelViewSet):
         insumo_id = self.request.query_params.get("insumo_id")
         if insumo_id:
             qs = qs.filter(insumo_id=insumo_id)
+        canal = self.request.query_params.get("canal")
+        if canal:
+            qs = qs.filter(insumo__canal_analizador=canal)
         return qs
 
 
@@ -55,10 +80,13 @@ class MovimientoStockViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         lote_id = self.request.query_params.get("lote_id")
         insumo_id = self.request.query_params.get("insumo_id")
+        canal = self.request.query_params.get("canal")
         if lote_id:
             qs = qs.filter(lote_id=lote_id)
         if insumo_id:
             qs = qs.filter(lote__insumo_id=insumo_id)
+        if canal:
+            qs = qs.filter(lote__insumo__canal_analizador=canal)
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -83,7 +111,6 @@ class MovimientoStockViewSet(viewsets.ModelViewSet):
                 if tipo == MovimientoStock.Tipo.DESCARTE:
                     LoteInsumo.objects.filter(pk=lote.pk).update(cantidad=F("cantidad") - cantidad)
                 else:
-                    # AJUSTE: set absolute? treat as delta negative/positive via signo in motivo — use absolute set
                     LoteInsumo.objects.filter(pk=lote.pk).update(cantidad=cantidad)
                 lote.refresh_from_db()
                 mov = MovimientoStock.objects.create(
@@ -99,3 +126,35 @@ class MovimientoStockViewSet(viewsets.ModelViewSet):
                     status=400,
                 )
         return Response(MovimientoStockSerializer(mov).data, status=status.HTTP_201_CREATED)
+
+
+class ConsumoInsumoExamenViewSet(viewsets.ModelViewSet):
+    """Recetas examen → insumos (0..N SKUs físicos)."""
+
+    queryset = ConsumoInsumoExamen.objects.select_related(
+        "tipo_examen",
+        "tipo_examen__equipo_analizador",
+        "insumo",
+        "insumo__equipo",
+    ).all()
+    serializer_class = ConsumoInsumoExamenSerializer
+    permission_classes = [LimsInventarioPermission]
+    filterset_fields = ["tipo_examen", "insumo", "activo"]
+    ordering = ["tipo_examen_id", "id"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        tipo_examen = self.request.query_params.get("tipo_examen_id") or self.request.query_params.get(
+            "tipo_examen"
+        )
+        insumo = self.request.query_params.get("insumo_id") or self.request.query_params.get("insumo")
+        equipo = self.request.query_params.get("equipo") or self.request.query_params.get(
+            "equipo_codigo"
+        )
+        if tipo_examen:
+            qs = qs.filter(tipo_examen_id=tipo_examen)
+        if insumo:
+            qs = qs.filter(insumo_id=insumo)
+        if equipo:
+            qs = qs.filter(tipo_examen__equipo_analizador__codigo__iexact=equipo)
+        return qs

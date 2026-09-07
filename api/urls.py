@@ -35,6 +35,7 @@ from laboratorio.views_microbiologia import (
     TipoMuestraMicrobiologiaViewSet,
 )
 from laboratorio.views_inventario import (
+    ConsumoInsumoExamenViewSet,
     InsumoLabViewSet,
     LoteInsumoViewSet,
     MovimientoStockViewSet,
@@ -251,6 +252,11 @@ router.register(
     r'lab/inventario/movimientos',
     MovimientoStockViewSet,
     basename='lab-inventario-movimientos',
+)
+router.register(
+    r'lab/inventario/consumos-examen',
+    ConsumoInsumoExamenViewSet,
+    basename='lab-inventario-consumos-examen',
 )
 # Control de calidad Westgard
 router.register(

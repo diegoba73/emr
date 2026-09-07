@@ -440,7 +440,10 @@ export async function createMuestra(payload: {
   return data;
 }
 
-export async function postMuestraTomar(id: number, body: { observaciones?: string } = {}): Promise<MuestraTransaccional> {
+export async function postMuestraTomar(
+  id: number,
+  body: { observaciones?: string } = {}
+): Promise<MuestraTransaccional> {
   const { data } = await apiClient.post<MuestraTransaccional>(`${LAB}/muestras-transaccionales/${id}/tomar/`, body);
   return data;
 }
@@ -716,9 +719,17 @@ export interface InsumoLab {
   tipo_contenedor_nombre?: string | null;
   medio_cultivo: number | null;
   medio_cultivo_nombre?: string | null;
+  equipo: number | null;
+  equipo_codigo?: string | null;
+  equipo_nombre?: string | null;
   unidad: string;
   stock_min: number;
   stock_actual: number;
+  proveedor: string;
+  unidades_por_caja?: number | null;
+  volumen_por_unidad?: string | number | null;
+  composicion: '' | 'SOLO_A' | 'A_B' | 'OTRO';
+  canal_analizador: '' | 'DEDICADO' | 'ABIERTO';
   activo: boolean;
 }
 
@@ -732,6 +743,7 @@ export interface LoteInsumo {
   fecha_vencimiento: string | null;
   ubicacion: string;
   activo: boolean;
+  canal_analizador?: string;
 }
 
 export interface MovimientoStock {
@@ -740,11 +752,29 @@ export interface MovimientoStock {
   lote: number;
   lote_codigo: string;
   insumo_codigo: string;
+  canal_analizador?: string;
   cantidad: number;
   motivo: string;
   created_at: string;
   muestra_id: number | null;
   siembra_id: number | null;
+  resultado_id: number | null;
+}
+
+export interface ConsumoInsumoExamen {
+  id: number;
+  tipo_examen: number;
+  tipo_examen_codigo: string;
+  tipo_examen_nombre: string;
+  insumo: number;
+  insumo_codigo: string;
+  insumo_nombre: string;
+  insumo_unidad: string;
+  canal_analizador?: string;
+  equipo_codigo?: string | null;
+  cantidad_por_determinacion: string | number;
+  rol: string;
+  activo: boolean;
 }
 
 export interface InventarioAlertas {
@@ -755,6 +785,10 @@ export interface InventarioAlertas {
     stock_actual: number;
     stock_min: number;
     unidad: string;
+    proveedor?: string;
+    canal_analizador?: string;
+    consumo_30d?: number;
+    cantidad_sugerida?: number;
   }>;
   por_vencer: Array<{
     lote_id: number;
@@ -764,23 +798,57 @@ export interface InventarioAlertas {
     cantidad: number;
     fecha_vencimiento: string;
     dias_restantes: number;
+    canal_analizador?: string;
+    proveedor?: string;
+  }>;
+  pedidos?: Array<{
+    insumo_id: number;
+    codigo: string;
+    nombre: string;
+    tipo: string;
+    unidad: string;
+    proveedor: string;
+    canal_analizador: string;
+    composicion: string;
+    equipo_codigo: string | null;
+    stock_actual: number;
+    stock_min: number;
+    consumo_7d: number;
+    consumo_30d: number;
+    cantidad_sugerida: number;
+    ritmo_alto: boolean;
+    dias_restantes_stock: number | null;
   }>;
 }
 
-export async function listInsumosLab(): Promise<InsumoLab[]> {
-  return getPaginatedAll<InsumoLab>(`${LAB}/inventario/insumos/`, { page_size: 500 });
+export async function listInsumosLab(params?: {
+  tipo?: string;
+  canal?: string;
+  activo?: boolean;
+}): Promise<InsumoLab[]> {
+  return getPaginatedAll<InsumoLab>(`${LAB}/inventario/insumos/`, {
+    page_size: 500,
+    tipo: params?.tipo,
+    canal: params?.canal,
+    activo: params?.activo === undefined ? undefined : params.activo ? 'true' : 'false',
+  });
 }
 
-export async function listLotesInsumo(params?: { insumo_id?: number }): Promise<LoteInsumo[]> {
+export async function listLotesInsumo(params?: {
+  insumo_id?: number;
+  canal?: string;
+}): Promise<LoteInsumo[]> {
   return getPaginatedAll<LoteInsumo>(`${LAB}/inventario/lotes/`, {
     page_size: 500,
     insumo_id: params?.insumo_id,
+    canal: params?.canal,
   });
 }
 
 export async function listMovimientosStock(params?: {
   lote_id?: number;
   insumo_id?: number;
+  canal?: string;
 }): Promise<MovimientoStock[]> {
   return getPaginatedAll<MovimientoStock>(`${LAB}/inventario/movimientos/`, {
     page_size: 500,
@@ -793,8 +861,15 @@ export async function getInventarioAlertas(): Promise<InventarioAlertas> {
   return data;
 }
 
-export async function createInsumoLab(body: Partial<InsumoLab> & { codigo: string; nombre: string; tipo: string }) {
+export async function createInsumoLab(
+  body: Partial<InsumoLab> & { codigo: string; nombre: string; tipo: string }
+) {
   const { data } = await apiClient.post<InsumoLab>(`${LAB}/inventario/insumos/`, body);
+  return data;
+}
+
+export async function patchInsumoLab(id: number, body: Partial<InsumoLab>) {
+  const { data } = await apiClient.patch<InsumoLab>(`${LAB}/inventario/insumos/${id}/`, body);
   return data;
 }
 
@@ -817,6 +892,54 @@ export async function registrarMovimientoStock(body: {
 }) {
   const { data } = await apiClient.post<MovimientoStock>(`${LAB}/inventario/movimientos/`, body);
   return data;
+}
+
+export async function listConsumosInsumoExamen(params?: {
+  tipo_examen_id?: number;
+  insumo_id?: number;
+  equipo?: string;
+  activo?: boolean;
+}): Promise<ConsumoInsumoExamen[]> {
+  return getPaginatedAll<ConsumoInsumoExamen>(`${LAB}/inventario/consumos-examen/`, {
+    page_size: 1000,
+    tipo_examen_id: params?.tipo_examen_id,
+    insumo_id: params?.insumo_id,
+    equipo: params?.equipo,
+    activo: params?.activo === undefined ? undefined : params.activo ? 'true' : 'false',
+  });
+}
+
+export async function createConsumoInsumoExamen(body: {
+  tipo_examen: number;
+  insumo: number;
+  cantidad_por_determinacion: number | string;
+  rol?: string;
+  activo?: boolean;
+}) {
+  const { data } = await apiClient.post<ConsumoInsumoExamen>(
+    `${LAB}/inventario/consumos-examen/`,
+    body
+  );
+  return data;
+}
+
+export async function patchConsumoInsumoExamen(
+  id: number,
+  body: Partial<{
+    cantidad_por_determinacion: number | string;
+    rol: string;
+    activo: boolean;
+  }>
+) {
+  const { data } = await apiClient.patch<ConsumoInsumoExamen>(
+    `${LAB}/inventario/consumos-examen/${id}/`,
+    body
+  );
+  return data;
+}
+
+export async function deleteConsumoInsumoExamen(id: number) {
+  await apiClient.delete(`${LAB}/inventario/consumos-examen/${id}/`);
 }
 
 // --- Control de calidad Westgard ---
