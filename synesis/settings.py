@@ -310,6 +310,19 @@ MEDGEMMA_TIMEOUT_SECONDS = int(os.getenv('MEDGEMMA_TIMEOUT_SECONDS', '30'))
 # IQC Fase 1: equipo analizador por defecto (corridas sin equipo no cuentan para el gate).
 IQC_EQUIPO_DEFAULT_CODIGO = os.getenv('IQC_EQUIPO_DEFAULT_CODIGO', 'CM260').strip() or 'CM260'
 
+# Impresora de etiquetas LIMS (3nStar LDT114 / ZPL / 40×23 mm). Deshabilitada por defecto.
+# Host/port NUNCA desde el cliente; sin auto-retry en el transporte.
+LIMS_LABEL_PRINTER_ENABLED = env_bool('LIMS_LABEL_PRINTER_ENABLED', default=False)
+LIMS_LABEL_PRINTER_HOST = os.getenv('LIMS_LABEL_PRINTER_HOST', '').strip()
+LIMS_LABEL_PRINTER_PORT = int(os.getenv('LIMS_LABEL_PRINTER_PORT', '9100') or '9100')
+LIMS_LABEL_PRINTER_TIMEOUT_SECONDS = float(
+    os.getenv('LIMS_LABEL_PRINTER_TIMEOUT_SECONDS', '5') or '5'
+)
+LIMS_LABEL_PRINTER_PROFILE = (
+    os.getenv('LIMS_LABEL_PRINTER_PROFILE', '3nstar_ldt114_203_40x23').strip()
+    or '3nstar_ldt114_203_40x23'
+)
+
 # Configuración del modelo de usuario personalizado
 AUTH_USER_MODEL = 'usuarios.User'
 

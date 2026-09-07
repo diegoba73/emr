@@ -176,6 +176,18 @@ class Muestra(models.Model):
     motivo_rechazo = models.TextField(blank=True, default="", verbose_name="Motivo de rechazo")
 
     ubicacion_actual = models.CharField(max_length=255, blank=True, default="", verbose_name="Ubicación actual")
+    # Snapshot del lugar donde se realizó la extracción (GUARDIA, CAMA 12, …).
+    # NO reutilizar ubicacion_actual: esa ubicación cambia en recepción/proceso/conservación.
+    lugar_extraccion = models.CharField(
+        max_length=120,
+        null=True,
+        blank=True,
+        verbose_name="Lugar de extracción",
+        help_text=(
+            "Lugar histórico de la toma física. Inmutable tras registrarse. "
+            "Distinto de ubicacion_actual (custodia posterior)."
+        ),
+    )
 
     fecha_conservacion = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de conservación")
     fecha_descarte = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de descarte")

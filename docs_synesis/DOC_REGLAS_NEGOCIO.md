@@ -29,9 +29,10 @@ Ver `INSTALLED_APPS` en `synesis/settings.py` y `DOC_BACKEND.md`. Incluye: `core
 
 ## Roles de usuario detectados
 
-En `usuarios.User.rol`: **paciente**, **medico**, **secretaria**, **enfermeria**, **laboratorio**, **admin**.
+En `usuarios.User.rol`: **paciente**, **medico**, **secretaria**, **enfermeria**, **laboratorio**, **bioquimico**, **admin**.
 
-- **`laboratorio`:** operador del LIMS nativo (app `laboratorio`): órdenes, toma de muestra (marca de estado), carga de resultados, cancelación, marcar entregado, etiquetas; **no** puede validar órdenes (solo **admin** / superuser). **No** es rol “técnico” legacy ni sustituye enfermería clínica EMR.
+- **`laboratorio`:** operador del LIMS nativo (app `laboratorio`): órdenes, toma de muestra (marca de estado), carga de resultados, cancelación, marcar entregado, etiquetas; **no** puede validar órdenes. La validación corresponde a **admin** / **bioquimico** (`ROLES_LIMS_VALIDAR`) / superuser. **No** es rol “técnico” legacy ni sustituye enfermería clínica EMR.
+- **`bioquimico`:** misma operación que laboratorio **más** validar/liberar (`LISTO_PARA_VALIDAR` → `FINALIZADO`).
 
 Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`Secretarias`, `Médicos`, `Pacientes`).
 
@@ -155,7 +156,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **Fase B3-audit [IMPLEMENTADO] — auditoría microbiología:** metadata micro usa solo IDs técnicos y flags booleanos (`*_presente`); **sin** `codigo_barra`, CIM, diámetro, interpretación S/I/R ni textos/observaciones completas. `safe_model_snapshot` redacta campos sensibles de modelos microbiológicos. La API autorizada sigue exponiendo resultados micro completos. Auditoría legal/especializada con old/new clínicos queda como fase futura.
 - **Pendiente de carga:** `valor_obtenido` puede estar **vacío** en modelo (`blank=True`, `default=''`) al crear filas `ResultadoExamen`; eso **no** autoriza validar la orden incompleta: la acción `validar` sigue rechazando si queda algún resultado con valor vacío. Con muestra vinculada, `validar` además rechaza si la muestra quedó en estados incompatibles (listado en `DOC_FLUJOS_LIMS.md`).
 - Carga masiva vía acción `cargar-resultados` con transacción y bloqueo de solicitud; no modificar si orden está en `VALIDADO`, `CANCELADO` o `ENTREGADO`.
-- Validación de orden: solo desde **`EN_PROCESO`**; no permitir validar con valores vacíos; asigna usuario y fecha a resultados. Solo rol **admin** (y superuser) puede ejecutar `validar`; rol **laboratorio** puede tomar muestra, cargar, cancelar y marcar entregado, pero **no** validar.
+- Validación de orden: solo desde **`EN_PROCESO`**; no permitir validar con valores vacíos; asigna usuario y fecha a resultados. **admin** / **bioquimico** (`ROLES_LIMS_VALIDAR`) / superuser pueden ejecutar `validar`; rol **laboratorio** puede tomar muestra, cargar, cancelar y marcar entregado, pero **no** validar.
 - **Entrega:** `marcar-entregado` solo desde **`VALIDADO`**; no genera PDF automáticamente.
 - **PDF-1 (jun 2026):** `GET informe-pdf` es vista derivada de solo lectura; no valida ni entrega la orden; no persiste archivo. Incluye resultados según API autorizada; laboratorio/admin ven estados técnicos; médico solo solicitudes propias; paciente sin acceso LIMS. Metadata de auditoría sin `codigo_barra`, DNI ni valores clínicos.
 

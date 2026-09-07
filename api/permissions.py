@@ -870,10 +870,16 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
             "cambiar_ubicacion",
             "recibir_por_codigo",
             "tomar_por_codigo",
+            # Nuevas acciones ZPL: misma familia write que tomar/recibir (ROLES_LIMS_WRITE).
+            "imprimir_etiqueta",
         ):
             return role in ROLES_LIMS_WRITE
         if action in ("etiqueta", "por_codigo"):
             return role in (*ROLES_LIMS_WRITE, "medico")
+        if action == "etiqueta_zpl":
+            # Preview con PHI: operadores LIMS write (no médico). Indispensable para
+            # registrar la acción nueva; no amplía el set de roles.
+            return role in ROLES_LIMS_WRITE
         if action == "eventos":
             return role in (*ROLES_LIMS_WRITE, "medico")
         return False

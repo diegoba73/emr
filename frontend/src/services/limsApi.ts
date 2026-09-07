@@ -442,9 +442,21 @@ export async function createMuestra(payload: {
 
 export async function postMuestraTomar(
   id: number,
-  body: { observaciones?: string } = {}
+  body: { observaciones?: string; lugar_extraccion?: string } = {}
 ): Promise<MuestraTransaccional> {
   const { data } = await apiClient.post<MuestraTransaccional>(`${LAB}/muestras-transaccionales/${id}/tomar/`, body);
+  return data;
+}
+
+export async function getMuestraEtiquetaZpl(id: number): Promise<import('../types/lims').EtiquetaMuestraZpl> {
+  const { data } = await apiClient.get(`${LAB}/muestras-transaccionales/${id}/etiqueta-zpl/`);
+  return data;
+}
+
+export async function postMuestraImprimirEtiqueta(
+  id: number
+): Promise<{ muestra_id: number; profile: string; resultado: string }> {
+  const { data } = await apiClient.post(`${LAB}/muestras-transaccionales/${id}/imprimir-etiqueta/`, {});
   return data;
 }
 

@@ -91,6 +91,7 @@ class MuestraSerializer(serializers.ModelSerializer):
             "rechazada_por",
             "motivo_rechazo",
             "ubicacion_actual",
+            "lugar_extraccion",
             "fecha_conservacion",
             "fecha_descarte",
             "descartada_por",
@@ -107,12 +108,68 @@ class MuestraPartialUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Muestra
-        fields = ("tipo_contenedor", "ubicacion_actual", "observaciones")
+        fields = ("tipo_contenedor", "ubicacion_actual", "lugar_extraccion", "observaciones")
+
+    def validate_lugar_extraccion(self, value):
+        text = " ".join((value or "").split()).strip()
+        if not text:
+            return None
+        return text.upper()
 
     def update(self, instance, validated_data):
-        if instance.estado in ("DESCARTADA", "CANCELADA", "RECHAZADA"):
-            validated_data.pop("tipo_contenedor", None)
-        return super().update(instance, validated_data)
+        """
+        Una sola transaction + select_for_update:
+        - no UPDATE parcial de lugar previo al save;
+        - save solo con update_fields (evita stale overwrite de snapshot);
+        - rollback completo si falla cualquier parte.
+        """
+        from django.db import transaction
+        from django.utils import timezone
+
+        with transaction.atomic():
+            locked = Muestra.objects.select_for_update().get(pk=instance.pk)
+
+            data = dict(validated_data)
+            if locked.estado in ("DESCARTADA", "CANCELADA", "RECHAZADA"):
+                data.pop("tipo_contenedor", None)
+
+            lugar_nuevo = data.pop("lugar_extraccion", serializers.empty)
+            update_fields: list[str] = []
+
+            if lugar_nuevo is not serializers.empty and lugar_nuevo is not None:
+                if locked.estado == "PENDIENTE_TOMA" or locked.fecha_toma is None:
+                    raise serializers.ValidationError(
+                        {
+                            "lugar_extraccion": (
+                                "El lugar de extracción se registra en la toma; "
+                                "no puede anticiparse mientras la muestra está pendiente."
+                            )
+                        }
+                    )
+                if (locked.lugar_extraccion or "").strip():
+                    raise serializers.ValidationError(
+                        {
+                            "lugar_extraccion": (
+                                "El lugar de extracción ya está registrado y no puede modificarse."
+                            )
+                        }
+                    )
+                locked.lugar_extraccion = lugar_nuevo
+                update_fields.append("lugar_extraccion")
+
+            for attr, value in data.items():
+                setattr(locked, attr, value)
+                update_fields.append(attr)
+
+            if update_fields:
+                if hasattr(locked, "updated_at"):
+                    locked.updated_at = timezone.now()
+                    update_fields.append("updated_at")
+                locked.save(update_fields=update_fields)
+
+            # Mantener la instancia del ViewSet alineada con la fila bloqueada.
+            instance.refresh_from_db()
+            return instance
 
 
 class MuestraCreateSerializer(serializers.Serializer):
@@ -150,6 +207,11 @@ class MuestraCreateSerializer(serializers.Serializer):
 
 class MuestraTomarSerializer(serializers.Serializer):
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+    # Opcional para compatibilidad con clientes que envían {}. La UI nueva lo solicita.
+    lugar_extraccion = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_lugar_extraccion(self, value):
+        return " ".join((value or "").split()).strip()
 
 
 class MuestraRecibirSerializer(serializers.Serializer):
@@ -237,6 +299,7 @@ class MuestraLookupSerializer(serializers.ModelSerializer):
             "fecha_toma",
             "fecha_recepcion",
             "ubicacion_actual",
+            "lugar_extraccion",
             "observaciones",
             "created_at",
             "updated_at",
@@ -260,9 +323,13 @@ class MuestraRecibirPorCodigoSerializer(serializers.Serializer):
 class MuestraTomarPorCodigoSerializer(serializers.Serializer):
     codigo_barra = serializers.CharField()
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+    lugar_extraccion = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_codigo_barra(self, value):
         cb = (value or "").strip()
         if not cb:
             raise serializers.ValidationError("El código de barras es obligatorio.")
         return cb
+
+    def validate_lugar_extraccion(self, value):
+        return " ".join((value or "").split()).strip()

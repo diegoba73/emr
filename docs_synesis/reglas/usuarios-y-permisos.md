@@ -22,6 +22,7 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 | `secretaria` | Agenda, pacientes, gestión turnos |
 | `enfermeria` | EMR clínico acotado (permisos compartidos con médico en varias vistas) |
 | `laboratorio` | LIMS nativo: carga, toma, cancelar, entregar; **no** `validar` |
+| `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
 | `paciente` | Portal propio |
 
 Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pacientes`).
@@ -44,7 +45,8 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 |-----------|----------------|
 | Leer catálogo LIMS | admin, laboratorio, medico, secretaria, enfermeria |
 | Crear/cargar resultados | admin, laboratorio |
-| Validar orden LIMS | admin (+ superuser) |
+| Etiqueta ZPL 40×23 (preview `etiqueta-zpl` / `imprimir-etiqueta`) | `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser; **no** médico |
+| Validar orden LIMS | admin, bioquímico (`ROLES_LIMS_VALIDAR`) |
 | Gestionar turnos (crear/modificar) | secretaria, admin/staff; médico y paciente solo propios; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
 

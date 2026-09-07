@@ -25,7 +25,7 @@
 
 ### User (AUTH_USER_MODEL, `db_table='usuarios'`)
 
-- Campos: `AbstractUser` + `rol` (choices: paciente, medico, secretaria, enfermeria, **laboratorio**, admin), `telefono`, `email_verificado`, `telefono_verificado`, `fecha_registro`, `ultima_actividad`
+- Campos: `AbstractUser` + `rol` (choices: paciente, medico, secretaria, enfermeria, **laboratorio**, **bioquimico**, admin, más roles de estudios complementarios), `telefono`, `email_verificado`, `telefono_verificado`, `fecha_registro`, `ultima_actividad`
 - Relaciones: OneToOne inversas `paciente`, `medico`, `secretaria`, `profile`
 
 ### UserProfile (`usuarios_profile`)

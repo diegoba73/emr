@@ -173,6 +173,7 @@ def aplicar_tomar(
     actor: AbstractUser | None,
     view: str,
     observaciones: str = "",
+    lugar_extraccion: str = "",
 ) -> Muestra:
     with transaction.atomic():
         muestra = Muestra.objects.select_for_update().select_related("solicitud").get(pk=muestra_id)
@@ -184,6 +185,11 @@ def aplicar_tomar(
         muestra.estado = "TOMADA"
         muestra.fecha_toma = now
         muestra.tomada_por = actor if getattr(actor, "is_authenticated", False) else None
+        lugar = " ".join((lugar_extraccion or "").split()).strip()
+        if lugar:
+            # Snapshot de la toma real (autoritativo). No anticipar vía PATCH en PENDIENTE_TOMA.
+            # No pisa ubicacion_actual; no se reescribe en cambiar_ubicacion.
+            muestra.lugar_extraccion = lugar.upper()
         if observaciones:
             muestra.observaciones = (muestra.observaciones + "\n" if muestra.observaciones else "") + observaciones
         muestra.save()

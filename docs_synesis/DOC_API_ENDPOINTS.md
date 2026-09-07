@@ -330,6 +330,11 @@ Prefijos **`/api/lab/...`** y alias **`/api/laboratorio/...`** (mismos ViewSets)
 | `.../{id}/cambiar-ubicacion/` | POST | admin/lab (`ubicacion` obligatoria; estados `RECIBIDA`/`CONSERVADA`) |
 | `.../{id}/cancelar/` | POST | admin/lab |
 | `.../{id}/eventos/` | GET | admin/lab/médico (médico: solo muestras de órdenes propias) |
+| `.../{id}/etiqueta/` | GET | PDF Code128 (tubo); admin/lab (+ médico vía permiso de acción; object: operadores) |
+| `.../{id}/etiqueta-zpl/` | GET | Vista previa JSON+ZPL 40×23 mm (PHI); **solo** admin/lab/bioquímico/superuser |
+| `.../{id}/imprimir-etiqueta/` | POST | Envío ZPL a impresora de red (env); mismo permiso; sin mutar muestra |
+
+**Etiqueta ZPL 40×23 (3nStar LDT114):** ver `docs/labels-lims-3nstar-ldt114.md`. Identidad = `codigo_barra`; lugar = `lugar_extraccion` (snapshot en `tomar`, no `ubicacion_actual`); fecha = `fecha_toma`. `tomar` acepta `lugar_extraccion` opcional (compat `{}`).
 
 **DELETE** en catálogos y muestras: no soportado / 405 u objeto no expuesto a borrado (desactivar catálogos con `activo=false`).
 

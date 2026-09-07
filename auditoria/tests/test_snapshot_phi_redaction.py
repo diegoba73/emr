@@ -219,3 +219,41 @@ class TestConsultaAmbulatoriaSnapshotRedaction:
         assert snap['plan_manejo'] == '<texto clínico redactado>'
         assert snap['alergias'] == '<texto clínico redactado>'
         assert snap['atencion'] == atencion.pk
+
+
+@pytest.mark.django_db
+class TestMuestraSnapshotRedactionEtiqueta:
+    """lugar_extraccion (campo nuevo etiqueta) no debe filtrarse en snapshots genéricos."""
+
+    def test_muestra_snapshot_sin_codigo_ni_lugar_extraccion(self):
+        from laboratorio.models import SolicitudExamen, TipoMuestra
+        from laboratorio.models_catalog import Muestra
+        from laboratorio.muestra_estado import aplicar_tomar, crear_muestra
+
+        pac = Paciente.objects.create(dni='EZ-SNAP-01', nombre='Juan', apellido='Perez')
+        tm = TipoMuestra.objects.create(codigo='EZSNAP', nombre='Sangre', activo=True)
+        sol = SolicitudExamen.objects.create(
+            paciente=pac,
+            origen_solicitud='AMBULATORIO_CEHTA',
+            estado='PENDIENTE',
+        )
+        m = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=tm.pk,
+            tipo_contenedor_id=None,
+            observaciones='obs interna',
+            actor=None,
+            view='test_snap',
+            codigo_barra='LAB-2026-SNAP01-01',
+        )
+        aplicar_tomar(m.pk, actor=None, view='test_snap', lugar_extraccion='GUARDIA CAMA 12')
+        m.refresh_from_db()
+        snap = safe_model_snapshot(m)
+        raw = _raw(snap)
+        assert 'LAB-2026-SNAP01-01' not in raw
+        assert 'GUARDIA' not in raw
+        assert 'CAMA 12' not in raw
+        assert snap.get('codigo_barra') == '<texto clínico redactado>'
+        assert snap.get('lugar_extraccion') == '<texto clínico redactado>'
+        assert snap.get('observaciones') == '<texto clínico redactado>'
+        assert snap['id'] == m.pk

@@ -32,6 +32,7 @@ _REDACT_LONG_TEXT_FIELDS = frozenset({
     ('laboratorio.Muestra', 'observaciones'),
     ('laboratorio.Muestra', 'motivo_rechazo'),
     ('laboratorio.Muestra', 'codigo_barra'),
+    ('laboratorio.Muestra', 'lugar_extraccion'),
     ('laboratorio.EventoMuestra', 'observaciones'),
 })
 

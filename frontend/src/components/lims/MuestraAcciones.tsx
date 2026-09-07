@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   TextField,
+  Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import type { MuestraTransaccional } from '../../types/lims';
@@ -15,11 +16,13 @@ import {
   postMuestraCancelar,
   postMuestraConservar,
   postMuestraDescartar,
+  postMuestraImprimirEtiqueta,
   postMuestraRecibir,
   postMuestraRechazar,
   postMuestraTomar,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import EtiquetaMuestraZplDialog, { printerErrorMessage } from './EtiquetaMuestraZplDialog';
 
 export interface MuestraAccionesProps {
   muestra: MuestraTransaccional;
@@ -33,7 +36,12 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
   const [openUbicacion, setOpenUbicacion] = useState<'recibir' | 'conservar' | null>(null);
   const [ubicacion, setUbicacion] = useState('');
   const [obsExtra, setObsExtra] = useState('');
+  const [openTomar, setOpenTomar] = useState(false);
+  const [lugarExtraccion, setLugarExtraccion] = useState('');
+  const [openEtiqueta, setOpenEtiqueta] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const printLock = useRef(false);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -48,6 +56,21 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
     }
   };
 
+  const handleImprimirEtiqueta = async () => {
+    if (printLock.current || printing) return;
+    printLock.current = true;
+    setPrinting(true);
+    try {
+      await postMuestraImprimirEtiqueta(muestra.id);
+      toast.success('Etiqueta enviada a impresión');
+    } catch (e) {
+      toast.error(printerErrorMessage(e));
+    } finally {
+      setPrinting(false);
+      printLock.current = false;
+    }
+  };
+
   const e = muestra.estado;
 
   const showTomar = e === 'PENDIENTE_TOMA';
@@ -56,6 +79,7 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
   const showConservar = e === 'RECIBIDA' || e === 'EN_PROCESO';
   const showDescartar = e === 'RECIBIDA' || e === 'CONSERVADA';
   const showCancelar = !['DESCARTADA', 'CANCELADA', 'RECHAZADA'].includes(e);
+  const showEtiquetaZpl = canOperate && Boolean(muestra.codigo_barra);
 
   if (!canOperate) return null;
 
@@ -65,11 +89,10 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
         {showTomar && (
           <Button
             disabled={busy}
-            onClick={() =>
-              run(async () => {
-                await postMuestraTomar(muestra.id, {});
-              })
-            }
+            onClick={() => {
+              setLugarExtraccion('');
+              setOpenTomar(true);
+            }}
           >
             Tomar
           </Button>
@@ -122,7 +145,10 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
             color="error"
             onClick={() =>
               run(async () => {
-                await postMuestraCancelar(muestra.id, { motivo: 'Cancelación operativa', observaciones: '' });
+                await postMuestraCancelar(muestra.id, {
+                  motivo: 'Cancelación operativa',
+                  observaciones: '',
+                });
               })
             }
           >
@@ -130,6 +156,58 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
           </Button>
         )}
       </ButtonGroup>
+
+      {showEtiquetaZpl && (
+        <ButtonGroup size="small" variant="text">
+          <Button disabled={busy || printing} onClick={() => setOpenEtiqueta(true)}>
+            Vista previa etiqueta
+          </Button>
+          <Button disabled={busy || printing} onClick={handleImprimirEtiqueta}>
+            {printing ? 'Imprimiendo…' : 'Imprimir etiqueta'}
+          </Button>
+        </ButtonGroup>
+      )}
+
+      <Dialog open={openTomar} onClose={() => !busy && setOpenTomar(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Registrar toma de muestra</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Lugar de extracción"
+            fullWidth
+            value={lugarExtraccion}
+            onChange={(ev) => setLugarExtraccion(ev.target.value)}
+            placeholder="GUARDIA"
+            helperText="Ejemplos: GUARDIA, CAMA 12, UCI-3, CONS 2"
+            sx={{ mb: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Queda registrado como snapshot histórico para la etiqueta (no cambia con la ubicación
+            posterior de custodia).
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenTomar(false)} disabled={busy}>
+            Cerrar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy || !lugarExtraccion.trim()}
+            onClick={() =>
+              run(async () => {
+                await postMuestraTomar(muestra.id, {
+                  lugar_extraccion: lugarExtraccion.trim(),
+                });
+                setOpenTomar(false);
+                setLugarExtraccion('');
+              })
+            }
+          >
+            Confirmar toma
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={openRechazar} onClose={() => !busy && setOpenRechazar(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Rechazar muestra</DialogTitle>
@@ -214,6 +292,12 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
           </Button>
         </DialogActions>
       </Dialog>
+
+      <EtiquetaMuestraZplDialog
+        open={openEtiqueta}
+        muestraId={muestra.id}
+        onClose={() => setOpenEtiqueta(false)}
+      />
     </Box>
   );
 };

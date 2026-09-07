@@ -69,7 +69,7 @@
   - Si un resultado tiene **`muestra`** vinculada, la muestra **no** debe estar en `RECHAZADA`, `DESCARTADA`, `CANCELADA`, `PENDIENTE_TOMA` ni `TOMADA` (resultados **sin** muestra siguen validándose si los valores están completos — compatibilidad histórica). **Fase B2.1:** antes de leer el estado de cada muestra referenciada, la acción aplica `Muestra.objects.select_for_update().filter(pk__in=…)` **dentro de la transacción** de validación, mitigando la ventana TOCTOU que existía en B2 (otro proceso ya no puede mutar la fila entre lectura y commit).
   - Transiciona `EN_PROCESO` → `VALIDADO` mediante la misma capa de transiciones auditadas que el resto de acciones.
   - Asigna `validado_por` y `fecha_validacion` a **todos** los `ResultadoExamen` vía `queryset.update` (mismo usuario/fecha para todos).
-- **Permiso:** solo **`admin`** o **superuser** puede invocar `validar`. El rol **`laboratorio`** puede cargar resultados, tomar muestra, cancelar y marcar entregado, pero **no** validar.
+- **Permiso:** **`admin`**, **`bioquimico`** (`ROLES_LIMS_VALIDAR`) o **superuser** pueden invocar `validar`. El rol **`laboratorio`** puede cargar resultados, tomar muestra, cancelar y marcar entregado, pero **no** validar.
 - **No hay** distinción explícita entre validación técnica y profesional como estados separados — sigue siendo deuda funcional; un solo estado `VALIDADO`.
 
 ---
@@ -116,8 +116,11 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 | **enfermeria** | Sí (solo lectura GET) | No | No | No | No | No | No | No |
 | **medico** | Sí (solo lectura GET) | Crear y ver **solo** órdenes con `medico_interno.user` = request.user; sin listado global | No | No | No | No | No | No |
 | **laboratorio** | Sí | Listar/ver/crear/editar órdenes (destroy solo admin) | Sí | Sí | Sí | Sí | **No** | Sí |
+| **bioquimico** | Sí | Igual que laboratorio (familia `ROLES_LIMS_WRITE`) | Sí | Sí | Sí | Sí | **Sí** | Sí |
 | **admin** | Sí | Sí (incluye destroy según permiso) | Sí | Sí | Sí | Sí | **Sí** | Sí |
 | **superuser** | Sí | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
+
+**Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/` y `POST .../imprimir-etiqueta/` → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
 
 **Aliases:** `/api/laboratorio/tipos-examen/` y `/api/laboratorio/solicitudes/` — mismos ViewSets y **misma** matriz de permisos que `/api/lab/...`.
 

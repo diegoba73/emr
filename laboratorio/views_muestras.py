@@ -223,6 +223,7 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
             aplicar_tomar,
             "MuestraTransaccionalViewSet.tomar",
             observaciones=ser.validated_data.get("observaciones") or "",
+            lugar_extraccion=ser.validated_data.get("lugar_extraccion") or "",
         )
 
     @action(detail=True, methods=["post"], url_path="recibir")
@@ -329,6 +330,42 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{nombre}"'
         return response
 
+    @action(detail=True, methods=["get"], url_path="etiqueta-zpl")
+    def etiqueta_zpl(self, request, pk=None):
+        """Vista previa JSON+ZPL 40×23 mm (sin enviar a impresora)."""
+        from laboratorio.services_etiqueta_muestra import (
+            build_etiqueta_muestra,
+            etiqueta_payload_to_dict,
+        )
+
+        muestra = self.get_object()
+        payload = build_etiqueta_muestra(muestra, require_printable=False)
+        return Response(etiqueta_payload_to_dict(payload), status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="imprimir-etiqueta")
+    def imprimir_etiqueta(self, request, pk=None):
+        """Envía ZPL a la impresora de red configurada en el servidor (sin mutar la muestra)."""
+        from laboratorio.label_printer_transport import LabelPrinterError
+        from laboratorio.services_etiqueta_muestra import (
+            EtiquetaMuestraError,
+            imprimir_etiqueta_muestra,
+        )
+
+        muestra = self.get_object()
+        try:
+            result = imprimir_etiqueta_muestra(
+                muestra,
+                actor=request.user,
+                view="MuestraTransaccionalViewSet.imprimir_etiqueta",
+            )
+        except EtiquetaMuestraError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except LabelPrinterError as e:
+            if e.code in ("printer_disabled", "printer_misconfigured"):
+                return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(result, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=["get"], url_path=r"por-codigo/(?P<codigo>[^/]+)")
     def por_codigo(self, request, codigo=None):
         codigo_limpio = (codigo or "").strip()
@@ -362,6 +399,7 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
                     actor=request.user,
                     view="MuestraTransaccionalViewSet.tomar_por_codigo",
                     observaciones=ser.validated_data.get("observaciones") or "",
+                    lugar_extraccion=ser.validated_data.get("lugar_extraccion") or "",
                 )
                 avanzar_orden_si_corresponde_por_toma(
                     muestra,

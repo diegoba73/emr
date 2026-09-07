@@ -287,10 +287,22 @@ export interface MuestraTransaccional {
   fecha_rechazo?: string | null;
   motivo_rechazo?: string;
   ubicacion_actual?: string;
+  lugar_extraccion?: string | null;
   observaciones?: string;
   created_at?: string;
   updated_at?: string;
   eventos?: MuestraEventoLims[];
+}
+
+export interface EtiquetaMuestraZpl {
+  muestra_id: number;
+  profile: string;
+  width_mm: number;
+  height_mm: number;
+  lines: string[];
+  zpl: string;
+  printable: boolean;
+  validation_errors: string[];
 }
 
 export interface MuestraLookupLims extends MuestraTransaccional {
