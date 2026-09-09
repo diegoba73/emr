@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from api.permissions import LimsInventarioPermission
+from laboratorio.destroy_protected import ProtectedDestroyMixin
 from laboratorio.inventario_service import alertas, registrar_ingreso
 from laboratorio.models_inventario import (
     ConsumoInsumoExamen,
@@ -21,7 +22,7 @@ from laboratorio.serializers_inventario import (
 )
 
 
-class InsumoLabViewSet(viewsets.ModelViewSet):
+class InsumoLabViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = InsumoLab.objects.select_related(
         "tipo_contenedor", "medio_cultivo", "equipo"
     ).all()
@@ -51,7 +52,7 @@ class InsumoLabViewSet(viewsets.ModelViewSet):
         return Response(alertas())
 
 
-class LoteInsumoViewSet(viewsets.ModelViewSet):
+class LoteInsumoViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = LoteInsumo.objects.select_related("insumo").all()
     serializer_class = LoteInsumoSerializer
     permission_classes = [LimsInventarioPermission]
@@ -128,7 +129,7 @@ class MovimientoStockViewSet(viewsets.ModelViewSet):
         return Response(MovimientoStockSerializer(mov).data, status=status.HTTP_201_CREATED)
 
 
-class ConsumoInsumoExamenViewSet(viewsets.ModelViewSet):
+class ConsumoInsumoExamenViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     """Recetas examen → insumos (0..N SKUs físicos)."""
 
     queryset = ConsumoInsumoExamen.objects.select_related(

@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import type { MuestraTransaccional } from '../../types/lims';
 import {
+  patchMuestraTransaccional,
   postMuestraCancelar,
   postMuestraConservar,
   postMuestraDescartar,
@@ -22,26 +23,40 @@ import {
   postMuestraTomar,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import {
+  sugerirLugarExtraccionDesdeOrigen,
+  type OrigenParaLugarExtraccion,
+} from '../../utils/limsOrigenSolicitud';
 import EtiquetaMuestraZplDialog, { printerErrorMessage } from './EtiquetaMuestraZplDialog';
 
 export interface MuestraAccionesProps {
   muestra: MuestraTransaccional;
   canOperate: boolean;
   onUpdated: () => void;
+  /** Origen/procedencia de la orden — prellena lugar de extracción (editable). */
+  origenOrden?: OrigenParaLugarExtraccion | null;
 }
 
-const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, onUpdated }) => {
+const MuestraAcciones: React.FC<MuestraAccionesProps> = ({
+  muestra,
+  canOperate,
+  onUpdated,
+  origenOrden = null,
+}) => {
   const [openRechazar, setOpenRechazar] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState('');
   const [openUbicacion, setOpenUbicacion] = useState<'recibir' | 'conservar' | null>(null);
   const [ubicacion, setUbicacion] = useState('');
   const [obsExtra, setObsExtra] = useState('');
   const [openTomar, setOpenTomar] = useState(false);
+  const [openCompletarLugar, setOpenCompletarLugar] = useState(false);
   const [lugarExtraccion, setLugarExtraccion] = useState('');
   const [openEtiqueta, setOpenEtiqueta] = useState(false);
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
   const printLock = useRef(false);
+
+  const sugerenciaLugar = () => sugerirLugarExtraccionDesdeOrigen(origenOrden);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -80,6 +95,11 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
   const showDescartar = e === 'RECIBIDA' || e === 'CONSERVADA';
   const showCancelar = !['DESCARTADA', 'CANCELADA', 'RECHAZADA'].includes(e);
   const showEtiquetaZpl = canOperate && Boolean(muestra.codigo_barra);
+  const faltaLugar =
+    !(muestra.lugar_extraccion || '').trim() &&
+    e !== 'PENDIENTE_TOMA' &&
+    !['RECHAZADA', 'DESCARTADA', 'CANCELADA'].includes(e);
+  const showCompletarLugar = canOperate && faltaLugar;
 
   if (!canOperate) return null;
 
@@ -90,11 +110,23 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
           <Button
             disabled={busy}
             onClick={() => {
-              setLugarExtraccion('');
+              setLugarExtraccion(sugerenciaLugar());
               setOpenTomar(true);
             }}
           >
             Tomar
+          </Button>
+        )}
+        {showCompletarLugar && (
+          <Button
+            disabled={busy}
+            color="warning"
+            onClick={() => {
+              setLugarExtraccion(sugerenciaLugar());
+              setOpenCompletarLugar(true);
+            }}
+          >
+            Completar lugar
           </Button>
         )}
         {showRecibir && (
@@ -179,7 +211,11 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
             value={lugarExtraccion}
             onChange={(ev) => setLugarExtraccion(ev.target.value)}
             placeholder="GUARDIA"
-            helperText="Ejemplos: GUARDIA, CAMA 12, UCI-3, CONS 2"
+            helperText={
+              sugerenciaLugar()
+                ? 'Prellenado desde el origen de la orden; podés editarlo antes de confirmar.'
+                : 'Ejemplos: GUARDIA, CAMA 12, UCI-3, CONS 2'
+            }
             sx={{ mb: 1 }}
           />
           <Typography variant="caption" color="text.secondary">
@@ -205,6 +241,52 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({ muestra, canOperate, 
             }
           >
             Confirmar toma
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openCompletarLugar}
+        onClose={() => !busy && setOpenCompletarLugar(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Completar lugar de extracción</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Lugar de extracción"
+            fullWidth
+            value={lugarExtraccion}
+            onChange={(ev) => setLugarExtraccion(ev.target.value)}
+            placeholder="GUARDIA"
+            helperText={
+              sugerenciaLugar()
+                ? 'Prellenado desde el origen de la orden; solo se puede cargar una vez.'
+                : 'Obligatorio para imprimir la etiqueta 40×23. Solo se puede cargar una vez.'
+            }
+            sx={{ mb: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenCompletarLugar(false)} disabled={busy}>
+            Cerrar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy || !lugarExtraccion.trim()}
+            onClick={() =>
+              run(async () => {
+                await patchMuestraTransaccional(muestra.id, {
+                  lugar_extraccion: lugarExtraccion.trim(),
+                });
+                setOpenCompletarLugar(false);
+                setLugarExtraccion('');
+              })
+            }
+          >
+            Guardar lugar
           </Button>
         </DialogActions>
       </Dialog>

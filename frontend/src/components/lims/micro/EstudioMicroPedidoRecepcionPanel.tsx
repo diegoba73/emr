@@ -17,8 +17,10 @@ export interface EstudioMicroPedidoRecepcionPanelProps {
   estudio: EstudioMicrobiologia;
   canOperate: boolean;
   reprinting?: boolean;
+  downloadingTalon?: boolean;
   confirmingRecepcion?: boolean;
   onReimprimirEtiquetas: () => void;
+  onImprimirTalon?: () => void;
   onConfirmarRecepcion: () => void;
   onCancelar: () => void;
   onObraSocial?: () => void;
@@ -33,8 +35,10 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
   estudio,
   canOperate,
   reprinting,
+  downloadingTalon,
   confirmingRecepcion,
   onReimprimirEtiquetas,
+  onImprimirTalon,
   onConfirmarRecepcion,
   onCancelar,
   onObraSocial,
@@ -75,7 +79,7 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           {canOperate && (
             <Button
               variant="outlined"
-              disabled={reprinting || confirmingRecepcion}
+              disabled={reprinting || confirmingRecepcion || downloadingTalon}
               onClick={onReimprimirEtiquetas}
             >
               {reprinting
@@ -85,10 +89,19 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
                   : 'Imprimir etiquetas'}
             </Button>
           )}
+          {canOperate && onImprimirTalon && (
+            <Button
+              variant="outlined"
+              disabled={reprinting || confirmingRecepcion || downloadingTalon}
+              onClick={onImprimirTalon}
+            >
+              {downloadingTalon ? 'Abriendo impresión…' : 'Imprimir talón'}
+            </Button>
+          )}
           {canOperate && tieneEtiqueta && (
             <Button
               variant="contained"
-              disabled={confirmingRecepcion || reprinting}
+              disabled={confirmingRecepcion || reprinting || downloadingTalon}
               onClick={onConfirmarRecepcion}
             >
               {confirmingRecepcion ? 'Confirmando…' : 'Confirmar recepción de muestra'}
@@ -122,11 +135,14 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
               al laboratorio. Escaneá el código en{' '}
               <strong>Recepción de muestras</strong> o usá{' '}
               <strong>Confirmar recepción de muestra</strong> cuando la tengas físicamente. Después
-              podrás sembrar e iniciar el trabajo técnico.
+              podrás cargar siembras y lecturas. Si falla la etiquetadora, usá{' '}
+              <strong>Imprimir talón</strong> (hoja común; no cambia el estado).
             </>
           ) : (
             <>
-              Pendiente de etiquetas. Imprimí la etiqueta del cultivo antes de enviar la muestra.
+              Imprimí la etiqueta del cultivo para pasar a «Esperando recepción». Como respaldo,
+              también podés usar <strong>Imprimir talón</strong> (diálogo de impresión / hoja común;
+              paciente, DNI, lugar, médico y estudios) — el talón solo no marca etiquetas impresas.
             </>
           )}
         </Typography>

@@ -15,6 +15,8 @@
 **Actualización (B3-frontend-validación-A [VALIDADO] + UX parcial):** junio de 2026 — Alta estudio micro: picker solicitud/muestra LIMS (`RECIBIDA`/`CONSERVADA`/`EN_PROCESO`). Detalle micro: listados globales + filtro cliente [GAP filtros API].  
 **Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026
 
+> **Sep 2026 — máquina de estados de `SolicitudExamen`:** los estados vigentes son `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` → `FINALIZADO`. Las tablas de este documento que citan `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO` o `CANCELADO` en la **orden** son históricas (Fase A). Fuente actual: `laboratorio/solicitud_estado.py` y `docs_synesis/DOC_REGLAS_NEGOCIO.md`. IQC: `docs_synesis/reglas/control-calidad.md`.
+
 **Alcance:** Flujo LIMS **nativo** (`laboratorio` app) y vínculos con `solicitudes` / `integracion_lims`.
 
 **Fuentes revisadas:** `laboratorio/models.py`, `laboratorio/models_catalog.py`, `laboratorio/serializers.py`, `laboratorio/views.py`, `laboratorio/solicitud_estado.py`, `laboratorio/resultado_muestra_validacion.py`, `solicitudes/models.py`, `integracion_lims/lims_service.py`.
@@ -69,7 +71,7 @@
   - Si un resultado tiene **`muestra`** vinculada, la muestra **no** debe estar en `RECHAZADA`, `DESCARTADA`, `CANCELADA`, `PENDIENTE_TOMA` ni `TOMADA` (resultados **sin** muestra siguen validándose si los valores están completos — compatibilidad histórica). **Fase B2.1:** antes de leer el estado de cada muestra referenciada, la acción aplica `Muestra.objects.select_for_update().filter(pk__in=…)` **dentro de la transacción** de validación, mitigando la ventana TOCTOU que existía en B2 (otro proceso ya no puede mutar la fila entre lectura y commit).
   - Transiciona `EN_PROCESO` → `VALIDADO` mediante la misma capa de transiciones auditadas que el resto de acciones.
   - Asigna `validado_por` y `fecha_validacion` a **todos** los `ResultadoExamen` vía `queryset.update` (mismo usuario/fecha para todos).
-- **Permiso:** **`admin`**, **`bioquimico`** (`ROLES_LIMS_VALIDAR`) o **superuser** pueden invocar `validar`. El rol **`laboratorio`** puede cargar resultados, tomar muestra, cancelar y marcar entregado, pero **no** validar.
+- **Permiso:** solo **`admin`** o **superuser** puede invocar `validar`. El rol **`laboratorio`** puede cargar resultados, tomar muestra, cancelar y marcar entregado, pero **no** validar.
 - **No hay** distinción explícita entre validación técnica y profesional como estados separados — sigue siendo deuda funcional; un solo estado `VALIDADO`.
 
 ---
@@ -108,7 +110,7 @@ Transiciones **permitidas** (solo vía acciones explícitas del ViewSet; `estado
 
 Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolicitudExamenPermission`) y `get_queryset` en `SolicitudExamenViewSet`:
 
-| Rol | Catálogos (`lab/muestras`, `examenes`, `paneles`) | Solicitudes list/detail/create/update | `tomar-muestra` | `cargar-resultados` | `cancelar` | `marcar-entregado` | `validar` | `etiqueta` |
+| Rol | Catálogos (`lab/muestras`, `examenes`, `paneles`) | Solicitudes list/detail/create/update | `tomar-muestra` | `cargar-resultados` | `cancelar` | `marcar-entregado` | `validar` | `etiqueta` (solicitud, ZPL simulado) |
 |-----|---------------------------------------------------|----------------------------------------|-----------------|---------------------|------------|-------------------|-----------|------------|
 | **Anónimo** | No | No | No | No | No | No | No | No |
 | **paciente** | No | No | No | No | No | No | No | No |

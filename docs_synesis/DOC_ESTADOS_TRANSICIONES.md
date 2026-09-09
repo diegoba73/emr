@@ -1,9 +1,9 @@
 # DOC_ESTADOS_TRANSICIONES — Máquinas de estado conceptuales (Fase C0)
 
-**Versión:** C0 — 18 de mayo de 2026  
+**Versión:** C0 — 18 de mayo de 2026 · **actualización orden LIMS:** 6 de septiembre de 2026  
 **Leyenda:** **[IMPLEMENTADO]** valor en código hoy | **[OBJETIVO]** futuro | **[CONCEPTUAL]** etiqueta de negocio no 1:1 con campo
 
-**Detalle operativo LIMS:** `DOC_FLUJOS_LIMS.md`, `laboratorio/solicitud_estado.py`, `laboratorio/muestra_estado.py`, `laboratorio/microbiologia_estado.py`.
+**Detalle operativo LIMS:** `DOC_REGLAS_NEGOCIO.md`, `DOC_FLUJOS_LIMS.md`, `laboratorio/solicitud_estado.py`, `laboratorio/muestra_estado.py`, `laboratorio/microbiologia_estado.py`, `reglas/control-calidad.md`.
 
 ---
 
@@ -52,13 +52,16 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 | Conceptual | **[IMPLEMENTADO]** | Acción / transición |
 |------------|---------------------|---------------------|
 | Pendiente | `PENDIENTE` | Creación |
-| Toma muestra (marcador orden) | `TOMA_MUESTRA` | `POST .../tomar-muestra/` |
-| En proceso | `EN_PROCESO` | `cargar-resultados` (desde PENDIENTE/TOMA_MUESTRA/EN_PROCESO) |
-| Validado | `VALIDADO` | `validar` (solo **admin**) |
-| Entregado | `ENTREGADO` | `marcar-entregado` |
-| Cancelado | `CANCELADO` | `cancelar` |
+| En proceso | `EN_PROCESO` | `POST .../tomar-muestra/` desde `PENDIENTE` |
+| Informe parcial | `INFORMADO_PARCIAL` | Carga incompleta |
+| Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa; exige IQC del día |
+| Finalizado | `FINALIZADO` | `validar` (bioquímico / admin) |
 
-**[DEUDA]** No hay estados separados “validación técnica” vs “profesional”.
+Ya **no** existen en este modelo: `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO` (pueden figurar en docs Fase A).
+
+IQC bloquea **carga** y **validar**, no la toma. Agregar/quitar ensayos permitido hasta `FINALIZADO` (con reglas de tubos y resultados vacíos). Ver `DOC_REGLAS_NEGOCIO.md`.
+
+Separación técnica vs profesional: **roles** (`laboratorio` opera, `bioquimico` libera), no estados extra.
 
 ---
 
@@ -88,7 +91,7 @@ No hay campo `estado` dedicado; el ciclo se infiere:
 | Pendiente | `valor_obtenido == ''` | Al crear orden |
 | Cargado | Valor no vacío, sin `fecha_validacion` | Tras `cargar-resultados` |
 | Validado | `validado_por` + `fecha_validacion` | Tras `validar` en orden |
-| Informado | Indirecto vía orden `ENTREGADO` / informe micro | No estado en fila resultado |
+| Informado | Orden `FINALIZADO` / informe micro | No estado en fila resultado |
 | Corregido | **[OBJETIVO]** | Sin flujo de corrección versionada |
 | Anulado | **[OBJETIVO]** | — |
 
@@ -98,8 +101,8 @@ No hay campo `estado` dedicado; el ciclo se infiere:
 
 | Conceptual | Código | Notas |
 |------------|--------|--------|
-| Borrador / emitido / validado PDF | **[OBJETIVO]** | Solo orden `ENTREGADO` como marcador operativo |
-| — | `ENTREGADO` en orden | **[IMPLEMENTADO]** sin PDF |
+| PDF básico | `GET …/informe-pdf` | **[IMPLEMENTADO]** PDF-1; no cambia estado |
+| Liberado | Orden `FINALIZADO` | Marcador operativo de cierre |
 
 ---
 
@@ -127,11 +130,11 @@ Estados propios del módulo `solicitudes` (ver `DOC_REGLAS_NEGOCIO.md`) — **[I
 ## Diagrama resumen LIMS nativo (orden + muestra)
 
 ```
-PENDIENTE ──tomar-muestra──► TOMA_MUESTRA
-     │                            │
-     └────cargar-resultados───────┴──► EN_PROCESO ──validar──► VALIDADO ──marcar-entregado──► ENTREGADO
-              │                         │
-              └─────────────────────────┴──► CANCELADO (desde estados no finales según reglas)
+PENDIENTE ──tomar-muestra──► EN_PROCESO ──carga incompleta──► INFORMADO_PARCIAL
+                                  │                              │
+                                  └──carga completa──────────────┴──► LISTO_PARA_VALIDAR ──validar──► FINALIZADO
+                                                                        │
+                                                                        └──(vaciar valor)──► EN_PROCESO
 ```
 
-Muestra física corre en paralelo (`PENDIENTE_TOMA` → `TOMADA` → `RECIBIDA` → `EN_PROCESO` → terminales).
+IQC (día local) en carga y en validar. Muestra física corre en paralelo (`PENDIENTE_TOMA` → `TOMADA` → `RECIBIDA` → `EN_PROCESO` → terminales).

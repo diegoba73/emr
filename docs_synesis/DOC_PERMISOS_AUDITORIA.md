@@ -55,7 +55,7 @@ Ubicación: `api/permissions.py`
 | `IsEMRClinicianOrReadOnly` | GET para autenticados; escritura como EMR clinician |
 | `CanUpdatePacienteDemographics` | staff/admin/secretaria; médico cualquier paciente GET/PATCH; paciente solo su ficha |
 | **`LimsCatalogReadPermission`** | Lectura GET de catálogos LIMS (tipos muestra/examen/panel): roles admin, laboratorio, medico, secretaria, enfermeria + superuser; **no** paciente ni anónimos |
-| **`LimsSolicitudExamenPermission`** | `SolicitudExamenViewSet` y acciones `cargar_resultados`, `validar`, `etiqueta`, **`informe_pdf`**, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`** (`view.action` en snake_case): matriz en `DOC_FLUJOS_LIMS.md`. `validar` **admin** y **bioquímico** (`ROLES_LIMS_VALIDAR`) + superuser; `tomar_muestra`, `cancelar`, `marcar_entregado` y `cargar_resultados`: **admin** y **laboratorio**; **`informe_pdf`**: **admin**, **laboratorio** y **médico** (médico solo solicitudes propias vía `get_queryset`/`has_object_permission`) |
+| **`LimsSolicitudExamenPermission`** | `SolicitudExamenViewSet` y acciones `cargar_resultados`, `validar`, `etiqueta`, **`informe_pdf`**, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`** (`view.action` en snake_case): matriz en `DOC_FLUJOS_LIMS.md`. `validar` solo **admin** (+ superuser); `tomar_muestra`, `cancelar`, `marcar_entregado` y `cargar_resultados`: **admin** y **laboratorio**; **`informe_pdf`**: **admin**, **laboratorio** y **médico** (médico solo solicitudes propias vía `get_queryset`/`has_object_permission`) |
 
 **Nota:** Muchos ViewSets **no usan** estas clases y aplican lógica en `get_queryset` con comparación manual de `user.rol`.
 

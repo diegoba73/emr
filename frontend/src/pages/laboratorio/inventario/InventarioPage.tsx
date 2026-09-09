@@ -25,6 +25,8 @@ import {
   createInsumoLab,
   createLoteInsumo,
   deleteConsumoInsumoExamen,
+  deleteInsumoLab,
+  deleteLoteInsumo,
   getInventarioAlertas,
   listConsumosInsumoExamen,
   listEquiposQc,
@@ -32,6 +34,9 @@ import {
   listLotesInsumo,
   listMovimientosStock,
   listTiposExamenLims,
+  patchConsumoInsumoExamen,
+  patchInsumoLab,
+  patchLoteInsumo,
   type ConsumoInsumoExamen,
   type EquipoAnalizador,
   type InsumoLab,
@@ -40,6 +45,7 @@ import {
   type MovimientoStock,
 } from '../../../services/limsApi';
 import type { LimsTipoExamen } from '../../../types/lims';
+import { getSafeApiErrorMessage, isProtectedDeleteError } from '../../../utils/apiError';
 
 type ProductoTipo = InsumoLab['tipo'];
 
@@ -111,12 +117,16 @@ const InventarioPage: React.FC = () => {
     cantidad: '1',
     etiqueta: '',
   });
+  const [editingReactivoId, setEditingReactivoId] = useState<number | null>(null);
+  const [editingInsumoId, setEditingInsumoId] = useState<number | null>(null);
+  const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
+  const [editingConsumoId, setEditingConsumoId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [i, l, m, a, c, ex, eq] = await Promise.all([
-        listInsumosLab(),
+        listInsumosLab({ activo: true }),
         listLotesInsumo(),
         listMovimientosStock(),
         getInventarioAlertas(),
@@ -128,14 +138,14 @@ const InventarioPage: React.FC = () => {
         listEquiposQc(),
       ]);
       setProductos(i);
-      setLotes(l);
+      setLotes(l.filter((x) => x.activo));
       setMovimientos(m);
       setAlertas(a);
       setConsumos(c);
       setExamenes(ex);
       setEquipos(eq.filter((e) => e.activo));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error cargando inventario');
+      toast.error(getSafeApiErrorMessage(e, 'Error cargando inventario'));
     } finally {
       setLoading(false);
     }
@@ -184,10 +194,10 @@ const InventarioPage: React.FC = () => {
 
   const submitReactivo = async () => {
     try {
-      await createInsumoLab({
+      const body = {
         codigo: reactivoForm.codigo.trim(),
         nombre: reactivoForm.nombre.trim(),
-        tipo: 'REACTIVO',
+        tipo: 'REACTIVO' as const,
         unidad: reactivoForm.unidad.trim() || 'u',
         stock_min: Number(reactivoForm.stock_min) || 0,
         proveedor: reactivoForm.proveedor.trim(),
@@ -198,18 +208,25 @@ const InventarioPage: React.FC = () => {
         canal_analizador: reactivoForm.canal_analizador,
         equipo: reactivoForm.equipo ? Number(reactivoForm.equipo) : null,
         activo: true,
-      });
-      toast.success('Reactivo creado');
+      };
+      if (editingReactivoId) {
+        await patchInsumoLab(editingReactivoId, body);
+        toast.success('Reactivo actualizado');
+      } else {
+        await createInsumoLab(body);
+        toast.success('Reactivo creado');
+      }
       setReactivoForm(emptyReactivoForm);
+      setEditingReactivoId(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo crear el reactivo');
+      toast.error(getSafeApiErrorMessage(e, 'No se pudo guardar el reactivo'));
     }
   };
 
   const submitInsumo = async () => {
     try {
-      await createInsumoLab({
+      const body = {
         codigo: insumoForm.codigo.trim(),
         nombre: insumoForm.nombre.trim(),
         tipo: insumoForm.tipo,
@@ -217,12 +234,19 @@ const InventarioPage: React.FC = () => {
         stock_min: Number(insumoForm.stock_min) || 0,
         proveedor: insumoForm.proveedor.trim(),
         activo: true,
-      });
-      toast.success('Insumo creado');
+      };
+      if (editingInsumoId) {
+        await patchInsumoLab(editingInsumoId, body);
+        toast.success('Insumo actualizado');
+      } else {
+        await createInsumoLab(body);
+        toast.success('Insumo creado');
+      }
       setInsumoForm(emptyInsumoForm);
+      setEditingInsumoId(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo crear el insumo');
+      toast.error(getSafeApiErrorMessage(e, 'No se pudo guardar el insumo'));
     }
   };
 
@@ -233,17 +257,24 @@ const InventarioPage: React.FC = () => {
       return;
     }
     try {
-      await createLoteInsumo({
+      const body = {
         insumo: Number(loteForm.producto),
         codigo_lote: loteForm.codigo_lote.trim(),
         cantidad,
         fecha_vencimiento: loteForm.fecha_vencimiento || null,
-      });
-      toast.success('Lote cargado');
+      };
+      if (editingLoteId) {
+        await patchLoteInsumo(editingLoteId, body);
+        toast.success('Lote actualizado');
+      } else {
+        await createLoteInsumo(body);
+        toast.success('Lote cargado');
+      }
       setLoteForm({ producto: '', codigo_lote: '', cantidad: '', fecha_vencimiento: '' });
+      setEditingLoteId(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo crear el lote');
+      toast.error(getSafeApiErrorMessage(e, 'No se pudo guardar el lote'));
     }
   };
 
@@ -253,29 +284,123 @@ const InventarioPage: React.FC = () => {
       return;
     }
     try {
-      await createConsumoInsumoExamen({
-        tipo_examen: Number(examenId),
-        insumo: Number(consumoForm.reactivo),
-        cantidad_por_determinacion: Number(consumoForm.cantidad) || 1,
-        rol: consumoForm.etiqueta.trim(),
-        activo: true,
-      });
-      toast.success('Consumo vinculado al ensayo');
+      if (editingConsumoId) {
+        await patchConsumoInsumoExamen(editingConsumoId, {
+          tipo_examen: Number(examenId),
+          insumo: Number(consumoForm.reactivo),
+          cantidad_por_determinacion: Number(consumoForm.cantidad) || 1,
+          rol: consumoForm.etiqueta.trim(),
+        });
+        toast.success('Consumo actualizado');
+      } else {
+        await createConsumoInsumoExamen({
+          tipo_examen: Number(examenId),
+          insumo: Number(consumoForm.reactivo),
+          cantidad_por_determinacion: Number(consumoForm.cantidad) || 1,
+          rol: consumoForm.etiqueta.trim(),
+          activo: true,
+        });
+        toast.success('Consumo vinculado al ensayo');
+      }
       setConsumoForm({ reactivo: '', cantidad: '1', etiqueta: '' });
+      setEditingConsumoId(null);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
+      toast.error(getSafeApiErrorMessage(e, 'No se pudo guardar'));
+    }
+  };
+
+  const deleteWithFallback = async (
+    label: string,
+    doDelete: () => Promise<unknown>,
+    doDeactivate?: () => Promise<unknown>
+  ) => {
+    if (!window.confirm(`¿Eliminar ${label}?`)) return;
+    try {
+      await doDelete();
+      toast.success('Eliminado');
+      load();
+    } catch (e) {
+      if (doDeactivate && isProtectedDeleteError(e)) {
+        if (
+          window.confirm(
+            'No se puede borrar porque tiene registros relacionados. ¿Desactivar en su lugar?'
+          )
+        ) {
+          try {
+            await doDeactivate();
+            toast.success('Desactivado');
+            load();
+          } catch (e2) {
+            toast.error(getSafeApiErrorMessage(e2, 'No se pudo desactivar'));
+          }
+        }
+        return;
+      }
+      toast.error(getSafeApiErrorMessage(e, 'No se pudo eliminar'));
     }
   };
 
   const quitarConsumo = async (id: number) => {
+    if (!window.confirm('¿Quitar este vínculo de consumo?')) return;
     try {
       await deleteConsumoInsumoExamen(id);
       toast.success('Vínculo quitado');
+      if (editingConsumoId === id) {
+        setEditingConsumoId(null);
+        setConsumoForm({ reactivo: '', cantidad: '1', etiqueta: '' });
+      }
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo quitar');
+      toast.error(getSafeApiErrorMessage(e, 'No se pudo quitar'));
     }
+  };
+
+  const startEditReactivo = (r: InsumoLab) => {
+    setEditingReactivoId(r.id);
+    setReactivoForm({
+      codigo: r.codigo,
+      nombre: r.nombre,
+      unidad: r.unidad || 'cartucho',
+      stock_min: String(r.stock_min ?? 0),
+      proveedor: r.proveedor || '',
+      volumen_por_unidad: r.volumen_por_unidad != null ? String(r.volumen_por_unidad) : '',
+      composicion: r.composicion || '',
+      canal_analizador: r.canal_analizador || '',
+      equipo: r.equipo != null ? String(r.equipo) : '',
+    });
+  };
+
+  const startEditInsumo = (i: InsumoLab) => {
+    setEditingInsumoId(i.id);
+    setInsumoForm({
+      codigo: i.codigo,
+      nombre: i.nombre,
+      tipo: (i.tipo === 'REACTIVO' ? 'TUBO' : i.tipo) as typeof emptyInsumoForm.tipo,
+      unidad: i.unidad || 'tubo',
+      stock_min: String(i.stock_min ?? 0),
+      proveedor: i.proveedor || '',
+    });
+  };
+
+  const startEditLote = (l: LoteInsumo) => {
+    setEditingLoteId(l.id);
+    setLoteForm({
+      producto: String(l.insumo),
+      codigo_lote: l.codigo_lote,
+      cantidad: String(l.cantidad),
+      fecha_vencimiento: l.fecha_vencimiento || '',
+    });
+  };
+
+  const startEditConsumo = (c: ConsumoInsumoExamen) => {
+    setEditingConsumoId(c.id);
+    setExamenId(String(c.tipo_examen));
+    setConsumoForm({
+      reactivo: String(c.insumo),
+      cantidad: String(c.cantidad_por_determinacion),
+      etiqueta: c.rol || '',
+    });
   };
 
   const labelTipoInsumo = (t: string) => {
@@ -414,8 +539,19 @@ const InventarioPage: React.FC = () => {
                 sx={{ minWidth: 160 }}
               />
               <Button variant="contained" onClick={submitReactivo}>
-                Alta reactivo
+                {editingReactivoId ? 'Guardar' : 'Alta reactivo'}
               </Button>
+              {editingReactivoId && (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setEditingReactivoId(null);
+                    setReactivoForm(emptyReactivoForm);
+                  }}
+                >
+                  Cancelar
+                </Button>
+              )}
             </Stack>
           </Stack>
 
@@ -431,6 +567,7 @@ const InventarioPage: React.FC = () => {
                 <TableCell>Equipo</TableCell>
                 <TableCell align="right">Stock</TableCell>
                 <TableCell align="right">Mín.</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -445,11 +582,29 @@ const InventarioPage: React.FC = () => {
                   <TableCell>{r.equipo_codigo || '—'}</TableCell>
                   <TableCell align="right">{r.stock_actual}</TableCell>
                   <TableCell align="right">{r.stock_min}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" onClick={() => startEditReactivo(r)}>
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() =>
+                        void deleteWithFallback(
+                          `reactivo ${r.codigo}`,
+                          () => deleteInsumoLab(r.id),
+                          () => patchInsumoLab(r.id, { activo: false })
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {reactivos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9}>
+                  <TableCell colSpan={10}>
                     <Typography variant="body2" color="text.secondary">
                       Sin reactivos aún.
                     </Typography>
@@ -528,8 +683,19 @@ const InventarioPage: React.FC = () => {
               onChange={(e) => setInsumoForm((p) => ({ ...p, proveedor: e.target.value }))}
             />
             <Button variant="contained" onClick={submitInsumo}>
-              Alta insumo
+              {editingInsumoId ? 'Guardar' : 'Alta insumo'}
             </Button>
+            {editingInsumoId && (
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setEditingInsumoId(null);
+                  setInsumoForm(emptyInsumoForm);
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
           <Table size="small">
             <TableHead>
@@ -540,6 +706,7 @@ const InventarioPage: React.FC = () => {
                 <TableCell>Unidad</TableCell>
                 <TableCell align="right">Stock</TableCell>
                 <TableCell align="right">Mín.</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -551,6 +718,24 @@ const InventarioPage: React.FC = () => {
                   <TableCell>{i.unidad}</TableCell>
                   <TableCell align="right">{i.stock_actual}</TableCell>
                   <TableCell align="right">{i.stock_min}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" onClick={() => startEditInsumo(i)}>
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() =>
+                        void deleteWithFallback(
+                          `insumo ${i.codigo}`,
+                          () => deleteInsumoLab(i.id),
+                          () => patchInsumoLab(i.id, { activo: false })
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -619,8 +804,19 @@ const InventarioPage: React.FC = () => {
               onChange={(e) => setLoteForm((p) => ({ ...p, fecha_vencimiento: e.target.value }))}
             />
             <Button variant="contained" onClick={submitLote}>
-              Cargar lote
+              {editingLoteId ? 'Guardar lote' : 'Cargar lote'}
             </Button>
+            {editingLoteId && (
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setEditingLoteId(null);
+                  setLoteForm({ producto: '', codigo_lote: '', cantidad: '', fecha_vencimiento: '' });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
           <Table size="small">
             <TableHead>
@@ -629,6 +825,7 @@ const InventarioPage: React.FC = () => {
                 <TableCell>Lote</TableCell>
                 <TableCell align="right">Cantidad</TableCell>
                 <TableCell>Vence</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -640,6 +837,24 @@ const InventarioPage: React.FC = () => {
                   <TableCell>{l.codigo_lote}</TableCell>
                   <TableCell align="right">{l.cantidad}</TableCell>
                   <TableCell>{l.fecha_vencimiento || '—'}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" onClick={() => startEditLote(l)}>
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() =>
+                        void deleteWithFallback(
+                          `lote ${l.codigo_lote}`,
+                          () => deleteLoteInsumo(l.id),
+                          () => patchLoteInsumo(l.id, { activo: false })
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -710,8 +925,19 @@ const InventarioPage: React.FC = () => {
               sx={{ width: 110 }}
             />
             <Button variant="contained" onClick={submitConsumo} disabled={!examenId}>
-              Vincular
+              {editingConsumoId ? 'Guardar' : 'Vincular'}
             </Button>
+            {editingConsumoId && (
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setEditingConsumoId(null);
+                  setConsumoForm({ reactivo: '', cantidad: '1', etiqueta: '' });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
           <Table size="small">
             <TableHead>
@@ -719,7 +945,7 @@ const InventarioPage: React.FC = () => {
                 <TableCell>Ensayo</TableCell>
                 <TableCell>Reactivo que se descuenta</TableCell>
                 <TableCell align="right">Cant. / det.</TableCell>
-                <TableCell />
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -732,8 +958,11 @@ const InventarioPage: React.FC = () => {
                     {c.insumo_codigo} ({c.insumo_unidad})
                   </TableCell>
                   <TableCell align="right">{c.cantidad_por_determinacion}</TableCell>
-                  <TableCell>
-                    <Button size="small" color="error" onClick={() => quitarConsumo(c.id)}>
+                  <TableCell align="right">
+                    <Button size="small" onClick={() => startEditConsumo(c)}>
+                      Editar
+                    </Button>
+                    <Button size="small" color="error" onClick={() => void quitarConsumo(c.id)}>
                       Quitar
                     </Button>
                   </TableCell>

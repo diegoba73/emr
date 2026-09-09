@@ -32,6 +32,25 @@ from laboratorio.solicitud_orden_abierta import ESTADOS_ORDEN_EN_CURSO
 
 logger = logging.getLogger(__name__)
 
+# Lunes=0 … Viernes=4 — aviso de control con valores (no bloquea OK rápido).
+DIAS_AVISO_CONTROL_VALORES: frozenset[int] = frozenset({0, 4})
+
+
+def es_dia_aviso_control_valores(*, fecha=None) -> bool:
+    d = fecha if fecha is not None else timezone.localdate()
+    return d.weekday() in DIAS_AVISO_CONTROL_VALORES
+
+
+def _nombre_dia(fecha) -> str:
+    return ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")[fecha.weekday()]
+
+
+def _corrida_tiene_valores(corrida: CorridaQC | None) -> bool:
+    """True si la corrida está ACEPTADA y tiene al menos un punto (modo VALORES)."""
+    if corrida is None or corrida.estado != CorridaQC.Estado.ACEPTADA:
+        return False
+    return corrida.puntos.exists()
+
 
 def _estado_nivel(corrida: CorridaQC | None) -> str:
     if corrida is None:
@@ -48,6 +67,7 @@ def _pack_nivel(corrida: CorridaQC | None) -> dict[str, Any]:
     return {
         "estado": est,
         "corrida_id": corrida.id if corrida else None,
+        "con_valores": _corrida_tiene_valores(corrida),
     }
 
 
@@ -63,6 +83,23 @@ def _rollup(s1: str, s2: str) -> tuple[str, str]:
     if s2 != "aceptada":
         faltan.append("S2")
     return "falta", "Falta " + " y ".join(faltan)
+
+
+def _aviso_valores_s1_s2(p1: dict[str, Any], p2: dict[str, Any], *, fecha) -> dict[str, Any]:
+    """Aviso lun/vie si falta corrida ACEPTADA con puntos en S1 o S2. No bloquea."""
+    if not es_dia_aviso_control_valores(fecha=fecha):
+        return {"aviso_valores": False, "aviso_valores_mensaje": None}
+    ok = bool(p1.get("con_valores")) and bool(p2.get("con_valores"))
+    if ok:
+        return {"aviso_valores": False, "aviso_valores_mensaje": None}
+    dia = _nombre_dia(fecha)
+    return {
+        "aviso_valores": True,
+        "aviso_valores_mensaje": (
+            f"Hoy es {dia}: falta cargar el control con valores (S1 y S2 con resultados). "
+            "El OK rápido sigue disponible para salir del apuro."
+        ),
+    }
 
 
 def _exam_ids_abiertos() -> set[int]:
@@ -129,6 +166,7 @@ def _calibracion_hoy(equipo: EquipoAnalizador, *, fecha) -> Calibracion | None:
 def tablero_iqc_hoy() -> dict[str, Any]:
     start, end = _ventana_hoy()
     hoy = timezone.localdate()
+    dia_aviso = es_dia_aviso_control_valores(fecha=hoy)
     try:
         exam_ids_hoy = _exam_ids_abiertos()
     except Exception:
@@ -159,10 +197,23 @@ def tablero_iqc_hoy() -> dict[str, Any]:
                     "s2": None,
                     "ensayos_hoy": [],
                     "ensayos": [],
+                    "aviso_valores": False,
+                    "aviso_valores_mensaje": None,
                 }
             )
 
-    return {"fecha": str(hoy), "equipos": cards}
+    avisos = [
+        {"equipo_id": c["id"], "codigo": c["codigo"], "mensaje": c["aviso_valores_mensaje"]}
+        for c in cards
+        if c.get("aviso_valores") and c.get("aviso_valores_mensaje")
+    ]
+    return {
+        "fecha": str(hoy),
+        "dia_aviso_control_valores": dia_aviso,
+        "dia_semana": _nombre_dia(hoy),
+        "avisos_valores": avisos,
+        "equipos": cards,
+    }
 
 
 def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
@@ -221,6 +272,11 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
             if not n1 and not n2:
                 est, resumen = "sin_trabajo", "Sin material de control"
             pedido = te.id in {e["id"] for e in ensayos_hoy}
+            aviso_fila = _aviso_valores_s1_s2(
+                p1 if n1 else {"con_valores": True},
+                p2 if n2 else {"con_valores": True},
+                fecha=hoy,
+            )
             filas.append(
                 {
                     "tipo_examen": te.id,
@@ -231,6 +287,7 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
                     "pedido_hoy": pedido,
                     "s1": p1,
                     "s2": p2,
+                    **aviso_fila,
                 }
             )
         relevantes = [f for f in filas if f["pedido_hoy"]] or filas
@@ -242,6 +299,14 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
             estado_eq, resumen_eq = "liberado", "Ensayos de hoy liberados"
         else:
             estado_eq, resumen_eq = "falta", "Faltan controles por ensayo"
+        aviso_eq = any(f.get("aviso_valores") for f in relevantes) if relevantes else False
+        msg_eq = None
+        if aviso_eq:
+            dia = _nombre_dia(hoy)
+            msg_eq = (
+                f"Hoy es {dia}: falta cargar control con valores en uno o más ensayos. "
+                "El OK rápido sigue disponible para salir del apuro."
+            )
         return {
             "id": eq.id,
             "codigo": eq.codigo,
@@ -258,6 +323,8 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
             "s2": None,
             "ensayos_hoy": ensayos_hoy,
             "ensayos": filas,
+            "aviso_valores": aviso_eq,
+            "aviso_valores_mensaje": msg_eq,
         }
 
     producto = (
@@ -282,9 +349,11 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
     if producto:
         estado_eq, resumen_eq = _rollup(p1["estado"], p2["estado"])
         tiene = True
+        aviso = _aviso_valores_s1_s2(p1, p2, fecha=hoy)
     else:
         estado_eq, resumen_eq = "sin_trabajo", "Sin producto de control"
         tiene = False
+        aviso = {"aviso_valores": False, "aviso_valores_mensaje": None}
     liberado = estado_eq == "liberado"
     ensayos_pack = [
         {**e, "liberado": liberado, "razon": None if liberado else resumen_eq}
@@ -310,4 +379,5 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
         "s2": p2,
         "ensayos_hoy": ensayos_pack,
         "ensayos": [],
+        **aviso,
     }

@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.permissions import LimsQcPermission
+from laboratorio.destroy_protected import ProtectedDestroyMixin
 
 logger = logging.getLogger(__name__)
 from laboratorio.models import SolicitudExamen, TipoExamen
@@ -47,7 +48,7 @@ from laboratorio.serializers_qc import (
 )
 
 
-class EquipoAnalizadorViewSet(viewsets.ModelViewSet):
+class EquipoAnalizadorViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = EquipoAnalizador.objects.all()
     serializer_class = EquipoAnalizadorSerializer
     permission_classes = [LimsQcPermission]
@@ -55,7 +56,7 @@ class EquipoAnalizadorViewSet(viewsets.ModelViewSet):
     ordering = ["codigo"]
 
 
-class ProductoControlViewSet(viewsets.ModelViewSet):
+class ProductoControlViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = ProductoControl.objects.select_related("equipo").all()
     serializer_class = ProductoControlSerializer
     permission_classes = [LimsQcPermission]
@@ -63,7 +64,7 @@ class ProductoControlViewSet(viewsets.ModelViewSet):
     ordering = ["equipo__codigo", "nombre"]
 
 
-class LoteProductoControlViewSet(viewsets.ModelViewSet):
+class LoteProductoControlViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = (
         LoteProductoControl.objects.select_related("producto", "producto__equipo")
         .prefetch_related("targets__tipo_examen")
@@ -117,7 +118,7 @@ class TargetLoteControlViewSet(viewsets.ModelViewSet):
     ordering = ["tipo_examen__codigo", "nivel"]
 
 
-class MaterialControlViewSet(viewsets.ModelViewSet):
+class MaterialControlViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = MaterialControl.objects.select_related("tipo_examen").all()
     serializer_class = MaterialControlSerializer
     permission_classes = [LimsQcPermission]
@@ -130,7 +131,7 @@ class MaterialControlViewSet(viewsets.ModelViewSet):
         return Response(levey_jennings_series(material))
 
 
-class LoteControlViewSet(viewsets.ModelViewSet):
+class LoteControlViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = LoteControl.objects.select_related("material").all()
     serializer_class = LoteControlSerializer
     permission_classes = [LimsQcPermission]

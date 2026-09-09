@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 const mockTomar = jest.fn();
 const mockImprimir = jest.fn();
 const mockGetZpl = jest.fn();
+const mockPatch = jest.fn();
 
 jest.mock('../../services/limsApi', () => ({
   postMuestraTomar: (...args: unknown[]) => mockTomar(...args),
@@ -14,6 +15,7 @@ jest.mock('../../services/limsApi', () => ({
   postMuestraCancelar: jest.fn(),
   postMuestraImprimirEtiqueta: (...args: unknown[]) => mockImprimir(...args),
   getMuestraEtiquetaZpl: (...args: unknown[]) => mockGetZpl(...args),
+  patchMuestraTransaccional: (...args: unknown[]) => mockPatch(...args),
 }));
 
 jest.mock('react-hot-toast', () => ({
@@ -63,6 +65,7 @@ describe('MuestraAcciones etiquetas ZPL', () => {
     });
     mockImprimir.mockResolvedValue({ muestra_id: 42, profile: 'x', resultado: 'ok' });
     mockTomar.mockResolvedValue({ ...baseMuestra, estado: 'TOMADA' });
+    mockPatch.mockResolvedValue({ ...baseMuestra, lugar_extraccion: 'INTERNACIÓN — UCO — CAMA 3' });
   });
 
   it('muestra botones de etiqueta para operador', () => {
@@ -163,6 +166,57 @@ describe('MuestraAcciones etiquetas ZPL', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar toma' }));
     await waitFor(() => {
       expect(mockTomar).toHaveBeenCalledWith(42, { lugar_extraccion: 'GUARDIA' });
+    });
+    expect(onUpdated).toHaveBeenCalled();
+  });
+
+  it('toma prellena lugar desde origen de la orden', () => {
+    const pendiente: MuestraTransaccional = {
+      ...baseMuestra,
+      estado: 'PENDIENTE_TOMA',
+      lugar_extraccion: null,
+    };
+    render(
+      <MuestraAcciones
+        muestra={pendiente}
+        canOperate
+        onUpdated={jest.fn()}
+        origenOrden={{
+          origen_solicitud: 'INTERNACION_UCO',
+          origen_solicitud_display: 'Internación — UCO',
+          procedencia_display: 'Internación — UCO — CAMA 3',
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tomar' }));
+    expect(screen.getByLabelText('Lugar de extracción')).toHaveValue('Internación — UCO — CAMA 3');
+  });
+
+  it('completa lugar vacío con PATCH prellenado desde origen', async () => {
+    const sinLugar: MuestraTransaccional = {
+      ...baseMuestra,
+      estado: 'TOMADA',
+      lugar_extraccion: '',
+    };
+    const onUpdated = jest.fn();
+    render(
+      <MuestraAcciones
+        muestra={sinLugar}
+        canOperate
+        onUpdated={onUpdated}
+        origenOrden={{
+          origen_solicitud: 'INTERNACION_UCO',
+          procedencia_display: 'Internación — UCO — CAMA 3',
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Completar lugar' }));
+    expect(screen.getByLabelText('Lugar de extracción')).toHaveValue('Internación — UCO — CAMA 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar lugar' }));
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith(42, {
+        lugar_extraccion: 'Internación — UCO — CAMA 3',
+      });
     });
     expect(onUpdated).toHaveBeenCalled();
   });

@@ -37,6 +37,12 @@ import {
   createLoteProductoQc,
   createMaterialQc,
   createProductoQc,
+  deleteCalibracionQc,
+  deleteEquipoQc,
+  deleteLoteControl,
+  deleteLoteProductoQc,
+  deleteMaterialQc,
+  deleteProductoQc,
   getLeveyJenningsExamen,
   listCalibracionesQc,
   listCorridasQc,
@@ -46,6 +52,12 @@ import {
   listMaterialesQc,
   listProductosQc,
   listTiposExamenLims,
+  patchCalibracionQc,
+  patchEquipoQc,
+  patchLoteControl,
+  patchLoteProductoQc,
+  patchMaterialQc,
+  patchProductoQc,
   putTargetsLoteProducto,
   type Calibracion,
   type CorridaQC,
@@ -59,7 +71,12 @@ import {
   type TargetLoteControl,
 } from '../../../services/limsApi';
 import type { LimsTipoExamen } from '../../../types/lims';
-import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import {
+  CLINICAL_ACTION_ERRORS,
+  getSafeApiErrorMessage,
+  getSafeClinicalActionMessage,
+  isProtectedDeleteError,
+} from '../../../utils/apiError';
 import QcHoyPage from './QcHoyPage';
 
 const EQUIPOS_POR_ENSAYO = new Set(['VIDAS_KUBE', 'FINECARE']);
@@ -348,6 +365,12 @@ const QcHubPage: React.FC = () => {
     { orden: 1, concentracion: '', senal: '', unidad: 'mg/L' },
     { orden: 2, concentracion: '', senal: '', unidad: 'mg/L' },
   ]);
+  const [editingMaterialId, setEditingMaterialId] = useState<number | null>(null);
+  const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
+  const [editingProductoId, setEditingProductoId] = useState<number | null>(null);
+  const [editingLoteProdId, setEditingLoteProdId] = useState<number | null>(null);
+  const [editingEquipoId, setEditingEquipoId] = useState<number | null>(null);
+  const [editingCalId, setEditingCalId] = useState<number | null>(null);
 
   const materialById = useMemo(() => {
     const map = new Map<number, MaterialControl>();
@@ -679,6 +702,40 @@ const QcHubPage: React.FC = () => {
     }
   };
 
+  const deleteWithFallback = async (
+    label: string,
+    doDelete: () => Promise<unknown>,
+    doDeactivate?: () => Promise<unknown>
+  ) => {
+    if (!window.confirm(`¿Eliminar ${label}?`)) return;
+    setSaving(true);
+    try {
+      await doDelete();
+      toast.success('Eliminado');
+      await load();
+    } catch (e) {
+      if (doDeactivate && isProtectedDeleteError(e)) {
+        if (
+          window.confirm(
+            'No se puede borrar porque tiene registros relacionados. ¿Desactivar en su lugar?'
+          )
+        ) {
+          try {
+            await doDeactivate();
+            toast.success('Desactivado');
+            await load();
+          } catch (e2) {
+            toast.error(getSafeApiErrorMessage(e2, 'No se pudo desactivar'));
+          }
+        }
+      } else {
+        toast.error(getSafeApiErrorMessage(e, 'No se pudo eliminar'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const submitMaterial = async () => {
     if (!formMaterial.tipo_examen) {
       toast.error('Seleccioná el examen.');
@@ -690,7 +747,7 @@ const QcHubPage: React.FC = () => {
       const nombre =
         formMaterial.nombre.trim() ||
         `${formMaterial.producto || 'Control'} ${exam?.codigo || ''} ${NIVEL_LABEL[formMaterial.nivel]}`;
-      await createMaterialQc({
+      const body = {
         nombre,
         tipo_examen: Number(formMaterial.tipo_examen),
         nivel: formMaterial.nivel,
@@ -699,9 +756,16 @@ const QcHubPage: React.FC = () => {
         marca: formMaterial.marca,
         producto: formMaterial.producto,
         equipo: exam?.equipo_analizador ?? null,
-        activo: true,
-      });
-      toast.success('Material creado');
+        activo: true as const,
+      };
+      if (editingMaterialId) {
+        await patchMaterialQc(editingMaterialId, body);
+        toast.success('Material actualizado');
+      } else {
+        await createMaterialQc(body);
+        toast.success('Material creado');
+      }
+      setEditingMaterialId(null);
       await load();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsQcCatalogo));
@@ -717,14 +781,21 @@ const QcHubPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      await createLoteControl({
+      const body = {
         material: Number(formLote.material),
         codigo_lote: formLote.codigo_lote.trim(),
         vencimiento: formLote.vencimiento,
-        activo: true,
-      });
-      toast.success('Lote creado');
+        activo: true as const,
+      };
+      if (editingLoteId) {
+        await patchLoteControl(editingLoteId, body);
+        toast.success('Lote actualizado');
+      } else {
+        await createLoteControl(body);
+        toast.success('Lote creado');
+      }
       setFormLote((p) => ({ ...p, codigo_lote: '' }));
+      setEditingLoteId(null);
       await load();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsQcCatalogo));
@@ -740,16 +811,23 @@ const QcHubPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      await createProductoQc({
+      const body = {
         codigo: formProducto.codigo.trim().toUpperCase(),
         nombre: formProducto.nombre.trim(),
         marca: formProducto.marca.trim(),
         equipo: Number(formProducto.equipo),
-        modo: 'MULTIPARAM',
-        activo: true,
-      });
-      toast.success('Producto creado');
-      setFormProducto((p) => ({ ...p, codigo: '', nombre: '' }));
+        modo: 'MULTIPARAM' as const,
+        activo: true as const,
+      };
+      if (editingProductoId) {
+        await patchProductoQc(editingProductoId, body);
+        toast.success('Producto actualizado');
+      } else {
+        await createProductoQc(body);
+        toast.success('Producto creado');
+      }
+      setFormProducto((p) => ({ ...p, codigo: '', nombre: '', marca: '' }));
+      setEditingProductoId(null);
       await load();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsQcCatalogo));
@@ -765,14 +843,21 @@ const QcHubPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      await createLoteProductoQc({
+      const body = {
         producto: Number(formLoteProd.producto),
         codigo_lote: formLoteProd.codigo_lote.trim(),
         vencimiento: formLoteProd.vencimiento,
-        activo: true,
-      });
-      toast.success('Lote de producto creado');
+        activo: true as const,
+      };
+      if (editingLoteProdId) {
+        await patchLoteProductoQc(editingLoteProdId, body);
+        toast.success('Lote de producto actualizado');
+      } else {
+        await createLoteProductoQc(body);
+        toast.success('Lote de producto creado');
+      }
       setFormLoteProd((p) => ({ ...p, codigo_lote: '' }));
+      setEditingLoteProdId(null);
       await load();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsQcCatalogo));
@@ -834,14 +919,21 @@ const QcHubPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      await createEquipoQc({
+      const body = {
         codigo: formEquipo.codigo.trim(),
         nombre: formEquipo.nombre.trim(),
         marca_modelo: formEquipo.marca_modelo.trim(),
         activo: formEquipo.activo,
-      });
-      toast.success('Equipo creado');
+      };
+      if (editingEquipoId) {
+        await patchEquipoQc(editingEquipoId, body);
+        toast.success('Equipo actualizado');
+      } else {
+        await createEquipoQc(body);
+        toast.success('Equipo creado');
+      }
       setFormEquipo({ codigo: '', nombre: '', marca_modelo: '', activo: true });
+      setEditingEquipoId(null);
       await load();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsQcCatalogo));
@@ -876,7 +968,7 @@ const QcHubPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      await createCalibracionQc({
+      const body = {
         equipo: Number(formCal.equipo),
         fecha: formCal.fecha,
         vigente_hasta: formCal.vigente_hasta,
@@ -887,8 +979,15 @@ const QcHubPage: React.FC = () => {
         tipo_examen: formCal.tipo_examen ? Number(formCal.tipo_examen) : null,
         puntos_curva: puntos,
         observaciones: formCal.observaciones,
-      });
-      toast.success('Calibración registrada');
+      };
+      if (editingCalId) {
+        await patchCalibracionQc(editingCalId, body);
+        toast.success('Calibración actualizada');
+      } else {
+        await createCalibracionQc(body);
+        toast.success('Calibración registrada');
+      }
+      setEditingCalId(null);
       await load();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsQcCatalogo));
@@ -1299,8 +1398,20 @@ const QcHubPage: React.FC = () => {
               </Select>
             </FormControl>
             <Button variant="contained" onClick={submitProducto} disabled={saving}>
-              Alta producto
+              {editingProductoId ? 'Guardar producto' : 'Alta producto'}
             </Button>
+            {editingProductoId && (
+              <Button
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  setEditingProductoId(null);
+                  setFormProducto({ codigo: '', nombre: '', marca: '', equipo: '' });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
             <FormControl size="small" sx={{ minWidth: 260 }}>
@@ -1333,8 +1444,20 @@ const QcHubPage: React.FC = () => {
               onChange={(e) => setFormLoteProd((p) => ({ ...p, vencimiento: e.target.value }))}
             />
             <Button variant="contained" onClick={submitLoteProd} disabled={saving || !productos.length}>
-              Alta lote
+              {editingLoteProdId ? 'Guardar lote' : 'Alta lote'}
             </Button>
+            {editingLoteProdId && (
+              <Button
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  setEditingLoteProdId(null);
+                  setFormLoteProd({ producto: '', codigo_lote: '', vencimiento: plusDaysISO(365) });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
           {productosPorEquipo.map(([eqCodigo, prods]) => (
             <Box key={eqCodigo} sx={{ mb: 2 }}>
@@ -1345,6 +1468,7 @@ const QcHubPage: React.FC = () => {
                     <TableCell>Producto</TableCell>
                     <TableCell>Marca</TableCell>
                     <TableCell>Lotes</TableCell>
+                    <TableCell align="right">Acciones</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1353,7 +1477,37 @@ const QcHubPage: React.FC = () => {
                       <TableCell>{p.codigo} — {p.nombre}</TableCell>
                       <TableCell>{p.marca || '—'}</TableCell>
                       <TableCell>
-                        {lotesProducto.filter((l) => l.producto === p.id).map((l) => l.codigo_lote).join(', ') || '—'}
+                        {lotesProducto.filter((l) => l.producto === p.id && l.activo).map((l) => l.codigo_lote).join(', ') || '—'}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEditingProductoId(p.id);
+                            setFormProducto({
+                              codigo: p.codigo,
+                              nombre: p.nombre,
+                              marca: p.marca || '',
+                              equipo: String(p.equipo),
+                            });
+                          }}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          disabled={saving}
+                          onClick={() =>
+                            void deleteWithFallback(
+                              `producto ${p.codigo}`,
+                              () => deleteProductoQc(p.id),
+                              () => patchProductoQc(p.id, { activo: false })
+                            )
+                          }
+                        >
+                          Eliminar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1361,6 +1515,57 @@ const QcHubPage: React.FC = () => {
               </Table>
             </Box>
           ))}
+          <Typography variant="subtitle1" gutterBottom>
+            Lotes de producto
+          </Typography>
+          <Table size="small" sx={{ mb: 2 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Producto</TableCell>
+                <TableCell>Lote</TableCell>
+                <TableCell>Vencimiento</TableCell>
+                <TableCell align="right">Acciones</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {lotesProductoActivos.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell>{labelLoteProducto(l)}</TableCell>
+                  <TableCell>{l.codigo_lote}</TableCell>
+                  <TableCell>{l.vencimiento}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingLoteProdId(l.id);
+                        setFormLoteProd({
+                          producto: String(l.producto),
+                          codigo_lote: l.codigo_lote,
+                          vencimiento: l.vencimiento,
+                        });
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={saving}
+                      onClick={() =>
+                        void deleteWithFallback(
+                          `lote ${l.codigo_lote}`,
+                          () => deleteLoteProductoQc(l.id),
+                          () => patchLoteProductoQc(l.id, { activo: false })
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
           <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ mt: 2 }}>
             Targets del inserto (ensayo × S1/S2)
           </Typography>
@@ -1573,8 +1778,28 @@ const QcHubPage: React.FC = () => {
               sx={{ width: 110 }}
             />
             <Button variant="contained" onClick={submitMaterial} disabled={saving}>
-              Agregar material
+              {editingMaterialId ? 'Guardar material' : 'Agregar material'}
             </Button>
+            {editingMaterialId && (
+              <Button
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  setEditingMaterialId(null);
+                  setFormMaterial({
+                    tipo_examen: '',
+                    nombre: 'Control VIDAS',
+                    marca: '',
+                    producto: 'Control VIDAS',
+                    nivel: 'N1',
+                    media_target: '100',
+                    de_target: '5',
+                  });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
           {margenesFormMaterial && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -1617,8 +1842,20 @@ const QcHubPage: React.FC = () => {
               onChange={(e) => setFormLote((p) => ({ ...p, vencimiento: e.target.value }))}
             />
             <Button variant="contained" onClick={submitLote} disabled={saving || !materialesPorEnsayo.length}>
-              Agregar lote
+              {editingLoteId ? 'Guardar lote' : 'Agregar lote'}
             </Button>
+            {editingLoteId && (
+              <Button
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  setEditingLoteId(null);
+                  setFormLote({ material: '', codigo_lote: '', vencimiento: plusDaysISO(365) });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
 
           <Typography variant="subtitle1" gutterBottom>
@@ -1636,6 +1873,7 @@ const QcHubPage: React.FC = () => {
                 <TableCell>DE</TableCell>
                 <TableCell>Aceptación ±2s</TableCell>
                 <TableCell>Fuera ±3s</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1656,6 +1894,39 @@ const QcHubPage: React.FC = () => {
                   <TableCell>{mg ? fmtQc(mg.de) : m.de_target}</TableCell>
                   <TableCell>{mg ? rangoTxt(mg.warnLow, mg.warnHigh) : '—'}</TableCell>
                   <TableCell>{mg ? rangoTxt(mg.outLow, mg.outHigh) : '—'}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingMaterialId(m.id);
+                        setFormMaterial({
+                          tipo_examen: String(m.tipo_examen),
+                          nombre: m.nombre,
+                          marca: m.marca || '',
+                          producto: m.producto || '',
+                          nivel: m.nivel,
+                          media_target: String(m.media_target),
+                          de_target: String(m.de_target),
+                        });
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={saving}
+                      onClick={() =>
+                        void deleteWithFallback(
+                          `material ${m.nombre}`,
+                          () => deleteMaterialQc(m.id),
+                          () => patchMaterialQc(m.id, { activo: false })
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
                   </TableRow>
                 );
               })}
@@ -1673,6 +1944,7 @@ const QcHubPage: React.FC = () => {
                 <TableCell>Examen</TableCell>
                 <TableCell>Vencimiento</TableCell>
                 <TableCell>Activo</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1687,6 +1959,35 @@ const QcHubPage: React.FC = () => {
                     </TableCell>
                     <TableCell>{l.vencimiento}</TableCell>
                     <TableCell>{l.activo ? 'Sí' : 'No'}</TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setEditingLoteId(l.id);
+                          setFormLote({
+                            material: String(l.material),
+                            codigo_lote: l.codigo_lote,
+                            vencimiento: l.vencimiento,
+                          });
+                        }}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        disabled={saving}
+                        onClick={() =>
+                          void deleteWithFallback(
+                            `lote ${l.codigo_lote}`,
+                            () => deleteLoteControl(l.id),
+                            () => patchLoteControl(l.id, { activo: false })
+                          )
+                        }
+                      >
+                        Eliminar
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -1734,8 +2035,20 @@ const QcHubPage: React.FC = () => {
               label="Activo"
             />
             <Button variant="contained" onClick={submitEquipo} disabled={saving}>
-              Agregar equipo
+              {editingEquipoId ? 'Guardar equipo' : 'Agregar equipo'}
             </Button>
+            {editingEquipoId && (
+              <Button
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  setEditingEquipoId(null);
+                  setFormEquipo({ codigo: '', nombre: '', marca_modelo: '', activo: true });
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
           </Stack>
 
           <Typography variant="subtitle1" gutterBottom>
@@ -1748,6 +2061,7 @@ const QcHubPage: React.FC = () => {
                 <TableCell>Nombre</TableCell>
                 <TableCell>Marca / modelo</TableCell>
                 <TableCell>Activo</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1757,6 +2071,36 @@ const QcHubPage: React.FC = () => {
                   <TableCell>{e.nombre}</TableCell>
                   <TableCell>{e.marca_modelo || '—'}</TableCell>
                   <TableCell>{e.activo ? 'Sí' : 'No'}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingEquipoId(e.id);
+                        setFormEquipo({
+                          codigo: e.codigo,
+                          nombre: e.nombre,
+                          marca_modelo: e.marca_modelo || '',
+                          activo: e.activo,
+                        });
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={saving}
+                      onClick={() =>
+                        void deleteWithFallback(
+                          `equipo ${e.codigo}`,
+                          () => deleteEquipoQc(e.id),
+                          () => patchEquipoQc(e.id, { activo: false })
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1930,9 +2274,37 @@ const QcHubPage: React.FC = () => {
             </Box>
           )}
 
-          <Button variant="contained" onClick={submitCalibracion} disabled={saving || !equipos.length} sx={{ mb: 3 }}>
-            Registrar calibración
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ mb: 3 }} flexWrap="wrap" useFlexGap>
+            <Button variant="contained" onClick={submitCalibracion} disabled={saving || !equipos.length}>
+              {editingCalId ? 'Guardar calibración' : 'Registrar calibración'}
+            </Button>
+            {editingCalId && (
+              <Button
+                variant="outlined"
+                disabled={saving}
+                onClick={() => {
+                  setEditingCalId(null);
+                  setFormCal({
+                    equipo: '',
+                    tipo_examen: '',
+                    fecha: todayISO(),
+                    vigente_hasta: plusDaysISO(30),
+                    calibrador_nombre: 'Calibrador A Plus',
+                    marca: 'Wiener',
+                    codigo_lote: '',
+                    tipo: 'PUNTO_UNICO',
+                    observaciones: '',
+                  });
+                  setPuntosCurva([
+                    { orden: 1, concentracion: '', senal: '', unidad: 'mg/L' },
+                    { orden: 2, concentracion: '', senal: '', unidad: 'mg/L' },
+                  ]);
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
+          </Stack>
 
           <Typography variant="subtitle1" gutterBottom>
             Calibraciones
@@ -1947,6 +2319,7 @@ const QcHubPage: React.FC = () => {
                 <TableCell>Fecha</TableCell>
                 <TableCell>Vigente hasta</TableCell>
                 <TableCell>Puntos</TableCell>
+                <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1960,7 +2333,47 @@ const QcHubPage: React.FC = () => {
                   <TableCell>{c.tipo_examen_codigo || '—'}</TableCell>
                   <TableCell>{c.fecha}</TableCell>
                   <TableCell>{c.vigente_hasta}</TableCell>
-                  <TableCell>{c.puntos_curva?.length || 0}</TableCell>
+                  <TableCell>{(c.puntos_curva || []).length || '—'}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingCalId(c.id);
+                        setFormCal({
+                          equipo: String(c.equipo),
+                          tipo_examen: c.tipo_examen != null ? String(c.tipo_examen) : '',
+                          fecha: c.fecha,
+                          vigente_hasta: c.vigente_hasta,
+                          calibrador_nombre: c.calibrador_nombre || '',
+                          marca: c.marca || '',
+                          codigo_lote: c.codigo_lote || '',
+                          tipo: c.tipo,
+                          observaciones: c.observaciones || '',
+                        });
+                        const pts = c.puntos_curva?.length
+                          ? c.puntos_curva
+                          : [
+                              { orden: 1, concentracion: '', senal: '', unidad: 'mg/L' },
+                              { orden: 2, concentracion: '', senal: '', unidad: 'mg/L' },
+                            ];
+                        setPuntosCurva(pts);
+                      }}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={saving}
+                      onClick={() =>
+                        void deleteWithFallback(`calibración ${c.fecha}`, () =>
+                          deleteCalibracionQc(c.id)
+                        )
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -60,3 +60,21 @@ export function formatOrigenProcedenciaCell(row: {
   }
   return { titulo, detalle };
 }
+
+export type OrigenParaLugarExtraccion = {
+  origen_solicitud?: OrigenSolicitudLims | string | null;
+  origen_solicitud_display?: string | null;
+  procedencia_display?: string | null;
+};
+
+/**
+ * Sugerencia editable de lugar de extracción a partir del origen/procedencia de la orden.
+ * Prefiere el detalle clínico (p. ej. cama) cuando aporta más que el título de origen.
+ */
+export function sugerirLugarExtraccionDesdeOrigen(row: OrigenParaLugarExtraccion | null | undefined): string {
+  if (!row) return '';
+  const { titulo, detalle } = formatOrigenProcedenciaCell(row);
+  const preferido = (detalle || titulo || '').trim();
+  if (!preferido || preferido === '—') return '';
+  return preferido;
+}

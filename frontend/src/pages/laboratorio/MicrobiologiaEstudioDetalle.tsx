@@ -21,7 +21,7 @@ import {
   listSiembrasMicrobiologia,
   marcarEstudioMicrobiologiaInformado,
 } from '../../services/limsApi';
-import { downloadEtiquetasEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
+import { downloadEtiquetasEstudioMicro, printTalonEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessMicrobiologiaLectura,
@@ -53,6 +53,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [estudio, setEstudio] = useState<EstudioMicrobiologia | null>(null);
   const [loading, setLoading] = useState(true);
   const [reprinting, setReprinting] = useState(false);
+  const [downloadingTalon, setDownloadingTalon] = useState(false);
   const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
   const [openObraSocial, setOpenObraSocial] = useState(false);
   const [bundle, setBundle] = useState({
@@ -179,6 +180,18 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     }
   };
 
+  const onImprimirTalon = async () => {
+    setDownloadingTalon(true);
+    try {
+      await printTalonEstudioMicro(estudioId);
+      toast.success('Diálogo de impresión abierto — elegí una impresora común.');
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
+    } finally {
+      setDownloadingTalon(false);
+    }
+  };
+
   const onConfirmarRecepcion = async () => {
     setConfirmingRecepcion(true);
     try {
@@ -252,8 +265,10 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           estudio={estudio}
           canOperate={canOp}
           reprinting={reprinting}
+          downloadingTalon={downloadingTalon}
           confirmingRecepcion={confirmingRecepcion}
           onReimprimirEtiquetas={() => void onReimprimir()}
+          onImprimirTalon={() => void onImprimirTalon()}
           onConfirmarRecepcion={() => void onConfirmarRecepcion()}
           onCancelar={onCancelar}
           onObraSocial={canOp ? () => setOpenObraSocial(true) : undefined}

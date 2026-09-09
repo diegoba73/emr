@@ -71,6 +71,11 @@ from .services_informes_pdf import (
     generar_informe_lims_pdf_bytes,
     nombre_archivo_pdf_seguro,
 )
+from .talon_pedido_pdf import (
+    auditar_descarga_talon_solicitud,
+    generar_talon_solicitud_pdf_bytes,
+    nombre_archivo_talon_solicitud,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1333,6 +1338,30 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         nombre = nombre_archivo_etiquetas_orden(solicitud.pk, solicitud.numero)
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        return response
+
+    @action(detail=True, methods=['get'], url_path='talon-pdf')
+    def talon_pdf(self, request, pk=None):
+        """
+        Talón PDF A4 de respaldo (impresora común). No muta estado ni muestras.
+        """
+        solicitud = self.get_object()
+        try:
+            pdf_bytes = generar_talon_solicitud_pdf_bytes(solicitud)
+        except Exception:
+            logger.exception('generar talon PDF solicitud pk=%s', pk)
+            return Response(
+                {'error': 'No se pudo generar el talón PDF.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        auditar_descarga_talon_solicitud(
+            actor=request.user,
+            solicitud=solicitud,
+            view='SolicitudExamenViewSet.talon_pdf',
+        )
+        nombre = nombre_archivo_talon_solicitud(solicitud)
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{nombre}"'
         return response

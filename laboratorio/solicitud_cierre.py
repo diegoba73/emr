@@ -14,6 +14,7 @@ from laboratorio.models_catalog import Muestra
 from laboratorio.muestra_estado import MuestraAccionError, aplicar_iniciar_proceso
 from laboratorio.resultado_muestra_validacion import (
     MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN,
+    MUESTRA_ESTADOS_PENDIENTES_RECEPCION,
     asegurar_muestra_lista_para_carga,
 )
 from laboratorio.solicitud_estado import (
@@ -64,7 +65,32 @@ def _preparar_muestras_para_cierre(
                 pass
 
 
+def orden_tiene_tubos_pendientes_recepcion(solicitud: SolicitudExamen) -> bool:
+    """True si quedan tubos PENDIENTE_TOMA o TOMADA (aún no recepcionados)."""
+    return Muestra.objects.filter(
+        solicitud_id=solicitud.pk,
+        estado__in=MUESTRA_ESTADOS_PENDIENTES_RECEPCION,
+    ).exists()
+
+
+MSG_TUBOS_PENDIENTES_RECEPCION = (
+    "Hay tubos pendientes de recepción. Recibilos o cancelalos (o rechazadlos) "
+    "antes de marcar la orden como lista para validar."
+)
+
+
+def _assert_sin_tubos_pendientes_recepcion(solicitud: SolicitudExamen) -> None:
+    if orden_tiene_tubos_pendientes_recepcion(solicitud):
+        raise SolicitudCierreError(MSG_TUBOS_PENDIENTES_RECEPCION)
+
+
 def _validar_muestras_para_cierre(solicitud: SolicitudExamen) -> None:
+    """
+    Reglas al validar:
+    1) No puede haber tubos aún PENDIENTE_TOMA/TOMADA en la orden.
+    2) Resultados vinculados no pueden apuntar a muestra en estado inválido.
+    """
+    _assert_sin_tubos_pendientes_recepcion(solicitud)
     muestra_ids = list(
         solicitud.resultados.filter(muestra_id__isnull=False)
         .values_list("muestra_id", flat=True)
@@ -126,7 +152,11 @@ def sincronizar_estado_tras_carga(
 ) -> str:
     """
     Tras cargar resultados:
-    - Completos → LISTO_PARA_VALIDAR (desde EN_PROCESO o INFORMADO_PARCIAL).
+    - Completos y sin tubos pendientes de recepción → LISTO_PARA_VALIDAR
+      (desde EN_PROCESO o INFORMADO_PARCIAL).
+    - Completos pero con tubos PENDIENTE_TOMA/TOMADA → no promover a listo
+      (hay que recepcionar o cancelar esos tubos; se puede seguir cargando
+      resultados de tubos ya recibidos).
     - Incompletos + informar_parcial → INFORMADO_PARCIAL.
     - Incompletos desde LISTO_PARA_VALIDAR → EN_PROCESO (reabrir).
     """
@@ -135,8 +165,9 @@ def sincronizar_estado_tras_carga(
         return solicitud.estado
 
     completos = solicitud_resultados_completos(solicitud)
+    tubos_pendientes = orden_tiene_tubos_pendientes_recepcion(solicitud)
 
-    if completos:
+    if completos and not tubos_pendientes:
         if solicitud.estado in ("EN_PROCESO", "INFORMADO_PARCIAL"):
             apply_solicitud_estado_transition(
                 solicitud,
@@ -147,7 +178,7 @@ def sincronizar_estado_tras_carga(
             )
         return solicitud.estado
 
-    # Incompletos
+    # Incompletos, o completos pero con tubos aún no recepcionados
     if solicitud.estado == "LISTO_PARA_VALIDAR":
         apply_solicitud_estado_transition(
             solicitud,

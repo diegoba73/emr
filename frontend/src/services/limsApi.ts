@@ -4,6 +4,7 @@ import { triggerBlobDownload } from './estudiosComplementariosApi';
 import {
   assertValidSolicitudId,
   informeLimsPdfFilename,
+  printPdfBlob,
 } from '../utils/limsDownload';
 import type {
   AnalisisLongitudinalOrden,
@@ -448,6 +449,18 @@ export async function postMuestraTomar(
   return data;
 }
 
+/** PATCH administrativo (p. ej. completar `lugar_extraccion` una vez si quedó vacío tras la toma). */
+export async function patchMuestraTransaccional(
+  id: number,
+  body: { lugar_extraccion?: string; tipo_contenedor?: number | null; observaciones?: string }
+): Promise<MuestraTransaccional> {
+  const { data } = await apiClient.patch<MuestraTransaccional>(
+    `${LAB}/muestras-transaccionales/${id}/`,
+    body
+  );
+  return data;
+}
+
 export async function getMuestraEtiquetaZpl(id: number): Promise<import('../types/lims').EtiquetaMuestraZpl> {
   const { data } = await apiClient.get(`${LAB}/muestras-transaccionales/${id}/etiqueta-zpl/`);
   return data;
@@ -603,6 +616,25 @@ export async function downloadEtiquetasOrdenMuestras(
   const blob = await getEtiquetasOrdenMuestrasPdfBlob(solicitudId);
   const ref = (numeroOrden || String(solicitudId)).replace(/\//g, '-');
   await triggerBlobDownload(blob, `etiquetas-orden-${ref}.pdf`);
+}
+
+export async function getTalonOrdenPdfBlob(solicitudId: number): Promise<Blob> {
+  assertValidSolicitudId(solicitudId);
+  const { data } = await apiClient.get<Blob>(`${LAB}/solicitudes/${solicitudId}/talon-pdf/`, {
+    responseType: 'blob',
+  });
+  return data;
+}
+
+/** Abre el diálogo de impresión del navegador (impresora común). No descarga archivo. */
+export async function printTalonOrden(solicitudId: number): Promise<void> {
+  const blob = await getTalonOrdenPdfBlob(solicitudId);
+  await printPdfBlob(blob);
+}
+
+/** @deprecated Usar printTalonOrden — mantiene el nombre por compatibilidad de imports. */
+export async function downloadTalonOrden(solicitudId: number): Promise<void> {
+  await printTalonOrden(solicitudId);
 }
 
 // --- Catálogos ---
@@ -896,6 +928,29 @@ export async function createLoteInsumo(body: {
   return data;
 }
 
+export async function patchLoteInsumo(
+  id: number,
+  body: Partial<{
+    insumo: number;
+    codigo_lote: string;
+    cantidad: number;
+    fecha_vencimiento: string | null;
+    ubicacion: string;
+    activo: boolean;
+  }>
+) {
+  const { data } = await apiClient.patch<LoteInsumo>(`${LAB}/inventario/lotes/${id}/`, body);
+  return data;
+}
+
+export async function deleteLoteInsumo(id: number) {
+  await apiClient.delete(`${LAB}/inventario/lotes/${id}/`);
+}
+
+export async function deleteInsumoLab(id: number) {
+  await apiClient.delete(`${LAB}/inventario/insumos/${id}/`);
+}
+
 export async function registrarMovimientoStock(body: {
   lote_id: number;
   tipo: 'INGRESO' | 'AJUSTE' | 'DESCARTE';
@@ -938,6 +993,8 @@ export async function createConsumoInsumoExamen(body: {
 export async function patchConsumoInsumoExamen(
   id: number,
   body: Partial<{
+    tipo_examen: number;
+    insumo: number;
     cantidad_por_determinacion: number | string;
     rol: string;
     activo: boolean;
@@ -1128,6 +1185,7 @@ export type IqcNivelEstado = 'aceptada' | 'rechazada' | 'pendiente' | 'falta';
 export interface IqcNivelHoy {
   estado: IqcNivelEstado;
   corrida_id?: number | null;
+  con_valores?: boolean;
   material_id?: number | null;
   lote_control_id?: number | null;
   lote_producto_id?: number | null;
@@ -1143,6 +1201,8 @@ export interface IqcEnsayoHoy {
   pedido_hoy: boolean;
   s1: IqcNivelHoy;
   s2: IqcNivelHoy;
+  aviso_valores?: boolean;
+  aviso_valores_mensaje?: string | null;
 }
 
 export interface IqcEquipoHoy {
@@ -1167,10 +1227,15 @@ export interface IqcEquipoHoy {
     razon?: string | null;
   }>;
   ensayos: IqcEnsayoHoy[];
+  aviso_valores?: boolean;
+  aviso_valores_mensaje?: string | null;
 }
 
 export interface IqcTableroHoy {
   fecha: string;
+  dia_aviso_control_valores?: boolean;
+  dia_semana?: string;
+  avisos_valores?: Array<{ equipo_id: number; codigo: string; mensaje: string }>;
   equipos: IqcEquipoHoy[];
 }
 
@@ -1195,6 +1260,15 @@ export async function createEquipoQc(body: {
   return data;
 }
 
+export async function patchEquipoQc(id: number, body: Partial<EquipoAnalizador>): Promise<EquipoAnalizador> {
+  const { data } = await apiClient.patch<EquipoAnalizador>(`${LAB}/qc/equipos/${id}/`, body);
+  return data;
+}
+
+export async function deleteEquipoQc(id: number): Promise<void> {
+  await apiClient.delete(`${LAB}/qc/equipos/${id}/`);
+}
+
 export async function listMaterialesQc(): Promise<MaterialControl[]> {
   return getPaginatedAll<MaterialControl>(`${LAB}/qc/materiales/`, { page_size: 200 });
 }
@@ -1214,6 +1288,28 @@ export async function createMaterialQc(body: {
   return data;
 }
 
+export async function patchMaterialQc(
+  id: number,
+  body: Partial<{
+    nombre: string;
+    tipo_examen: number;
+    nivel: 'N1' | 'N2' | 'N3';
+    media_target: number | string;
+    de_target: number | string;
+    marca: string;
+    producto: string;
+    equipo: number | null;
+    activo: boolean;
+  }>
+): Promise<MaterialControl> {
+  const { data } = await apiClient.patch<MaterialControl>(`${LAB}/qc/materiales/${id}/`, body);
+  return data;
+}
+
+export async function deleteMaterialQc(id: number): Promise<void> {
+  await apiClient.delete(`${LAB}/qc/materiales/${id}/`);
+}
+
 export async function listProductosQc(): Promise<ProductoControl[]> {
   return getPaginatedAll<ProductoControl>(`${LAB}/qc/productos/`, { page_size: 200 });
 }
@@ -1228,6 +1324,25 @@ export async function createProductoQc(body: {
 }): Promise<ProductoControl> {
   const { data } = await apiClient.post<ProductoControl>(`${LAB}/qc/productos/`, body);
   return data;
+}
+
+export async function patchProductoQc(
+  id: number,
+  body: Partial<{
+    codigo: string;
+    nombre: string;
+    marca: string;
+    equipo: number;
+    modo: 'MULTIPARAM' | 'POR_ENSAYO';
+    activo: boolean;
+  }>
+): Promise<ProductoControl> {
+  const { data } = await apiClient.patch<ProductoControl>(`${LAB}/qc/productos/${id}/`, body);
+  return data;
+}
+
+export async function deleteProductoQc(id: number): Promise<void> {
+  await apiClient.delete(`${LAB}/qc/productos/${id}/`);
 }
 
 export async function listLotesProductoQc(params?: {
@@ -1247,6 +1362,26 @@ export async function createLoteProductoQc(body: {
 }): Promise<LoteProductoControl> {
   const { data } = await apiClient.post<LoteProductoControl>(`${LAB}/qc/lotes-producto/`, body);
   return data;
+}
+
+export async function patchLoteProductoQc(
+  id: number,
+  body: Partial<{
+    producto: number;
+    codigo_lote: string;
+    vencimiento: string;
+    activo: boolean;
+  }>
+): Promise<LoteProductoControl> {
+  const { data } = await apiClient.patch<LoteProductoControl>(
+    `${LAB}/qc/lotes-producto/${id}/`,
+    body
+  );
+  return data;
+}
+
+export async function deleteLoteProductoQc(id: number): Promise<void> {
+  await apiClient.delete(`${LAB}/qc/lotes-producto/${id}/`);
 }
 
 export async function putTargetsLoteProducto(
@@ -1279,6 +1414,23 @@ export async function createLoteControl(body: {
   return data;
 }
 
+export async function patchLoteControl(
+  id: number,
+  body: Partial<{
+    material: number;
+    codigo_lote: string;
+    vencimiento: string;
+    activo: boolean;
+  }>
+): Promise<LoteControl> {
+  const { data } = await apiClient.patch<LoteControl>(`${LAB}/qc/lotes/${id}/`, body);
+  return data;
+}
+
+export async function deleteLoteControl(id: number): Promise<void> {
+  await apiClient.delete(`${LAB}/qc/lotes/${id}/`);
+}
+
 export async function listCorridasQc(): Promise<CorridaQC[]> {
   return getPaginatedAll<CorridaQC>(`${LAB}/qc/corridas/`, { page_size: 200 });
 }
@@ -1301,6 +1453,29 @@ export async function createCalibracionQc(body: {
 }): Promise<Calibracion> {
   const { data } = await apiClient.post<Calibracion>(`${LAB}/qc/calibraciones/`, body);
   return data;
+}
+
+export async function patchCalibracionQc(
+  id: number,
+  body: Partial<{
+    equipo: number;
+    fecha: string;
+    vigente_hasta: string;
+    calibrador_nombre: string;
+    marca: string;
+    codigo_lote: string;
+    tipo: 'PUNTO_UNICO' | 'CURVA_MULTIPUNTO';
+    tipo_examen: number | null;
+    puntos_curva: PuntoCurvaCalibracion[];
+    observaciones: string;
+  }>
+): Promise<Calibracion> {
+  const { data } = await apiClient.patch<Calibracion>(`${LAB}/qc/calibraciones/${id}/`, body);
+  return data;
+}
+
+export async function deleteCalibracionQc(id: number): Promise<void> {
+  await apiClient.delete(`${LAB}/qc/calibraciones/${id}/`);
 }
 
 export async function getLeveyJenningsMaterial(materialId: number): Promise<LeveyJenningsSeries> {

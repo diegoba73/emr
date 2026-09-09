@@ -41,7 +41,7 @@ export function getSafeApiErrorMessage(
   if (status === 401) {
     return 'Debe iniciar sesión para continuar.';
   }
-  if (status === 400 || status === 500) {
+  if (status === 400 || status === 409 || status === 500) {
     const data = (error as { response?: { data?: unknown } })?.response?.data;
     if (data && typeof data === 'object') {
       const o = data as Record<string, unknown>;
@@ -75,6 +75,16 @@ export function isForbiddenError(error: unknown): boolean {
 
 export function isNotFoundError(error: unknown): boolean {
   return responseStatus(error) === 404;
+}
+
+/** DELETE bloqueado por FK PROTECT (backend ProtectedDestroyMixin → 409). */
+export function isProtectedDeleteError(error: unknown): boolean {
+  const status = responseStatus(error);
+  if (status !== 409 && status !== 400) return false;
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (!data || typeof data !== 'object') return false;
+  const o = data as Record<string, unknown>;
+  return o.code === 'PROTECTED' || o.can_deactivate === true;
 }
 
 /** Mensajes genéricos por acción clínica (sin parsear response.data). */

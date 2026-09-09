@@ -2,6 +2,7 @@ import {
   esOrigenAmbulatorioExterno,
   formatOrigenProcedenciaCell,
   labelOrigenSolicitudLims,
+  sugerirLugarExtraccionDesdeOrigen,
 } from './limsOrigenSolicitud';
 
 describe('limsOrigenSolicitud', () => {
@@ -43,5 +44,29 @@ describe('limsOrigenSolicitud', () => {
     expect(cell.titulo).toBe('Ambulatorio externo — CEHTA');
     expect(cell.detalle).toContain('Receta externa');
     expect(cell.detalle).toContain('Dr. García');
+  });
+
+  it('sugerirLugarExtraccionDesdeOrigen prefiere detalle con cama', () => {
+    expect(
+      sugerirLugarExtraccionDesdeOrigen({
+        origen_solicitud: 'INTERNACION_UCO',
+        origen_solicitud_display: 'Internación — UCO',
+        procedencia_display: 'Internación — UCO — CAMA 3',
+      })
+    ).toBe('Internación — UCO — CAMA 3');
+  });
+
+  it('sugerirLugarExtraccionDesdeOrigen usa título si no hay detalle útil', () => {
+    expect(
+      sugerirLugarExtraccionDesdeOrigen({
+        origen_solicitud: 'GUARDIA',
+        procedencia_display: 'Guardia',
+      })
+    ).toBe('Guardia — ICPL');
+  });
+
+  it('sugerirLugarExtraccionDesdeOrigen vacío sin origen', () => {
+    expect(sugerirLugarExtraccionDesdeOrigen(null)).toBe('');
+    expect(sugerirLugarExtraccionDesdeOrigen({})).toBe('');
   });
 });

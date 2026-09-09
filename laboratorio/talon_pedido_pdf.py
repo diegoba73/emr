@@ -1,0 +1,329 @@
+"""
+Talón PDF de respaldo (hoja común) para pedidos LIMS clínico y microbiología.
+
+No muta estado ni FSM: solo genera un documento imprimible en impresora normal
+cuando falla la etiquetadora de tubos.
+"""
+from __future__ import annotations
+
+import re
+from io import BytesIO
+from typing import Any
+
+from django.utils import timezone
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
+
+from auditoria.audit_service import log_event
+from laboratorio.models import SolicitudExamen
+from laboratorio.models_catalog import Muestra
+from laboratorio.models_microbiologia import EstudioMicrobiologia
+
+
+def nombre_archivo_talon_solicitud(solicitud: SolicitudExamen) -> str:
+    ref = (solicitud.numero or str(solicitud.pk)).replace("/", "-")
+    safe = re.sub(r"[^\w.\-]+", "_", ref)[:80]
+    return f"talon-orden-{safe}.pdf"
+
+
+def nombre_archivo_talon_micro(estudio: EstudioMicrobiologia) -> str:
+    ref = (estudio.numero or estudio.codigo_barra or str(estudio.pk)).replace("/", "-")
+    safe = re.sub(r"[^\w.\-]+", "_", ref)[:80]
+    return f"talon-micro-{safe}.pdf"
+
+
+def _texto(val: Any, default: str = "—") -> str:
+    s = (str(val).strip() if val is not None else "") or ""
+    return s if s else default
+
+
+def _fmt_paciente(paciente) -> tuple[str, str]:
+    if paciente is None:
+        return "—", "—"
+    apellido = (getattr(paciente, "apellido", None) or "").strip()
+    nombre = (getattr(paciente, "nombre", None) or "").strip()
+    if apellido and nombre:
+        nombre_completo = f"{apellido}, {nombre}"
+    else:
+        nombre_completo = apellido or nombre or getattr(paciente, "nombre_completo", None) or "—"
+    dni = _texto(getattr(paciente, "dni", None))
+    return nombre_completo, dni
+
+
+def _fmt_medico(medico, externo: str = "") -> str:
+    if medico is not None:
+        apellido = (getattr(medico, "apellido", None) or "").strip()
+        nombre = (getattr(medico, "nombre", None) or "").strip()
+        if apellido and nombre:
+            name = f"{apellido}, {nombre}"
+        else:
+            name = apellido or nombre or "—"
+        mat = (getattr(medico, "matricula", None) or "").strip()
+        if mat and name != "—":
+            return f"{name} · MP {mat}"
+        if mat:
+            return f"MP {mat}"
+        return name
+    ext = (externo or "").strip()
+    return ext if ext else "—"
+
+
+def _lugar_solicitud(solicitud: SolicitudExamen) -> str:
+    for m in Muestra.objects.filter(solicitud_id=solicitud.pk).order_by("pk"):
+        lugar = (getattr(m, "lugar_extraccion", None) or "").strip()
+        if lugar:
+            return lugar
+    from laboratorio.services_etiqueta_muestra import resolver_lugar_etiqueta_desde_solicitud
+
+    return resolver_lugar_etiqueta_desde_solicitud(solicitud) or "—"
+
+
+def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
+    nombres: list[str] = []
+    seen: set[str] = set()
+    for panel in solicitud.paneles.all().order_by("nombre"):
+        n = (panel.nombre or panel.codigo or "").strip()
+        if n and n not in seen:
+            seen.add(n)
+            nombres.append(f"Panel: {n}")
+    for te in solicitud.tipos_examen.all().order_by("nombre"):
+        n = (te.nombre or te.codigo or "").strip()
+        if n and n not in seen:
+            seen.add(n)
+            nombres.append(n)
+    # Fallback: resultados (órdenes donde solo hay ResultadoExamen)
+    if not nombres:
+        for res in solicitud.resultados.select_related("tipo_examen").order_by(
+            "tipo_examen__nombre", "pk"
+        ):
+            te = res.tipo_examen
+            n = (te.nombre or te.codigo or "").strip() if te else ""
+            if n and n not in seen:
+                seen.add(n)
+                nombres.append(n)
+    return nombres
+
+
+def _codigos_tubos(solicitud: SolicitudExamen) -> list[str]:
+    return list(
+        Muestra.objects.filter(solicitud_id=solicitud.pk)
+        .exclude(codigo_barra="")
+        .exclude(codigo_barra__isnull=True)
+        .order_by("pk")
+        .values_list("codigo_barra", flat=True)
+    )
+
+
+def _lugar_estudio_micro(estudio: EstudioMicrobiologia) -> str:
+    from laboratorio.procedencia_display import resolver_procedencia_solicitud
+    from laboratorio.origen_solicitud import label_origen_solicitud
+
+    sol = getattr(estudio, "solicitud", None)
+    if sol is not None:
+        disp = resolver_procedencia_solicitud(sol).get("procedencia_display") or ""
+        if disp.strip() and disp.strip() not in ("—", "-"):
+            return disp.strip()
+    # Proxy mínimo como en el serializer micro
+    class _Proxy:
+        pass
+
+    proxy = _Proxy()
+    proxy.paciente_id = estudio.paciente_id
+    proxy.origen_solicitud = getattr(estudio, "origen_solicitud", "") or ""
+    proxy.consulta_hc = getattr(estudio, "consulta_hc", None)
+    proxy.fecha_solicitud = getattr(estudio, "created_at", None) or timezone.now()
+    disp = resolver_procedencia_solicitud(proxy).get("procedencia_display") or ""
+    if disp.strip() and disp.strip() not in ("—", "-"):
+        return disp.strip()
+    return label_origen_solicitud(getattr(estudio, "origen_solicitud", None) or "") or "—"
+
+
+def _examenes_micro(estudio: EstudioMicrobiologia) -> list[str]:
+    items: list[str] = []
+    if estudio.tipo_cultivo_id:
+        tc = estudio.tipo_cultivo
+        n = (tc.nombre or tc.codigo or "").strip() if tc else ""
+        if n:
+            items.append(f"Cultivo: {n}")
+    elif (estudio.tipo_estudio or "").strip():
+        items.append(f"Estudio: {estudio.tipo_estudio.strip()}")
+    if estudio.tipo_muestra_micro_id:
+        tm = estudio.tipo_muestra_micro
+        n = (tm.nombre or tm.codigo or "").strip() if tm else ""
+        if n:
+            items.append(f"Muestra: {n}")
+    return items or ["—"]
+
+
+def _draw_talon(
+    c: canvas.Canvas,
+    *,
+    titulo: str,
+    numero: str,
+    paciente_nombre: str,
+    dni: str,
+    lugar: str,
+    medico: str,
+    examenes: list[str],
+    codigos: list[str],
+) -> None:
+    width, height = A4
+    x = 20 * mm
+    y = height - 20 * mm
+    line = 6.5 * mm
+
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(x, y, "TALÓN DE PEDIDO — LABORATORIO")
+    y -= line * 0.9
+    c.setFont("Helvetica", 9)
+    c.drawString(x, y, "Respaldo para impresora común (si falla la etiquetadora de tubos)")
+    y -= line * 1.2
+
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(x, y, titulo)
+    y -= line
+    c.setFont("Helvetica", 10)
+    c.drawString(x, y, f"Nº pedido: {_texto(numero)}")
+    y -= line * 1.3
+
+    def _campo(label: str, value: str) -> None:
+        nonlocal y
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x, y, f"{label}:")
+        c.setFont("Helvetica", 10)
+        c.drawString(x + 45 * mm, y, value[:90])
+        y -= line
+
+    _campo("Paciente", paciente_nombre)
+    _campo("DNI", dni)
+    _campo("Lugar extracción", lugar)
+    _campo("Médico", medico)
+
+    y -= line * 0.4
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(x, y, "Exámenes / estudios solicitados:")
+    y -= line
+    c.setFont("Helvetica", 10)
+    for item in examenes:
+        if y < 30 * mm:
+            c.showPage()
+            y = height - 20 * mm
+            c.setFont("Helvetica", 10)
+        c.drawString(x + 4 * mm, y, f"• {item[:95]}")
+        y -= line * 0.95
+
+    y -= line * 0.5
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(x, y, "Códigos para recepción:")
+    y -= line
+    c.setFont("Helvetica", 10)
+    if not codigos:
+        c.drawString(x + 4 * mm, y, "— (aún sin código de barras asignado)")
+        y -= line
+    else:
+        for codigo in codigos:
+            if y < 30 * mm:
+                c.showPage()
+                y = height - 20 * mm
+                c.setFont("Helvetica", 10)
+            c.drawString(x + 4 * mm, y, f"• {codigo}")
+            y -= line * 0.95
+
+    y -= line
+    c.setFont("Helvetica", 8)
+    c.setFillGray(0.35)
+    ahora = timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M")
+    c.drawString(x, max(y, 18 * mm), f"Generado: {ahora} · No reemplaza la etiqueta de tubo.")
+    c.setFillGray(0)
+
+
+def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
+    sol = (
+        SolicitudExamen.objects.select_related(
+            "paciente",
+            "medico_interno",
+            "consulta_hc__turno__recurso",
+        )
+        .prefetch_related("tipos_examen", "paneles", "resultados__tipo_examen", "muestras")
+        .get(pk=solicitud.pk)
+    )
+    pac_nombre, dni = _fmt_paciente(sol.paciente)
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    _draw_talon(
+        c,
+        titulo="Pedido clínico (análisis de laboratorio)",
+        numero=sol.numero or str(sol.pk),
+        paciente_nombre=pac_nombre,
+        dni=dni,
+        lugar=_lugar_solicitud(sol),
+        medico=_fmt_medico(sol.medico_interno),
+        examenes=_examenes_solicitud(sol) or ["—"],
+        codigos=_codigos_tubos(sol),
+    )
+    c.save()
+    return buf.getvalue()
+
+
+def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> bytes:
+    est = (
+        EstudioMicrobiologia.objects.select_related(
+            "paciente",
+            "medico_interno",
+            "tipo_cultivo",
+            "tipo_muestra_micro",
+            "solicitud",
+            "consulta_hc__turno__recurso",
+        ).get(pk=estudio.pk)
+    )
+    pac_nombre, dni = _fmt_paciente(est.paciente)
+    codigo = (est.codigo_barra or est.numero or "").strip()
+    codigos = [codigo] if codigo else []
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    _draw_talon(
+        c,
+        titulo="Pedido microbiología",
+        numero=est.numero or str(est.pk),
+        paciente_nombre=pac_nombre,
+        dni=dni,
+        lugar=_lugar_estudio_micro(est),
+        medico=_fmt_medico(est.medico_interno, getattr(est, "medico_externo_nombre", "") or ""),
+        examenes=_examenes_micro(est),
+        codigos=codigos,
+    )
+    c.save()
+    return buf.getvalue()
+
+
+def auditar_descarga_talon_solicitud(*, actor, solicitud: SolicitudExamen, view: str) -> None:
+    log_event(
+        action="UPDATE",
+        actor=actor,
+        entity=solicitud,
+        entity_repr=f"laboratorio.SolicitudExamen:{solicitud.pk}",
+        after=None,
+        module="laboratorio",
+        metadata={
+            "accion": "talon_pedido_pdf_download",
+            "solicitud_id": solicitud.pk,
+            "view": view,
+        },
+    )
+
+
+def auditar_descarga_talon_micro(*, actor, estudio: EstudioMicrobiologia, view: str) -> None:
+    log_event(
+        action="UPDATE",
+        actor=actor,
+        entity=estudio,
+        entity_repr=f"laboratorio.EstudioMicrobiologia:{estudio.pk}",
+        after=None,
+        module="laboratorio",
+        metadata={
+            "accion": "talon_pedido_pdf_download",
+            "estudio_id": estudio.pk,
+            "view": view,
+        },
+    )

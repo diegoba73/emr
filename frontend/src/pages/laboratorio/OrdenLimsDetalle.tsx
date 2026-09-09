@@ -535,6 +535,11 @@ const OrdenLimsDetalle: React.FC = () => {
           ordenEstado={orden.estado}
           canOperate={canOp}
           reloadToken={muestrasReloadToken}
+          origenOrden={{
+            origen_solicitud: orden.origen_solicitud,
+            origen_solicitud_display: orden.origen_solicitud_display,
+            procedencia_display: orden.procedencia_display,
+          }}
         />
       )}
 
@@ -562,6 +567,11 @@ const OrdenLimsDetalle: React.FC = () => {
         open={openTomarMuestra}
         orden={orden}
         muestrasExistentes={muestras}
+        origenOrden={{
+          origen_solicitud: orden.origen_solicitud,
+          origen_solicitud_display: orden.origen_solicitud_display,
+          procedencia_display: orden.procedencia_display,
+        }}
         onClose={() => setOpenTomarMuestra(false)}
         onSuccess={async (o) => {
           setOrden(o);

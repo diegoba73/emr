@@ -1,6 +1,7 @@
 """Tablero IQC de la mañana y materiales canónicos (sin duplicados)."""
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -16,12 +17,22 @@ from laboratorio.models_qc import (
     LoteProductoControl,
     MaterialControl,
     ProductoControl,
+    PuntoQC,
 )
 from laboratorio.qc_service import estado_iqc_solicitud
-from laboratorio.qc_tablero import tablero_iqc_hoy
+from laboratorio.qc_tablero import es_dia_aviso_control_valores, tablero_iqc_hoy
 from laboratorio.tests.test_qc_gate import _FakeSolicitud
 
 User = get_user_model()
+
+# 2026-09-07 = lunes, 2026-09-08 = martes, 2026-09-11 = viernes
+LUNES = date(2026, 9, 7)
+MARTES = date(2026, 9, 8)
+VIERNES = date(2026, 9, 11)
+
+
+def _aware(d: date, t: time | None = None):
+    return timezone.make_aware(datetime.combine(d, t or time(10, 0)))
 
 
 class TestMaterialesCanonicosGate(TestCase):
@@ -190,3 +201,59 @@ class TestTableroHoy(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         self.assertEqual(r.data["estado"], "ACEPTADA")
+
+    def _corridas_ok_rapido(self, dia: date):
+        for nivel in (CorridaQC.Nivel.N1, CorridaQC.Nivel.N2):
+            CorridaQC.objects.create(
+                lote_producto=self.lote,
+                equipo=self.cm260,
+                nivel=nivel,
+                fecha=_aware(dia),
+                estado=CorridaQC.Estado.ACEPTADA,
+            )
+
+    def test_es_dia_aviso_lun_vie(self):
+        self.assertTrue(es_dia_aviso_control_valores(fecha=LUNES))
+        self.assertTrue(es_dia_aviso_control_valores(fecha=VIERNES))
+        self.assertFalse(es_dia_aviso_control_valores(fecha=MARTES))
+
+    def test_aviso_valores_lunes_sin_puntos(self):
+        self._corridas_ok_rapido(LUNES)
+        with patch("django.utils.timezone.localdate", return_value=LUNES):
+            data = tablero_iqc_hoy()
+            card = next(e for e in data["equipos"] if e["codigo"] == "CM260")
+        self.assertTrue(data["dia_aviso_control_valores"])
+        self.assertEqual(card["estado"], "liberado")
+        self.assertTrue(card["aviso_valores"])
+        self.assertFalse(card["s1"]["con_valores"])
+        self.assertFalse(card["s2"]["con_valores"])
+        self.assertTrue(any(a["codigo"] == "CM260" for a in data["avisos_valores"]))
+
+    def test_aviso_valores_se_limpia_con_puntos(self):
+        self._corridas_ok_rapido(LUNES)
+        for c in CorridaQC.objects.filter(lote_producto=self.lote):
+            PuntoQC.objects.create(corrida=c, tipo_examen=self.glu, valor=Decimal("100"))
+        with patch("django.utils.timezone.localdate", return_value=LUNES):
+            card = next(e for e in tablero_iqc_hoy()["equipos"] if e["codigo"] == "CM260")
+        self.assertFalse(card["aviso_valores"])
+        self.assertTrue(card["s1"]["con_valores"])
+        self.assertTrue(card["s2"]["con_valores"])
+
+    def test_sin_aviso_valores_martes(self):
+        self._corridas_ok_rapido(MARTES)
+        with patch("django.utils.timezone.localdate", return_value=MARTES):
+            data = tablero_iqc_hoy()
+            card = next(e for e in data["equipos"] if e["codigo"] == "CM260")
+        self.assertFalse(data["dia_aviso_control_valores"])
+        self.assertFalse(card["aviso_valores"])
+        self.assertEqual(card["estado"], "liberado")
+
+    def test_aviso_valores_viernes_endpoint(self):
+        self._corridas_ok_rapido(VIERNES)
+        with patch("django.utils.timezone.localdate", return_value=VIERNES):
+            resp = self.client.get("/api/lab/qc/tablero-hoy/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertTrue(resp.data["dia_aviso_control_valores"])
+        card = next(e for e in resp.data["equipos"] if e["codigo"] == "CM260")
+        self.assertTrue(card["aviso_valores"])
+        self.assertIn("OK rápido", card["aviso_valores_mensaje"])

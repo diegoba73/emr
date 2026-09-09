@@ -15,6 +15,70 @@ export function assertValidSolicitudId(solicitudId: number): void {
   }
 }
 
+/**
+ * Abre el diálogo de impresión del navegador con un PDF (sin descargar archivo).
+ * Usa un iframe oculto; demora el revoke del blob para no cortar el print dialog.
+ */
+export async function printPdfBlob(blob: Blob): Promise<void> {
+  const pdfBlob =
+    blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(pdfBlob);
+
+  await new Promise<void>((resolve, reject) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('title', 'Imprimir talón');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+
+    let settled = false;
+    const cleanup = () => {
+      window.setTimeout(() => {
+        iframe.remove();
+        window.URL.revokeObjectURL(url);
+      }, 60_000);
+    };
+
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      iframe.remove();
+      window.URL.revokeObjectURL(url);
+      reject(err instanceof Error ? err : new Error('No se pudo abrir la impresión.'));
+    };
+
+    iframe.onload = () => {
+      window.setTimeout(() => {
+        try {
+          const win = iframe.contentWindow;
+          if (!win) {
+            fail(new Error('No se pudo abrir la impresión.'));
+            return;
+          }
+          win.focus();
+          win.print();
+          if (!settled) {
+            settled = true;
+            cleanup();
+            resolve();
+          }
+        } catch (e) {
+          fail(e);
+        }
+      }, 250);
+    };
+
+    iframe.onerror = () => fail(new Error('No se pudo cargar el PDF para imprimir.'));
+    document.body.appendChild(iframe);
+    iframe.src = url;
+  });
+}
+
 /** Mensajes de error para descarga PDF LIMS sin exponer cuerpo de respuesta ni ax.message. */
 export function formatLimsPdfDownloadError(error: unknown): string {
   const ax = error as AxiosError;

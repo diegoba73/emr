@@ -18,9 +18,8 @@ import { withNavBack } from '../../utils/navBack';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type { SolicitudExamenLims } from '../../types/lims';
-import { downloadEtiquetasOrdenMuestras, listSolicitudesExamen } from '../../services/limsApi';
+import { listSolicitudesExamen } from '../../services/limsApi';
 import {
-  downloadEtiquetasEstudioMicro,
   listEstudiosMicrobiologia,
 } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
@@ -34,6 +33,8 @@ import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
 import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
+import EtiquetasMuestrasZplOrdenDialog from '../../components/lims/EtiquetasMuestrasZplOrdenDialog';
+import ImprimirPedidoMicroDialog from '../../components/lims/micro/ImprimirPedidoMicroDialog';
 
 type TabPendiente = 'sin_etiquetas' | 'esperando_recepcion';
 
@@ -54,8 +55,9 @@ const OrdenesLimsPendientes: React.FC = () => {
   );
   const [nuevaOrdenOpen, setNuevaOrdenOpen] = useState(false);
   const [ordenEtiquetas, setOrdenEtiquetas] = useState<SolicitudExamenLims | null>(null);
+  const [ordenZplReimprimir, setOrdenZplReimprimir] = useState<SolicitudExamenLims | null>(null);
   const [ordenAgregar, setOrdenAgregar] = useState<SolicitudExamenLims | null>(null);
-  const [imprimiendo, setImprimiendo] = useState(false);
+  const [microImprimir, setMicroImprimir] = useState<PendientePedidoRow | null>(null);
 
   const allowed = canAccessLimsPendientes(currentUser);
   const puedeCrear = canOperateLims(currentUser);
@@ -152,19 +154,11 @@ const OrdenesLimsPendientes: React.FC = () => {
     }
   };
 
-  /** Primera impresión (crea tubos lab / marca micro) o reimpresión PDF. */
+  /** Primera impresión (crea tubos lab) o reimpresión ZPL; micro sigue PDF. */
   const handleAccionEtiquetas = async (row: PendientePedidoRow) => {
     if (row.tipo === 'LAB_CLINICO' && row.labOrden) {
       if (tab === 'esperando_recepcion') {
-        setImprimiendo(true);
-        try {
-          await downloadEtiquetasOrdenMuestras(row.id, row.numero);
-          toast.success('Etiquetas reimpresas. Podés volver a pegarlas en los tubos.');
-        } catch (e) {
-          toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-        } finally {
-          setImprimiendo(false);
-        }
+        setOrdenZplReimprimir(row.labOrden);
         return;
       }
       setOrdenEtiquetas(row.labOrden);
@@ -172,21 +166,7 @@ const OrdenesLimsPendientes: React.FC = () => {
     }
 
     if (row.tipo === 'MICROBIOLOGIA') {
-      setImprimiendo(true);
-      try {
-        await downloadEtiquetasEstudioMicro(row.id);
-        toast.success(
-          tab === 'esperando_recepcion'
-            ? 'Etiqueta reimpresa.'
-            : 'Etiqueta generada. El pedido pasó a «Esperando recepción».'
-        );
-        await load();
-        goTab('esperando_recepcion');
-      } catch (e) {
-        toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-      } finally {
-        setImprimiendo(false);
-      }
+      setMicroImprimir(row);
     }
   };
 
@@ -238,7 +218,7 @@ const OrdenesLimsPendientes: React.FC = () => {
             onChange={(e) => setBusqueda(e.target.value)}
             sx={{ minWidth: 240 }}
           />
-          <Button variant="outlined" onClick={load} disabled={loading || imprimiendo}>
+          <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
           <Chip
@@ -315,9 +295,42 @@ const OrdenesLimsPendientes: React.FC = () => {
           open={!!ordenEtiquetas}
           orden={ordenEtiquetas}
           muestrasExistentes={[]}
+          origenOrden={{
+            origen_solicitud: ordenEtiquetas.origen_solicitud,
+            origen_solicitud_display: ordenEtiquetas.origen_solicitud_display,
+            procedencia_display: ordenEtiquetas.procedencia_display,
+          }}
           onClose={() => setOrdenEtiquetas(null)}
           onSuccess={() => {
-            setOrdenEtiquetas(null);
+            load();
+            goTab('esperando_recepcion');
+          }}
+        />
+      )}
+
+      {ordenZplReimprimir && (
+        <EtiquetasMuestrasZplOrdenDialog
+          open={!!ordenZplReimprimir}
+          solicitudId={ordenZplReimprimir.id}
+          solicitudNumero={ordenZplReimprimir.numero}
+          origenOrden={{
+            origen_solicitud: ordenZplReimprimir.origen_solicitud,
+            origen_solicitud_display: ordenZplReimprimir.origen_solicitud_display,
+            procedencia_display: ordenZplReimprimir.procedencia_display,
+          }}
+          onClose={() => setOrdenZplReimprimir(null)}
+          onUpdated={load}
+        />
+      )}
+
+      {microImprimir && (
+        <ImprimirPedidoMicroDialog
+          open={!!microImprimir}
+          estudioId={microImprimir.id}
+          estudioNumero={microImprimir.numero}
+          reimpresion={tab === 'esperando_recepcion'}
+          onClose={() => setMicroImprimir(null)}
+          onEtiquetasOk={() => {
             load();
             goTab('esperando_recepcion');
           }}

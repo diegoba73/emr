@@ -117,6 +117,7 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
     queryset = Muestra.objects.select_related(
         "solicitud",
         "solicitud__medico_interno",
+        "solicitud__consulta_hc",
         "paciente",
         "tipo_muestra",
         "tipo_contenedor",

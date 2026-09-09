@@ -267,6 +267,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in ROLES_LIMS_WRITE
         if action == 'etiquetas_muestras':
             return role in ROLES_LIMS_WRITE
+        if action == 'talon_pdf':
+            return role in ROLES_LIMS_WRITE
         if action == 'informe_pdf':
             return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'analisis_longitudinal':
@@ -331,6 +333,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in ROLES_LIMS_WRITE
 
         if action == 'etiquetas_muestras':
+            return role in ROLES_LIMS_WRITE
+
+        if action == 'talon_pdf':
             return role in ROLES_LIMS_WRITE
 
         if action == 'informe_pdf':
@@ -968,6 +973,7 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             "marcar_informado",
             "imprimir_etiquetas",
             "imprimir_etiquetas_batch",
+            "talon_pdf",
             "recibir_por_codigo",
             "estado_obra_social",
         ):

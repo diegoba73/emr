@@ -3,6 +3,7 @@
  */
 import { apiClient } from './apiClient';
 import { triggerBlobDownload } from './estudiosComplementariosApi';
+import { printPdfBlob } from '../utils/limsDownload';
 import type {
   AisladoMicrobiologico,
   Antibiograma,
@@ -132,6 +133,20 @@ export async function downloadEtiquetasEstudioMicro(estudioId: number): Promise<
   a.download = `etiquetas-micro-${estudioId}.pdf`;
   a.click();
   window.URL.revokeObjectURL(url);
+}
+
+/** Abre el diálogo de impresión del navegador (impresora común). No descarga archivo. */
+export async function printTalonEstudioMicro(estudioId: number): Promise<void> {
+  const res = await apiClient.get(`${MICRO}/estudios/${estudioId}/talon-pdf/`, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([res.data], { type: 'application/pdf' });
+  await printPdfBlob(blob);
+}
+
+/** @deprecated Usar printTalonEstudioMicro. */
+export async function downloadTalonEstudioMicro(estudioId: number): Promise<void> {
+  await printTalonEstudioMicro(estudioId);
 }
 
 export async function downloadEtiquetasEstudiosMicroBatch(estudioIds: number[]): Promise<void> {

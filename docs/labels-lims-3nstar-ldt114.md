@@ -11,7 +11,8 @@ requerido: estimated_width ≤ 296
 ```
 
 - Línea 1 (`codigo_barra`): **nunca se trunca**; se elige el mayor `w` ≤ preferido que cumpla la desigualdad.
-- Líneas 2–4: se acorta primero el fragmento abreviable (apellido / lugar / tipo; no DNI ni fecha), luego se maximiza `w`.
+- Línea 2 (paciente): **apellido completo siempre** (nunca se trunca). Si no cabe, se omite la inicial del nombre y se baja `w`; DNI íntegro.
+- Líneas 3–4: se acorta primero el fragmento abreviable (lugar / tipo; no DNI ni fecha), luego se maximiza `w`.
 - Márgenes: `MARGIN_X=12`, apilado vertical con `MARGIN_Y` + gaps dentro de `LL=184`.
 
 Ejemplo `00458127` (8): `w=28` → 224 ≤ 296.
@@ -40,9 +41,13 @@ Permisos ZPL/impresión: `admin`, `laboratorio`, `bioquimico`, `superuser`. No m
 ## Identidad y datos
 
 - Código impreso = `Muestra.codigo_barra` (SoT; autogenerado si vacío).
-- Fecha/hora = `Muestra.fecha_toma` (localtime), no `now()` al imprimir.
-- Lugar = `Muestra.lugar_extraccion` (snapshot en `tomar`). **No** usar `ubicacion_actual`.
+- **Imprimir no es tomar ni recibir:** la muestra sigue `PENDIENTE_TOMA` y la orden `PENDIENTE` («Esperando recepción»). No hay `aplicar_tomar` ni transición a `EN_PROCESO`.
+- Lugar: snapshot `lugar_extraccion` si ya existe; si no, se resuelve desde origen/procedencia de la solicitud al preview/print (sin FSM).
+- Fecha: snapshot `fecha_toma` si ya existe; si no, preview usa `now()` solo en el payload; al **imprimir** se persiste `fecha_toma=now` sin cambiar `estado`.
 - Tipo línea 4 = aditivo/código de `TipoContenedor` (p.ej. EDTA); fallback `TipoMuestra.codigo`.
+- Validar orden: bloqueado mientras existan tubos `PENDIENTE_TOMA`/`TOMADA`. Cancelar/rechazar
+  los no recepcionados y tener cargados los resultados de los tubos recibidos habilita validar.
+  Cargar resultados del tubo ya `RECIBIDA` está permitido aunque queden otros pendientes.
 
 ## Variables de entorno
 

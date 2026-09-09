@@ -876,3 +876,177 @@ class TestCargarMuestraPermisosAPI(APITestCase):
             format="json",
         )
         assert r.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+class TestCargaParcialYValidarConTubosPendientes(APITestCase):
+    """
+    2 tubos: se puede cargar el recibido; no listo/validar mientras quede
+    PENDIENTE_TOMA; tras cancelar el pendiente + resultados del recibido → validar OK.
+    """
+
+    def setUp(self):
+        suf = uuid.uuid4().hex[:6]
+        self.tm = TipoMuestra.objects.create(
+            codigo=f"TM{suf}", nombre="Sangre", activo=True
+        )
+        self.te_a = TipoExamen.objects.create(
+            codigo=f"A{suf}",
+            nombre="Examen A",
+            tipo_muestra_requerida=self.tm,
+            precio=1,
+            activo=True,
+            requiere_muestra=True,
+        )
+        self.te_b = TipoExamen.objects.create(
+            codigo=f"B{suf}",
+            nombre="Examen B",
+            tipo_muestra_requerida=self.tm,
+            precio=1,
+            activo=True,
+            # Sin obligar muestra: permite completar valor sin tubo (escenario gate).
+            requiere_muestra=False,
+        )
+        self.paciente = Paciente.objects.create(
+            dni=f"9{suf[:7]}", nombre="Par", apellido="Tubo"
+        )
+        esp = Especialidad.objects.create(nombre=f"Esp {suf}")
+        self.medico = Medico.objects.create(
+            nombre="Dr", apellido="T", matricula=f"M-{suf}", especialidad=esp
+        )
+        self.user_lab = User.objects.create_user(
+            username=f"lab_{suf}",
+            email=f"lab-{suf}@t.com",
+            password="x",
+            rol="laboratorio",
+            is_staff=True,
+        )
+        self.user_admin = User.objects.create_user(
+            username=f"adm_{suf}",
+            email=f"adm-{suf}@t.com",
+            password="x",
+            rol="admin",
+            is_staff=True,
+        )
+
+    def _orden_dos_tubos_uno_recibido(self):
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+            estado_obra_social="AUTORIZADO",
+        )
+        sol.tipos_examen.add(self.te_a, self.te_b)
+        res_a = ResultadoExamen.objects.create(
+            solicitud=sol, tipo_examen=self.te_a, valor_obtenido=""
+        )
+        res_b = ResultadoExamen.objects.create(
+            solicitud=sol, tipo_examen=self.te_b, valor_obtenido=""
+        )
+        m_ok = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="t",
+        )
+        m_pend = crear_muestra(
+            solicitud=sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="t",
+        )
+        aplicar_tomar(m_ok.pk, actor=None, view="t")
+        aplicar_recibir(m_ok.pk, actor=None, view="t")
+        m_ok.refresh_from_db()
+        m_pend.refresh_from_db()
+        self.assertEqual(m_ok.estado, "RECIBIDA")
+        self.assertEqual(m_pend.estado, "PENDIENTE_TOMA")
+        return sol, res_a, res_b, m_ok, m_pend
+
+    def test_carga_tubo_recibido_con_otro_pendiente_ok(self):
+        sol, res_a, _res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()
+        self.client.force_authenticate(user=self.user_lab)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res_a.pk, "valor": "11", "muestra_id": m_ok.pk},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        res_a.refresh_from_db()
+        sol.refresh_from_db()
+        m_pend.refresh_from_db()
+        self.assertEqual(res_a.valor_obtenido, "11")
+        self.assertEqual(res_a.muestra_id, m_ok.pk)
+        self.assertEqual(m_pend.estado, "PENDIENTE_TOMA")
+        self.assertEqual(sol.estado, "EN_PROCESO")
+
+    def test_no_listo_ni_validar_con_tubo_pendiente(self):
+        sol, res_a, res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()
+        self.client.force_authenticate(user=self.user_lab)
+        # Completar ambos valores (el B sin tubo recibido — legacy sin muestra)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res_a.pk, "valor": "11", "muestra_id": m_ok.pk},
+                    {"id": res_b.pk, "valor": "22"},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        sol.refresh_from_db()
+        # Completos pero tubo pendiente → no LISTO
+        self.assertEqual(sol.estado, "EN_PROCESO")
+        self.client.force_authenticate(user=self.user_admin)
+        # Forzar LISTO para probar el gate de validar
+        sol.estado = "LISTO_PARA_VALIDAR"
+        sol.save(update_fields=["estado"])
+        r_val = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
+        self.assertEqual(r_val.status_code, status.HTTP_400_BAD_REQUEST)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
+        m_pend.refresh_from_db()
+        self.assertEqual(m_pend.estado, "PENDIENTE_TOMA")
+
+    def test_validar_ok_tras_cancelar_tubo_pendiente_y_quitar_examen(self):
+        sol, res_a, res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()
+        self.client.force_authenticate(user=self.user_lab)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res_a.pk, "valor": "11", "muestra_id": m_ok.pk},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        aplicar_cancelar(m_pend.pk, actor=self.user_lab, view="t", motivo="No llegó")
+        # Quitar examen B vacío (tubo cancelado)
+        from laboratorio.solicitud_orden_abierta import quitar_examenes_de_solicitud
+
+        quitar_examenes_de_solicitud(sol, examenes_ids=[self.te_b.pk])
+        sol.refresh_from_db()
+        # Re-sincronizar tras quitar: solo queda A cargado
+        from laboratorio.solicitud_cierre import sincronizar_estado_tras_carga
+
+        sincronizar_estado_tras_carga(
+            sol, actor=self.user_lab, view="test_cancel_pendiente"
+        )
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
+        self.client.force_authenticate(user=self.user_admin)
+        r_val = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
+        self.assertEqual(r_val.status_code, status.HTTP_200_OK, r_val.content)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "FINALIZADO")

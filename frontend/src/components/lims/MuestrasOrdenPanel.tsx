@@ -24,14 +24,15 @@ import toast from 'react-hot-toast';
 import type { LimsTipoContenedor, LimsTipoMuestra, MuestraTransaccional } from '../../types/lims';
 import {
   createMuestra,
-  downloadEtiquetasOrdenMuestras,
   listContenedoresLims,
   listMuestrasPorSolicitud,
   listTiposMuestraLims,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import type { OrigenParaLugarExtraccion } from '../../utils/limsOrigenSolicitud';
 import MuestraEstadoBadge from './MuestraEstadoBadge';
 import MuestraAcciones from './MuestraAcciones';
+import EtiquetasMuestrasZplOrdenDialog from './EtiquetasMuestrasZplOrdenDialog';
 
 export interface MuestrasOrdenPanelProps {
   solicitudId: number;
@@ -41,6 +42,8 @@ export interface MuestrasOrdenPanelProps {
   canOperate: boolean;
   /** Incrementar para forzar recarga tras cambios externos (ej. carga de resultados). */
   reloadToken?: number;
+  /** Origen/procedencia de la orden para prellenar lugar de extracción. */
+  origenOrden?: OrigenParaLugarExtraccion | null;
 }
 
 const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
@@ -49,6 +52,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   ordenEstado,
   canOperate,
   reloadToken = 0,
+  origenOrden = null,
 }) => {
   const [rows, setRows] = useState<MuestraTransaccional[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +62,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   const [tipoId, setTipoId] = useState<number | ''>('');
   const [contId, setContId] = useState<number | ''>('');
   const [saving, setSaving] = useState(false);
-  const [printing, setPrinting] = useState(false);
+  const [zplOpen, setZplOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -107,16 +111,8 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
     }
   };
 
-  const handleImprimirEtiquetas = async () => {
-    setPrinting(true);
-    try {
-      await downloadEtiquetasOrdenMuestras(solicitudId, solicitudNumero);
-      toast.success('Etiquetas descargadas');
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden));
-    } finally {
-      setPrinting(false);
-    }
+  const handleImprimirEtiquetas = () => {
+    setZplOpen(true);
   };
 
   if (loading) {
@@ -135,8 +131,8 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
         <Typography variant="h6">Muestras</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           {rows.length > 0 && canOperate && (
-            <Button variant="outlined" size="small" onClick={handleImprimirEtiquetas} disabled={printing}>
-              {printing ? 'Generando…' : 'Reimprimir etiquetas'}
+            <Button variant="outlined" size="small" onClick={handleImprimirEtiquetas}>
+              Reimprimir etiquetas
             </Button>
           )}
           {showAlta && (
@@ -191,7 +187,12 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
                   </TableCell>
                   <TableCell>{m.ubicacion_actual || '—'}</TableCell>
                   <TableCell align="right">
-                    <MuestraAcciones muestra={m} canOperate={canOperate} onUpdated={load} />
+                    <MuestraAcciones
+                      muestra={m}
+                      canOperate={canOperate}
+                      onUpdated={load}
+                      origenOrden={origenOrden}
+                    />
                   </TableCell>
                   </TableRow>
                 );
@@ -252,6 +253,15 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <EtiquetasMuestrasZplOrdenDialog
+        open={zplOpen}
+        solicitudId={solicitudId}
+        solicitudNumero={solicitudNumero}
+        origenOrden={origenOrden}
+        onClose={() => setZplOpen(false)}
+        onUpdated={load}
+      />
     </Box>
   );
 };

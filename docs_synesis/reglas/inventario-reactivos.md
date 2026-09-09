@@ -61,3 +61,9 @@ Soft si falta stock (`LAB_INVENTARIO_STRICT` puede endurecer). FEFO por vencimie
 ## Pedidos / alertas
 
 `GET …/insumos/alertas/` → `bajo_minimo`, `por_vencer`, `pedidos` (la UI separa reactivos vs insumos).
+
+---
+
+## Editar / eliminar (catálogo)
+
+Reactivos, insumos, lotes y vínculos de consumo se editan/eliminan en la UI. Si DELETE falla por movimientos u otras FK (`409 PROTECTED`), se ofrece **desactivar** (`activo=false`). Los **movimientos** son historial: solo lectura.

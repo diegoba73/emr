@@ -393,6 +393,37 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         )
         return resp
 
+    @action(detail=True, methods=["get"], url_path="talon-pdf")
+    def talon_pdf(self, request, pk=None):
+        """Talón PDF A4 de respaldo. No muta estado ni etiquetas_impresas_at."""
+        from django.http import HttpResponse
+
+        from laboratorio.talon_pedido_pdf import (
+            auditar_descarga_talon_micro,
+            generar_talon_estudio_micro_pdf_bytes,
+            nombre_archivo_talon_micro,
+        )
+
+        estudio = self.get_object()
+        try:
+            pdf_bytes = generar_talon_estudio_micro_pdf_bytes(estudio)
+        except Exception:
+            logger.exception("generar talon PDF micro pk=%s", pk)
+            return Response(
+                {"error": "No se pudo generar el talón PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        auditar_descarga_talon_micro(
+            actor=request.user,
+            estudio=estudio,
+            view="EstudioMicrobiologiaViewSet.talon_pdf",
+        )
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="{nombre_archivo_talon_micro(estudio)}"'
+        )
+        return resp
+
     @action(detail=False, methods=["post"], url_path="imprimir-etiquetas")
     def imprimir_etiquetas_batch(self, request):
         from django.http import HttpResponse

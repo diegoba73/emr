@@ -128,23 +128,30 @@ class TestLabelZplRenderer(TestCase):
         self.assertLessEqual(rendered.layouts[0].estimated_width_dots, MAX_CONTENT_WIDTH_DOTS)
 
     def test_apellido_largo_dni_intacto_y_ancho(self):
+        apellido = "Apellidolarguisimoextraordinario"
         lines = build_label_lines(
             codigo_barra="LAB-2026-00002-03",
-            apellido="Apellidolarguisimoextraordinario",
+            apellido=apellido,
             nombre="Pedro",
             dni="30111222",
             lugar_extraccion="UCI-3",
             fecha_toma=timezone.now(),
             tipo_operacional="EDTA",
         )
+        self.assertIn(apellido.upper(), lines.paciente_dni)
         self.assertIn("DNI 30111222", lines.paciente_dni)
         self.assertTrue(lines.paciente_dni.endswith("DNI 30111222"))
+        # No truncar apellido: el string completo debe aparecer (con o sin inicial).
+        self.assertTrue(
+            lines.paciente_dni.startswith(apellido.upper()),
+            msg=f"apellido truncado: {lines.paciente_dni!r}",
+        )
         rendered = render_zpl_40x23(lines)
         self.assertLessEqual(rendered.layouts[1].estimated_width_dots, MAX_CONTENT_WIDTH_DOTS)
         self.assertTrue(rendered.all_fit_width())
         again = build_label_lines(
             codigo_barra="LAB-2026-00002-03",
-            apellido="Apellidolarguisimoextraordinario",
+            apellido=apellido,
             nombre="Pedro",
             dni="30111222",
             lugar_extraccion="UCI-3",
@@ -429,7 +436,31 @@ class TestEtiquetaMuestraApi(TestCase):
         r = self.client.get(url)
         self.assertIn(r.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
 
-    def test_preview_sin_toma_no_printable(self):
+    def test_preview_pendiente_toma_printable_desde_origen(self):
+        """Sin tomar: preview usa origen de la orden + now(); no exige TOMADA."""
+        m = crear_muestra(
+            solicitud=self.solicitud,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=self.tc.pk,
+            observaciones="",
+            actor=self.lab,
+            view="test",
+        )
+        self.assertEqual(m.estado, "PENDIENTE_TOMA")
+        self.client.force_authenticate(self.lab)
+        r = self.client.get(f"/api/lab/muestras-transaccionales/{m.pk}/etiqueta-zpl/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        body = r.json()
+        self.assertTrue(body["printable"], body.get("validation_errors"))
+        self.assertEqual(len(body["lines"]), 4)
+        self.assertTrue(body["zpl"])
+        m.refresh_from_db()
+        self.assertEqual(m.estado, "PENDIENTE_TOMA")
+        self.assertFalse(m.fecha_toma)
+        self.assertFalse(m.lugar_extraccion)
+
+    def test_imprimir_pendiente_toma_no_salta_recepcion(self):
+        """Imprimir completa snapshot de etiqueta sin TOMADA ni EN_PROCESO."""
         m = crear_muestra(
             solicitud=self.solicitud,
             tipo_muestra_id=self.tm.pk,
@@ -439,14 +470,35 @@ class TestEtiquetaMuestraApi(TestCase):
             view="test",
         )
         self.client.force_authenticate(self.lab)
-        r = self.client.get(f"/api/lab/muestras-transaccionales/{m.pk}/etiqueta-zpl/")
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        body = r.json()
-        self.assertFalse(body["printable"])
-        self.assertEqual(body["zpl"], "")
-        self.assertTrue(body["validation_errors"])
+        with mock.patch(
+            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer"
+        ):
+            with override_settings(
+                LIMS_LABEL_PRINTER_ENABLED=True,
+                LIMS_LABEL_PRINTER_HOST="127.0.0.1",
+                LIMS_LABEL_PRINTER_PORT=9100,
+            ):
+                with self.captureOnCommitCallbacks(execute=True):
+                    r = self.client.post(
+                        f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
+                        {},
+                        format="json",
+                    )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        m.refresh_from_db()
+        self.solicitud.refresh_from_db()
+        self.assertEqual(m.estado, "PENDIENTE_TOMA")
+        self.assertTrue(m.fecha_toma)
+        self.assertTrue((m.lugar_extraccion or "").strip())
+        self.assertEqual(self.solicitud.estado, "PENDIENTE")
+        from laboratorio.solicitud_orden_abierta import orden_esperando_recepcion
 
-    def test_imprimir_sin_lugar_400(self):
+        self.assertTrue(orden_esperando_recepcion(self.solicitud))
+        self.assertFalse(
+            AuditEvent.objects.filter(metadata__accion="muestra_tomar").exists()
+        )
+
+    def test_imprimir_sin_lugar_ni_origen_usable_400(self):
         m = crear_muestra(
             solicitud=self.solicitud,
             tipo_muestra_id=self.tm.pk,
@@ -456,8 +508,22 @@ class TestEtiquetaMuestraApi(TestCase):
             view="test",
         )
         aplicar_tomar(m.pk, actor=self.lab, view="test", lugar_extraccion="")
+        m.refresh_from_db()
+        # Quitar origen usable: forzar resolver vacío.
         self.client.force_authenticate(self.lab)
-        r = self.client.post(f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/", {}, format="json")
+        with mock.patch(
+            "laboratorio.services_etiqueta_muestra.resolver_lugar_etiqueta_desde_solicitud",
+            return_value="",
+        ):
+            with override_settings(
+                LIMS_LABEL_PRINTER_ENABLED=True,
+                LIMS_LABEL_PRINTER_HOST="127.0.0.1",
+            ):
+                r = self.client.post(
+                    f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
+                    {},
+                    format="json",
+                )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertNotIn("zpl", (r.json().get("error") or "").lower())
 

@@ -19,10 +19,12 @@ con ``MAX_CONTENT_WIDTH_DOTS = PW - 2 * MARGIN_X`` (320 − 24 = 296).
 1. Código (línea 1): **nunca se trunca**. Se elige el mayor ``w`` ≤ preferido
    tal que ``len * w ≤ MAX``. Si hace falta, ``w`` puede bajar del mínimo
    “ideal” de jerarquía (sigue siendo el mayor entero que cabe).
-2. Paciente/DNI, lugar, fecha|tipo: se reduce primero el fragmento
-   abreviable (apellido / lugar / tipo; **no** DNI ni fecha), hasta que
-   quepa con el ``w`` mínimo legible; luego se sube ``w`` lo más posible.
-3. Altura ``h`` sigue la jerarquía visual (código > resto) y se apila en Y
+2. Paciente (línea 2): **apellido completo siempre** (nunca se trunca). Si no
+   cabe con el ``w`` mínimo deseado, se omite solo la inicial del nombre; el
+   sizing baja ``w`` para conservar apellido + DNI íntegros. DNI no se trunca.
+3. Lugar / fecha|tipo: se reduce el fragmento abreviable (lugar / tipo; **no**
+   fecha), hasta que quepa; luego se sube ``w`` lo más posible.
+4. Altura ``h`` sigue la jerarquía visual (código > resto) y se apila en Y
    con márgenes/gaps sin superar ``LL=184``.
 """
 from __future__ import annotations
@@ -175,33 +177,28 @@ def format_line_paciente(
     """
     Línea 2: APELLIDO I. | DNI NNNNNNNN
 
-    No trunca DNI. Acorta apellido hasta caber con ``min_char_width``.
-    El texto ya sale sanitizado (mismo valor que irá a ^FD).
+    **Apellido completo siempre** (nunca se trunca). Tampoco se trunca el DNI.
+    Si la línea no cabe con ``min_char_width``, se omite la inicial del nombre;
+    el render bajará ``w`` para que apellido+DNI quepan enteros.
     """
     dni_clean = escape_zpl_fd(re.sub(r"\s+", "", (dni or "").strip()))
     suffix = f" | DNI {dni_clean}"
     inicial = _nombre_inicial(nombre)
     ap = _apellido_token(apellido)
 
-    def compose(ap_part: str) -> str:
-        if not ap_part and not inicial:
-            return suffix.lstrip(" |") if suffix.startswith(" |") else suffix
-        if inicial:
-            return f"{ap_part} {inicial}.{suffix}" if ap_part else f"{inicial}.{suffix}"
-        return f"{ap_part}{suffix}"
+    def compose(*, with_inicial: bool) -> str:
+        if not ap and not (with_inicial and inicial):
+            return f"DNI {dni_clean}" if dni_clean else ""
+        if with_inicial and inicial:
+            return f"{ap} {inicial}.{suffix}" if ap else f"{inicial}.{suffix}"
+        return f"{ap}{suffix}" if ap else f"DNI {dni_clean}"
 
-    # Reducir apellido carácter a carácter hasta que quepa al mínimo legible.
-    while True:
-        line = compose(ap)
-        if text_fits(line, min_char_width, max_content_width):
-            return line
-        if len(ap) <= 1:
-            # Último recurso: solo DNI (sigue sin truncar dígitos).
-            only_dni = f"DNI {dni_clean}"
-            if text_fits(only_dni, min_char_width, max_content_width):
-                return only_dni
-            return only_dni  # DNI completo; el sizing bajará w si hiciera falta
-        ap = ap[:-1]
+    # Preferir apellido completo + inicial; si no cabe al mínimo, solo apellido+DNI.
+    full = compose(with_inicial=True)
+    if text_fits(full, min_char_width, max_content_width):
+        return full
+    without_inicial = compose(with_inicial=False)
+    return without_inicial
 
 
 def format_line_lugar(

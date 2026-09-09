@@ -62,7 +62,8 @@ function NivelChip({ nivel, pack }: { nivel: string; pack: IqcNivelHoy | null | 
   const est = pack?.estado || 'falta';
   const color =
     est === 'aceptada' ? 'success' : est === 'rechazada' ? 'error' : est === 'pendiente' ? 'warning' : 'default';
-  const txt = est === 'aceptada' ? 'OK' : est === 'rechazada' ? 'No OK' : 'Falta';
+  let txt = est === 'aceptada' ? 'OK' : est === 'rechazada' ? 'No OK' : 'Falta';
+  if (est === 'aceptada' && pack?.con_valores) txt = 'OK · valores';
   return <Chip size="small" color={color} variant={est === 'falta' ? 'outlined' : 'filled'} label={`${nivel} ${txt}`} />;
 }
 
@@ -248,6 +249,11 @@ const QcHoyPage: React.FC = () => {
             <Typography variant="body2" color="text.secondary">
               {fila.nombre} — {fila.resumen}
             </Typography>
+            {fila.aviso_valores && fila.aviso_valores_mensaje && (
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+                {fila.aviso_valores_mensaje}
+              </Typography>
+            )}
           </Box>
           <Stack direction="row" spacing={0.5}>
             <NivelChip nivel="S1" pack={fila.s1} />
@@ -332,12 +338,19 @@ const QcHoyPage: React.FC = () => {
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         Largá los controles <strong>antes</strong> de ensayar. Verde = liberado. Ámbar = falta S1 o S2. Rojo =
-        no OK: calibrá y repetí el control.
+        no OK: calibrá y repetí el control. El OK rápido siempre sirve para salir del apuro.
       </Typography>
       {board && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
           {board.fecha}
+          {board.dia_semana ? ` · ${board.dia_semana}` : ''}
         </Typography>
+      )}
+      {board?.dia_aviso_control_valores && (board.avisos_valores?.length ?? 0) > 0 && (
+        <Alert severity="info" sx={{ mb: 2, maxWidth: 720 }}>
+          Hoy corresponde control con valores. Todavía falta en:{' '}
+          {(board.avisos_valores || []).map((a) => a.codigo).join(', ')}. El OK rápido no se bloquea.
+        </Alert>
       )}
       <Box
         sx={{
@@ -366,6 +379,11 @@ const QcHoyPage: React.FC = () => {
               </Typography>
             </Box>
             <Box sx={{ p: 2 }}>
+              {eq.aviso_valores && eq.aviso_valores_mensaje && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                  {eq.aviso_valores_mensaje}
+                </Alert>
+              )}
               {eq.modo === 'MULTIPARAM' ? (
                 <>
                   {accionesMultiparam(eq)}
@@ -398,14 +416,24 @@ const QcHoyPage: React.FC = () => {
                       Sin órdenes en curso. Igual podés liberar el equipo para el día.
                     </Typography>
                   )}
-                  <Accordion disableGutters elevation={0} sx={{ bgcolor: 'transparent', mt: 1 }}>
+                  <Accordion
+                    disableGutters
+                    elevation={0}
+                    defaultExpanded={Boolean(eq.aviso_valores)}
+                    sx={{ bgcolor: 'transparent', mt: 1 }}
+                  >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0, minHeight: 36 }}>
-                      <Typography variant="body2">Cargar valores del aparato (opcional)</Typography>
+                      <Typography variant="body2">
+                        {eq.aviso_valores
+                          ? 'Cargar valores del aparato (recomendado hoy)'
+                          : 'Cargar valores del aparato (opcional)'}
+                      </Typography>
                     </AccordionSummary>
                     <AccordionDetails sx={{ px: 0 }}>
                       <Typography variant="body2" color="text.secondary">
-                        El día a día es Control OK / no OK. Si querés Westgard con números por ensayo, usá
-                        Catálogo / lotes → Corridas.
+                        {eq.aviso_valores
+                          ? 'Lunes y viernes conviene cargar los números del aparato (Catálogo / lotes → Corridas). El OK rápido de arriba sigue valiendo para liberar.'
+                          : 'El día a día es Control OK / no OK. Si querés Westgard con números por ensayo, usá Catálogo / lotes → Corridas.'}
                       </Typography>
                     </AccordionDetails>
                   </Accordion>

@@ -21,9 +21,17 @@ MUESTRA_ESTADOS_ACEPTADOS_CARGA_RESULTADO = frozenset(
 )
 
 # Al validar orden: resultado con muestra pendiente/tomada o terminal inválida bloquea.
+# Además, cualquier tubo de la orden aún en PENDIENTE_TOMA/TOMADA bloquea listo/validar
+# (aunque no tenga resultado vinculado). Cancelar/rechazar/descartar esos tubos habilita el cierre
+# si los resultados de los tubos recepcionados están completos.
+# La carga de valores exige RECIBIDA/CONSERVADA/EN_PROCESO — se puede cargar el tubo recibido
+# aunque queden otros pendientes.
 MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN = frozenset(
     {"RECHAZADA", "DESCARTADA", "CANCELADA", "PENDIENTE_TOMA", "TOMADA"}
 )
+
+# Tubos aún no recepcionados: bloquean pasar a LISTO_PARA_VALIDAR / validar.
+MUESTRA_ESTADOS_PENDIENTES_RECEPCION = frozenset({"PENDIENTE_TOMA", "TOMADA"})
 
 
 def validate_muestra_integridad_resultado(
