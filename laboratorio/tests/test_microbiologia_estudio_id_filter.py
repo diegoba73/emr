@@ -292,9 +292,21 @@ class TestMicroEstudioIdFilter(TestCase):
                 self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
                 self.assertEqual(_results_ids(r), {self.expected_by_path[path]})
 
-    def test_medico_estudio_ajeno_no_revela_datos(self):
+    def test_medico_ve_estudio_ajeno_lectura_institucional(self):
+        """Médico ve estudios de otros, igual que las órdenes LIMS."""
+        self.client.force_authenticate(self.med_user)
+        r = self.client.get(
+            f"/api/lab/microbiologia/estudios/?estudio_id={self.estudio_ajeno.pk}"
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(_results_ids(r), {self.estudio_ajeno.pk})
+
+    def test_medico_estudio_ajeno_sin_recursos_hijos_lista_vacia(self):
+        """Sin siembras/informes del estudio ajeno, el filtro no inventa filas."""
         self.client.force_authenticate(self.med_user)
         for path in MICRO_LIST_ENDPOINTS:
+            if path == "estudios":
+                continue
             with self.subTest(path=path):
                 r = self.client.get(
                     f"/api/lab/microbiologia/{path}/?estudio_id={self.estudio_ajeno.pk}"
