@@ -175,7 +175,7 @@ class TipoMuestraMicrobiologiaViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class MedioCultivoViewSet(viewsets.ModelViewSet):
-    """Catálogo de medios. Lectura amplia, escritura solo admin (patrón B0)."""
+    """Catálogo de medios. Lectura amplia; escritura admin y operadores LIMS."""
 
     queryset = MedioCultivo.objects.all().order_by("nombre")
     serializer_class = MedioCultivoSerializer
@@ -958,7 +958,7 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
 
 
 class MicroorganismoViewSet(viewsets.ModelViewSet):
-    """Catálogo de microorganismos (B3.2). Lectura amplia, escritura solo admin."""
+    """Catálogo de microorganismos (B3.2). Lectura amplia; escritura admin y operadores LIMS."""
 
     queryset = Microorganismo.objects.all().order_by("nombre")
     serializer_class = MicroorganismoSerializer
@@ -1182,7 +1182,7 @@ class IdentificacionMicroorganismoViewSet(viewsets.ModelViewSet):
 
 
 class AntibioticoViewSet(viewsets.ModelViewSet):
-    """Catálogo de antibióticos (B3.3). Lectura amplia, escritura solo admin."""
+    """Catálogo de antibióticos (B3.3). Lectura amplia; escritura admin y operadores LIMS."""
 
     queryset = Antibiotico.objects.all().order_by("nombre")
     serializer_class = AntibioticoSerializer
@@ -1485,7 +1485,7 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
                     estudio__medico_interno__user_id=user.pk,
                 )
                 qs = qs.filter(q_via_solicitud | q_directo).distinct()
-            elif role not in ("laboratorio", *ROLES_LIMS_OPERATIVA_LIMITADA):
+            elif role not in ("laboratorio", "enfermeria"):
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
 

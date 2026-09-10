@@ -113,6 +113,14 @@ class Muestra(models.Model):
         verbose_name="Código de barras",
         help_text="Generado automáticamente si se deja vacío (LAB-YYYY-XXXXX-nn).",
     )
+    codigo_instrumento = models.CharField(
+        max_length=16,
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name="ID compacto analizador",
+        help_text="Alias corto para sample ID del equipo (año+secuencia+tubo, sin LAB- ni guiones).",
+    )
     solicitud = models.ForeignKey(
         "laboratorio.SolicitudExamen",
         on_delete=models.PROTECT,
@@ -240,6 +248,11 @@ class Muestra(models.Model):
             if not sol.numero:
                 sol.save()  # asigna LAB- vía SolicitudExamen.save
             self.codigo_barra = next_tubo_codigo(sol)
+        if self.codigo_barra:
+            from laboratorio.lab_codigo import codigo_instrumento_desde_tubo
+
+            compact = codigo_instrumento_desde_tubo(self.codigo_barra)
+            self.codigo_instrumento = compact or None
         self.full_clean()
         super().save(*args, **kwargs)
 

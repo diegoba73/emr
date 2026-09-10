@@ -28,6 +28,7 @@ import {
   Inventory as RecepcionIcon,
   Inventory2 as InventarioIcon,
   Analytics as QcIcon,
+  DeviceHub as InstrumentosIcon,
   Insights as BiIcon,
   Timeline as PortalTimelineIcon,
   MeetingRoom as MeetingRoomIcon,
@@ -125,6 +126,7 @@ const labItems: NavItem[] = [
   { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
   { text: 'Inventario', icon: <InventarioIcon />, path: '/laboratorio/inventario', canAccess: canAccessLimsModule },
   { text: 'Control calidad', icon: <QcIcon />, path: '/laboratorio/qc', canAccess: canAccessLimsModule },
+  { text: 'Analizadores', icon: <InstrumentosIcon />, path: '/laboratorio/instrumentos', canAccess: canAccessLimsModule },
 ];
 
 const labCatalogItems: NavItem[] = [

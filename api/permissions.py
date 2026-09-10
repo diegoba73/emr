@@ -112,12 +112,20 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     return False
 
 
+def es_secretaria_entrega_lab(user) -> bool:
+    """Secretaría en laboratorio: solo envío/PDF del informe validado, sin detalle clínico."""
+    return get_normalized_role(user) == 'secretaria'
+
+
 def usuario_puede_ver_resultados_lims(user, solicitud) -> bool:
     """True si el usuario puede ver valores de resultados / análisis longitudinal.
 
-    Quien puede ver la orden puede ver sus resultados en cualquier estado.
-    El PDF / envío del informe sigue restringido a FINALIZADO.
+    Quien puede ver la orden puede ver sus resultados, excepto secretaría:
+    secretaría no ve valores ni detalle clínico; solo envía/descarga el PDF
+    cuando la orden está FINALIZADO (validada).
     """
+    if es_secretaria_entrega_lab(user):
+        return False
     return usuario_puede_ver_solicitud_lims(user, solicitud)
 
 
@@ -167,7 +175,8 @@ def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
     """Contenido del informe micro.
 
     Bioquímico/admin: siempre (borrador, emitido, validado).
-    Técnico laboratorio / médico: solo cuando el informe está VALIDADO.
+    Técnico laboratorio / médico / enfermería: solo cuando el informe está VALIDADO.
+    Secretaría: no ve el texto; solo PDF/envío del informe validado.
     """
     if not user or not getattr(user, 'is_authenticated', False):
         return False
@@ -177,10 +186,13 @@ def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
     if role in ROLES_LIMS_VALIDAR:
         return True
 
+    if role == 'secretaria':
+        return False
+
     if getattr(informe, 'estado', None) != 'VALIDADO':
         return False
 
-    if role == 'laboratorio' or role in ROLES_LIMS_OPERATIVA_LIMITADA or role == 'medico':
+    if role == 'laboratorio' or role == 'enfermeria' or role == 'medico':
         return True
     return False
 
@@ -345,8 +357,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return usuario_puede_ver_resultados_lims(request.user, obj)
 
         if action == 'historial_analitos':
-            # Pre-carga: basta con poder ver la orden (no exige FINALIZADO).
-            return usuario_puede_ver_solicitud_lims(request.user, obj)
+            return usuario_puede_ver_resultados_lims(request.user, obj)
 
         if action == 'sugerir_conclusion_hemograma':
             return role in ROLES_LIMS_WRITE
@@ -912,12 +923,14 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
 
 class LimsMicrobiologiaCatalogPermission(permissions.BasePermission):
     """
-    Catálogo de microbiología (medios de cultivo) — LIMS Fase B3.1.
-    Lectura: admin, laboratorio, bioquímico, médico (+ superuser).
-    Escritura (POST/PATCH): solo admin/superuser. Sin destroy (se desactiva).
+    Catálogo de microbiología (medios, microorganismos, antibióticos).
+    Lectura: roles clínicos con acceso LIMS.
+    Escritura (POST/PATCH): admin, laboratorio y bioquímico.
+    Sin destroy: se desactiva con activo=False.
     """
 
     _roles_read = ROLES_LIMS_CATALOG_READ
+    _roles_write = ROLES_LIMS_WRITE
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -927,7 +940,9 @@ class LimsMicrobiologiaCatalogPermission(permissions.BasePermission):
         role = get_normalized_role(request.user)
         if request.method in permissions.SAFE_METHODS:
             return role in self._roles_read
-        return role == "admin"
+        if request.method in ("POST", "PUT", "PATCH"):
+            return role in self._roles_write
+        return False
 
 
 class LimsMicrobiologiaPermission(permissions.BasePermission):
@@ -939,8 +954,11 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
     - médico: list/retrieve; además puede **solicitar** estudios (create/batch)
       desde consulta/mostrador (pedido clínico). No opera el flujo técnico
       (iniciar, siembras, etiquetas, etc.).
-    - secretaría / enfermería: lectura de pedidos (todos los estados) y
-      envío/PDF solo con informe FINAL VALIDADO. Sin operación técnica.
+    - secretaría: list/retrieve del estudio + envío/PDF con informe FINAL
+      VALIDADO. Sin siembras, lecturas, aislados, antibiograma ni texto del
+      informe.
+    - enfermería: lectura de pedidos (todos los estados) y PDF con informe
+      FINAL VALIDADO. Sin operación técnica.
     - paciente / anónimo: sin acceso.
     """
 
@@ -953,6 +971,10 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         if role not in (*ROLES_LIMS_WRITE, "medico", *ROLES_LIMS_OPERATIVA_LIMITADA):
             return False
         action = getattr(view, "action", None)
+        if role == "secretaria":
+            if type(view).__name__ != "EstudioMicrobiologiaViewSet":
+                return False
+            return action in ("list", "retrieve", "informe_pdf", "enviar_informe")
         if action in ("list", "retrieve", "por_codigo"):
             return True
         # Pedido clínico: médico solo puede crear estudios (no siembras/lecturas/etc.).
@@ -1038,12 +1060,13 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
     Informes de microbiología (B3.4).
 
     - bioquímico / admin: crear, completar (emitir), anular y validar; ven todo.
-    - laboratorio / médico / secretaría / enfermería: solo list/retrieve de
-      informes **VALIDADO**; no ven borradores ni emitidos pendientes.
+    - laboratorio / médico / enfermería: solo list/retrieve de informes
+      **VALIDADO**; no ven borradores ni emitidos pendientes.
+    - secretaría: sin lectura del texto; usa PDF/envío sobre el estudio.
     - paciente / anónimo: sin acceso.
     """
 
-    _read_roles = frozenset({*ROLES_LIMS_WRITE, "medico", *ROLES_LIMS_OPERATIVA_LIMITADA})
+    _read_roles = frozenset({*ROLES_LIMS_WRITE, "medico", "enfermeria"})
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -1106,6 +1129,22 @@ class LimsQcPermission(permissions.BasePermission):
     """
     Control de calidad Westgard.
     Lectura/escritura: admin, laboratorio, bioquímico (+ superuser).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_normalized_role(request.user)
+        return role in ROLES_LIMS_WRITE
+
+
+class LimsInstrumentPermission(permissions.BasePermission):
+    """
+    Interfaz de analizadores: listados/CRUD para operadores LIMS;
+    consulta-trabajo/ingesta también con token de gateway (usuario sintético).
+    Médico, paciente, secretaría y anónimo: no.
     """
 
     def has_permission(self, request, view):

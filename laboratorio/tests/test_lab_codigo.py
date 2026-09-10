@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 
 from laboratorio.lab_codigo import (
     CodigoKind,
+    codigo_instrumento_desde_tubo,
     format_tubo,
     next_protocolo,
     parse_codigo,
@@ -127,6 +128,9 @@ class TestLabCodigoNumeracion(TestCase):
         self.assertTrue(m.codigo_barra.startswith(f"{sol.numero}-"))
         parsed = parse_codigo(m.codigo_barra)
         self.assertEqual(parsed.kind, CodigoKind.TUBO)
+        compact = codigo_instrumento_desde_tubo(m.codigo_barra)
+        self.assertEqual(m.codigo_instrumento, compact)
+        self.assertTrue(compact.isdigit())
 
     def test_micro_codigo_barra_igual_numero(self):
         est = EstudioMicrobiologia.objects.create(

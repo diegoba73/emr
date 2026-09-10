@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Paper, Tab, Tabs, Typography } from '@mui/material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
@@ -20,6 +20,7 @@ import {
   listResultadosAntibiotico,
   listSiembrasMicrobiologia,
   marcarEstudioMicrobiologiaInformado,
+  downloadInformeMicroPdf,
 } from '../../services/limsApi';
 import { downloadEtiquetasEstudioMicro, printTalonEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
@@ -33,6 +34,7 @@ import {
   canOperateMicroEstudioTecnico,
   canValidarInformeMicro,
   isMicroEstudioCerrado,
+  isSecretariaEntregaLab,
 } from '../../utils/limsAccess';
 import EstudioMicroPedidoRecepcionPanel from '../../components/lims/micro/EstudioMicroPedidoRecepcionPanel';
 import EstudioMicroResumenTab from '../../components/lims/micro/EstudioMicroResumenTab';
@@ -40,9 +42,12 @@ import SiembrasLecturasPanel from '../../components/lims/micro/SiembrasLecturasP
 import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIdentificacionPanel';
 import AntibiogramaPanel from '../../components/lims/micro/AntibiogramaPanel';
 import InformesMicrobiologiaPanel from '../../components/lims/micro/InformesMicrobiologiaPanel';
+import EnviarInformeMicroDialog from '../../components/lims/EnviarInformeMicroDialog';
 import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/MotivoDialog';
 import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
 import { ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
+import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
+import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
 
 const MicrobiologiaEstudioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -56,6 +61,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [downloadingTalon, setDownloadingTalon] = useState(false);
   const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
   const [openObraSocial, setOpenObraSocial] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [bundle, setBundle] = useState({
     siembras: [] as Awaited<ReturnType<typeof listSiembrasMicrobiologia>>,
     lecturas: [] as Awaited<ReturnType<typeof listLecturasCultivo>>,
@@ -70,6 +77,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   });
 
   const allowed = canAccessMicrobiologiaLectura(currentUser);
+  const modoEntrega = isSecretariaEntregaLab(currentUser);
   const canOp = canOperateMicrobiologia(currentUser);
   const canVal = canValidarInformeMicro(currentUser);
   const canOpInforme = canOperateInformeMicro(currentUser);
@@ -92,8 +100,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       const est = await getEstudioMicrobiologia(estudioId);
       setEstudio(est);
 
-      // En PENDIENTE solo hace falta el estudio (vista de recepción).
-      if (est.estado === 'PENDIENTE') {
+      // Secretaría: solo identificación + informe. PENDIENTE: vista de recepción.
+      if (modoEntrega || est.estado === 'PENDIENTE') {
         return;
       }
 
@@ -130,7 +138,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [allowed, estudioId]);
+  }, [allowed, estudioId, modoEntrega]);
 
   useEffect(() => {
     loadAll();
@@ -228,6 +236,19 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     navigate('/solicitudes');
   };
 
+  const handleDownloadPdf = async () => {
+    if (!estudio) return;
+    setDownloadingPdf(true);
+    try {
+      await downloadInformeMicroPdf(estudio.id);
+      toast.success('Informe PDF descargado');
+    } catch (e) {
+      toast.error(formatLimsPdfDownloadError(e));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   if (!allowed) {
     return (
       <Box sx={{ p: 3 }}>
@@ -251,6 +272,70 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           ← Volver
         </Button>
         <Alert severity="error">No se pudo cargar el estudio de microbiología.</Alert>
+      </Box>
+    );
+  }
+
+  if (modoEntrega) {
+    const puedePdf = canDownloadInformeMicroPdf(currentUser, estudio.estado);
+    const puedeEnviar = canEnviarInformeMicro(currentUser, estudio.estado);
+    return (
+      <Box sx={{ p: 3 }}>
+        <Button size="small" onClick={handleVolver} sx={{ mb: 2 }}>
+          ← Volver
+        </Button>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Typography variant="h5">
+            Estudio {estudio.numero || `#${estudio.id}`}
+          </Typography>
+          <Chip label={labelEstadoOrdenLims(estudio.estado)} />
+          {puedeEnviar && (
+            <Button variant="contained" onClick={() => setOpenEnviarInforme(true)}>
+              Enviar informe
+            </Button>
+          )}
+          {puedePdf && (
+            <Button variant="outlined" disabled={downloadingPdf} onClick={() => void handleDownloadPdf()}>
+              {downloadingPdf ? 'Descargando…' : 'Descargar informe PDF'}
+            </Button>
+          )}
+        </Box>
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="overline" color="text.secondary" display="block">
+            Paciente
+          </Typography>
+          <Typography fontWeight={600}>
+            {estudio.paciente_nombre || `ID ${estudio.paciente}`}
+          </Typography>
+          {estudio.paciente_dni && (
+            <Typography variant="body2" color="text.secondary">
+              DNI {estudio.paciente_dni}
+            </Typography>
+          )}
+          {estudio.medico_display ? (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Médico: {estudio.medico_display}
+            </Typography>
+          ) : null}
+          {!puedePdf && !puedeEnviar ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              El informe estará disponible para enviar o descargar cuando esté validado.
+            </Alert>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Informe validado. Podés enviarlo o descargar el PDF.
+            </Typography>
+          )}
+        </Paper>
+        <EnviarInformeMicroDialog
+          open={openEnviarInforme}
+          estudio={estudio}
+          onClose={() => setOpenEnviarInforme(false)}
+          onSuccess={() => {
+            setOpenEnviarInforme(false);
+            void loadAll();
+          }}
+        />
       </Box>
     );
   }

@@ -8,6 +8,8 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
+  InputAdornment,
   Paper,
   Switch,
   Tab,
@@ -21,6 +23,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
@@ -65,6 +71,13 @@ type AntibioticoForm = {
   familia: string;
   descripcion: string;
   activo: boolean;
+};
+
+type DeleteTarget = {
+  tab: CatalogTab;
+  id: number;
+  codigo: string;
+  nombre: string;
 };
 
 const emptyMedioForm = (): MedioForm => ({
@@ -119,6 +132,9 @@ const antibioticoFromRow = (row: Antibiotico): AntibioticoForm => ({
   activo: row.activo !== false,
 });
 
+const TAB_NOUN = ['medio', 'microorganismo', 'antibiótico'] as const;
+const TAB_NOUN_PLURAL = ['medios', 'microorganismos', 'antibióticos'] as const;
+
 const MicrobiologiaCatalogos: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useData();
@@ -134,6 +150,8 @@ const MicrobiologiaCatalogos: React.FC = () => {
   const [medioForm, setMedioForm] = useState<MedioForm>(emptyMedioForm);
   const [microForm, setMicroForm] = useState<MicroForm>(emptyMicroForm);
   const [antibioticoForm, setAntibioticoForm] = useState<AntibioticoForm>(emptyAntibioticoForm);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const allowed = canAccessMicrobiologia(currentUser);
   const canEdit = canEditMicroCatalogos(currentUser);
@@ -162,6 +180,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
   }, [allowed, load]);
 
   const rows = tab === 0 ? medios : tab === 1 ? micros : abs;
+  const colSpan = canEdit ? (tab === 1 ? 6 : 5) : tab === 1 ? 5 : 4;
 
   const openCreate = () => {
     setEditingId(null);
@@ -189,14 +208,28 @@ const MicrobiologiaCatalogos: React.FC = () => {
     setDialogOpen(true);
   };
 
+  const handleTabChange = (_: unknown, v: CatalogTab) => {
+    setTab(v);
+    setDialogOpen(false);
+    setDeleteTarget(null);
+  };
+
   const handleSave = async () => {
+    if (tab === 0 && (!medioForm.codigo.trim() || !medioForm.nombre.trim())) {
+      toast.error('Código y nombre son obligatorios');
+      return;
+    }
+    if (tab === 1 && (!microForm.codigo.trim() || !microForm.nombre.trim())) {
+      toast.error('Código y nombre son obligatorios');
+      return;
+    }
+    if (tab === 2 && (!antibioticoForm.codigo.trim() || !antibioticoForm.nombre.trim())) {
+      toast.error('Código y nombre son obligatorios');
+      return;
+    }
     setSaving(true);
     try {
       if (tab === 0) {
-        if (!medioForm.codigo.trim() || !medioForm.nombre.trim()) {
-          toast.error('Código y nombre son obligatorios');
-          return;
-        }
         const body = {
           codigo: medioForm.codigo.trim().toUpperCase(),
           nombre: medioForm.nombre.trim(),
@@ -212,10 +245,6 @@ const MicrobiologiaCatalogos: React.FC = () => {
           toast.success('Medio creado');
         }
       } else if (tab === 1) {
-        if (!microForm.codigo.trim() || !microForm.nombre.trim()) {
-          toast.error('Código y nombre son obligatorios');
-          return;
-        }
         const body = {
           codigo: microForm.codigo.trim().toUpperCase(),
           nombre: microForm.nombre.trim(),
@@ -233,10 +262,6 @@ const MicrobiologiaCatalogos: React.FC = () => {
           toast.success('Microorganismo creado');
         }
       } else {
-        if (!antibioticoForm.codigo.trim() || !antibioticoForm.nombre.trim()) {
-          toast.error('Código y nombre son obligatorios');
-          return;
-        }
         const body = {
           codigo: antibioticoForm.codigo.trim().toUpperCase(),
           nombre: antibioticoForm.nombre.trim(),
@@ -258,6 +283,27 @@ const MicrobiologiaCatalogos: React.FC = () => {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      if (deleteTarget.tab === 0) {
+        await updateMedioCultivo(deleteTarget.id, { activo: false });
+      } else if (deleteTarget.tab === 1) {
+        await updateMicroorganismo(deleteTarget.id, { activo: false });
+      } else {
+        await updateAntibiotico(deleteTarget.id, { activo: false });
+      }
+      toast.success(`«${deleteTarget.nombre}» eliminado (desactivado)`);
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarCatalogo));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -286,7 +332,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
         Medios, microorganismos y antibióticos usados en siembras, identificación y antibiogramas.
       </Typography>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v as CatalogTab)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={handleTabChange} sx={{ mb: 2 }}>
         <Tab label="Medios" />
         <Tab label="Microorganismos" />
         <Tab label="Antibióticos" />
@@ -306,15 +352,25 @@ const MicrobiologiaCatalogos: React.FC = () => {
                 : 'Código, nombre, familia…'
           }
           sx={{ minWidth: 260 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          }}
         />
         <Button variant="outlined" onClick={() => load()} disabled={loading}>
           Actualizar
         </Button>
         {canEdit && (
-          <Button variant="contained" onClick={openCreate}>
-            {tab === 0 ? 'Nuevo medio' : tab === 1 ? 'Nuevo microorganismo' : 'Nuevo antibiótico'}
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            {createLabels[tab]}
           </Button>
         )}
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+          {rows.length} {TAB_NOUN_PLURAL[tab]}
+        </Typography>
       </Box>
 
       <TableContainer component={Paper} variant="outlined">
@@ -332,20 +388,22 @@ const MicrobiologiaCatalogos: React.FC = () => {
               )}
               {tab === 2 && <TableCell>Familia</TableCell>}
               <TableCell>Estado</TableCell>
-              {canEdit && <TableCell align="right">Acción</TableCell>}
+              {canEdit && <TableCell align="right">Acciones</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? (tab === 1 ? 6 : 5) : tab === 1 ? 5 : 4}>
+                <TableCell colSpan={colSpan}>
                   <Typography color="text.secondary">Cargando…</Typography>
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? (tab === 1 ? 6 : 5) : tab === 1 ? 5 : 4}>
-                  <Typography color="text.secondary">Sin registros.</Typography>
+                <TableCell colSpan={colSpan}>
+                  <Typography color="text.secondary">
+                    {search.trim() ? 'Sin resultados para la búsqueda.' : 'Sin registros.'}
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : tab === 0 ? (
@@ -363,10 +421,21 @@ const MicrobiologiaCatalogos: React.FC = () => {
                     />
                   </TableCell>
                   {canEdit && (
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEditMedio(r)}>
-                        Editar
-                      </Button>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      <IconButton size="small" aria-label={`Editar ${r.nombre}`} onClick={() => openEditMedio(r)}>
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label={`Eliminar ${r.nombre}`}
+                        color="error"
+                        disabled={r.activo === false}
+                        onClick={() =>
+                          setDeleteTarget({ tab: 0, id: r.id, codigo: r.codigo, nombre: r.nombre })
+                        }
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   )}
                 </TableRow>
@@ -387,10 +456,21 @@ const MicrobiologiaCatalogos: React.FC = () => {
                     />
                   </TableCell>
                   {canEdit && (
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEditMicro(r)}>
-                        Editar
-                      </Button>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      <IconButton size="small" aria-label={`Editar ${r.nombre}`} onClick={() => openEditMicro(r)}>
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label={`Eliminar ${r.nombre}`}
+                        color="error"
+                        disabled={r.activo === false}
+                        onClick={() =>
+                          setDeleteTarget({ tab: 1, id: r.id, codigo: r.codigo, nombre: r.nombre })
+                        }
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   )}
                 </TableRow>
@@ -410,10 +490,25 @@ const MicrobiologiaCatalogos: React.FC = () => {
                     />
                   </TableCell>
                   {canEdit && (
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEditAntibiotico(r)}>
-                        Editar
-                      </Button>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      <IconButton
+                        size="small"
+                        aria-label={`Editar ${r.nombre}`}
+                        onClick={() => openEditAntibiotico(r)}
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label={`Eliminar ${r.nombre}`}
+                        color="error"
+                        disabled={r.activo === false}
+                        onClick={() =>
+                          setDeleteTarget({ tab: 2, id: r.id, codigo: r.codigo, nombre: r.nombre })
+                        }
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   )}
                 </TableRow>
@@ -425,7 +520,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
 
       {!canEdit && (
         <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          Solo lectura: la edición de catálogos requiere rol administrador.
+          Solo lectura: agregar, editar o eliminar requiere rol laboratorio, bioquímico o administrador.
         </Typography>
       )}
 
@@ -434,24 +529,26 @@ const MicrobiologiaCatalogos: React.FC = () => {
         <DialogContent dividers>
           {tab === 0 && (
             <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-              {!editingId && (
-                <TextField
-                  label="Código"
-                  value={medioForm.codigo}
-                  onChange={(ev) => setMedioForm((f) => ({ ...f, codigo: ev.target.value.toUpperCase() }))}
-                  required
-                />
-              )}
+              <TextField
+                label="Código"
+                value={medioForm.codigo}
+                onChange={(ev) => setMedioForm((f) => ({ ...f, codigo: ev.target.value.toUpperCase() }))}
+                required
+                disabled={!!editingId}
+                inputProps={{ maxLength: 30 }}
+              />
               <TextField
                 label="Nombre"
                 value={medioForm.nombre}
                 onChange={(ev) => setMedioForm((f) => ({ ...f, nombre: ev.target.value }))}
                 required
+                inputProps={{ maxLength: 200 }}
               />
               <TextField
                 label="Tipo"
                 value={medioForm.tipo}
                 onChange={(ev) => setMedioForm((f) => ({ ...f, tipo: ev.target.value }))}
+                inputProps={{ maxLength: 50 }}
               />
               <TextField
                 label="Descripción"
@@ -473,34 +570,38 @@ const MicrobiologiaCatalogos: React.FC = () => {
           )}
           {tab === 1 && (
             <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-              {!editingId && (
-                <TextField
-                  label="Código"
-                  value={microForm.codigo}
-                  onChange={(ev) => setMicroForm((f) => ({ ...f, codigo: ev.target.value.toUpperCase() }))}
-                  required
-                />
-              )}
+              <TextField
+                label="Código"
+                value={microForm.codigo}
+                onChange={(ev) => setMicroForm((f) => ({ ...f, codigo: ev.target.value.toUpperCase() }))}
+                required
+                disabled={!!editingId}
+                inputProps={{ maxLength: 40 }}
+              />
               <TextField
                 label="Nombre"
                 value={microForm.nombre}
                 onChange={(ev) => setMicroForm((f) => ({ ...f, nombre: ev.target.value }))}
                 required
+                inputProps={{ maxLength: 200 }}
               />
               <TextField
                 label="Género"
                 value={microForm.genero}
                 onChange={(ev) => setMicroForm((f) => ({ ...f, genero: ev.target.value }))}
+                inputProps={{ maxLength: 120 }}
               />
               <TextField
                 label="Especie"
                 value={microForm.especie}
                 onChange={(ev) => setMicroForm((f) => ({ ...f, especie: ev.target.value }))}
+                inputProps={{ maxLength: 120 }}
               />
               <TextField
                 label="Grupo"
                 value={microForm.grupo}
                 onChange={(ev) => setMicroForm((f) => ({ ...f, grupo: ev.target.value }))}
+                inputProps={{ maxLength: 80 }}
               />
               <TextField
                 label="Descripción"
@@ -522,26 +623,28 @@ const MicrobiologiaCatalogos: React.FC = () => {
           )}
           {tab === 2 && (
             <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-              {!editingId && (
-                <TextField
-                  label="Código"
-                  value={antibioticoForm.codigo}
-                  onChange={(ev) =>
-                    setAntibioticoForm((f) => ({ ...f, codigo: ev.target.value.toUpperCase() }))
-                  }
-                  required
-                />
-              )}
+              <TextField
+                label="Código"
+                value={antibioticoForm.codigo}
+                onChange={(ev) =>
+                  setAntibioticoForm((f) => ({ ...f, codigo: ev.target.value.toUpperCase() }))
+                }
+                required
+                disabled={!!editingId}
+                inputProps={{ maxLength: 40 }}
+              />
               <TextField
                 label="Nombre"
                 value={antibioticoForm.nombre}
                 onChange={(ev) => setAntibioticoForm((f) => ({ ...f, nombre: ev.target.value }))}
                 required
+                inputProps={{ maxLength: 200 }}
               />
               <TextField
                 label="Familia"
                 value={antibioticoForm.familia}
                 onChange={(ev) => setAntibioticoForm((f) => ({ ...f, familia: ev.target.value }))}
+                inputProps={{ maxLength: 120 }}
               />
               <TextField
                 label="Descripción"
@@ -563,9 +666,30 @@ const MicrobiologiaCatalogos: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
+          <Button onClick={() => setDialogOpen(false)} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button variant="contained" onClick={() => void handleSave()} disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)}>
+        <DialogTitle>Eliminar {deleteTarget ? TAB_NOUN[deleteTarget.tab] : ''}</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Desactivar «{deleteTarget?.codigo} — {deleteTarget?.nombre}»? No se borra de la base
+            (para no romper estudios históricos); quedará inactivo y dejará de usarse en nuevas
+            siembras, identificaciones o antibiogramas.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>
+            Cancelar
+          </Button>
+          <Button color="error" variant="contained" onClick={() => void handleDelete()} disabled={deleting}>
+            {deleting ? 'Eliminando…' : 'Eliminar'}
           </Button>
         </DialogActions>
       </Dialog>

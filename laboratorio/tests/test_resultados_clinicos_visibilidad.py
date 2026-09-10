@@ -132,12 +132,26 @@ class TestResultadosClinicosVisibilidad:
         results = data["results"] if isinstance(data, dict) else data
         assert any(row["id"] == self.sol.pk for row in results)
 
-    def test_secretaria_detalle_ve_resultados_aunque_no_finalizado(self):
+    def test_secretaria_detalle_no_ve_resultados(self):
+        """Secretaría no ve valores clínicos ni en proceso ni validado; solo PDF/envío."""
         self.client.force_authenticate(self.sec)
         r = self.client.get(self._url())
         assert r.status_code == status.HTTP_200_OK
         body = r.json()
         assert body["estado"] == "EN_PROCESO"
-        assert len(body["resultados"]) == 1
-        assert body["resultados"][0]["valor_obtenido"] == "99.9"
-        assert body.get("resultados_visibles") is True
+        assert body.get("resultados") == []
+        assert body.get("resultados_visibles") is False
+        assert body.get("observaciones") in ("", None)
+
+        self.sol.estado = "FINALIZADO"
+        self.sol.save(update_fields=["estado"])
+        r2 = self.client.get(self._url())
+        assert r2.status_code == status.HTTP_200_OK
+        body2 = r2.json()
+        assert body2.get("resultados") == []
+        assert body2.get("resultados_visibles") is False
+
+    def test_secretaria_no_lee_analisis_longitudinal(self):
+        self.client.force_authenticate(self.sec)
+        r = self.client.get(f"/api/lab/solicitudes/{self.sol.pk}/analisis-longitudinal/")
+        assert r.status_code == status.HTTP_403_FORBIDDEN

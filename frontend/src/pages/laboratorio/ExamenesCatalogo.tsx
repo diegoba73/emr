@@ -55,6 +55,8 @@ function rowTipoContenedorFallback(rows: LimsTipoExamen[], id: number): string {
 
 type ExamenForm = {
   codigo: string;
+  codigo_nbu: string;
+  ub_nbu: string;
   nombre: string;
   abreviatura: string;
   tipo_muestra_requerida: number | '';
@@ -75,6 +77,8 @@ type ExamenForm = {
 
 const emptyForm = (): ExamenForm => ({
   codigo: '',
+  codigo_nbu: '',
+  ub_nbu: '',
   nombre: '',
   abreviatura: '',
   tipo_muestra_requerida: '',
@@ -95,6 +99,8 @@ const emptyForm = (): ExamenForm => ({
 
 const formFromRow = (row: LimsTipoExamen): ExamenForm => ({
   codigo: row.codigo,
+  codigo_nbu: row.codigo_nbu ?? '',
+  ub_nbu: row.ub_nbu != null && row.ub_nbu !== '' ? String(row.ub_nbu) : '',
   nombre: row.nombre,
   abreviatura: row.abreviatura ?? '',
   tipo_muestra_requerida: row.tipo_muestra_requerida,
@@ -184,6 +190,8 @@ const ExamenesCatalogo: React.FC = () => {
 
     const base: TipoExamenLimsWriteBody = {
       nombre: form.nombre.trim(),
+      codigo_nbu: form.codigo_nbu.trim() || null,
+      ub_nbu: form.ub_nbu.trim() || null,
       abreviatura: form.abreviatura.trim() || undefined,
       tipo_muestra_requerida: Number(form.tipo_muestra_requerida),
       tipo_contenedor: form.tipo_contenedor === '' ? null : Number(form.tipo_contenedor),
@@ -254,6 +262,7 @@ const ExamenesCatalogo: React.FC = () => {
   };
 
   const ticketMode = form.modo_entrada !== 'ESTANDAR';
+  const editingRow = editingId != null ? rows.find((r) => r.id === editingId) : undefined;
 
   if (!allowed) {
     return (
@@ -273,7 +282,12 @@ const ExamenesCatalogo: React.FC = () => {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Configurá método, tipo de muestra, unidad, rangos y modo de ingreso de resultados (estándar, ticket
-        analizador o fórmula %). La carga de resultados usa esta configuración por examen.
+        analizador o fórmula %). La carga de resultados usa esta configuración por examen. Los perfiles
+        (Hemograma, Ionograma, Hepatograma, etc.) se piden desde{' '}
+        <Button size="small" onClick={() => navigate('/laboratorio/catalogos/paneles')} sx={{ minWidth: 0, p: 0, verticalAlign: 'baseline' }}>
+          Paneles
+        </Button>
+        ; acá solo aparecen los analitos componentes (y productos IACA inactivos marcados como perfil).
       </Typography>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2, alignItems: 'center' }}>
@@ -282,7 +296,7 @@ const ExamenesCatalogo: React.FC = () => {
           label="Buscar"
           value={search}
           onChange={(ev) => setSearch(ev.target.value)}
-          placeholder="Código, nombre, método…"
+          placeholder="Código IACA, NBU, nombre, método…"
           sx={{ minWidth: 260 }}
         />
         <Button variant="outlined" onClick={() => load()} disabled={loading}>
@@ -307,6 +321,8 @@ const ExamenesCatalogo: React.FC = () => {
           <TableHead>
             <TableRow>
               <TableCell>Código</TableCell>
+              <TableCell>NBU</TableCell>
+              <TableCell>U.B.</TableCell>
               <TableCell>Nombre</TableCell>
               <TableCell>Método</TableCell>
               <TableCell>Muestra</TableCell>
@@ -320,13 +336,13 @@ const ExamenesCatalogo: React.FC = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 9 : 8}>
+                <TableCell colSpan={canEdit ? 11 : 10}>
                   <Typography color="text.secondary">Cargando…</Typography>
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 9 : 8}>
+                <TableCell colSpan={canEdit ? 11 : 10}>
                   <Typography color="text.secondary">Sin registros.</Typography>
                 </TableCell>
               </TableRow>
@@ -334,7 +350,22 @@ const ExamenesCatalogo: React.FC = () => {
               rows.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
-                  <TableCell>{r.nombre}</TableCell>
+                  <TableCell>{r.codigo_nbu || '—'}</TableCell>
+                  <TableCell>{r.ub_nbu != null && r.ub_nbu !== '' ? r.ub_nbu : '—'}</TableCell>
+                  <TableCell>
+                    <Box>
+                      {r.nombre}
+                      {r.panel_equivalente ? (
+                        <Chip
+                          size="small"
+                          sx={{ ml: 1 }}
+                          label={`Perfil → ${r.panel_equivalente}`}
+                          variant="outlined"
+                          color="warning"
+                        />
+                      ) : null}
+                    </Box>
+                  </TableCell>
                   <TableCell>{r.metodo || '—'}</TableCell>
                   <TableCell>{r.tipo_muestra_nombre || muestraNombre(r.tipo_muestra_requerida)}</TableCell>
                   <TableCell>{contenedorLabel(r.tipo_contenedor)}</TableCell>
@@ -373,21 +404,45 @@ const ExamenesCatalogo: React.FC = () => {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{editingId ? `Editar ${form.codigo}` : 'Nuevo examen'}</DialogTitle>
         <DialogContent dividers>
+          {editingRow?.panel_equivalente ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Este código IACA es un perfil (producto compuesto). En una orden hay que pedir el panel{' '}
+              <strong>{editingRow.panel_equivalente}</strong>, no este examen. El NBU / U.B. de
+              facturación del perfil está en el catálogo de Paneles.
+            </Alert>
+          ) : null}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 1 }}>
-            {!editingId && (
+            {editingId ? (
+              <TextField label="Código" value={form.codigo} disabled helperText="Código interno/IACA (no se modifica)." />
+            ) : (
               <TextField
                 label="Código"
                 value={form.codigo}
                 onChange={(ev) => patchForm({ codigo: ev.target.value.toUpperCase() })}
                 required
+                helperText="Código interno/IACA."
               />
             )}
+            <TextField
+              label="Código NBU"
+              value={form.codigo_nbu}
+              onChange={(ev) => patchForm({ codigo_nbu: ev.target.value.replace(/\D/g, '').slice(0, 6) })}
+              placeholder="Ej. 660412"
+              helperText="Nomenclador Bioquímico Único (CUBRA)."
+            />
+            <TextField
+              label="U.B."
+              value={form.ub_nbu}
+              onChange={(ev) => patchForm({ ub_nbu: ev.target.value.replace(',', '.') })}
+              placeholder="Ej. 1.5"
+              helperText="Unidades bioquímicas de ese código NBU."
+            />
             <TextField
               label="Nombre"
               value={form.nombre}
               onChange={(ev) => patchForm({ nombre: ev.target.value })}
               required
-              sx={{ gridColumn: editingId ? 'span 2' : undefined }}
+              sx={{ gridColumn: 'span 2' }}
             />
             <TextField
               label="Abreviatura"

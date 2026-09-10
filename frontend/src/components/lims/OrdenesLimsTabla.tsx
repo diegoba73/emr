@@ -34,6 +34,8 @@ export interface OrdenesLimsTablaProps {
   puedeObraSocial?: boolean;
   /** Tras guardar el estado de cobertura (para refrescar el listado). */
   onObraSocialSaved?: () => void;
+  /** Oculta columnas técnicas (IQC, tubos, recepción) para secretaría. */
+  modoEntrega?: boolean;
 }
 
 const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
@@ -46,6 +48,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
   accionLabel = 'Ver',
   puedeObraSocial = false,
   onObraSocialSaved,
+  modoEntrega = false,
 }) => {
   const [obraSocialRow, setObraSocialRow] = useState<PendientePedidoRow | null>(null);
 
@@ -71,7 +74,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
           <TableCell>Médico</TableCell>
           <TableCell sx={{ minWidth: 180 }}>Origen</TableCell>
           <TableCell>Estado</TableCell>
-          <TableCell>IQC</TableCell>
+          {!modoEntrega && <TableCell>IQC</TableCell>}
           <TableCell>{columnaFecha === 'toma' ? 'Muestra tomada' : 'Fecha pedido'}</TableCell>
           <TableCell align="right">Acción</TableCell>
         </TableRow>
@@ -79,7 +82,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={9}>
+            <TableCell colSpan={modoEntrega ? 8 : 9}>
               <Typography color="text.secondary">{emptyMessage}</Typography>
             </TableCell>
           </TableRow>
@@ -135,7 +138,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     label={labelEstadoOrdenLims(r.estado)}
                     color={estadoOrdenColor(r.estado as EstadoSolicitudLims)}
                   />
-                  {r.esperando_recepcion && (
+                  {r.esperando_recepcion && !modoEntrega && (
                     <Chip
                       size="small"
                       label="Esperando recepción"
@@ -144,7 +147,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       sx={{ ml: 0.5, mt: 0.5 }}
                     />
                   )}
-                  {r.pedido_adicional && (
+                  {r.pedido_adicional && !modoEntrega && (
                     <Chip
                       size="small"
                       label="Pedido adicional"
@@ -153,7 +156,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       sx={{ ml: 0.5, mt: 0.5 }}
                     />
                   )}
-                  {r.tubos_pendientes_extraccion && r.tubos_pendientes_extraccion.length > 0 && (
+                  {!modoEntrega && r.tubos_pendientes_extraccion && r.tubos_pendientes_extraccion.length > 0 && (
                     <Typography variant="caption" display="block" color="warning.main">
                       Faltan {r.tubos_pendientes_extraccion.length} tubo(s)
                     </Typography>
@@ -168,6 +171,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     />
                   ) : null}
                 </TableCell>
+                {!modoEntrega && (
                 <TableCell>
                   {r.tipo !== 'LAB_CLINICO' || !r.iqcStatus || r.iqcStatus === 'na' ? (
                     <Typography variant="caption" color="text.secondary">
@@ -179,6 +183,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     <Chip size="small" label="Falta IQC" color="warning" variant="outlined" />
                   )}
                 </TableCell>
+                )}
                 <TableCell>{fechaMostrar ? new Date(fechaMostrar).toLocaleString() : '—'}</TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="wrap" useFlexGap>

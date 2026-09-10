@@ -49,7 +49,8 @@ ROLES_LIMS_CATALOG_READ = frozenset({
 })
 
 # Secretaría/enfermería: lectura de órdenes LIMS en todos los estados.
-# PDF / envío del informe: solo FINALIZADO (usuario_puede_descargar/enviar_informe_lims).
+# Secretaría: sin valores clínicos ni detalle técnico; solo envío/PDF si validado.
+# PDF / envío del informe: solo FINALIZADO / VALIDADO.
 ROLES_LIMS_OPERATIVA_LIMITADA = frozenset({
     'secretaria',
     'enfermeria',

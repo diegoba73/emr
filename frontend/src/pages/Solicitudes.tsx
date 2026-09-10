@@ -23,6 +23,7 @@ import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/a
 import {
   canAccessAnalisisClinicoLab,
   canAccessMicrobiologiaLectura,
+  isSecretariaEntregaLab,
 } from '../utils/limsAccess';
 import { ESTADOS_ORDEN_LIMS, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
 import { withNavBack } from '../utils/navBack';
@@ -47,6 +48,7 @@ const Solicitudes: React.FC = () => {
   const allowed = canAccessAnalisisClinicoLab(currentUser);
   const puedeVerMicro = canAccessMicrobiologiaLectura(currentUser);
   const esPaciente = isPacienteRole(currentUser);
+  const modoEntrega = isSecretariaEntregaLab(currentUser);
   const initialLoadDone = useRef(false);
 
   useEffect(() => {
@@ -152,7 +154,9 @@ const Solicitudes: React.FC = () => {
   const pageTitle = esPaciente ? 'Mis análisis clínico' : 'Análisis de laboratorio';
   const pageDescription = esPaciente
     ? 'Pedidos de laboratorio realizados desde consultas y sus resultados.'
-    : 'Órdenes de Lab. Clínico y Microbiología. Se actualiza sola; el pedido aparece al guardar y cerrar la consulta.';
+    : modoEntrega
+      ? 'Informes de laboratorio validados para enviar o descargar en PDF.'
+      : 'Órdenes de Lab. Clínico y Microbiología. Se actualiza sola; el pedido aparece al guardar y cerrar la consulta.';
 
   const handleVer = (row: PendientePedidoRow) => {
     if (row.tipo === 'MICROBIOLOGIA') {
@@ -263,7 +267,8 @@ const Solicitudes: React.FC = () => {
             rows={rows}
             emptyMessage="No hay órdenes de laboratorio para los filtros seleccionados."
             onVer={handleVer}
-            accionLabel="Ver detalle"
+            accionLabel={modoEntrega ? 'Informe' : 'Ver detalle'}
+            modoEntrega={modoEntrega}
           />
         </Paper>
       )}

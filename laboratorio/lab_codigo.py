@@ -84,6 +84,24 @@ def format_tubo(protocolo: str, tubo_n: int) -> str:
     return f"{proto}-{tubo_n:0{TUBO_SUFFIX_DIGITS}d}"
 
 
+def codigo_instrumento_desde_tubo(codigo_barra: str | None) -> str:
+    """
+    Alias corto para analizadores (sample ID ~11 dígitos).
+
+    ``LAB-2026-00042-01`` → ``20260004201``.
+    """
+    parsed = parse_codigo(codigo_barra)
+    if (
+        parsed.kind == CodigoKind.TUBO
+        and parsed.year is not None
+        and parsed.seq is not None
+        and parsed.tubo_n is not None
+    ):
+        return f"{parsed.year}{parsed.seq:0{PROTOCOLO_DIGITS}d}{parsed.tubo_n:0{TUBO_SUFFIX_DIGITS}d}"
+    compact = re.sub(r"[^A-Z0-9]", "", normalize_codigo(codigo_barra).upper())
+    return compact[:15]
+
+
 def parse_codigo(codigo: str | None) -> ParsedCodigo:
     raw = normalize_codigo(codigo)
     if not raw:

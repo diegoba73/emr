@@ -50,6 +50,7 @@ import MicrobiologiaEstudioDetalle from './pages/laboratorio/MicrobiologiaEstudi
 import MicrobiologiaCatalogos from './pages/laboratorio/MicrobiologiaCatalogos';
 import InventarioPage from './pages/laboratorio/inventario/InventarioPage';
 import QcHubPage from './pages/laboratorio/qc/QcHubPage';
+import InstrumentosPage from './pages/laboratorio/InstrumentosPage';
 import PatientDashboard from './components/patient360/PatientDashboard';
 import AuditEventsPage from './pages/AuditEventsPage';
 import BiDashboard from './pages/BiDashboard';
@@ -742,6 +743,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsModule}
               >
                 <QcHubPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/instrumentos"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <InstrumentosPage />
               </ProtectedRoute>
             }
           />

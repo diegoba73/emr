@@ -30,6 +30,38 @@ from laboratorio.origen_solicitud import (
 logger = logging.getLogger(__name__)
 
 
+def normalize_codigo_nbu(value):
+    """Valida código CUBRA de 6 dígitos; vacío → None."""
+    if value in (None, ''):
+        return None
+    codigo_nbu = str(value).strip()
+    if not codigo_nbu:
+        return None
+    if not codigo_nbu.isdigit() or len(codigo_nbu) != 6:
+        raise serializers.ValidationError(
+            'El código NBU debe tener 6 dígitos (nomenclador CUBRA).'
+        )
+    return codigo_nbu
+
+
+def fill_ub_nbu_from_catalog(attrs):
+    """Si viene codigo_nbu y no ub_nbu, completa U.B. desde el CSV NBU."""
+    if 'codigo_nbu' not in attrs:
+        return
+    if not attrs.get('codigo_nbu'):
+        attrs['ub_nbu'] = None
+        return
+    if attrs.get('ub_nbu') not in (None, ''):
+        return
+    from laboratorio.nbu_match import ub_map
+    try:
+        raw = ub_map().get(attrs['codigo_nbu'])
+    except OSError:
+        raw = None
+    if raw:
+        attrs['ub_nbu'] = Decimal(str(raw).replace(',', '.'))
+
+
 # ============================================================================
 # SERIALIZERS DE INFRAESTRUCTURA
 # ============================================================================
@@ -127,6 +159,7 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    panel_equivalente = serializers.SerializerMethodField()
     equipo_analizador_codigo = serializers.CharField(
         source='equipo_analizador.codigo',
         read_only=True,
@@ -143,6 +176,8 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'codigo',
+            'codigo_nbu',
+            'ub_nbu',
             'nombre',
             'abreviatura',
             'tipo_muestra_requerida',
@@ -173,10 +208,12 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'laboratorio_derivacion',
             'laboratorio_derivacion_codigo',
             'laboratorio_derivacion_nombre',
+            'panel_equivalente',
             'activo',
         ]
         read_only_fields = [
             'id',
+            'panel_equivalente',
             'tipo_muestra_nombre',
             'tipo_muestra_codigo',
             'tipo_contenedor_codigo',
@@ -197,6 +234,19 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         if not codigo:
             raise serializers.ValidationError('El código es obligatorio.')
         return codigo
+
+    def get_panel_equivalente(self, obj):
+        """Código PAN_* si este TipoExamen es un producto IACA compuesto (inactivo)."""
+        from laboratorio.iaca_compat import IACA_PRODUCTO_A_PANEL
+        return IACA_PRODUCTO_A_PANEL.get(obj.codigo)
+
+    def validate_codigo_nbu(self, value):
+        return normalize_codigo_nbu(value)
+
+    def validate_ub_nbu(self, value):
+        if value in (None, ''):
+            return None
+        return value
 
     def validate_nombre(self, value):
         nombre = (value or '').strip()
@@ -223,6 +273,8 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         for field in ('formato_informe_entrada', 'abreviatura', 'rango_referencia_texto'):
             if field in attrs and attrs[field] is None:
                 attrs[field] = ''
+
+        fill_ub_nbu_from_catalog(attrs)
 
         modo = attrs.get(
             'modo_entrada',
@@ -282,6 +334,8 @@ class PanelExamenSerializer(serializers.ModelSerializer):
             'id',
             'codigo',
             'nombre',
+            'codigo_nbu',
+            'ub_nbu',
             'tipos_examen',
             'tipos_examen_ids',
             'tipos_examen_nombres',
@@ -289,6 +343,18 @@ class PanelExamenSerializer(serializers.ModelSerializer):
             'activo',
         ]
         read_only_fields = ['id', 'tipos_examen_nombres', 'tipos_examen_detalle']
+
+    def validate_codigo_nbu(self, value):
+        return normalize_codigo_nbu(value)
+
+    def validate_ub_nbu(self, value):
+        if value in (None, ''):
+            return None
+        return value
+
+    def validate(self, attrs):
+        fill_ub_nbu_from_catalog(attrs)
+        return attrs
 
     def get_tipos_examen_nombres(self, obj):
         """Retorna los nombres de los tipos de examen del panel (orden clínico)."""
@@ -434,6 +500,21 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'fecha_envio_derivacion',
             'observaciones_derivacion',
         ]
+
+
+def _ocultar_detalle_clinico_secretaria(data, user):
+    """Secretaría no recibe observaciones ni detalle técnico de la orden."""
+    from api.permissions import es_secretaria_entrega_lab
+
+    if not es_secretaria_entrega_lab(user):
+        return data
+    data['observaciones'] = ''
+    data['orden_grupos_informe'] = []
+    data['tubos_pendientes_extraccion'] = []
+    data['derivaciones_resumen'] = []
+    data['resultados'] = []
+    data['resultados_visibles'] = False
+    return data
 
 
 # ============================================================================
@@ -585,7 +666,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         if is_list:
             data['resultados'] = []
             data['resultados_visibles'] = False
-            return data
+            return _ocultar_detalle_clinico_secretaria(data, user)
 
         if user is not None and getattr(user, 'is_authenticated', False):
             if not usuario_puede_ver_resultados_lims(user, instance):
@@ -596,7 +677,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         else:
             data['resultados'] = []
             data['resultados_visibles'] = False
-        return data
+        return _ocultar_detalle_clinico_secretaria(data, user)
 
     def get_paciente_nombre(self, obj):
         return format_apellido_nombre(getattr(obj, 'paciente', None))

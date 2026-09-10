@@ -43,6 +43,8 @@ import { canAccessLimsCatalogos, canEditLimsCatalogos } from '../../utils/limsAc
 type FormState = {
   codigo: string;
   nombre: string;
+  codigo_nbu: string;
+  ub_nbu: string;
   activo: boolean;
   componentes: LimsTipoExamen[];
 };
@@ -50,6 +52,8 @@ type FormState = {
 const emptyForm = (): FormState => ({
   codigo: '',
   nombre: '',
+  codigo_nbu: '',
+  ub_nbu: '',
   activo: true,
   componentes: [],
 });
@@ -102,7 +106,7 @@ const PanelesCatalogo: React.FC = () => {
     if (!q) return rows;
     return rows.filter((r) => {
       const comps = (r.tipos_examen_nombres ?? []).join(' ');
-      const hay = `${r.codigo} ${r.nombre} ${comps}`.toLowerCase();
+      const hay = `${r.codigo} ${r.codigo_nbu ?? ''} ${r.nombre} ${comps}`.toLowerCase();
       return hay.includes(q);
     });
   }, [rows, search]);
@@ -137,6 +141,8 @@ const PanelesCatalogo: React.FC = () => {
     setForm({
       codigo: row.codigo,
       nombre: row.nombre,
+      codigo_nbu: row.codigo_nbu ?? '',
+      ub_nbu: row.ub_nbu != null && row.ub_nbu !== '' ? String(row.ub_nbu) : '',
       activo: row.activo !== false,
       componentes: comps,
     });
@@ -162,6 +168,8 @@ const PanelesCatalogo: React.FC = () => {
         nombre: form.nombre.trim(),
         activo: form.activo,
         tipos_examen_ids: form.componentes.map((c) => c.id),
+        codigo_nbu: form.codigo_nbu.trim() || null,
+        ub_nbu: form.ub_nbu.trim() || null,
       };
       if (editingId) {
         await patchPanelExamenLims(editingId, body);
@@ -214,8 +222,10 @@ const PanelesCatalogo: React.FC = () => {
         Paneles de examen
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Un panel agrupa analitos (ej. Hemograma, Ionograma). Al pedirlo en una orden se generan
-        resultados para cada componente.
+        Un panel agrupa analitos (ej. Hemograma = hematíes, Hb, Hto…; Ionograma = Na, K, Cl).
+        Al pedirlo en una orden se generan resultados para cada componente. El código NBU / U.B.
+        del panel es el de facturación del perfil; los componentes pueden tener NBU propio si se
+        piden sueltos.
       </Typography>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2, alignItems: 'center' }}>
@@ -224,7 +234,7 @@ const PanelesCatalogo: React.FC = () => {
           label="Buscar"
           value={search}
           onChange={(ev) => setSearch(ev.target.value)}
-          placeholder="Código, nombre, componente…"
+          placeholder="Código, NBU, nombre, componente…"
           sx={{ minWidth: 280 }}
           InputProps={{
             startAdornment: (
@@ -260,6 +270,8 @@ const PanelesCatalogo: React.FC = () => {
           <TableHead>
             <TableRow>
               <TableCell>Código</TableCell>
+              <TableCell>NBU</TableCell>
+              <TableCell>U.B.</TableCell>
               <TableCell>Nombre</TableCell>
               <TableCell>Componentes</TableCell>
               <TableCell>Estado</TableCell>
@@ -269,13 +281,13 @@ const PanelesCatalogo: React.FC = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 5 : 4}>
+                <TableCell colSpan={canEdit ? 7 : 6}>
                   <Typography color="text.secondary">Cargando…</Typography>
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 5 : 4}>
+                <TableCell colSpan={canEdit ? 7 : 6}>
                   <Typography color="text.secondary">
                     {search.trim() ? 'Sin resultados para la búsqueda.' : 'Sin registros.'}
                   </Typography>
@@ -285,6 +297,8 @@ const PanelesCatalogo: React.FC = () => {
               filtered.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
+                  <TableCell>{r.codigo_nbu || '—'}</TableCell>
+                  <TableCell>{r.ub_nbu != null && r.ub_nbu !== '' ? r.ub_nbu : '—'}</TableCell>
                   <TableCell>{r.nombre}</TableCell>
                   <TableCell sx={{ maxWidth: 480 }}>
                     <Typography variant="body2" color="text.secondary">
@@ -359,6 +373,21 @@ const PanelesCatalogo: React.FC = () => {
               onChange={(ev) => setForm((p) => ({ ...p, nombre: ev.target.value }))}
               required
             />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField
+                label="Código NBU"
+                value={form.codigo_nbu}
+                onChange={(ev) => setForm((p) => ({ ...p, codigo_nbu: ev.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                helperText="Práctica CUBRA del perfil (6 dígitos). Ej. Hemograma 660475."
+                inputProps={{ inputMode: 'numeric', maxLength: 6 }}
+              />
+              <TextField
+                label="U.B. (NBU)"
+                value={form.ub_nbu}
+                onChange={(ev) => setForm((p) => ({ ...p, ub_nbu: ev.target.value }))}
+                helperText="Se completa solo si el nomenclador no tiene U.B. para ese código."
+              />
+            </Box>
             <Autocomplete
               multiple
               options={examenes.filter((e) => e.activo !== false)}

@@ -76,6 +76,7 @@ _GEM_CONTEXT/
 .vscode/
 _tmp_*
 _dbg_*
+_scratch_nbu/
 emr_test_write
 frontend/_jest_*
 frontend/run_jest_capture.sh

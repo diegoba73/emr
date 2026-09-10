@@ -13,7 +13,8 @@
 **Actualización (E2E-1 — validación flujo crítico API):** 4 de junio de 2026  
 **Actualización (Frontend UI-2 — consola microbiología):** 17 de mayo de 2026  
 **Actualización (B3-frontend-validación-A [VALIDADO] + UX parcial):** junio de 2026 — Alta estudio micro: picker solicitud/muestra LIMS (`RECIBIDA`/`CONSERVADA`/`EN_PROCESO`). Detalle micro: listados globales + filtro cliente [GAP filtros API].  
-**Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026
+**Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026  
+**Actualización (interfaz analizadores CM260 / Sysmex XP-300):** 9 de septiembre de 2026
 
 > **Sep 2026 — máquina de estados de `SolicitudExamen`:** los estados vigentes son `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` → `FINALIZADO`. Las tablas de este documento que citan `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO` o `CANCELADO` en la **orden** son históricas (Fase A). Fuente actual: `laboratorio/solicitud_estado.py` y `docs_synesis/DOC_REGLAS_NEGOCIO.md`. IQC: `docs_synesis/reglas/control-calidad.md`.
 
@@ -393,6 +394,16 @@ Orden LIMS (SolicitudExamen) → Muestra → EstudioMicrobiologia
 Complementa (no reemplaza) la suite B3.4 (`test_microbiologia_api.py`) con un único camino integrado desde solicitud LIMS. No PDF, no CLSI/EUCAST.
 
 **GAP:** E2E navegador sobre rutas `/laboratorio/microbiologia/*` pendiente de framework.
+
+---
+
+## Interfaz de analizadores (CM260 / Sysmex XP-300)
+
+**SoT:** `docs_synesis/reglas/instrumentos-analizadores.md`.
+
+Flujo bidireccional ASTM: query del tubo → worklist de ensayos pendientes del equipo → ingesta como borrador vía `cargar_resultados_solicitud` (IQC, muestra recibida, sin auto-`FINALIZADO`).
+
+APIs: `POST /api/lab/instrumentos/consulta-trabajo/`, `POST /api/lab/instrumentos/ingesta/`, listados `.../interfaces/`, `.../mapeos/`, `.../mensajes/`. UI: `/laboratorio/instrumentos`. Gateway: `manage.py run_instrument_gateway` (TCP; `LIMS_INSTRUMENT_ENABLED=false` por defecto).
 
 ---
 

@@ -55,6 +55,13 @@ from laboratorio.views_qc import (
 )
 from laboratorio.views_lab_codigo import LabCodigoViewSet
 from laboratorio.views_derivacion import LaboratorioDerivacionViewSet
+from laboratorio.views_instrumentos import (
+    ConsultaTrabajoView,
+    IngestaInstrumentoView,
+    InterfazInstrumentoViewSet,
+    MapeoAnalitoInstrumentoViewSet,
+    MensajeInstrumentoViewSet,
+)
 from usuarios.views import PacienteRegisterView
 from core.views import HealthCheckView
 from .views_bi import BiKpisView
@@ -299,6 +306,21 @@ router.register(
     CalibracionViewSet,
     basename='lab-qc-calibraciones',
 )
+router.register(
+    r'lab/instrumentos/interfaces',
+    InterfazInstrumentoViewSet,
+    basename='lab-instrumentos-interfaces',
+)
+router.register(
+    r'lab/instrumentos/mapeos',
+    MapeoAnalitoInstrumentoViewSet,
+    basename='lab-instrumentos-mapeos',
+)
+router.register(
+    r'lab/instrumentos/mensajes',
+    MensajeInstrumentoViewSet,
+    basename='lab-instrumentos-mensajes',
+)
 router.register(r'disponibilidades', views.DisponibilidadMedicoViewSet, basename='disponibilidades')
 router.register(r'excepciones', views.ExcepcionMedicoViewSet, basename='excepciones')
 # router.register(r'tipos-examen', views.TipoExamenViewSet)
@@ -334,6 +356,16 @@ urlpatterns = [
     path('lab/qc/precheck-batch/', IqcPrecheckView.as_view(), name='lab-qc-precheck-batch'),
     path('lab/qc/tablero-hoy/', TableroIqcHoyView.as_view(), name='lab-qc-tablero-hoy'),
     path('lab/qc/levey-jennings/', LeveyJenningsExamenView.as_view(), name='lab-qc-levey-jennings'),
+    path(
+        'lab/instrumentos/consulta-trabajo/',
+        ConsultaTrabajoView.as_view(),
+        name='lab-instrumentos-consulta-trabajo',
+    ),
+    path(
+        'lab/instrumentos/ingesta/',
+        IngestaInstrumentoView.as_view(),
+        name='lab-instrumentos-ingesta',
+    ),
     
     # Endpoint público para obtener token CSRF
     path('auth/csrf-token/', views.csrf_token_view, name='csrf_token'),

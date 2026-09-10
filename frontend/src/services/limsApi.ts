@@ -731,6 +731,8 @@ export async function createPanelExamenLims(body: {
   nombre: string;
   tipos_examen_ids: number[];
   activo?: boolean;
+  codigo_nbu?: string | null;
+  ub_nbu?: string | number | null;
 }): Promise<LimsPanelExamen> {
   const { data } = await apiClient.post<LimsPanelExamen>(`${LAB}/paneles/`, body);
   return data;
@@ -742,6 +744,8 @@ export async function patchPanelExamenLims(
     nombre: string;
     tipos_examen_ids: number[];
     activo: boolean;
+    codigo_nbu: string | null;
+    ub_nbu: string | number | null;
   }>
 ): Promise<LimsPanelExamen> {
   const { data } = await apiClient.patch<LimsPanelExamen>(`${LAB}/paneles/${id}/`, body);
@@ -1490,6 +1494,51 @@ export async function getLeveyJenningsExamen(tipoExamenId: number): Promise<Leve
     params: { tipo_examen: tipoExamenId },
   });
   return data;
+}
+
+export interface InterfazInstrumento {
+  id: number;
+  nombre: string;
+  equipo: number;
+  equipo_codigo: string;
+  equipo_nombre: string;
+  driver: string;
+  transporte: string;
+  host: string;
+  puerto: number | null;
+  puerto_serie: string;
+  activo: boolean;
+  ultimo_contacto: string | null;
+}
+
+export interface MensajeInstrumento {
+  id: number;
+  interfaz: number;
+  interfaz_nombre: string;
+  interfaz_driver: string;
+  direccion: string;
+  estado: string;
+  sample_id: string;
+  detalle: string;
+  muestra: number | null;
+  solicitud: number | null;
+  solicitud_numero: string | null;
+  created_at: string;
+}
+
+export async function listInterfacesInstrumento(): Promise<InterfazInstrumento[]> {
+  return getPaginatedAll<InterfazInstrumento>(`${LAB}/instrumentos/interfaces/`, { page_size: 200 });
+}
+
+export async function listMensajesInstrumento(params?: {
+  excepciones?: boolean;
+  interfaz?: number;
+}): Promise<MensajeInstrumento[]> {
+  return getPaginatedAll<MensajeInstrumento>(`${LAB}/instrumentos/mensajes/`, {
+    page_size: 50,
+    excepciones: params?.excepciones ? '1' : undefined,
+    interfaz: params?.interfaz,
+  });
 }
 
 export async function createCorridaQc(body: {

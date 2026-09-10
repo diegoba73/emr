@@ -20,13 +20,7 @@ from .models import (
     ResultadoExamen,
 )
 from .models_catalog import Muestra
-from .resultado_muestra_validacion import (
-    asegurar_muestra_lista_para_carga,
-    assert_muestra_estado_carga_resultado,
-    assert_tipo_examen_muestra_carga,
-)
-from .muestra_estado import MuestraAccionError, aplicar_iniciar_proceso, tomar_muestras_en_solicitud
-from .resultados_clinicos import aplicar_carga_estructurada
+from .muestra_estado import MuestraAccionError, tomar_muestras_en_solicitud
 from .serializers import (
     TomarMuestraOrdenSerializer,
     EnviarInformeOrdenSerializer,
@@ -59,7 +53,8 @@ from .solicitud_cierre import (
     solicitud_resultados_completos,
     solicitud_tiene_algun_resultado,
 )
-from .qc_service import QcGateError, verificar_iqc_para_solicitud
+from .qc_service import QcGateError
+from .resultado_carga import CargaResultadosError, cargar_resultados_solicitud, payload_item_tiene_valor
 from .informe_entrega_token import InformeEntregaTokenError, verificar_token_entrega_informe
 from .etiquetas_muestra import (
     generar_etiquetas_muestras_pdf_bytes,
@@ -82,15 +77,7 @@ logger = logging.getLogger(__name__)
 
 def _payload_item_tiene_valor(item: dict) -> bool:
     """True si el ítem trae un valor clínico para persistir (carga parcial)."""
-    if str(item.get("valor_sysmex") or "").strip():
-        return True
-    valor = item.get("valor")
-    if valor is None:
-        valor = item.get("valor_obtenido")
-    if valor is not None and str(valor).strip():
-        return True
-    vn = item.get("valor_numerico")
-    return vn is not None and vn != ""
+    return payload_item_tiene_valor(item)
 
 
 # ============================================================================
@@ -158,7 +145,7 @@ class TipoExamenViewSet(viewsets.ModelViewSet):
     permission_classes = [LimsTipoExamenCatalogPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['activo', 'tipo_muestra_requerida', 'modo_entrada']
-    search_fields = ['nombre', 'codigo', 'abreviatura', 'metodo']
+    search_fields = ['nombre', 'codigo', 'codigo_nbu', 'abreviatura', 'metodo']
     ordering_fields = ['nombre', 'codigo', 'precio']
     ordering = ['nombre']
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
@@ -209,7 +196,7 @@ class PanelExamenViewSet(viewsets.ModelViewSet):
     permission_classes = [LimsTipoExamenCatalogPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['activo']
-    search_fields = ['nombre', 'codigo']
+    search_fields = ['nombre', 'codigo', 'codigo_nbu']
     ordering_fields = ['nombre', 'codigo']
     ordering = ['nombre']
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
@@ -591,297 +578,23 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         resultados_data = request.data.get('resultados', [])
         informar_parcial = bool(request.data.get('informar_parcial'))
 
-        if not resultados_data:
-            return Response(
-                {'error': 'Se requiere una lista de resultados.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        items_con_valor = [i for i in resultados_data if _payload_item_tiene_valor(i)]
-        if not items_con_valor:
-            return Response(
-                {'error': 'Indique al menos un resultado con valor para guardar.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            with transaction.atomic():
-                solicitud = SolicitudExamen.objects.select_for_update().get(pk=pk)
-
-                if solicitud.estado == 'PENDIENTE':
-                    return Response(
-                        {'error': 'Debe tomarse la muestra antes de cargar resultados.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                if solicitud.estado == 'FINALIZADO':
-                    return Response(
-                        {
-                            'error': (
-                                'La orden está validada y bloqueada. '
-                                'No se pueden modificar los resultados.'
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                if solicitud.estado not in (
-                    'EN_PROCESO',
-                    'INFORMADO_PARCIAL',
-                    'LISTO_PARA_VALIDAR',
-                ):
-                    return Response(
-                        {
-                            'error': (
-                                'Solo se pueden cargar resultados en órdenes '
-                                'en proceso, informadas parcialmente o listas para validar.'
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # Gate IQC temprano: sin QC ACEPTADO hoy en equipo default no se cargan valores.
-                try:
-                    verificar_iqc_para_solicitud(
-                        solicitud,
-                        actor=request.user,
-                        permitir_override=False,
-                    )
-                except QcGateError as exc:
-                    return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-                before_solicitud = safe_model_snapshot(solicitud)
-
-                if 'observaciones' in request.data:
-                    solicitud.observaciones = request.data.get('observaciones') or ''
-                    solicitud.save(update_fields=['observaciones'])
-
-                if 'orden_grupos_informe' in request.data:
-                    claves = claves_grupos_validas(
-                        solicitud, solicitud.resultados.select_related('tipo_examen__tipo_muestra_requerida')
-                    )
-                    orden_validado = validar_orden_grupos(
-                        request.data.get('orden_grupos_informe'), claves
-                    )
-                    if orden_validado is None:
-                        return Response(
-                            {'error': 'orden_grupos_informe debe ser una lista de claves válidas.'},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    solicitud.orden_grupos_informe = orden_validado
-                    solicitud.save(update_fields=['orden_grupos_informe'])
-
-                for resultado_item in items_con_valor:
-                    resultado_id = resultado_item.get('id')
-
-                    if not resultado_id:
-                        continue
-
-                    try:
-                        resultado = ResultadoExamen.objects.select_for_update(of=("self",)).get(
-                            id=resultado_id,
-                            solicitud=solicitud
-                        )
-                        before_res = safe_model_snapshot(resultado)
-                        prev_muestra_id = resultado.muestra_id
-                        muestra_meta_aplica = False
-                        muestra_iniciar_proceso_id: int | None = None
-                        era_vacio = not (resultado.valor_obtenido or "").strip()
-
-                        if "muestra_id" in resultado_item:
-                            if resultado.validado_por_id or resultado.fecha_validacion:
-                                return Response(
-                                    {
-                                        "error": (
-                                            "No se puede cambiar la muestra de un resultado validado."
-                                        )
-                                    },
-                                    status=status.HTTP_400_BAD_REQUEST,
-                                )
-                            muestra_meta_aplica = True
-                            raw_muestra_id = resultado_item.get("muestra_id")
-                            if raw_muestra_id is None:
-                                resultado.muestra = None
-                            else:
-                                try:
-                                    muestra = Muestra.objects.select_for_update().get(
-                                        pk=raw_muestra_id,
-                                        solicitud_id=solicitud.pk,
-                                    )
-                                except Muestra.DoesNotExist:
-                                    return Response(
-                                        {
-                                            "error": (
-                                                "La muestra no existe o no pertenece a esta solicitud."
-                                            )
-                                        },
-                                        status=status.HTTP_400_BAD_REQUEST,
-                                    )
-                                if muestra.paciente_id != solicitud.paciente_id:
-                                    return Response(
-                                        {
-                                            "error": (
-                                                "La muestra no corresponde al paciente de la solicitud."
-                                            )
-                                        },
-                                        status=status.HTTP_400_BAD_REQUEST,
-                                    )
-                                try:
-                                    asegurar_muestra_lista_para_carga(
-                                        muestra,
-                                        actor=request.user,
-                                        view="SolicitudExamenViewSet.cargar_resultados",
-                                    )
-                                    assert_muestra_estado_carga_resultado(muestra)
-                                except ValueError as exc:
-                                    return Response(
-                                        {"error": str(exc)},
-                                        status=status.HTTP_400_BAD_REQUEST,
-                                    )
-                                resultado.muestra = muestra
-                                if muestra.estado in ("RECIBIDA", "CONSERVADA"):
-                                    muestra_iniciar_proceso_id = muestra.pk
-
-                        try:
-                            assert_tipo_examen_muestra_carga(
-                                tipo_examen=resultado.tipo_examen,
-                                resultado_muestra=resultado.muestra,
-                                muestra_id_en_payload="muestra_id" in resultado_item,
-                                raw_muestra_id=resultado_item.get("muestra_id"),
-                            )
-                        except ValueError as exc:
-                            return Response(
-                                {"error": str(exc)},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-
-                        try:
-                            audit_estructurado = aplicar_carga_estructurada(
-                                resultado,
-                                resultado.tipo_examen,
-                                resultado_item,
-                            )
-                            audit_estructurado["valor_presente"] = bool(
-                                (resultado.valor_obtenido or "").strip()
-                            )
-                        except ValidationError as exc:
-                            msg = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
-                            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
-                        # Resultado externo recibido por correo → estado RESULTADO_RECIBIDO
-                        if (
-                            (resultado.valor_obtenido or "").strip()
-                            and resultado.estado_derivacion
-                            in ("PENDIENTE_ENVIO", "ENVIADO")
-                        ):
-                            resultado.estado_derivacion = "RESULTADO_RECIBIDO"
-                        try:
-                            resultado.save()
-                        except ValidationError as exc:
-                            if hasattr(exc, "message_dict"):
-                                first = next(iter(exc.message_dict.values()))
-                                msg = first[0] if isinstance(first, list) else str(first)
-                            elif getattr(exc, "messages", None):
-                                msg = exc.messages[0]
-                            else:
-                                msg = str(exc)
-                            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
-
-                        # Primera carga con valor → egreso soft de reactivos (receta del ensayo).
-                        if era_vacio and (resultado.valor_obtenido or "").strip():
-                            try:
-                                from laboratorio.inventario_service import egresar_por_resultado
-
-                                inv = egresar_por_resultado(resultado, user=request.user)
-                                for w in inv.get("warnings") or []:
-                                    logger.warning("inventario (carga resultado %s): %s", resultado.pk, w)
-                            except Exception:
-                                logger.exception(
-                                    "inventario: fallo egreso por resultado %s",
-                                    resultado.pk,
-                                )
-
-                        muestra_transitioned_en_proceso = False
-                        muestra_estado_antes_proceso: str | None = None
-                        if muestra_iniciar_proceso_id is not None:
-                            muestra_estado_antes_proceso = (
-                                Muestra.objects.filter(pk=muestra_iniciar_proceso_id)
-                                .values_list("estado", flat=True)
-                                .first()
-                            )
-                            try:
-                                aplicar_iniciar_proceso(
-                                    muestra_iniciar_proceso_id,
-                                    actor=request.user,
-                                    view="SolicitudExamenViewSet.cargar_resultados",
-                                    resultado_id=resultado.pk,
-                                )
-                                muestra_transitioned_en_proceso = True
-                            except MuestraAccionError:
-                                pass
-                        meta_carga = {
-                            "action": "cargar_resultados",
-                            "accion": "cargar_resultados",
-                            "view": "SolicitudExamenViewSet.cargar_resultados",
-                            "resultado_id": resultado.pk,
-                            "solicitud_id": solicitud.pk,
-                            "numero_solicitud": solicitud.numero,
-                            "actor_id": getattr(request.user, "pk", None),
-                            **audit_estructurado,
-                        }
-                        if muestra_transitioned_en_proceso and muestra_estado_antes_proceso:
-                            meta_carga["muestra_estado_anterior"] = muestra_estado_antes_proceso
-                            meta_carga["muestra_estado_nuevo"] = "EN_PROCESO"
-                        if muestra_meta_aplica:
-                            meta_carga["muestra_id"] = resultado.muestra_id
-                        if prev_muestra_id != resultado.muestra_id and muestra_meta_aplica:
-                            meta_carga["accion"] = "resultado_muestra_asociar"
-                            meta_carga["muestra_anterior_id"] = prev_muestra_id
-                            meta_carga["muestra_nueva_id"] = resultado.muestra_id
-                        log_update(
-                            actor=request.user,
-                            entity=resultado,
-                            before=before_res,
-                            module="laboratorio",
-                            metadata=meta_carga,
-                        )
-                    except ResultadoExamen.DoesNotExist:
-                        logger.warning("ResultadoExamen inexistente para carga de resultados")
-
-                # Sync estado: completos → LISTO_PARA_VALIDAR; parcial → INFORMADO_PARCIAL.
-                solicitud.refresh_from_db()
-                try:
-                    sincronizar_estado_tras_carga(
-                        solicitud,
-                        actor=request.user,
-                        view="SolicitudExamenViewSet.cargar_resultados",
-                        informar_parcial=informar_parcial,
-                    )
-                except SolicitudCierreError as exc:
-                    return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-                solicitud.refresh_from_db()
-
-                log_update(
-                    actor=request.user,
-                    entity=solicitud,
-                    before=before_solicitud,
-                    module="laboratorio",
-                    metadata={
-                        "action": "cargar_resultados",
-                        "accion": "cargar_resultados",
-                        "view": "SolicitudExamenViewSet.cargar_resultados",
-                        "estado_anterior": before_solicitud.get("estado"),
-                        "estado_nuevo": solicitud.estado,
-                        "solicitud_id": solicitud.pk,
-                        "numero_solicitud": solicitud.numero,
-                    },
-                )
-
-                logger.debug(
-                    "cargar_resultados completado solicitud_id=%s",
-                    solicitud.pk,
-                )
-
-                serializer = self.get_serializer(solicitud)
-                return Response(serializer.data, status=status.HTTP_200_OK)
-
+            solicitud = cargar_resultados_solicitud(
+                solicitud_id=pk,
+                resultados_data=list(resultados_data or []),
+                actor=request.user,
+                informar_parcial=informar_parcial,
+                observaciones=request.data.get('observaciones') or '',
+                observaciones_en_payload='observaciones' in request.data,
+                orden_grupos_informe=request.data.get('orden_grupos_informe'),
+                orden_grupos_en_payload='orden_grupos_informe' in request.data,
+                view='SolicitudExamenViewSet.cargar_resultados',
+                fuente='MANUAL',
+            )
+        except SolicitudExamen.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except CargaResultadosError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except SolicitudEstadoTransitionError:
             return Response(
                 {'error': 'Transición de estado no permitida al cargar resultados.'},
@@ -898,6 +611,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'error': 'Error al cargar resultados.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+        serializer = self.get_serializer(solicitud)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'], url_path='orden-informe')
     def orden_informe(self, request, pk=None):
@@ -1061,9 +777,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         No usa IA; devuelve alertas estructuradas para revisión del laboratorio o médico.
         """
         solicitud = self.get_object()
-        from api.permissions import usuario_puede_ver_solicitud_lims
+        from api.permissions import usuario_puede_ver_resultados_lims
 
-        if not usuario_puede_ver_solicitud_lims(request.user, solicitud):
+        if not usuario_puede_ver_resultados_lims(request.user, solicitud):
             return Response(
                 {'detail': 'No tenés permiso para ver el análisis de esta orden.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -1085,9 +801,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         Query param ``n`` (default 10, máx. 20).
         """
         solicitud = self.get_object()
-        from api.permissions import usuario_puede_ver_solicitud_lims
+        from api.permissions import usuario_puede_ver_resultados_lims
 
-        if not usuario_puede_ver_solicitud_lims(request.user, solicitud):
+        if not usuario_puede_ver_resultados_lims(request.user, solicitud):
             return Response(
                 {'detail': 'No tenés permiso para ver el historial de esta orden.'},
                 status=status.HTTP_403_FORBIDDEN,

@@ -2,6 +2,7 @@ import {
   ESTADOS_MICRO_CERRADOS,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
+  canEditMicroCatalogos,
   canDownloadInformeClinicoPdf,
   canDownloadInformeLimsPdf,
   canDownloadInformeMicroPdf,
@@ -15,6 +16,7 @@ import {
   canSeeResultadosClinicos,
   canValidarOrdenLims,
   isMicroEstudioCerrado,
+  isSecretariaEntregaLab,
   canOpenDetalleOrdenLab,
   pathDetalleOrdenLab,
 } from './limsAccess';
@@ -77,6 +79,20 @@ describe('canMarcarMicroEstudioInformado', () => {
 
 const medUser: User = { ...labUser, id: 2, username: 'med', rol: 'MEDICO' };
 const pacUser: User = { ...labUser, id: 3, username: 'pac', rol: 'PACIENTE' };
+
+describe('canEditMicroCatalogos', () => {
+  it('allows laboratorio, bioquímico and admin', () => {
+    expect(canEditMicroCatalogos(labUser)).toBe(true);
+    expect(canEditMicroCatalogos(bioUser)).toBe(true);
+    expect(canEditMicroCatalogos({ ...labUser, id: 99, username: 'adm', rol: 'ADMIN' })).toBe(true);
+  });
+
+  it('blocks medico, paciente and anonymous', () => {
+    expect(canEditMicroCatalogos(medUser)).toBe(false);
+    expect(canEditMicroCatalogos(pacUser)).toBe(false);
+    expect(canEditMicroCatalogos(null)).toBe(false);
+  });
+});
 
 describe('micro LIMS role matrix', () => {
   it('lab can access and operate open study', () => {
@@ -142,6 +158,8 @@ describe('canOperateInformeMicro / canSeeInformeMicro / canDownloadInformeMicroP
     expect(canSeeInformeMicro(labUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(medUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(bioUser, 'BORRADOR')).toBe(true);
+    expect(canSeeInformeMicro(secUser, 'VALIDADO')).toBe(false);
+    expect(canSeeInformeMicro(secUser, 'BORRADOR')).toBe(false);
   });
 
   it('PDF: bio puede con emitido; lab/médico solo validado', () => {
@@ -190,12 +208,14 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
     expect(canSeeResultadosClinicos(adminUser, 'PENDIENTE')).toBe(true);
   });
 
-  it('médico/secretaría ven resultados en cualquier estado; PDF solo FINALIZADO', () => {
+  it('médico ve resultados en cualquier estado; secretaría nunca; PDF solo FINALIZADO', () => {
     expect(canSeeResultadosClinicos(medUser, 'EN_PROCESO')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'FINALIZADO')).toBe(true);
-    expect(canSeeResultadosClinicos(secUser, 'EN_PROCESO')).toBe(true);
-    expect(canSeeResultadosClinicos(secUser, 'FINALIZADO')).toBe(true);
+    expect(canSeeResultadosClinicos(secUser, 'EN_PROCESO')).toBe(false);
+    expect(canSeeResultadosClinicos(secUser, 'FINALIZADO')).toBe(false);
+    expect(isSecretariaEntregaLab(secUser)).toBe(true);
+    expect(isSecretariaEntregaLab(medUser)).toBe(false);
 
     expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(false);
     expect(canDownloadInformeClinicoPdf(medUser, 'FINALIZADO')).toBe(true);

@@ -21,7 +21,8 @@ export function canAccessLimsModule(user: User | null): boolean {
 
 /**
  * @deprecated El área LIMS ya no admite roles operativos limitados.
- * Secretaría/enfermería consultan resultados validados en /solicitudes.
+ * Secretaría/enfermería: secretaría solo entrega PDF validado en /solicitudes;
+ * enfermería consulta resultados validados en /solicitudes.
  */
 export function canAccessLimsOperativaLimitada(_user: User | null): boolean {
   return false;
@@ -93,14 +94,23 @@ export function pathDetalleOrdenLab(user: User | null, ordenId: number): string 
 }
 
 /**
- * Ver valores de resultados en portal clínico (cualquier estado).
- * PDF / envío del informe: solo FINALIZADO (`canDownloadInformeClinicoPdf`).
+ * Secretaría en Laboratorio: no ve resultados ni detalle técnico.
+ * Solo envía / descarga el PDF del informe cuando está validado.
+ */
+export function isSecretariaEntregaLab(user: User | null): boolean {
+  return normalizeRol(user) === 'secretaria';
+}
+
+/**
+ * Ver valores de resultados en portal clínico.
+ * Secretaría nunca ve valores: solo PDF / envío si FINALIZADO.
  */
 export function canSeeResultadosClinicos(
   user: User | null,
   _estado?: string | null
 ): boolean {
   if (!user) return false;
+  if (isSecretariaEntregaLab(user)) return false;
   if (canAccessLimsModule(user)) return true;
   return canAccessAnalisisClinicoLab(user);
 }
@@ -218,6 +228,7 @@ export function canSeeInformeMicro(
   estadoInforme: string | null | undefined
 ): boolean {
   if (!user) return false;
+  if (isSecretariaEntregaLab(user)) return false;
   if (canOperateInformeMicro(user)) return true;
   if (!canAccessMicrobiologiaLectura(user)) return false;
   return String(estadoInforme || '').toUpperCase() === 'VALIDADO';
@@ -294,11 +305,9 @@ export function canEditLimsCatalogos(user: User | null): boolean {
   return canOperateLims(user);
 }
 
-/** Catálogos micro: escritura solo admin. */
+/** Catálogos micro (medios, microorganismos, antibióticos): admin y operadores LIMS. */
 export function canEditMicroCatalogos(user: User | null): boolean {
-  if (!user) return false;
-  if (user.is_superuser) return true;
-  return normalizeRol(user) === 'admin';
+  return canOperateLims(user);
 }
 
 /** Inventario de laboratorio (admin, laboratorio, bioquímico). */

@@ -45,10 +45,10 @@ class EventoMuestraInline(admin.TabularInline):
 
 @admin.register(Muestra)
 class MuestraAdmin(admin.ModelAdmin):
-    list_display = ("codigo_barra", "solicitud", "paciente", "estado", "tipo_muestra", "created_at")
+    list_display = ("codigo_barra", "codigo_instrumento", "solicitud", "paciente", "estado", "tipo_muestra", "created_at")
     list_filter = ("estado",)
-    search_fields = ("codigo_barra", "solicitud__numero")
-    readonly_fields = ("codigo_barra", "created_at", "updated_at")
+    search_fields = ("codigo_barra", "codigo_instrumento", "solicitud__numero")
+    readonly_fields = ("codigo_barra", "codigo_instrumento", "created_at", "updated_at")
     inlines = [EventoMuestraInline]
 
 
@@ -62,18 +62,18 @@ class TipoMuestraAdmin(admin.ModelAdmin):
 
 @admin.register(TipoExamen)
 class TipoExamenAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'tipo_contenedor', 'metodo', 'unidad_default', 'precio', 'activo')
+    list_display = ('codigo', 'codigo_nbu', 'ub_nbu', 'nombre', 'abreviatura', 'tipo_muestra_requerida', 'tipo_contenedor', 'metodo', 'unidad_default', 'precio', 'activo')
     list_filter = ('activo', 'tipo_muestra_requerida', 'tipo_contenedor')
-    search_fields = ('codigo', 'nombre', 'abreviatura')
+    search_fields = ('codigo', 'codigo_nbu', 'nombre', 'abreviatura')
     autocomplete_fields = ('tipo_muestra_requerida', 'tipo_contenedor')
     ordering = ('nombre',)
 
 
 @admin.register(PanelExamen)
 class PanelExamenAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'get_tipos_examen_count', 'activo')
+    list_display = ('codigo', 'codigo_nbu', 'ub_nbu', 'nombre', 'get_tipos_examen_count', 'activo')
     list_filter = ('activo',)
-    search_fields = ('codigo', 'nombre')
+    search_fields = ('codigo', 'codigo_nbu', 'nombre')
     filter_horizontal = ('tipos_examen',)
     ordering = ('nombre',)
 
@@ -209,4 +209,27 @@ class ResultadoExamenAdmin(admin.ModelAdmin):
     )
 
 
+from .models_instrumentos import InterfazInstrumento, MapeoAnalitoInstrumento, MensajeInstrumento
+
+
+@admin.register(InterfazInstrumento)
+class InterfazInstrumentoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "driver", "equipo", "transporte", "activo", "ultimo_contacto")
+    list_filter = ("driver", "activo", "transporte")
+    search_fields = ("nombre", "equipo__codigo")
+
+
+@admin.register(MapeoAnalitoInstrumento)
+class MapeoAnalitoInstrumentoAdmin(admin.ModelAdmin):
+    list_display = ("interfaz", "codigo_instrumento", "tipo_examen", "activo")
+    list_filter = ("interfaz", "activo")
+    search_fields = ("codigo_instrumento", "tipo_examen__codigo")
+
+
+@admin.register(MensajeInstrumento)
+class MensajeInstrumentoAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "interfaz", "direccion", "estado", "sample_id", "detalle")
+    list_filter = ("estado", "direccion", "interfaz")
+    search_fields = ("sample_id", "detalle")
+    readonly_fields = ("created_at", "crudo")
 

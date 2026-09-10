@@ -22,6 +22,7 @@ import {
   canDownloadInformeClinicoPdf,
   canEnviarInformeLims,
   canSeeResultadosClinicos,
+  isSecretariaEntregaLab,
 } from '../utils/limsAccess';
 import { formatLimsPdfDownloadError } from '../utils/limsDownload';
 import {
@@ -122,6 +123,7 @@ const SolicitudLabDetalle: React.FC = () => {
   }
 
   const resultados = orden.resultados ?? [];
+  const modoEntrega = isSecretariaEntregaLab(currentUser);
   const puedeVerResultados = canSeeResultadosClinicos(currentUser, orden.estado);
   const puedePdf = canDownloadInformeClinicoPdf(currentUser, orden.estado);
   const puedeEnviar =
@@ -150,32 +152,64 @@ const SolicitudLabDetalle: React.FC = () => {
         )}
       </Box>
 
-      <Box sx={{ mb: 2 }}>
-        <OrdenLimsResumenPanel orden={orden} />
-      </Box>
+      {modoEntrega ? (
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="overline" color="text.secondary" display="block">
+            Paciente
+          </Typography>
+          <Typography fontWeight={600}>
+            {orden.paciente_nombre || `ID ${orden.paciente}`}
+          </Typography>
+          {orden.paciente_dni && (
+            <Typography variant="body2" color="text.secondary">
+              DNI {orden.paciente_dni}
+            </Typography>
+          )}
+          {orden.medico_display || orden.medico_interno_nombre ? (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Médico: {orden.medico_display || orden.medico_interno_nombre}
+            </Typography>
+          ) : null}
+          {!puedePdf && !puedeEnviar ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              El informe estará disponible para enviar o descargar cuando esté validado.
+            </Alert>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Informe validado. Podés enviarlo o descargar el PDF.
+            </Typography>
+          )}
+        </Paper>
+      ) : (
+        <>
+          <Box sx={{ mb: 2 }}>
+            <OrdenLimsResumenPanel orden={orden} />
+          </Box>
 
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Resultados
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Agrupados por perfil (hemograma, orina, ionograma, EAB, etc.)
-        </Typography>
-        {!puedeVerResultados ? (
-          <Alert severity="info">
-            No tiene permiso para ver los resultados de esta orden.
-          </Alert>
-        ) : resultados.length === 0 ? (
-          <Typography color="text.secondary">Resultados pendientes.</Typography>
-        ) : (
-          <ResultadosOrdenLista
-            resultados={resultados}
-            orden={orden}
-            observaciones={orden.observaciones}
-            modo="clinico"
-          />
-        )}
-      </Paper>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Resultados
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Agrupados por perfil (hemograma, orina, ionograma, EAB, etc.)
+            </Typography>
+            {!puedeVerResultados ? (
+              <Alert severity="info">
+                No tiene permiso para ver los resultados de esta orden.
+              </Alert>
+            ) : resultados.length === 0 ? (
+              <Typography color="text.secondary">Resultados pendientes.</Typography>
+            ) : (
+              <ResultadosOrdenLista
+                resultados={resultados}
+                orden={orden}
+                observaciones={orden.observaciones}
+                modo="clinico"
+              />
+            )}
+          </Paper>
+        </>
+      )}
 
       <EnviarInformeOrdenDialog
         open={openEnviarInforme}

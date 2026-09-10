@@ -77,8 +77,8 @@ const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           <strong>Etiqueta</strong>: PDF del cultivo (pasa a «Esperando recepción» si es la primera
-          vez). <strong>Talón</strong>: abre el diálogo de impresión del sistema (hoja común) con
-          paciente, DNI, lugar, médico y estudios — no cambia el estado del pedido.
+          vez). <strong>Talón</strong>: abre impresión en media hoja A4 (paciente, DNI, lugar,
+          médico y estudios) — no cambia el estado del pedido.
         </Typography>
         {busy ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>

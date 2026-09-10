@@ -63,8 +63,9 @@ class TipoMuestraMicrobiologia(models.Model):
 
 
 class MedioCultivo(models.Model):
-    """Catálogo de medios de cultivo (agar sangre, MacConkey, etc.). Catálogo maestro
-    administrativo; desactivar con ``activo=False`` en vez de borrar.
+    """Catálogo de medios de cultivo (agar sangre, MacConkey, etc.).
+
+    Escritura: admin y operadores LIMS. Desactivar con ``activo=False`` en vez de borrar.
     """
 
     codigo = models.CharField(max_length=30, unique=True, verbose_name="Código")
@@ -510,8 +511,8 @@ class LecturaCultivo(models.Model):
 class Microorganismo(models.Model):
     """Catálogo de microorganismos (LIMS Fase B3.2).
 
-    Catálogo administrativo: se desactiva con ``activo=False`` en vez de borrar.
-    Escritura limitada a admin/superuser; lectura amplia para roles LIMS.
+    Se desactiva con ``activo=False`` en vez de borrar.
+    Escritura: admin y operadores LIMS; lectura amplia para roles LIMS.
     """
 
     codigo = models.CharField(max_length=40, unique=True, verbose_name="Código")
@@ -764,8 +765,8 @@ class IdentificacionMicroorganismo(models.Model):
 class Antibiotico(models.Model):
     """Catálogo de antibióticos (LIMS Fase B3.3).
 
-    Catálogo administrativo: se desactiva con ``activo=False`` en vez de borrar.
-    Escritura limitada a admin/superuser; lectura amplia para roles LIMS.
+    Se desactiva con ``activo=False`` en vez de borrar.
+    Escritura: admin y operadores LIMS; lectura amplia para roles LIMS.
     """
 
     codigo = models.CharField(max_length=40, unique=True, verbose_name="Código")

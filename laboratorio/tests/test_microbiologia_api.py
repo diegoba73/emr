@@ -124,8 +124,36 @@ class TestMedioCultivoAPI(TestCase):
             ).exists()
         )
 
-    def test_laboratorio_no_crea_medio(self):
+    def test_laboratorio_crea_medio(self):
         self.client.force_authenticate(self.lab)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/medios/",
+                {"codigo": f"AGS{self.suf}", "nombre": f"X {self.suf}"},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                entity_type=MedioCultivo._meta.label,
+                action="CREATE",
+            ).exists()
+        )
+
+    def test_laboratorio_desactiva_medio(self):
+        self.client.force_authenticate(self.lab)
+        medio = MedioCultivo.objects.create(codigo=f"MD{self.suf}", nombre="Agar")
+        r = self.client.patch(
+            f"/api/lab/microbiologia/medios/{medio.pk}/",
+            {"activo": False},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        medio.refresh_from_db()
+        self.assertFalse(medio.activo)
+
+    def test_medico_no_crea_medio(self):
+        self.client.force_authenticate(self.med)
         r = self.client.post(
             "/api/lab/microbiologia/medios/",
             {"codigo": f"AGS{self.suf}", "nombre": f"X {self.suf}"},
@@ -422,6 +450,25 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         self.assertIn(data["id"], ids)
         r2 = self.client.get(f"/api/lab/microbiologia/estudios/{data['id']}/")
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
+
+    def test_secretaria_no_lista_detalle_tecnico_micro(self):
+        data = self._crear_estudio()
+        sec = User.objects.create_user(
+            username=f"sec_tec_{self.suf}",
+            email=f"stec{self.suf}@t.com",
+            password="x",
+            rol="secretaria",
+        )
+        self.client.force_authenticate(sec)
+        for path in (
+            "/api/lab/microbiologia/siembras/",
+            "/api/lab/microbiologia/lecturas/",
+            "/api/lab/microbiologia/aislados/",
+            "/api/lab/microbiologia/antibiogramas/",
+            "/api/lab/microbiologia/informes/",
+        ):
+            r = self.client.get(path)
+            self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, msg=path)
 
     def test_secretaria_no_inicia_estudio(self):
         data = self._crear_estudio()
@@ -840,14 +887,33 @@ class TestMicroorganismoAPI(TestCase):
             ).exists()
         )
 
-    def test_laboratorio_no_crea_microorganismo(self):
+    def test_laboratorio_crea_microorganismo(self):
         self.client.force_authenticate(self.lab)
-        r = self.client.post(
-            "/api/lab/microbiologia/microorganismos/",
-            {"codigo": f"X{self.suf}", "nombre": "X"},
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/microorganismos/",
+                {"codigo": f"X{self.suf}", "nombre": "X"},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                entity_type=Microorganismo._meta.label,
+                action="CREATE",
+            ).exists()
+        )
+
+    def test_laboratorio_desactiva_microorganismo(self):
+        self.client.force_authenticate(self.lab)
+        mo = Microorganismo.objects.create(codigo=f"MO{self.suf}", nombre="E. coli")
+        r = self.client.patch(
+            f"/api/lab/microbiologia/microorganismos/{mo.pk}/",
+            {"activo": False},
             format="json",
         )
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        mo.refresh_from_db()
+        self.assertFalse(mo.activo)
 
     def test_paciente_bloqueado(self):
         self.client.force_authenticate(self.pac_u)
@@ -1207,8 +1273,23 @@ class TestAntibioticoAPI(TestCase):
             ).exists()
         )
 
-    def test_laboratorio_no_crea_antibiotico(self):
+    def test_laboratorio_crea_antibiotico(self):
         self.client.force_authenticate(self.lab)
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                "/api/lab/microbiologia/antibioticos/",
+                {"codigo": f"AB{self.suf}", "nombre": "Ampicilina"},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                entity_type=Antibiotico._meta.label, action="CREATE"
+            ).exists()
+        )
+
+    def test_medico_no_crea_antibiotico(self):
+        self.client.force_authenticate(self.med)
         r = self.client.post(
             "/api/lab/microbiologia/antibioticos/",
             {"codigo": f"AB{self.suf}", "nombre": "Ampicilina"},
@@ -1241,7 +1322,11 @@ class TestAntibioticoAPI(TestCase):
         self.client.force_authenticate(self.admin)
         ab = Antibiotico.objects.create(codigo=f"AB{self.suf}", nombre="Ampi")
         r = self.client.delete(f"/api/lab/microbiologia/antibioticos/{ab.pk}/")
-        self.assertEqual(r.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertIn(
+            r.status_code,
+            (status.HTTP_403_FORBIDDEN, status.HTTP_405_METHOD_NOT_ALLOWED),
+        )
+        self.assertTrue(Antibiotico.objects.filter(pk=ab.pk).exists())
 
     def test_alias_laboratorio_antibioticos(self):
         self.client.force_authenticate(self.lab)
@@ -1673,6 +1758,31 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.assertEqual(r2.json().get("estado"), "VALIDADO")
         self.assertTrue(r2.json().get("contenido_visible"))
         self.assertIn("Texto final", r2.json().get("texto") or "")
+
+    def test_secretaria_no_lee_texto_informe_validado(self):
+        self.client.force_authenticate(self.bio)
+        r = self._post_informe(tipo="FINAL", texto="x")
+        iid = r.json()["id"]
+        self.client.post(
+            f"/api/lab/microbiologia/informes/{iid}/emitir/",
+            {"texto": "Texto confidencial secretaria."},
+            format="json",
+        )
+        self.client.force_authenticate(self.admin)
+        self.client.post(f"/api/lab/microbiologia/informes/{iid}/validar/", {}, format="json")
+        sec = User.objects.create_user(
+            username=f"sec_inf_{self.suf}",
+            email=f"sinf{self.suf}@t.com",
+            password="x",
+            rol="secretaria",
+        )
+        self.client.force_authenticate(sec)
+        r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")
+        self.assertIn(r2.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+        r_list = self.client.get(
+            f"/api/lab/microbiologia/informes/?estudio_id={self.ctx['estudio'].pk}"
+        )
+        self.assertEqual(r_list.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_medico_ajeno_no_lee(self):
         self.client.force_authenticate(self.bio)

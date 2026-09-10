@@ -52,6 +52,28 @@ class TipoExamen(models.Model):
     ]
 
     codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    codigo_nbu = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Código NBU",
+        help_text=(
+            "Código del Nomenclador Bioquímico Único (CUBRA). "
+            "Es distinto del código interno/IACA del campo «código»."
+        ),
+    )
+    ub_nbu = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="U.B. (NBU)",
+        help_text=(
+            "Unidades bioquímicas del nomenclador para ese código NBU. "
+            "No confundir con la unidad analítica (mg/dL, g/L, etc.)."
+        ),
+    )
     nombre = models.CharField(max_length=200, verbose_name="Nombre")
     abreviatura = models.CharField(
         max_length=20,
@@ -266,10 +288,36 @@ class TipoExamen(models.Model):
 
 class PanelExamen(models.Model):
     """
-    Grupo de análisis (ej: "Hepatograma", "Perfil Lipídico").
+    Perfil / panel de análisis (ej: Hemograma, Ionograma, Hepatograma).
+
+    Se pide como una unidad; los resultados se cargan en cada ``TipoExamen``
+    componente. El código NBU/U.B. del panel es el de facturación cuando se
+    solicita el perfil completo (no la suma de los componentes).
     """
     codigo = models.CharField(max_length=20, unique=True, verbose_name="Código")
     nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    codigo_nbu = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Código NBU",
+        help_text=(
+            "Código CUBRA del perfil (p. ej. Hemograma 660475, Ionograma sérico 660546). "
+            "Distinto del código interno PAN_*."
+        ),
+    )
+    ub_nbu = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="U.B. (NBU)",
+        help_text=(
+            "Unidades bioquímicas del nomenclador para el perfil. "
+            "No confundir con la unidad analítica de cada componente."
+        ),
+    )
     tipos_examen = models.ManyToManyField(
         TipoExamen,
         related_name='paneles',
@@ -740,6 +788,11 @@ from laboratorio.models_qc import (  # noqa: E402,F401
     ProductoControl,
     PuntoQC,
     TargetLoteControl,
+)
+from laboratorio.models_instrumentos import (  # noqa: E402,F401
+    InterfazInstrumento,
+    MapeoAnalitoInstrumento,
+    MensajeInstrumento,
 )
 from laboratorio.models_derivacion import (  # noqa: E402,F401
     EstadoDerivacion,

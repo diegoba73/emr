@@ -90,6 +90,30 @@ class TestTalonPedidoClinicoApi(TestCase):
             ).exists()
         )
 
+    def test_talon_dos_muestras_media_hoja_ok(self):
+        """Dos tubos → PDF válido (2 medias hojas en 1 página)."""
+        from laboratorio.talon_pedido_pdf import generar_talon_solicitud_pdf_bytes
+
+        crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=self.lab,
+            view="t",
+        )
+        crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=self.lab,
+            view="t",
+        )
+        pdf = generar_talon_solicitud_pdf_bytes(self.sol)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 500)
+
     def test_talon_pdf_medico_403(self):
         self.client.force_authenticate(self.med)
         r = self.client.get(f"/api/lab/solicitudes/{self.sol.pk}/talon-pdf/")

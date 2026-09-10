@@ -323,6 +323,12 @@ LIMS_LABEL_PRINTER_PROFILE = (
     or '3nstar_ldt114_203_40x23'
 )
 
+# Interfaz analizadores (CM260 / Sysmex XP-300). Deshabilitada por defecto.
+LIMS_INSTRUMENT_ENABLED = env_bool('LIMS_INSTRUMENT_ENABLED', default=False)
+LIMS_INSTRUMENT_TOKEN = os.getenv('LIMS_INSTRUMENT_TOKEN', '').strip()
+LIMS_INSTRUMENT_LISTEN_HOST = os.getenv('LIMS_INSTRUMENT_LISTEN_HOST', '0.0.0.0').strip() or '0.0.0.0'
+LIMS_INSTRUMENT_LISTEN_PORT = int(os.getenv('LIMS_INSTRUMENT_LISTEN_PORT', '5000') or '5000')
+
 # Configuración del modelo de usuario personalizado
 AUTH_USER_MODEL = 'usuarios.User'
 

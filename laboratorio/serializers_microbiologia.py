@@ -166,6 +166,18 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        from api.permissions import es_secretaria_entrega_lab
+
+        if es_secretaria_entrega_lab(user):
+            data["observaciones"] = ""
+            data["codigo_barra"] = None
+            data["muestra_codigo_barra"] = None
+        return data
+
     def get_paciente_nombre(self, obj):
         return format_apellido_nombre(getattr(obj, "paciente", None))
 

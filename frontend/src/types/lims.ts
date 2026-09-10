@@ -48,6 +48,10 @@ export interface LimsTipoMuestra {
 export interface LimsTipoExamen {
   id: number;
   codigo: string;
+  codigo_nbu?: string | null;
+  ub_nbu?: string | number | null;
+  /** Código PAN_* si este registro es un producto IACA compuesto (Hemograma, Ionograma…). */
+  panel_equivalente?: string | null;
   nombre: string;
   abreviatura?: string;
   tipo_muestra_requerida: number;
@@ -81,6 +85,8 @@ export interface LimsTipoExamen {
 /** Body POST/PATCH catálogo exámenes LIMS */
 export type TipoExamenLimsWriteBody = {
   codigo?: string;
+  codigo_nbu?: string | null;
+  ub_nbu?: string | number | null;
   nombre?: string;
   abreviatura?: string;
   tipo_muestra_requerida?: number;
@@ -118,6 +124,8 @@ export interface LimsPanelExamen {
   id: number;
   codigo: string;
   nombre: string;
+  codigo_nbu?: string | null;
+  ub_nbu?: string | number | null;
   tipos_examen?: number[];
   tipos_examen_nombres?: string[];
   tipos_examen_detalle?: LimsPanelExamenComponente[];

@@ -50,6 +50,7 @@ jest.mock('../../utils/limsAccess', () => ({
   canOperateMicroEstudioTecnico: () => true,
   canMarcarMicroEstudioInformado: () => false,
   isMicroEstudioCerrado: () => false,
+  isSecretariaEntregaLab: () => false,
 }));
 
 jest.mock('../../services/limsMicroApi', () => ({

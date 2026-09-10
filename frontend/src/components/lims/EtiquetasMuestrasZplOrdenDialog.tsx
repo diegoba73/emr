@@ -237,8 +237,8 @@ const EtiquetasMuestrasZplOrdenDialog: React.FC<EtiquetasMuestrasZplOrdenDialogP
       </DialogTitle>
       <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Etiqueta = impresora de tubos (ZPL). Talón = hoja común si la etiquetadora falla. Ninguna
-          opción recepciona la muestra.
+          Etiqueta = impresora de tubos (ZPL). Talón = media hoja A4 por muestra (impresora
+          común) si la etiquetadora falla. Ninguna opción recepciona la muestra.
         </Typography>
         {loadingList && rows.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
