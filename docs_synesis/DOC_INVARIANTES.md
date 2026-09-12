@@ -1,7 +1,7 @@
 # DOC_INVARIANTES — Invariantes del dominio (Fase C0)
 
 **Versión:** C0 — 18 de mayo de 2026  
-**Leyenda:** **[RECTOR]** | **[IMPLEMENTADO]** | **[OBJETIVO]** | **[DEUDA]** incumplimiento parcial conocido
+**Jerarquía:** `REGLAS_INDICE.md`. Leyenda: **[RECTOR]** | **[IMPLEMENTADO]** | **[OBJETIVO]** | **[DEUDA]** incumplimiento parcial conocido
 
 Cada invariante debe poder verificarse por tests, reglas de modelo o política documentada.
 
@@ -24,7 +24,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | ID | Invariante | Estado |
 |----|------------|--------|
 | U1 | Mínimo privilegio por rol. | **[RECTOR]** — **[DEUDA]** dispersión en `get_queryset` |
-| U2 | Rol `laboratorio` no valida órdenes LIMS (`validar` solo admin). | **[IMPLEMENTADO]** |
+| U2 | Rol `laboratorio` no valida órdenes LIMS (`validar`: admin / `bioquimico` / superuser; ver `reglas/usuarios-y-permisos.md`). | **[IMPLEMENTADO]** — el detalle de roles gana sobre el resumen «solo admin» de versiones C0 |
 | U3 | Rol `laboratorio` no sustituye clínico EMR en `IsEMRClinician`. | **[IMPLEMENTADO]** |
 | U4 | Cambios de permisos/rol sensibles auditables. | **[OBJETIVO]** parcial |
 | U5 | Ningún acceso a PHI fuera de permiso y contexto de objeto. | **[RECTOR]** — revisión continua |

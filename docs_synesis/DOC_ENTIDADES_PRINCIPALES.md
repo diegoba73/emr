@@ -1,7 +1,7 @@
 # DOC_ENTIDADES_PRINCIPALES — Entidades del modelo conceptual (Fase C0)
 
 **Versión:** C0 — 18 de mayo de 2026  
-**Leyenda:** **[RECTOR]** principio | **[IMPLEMENTADO]** en código | **[OBJETIVO]** futuro | **[DEUDA]** gap conocido
+**Jerarquía:** `REGLAS_INDICE.md`. Leyenda: **[RECTOR]** principio | **[IMPLEMENTADO]** en código | **[OBJETIVO]** futuro | **[DEUDA]** gap conocido
 
 **Fuentes operativas:** `DOC_MODELOS_DB.md`, `DOC_REGLAS_NEGOCIO.md`.
 

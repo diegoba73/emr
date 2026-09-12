@@ -42,6 +42,8 @@ El script hace backup de seguridad de la BD actual antes de restaurar.
 
 ## Variables de `.env`
 
+**Política de BD local (una sola fuente):** `docs_synesis/reglas/entorno-local.md`.
+
 Para desarrollo con Docker, el backend en contenedor usa `DB_HOST=db` (definido en `docker-compose.yml`).
 Si corrés comandos `manage.py` **desde tu terminal** contra la misma BD:
 
@@ -53,7 +55,7 @@ DB_NAME=synesis_db
 DB_PORT=5432
 ```
 
-**No uses** `synesis_user` ni Postgres nativo en WSL.
+Prohibiciones y restores: `docs_synesis/reglas/entorno-local.md`.
 
 ## Comandos útiles
 

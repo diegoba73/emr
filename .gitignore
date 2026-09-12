@@ -70,7 +70,10 @@ backup_documentacion/
 synesis_db
 DB_GAP_REPORT.txt
 _GEM_CONTEXT/
-.cursor/
+.cursor/*
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/synesis-reglas.mdc
 .cursor_setup.sh
 .cursorrules
 .vscode/

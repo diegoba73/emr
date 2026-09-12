@@ -99,18 +99,23 @@ Complemento existente: `docs_synesis/checklists/pre-commit-emr-lims.md` (dominio
 
 ## Fuentes de verdad del proyecto
 
-Ubicación canónica: **`docs_synesis/`** (no confundir con `_GEM_CONTEXT/`, que puede ser export histórico para Gem y **no sustituye** SoT salvo acuerdo explícito).
+Ubicación canónica: **`docs_synesis/`**. Índice rector (dónde están las reglas y quién gana): **`REGLAS_INDICE.md`**.
+
+No confundir con `_GEM_CONTEXT/` (export Gem; no sustituye SoT).
+
+La tabla siguiente es **catálogo**, no jerarquía. La jerarquía vive solo en `REGLAS_INDICE.md`.
 
 | Documento | Estado en repo (mayo 2026) | Mandato |
 |-----------|----------------------------|---------|
-| `DOC_REGLAS_NEGOCIO.md` | Presente | Comportamiento funcional, permisos, restricciones, estados y flujos |
+| `REGLAS_INDICE.md` | Presente | Índice rector: dónde están las reglas y quién gana |
+| `DOC_REGLAS_NEGOCIO.md` | Presente | Comportamiento funcional (reglas generales) |
 | `DOC_MODELOS_DB.md` | Presente | Tablas, relaciones, campos, constraints e integridad |
 | `DOC_API_ENDPOINTS.md` | Presente | Rutas, endpoints y contratos públicos |
 | `DOC_PERMISOS_AUDITORIA.md` | Presente | Roles, permisos, auditoría y seguridad funcional |
 | `DOC_BACKEND.md` | Presente | Arquitectura backend |
 | `DOC_FRONTEND.md` | Presente | Frontend **real en el repositorio** (ver sección Frontend) |
 | `DOC_TESTS.md` | Presente | Pruebas automatizadas existentes |
-| `DOC_MAPA_SISTEMA.md` | Presente | Visión de conjunto e índice de lectura |
+| `DOC_MAPA_SISTEMA.md` | Presente | Visión de conjunto |
 | `DOC_FLUJOS_EMR.md` | Presente | Flujos clínicos |
 | `DOC_FLUJOS_LIMS.md` | Presente | Flujos laboratorio |
 | `DOC_RIESGOS_DEUDA_TECNICA.md` | Presente | Riesgos y deuda |
@@ -130,19 +135,12 @@ Ante ausencia de un documento listado arriba: tratarlo como **“documento esper
 
 ## Jerarquía de decisión
 
-1. **Seguridad del paciente y datos sensibles** (confidencialidad, integridad, trazabilidad).
-2. **`DOC_PERMISOS_AUDITORIA.md`** y **`DOC_REGLAS_NEGOCIO.md`** para permisos, estados y flujos.
-3. **`DOC_MODELOS_DB.md`** para esquema e integridad.
-4. **`DOC_API_ENDPOINTS.md`** para contratos públicos.
-5. Código actual en el repositorio (si contradice docs, **reportar conflicto**; no “arreglar” en silencio).
-6. Pedido del usuario.
+Una sola jerarquía documental: **`REGLAS_INDICE.md`**. No repetir precedencia aquí.
 
-**Reglas operativas:**
+Si el código contradice un doc: gana el código; **reportar el conflicto**; no “arreglar” docs en silencio ni inventar reglas.
 
-- `DOC_REGLAS_NEGOCIO.md` manda sobre comportamiento funcional.
-- `DOC_MODELOS_DB.md` manda sobre tablas y constraints.
-- `DOC_API_ENDPOINTS.md` manda sobre rutas y contratos.
-- `DOC_PERMISOS_AUDITORIA.md` manda sobre roles, permisos y auditoría.
+**Reglas operativas (herramientas, no dominio):**
+
 - **Codex** no redefine reglas clínicas ni laboratoriales.
 - **Cursor** no inventa roles, estados, columnas, rutas ni endpoints.
 - **SYNESIS** valida conflictos entre pedido, documentación y código.

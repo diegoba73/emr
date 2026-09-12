@@ -29,9 +29,10 @@
 
 Definidos en `usuarios.User.ROL_CHOICES`:
 
-- `paciente`, `medico`, `secretaria`, `enfermeria`, **`laboratorio`**, `admin`
+- `paciente`, `medico`, `secretaria`, `enfermeria`, **`laboratorio`**, **`bioquimico`**, `admin`
 
 - **`laboratorio`:** operador del LIMS nativo (app `laboratorio`). **No** está en `IsEMRClinician` (personal clínico EMR general); el acceso LIMS va por `LimsCatalogReadPermission` / `LimsSolicitudExamenPermission` y `laboratorio/views.py`.
+- **`bioquimico`:** operador LIMS **más** `validar` (`ROLES_LIMS_VALIDAR`). Matriz: `reglas/usuarios-y-permisos.md`. No copiar aquí.
 
 **EMR (mayo 2026):** el string inexistente **`tecnico`** fue retirado de `IsEMRClinician` y de los filtros por rol en `api/views.py` (atenciones y registros asociados). No se añadió `laboratorio` a permisos EMR generales.
 

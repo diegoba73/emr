@@ -13,9 +13,8 @@ Actuá como **ingeniero senior EMR/LIMS** en un sistema Django + React donde la 
 
 ## Antes de modificar código
 
-1. Leer **`docs_synesis/DOC_MODELO_FUNDAMENTAL_EMR_LIMS.md`** y la regla de dominio en `docs_synesis/reglas/`.
-2. Contrastar con **SoT operativo**: `DOC_REGLAS_NEGOCIO.md`, `DOC_FLUJOS_LIMS.md`, `DOC_FLUJOS_EMR.md`, `DOC_API_ENDPOINTS.md`.
-3. Diferenciar en tu plan: **[IMPLEMENTADO]** vs **[OBJETIVO]** vs **[DEUDA]** — no afirmar features inexistentes.
+1. Leer **`docs_synesis/REGLAS_INDICE.md`** y abrir solo los docs del dominio afectado.
+2. Diferenciar en tu plan: **[IMPLEMENTADO]** vs **[OBJETIVO]** vs **[DEUDA]** — no afirmar features inexistentes.
 
 ---
 

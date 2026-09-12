@@ -1,7 +1,7 @@
 # DOC_ESTADOS_TRANSICIONES — Máquinas de estado conceptuales (Fase C0)
 
 **Versión:** C0 — 18 de mayo de 2026 · **actualización orden LIMS:** 6 de septiembre de 2026  
-**Leyenda:** **[IMPLEMENTADO]** valor en código hoy | **[OBJETIVO]** futuro | **[CONCEPTUAL]** etiqueta de negocio no 1:1 con campo
+**Jerarquía:** `REGLAS_INDICE.md`. Leyenda: **[IMPLEMENTADO]** valor en código hoy | **[OBJETIVO]** futuro | **[CONCEPTUAL]** etiqueta de negocio no 1:1 con campo
 
 **Detalle operativo LIMS:** `DOC_REGLAS_NEGOCIO.md`, `DOC_FLUJOS_LIMS.md`, `laboratorio/solicitud_estado.py`, `laboratorio/muestra_estado.py`, `laboratorio/microbiologia_estado.py`, `reglas/control-calidad.md`.
 

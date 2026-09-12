@@ -3,9 +3,9 @@
 **Fecha de generación:** 30 de abril de 2026  
 **Actualización (PROD-1 configuración producción):** 7 de junio de 2026  
 **Actualización (LIMS hardening, rol `laboratorio`):** 2 de mayo de 2026  
-**Actualización (DOC-01 — solicitudes genéricas vs LIMS nativo):** 24 de junio de 2026   Visión de conjunto del repositorio `emr` (proyecto Django `synesis`): EMR + LIMS embebido en backend, sin asumir despliegue productivo ni frontend en este repo.
+**Actualización (DOC-01 — solicitudes genéricas vs LIMS nativo):** 24 de junio de 2026   Visión de conjunto del repositorio `emr` (proyecto Django `synesis`): EMR + LIMS embebido en backend, SPA en `frontend/`.
 
-**Fuentes revisadas:** `synesis/settings.py`, `synesis/urls.py`, `api/urls.py`, apps listadas en `INSTALLED_APPS`, estructura de carpetas, ausencia de `package.json` / `frontend/`.
+**Fuentes revisadas:** `synesis/settings.py`, `synesis/urls.py`, `api/urls.py`, apps listadas en `INSTALLED_APPS`, estructura de carpetas, `frontend/` (SPA; detalle en `DOC_FRONTEND.md`).
 
 ---
 
@@ -44,7 +44,7 @@ Backend **Django 5.x** con **Django REST Framework** que modela:
 ## Arquitectura general
 
 ```
-Cliente (React esperado en :3000 según CORS; no presente en repo)
+Cliente (React en frontend/, :3000 según CORS)
     → HTTP /api/... (session + JWT + token legacy)
     → Django + DRF + django-filter
     → PostgreSQL (config por env)
@@ -64,7 +64,7 @@ Cliente (React esperado en :3000 según CORS; no presente en repo)
 
 ## Frontend
 
-**No hay aplicación frontend en el repositorio** (sin `package.json`, sin `frontend/src`). Solo scripts de prueba en `backup_documentacion/*.js` que consumen la API. Ver `DOC_FRONTEND.md`.
+La SPA React/TypeScript vive en `frontend/` del monorepo. Contratos de UI, rutas y guards: **`DOC_FRONTEND.md`**. Los permisos de la SPA no sustituyen al backend (`DOC_PERMISOS_AUDITORIA.md`).
 
 ---
 
@@ -101,47 +101,20 @@ Ver `requirements.txt`: Django ≥5, DRF, cors-headers, django-filter, psycopg2-
 
 ---
 
-## Documentos generados (SYNESIS)
+## Documentos de reglas (SYNESIS)
 
-En `docs_synesis/`:
+Índice rector (dónde están las reglas y quién gana): **`REGLAS_INDICE.md`**.
 
-1. `DOC_MAPA_SISTEMA.md` (este archivo)
-2. `DOC_REGLAS_NEGOCIO.md`
-3. `DOC_MODELOS_DB.md`
-4. `DOC_API_ENDPOINTS.md`
-5. `DOC_BACKEND.md`
-6. `DOC_FRONTEND.md`
-7. `DOC_FLUJOS_EMR.md`
-8. `DOC_FLUJOS_LIMS.md`
-9. `DOC_PERMISOS_AUDITORIA.md`
-10. `DOC_TESTS.md`
-11. `DOC_RIESGOS_DEUDA_TECNICA.md`
+Este archivo es el mapa del sistema, no la jerarquía de reglas. No duplicar listas normativas aquí.
 
 ---
 
 ## Cómo debe usar SYNESIS esta documentación
 
-- Tratar estos archivos como **fuente de verdad del código presente**, no del producto desplegado.
-- Antes de diseñar cambios: `DOC_MAPA_SISTEMA` → `DOC_REGLAS_NEGOCIO` → módulo específico (`DOC_FLUJOS_*`, `DOC_MODELOS_DB`, `DOC_API_ENDPOINTS`).
-- Para seguridad y trazabilidad: `DOC_PERMISOS_AUDITORIA.md`.
-- Para riesgos y deuda: `DOC_RIESGOS_DEUDA_TECNICA.md`.
+- Tratar `docs_synesis/` como **fuente de verdad del código presente**, no del producto desplegado.
+- Antes de diseñar o cambiar comportamiento: `REGLAS_INDICE.md` → solo los docs del dominio afectado.
 - Para coordinar SYNESIS, Cursor y Codex: `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md`.
-
----
-
-## Orden recomendado de lectura
-
-1. `DOC_MAPA_SISTEMA.md`
-2. `DOC_REGLAS_NEGOCIO.md`
-3. `DOC_MODELOS_DB.md`
-4. `DOC_API_ENDPOINTS.md`
-5. `DOC_BACKEND.md`
-6. `DOC_FLUJOS_EMR.md` y `DOC_FLUJOS_LIMS.md`
-7. `DOC_PERMISOS_AUDITORIA.md`
-8. `DOC_FRONTEND.md`
-9. `DOC_TESTS.md`
-10. `DOC_RIESGOS_DEUDA_TECNICA.md`
-11. `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md` (proceso IA: SYNESIS → Cursor → Codex → validación → commit)
+- Deuda y riesgos: `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 ---
 

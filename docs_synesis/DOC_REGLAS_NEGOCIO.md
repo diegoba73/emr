@@ -9,7 +9,9 @@
 **Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
 **Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026
 
-**Alcance:** Reglas inferidas de modelos, serializers, vistas y permisos **existentes**; sin extrapolar funcionalidades no implementadas.
+**Jerarquía:** `REGLAS_INDICE.md`. Este archivo son **reglas generales**. Si hay conflicto, gana el código y después `reglas/` del dominio.
+
+**Estados de orden LIMS:** la máquina vigente está en `DOC_ESTADOS_TRANSICIONES.md` (sep 2026: `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` → `FINALIZADO`). Donde este documento aún nombre `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO` o `CANCELADO` como estados de `SolicitudExamen`, tratarlo como **legado Fase A** hasta alinear el texto; no inventar transiciones.
 
 **Fuentes revisadas:** `api/permissions.py`, `pacientes/views.py`, `turnos/views.py`, `turnos/services.py`, `turnos/models.py`, `historias_clinicas/*`, `laboratorio/*` (incl. `laboratorio/solicitud_estado.py`), `solicitudes/*`, `archivos_medicos/views.py`, `usuarios/models.py`.
 

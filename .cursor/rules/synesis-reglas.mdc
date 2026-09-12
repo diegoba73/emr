@@ -1,0 +1,12 @@
+---
+description: Puntero a la jerarquía canónica de reglas SYNESIS (docs_synesis)
+alwaysApply: true
+---
+
+# Reglas SYNESIS — puntero
+
+Fuente única: `docs_synesis/REGLAS_INDICE.md`.
+Abrí ese índice y solo los docs del dominio que toques.
+**No** definas reglas en este archivo ni en otros `.mdc`.
+
+Punteros de operación: `reglas/entorno-local.md`, `reglas/produccion-servidor.md`, `DOC_PROTOCOLO_TRABAJO_ASISTENTE.md` §5.7 (checkpoint) y §5.9 (gem).

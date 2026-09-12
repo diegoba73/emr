@@ -3,13 +3,7 @@
 **Versión:** C0 — 18 de mayo de 2026  
 **Estado:** Documento rector complementario. **No reemplaza** los `DOC_*` operativos existentes; los integra y orienta evolución futura.
 
-**Jerarquía documental:**
-
-| Nivel | Documentos |
-|-------|------------|
-| **SoT operativo (código + hechos)** | `DOC_REGLAS_NEGOCIO.md`, `DOC_MODELOS_DB.md`, `DOC_API_ENDPOINTS.md`, `DOC_FLUJOS_EMR.md`, `DOC_FLUJOS_LIMS.md`, `DOC_PERMISOS_AUDITORIA.md` |
-| **Constitución (este bloque C0)** | Este archivo + `DOC_ENTIDADES_PRINCIPALES.md`, `DOC_ESTADOS_TRANSICIONES.md`, `DOC_INVARIANTES.md`, `reglas/*` |
-| **Arquitectura complementaria** | `docs/` (roadmaps, auditorías) |
+**Jerarquía documental:** una sola, en `REGLAS_INDICE.md`. Este archivo es constitución (principios); no redefine precedencia ni lista normativa.
 
 ---
 

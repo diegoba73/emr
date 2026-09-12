@@ -165,6 +165,7 @@ def package_definitions() -> list[tuple[str, list[str]]]:
         (
             "SYNESIS_00_MAPA_Y_PRIORIDADES.md",
             [
+                "docs_synesis/REGLAS_INDICE.md",
                 "docs_synesis/DOC_MAPA_SISTEMA.md",
                 "docs_synesis/DOC_ESTADO_ACTUAL_VERIFICADO.md",
             ],
@@ -209,6 +210,7 @@ def package_definitions() -> list[tuple[str, list[str]]]:
             [
                 "docs_synesis/DOC_TESTS.md",
                 "docs_synesis/DOC_RIESGOS_DEUDA_TECNICA.md",
+                "docs_synesis/DOC_BACKUP_RESTAURACION.md",
                 # Roadmap LIMS / deuda / próximas fases (no obsoletos)
                 "docs_synesis/DOC_BLUEPRINT_LIMS_FASE_B.md",
                 "docs_synesis/INFORME_PROXIMAS_FASES_LIMS.md",
@@ -242,6 +244,17 @@ def assigned_sources_from_packages(
     for _, source_paths in packages:
         assigned.update(source_paths)
     return assigned
+
+
+def compute_duplicate_assignments(
+    packages: list[tuple[str, list[str]]],
+) -> dict[str, list[str]]:
+    """Source path → list of consolidated files if assigned more than once."""
+    owners: dict[str, list[str]] = {}
+    for output_name, source_paths in packages:
+        for source_rel in source_paths:
+            owners.setdefault(source_rel, []).append(output_name)
+    return {path: files for path, files in sorted(owners.items()) if len(files) > 1}
 
 
 def compute_unassigned_sources(
@@ -300,6 +313,7 @@ def build_readme(manifest: dict[str, Any]) -> str:
         "|-------|-------------|",
         "| `all_missing_sources` | Rutas **esperadas** por el mapeo del script pero **no encontradas** en disco (`missing`). |",
         "| `unassigned_sources` | Archivos `.md` **existentes** bajo `docs_synesis/` que **no** fueron incluidos en ningún `SYNESIS_*.md`. |",
+        "| `duplicate_assignments` | Fuentes canónicas incluidas en **más de un** `SYNESIS_*.md`. |",
         "",
         "Un archivo puede existir y no estar en `missing` si nunca fue listado en el mapeo; ",
         "eso aparece en `unassigned_sources`. Objetivo: lista vacía = cobertura completa.",
@@ -370,6 +384,22 @@ def build_readme(manifest: dict[str, Any]) -> str:
             lines.append(f"- `{path}`")
     else:
         lines.append("- _(ninguna — cobertura completa)_")
+
+    dup = manifest.get("duplicate_assignments") or {}
+    lines.extend(
+        [
+            "",
+            "### Fuentes duplicadas (`duplicate_assignments`)",
+            "",
+            "Misma fuente canónica incluida en más de un `SYNESIS_*.md`.",
+            "",
+        ]
+    )
+    if dup:
+        for path, files in dup.items():
+            lines.append(f"- `{path}` — {', '.join(files)}")
+    else:
+        lines.append("- _(ninguna)_")
 
     if warnings:
         lines.extend(["", "## Advertencias", ""])
@@ -446,6 +476,20 @@ def build_manifest_md(manifest: dict[str, Any]) -> str:
     else:
         lines.append("- _(ninguna — cobertura completa)_")
 
+    dup = manifest.get("duplicate_assignments") or {}
+    lines.extend(
+        [
+            "",
+            "### `duplicate_assignments` — fuente en más de un consolidado",
+            "",
+        ]
+    )
+    if dup:
+        for path, files in dup.items():
+            lines.append(f"- `{path}` — {', '.join(files)}")
+    else:
+        lines.append("- _(ninguna)_")
+
     excluded = manifest.get("explicit_exclude_from_coverage", [])
     if excluded:
         lines.extend(["", "### Excluidos del escaneo (patrón documentado)", ""])
@@ -509,6 +553,14 @@ def main() -> int:
             + ", ".join(unassigned_sources)
         )
 
+    duplicate_assignments = compute_duplicate_assignments(packages)
+    if duplicate_assignments:
+        dup_txt = "; ".join(
+            f"{path} → {', '.join(files)}"
+            for path, files in duplicate_assignments.items()
+        )
+        warnings.append(f"DUPLICADOS: fuentes en más de un consolidado: {dup_txt}")
+
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     manifest: dict[str, Any] = {
         "generated_at": generated_at,
@@ -518,6 +570,7 @@ def main() -> int:
         "consolidated_files": consolidated_files,
         "all_missing_sources": sorted(all_missing),
         "unassigned_sources": unassigned_sources,
+        "duplicate_assignments": duplicate_assignments,
         "explicit_exclude_from_coverage": [
             {"path": path, "reason": "documented opt-out in script"}
             for path in sorted(EXPLICIT_EXCLUDE_FROM_COVERAGE)
@@ -527,7 +580,12 @@ def main() -> int:
             "assigned_unique": len(assigned_sources_from_packages(packages)),
             "missing_count": len(all_missing),
             "unassigned_count": len(unassigned_sources),
-            "complete": len(unassigned_sources) == 0 and len(all_missing) == 0,
+            "duplicate_assignment_count": len(duplicate_assignments),
+            "complete": (
+                len(unassigned_sources) == 0
+                and len(all_missing) == 0
+                and len(duplicate_assignments) == 0
+            ),
         },
         "warnings": warnings,
         "totals": {
@@ -537,6 +595,7 @@ def main() -> int:
             ),
             "sources_missing": len(all_missing),
             "sources_unassigned": len(unassigned_sources),
+            "sources_duplicated": len(duplicate_assignments),
             "total_output_bytes": sum(e["size_bytes"] for e in consolidated_files),
         },
     }
@@ -597,6 +656,14 @@ def main() -> int:
             print(f"  - {path}")
     else:
         print("  (ninguna — cobertura completa)")
+
+    print()
+    print("Fuentes duplicadas (duplicate_assignments):")
+    if duplicate_assignments:
+        for path, files in duplicate_assignments.items():
+            print(f"  - {path}: {', '.join(files)}")
+    else:
+        print("  (ninguna)")
 
     if warnings:
         print()

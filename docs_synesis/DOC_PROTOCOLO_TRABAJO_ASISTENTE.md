@@ -18,13 +18,14 @@ Unificar **cómo pedir**, **cómo revisar** y **cuándo avanzar** para que cada 
 
 | Documento | Cuándo usarlo |
 |-----------|---------------|
-| `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md` | Flujo oficial, roles, plantillas Cursor/Codex, jerarquía SoT |
-| `DOC_MAPA_SISTEMA.md` | Índice del sistema y orden de lectura |
+| `REGLAS_INDICE.md` | **Índice rector** de reglas (dónde están y quién gana). No duplicar jerarquías. |
+| `DOC_TRABAJO_SYNESIS_CURSOR_CODEX.md` | Flujo oficial, roles, plantillas Cursor/Codex |
+| `DOC_MAPA_SISTEMA.md` | Visión de conjunto del sistema |
 | `checklists/pre-commit-emr-lims.md` | Antes de commit (dominio clínico/LIMS) |
 | `DOC_ESTADO_ACTUAL_VERIFICADO.md` | Qué está probado en local/CI hoy |
 | `prompts/prompt-maestro-cursor.md` | Referencia legacy para Cursor (alinear con SoT) |
 
-**SoT canónica:** `docs_synesis/DOC_*.md` y `docs_synesis/reglas/*.md`. El código prevalece si contradice la doc; el conflicto debe reportarse, no ignorarse.
+**SoT canónica:** `docs_synesis/REGLAS_INDICE.md`. Precedencia y lista de archivos ahí; no repetirlas en este protocolo.
 
 ---
 
@@ -308,14 +309,18 @@ npm test -- --watchAll=false limsMicroApi.test.ts MicrobiologiaEstudioDetalle.te
 
 ### 5.7 Checkpoints (snapshots git)
 
-Solo cuando el usuario pide **checkpoint** explícitamente:
+Solo cuando el usuario pide **checkpoint** explícitamente. Tags: `checkpoint-1`, `checkpoint-2`, … (`git tag -l 'checkpoint-*' | sort -V`).
 
 ```bash
 bash scripts/checkpoint.sh checkpoint   # commit + tag incremental
 bash scripts/checkpoint.sh last         # último checkpoint
-bash scripts/checkpoint.sh volver       # reset al último checkpoint (destructivo)
+bash scripts/checkpoint.sh volver       # reset --hard al último checkpoint (destructivo)
 bash scripts/checkpoint.sh listar       # listado de tags
 ```
+
+- Si no hay nada que commitear, el script no crea tag (esperado).
+- Si aún no existen tags `checkpoint-*`, decirlo con claridad (puede haber otros tags ajenos).
+- `volver` advierte si hay riesgo de perder cambios no guardados en otro commit.
 
 ### 5.8 Qué reportar al asistente
 
@@ -324,6 +329,22 @@ Copiar en el reporte de avance:
 - Comando exacto ejecutado
 - Pass/fail y conteo (ej. `328 passed`)
 - Si no se corrieron tests: **motivo** (alcance solo docs, bloqueo de entorno, etc.)
+
+### 5.9 Actualizar contexto Gem (ICPL)
+
+Solo con disparadores: «Actualiza los datos para Gem», «actualiza gem», «update gem context».
+
+No resumir: la IA Arquitecta necesita código casi textual.
+
+1. Verificar o crear `_GEM_CONTEXT/`.
+2. Escanear el proyecto.
+3. **BD:** todos los `models.py` en `apps/` → `_GEM_CONTEXT/DOC_MODELOS_DB.md` (clases casi textuales: campos, `choices`, `properties`, `save`/`clean`/`Meta`; separar con `# === APP: [Ruta] ===`).
+4. **Frontend:** `frontend/src` → `_GEM_CONTEXT/DOC_FRONTEND.md` (`package.json`, árbol, store/`DataContext`, componentes y props).
+5. **Reglas:** `serializers.py` / `views.py` / `services.py` / `permissions.py` → `_GEM_CONTEXT/DOC_REGLAS_NEGOCIO.md` (validaciones `validate_`, permisos, cambios de estado).
+
+Respuesta única: `✅ Documentación ACTUALIZADA y DETALLADA en carpeta /_GEM_CONTEXT. Lista para subir al Gem.`
+
+`_GEM_CONTEXT/` **no** sustituye `docs_synesis/`.
 
 ---
 
@@ -528,7 +549,7 @@ Copiar al cerrar una sesión o al pedir revisión al asistente.
 | Decidir | Usuario + asistente | Go/no-go §7 |
 | Commit | Usuario (explícito) | Checklist pre-commit |
 
-**Prioridad absoluta:** seguridad del paciente y datos sensibles > SoT en `docs_synesis/` > código actual > pedido del usuario (si el pedido contradice lo anterior, prevalece la **alternativa segura** o decisión explícita).
+**Precedencia de reglas:** `REGLAS_INDICE.md`. No violar PHI, mezclar bases locales ni tocar la otra app del servidor (`reglas/entorno-local.md`, `reglas/produccion-servidor.md`). Si el pedido contradice eso, alternativa segura o confirmación explícita.
 
 ---
 
@@ -536,4 +557,5 @@ Copiar al cerrar una sesión o al pedir revisión al asistente.
 
 | Versión | Fecha | Cambio |
 |---------|-------|--------|
+| 1.1 | 2026-09-12 | Índice rector `REGLAS_INDICE.md`; Gem §5.9; checkpoints alineados al script |
 | 1.0 | 2026-06-21 | Creación inicial |
