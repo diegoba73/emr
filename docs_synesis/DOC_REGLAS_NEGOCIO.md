@@ -7,11 +7,12 @@
 **Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
 **Actualización (Fase B3.3 — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
-**Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026
+**Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026  
+**Actualización (alineación FSM/permisos orden LIMS vs código):** 12 de septiembre de 2026
 
 **Jerarquía:** `REGLAS_INDICE.md`. Este archivo son **reglas generales**. Si hay conflicto, gana el código y después `reglas/` del dominio.
 
-**Estados de orden LIMS:** la máquina vigente está en `DOC_ESTADOS_TRANSICIONES.md` (sep 2026: `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` → `FINALIZADO`). Donde este documento aún nombre `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO` o `CANCELADO` como estados de `SolicitudExamen`, tratarlo como **legado Fase A** hasta alinear el texto; no inventar transiciones.
+**Estados de orden LIMS [VIGENTE]:** `PENDIENTE` → `EN_PROCESO` → (`INFORMADO_PARCIAL` opcional) → `LISTO_PARA_VALIDAR` → `FINALIZADO`. Fuente: `laboratorio/solicitud_estado.py`, `DOC_ESTADOS_TRANSICIONES.md`. `[HISTÓRICO / Fase A]` en la **orden**: `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO` (remapeados: `TOMA_MUESTRA`→`EN_PROCESO`; los otros tres→`FINALIZADO`). Esos nombres pueden seguir vigentes en **otras** entidades (muestra, micro, estudios complementarios).
 
 **Fuentes revisadas:** `api/permissions.py`, `pacientes/views.py`, `turnos/views.py`, `turnos/services.py`, `turnos/models.py`, `historias_clinicas/*`, `laboratorio/*` (incl. `laboratorio/solicitud_estado.py`), `solicitudes/*`, `archivos_medicos/views.py`, `usuarios/models.py`.
 
@@ -33,7 +34,7 @@ Ver `INSTALLED_APPS` en `synesis/settings.py` y `DOC_BACKEND.md`. Incluye: `core
 
 En `usuarios.User.rol`: **paciente**, **medico**, **secretaria**, **enfermeria**, **laboratorio**, **bioquimico**, **admin**.
 
-- **`laboratorio`:** operador del LIMS nativo (app `laboratorio`): órdenes, toma de muestra (marca de estado), carga de resultados, cancelación, marcar entregado, etiquetas; **no** puede validar órdenes. La validación corresponde a **admin** / **bioquimico** (`ROLES_LIMS_VALIDAR`) / superuser. **No** es rol “técnico” legacy ni sustituye enfermería clínica EMR.
+- **`laboratorio`:** operador del LIMS nativo (`ROLES_LIMS_WRITE` con `admin` y `bioquimico`): órdenes, toma/etiquetas, carga de resultados. **No** valida ni finaliza órdenes (`is_staff` no alcanza). La validación es `ROLES_LIMS_VALIDAR`: **admin** / **bioquimico** / **superuser**. **No** es rol “técnico” legacy ni sustituye enfermería clínica EMR.
 - **`bioquimico`:** misma operación que laboratorio **más** validar/liberar (`LISTO_PARA_VALIDAR` → `FINALIZADO`).
 
 Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`Secretarias`, `Médicos`, `Pacientes`).
@@ -54,7 +55,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 1. **Paciente** buscado/creado → **Turno** asignado a recurso/médico → **Atención** iniciada (POST con turno) → registros clínicos / documentos.
 2. **Consulta** en historia clínica (posible vínculo a turno) → diagnósticos, tratamientos, prescripciones.
-3. **Orden de laboratorio** creada en `PENDIENTE` → filas `ResultadoExamen` vacías → opcional `tomar-muestra` (`TOMA_MUESTRA`) → `cargar-resultados` (`EN_PROCESO`) → `validar` (`VALIDADO`, admin) → `marcar-entregado` (`ENTREGADO`) o `cancelar` (`CANCELADO`) desde estados no finales según `DOC_FLUJOS_LIMS.md`.
+3. **Orden de laboratorio [VIGENTE]:** creada en `PENDIENTE` → filas `ResultadoExamen` vacías → toma/etiquetas (`tomar-muestra`; con tubos la orden puede seguir `PENDIENTE` hasta escanear `TOMADA`) → `EN_PROCESO` → carga (`INFORMADO_PARCIAL` si incompleto; `LISTO_PARA_VALIDAR` si completo) → `POST …/validar/` o `…/finalizar/` (`FINALIZADO`; admin / bioquímico / superuser). No hay `cancelar` ni `marcar-entregado` de orden. Detalle: `DOC_FLUJOS_LIMS.md`.
 4. **Solicitud genérica EMR** (`solicitudes.Solicitud`): creación/lectura según `SolicitudPermission` (PERM-01). **No** hay auto-envío a LIMS externo en `save()` ni en `perform_create`. El envío/sincronización externa ocurre **solo** vía `POST …/enviar_lims/` o `POST …/sincronizar_lims/` (**admin/superuser**), auditado sin PHI en metadata. La variable de entorno histórica `LIMS_AUTO_SEND` quedó **sin efecto** (legacy/deshabilitada desde `85636c2`).
 
 ---
@@ -126,9 +127,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de órdenes (laboratorio)
 
 - `SolicitudExamen`: origen EMR/guardia/externo papel; médico interno o nombre externo; generación de número LAB-YYYY-…
-- **`estado`:** no se modifica por `PATCH`/`PUT` del CRUD estándar (`SolicitudExamenSerializer`: `estado` read-only). Los cambios son solo por acciones `POST` dedicadas (`tomar-muestra`, `cargar-resultados`, `validar`, `cancelar`, `marcar-entregado`).
-- No cargar resultados si estado `CANCELADO`, `VALIDADO` o `ENTREGADO` (vistas + integridad en modelo resultado).
-- **Cancelar:** no borra ni altera filas `ResultadoExamen`; solo pasa la solicitud a `CANCELADO` (permitido aunque existan resultados vacíos autogenerados).
+- **`estado`:** no se modifica por `PATCH`/`PUT` del CRUD (`SolicitudExamenSerializer`: `estado` read-only). Cambios vía acciones `POST` dedicadas (`tomar-muestra`, `cargar-resultados`, `validar` / alias `finalizar`) y servicios de muestra que coordinan `PENDIENTE`→`EN_PROCESO`. **[HISTÓRICO]** `cancelar` y `marcar-entregado` de orden: 404.
+- No cargar ni mutar resultados de una orden **`FINALIZADO`**. Estados cargables: `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`.
+- **[HISTÓRICO]** no hay action pública de cancelar la **orden**; `CANCELADO` no es estado de `SolicitudExamen`. Cancelar **muestra** o **estudio micro** son entidades distintas.
 - Al crear: M2M a tipos y paneles; se generan `ResultadoExamen` por tipo (panel expande sin duplicar tipo).
 
 ---
@@ -137,7 +138,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 - Catálogo `TipoMuestra`; cada `TipoExamen` exige un tipo de muestra.
 - **Fase B1:** entidad **`Muestra`** vinculada a `SolicitudExamen` y `Paciente` (redundante validada en `Muestra.clean`); eventos y transiciones en `laboratorio/muestra_estado.py`.
-- La acción de orden `tomar-muestra` (Fase A) sigue siendo **marcador** `PENDIENTE` → `TOMA_MUESTRA`; la toma física es la transaccional **Muestra** (`PENDIENTE_TOMA` → …).
+- **`tomar-muestra` [VIGENTE]:** genera tubos (`Muestra` en `PENDIENTE_TOMA`). Con tubos reales la **orden** puede permanecer `PENDIENTE` hasta que un tubo se registre/escanee como `TOMADA` (`PENDIENTE`→`EN_PROCESO`). Sin tubos (legacy) puede avanzar en el mismo `POST`. La toma física es `muestra_estado.py` (`PENDIENTE_TOMA` → `TOMADA` → …). **[HISTÓRICO]** el marcador de orden `TOMA_MUESTRA` ya no existe.
 
 ---
 
@@ -157,9 +158,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **Fase B2-A — auditoría:** `AuditEvent` de resultados y muestras (B1/B2) **no** incluye `codigo_barra` en metadata; `safe_model_snapshot(ResultadoExamen)` redacta valores clínicos (`valor_obtenido`, `valor_numerico`, `unidad`, rangos snapshot, `observaciones`). La API de lectura autorizada sigue exponiendo valores clínicos.
 - **Fase B3-audit [IMPLEMENTADO] — auditoría microbiología:** metadata micro usa solo IDs técnicos y flags booleanos (`*_presente`); **sin** `codigo_barra`, CIM, diámetro, interpretación S/I/R ni textos/observaciones completas. `safe_model_snapshot` redacta campos sensibles de modelos microbiológicos. La API autorizada sigue exponiendo resultados micro completos. Auditoría legal/especializada con old/new clínicos queda como fase futura.
 - **Pendiente de carga:** `valor_obtenido` puede estar **vacío** en modelo (`blank=True`, `default=''`) al crear filas `ResultadoExamen`; eso **no** autoriza validar la orden incompleta: la acción `validar` sigue rechazando si queda algún resultado con valor vacío. Con muestra vinculada, `validar` además rechaza si la muestra quedó en estados incompatibles (listado en `DOC_FLUJOS_LIMS.md`).
-- Carga masiva vía acción `cargar-resultados` con transacción y bloqueo de solicitud; no modificar si orden está en `VALIDADO`, `CANCELADO` o `ENTREGADO`.
-- Validación de orden: solo desde **`EN_PROCESO`**; no permitir validar con valores vacíos; asigna usuario y fecha a resultados. **admin** / **bioquimico** (`ROLES_LIMS_VALIDAR`) / superuser pueden ejecutar `validar`; rol **laboratorio** puede tomar muestra, cargar, cancelar y marcar entregado, pero **no** validar.
-- **Entrega:** `marcar-entregado` solo desde **`VALIDADO`**; no genera PDF automáticamente.
+- Carga masiva vía `cargar-resultados` (transacción + bloqueo); no modificar si la orden está **`FINALIZADO`**. Completar todos los valores → `LISTO_PARA_VALIDAR`; `informar_parcial` incompleto → `INFORMADO_PARCIAL`; vaciar un valor desde `LISTO_PARA_VALIDAR` → `EN_PROCESO`.
+- Validación de orden: solo desde **`LISTO_PARA_VALIDAR`** (`POST …/validar/` o `…/finalizar/`). Exige valores no vacíos, IQC y obra social; `confirmar_criticos` si hay alertas. Asigna `validado_por` y `fecha_validacion`. **admin** / **bioquimico** (`ROLES_LIMS_VALIDAR`) / **superuser**. **`laboratorio` no valida.** `is_staff` no alcanza.
+- **Cierre:** `FINALIZADO` es terminal de la orden. **[HISTÓRICO]** no hay `marcar-entregado` ni estado `ENTREGADO` en `SolicitudExamen`. El PDF (`informe-pdf`) no cambia estado.
 - **PDF-1 (jun 2026):** `GET informe-pdf` es vista derivada de solo lectura; no valida ni entrega la orden; no persiste archivo. Incluye resultados según API autorizada; laboratorio/admin ven estados técnicos; médico solo solicitudes propias; paciente sin acceso LIMS. Metadata de auditoría sin `codigo_barra`, DNI ni valores clínicos.
 
 ---
@@ -172,7 +173,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 ## Reglas de validación profesional / bioquímica
 
-- **No detectado** como rol o estado distinto en el código analizado; un solo estado `VALIDADO` y usuario validador.
+- **[VIGENTE]** la liberación clínica de la **orden** es el paso `validar`/`finalizar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`), ejecutado por bioquímico / admin / superuser. No hay estado de orden llamado `VALIDADO`. El informe microbiológico (`InformeMicrobiologia.VALIDADO`) es **otra entidad**.
 
 ---
 
@@ -186,11 +187,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 ## Reglas de estados (laboratorio)
 
-Valores de modelo: `PENDIENTE`, `TOMA_MUESTRA`, `EN_PROCESO`, `VALIDADO`, `ENTREGADO`, `CANCELADO`.
+**[VIGENTE] `SolicitudExamen.estado`:** `PENDIENTE`, `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`, `FINALIZADO` (terminal). Transiciones: `laboratorio/solicitud_estado.py` y `DOC_FLUJOS_LIMS.md`. Reapertura: `LISTO_PARA_VALIDAR` → `EN_PROCESO` al vaciar un resultado. **[HISTÓRICO Fase A]** `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO` no son choices de la orden.
 
-Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incluye `PENDIENTE`/`TOMA_MUESTRA` → `EN_PROCESO` por carga, `VALIDADO` → `ENTREGADO`, cancelación desde no finales). Terminales: **`CANCELADO`**, **`ENTREGADO`**.
-
-**No implementado (sigue pendiente):** validación técnica vs profesional como estados distintos; informe PDF **profesional** avanzado (PDF-1 cubre vista básica); vinculación **obligatoria** `ResultadoExamen`↔`Muestra` para órdenes nuevas; transición automática de muestra `RECIBIDA`→`EN_PROCESO` al cargar resultado; microbiología/QC avanzado.
+**No implementado (sigue pendiente):** validación técnica vs profesional como **estados de orden** distintos; informe PDF profesional avanzado (PDF-1 cubre vista básica); vinculación obligatoria `ResultadoExamen`↔`Muestra` para órdenes nuevas.
 
 **Implementado (Fase B1):** entidad **`Muestra`** (material físico) vinculada a `SolicitudExamen` y `TipoMuestra`; **`EventoMuestra`**; catálogos **`AreaLaboratorio`**, **`SeccionLaboratorio`**, **`TipoContenedor`**. Cambios de estado de muestra **solo** por acciones POST dedicadas; `PATCH` no altera `estado`. Recepción solo desde **`TOMADA`** (sin recepción directa desde `PENDIENTE_TOMA` en esta fase). Rechazo exige **motivo**. Auditoría y eventos por acción.
 
@@ -202,7 +201,7 @@ Transiciones implementadas (Fase A): ver tabla en **`DOC_FLUJOS_LIMS.md`** (incl
 
 **Implementado (Fase B3.3 — antibiograma microbiológico):** modelos `Antibiotico`, `Antibiograma`, `ResultadoAntibiotico`; flujo `AisladoMicrobiologico (IDENTIFICADO) → Antibiograma → ResultadoAntibiotico`. Antibiograma: estados cableados `PENDIENTE` (default) / `EN_PROCESO` (auto al cargar primer resultado válido) / `COMPLETO` (acción `completar`, requiere ≥1 resultado, setea `fecha_resultado`) / `CANCELADO` (acción `cancelar` con motivo obligatorio). Reglas de creación: solo sobre aislado `IDENTIFICADO` con microorganismo asignado y estudio no `CANCELADO`; bloqueado para `SOSPECHADO`/`DESCARTADO`. Resultados: par `(antibiograma, antibiotico)` único por `UniqueConstraint`; antibiótico debe estar `activo`; carga/edición bloqueada si antibiograma `COMPLETO`/`CANCELADO`; interpretaciones permitidas `S`/`I`/`R`/`SDD`/`NO_APLICA`. Estudio: nuevo choice cableado `ANTIBIOGRAMA` (auto desde `IDENTIFICACION`, `LECTURA_PRELIMINAR` o `SEMBRADO` al crear antibiograma o primer resultado). Antibióticos: catálogo administrativo (escritura solo admin); se desactiva con `activo=False`; sin destroy. PATCH limitado: antibiograma solo `metodo`/`observaciones`; resultado solo `halo_mm`/`mic`/`interpretacion`/`observaciones` (sin cambiar `antibiograma`/`antibiotico`). Microbiología sigue fuera de `ResultadoExamen.valor_obtenido`. Migración **`0007_lims_b3_3_microbiologia_antibiograma`** (aditiva: 3 modelos nuevos + `AlterField` no destructivo sobre `EstudioMicrobiologia.estado` + `UniqueConstraint`).
 
-**Implementado (Fase B3.4 — informes microbiológicos):** modelo `InformeMicrobiologia` (`PRELIMINAR`/`FINAL`; estados `BORRADOR`/`EMITIDO`/`VALIDADO`/`ANULADO`); a lo sumo un `FINAL` no `ANULADO` por estudio. Completitud para informe final (`verificar_completitud_para_informe_final`): ≥1 `LecturaCultivo`; aislados `DESCARTADO` ignorados; `SOSPECHADO` bloquea salvo significancia `CONTAMINANTE` o `FLORA_HABITUAL`; `IDENTIFICADO` con `requiere_antibiograma` exige antibiograma en `COMPLETO`. Servicios: `crear_informe_borrador`, `actualizar_informe_borrador`, `aplicar_emitir_informe` (texto no vacío al emitir; `FINAL` emitido → estudio `LISTO_PARA_VALIDAR`), `aplicar_validar_informe_final` (solo admin: `FINAL` `EMITIDO` + estudio `LISTO_PARA_VALIDAR` → informe y estudio `VALIDADO`; setea `fecha_cierre` del estudio si vacía), `aplicar_anular_informe` (motivo obligatorio; solo `BORRADOR`/`EMITIDO`, no `VALIDADO`), `aplicar_marcar_estudio_informado` (estudio `VALIDADO` + existe `FINAL` `VALIDADO` → `INFORMADO`). Anular un `FINAL` `EMITIDO` deja el estudio en `LISTO_PARA_VALIDAR` hasta un nuevo `FINAL` emitido. PATCH de informe solo en `BORRADOR`. Migración **`0008_lims_b3_4_microbiologia_informes`**. Sigue **fuera** de alcance: PDF, frontend dedicado, integración LIMS externa, QC/equipamiento avanzado.
+**Implementado (Fase B3.4 — informes microbiológicos):** modelo `InformeMicrobiologia` (`PRELIMINAR`/`FINAL`; estados `BORRADOR`/`EMITIDO`/`VALIDADO`/`ANULADO`); a lo sumo un `FINAL` no `ANULADO` por estudio. Completitud para informe final (`verificar_completitud_para_informe_final`): ≥1 `LecturaCultivo`; aislados `DESCARTADO` ignorados; `SOSPECHADO` bloquea salvo significancia `CONTAMINANTE` o `FLORA_HABITUAL`; `IDENTIFICADO` con `requiere_antibiograma` exige antibiograma en `COMPLETO`. Servicios: `crear_informe_borrador`, `actualizar_informe_borrador`, `aplicar_emitir_informe` (texto no vacío al emitir; `FINAL` emitido → estudio `LISTO_PARA_VALIDAR`), `aplicar_validar_informe_final` (`ROLES_LIMS_VALIDAR`: **admin** / **bioquimico** / **superuser**; `FINAL` `EMITIDO` + estudio `LISTO_PARA_VALIDAR` → informe y estudio `VALIDADO`; setea `fecha_cierre` del estudio si vacía), `aplicar_anular_informe` (motivo obligatorio; solo `BORRADOR`/`EMITIDO`, no `VALIDADO`), `aplicar_marcar_estudio_informado` (estudio `VALIDADO` + existe `FINAL` `VALIDADO` → `INFORMADO`). Anular un `FINAL` `EMITIDO` deja el estudio en `LISTO_PARA_VALIDAR` hasta un nuevo `FINAL` emitido. PATCH de informe solo en `BORRADOR`. Migración **`0008_lims_b3_4_microbiologia_informes`**. Sigue **fuera** de alcance: PDF, frontend dedicado, integración LIMS externa, QC/equipamiento avanzado.
 
 **Implementado (Fase B3-frontend-validación-A — cierre operativo micro):** `ESTADOS_BLOQUEAN_OPERACION_MICRO = {CANCELADO, VALIDADO, INFORMADO}` en servicio (`microbiologia_estado.py`; **no** altera constante del modelo). Helper `assert_estudio_micro_operable` bloquea siembra, lectura, aislado, identificación, antibiograma, resultados, completar/cancelar antibiograma, emitir/anular informe y PATCH técnicos cuando el estudio está cerrado. **Excepción:** `aplicar_marcar_estudio_informado` permitido desde `VALIDADO` → `INFORMADO`. Operaciones bloqueadas no persisten ni auditan éxito. `LISTO_PARA_VALIDAR` **no** se trata como cerrado en esta fase. UI alinea formularios operativos con la misma regla; datos históricos siguen visibles.
 
@@ -263,5 +262,5 @@ Ver sección anterior y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 ## Pendiente de confirmar
 
-- Reglas exactas de `DashboardViewSet` y transiciones `TOMA_MUESTRA` / `ENTREGADO`.
+- Reglas exactas de `DashboardViewSet`.
 - Si existe workflow de informe legal aparte de la API.

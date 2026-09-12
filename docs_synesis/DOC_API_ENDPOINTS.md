@@ -6,6 +6,7 @@
 **Actualización (Fase B3.1 — Microbiología base):** 13 de mayo de 2026  
 **Actualización (query `estudio_id` en listados micro):** 20 de junio de 2026 — **[IMPLEMENTADO]**  
 **Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
+**Actualización (acciones vigentes de orden LIMS):** 12 de septiembre de 2026  
 
 **Alcance:** Endpoints definidos por URLconf y routers bajo el prefijo del proyecto; métodos estándar DRF para `ModelViewSet` salvo donde se indica.
 
@@ -202,11 +203,10 @@ Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` 
 |-----------------|--------|-------------|
 | `/api/pacientes/buscar/` | GET | Búsqueda `q` |
 | `/api/historias-clinicas/{id}/resumen/` | GET | Resumen HC |
-| `/api/lab/solicitudes/{id}/tomar-muestra/` | POST | Marca orden en toma de muestra (`PENDIENTE` → `TOMA_MUESTRA`) |
-| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` con `id`, `valor` (obligatorio para considerar cargado), `es_patologico`, `observaciones`, **`muestra_id`** opcional salvo que `TipoExamen.requiere_muestra=True` (B2-B: entonces obligatorio en payload o FK previa). **B4.1 (retrocompatible):** por ítem también `valor_numerico`, `unidad`, `es_critico`; si no viene `unidad` y el `TipoExamen` tiene `unidad_default`, se copia; si hay rango/críticos estructurados en catálogo, se calculan `es_patologico`/`es_critico` y snapshots de referencia. Respuesta de lectura incluye campos estructurados en `resultados[]`. |
-| `/api/lab/solicitudes/{id}/validar/` | POST | Valida orden (`EN_PROCESO` → `VALIDADO`; solo admin/superuser) |
-| `/api/lab/solicitudes/{id}/cancelar/` | POST | Cancela orden no final (`PENDIENTE` / `TOMA_MUESTRA` / `EN_PROCESO` → `CANCELADO`) |
-| `/api/lab/solicitudes/{id}/marcar-entregado/` | POST | Marca entregada (`VALIDADO` → `ENTREGADO`; sin PDF) |
+| `/api/lab/solicitudes/{id}/tomar-muestra/` | POST | Genera tubos (`Muestra` en `PENDIENTE_TOMA`). **No** afirma `PENDIENTE` → `EN_PROCESO` en todos los casos: con tubos la orden puede seguir `PENDIENTE` hasta escanear `TOMADA`; sin tubos (legacy) puede avanzar en el mismo POST. |
+| `/api/lab/solicitudes/{id}/cargar-resultados/` | POST | Carga valores resultado; body `resultados[]` con `id`, `valor` (obligatorio para considerar cargado), `es_patologico`, `observaciones`, **`muestra_id`** opcional salvo que `TipoExamen.requiere_muestra=True` (B2-B: entonces obligatorio en payload o FK previa). **B4.1 (retrocompatible):** por ítem también `valor_numerico`, `unidad`, `es_critico`; si no viene `unidad` y el `TipoExamen` tiene `unidad_default`, se copia; si hay rango/críticos estructurados en catálogo, se calculan `es_patologico`/`es_critico` y snapshots de referencia. Respuesta de lectura incluye campos estructurados en `resultados[]`. Estados cargables de **orden:** `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR` (no `FINALIZADO`). |
+| `/api/lab/solicitudes/{id}/validar/` | POST | Libera la orden (`LISTO_PARA_VALIDAR` → `FINALIZADO`). **admin** / **bioquimico** / **superuser** (`ROLES_LIMS_VALIDAR` + bypass). **`laboratorio` no valida.** `is_staff` no alcanza. |
+| `/api/lab/solicitudes/{id}/finalizar/` | POST | Alias de `validar` (misma transición y permisos). |
 | `/api/lab/solicitudes/{id}/informe-pdf/` | GET | **PDF-1:** informe LIMS básico en PDF (generado en memoria; `Content-Type: application/pdf`; nombre `informe-lims-solicitud-{id}.pdf`; sin `/media/`; auditoría `lims_informe_pdf_download`; no modifica estado). **Frontend PDF-1-FE:** consumido desde `limsApi.downloadInformeLimsPdf` en detalle de orden (`OrdenLimsDetalle.tsx`) |
 | `/api/lab/solicitudes/{id}/etiqueta/` | GET | JSON ZPL |
 | `/api/atenciones/` | POST | **Compat/deprecated (C5.10.2):** alta idempotente de `Atencion` desde `turno`; no mueve estado del turno; headers `Deprecation`, `X-Synesis-Deprecated-Endpoint`, `X-Synesis-Replacement-Endpoint`, `Warning`. **Errores:** payload inválido con actor autorizado → **400** (turno inexistente, sin médico, etc.); turno ajeno o sin permiso de creación → **403** |
@@ -216,7 +216,7 @@ Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` 
 
 **Alias:** mismas acciones bajo `/api/laboratorio/solicitudes/{id}/...` (mismo `SolicitudExamenViewSet` registrado dos veces en `api/urls.py`).
 
-**CRUD estándar lab:** `PATCH` / `PUT` sobre `/api/lab/solicitudes/{id}/` usan `SolicitudExamenSerializer` con campo **`estado` en solo lectura** — no se debe usar para cambiar el estado de la orden; los cambios van solo por las acciones `POST` anteriores.
+**CRUD estándar lab:** `PATCH` / `PUT` sobre `/api/lab/solicitudes/{id}/` usan `SolicitudExamenSerializer` con campo **`estado` en solo lectura** — no se debe usar para cambiar el estado de la orden; los cambios van por `POST` `tomar-muestra`, `cargar-resultados`, `validar` / `finalizar` y por coordinación de tubos. **[HISTÓRICO]** `cancelar` y `marcar-entregado` de **orden** ya no existen (404). Cancelar **muestra**, **estudio micro** o **antibiograma** son otras entidades.
 
 ### Solicitudes genéricas EMR (`/api/solicitudes/`) — LIMS externo
 
@@ -252,7 +252,7 @@ Inferidos por ViewSet en cada app; listados detallados en serializers de `pacien
 - **`POST …/solicitudes/{id}/cargar-resultados/`** — cada ítem puede incluir opcionalmente **`muestra_id`** (misma orden; muestra en RECIBIDA/CONSERVADA/EN_PROCESO). Sin `muestra_id` = legacy **si** `requiere_muestra=False`. Con `requiere_muestra=True` → 400 sin muestra. **B2-B-A:** si se envía `muestra_id` (o queda muestra asociada), debe cumplir `tipo_muestra_requerida` aunque `requiere_muestra=False`. Catálogo `TipoExamen` vía API es read-only (`requiere_muestra` solo lectura en serializer).
 - **B2-C (frontend):** `CargaResultadosLims` envía `resultados[]` con `muestra_id` numérico solo cuando el operador selecciona muestra; lista muestras vía `GET /lab/muestras-transaccionales/?solicitud=<id>`.
 - Actualizar orden lab (`PATCH`/`PUT`): campos editables según serializer; **`estado` ignorado/no escribible** desde API estándar.
-- Acciones `tomar-muestra`, `cancelar`, `marcar-entregado`: cuerpo típico `{}` (JSON vacío aceptable).
+- Acciones `tomar-muestra`, `validar` / `finalizar`: cuerpo típico `{}` (JSON vacío aceptable; `validar` puede exigir `confirmar_criticos` si hay alertas). **[HISTÓRICO]** no hay `cancelar` ni `marcar-entregado` de orden.
 - Crear atención: `{ "turno": <id>, "observaciones_generales": "..." }` → `AtencionSerializer`.
 
 ---
@@ -447,11 +447,13 @@ Prefijo **`/api/lab/microbiologia/...`** y alias **`/api/laboratorio/microbiolog
 | `/api/lab/microbiologia/informes/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (médico solo sus solicitudes). **Query opcional `?estudio_id=`**. |
 | `/api/lab/microbiologia/informes/{id}/` | GET, PATCH | PATCH solo en `BORRADOR` (`texto`, `observaciones`, `version`). |
 | `/api/lab/microbiologia/informes/{id}/emitir/` | POST | admin/lab. Body opcional `texto`; si falta, usa el del borrador. Texto emitido no vacío. |
-| `/api/lab/microbiologia/informes/{id}/validar/` | POST | **Solo admin** (+ superuser). Solo informe `FINAL` en `EMITIDO` y estudio `LISTO_PARA_VALIDAR`. |
+| `/api/lab/microbiologia/informes/{id}/validar/` | POST | **`ROLES_LIMS_VALIDAR`:** admin / bioquimico + bypass superuser. **No** “solo admin”. Entidad **`InformeMicrobiologia`** (distinta de `SolicitudExamen`). Solo informe `FINAL` en `EMITIDO` y estudio `LISTO_PARA_VALIDAR`. |
 | `/api/lab/microbiologia/informes/{id}/anular/` | POST | admin/lab. `motivo` obligatorio. Solo `BORRADOR` o `EMITIDO` (no `VALIDADO`). |
 | `/api/lab/microbiologia/estudios/{id}/marcar-informado/` | POST | admin/lab. Requiere estudio `VALIDADO` e informe final `VALIDADO`. |
 
 **DELETE** no soportado en informes (405).
+
+**[HALLAZGO — revisión humana, sin cambio de código]** `LimsMicrobiologiaInformePermission`: `create` / PATCH / `emitir` / `anular` / `validar` exigen `ROLES_LIMS_VALIDAR` (`admin`/`bioquimico`), no el rol `laboratorio`. Las filas “Crear/emitir/anular: admin/lab” son la matriz B3.4 histórica. Solo se alineó aquí **`validar`**.
 
 **Transiciones estudio (B3.4):** `… → LISTO_PARA_VALIDAR` al emitir informe final; `LISTO_PARA_VALIDAR → VALIDADO` al validar informe final; `VALIDADO → INFORMADO` con `marcar-informado`.
 

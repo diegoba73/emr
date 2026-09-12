@@ -94,7 +94,7 @@
 | **Relaciones** | `EstudioMicrobiologico`, validador, emisor. |
 | **Invariantes** | Informe FINAL validado no se edita sin anulación (**[RECTOR]**; ver reglas micro en código). |
 | **Estado actual** | **[IMPLEMENTADO]** B3.4. |
-| **Deuda** | **[DEUDA]** `marcar-entregado` en orden ≠ informe PDF. |
+| **Deuda** | **[DEUDA]** informe PDF general LIMS (PDF-1 es básico y no cambia estado). **[HISTÓRICO]** action de orden `marcar-entregado` ya no existe. |
 
 ---
 

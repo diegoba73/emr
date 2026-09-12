@@ -18,6 +18,7 @@
 **Actualización (PROD-2-B — verificación ejecutable runtime):** 7 de junio de 2026
 **Actualización (PROD-2-A — runtime Gunicorn):** 7 de junio de 2026  
 **Actualización (PROD-1-A — SECRET_KEY productiva):** 7 de junio de 2026  
+**Actualización (deuda FSM Admin / `finalizar_auto`):** 12 de septiembre de 2026  
 **Actualización (PROD-1 — hardening configuración):** 7 de junio de 2026  
 **Actualización (Frontend UI-2 — microbiología LIMS):** 17 de mayo de 2026  
 
@@ -31,7 +32,9 @@
 
 - **Doble flujo de consulta/atención** (HC vs consulta ambulatoria por `Atencion`) — riesgo de registros clínicos duplicados o incompletos en reporting.
 - **Dos modelos de internación** (`historias_clinicas.Internacion` vs `internacion.Internacion`) — datos pueden divergir.
-- ~~Estados **TOMA_MUESTRA** / **ENTREGADO** sin acciones en API~~ — **mitigado (Fase A):** acciones `tomar-muestra`, `cargar-resultados` (incl. desde `TOMA_MUESTRA`), `marcar-entregado`; ~~tubos/muestra transaccional~~ — **mitigado (B1/B2):** `Muestra` + vínculo opcional `ResultadoExamen.muestra`; sigue pendiente informe PDF y obligatoriedad de muestra para órdenes nuevas.
+- ~~Estados **TOMA_MUESTRA** / **ENTREGADO** sin acciones en API~~ — **[HISTÓRICO Fase A]**. **[VIGENTE]** la orden usa `PENDIENTE` / `EN_PROCESO` / `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` / `FINALIZADO`. Tubos: `Muestra` + vínculo opcional `ResultadoExamen.muestra`.
+- **Django Admin** puede editar `SolicitudExamen.estado` directamente y **saltar la FSM** de `solicitud_estado.py` (PATCH API sí es `read_only`). No corregido en el ticket documental de sep 2026.
+- **`finalizar_auto`** figura en el frozenset de transiciones de orden pero **no tiene caller** en vistas/servicios. No corregido en ese ticket.
 - **Solicitud** EMR vs **SolicitudExamen** LIMS nativo sin vínculo obligatorio — doble entrada operativa.
 
 ---
@@ -42,6 +45,7 @@
 - **`SignosVitalesViewSet`** definido pero **no registrado** en `api/urls.py` — funcionalidad incompleta o muerta.
 - **`integracion_lims/urls.py`** no montado — webhooks inaccesibles desde `synesis.urls`.
 - **`lims_service`** URL fija `localhost:8001` — fallo de configuración por entorno.
+- **Gaps de tests LIMS [registrados, no agregados en el ticket documental sep 2026]:** `bioquimico` validando informe microbiológico; médico/paciente contra `validar` de orden; superuser sin rol `admin`; `bioquimico` contra override IQC.
 
 ---
 

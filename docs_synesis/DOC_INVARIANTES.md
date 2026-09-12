@@ -1,6 +1,6 @@
 # DOC_INVARIANTES — Invariantes del dominio (Fase C0)
 
-**Versión:** C0 — 18 de mayo de 2026  
+**Versión:** C0 — 18 de mayo de 2026 · **actualización orden LIMS:** 12 de septiembre de 2026  
 **Jerarquía:** `REGLAS_INDICE.md`. Leyenda: **[RECTOR]** | **[IMPLEMENTADO]** | **[OBJETIVO]** | **[DEUDA]** incumplimiento parcial conocido
 
 Cada invariante debe poder verificarse por tests, reglas de modelo o política documentada.
@@ -50,7 +50,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | O1 | Estado de `SolicitudExamen` solo vía acciones dedicadas, no PATCH CRUD. | **[IMPLEMENTADO]** |
 | O2 | Número de protocolo único. | **[IMPLEMENTADO]** |
 | O3 | Al crear orden LIMS, existen filas `ResultadoExamen` por tipo solicitado. | **[IMPLEMENTADO]** |
-| O4 | Cancelar orden no borra resultados; marca `CANCELADO`. | **[IMPLEMENTADO]** |
+| O4 | Orden `FINALIZADO` es terminal: no vuelve al flujo normal de carga; no hay action pública `cancelar` de `SolicitudExamen`. Cerrar no borra filas `ResultadoExamen`. **[HISTÓRICO]** “cancelar orden → `CANCELADO`”. | **[IMPLEMENTADO]** cierre; sin cancelar orden |
 | O5 | Orden EMR (`solicitudes`) y orden LIMS nativa son trazables por separado. | **[DEUDA]** sin FK única |
 
 ---
@@ -71,9 +71,9 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | ID | Invariante | Estado |
 |----|------------|--------|
 | R1 | Un resultado por (orden, tipo_examen). | **[IMPLEMENTADO]** |
-| R2 | No cargar resultados en orden `CANCELADO` / `VALIDADO` / `ENTREGADO`. | **[IMPLEMENTADO]** |
+| R2 | Orden `FINALIZADO` no vuelve al flujo normal de carga: no se cargan ni mutan resultados de forma silenciosa tras el cierre. Las transiciones respetan la FSM vigente (`PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` opcional → `LISTO_PARA_VALIDAR` → `FINALIZADO`). Una rectificación futura, si se implementa, debe mantener trazabilidad; **no hay** API de rectificación de orden hoy. **[HISTÓRICO]** los nombres `CANCELADO` / `VALIDADO` / `ENTREGADO` no son estados de `SolicitudExamen`. | **[IMPLEMENTADO]** cierre; **[DEUDA]** sin API “corregir” |
 | R3 | No validar con valores vacíos. | **[IMPLEMENTADO]** |
-| R4 | Resultado validado no se edita directamente sin política de corrección. | **[RECTOR]** — **[DEUDA]** no hay API “corregir” |
+| R4 | Resultado ya validado/cerrado no se edita directamente sin política de corrección. | **[RECTOR]** — **[DEUDA]** no hay API “corregir” |
 | R5 | `muestra_id` en carga debe ser de la misma orden y estados admitidos. | **[IMPLEMENTADO]** B2 |
 
 ---

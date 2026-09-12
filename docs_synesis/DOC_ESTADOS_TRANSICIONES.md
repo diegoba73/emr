@@ -1,6 +1,6 @@
 # DOC_ESTADOS_TRANSICIONES — Máquinas de estado conceptuales (Fase C0)
 
-**Versión:** C0 — 18 de mayo de 2026 · **actualización orden LIMS:** 6 de septiembre de 2026  
+**Versión:** C0 — 18 de mayo de 2026 · **actualización orden LIMS:** 12 de septiembre de 2026  
 **Jerarquía:** `REGLAS_INDICE.md`. Leyenda: **[IMPLEMENTADO]** valor en código hoy | **[OBJETIVO]** futuro | **[CONCEPTUAL]** etiqueta de negocio no 1:1 con campo
 
 **Detalle operativo LIMS:** `DOC_REGLAS_NEGOCIO.md`, `DOC_FLUJOS_LIMS.md`, `laboratorio/solicitud_estado.py`, `laboratorio/muestra_estado.py`, `laboratorio/microbiologia_estado.py`, `reglas/control-calidad.md`.
@@ -52,10 +52,10 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 | Conceptual | **[IMPLEMENTADO]** | Acción / transición |
 |------------|---------------------|---------------------|
 | Pendiente | `PENDIENTE` | Creación |
-| En proceso | `EN_PROCESO` | `POST .../tomar-muestra/` desde `PENDIENTE` |
+| En proceso | `EN_PROCESO` | **No** es regla universal que `POST .../tomar-muestra/` pase inmediatamente `PENDIENTE` → `EN_PROCESO`. Con tubos reales la orden puede seguir `PENDIENTE` hasta que el tubo correspondiente se registre/escanee como `TOMADA`. El flujo legacy **sin** tubos puede avanzar durante `tomar-muestra`. |
 | Informe parcial | `INFORMADO_PARCIAL` | Carga incompleta |
-| Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa; exige IQC del día |
-| Finalizado | `FINALIZADO` | `validar` (bioquímico / admin) |
+| Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa; exige IQC del día. Reapertura: vaciar un resultado completo → `EN_PROCESO`. |
+| Finalizado | `FINALIZADO` | `POST .../validar/` (alias `.../finalizar/`); admin / bioquímico / superuser |
 
 Ya **no** existen en este modelo: `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO` (pueden figurar en docs Fase A).
 

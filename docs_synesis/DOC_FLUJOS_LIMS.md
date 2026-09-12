@@ -14,9 +14,12 @@
 **Actualización (Frontend UI-2 — consola microbiología):** 17 de mayo de 2026  
 **Actualización (B3-frontend-validación-A [VALIDADO] + UX parcial):** junio de 2026 — Alta estudio micro: picker solicitud/muestra LIMS (`RECIBIDA`/`CONSERVADA`/`EN_PROCESO`). Detalle micro: listados globales + filtro cliente [GAP filtros API].  
 **Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026  
-**Actualización (interfaz analizadores CM260 / Sysmex XP-300):** 9 de septiembre de 2026
+**Actualización (interfaz analizadores CM260 / Sysmex XP-300):** 9 de septiembre de 2026  
+**Actualización (alineación FSM/permisos orden LIMS vs código):** 12 de septiembre de 2026
 
-> **Sep 2026 — máquina de estados de `SolicitudExamen`:** los estados vigentes son `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` → `FINALIZADO`. Las tablas de este documento que citan `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO` o `CANCELADO` en la **orden** son históricas (Fase A). Fuente actual: `laboratorio/solicitud_estado.py` y `docs_synesis/DOC_REGLAS_NEGOCIO.md`. IQC: `docs_synesis/reglas/control-calidad.md`.
+> **[VIGENTE — sep 2026]** máquina de `SolicitudExamen`: `PENDIENTE` → `EN_PROCESO` → (`INFORMADO_PARCIAL` opcional) → `LISTO_PARA_VALIDAR` → `FINALIZADO`. Reapertura: `LISTO_PARA_VALIDAR` → `EN_PROCESO` al vaciar un resultado completo. Fuente: `laboratorio/solicitud_estado.py`. IQC: `docs_synesis/reglas/control-calidad.md`.
+>
+> **[HISTÓRICO / Fase A]** las tablas que citan `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO` o `CANCELADO` **en la orden**, y las actions `cancelar` / `marcar-entregado` de orden, no describen el comportamiento actual. Esos nombres pueden seguir vigentes en **otras** entidades (muestra, estudio/informe micro, estudios complementarios).
 
 **Alcance:** Flujo LIMS **nativo** (`laboratorio` app) y vínculos con `solicitudes` / `integracion_lims`.
 
@@ -39,7 +42,7 @@
 
 - **Catálogo:** `TipoMuestra` (código, nombre, color tubo).
 - **Fase B1:** entidad transaccional **`Muestra`** (`EventoMuestra`, catálogos `AreaLaboratorio` / `SeccionLaboratorio` / `TipoContenedor`). Estados y acciones REST documentadas en `DOC_API_ENDPOINTS.md` y tests `test_muestras_*`.
-- **Toma de muestra (Fase A — orden):** `POST .../tomar-muestra/` cambia la orden `PENDIENTE` → `TOMA_MUESTRA` (marcador de flujo); es independiente de la toma física por **`Muestra`** (`aplicar_tomar` en `muestra_estado.py`).
+- **Toma de muestra [VIGENTE]:** `POST .../tomar-muestra/` genera tubos (`Muestra` en `PENDIENTE_TOMA`). Con tubos reales la **orden** puede permanecer `PENDIENTE` hasta que el tubo se registre/escanee como `TOMADA` (`PENDIENTE` → `EN_PROCESO`). El flujo legacy **sin** tubos puede avanzar en el mismo POST. Independiente de la toma física por **`Muestra`** (`aplicar_tomar` en `muestra_estado.py`). **[HISTÓRICO]** el marcador de orden `TOMA_MUESTRA` ya no existe.
 - **Etiqueta ZPL:** acción `GET .../etiqueta/` devuelve JSON con fragmento ZPL simulado.
 - **Fase B2 [IMPLEMENTADO]:** `cargar-resultados` acepta **`muestra_id`** opcional por ítem (misma solicitud/paciente; estados **`RECIBIDA`**, **`CONSERVADA`**, **`EN_PROCESO`**). Sin muestra = legacy. Al primer vínculo desde RECIBIDA/CONSERVADA → **`EN_PROCESO`** vía `aplicar_iniciar_proceso` + `EventoMuestra.PROCESAMIENTO` + audit `muestra_procesamiento` (idempotente si ya `EN_PROCESO`). Asociación de muestra audita `resultado_muestra_asociar` sin `codigo_barra` ni valor clínico en metadata (`valor_presente` solo). No rechazar muestra con resultados; no cambiar muestra en resultado validado.
 - **Fase B2-B [IMPLEMENTADO]:** `TipoExamen.requiere_muestra` (default `False`; admin/DB). Tipos configurados exigen muestra en carga. **B2-B-A:** si se asocia muestra, siempre se valida `tipo_muestra_requerida` (también con `requiere_muestra=False`). Fallos sin persistir ni auditar éxito. SPA LIMS debe adaptarse para enviar `muestra_id` en tipos obligatorios.
@@ -58,70 +61,85 @@
 
 - **Endpoint:** `POST /api/lab/solicitudes/{id}/cargar-resultados/` (y alias bajo `/api/laboratorio/solicitudes/{id}/cargar-resultados/`).
 - **B4.1:** cada ítem puede incluir además `valor_numerico`, `unidad`, `es_critico`; se fijan snapshots de rango/unidad del `TipoExamen` al momento de la carga; cálculo básico de `es_patologico`/`es_critico` si hay rangos estructurados. Payload histórico (`valor` + `es_patologico`) sigue válido.
-- **Payload (retrocompatible):** `{ "resultados": [ { "id": <ResultadoExamen.id>, "valor": "...", "es_patologico": bool, "observaciones": "...", "muestra_id": <opcional int|null> } ] }`. Si **`muestra_id`** no viene en el ítem, no se modifica la asociación previa. Si viene **`null`**, se limpia la muestra del resultado (misma política de bloqueo que la carga: orden no `VALIDADO`/`ENTREGADO`/`CANCELADO`).
-- **Reglas (Fase A + B2):** rechaza si orden está en `CANCELADO`, `VALIDADO` o `ENTREGADO`. Transacción + bloqueo de fila (`select_for_update`) sobre la solicitud y cada resultado (`of=("self",)` en PostgreSQL para FK muestra nullable). Tras aplicar cambios a resultados: si el estado era `PENDIENTE` o `TOMA_MUESTRA`, transición a `EN_PROCESO` (compatibilidad: se puede cargar sin pasar obligatoriamente por toma). Si ya estaba en `EN_PROCESO`, solo se actualizan resultados (sin cambio de estado).
+- **Payload (retrocompatible):** `{ "resultados": [ { "id": <ResultadoExamen.id>, "valor": "...", "es_patologico": bool, "observaciones": "...", "muestra_id": <opcional int|null> } ] }`. Si **`muestra_id`** no viene en el ítem, no se modifica la asociación previa. Si viene **`null`**, se limpia la muestra del resultado (misma política de bloqueo que la carga: orden no `FINALIZADO`).
+- **Reglas [VIGENTE]:** rechaza si la orden está `FINALIZADO` (u otro estado no cargable). Transacción + bloqueo de fila (`select_for_update`) sobre la solicitud y cada resultado (`of=("self",)` en PostgreSQL para FK muestra nullable). Tras aplicar cambios: completar todos los valores → `LISTO_PARA_VALIDAR`; incompleto → `INFORMADO_PARCIAL`; vaciar un valor desde `LISTO_PARA_VALIDAR` → `EN_PROCESO` (reabrir carga). **[HISTÓRICO Fase A]** se documentaba rechazo en `CANCELADO`/`VALIDADO`/`ENTREGADO` y auto-paso `PENDIENTE`/`TOMA_MUESTRA` → `EN_PROCESO` por carga.
 - **Auditoría (B2 / B2-A / B3-audit):** `log_update` por resultado con metadata: `resultado_id`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `valor_presente`, `muestra_anterior_id` / `muestra_nueva_id` si cambió la asociación; **sin `codigo_barra`** ni valores clínicos en metadata. Microbiología (B3-audit): metadata con IDs técnicos (`estudio_id`, `muestra_id`, `siembra_id`, etc.) y flags `*_presente`; **sin** resultados micro crudos ni `codigo_barra`. `before_state` / `after_state` redactan vía `safe_model_snapshot`. El `codigo_barra` de la muestra sigue disponible en API operativa, no en `AuditEvent` genérico.
 
 ---
 
 ## Flujo de validación técnica / profesional
 
-- Un único paso **`validar`** (`POST .../validar/`) que:
-  - Solo acepta orden en estado **`EN_PROCESO`** (rechaza `PENDIENTE`, `TOMA_MUESTRA`, `VALIDADO`, `CANCELADO`, `ENTREGADO`).
-  - Exige que no haya resultados con `valor_obtenido` vacío.
+- Un único paso **`validar`** (`POST .../validar/`, alias `POST .../finalizar/`):
+  - Solo acepta orden en **`LISTO_PARA_VALIDAR`**. `FINALIZADO` es terminal.
+  - Exige que no haya resultados con `valor_obtenido` vacío (más IQC del día y obra social; `confirmar_criticos` si hay alertas).
   - Si un resultado tiene **`muestra`** vinculada, la muestra **no** debe estar en `RECHAZADA`, `DESCARTADA`, `CANCELADA`, `PENDIENTE_TOMA` ni `TOMADA` (resultados **sin** muestra siguen validándose si los valores están completos — compatibilidad histórica). **Fase B2.1:** antes de leer el estado de cada muestra referenciada, la acción aplica `Muestra.objects.select_for_update().filter(pk__in=…)` **dentro de la transacción** de validación, mitigando la ventana TOCTOU que existía en B2 (otro proceso ya no puede mutar la fila entre lectura y commit).
-  - Transiciona `EN_PROCESO` → `VALIDADO` mediante la misma capa de transiciones auditadas que el resto de acciones.
+  - Transiciona `LISTO_PARA_VALIDAR` → `FINALIZADO` mediante la capa de transiciones auditadas.
   - Asigna `validado_por` y `fecha_validacion` a **todos** los `ResultadoExamen` vía `queryset.update` (mismo usuario/fecha para todos).
-- **Permiso:** solo **`admin`** o **superuser** puede invocar `validar`. El rol **`laboratorio`** puede cargar resultados, tomar muestra, cancelar y marcar entregado, pero **no** validar.
-- **No hay** distinción explícita entre validación técnica y profesional como estados separados — sigue siendo deuda funcional; un solo estado `VALIDADO`.
+- **Permiso:** **`ROLES_LIMS_VALIDAR`** = **`admin`** + **`bioquimico`**, más bypass **`superuser`**. El rol **`laboratorio`** puede operar (toma, carga, etiquetas) pero **no** validar. `is_staff` no otorga `validar`.
+- **No hay** distinción explícita entre validación técnica y profesional como **estados de orden** separados — sigue siendo deuda funcional; la separación es por **roles** (`laboratorio` opera, `bioquimico` libera). **[HISTÓRICO]** no existe estado de orden `VALIDADO`.
 
 ---
 
 ## Flujo de emisión de informes
 
 - **PDF-1 (jun 2026) [IMPLEMENTADO — básico]:** `GET /api/lab/solicitudes/{id}/informe-pdf/` genera PDF en memoria (`reportlab`) con número de solicitud, fecha, paciente, médico, estado, resultados, muestras (sin `codigo_barra`), resumen microbiología si aplica, leyenda SYNESIS. No modifica estado; no usa `/media/`. Auditoría `lims_informe_pdf_download` (metadata: `solicitud_id`, `numero_solicitud`, `view`; sin PHI ni valores clínicos). Permisos: admin/laboratorio (operación interna); médico (solo sus solicitudes). Paciente/secretaría/enfermería: bloqueados. Servicio: `laboratorio/services_informes_pdf.py`.
-- La acción `marcar-entregado` solo pone `ENTREGADO` en la orden (no genera PDF automáticamente).
+- **[HISTÓRICO]** la action de orden `marcar-entregado` (`ENTREGADO`) ya no existe. El PDF no cambia el estado de la orden.
 - Datos en JSON del serializer y acción `etiqueta` (ZPL simulado).
 - **PDF-1-FE (jun 2026) [IMPLEMENTADO — frontend]:** botón en detalle de orden LIMS; descarga blob protegida; roles UI admin/laboratorio/médico; sin `/media/`.
 - **GAP post-PDF-1:** PDF profesional avanzado, firma digital, CLSI/EUCAST, portal paciente.
 
 ---
 
-## Estados (`SolicitudExamen`) — Fase A
+## Estados (`SolicitudExamen`) — [VIGENTE]
 
-Transiciones **permitidas** (solo vía acciones explícitas del ViewSet; `estado` **no** se modifica por `PATCH`/`PUT` estándar — campo `read_only` en `SolicitudExamenSerializer`):
+Únicos choices del modelo: `PENDIENTE`, `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`, `FINALIZADO`.
+
+Transiciones **permitidas** (acciones/servicios; `estado` **no** se modifica por `PATCH`/`PUT` estándar — campo `read_only` en `SolicitudExamenSerializer`):
+
+| Desde | Disparador | Hacia |
+|-------|------------|--------|
+| `PENDIENTE` | Tubo registrado/escaneado como `TOMADA` (flujo con tubos); o `tomar-muestra` / carga en flujo **legacy sin tubos** | `EN_PROCESO` |
+| `EN_PROCESO` | `POST .../cargar-resultados/` incompleto | `INFORMADO_PARCIAL` |
+| `EN_PROCESO` / `INFORMADO_PARCIAL` | `POST .../cargar-resultados/` completo | `LISTO_PARA_VALIDAR` |
+| `LISTO_PARA_VALIDAR` | Vaciar/eliminar un resultado previamente completo | `EN_PROCESO` |
+| `LISTO_PARA_VALIDAR` | `POST .../validar/` o `POST .../finalizar/` | `FINALIZADO` |
+
+**Terminal:** `FINALIZADO` (sin vuelta al flujo normal de carga). No hay actions públicas de orden `cancelar` ni `marcar-entregado`.
+
+### [HISTÓRICO / Fase A] — no vigente para la orden
+
+La tabla siguiente describe la máquina **antigua** (`TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO`) y **no** debe usarse como contrato actual:
 
 | Desde | Disparador | Hacia |
 |-------|------------|--------|
 | `PENDIENTE` | `POST .../tomar-muestra/` | `TOMA_MUESTRA` |
-| `PENDIENTE` | `POST .../cargar-resultados/` | `EN_PROCESO` (compatibilidad sin toma previa) |
+| `PENDIENTE` | `POST .../cargar-resultados/` | `EN_PROCESO` |
 | `TOMA_MUESTRA` | `POST .../cargar-resultados/` | `EN_PROCESO` |
-| `EN_PROCESO` | `POST .../cargar-resultados/` | `EN_PROCESO` (sin cambio de estado) |
 | `EN_PROCESO` | `POST .../validar/` | `VALIDADO` |
 | `VALIDADO` | `POST .../marcar-entregado/` | `ENTREGADO` |
 | `PENDIENTE`, `TOMA_MUESTRA`, `EN_PROCESO` | `POST .../cancelar/` | `CANCELADO` |
 
-**Terminales (sin salida en Fase A):** `CANCELADO`, `ENTREGADO`. No se permite cancelar desde `VALIDADO` ni `ENTREGADO` en esta fase.
-
-**Cancelación:** no elimina ni vacía filas `ResultadoExamen`; la integridad “no cargar en cancelada” sigue en `ResultadoExamen.clean()`.
+Remapeo en datos: `TOMA_MUESTRA` → `EN_PROCESO`; `VALIDADO` / `ENTREGADO` / `CANCELADO` → `FINALIZADO`.
 
 ---
 
-## Roles involucrados (estado actual tras hardening + Fase A)
+## Roles involucrados [VIGENTE]
 
 Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolicitudExamenPermission`) y `get_queryset` en `SolicitudExamenViewSet`:
 
-| Rol | Catálogos (`lab/muestras`, `examenes`, `paneles`) | Solicitudes list/detail/create/update | `tomar-muestra` | `cargar-resultados` | `cancelar` | `marcar-entregado` | `validar` | `etiqueta` (solicitud, ZPL simulado) |
-|-----|---------------------------------------------------|----------------------------------------|-----------------|---------------------|------------|-------------------|-----------|------------|
-| **Anónimo** | No | No | No | No | No | No | No | No |
-| **paciente** | No | No | No | No | No | No | No | No |
-| **secretaria** | Sí (solo lectura GET) | No | No | No | No | No | No | No |
-| **enfermeria** | Sí (solo lectura GET) | No | No | No | No | No | No | No |
-| **medico** | Sí (solo lectura GET) | Crear y ver **solo** órdenes con `medico_interno.user` = request.user; sin listado global | No | No | No | No | No | No |
-| **laboratorio** | Sí | Listar/ver/crear/editar órdenes (destroy solo admin) | Sí | Sí | Sí | Sí | **No** | Sí |
-| **bioquimico** | Sí | Igual que laboratorio (familia `ROLES_LIMS_WRITE`) | Sí | Sí | Sí | Sí | **Sí** | Sí |
-| **admin** | Sí | Sí (incluye destroy según permiso) | Sí | Sí | Sí | Sí | **Sí** | Sí |
-| **superuser** | Sí | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
+| Rol | Catálogos (`lab/muestras`, `examenes`, `paneles`) | Solicitudes list/detail/create/update | `tomar-muestra` | `cargar-resultados` | `validar` / `finalizar` | `etiqueta` (solicitud, ZPL simulado) |
+|-----|---------------------------------------------------|----------------------------------------|-----------------|---------------------|-------------------------|------------|
+| **Anónimo** | No | No | No | No | No | No |
+| **paciente** | No | No | No | No | No | No |
+| **secretaria** | Sí (solo lectura GET) | No | No | No | No | No |
+| **enfermeria** | Sí (solo lectura GET) | No | No | No | No | No |
+| **medico** | Sí (solo lectura GET) | Crear y ver **solo** órdenes con `medico_interno.user` = request.user; sin listado global | No | No | No | No |
+| **laboratorio** | Sí | Listar/ver/crear/editar órdenes (destroy solo admin) | Sí | Sí | **No** | Sí |
+| **bioquimico** | Sí | Igual que laboratorio (familia `ROLES_LIMS_WRITE`) | Sí | Sí | **Sí** | Sí |
+| **admin** | Sí | Sí (incluye destroy según permiso) | Sí | Sí | **Sí** | Sí |
+| **superuser** | Sí | Sí | Sí | Sí | Sí | Sí |
+
+**[HISTÓRICO]** las columnas de orden `cancelar` / `marcar-entregado` se retiraron: esas actions no existen (404).
 
 **Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/` y `POST .../imprimir-etiqueta/` → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
 
@@ -131,7 +149,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 
 ## Eventos auditables
 
-- `log_create` / `log_update` en crear/actualizar orden (campos permitidos por serializer, sin `estado` por PATCH), `cargar_resultados`, `validar`, `tomar_muestra`, `cancelar`, `marcar_entregado`.
+- `log_create` / `log_update` en crear/actualizar orden (campos permitidos por serializer, sin `estado` por PATCH), `cargar_resultados`, `validar` / `finalizar`, `tomar_muestra`. **[HISTÓRICO]** no hay auditoría de orden `cancelar` / `marcar_entregado` porque las actions no existen.
 - **Muestra (B1):** `log_create` al crear muestra; `log_update` tras cada acción de estado (`tomar`, `recibir`, `rechazar`, `conservar`, `descartar`, `cancelar`) y tras PATCH administrativo; siempre fila `EventoMuestra` por acción.
 - Transiciones de estado de solicitud: metadata con `accion`, `estado_anterior`, `estado_nuevo`, `solicitud_id`, `numero_solicitud` (además de `before_state`/`after_state` del snapshot).
 - En `validar`, por resultado se captura snapshot **antes** del `update()` masivo para `before_state`.
@@ -148,7 +166,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 ## Restricciones
 
 - `unique_together` en `ResultadoExamen`: una fila por `(solicitud, tipo_examen)`.
-- No crear ni mutar resultados si orden cancelada (`ResultadoExamen.clean()` y rechazo en `cargar_resultados`). La orden **sí** puede cancelarse aunque existan `ResultadoExamen` vacíos autogenerados al crear la orden.
+- No crear ni mutar resultados si la orden está **`FINALIZADO`** (`ResultadoExamen.clean()` y rechazo en `cargar_resultados`). **[HISTÓRICO]** no hay cancelación pública de la **orden**.
 
 ---
 
@@ -180,14 +198,14 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 ## Riesgos o inconsistencias
 
 - Validación técnica / profesional no separada en estados distintos (deuda).
-- ~~Sin entidad transaccional muestra/tubo~~ — **Fase B1:** modelo `Muestra` + `EventoMuestra` y acciones REST; sigue sin vinculación obligatoria `ResultadoExamen`→`Muestra` (fase posterior). La acción de orden `tomar-muestra` (Fase A) coexiste con la toma física por muestra; al **tomar** una muestra en `PENDIENTE_TOMA`, si la solicitud está `PENDIENTE`, el servicio intenta `PENDIENTE`→`TOMA_MUESTRA` de forma segura (idempotente si ya avanzó).
+- ~~Sin entidad transaccional muestra/tubo~~ — **Fase B1:** modelo `Muestra` + `EventoMuestra` y acciones REST; sigue sin vinculación obligatoria `ResultadoExamen`→`Muestra` (fase posterior). **[VIGENTE]** al **tomar** una muestra en `PENDIENTE_TOMA`, si la solicitud está `PENDIENTE`, el servicio intenta `PENDIENTE`→`EN_PROCESO` de forma segura (idempotente si ya avanzó). **[HISTÓRICO]** se documentaba `PENDIENTE`→`TOMA_MUESTRA`.
 
 ---
 
 ## Pendiente de confirmar
 
 - Endpoints `ingesta/` y webhook en despliegue real.
-- Evolución post–Fase A: cancelación desde `VALIDADO`, informes PDF, tubos con trazabilidad.
+- **[HISTÓRICO]** “evolución post–Fase A: cancelación desde `VALIDADO`” — no aplica a la máquina vigente (`FINALIZADO` es terminal). Pendiente real: informes PDF avanzados, tubes con trazabilidad completa.
 
 ---
 
@@ -206,7 +224,7 @@ SolicitudExamen → Muestra (RECIBIDA | CONSERVADA | EN_PROCESO)
 
 - Microbiología **nunca** se serializa en `ResultadoExamen.valor_obtenido`.
 - Sólo se inicia un estudio sobre una muestra **`RECIBIDA`**, **`CONSERVADA`** o **`EN_PROCESO`**. Estados de muestra `PENDIENTE_TOMA`, `TOMADA`, `RECHAZADA`, `DESCARTADA`, `CANCELADA` bloquean alta de estudio (modelo `clean` + servicio). **B3.1-gap:** `CONSERVADA` alineada con B2 (carga de resultados).
-- La solicitud no puede estar `CANCELADO`, `VALIDADO` ni `ENTREGADO` al crear estudio.
+- La solicitud no puede estar **`FINALIZADO`** al crear estudio (`microbiologia_estado.crear_*`). **[HISTÓRICO Fase A]** el texto citaba `CANCELADO` / `VALIDADO` / `ENTREGADO` como estados de la **orden**.
 - Una solicitud puede tener varios estudios microbiológicos (uno por muestra; varios estudios por muestra están permitidos si se justifica).
 - Una siembra pertenece a un estudio y reutiliza la misma muestra del estudio (validación `clean`).
 - Una lectura pertenece a una siembra; `siembra.estudio_id` debe coincidir con `estudio_id`.
@@ -335,7 +353,7 @@ Extensión de la cadena B3.3:
 - Varios informes **PRELIMINAR** en cualquier estado (`BORRADOR` / `EMITIDO` / `ANULADO`). La emisión preliminar **no** cambia el estado del estudio.
 - Un solo informe **FINAL** vigente por estudio (`UniqueConstraint` con `tipo=FINAL` y `estado≠ANULADO`).
 - **Emitir** informe (cualquier tipo) exige texto no vacío. **Emitir FINAL** además exige completitud microbiológica (`verificar_completitud_para_informe_final`) y pasa el estudio a `LISTO_PARA_VALIDAR` (si no estaba ya en terminal avanzada).
-- **Validar** solo el informe **FINAL** en `EMITIDO`, con estudio en `LISTO_PARA_VALIDAR`, y solo rol **admin** (+ superuser). Pasa informe y estudio a `VALIDADO` y setea `fecha_cierre` del estudio si estaba vacía.
+- **Validar** solo el informe **FINAL** en `EMITIDO`, con estudio en `LISTO_PARA_VALIDAR`. Permiso: **`ROLES_LIMS_VALIDAR`** (`admin` / `bioquimico`) + bypass **superuser**. **No** “solo admin”. `InformeMicrobiologia` es **otra entidad** que `SolicitudExamen` (el `VALIDADO` de este párrafo es del **informe/estudio micro**, no de la orden). Pasa informe y estudio a `VALIDADO` y setea `fecha_cierre` del estudio si estaba vacía.
 - **Anular** con motivo obligatorio solo en `BORRADOR` o `EMITIDO` (no se anula un informe `VALIDADO` en B3.4).
 - **Marcar informado** (`POST …/estudios/{id}/marcar-informado/`): estudio `VALIDADO` + existencia de informe final `VALIDADO` → estudio `INFORMADO`.
 
@@ -387,7 +405,7 @@ Orden LIMS (SolicitudExamen) → Muestra → EstudioMicrobiologia
 1. Pasos 1–4 anteriores (sin informe preliminar)
 2. `POST aislados/` → `POST identificaciones/` → `POST antibiogramas/` → `POST resultados-antibiotico/` → `POST antibiogramas/{id}/completar/`
 3. `POST informes/` tipo `FINAL` → `POST emitir/` → estudio `LISTO_PARA_VALIDAR`
-4. Admin `POST validar/` → informe y estudio `VALIDADO`
+4. Admin o bioquímico `POST validar/` (informe micro; `ROLES_LIMS_VALIDAR` + superuser) → informe y estudio `VALIDADO`
 5. Lab `POST estudios/{id}/marcar-informado/` → estudio `INFORMADO`
 6. Operación técnica adicional (`POST siembras/`) → `400`
 

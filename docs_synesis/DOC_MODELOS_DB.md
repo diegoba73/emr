@@ -6,6 +6,7 @@
 **Actualización (Fase B3.2 — Microorganismos / aislados / identificación):** 13 de mayo de 2026  
 **Actualización (Fase B3.3 — Antibiograma microbiológico):** 13 de mayo de 2026  
 **Actualización (Fase B3.4 — Informes microbiológicos):** 14 de mayo de 2026  
+**Actualización (choices `SolicitudExamen.estado` vigentes):** 12 de septiembre de 2026  
 
 **Alcance:** Modelos Django presentes en el repositorio; tablas inferidas por convención `app_label` salvo `db_table` explícito.
 
@@ -234,8 +235,8 @@
 ### SolicitudExamen
 
 - `numero` unique nullable (generado LAB-…); FK Paciente CASCADE; FK Medico interno null; medico externo texto
-- M2M tipos_examen, paneles; `estado` choices; índices compuestos
-- `clean` coherencia cancelado/resultados
+- M2M tipos_examen, paneles; `estado` choices **[VIGENTE]:** `PENDIENTE`, `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`, `FINALIZADO` (terminal). **[HISTÓRICO]** no hay `TOMA_MUESTRA` / `VALIDADO` / `ENTREGADO` / `CANCELADO` en este modelo.
+- `clean` de orden: coherencia `consulta_hc`/paciente. No agregar `ResultadoExamen` nuevo a solicitud `FINALIZADO` (`ResultadoExamen.clean`). El docstring del modelo aún menciona “cancelada” en sentido histórico; el código compara `FINALIZADO`.
 
 ### ResultadoExamen
 

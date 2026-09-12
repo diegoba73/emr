@@ -5,7 +5,8 @@
 **Actualización (Fase A LIMS — acciones y auditoría de estado):** 3 de mayo de 2026  
 **Actualización (PROD-4 — media privada):** 8 de junio de 2026
 **Actualización (Fase B3.4 LIMS — Informes microbiológicos):** 14 de mayo de 2026  
-**Actualización (AUD-01 — redacción PHI auditoría genérica EMR):** 22 de junio de 2026
+**Actualización (AUD-01 — redacción PHI auditoría genérica EMR):** 22 de junio de 2026  
+**Actualización (alineación FSM/permisos orden LIMS vs código):** 12 de septiembre de 2026
 
 **Alcance:** Autenticación, autorización, auditoría y exposición de datos según código revisado.
 
@@ -56,7 +57,7 @@ Ubicación: `api/permissions.py`
 | `IsEMRClinicianOrReadOnly` | GET para autenticados; escritura como EMR clinician |
 | `CanUpdatePacienteDemographics` | staff/admin/secretaria; médico cualquier paciente GET/PATCH; paciente solo su ficha |
 | **`LimsCatalogReadPermission`** | Lectura GET de catálogos LIMS (tipos muestra/examen/panel): roles admin, laboratorio, medico, secretaria, enfermeria + superuser; **no** paciente ni anónimos |
-| **`LimsSolicitudExamenPermission`** | `SolicitudExamenViewSet` y acciones `cargar_resultados`, `validar`, `etiqueta`, **`informe_pdf`**, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`** (`view.action` en snake_case): matriz en `DOC_FLUJOS_LIMS.md`. `validar` solo **admin** (+ superuser); `tomar_muestra`, `cancelar`, `marcar_entregado` y `cargar_resultados`: **admin** y **laboratorio**; **`informe_pdf`**: **admin**, **laboratorio** y **médico** (médico solo solicitudes propias vía `get_queryset`/`has_object_permission`) |
+| **`LimsSolicitudExamenPermission`** | `SolicitudExamenViewSet` (`view.action` en snake_case). **Escritura operativa** (`ROLES_LIMS_WRITE` = `admin`, `laboratorio`, `bioquimico`; + superuser): create/update, `tomar_muestra`, `cargar_resultados`, `etiqueta`, etc. **Médico:** create / `agregar_examenes` (sin `validar`). **`validar` / `finalizar`:** `ROLES_LIMS_VALIDAR` = `admin` + `bioquimico`, más bypass `superuser`. **`laboratorio` no valida.** `is_staff` no otorga `validar`. **[VIGENTE]** no existen actions de orden `cancelar` ni `marcar_entregado` (404). **`informe_pdf`:** lectura LIMS (`_LIMS_SOLICITUD_READ_ROLES`); médico acotado por `get_queryset`/`has_object_permission`. Matriz: `DOC_FLUJOS_LIMS.md`. |
 
 **Nota:** Muchos ViewSets **no usan** estas clases y aplican lógica en `get_queryset` con comparación manual de `user.rol`.
 
@@ -143,7 +144,7 @@ Ocultar botones o campos en UI **no sustituye** controles de API; un cliente mal
 - Alta/edición de turnos (`TurnoViewSet`): `log_create` / `log_update` con actor y snapshot (best-effort). Mutaciones restringidas por rol desde C5.8.1; ver `turnos/tests/test_permissions_mutations.py`.
 - Borrado físico de turnos: **bloqueado** (405); no genera `log_delete`.
 - Transiciones de estado de turno: acciones POST con metadata `accion`, `estado_anterior`, `estado_nuevo`, `motivo`, `view` (C5.9.1–C5.9.2). **C5.10.1 `iniciar_atencion_turno`:** `log_create` solo si alta nueva de `Atencion`; `log_update` de `Turno` solo si cambia a `REALIZADO` (coordina `TurnoViewSet.iniciar_atencion`, no duplica con `AtencionViewSet.create`). **C5.10.2 compat `POST /api/atenciones/`:** headers de deprecación sin evento de auditoría adicional; `log_create` solo en alta real. PATCH/PUT `estado` bloqueado para todos los roles.
-- Laboratorio: creación/actualización solicitud (sin cambio de `estado` vía PATCH si el campo es read-only), resultados en `cargar_resultados`, validación, **`tomar_muestra`**, **`cancelar`**, **`marcar_entregado`**, descarga PDF **`lims_informe_pdf_download`** (`metadata`: `accion`, `solicitud_id`, `numero_solicitud`, `view`; sin PHI, sin `codigo_barra`, sin valores clínicos).
+- Laboratorio: creación/actualización solicitud (`estado` read-only en PATCH), resultados en `cargar_resultados`, **`validar`/`finalizar`**, **`tomar_muestra`**, descarga PDF **`lims_informe_pdf_download`** (`metadata`: `accion`, `estado_anterior`/`estado_nuevo` cuando aplica, `solicitud_id`, `numero_solicitud`, `view`; sin PHI, sin `codigo_barra`, sin valores clínicos). **[HISTÓRICO]** las actions de orden `cancelar` y `marcar_entregado` ya no existen.
 - Transiciones de estado de `SolicitudExamen`: `log_update` con `metadata` que incluye **`accion`**, **`estado_anterior`**, **`estado_nuevo`**, **`solicitud_id`**, **`numero_solicitud`** (vía `laboratorio/solicitud_estado.apply_solicitud_estado_transition`); además `before_state`/`after_state` del snapshot.
 - Solicitudes genéricas (`solicitudes.Solicitud`): `log_create` / `log_update` / `log_event` con `accion` técnica (`solicitud_create`, `solicitud_estado_cambio`, `solicitud_lims_enviar`, etc.); sin payload LIMS ni PHI en metadata.
 
@@ -266,13 +267,11 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 ## LIMS B3.4 (informes microbiológicos)
 
-- **`LimsMicrobiologiaInformePermission`** para `InformeMicrobiologiaViewSet`:
-  - **admin / superuser**: todas las acciones del viewset, incluida **`validar`** (único rol no superuser con `has_permission` para `action=validar`).
-  - **laboratorio**: `list`, `retrieve`, `create`, `partial_update`/`update`, **`emitir`**, **`anular`**; **no** `validar`.
-  - **medico**: solo `list`/`retrieve`; en objeto, solo si `estudio.solicitud.medico_interno.user` coincide con el usuario.
-  - **secretaria / enfermeria / paciente / anónimo**: sin acceso (`has_permission` false).
+- **`LimsMicrobiologiaInformePermission`** para `InformeMicrobiologiaViewSet` (**entidad distinta** de `SolicitudExamen`):
+  - **`validar` [VIGENTE]:** `ROLES_LIMS_VALIDAR` (`admin` / `bioquimico`) + bypass **superuser**. **No** “solo admin”. **`laboratorio` no valida.**
+  - **medico**: solo `list`/`retrieve`; visibilidad de objeto según `usuario_puede_ver_contenido_informe_micro`.
   - **`destroy`**: siempre denegado en `has_permission`.
-  - Cualquier otra `action` no listada arriba cae en `return False` en `has_permission` (p. ej. si se agregara una `@action` nueva habría que extender el permiso).
+  - **[HALLAZGO — revisión humana, no se cambia código en este ticket]** en `api/permissions.py` las actions `create` / `update` / `partial_update` / `emitir` / `anular` / `validar` exigen **el mismo** `ROLES_LIMS_VALIDAR` (no el rol `laboratorio`). La matriz B3.4 histórica decía que laboratorio crea/emite/anula y solo admin valida. No se adopta aquí una política nueva: queda registrado el drift código vs texto histórico.
 - **`LimsMicrobiologiaPermission`**: acción **`marcar_informado`** permitida a **admin** y **laboratorio** (además de `iniciar`, `cancelar`, `descartar`, etc.).
 - **secretaria / enfermeria**: siguen **sin** lectura de informes ni del resto de microbiología LIMS en B3.4 (misma política que B3.1–B3.3).
 - Auditoría B3.4: eventos de creación/actualización/emisión/validación/anulación de informe y de `marcar_informado` (acciones y metadata acotada en `microbiologia_estado.py` — sin PHI del paciente ni texto de informe en metadata/snapshots genéricos).

@@ -363,6 +363,8 @@ emr_env/bin/pytest laboratorio/tests/test_api.py laboratorio/tests/test_models.p
 
 ## Tests recomendados para LIMS
 
+**[VIGENTE]** contrato de orden: `PENDIENTE` / `EN_PROCESO` / `INFORMADO_PARCIAL` / `LISTO_PARA_VALIDAR` / `FINALIZADO`; `validar`/`finalizar` = admin / bioquimico / superuser. **[HISTÓRICO Fase A]** los ítems 2, 3 y 5 citan estados/actions de orden ya remapeados (`TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO`, `cancelar`, `marcar-entregado`).
+
 1. `SolicitudExamenCreateSerializer`: creación de `ResultadoExamen` por paneles con solapamiento (**cubierto en parte** por `test_api`).
 2. `cargar_resultados` con solicitud `VALIDADO` / `CANCELADO` / `ENTREGADO` (**cubierto** en `TestSolicitudExamenEstadoAPI`).
 3. `validar`: solo `EN_PROCESO`, resultados vacíos rechazados; `bulk update` en resultados + auditoría (**cubierto** en `test_api` + estado).
@@ -577,7 +579,7 @@ cd frontend && CI=true npm test -- --watchAll=false --runInBand src/utils/limsAc
 **Fase B3.4 (Informes microbiológicos):**
 
 - `laboratorio/tests/test_microbiologia_models.py` (`TestInformeMicrobiologiaModel`): informes preliminares múltiples; unicidad de `FINAL` vigente; emisión con texto obligatorio; completitud (lecturas, aislados, antibiograma `COMPLETO` cuando `requiere_antibiograma`); transiciones de estudio `LISTO_PARA_VALIDAR` / `VALIDADO` / `INFORMADO`; anulación con motivo; bloqueos PATCH tras `VALIDADO`; etc.
-- `laboratorio/tests/test_microbiologia_api.py` (`TestInformeMicrobiologiaAPI`): permisos lab/admin/médico/paciente; `validar` solo admin; `marcar-informado`; anulación con motivo; alias de rutas; auditoría con `captureOnCommitCallbacks(execute=True)`.
+- `laboratorio/tests/test_microbiologia_api.py` (`TestInformeMicrobiologiaAPI`): permisos lab/admin/médico/paciente; `validar` documentado en código como `ROLES_LIMS_VALIDAR` (admin / bioquimico / superuser). **[GAP de tests]** `bioquimico` validando informe micro. `marcar-informado`; anulación con motivo; alias de rutas; auditoría con `captureOnCommitCallbacks(execute=True)`.
 
 **Fase B2.1:** ampliación de `laboratorio/tests/test_resultados_muestras_api.py`:
 - `test_carga_muestra_descartada_400`, `test_carga_muestra_cancelada_400` (matriz API completa de estados inválidos).
