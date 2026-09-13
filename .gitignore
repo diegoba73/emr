@@ -69,7 +69,6 @@ backup_documentacion/
 # Artefactos locales de desarrollo / IDE / contexto IA
 synesis_db
 DB_GAP_REPORT.txt
-_GEM_CONTEXT/
 .cursor/*
 !.cursor/rules/
 .cursor/rules/*

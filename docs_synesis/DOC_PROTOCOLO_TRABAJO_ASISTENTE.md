@@ -330,22 +330,6 @@ Copiar en el reporte de avance:
 - Pass/fail y conteo (ej. `328 passed`)
 - Si no se corrieron tests: **motivo** (alcance solo docs, bloqueo de entorno, etc.)
 
-### 5.9 Actualizar contexto Gem (ICPL)
-
-Solo con disparadores: «Actualiza los datos para Gem», «actualiza gem», «update gem context».
-
-No resumir: la IA Arquitecta necesita código casi textual.
-
-1. Verificar o crear `_GEM_CONTEXT/`.
-2. Escanear el proyecto.
-3. **BD:** todos los `models.py` en `apps/` → `_GEM_CONTEXT/DOC_MODELOS_DB.md` (clases casi textuales: campos, `choices`, `properties`, `save`/`clean`/`Meta`; separar con `# === APP: [Ruta] ===`).
-4. **Frontend:** `frontend/src` → `_GEM_CONTEXT/DOC_FRONTEND.md` (`package.json`, árbol, store/`DataContext`, componentes y props).
-5. **Reglas:** `serializers.py` / `views.py` / `services.py` / `permissions.py` → `_GEM_CONTEXT/DOC_REGLAS_NEGOCIO.md` (validaciones `validate_`, permisos, cambios de estado).
-
-Respuesta única: `✅ Documentación ACTUALIZADA y DETALLADA en carpeta /_GEM_CONTEXT. Lista para subir al Gem.`
-
-`_GEM_CONTEXT/` **no** sustituye `docs_synesis/`.
-
 ---
 
 ## 6. Reglas de "no tocar"
@@ -378,7 +362,6 @@ Salvo ticket explícito que las incluya en **alcance permitido**:
 
 | Prohibido | Motivo |
 |-----------|--------|
-| Usar `_GEM_CONTEXT/` como única SoT | Export histórico Gem |
 | Afirmar features **[OBJETIVO]** como **[IMPLEMENTADO]** | Desalineación |
 | Cambiar reglas clínicas desde un DOC operativo | Jerarquía SoT |
 
@@ -557,5 +540,6 @@ Copiar al cerrar una sesión o al pedir revisión al asistente.
 
 | Versión | Fecha | Cambio |
 |---------|-------|--------|
-| 1.1 | 2026-09-12 | Índice rector `REGLAS_INDICE.md`; Gem §5.9; checkpoints alineados al script |
+| 1.2 | 2026-09-13 | Retiro del export Gemini Gem (`_GEM_CONTEXT/`, disparador «actualiza gem») |
+| 1.1 | 2026-09-12 | Índice rector `REGLAS_INDICE.md`; checkpoints alineados al script |
 | 1.0 | 2026-06-21 | Creación inicial |

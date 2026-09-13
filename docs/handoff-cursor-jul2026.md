@@ -245,4 +245,4 @@ kinesiologo, radiologo, ecografista, fonoaudiologo
 
 **Nota para el arquitecto:** Este documento resume trabajo hecho **directamente con Cursor** para iteración rápida. No reemplaza `docs_synesis/` ni los tickets formales previos; complementa el gap entre `master` remoto y el estado real del workspace de Diego.
 
-**Documentación técnica complementaria:** carpeta `_GEM_CONTEXT/` (modelos DB, frontend, reglas de negocio) generada el mismo día.
+**Documentación técnica complementaria:** `docs_synesis/` (el export `_GEM_CONTEXT/` para Gemini Gem se retiró el 13-sep-2026).

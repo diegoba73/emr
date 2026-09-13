@@ -101,8 +101,6 @@ Complemento existente: `docs_synesis/checklists/pre-commit-emr-lims.md` (dominio
 
 Ubicación canónica: **`docs_synesis/`**. Índice rector (dónde están las reglas y quién gana): **`REGLAS_INDICE.md`**.
 
-No confundir con `_GEM_CONTEXT/` (export Gem; no sustituye SoT).
-
 La tabla siguiente es **catálogo**, no jerarquía. La jerarquía vive solo en `REGLAS_INDICE.md`.
 
 | Documento | Estado en repo (mayo 2026) | Mandato |
@@ -127,7 +125,6 @@ La tabla siguiente es **catálogo**, no jerarquía. La jerarquía vive solo en `
 | `reglas/*.md` | Presente | Reglas modulares (complemento) |
 | `prompts/prompt-maestro-cursor.md` | Presente | Prompt maestro legacy; alinear con este DOC |
 | `README.md` (raíz) | **No presente** | Documento esperado si está presente en otras ramas |
-| `_GEM_CONTEXT/DOC_*.md` | Puede existir | Export Gem; verificar fecha y no usar como única SoT |
 
 Ante ausencia de un documento listado arriba: tratarlo como **“documento esperado si está presente”** y no afirmar comportamiento no verificado en código.
 

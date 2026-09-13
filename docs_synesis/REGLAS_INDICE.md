@@ -68,13 +68,12 @@ PHI, mezclar bases locales o tocar la otra app del servidor: `reglas/entorno-loc
 - Este índice **solo referencia**.
 - Los `SYNESIS_*.md` (paquete `docs_synesis_gpt_knowledge/`) son **derivados** de `scripts/build_synesis_gpt_knowledge.py`. No editarlos a mano para meter una regla.
 - Cualquier cambio de regla se hace **primero** en la fuente canónica de `docs_synesis/`; después se regenera el paquete.
-- No definir reglas en `.cursor/rules` ni `_GEM_CONTEXT/`. Cursor solo tiene un puntero: `.cursor/rules/synesis-reglas.mdc`.
+- No definir reglas en `.cursor/rules`. Cursor solo tiene un puntero: `.cursor/rules/synesis-reglas.mdc`.
 
 ## Disparadores del asistente
 
 Procedimiento en `DOC_PROTOCOLO_TRABAJO_ASISTENTE.md` (no repetir aquí):
 
-- «actualiza gem» / «update gem context» → §5.9
 - «checkpoint» / «volver» / «último checkpoint» → §5.7
 
 Arranque local (cómo, no la política): `docs/dev-start.md`.
