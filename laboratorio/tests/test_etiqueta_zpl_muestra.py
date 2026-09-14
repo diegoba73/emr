@@ -470,21 +470,16 @@ class TestEtiquetaMuestraApi(TestCase):
             view="test",
         )
         self.client.force_authenticate(self.lab)
-        with mock.patch(
-            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer"
-        ):
-            with override_settings(
-                LIMS_LABEL_PRINTER_ENABLED=True,
-                LIMS_LABEL_PRINTER_HOST="127.0.0.1",
-                LIMS_LABEL_PRINTER_PORT=9100,
-            ):
-                with self.captureOnCommitCallbacks(execute=True):
-                    r = self.client.post(
-                        f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
-                        {},
-                        format="json",
-                    )
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        body = r.json()
+        self.assertEqual(body["resultado"], "prepared")
+        self.assertTrue((body.get("zpl") or "").startswith("^XA"))
         m.refresh_from_db()
         self.solicitud.refresh_from_db()
         self.assertEqual(m.estado, "PENDIENTE_TOMA")
@@ -496,6 +491,9 @@ class TestEtiquetaMuestraApi(TestCase):
         self.assertTrue(orden_esperando_recepcion(self.solicitud))
         self.assertFalse(
             AuditEvent.objects.filter(metadata__accion="muestra_tomar").exists()
+        )
+        self.assertFalse(
+            AuditEvent.objects.filter(metadata__accion="muestra_etiqueta_print").exists()
         )
 
     def test_imprimir_sin_lugar_ni_origen_usable_400(self):
@@ -515,15 +513,11 @@ class TestEtiquetaMuestraApi(TestCase):
             "laboratorio.services_etiqueta_muestra.resolver_lugar_etiqueta_desde_solicitud",
             return_value="",
         ):
-            with override_settings(
-                LIMS_LABEL_PRINTER_ENABLED=True,
-                LIMS_LABEL_PRINTER_HOST="127.0.0.1",
-            ):
-                r = self.client.post(
-                    f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
-                    {},
-                    format="json",
-                )
+            r = self.client.post(
+                f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertNotIn("zpl", (r.json().get("error") or "").lower())
 
@@ -534,46 +528,55 @@ class TestEtiquetaMuestraApi(TestCase):
         with self.assertRaises(EtiquetaMuestraError):
             build_etiqueta_muestra(m, require_printable=True)
 
-    @override_settings(LIMS_LABEL_PRINTER_ENABLED=False)
-    def test_imprimir_disabled_503(self):
+    def test_imprimir_sin_impresora_servidor_igual_200(self):
+        """El servidor ya no requiere HOST/ENABLED: solo prepara ZPL."""
         m = self._muestra_lista()
         self.client.force_authenticate(self.lab)
-        r = self.client.post(f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/", {}, format="json")
-        self.assertEqual(r.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertIn("no configurada", r.json()["error"].lower())
+        with override_settings(
+            LIMS_LABEL_PRINTER_ENABLED=False,
+            LIMS_LABEL_PRINTER_HOST="",
+        ):
+            r = self.client.post(
+                f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["resultado"], "prepared")
+        self.assertIn("^XA", r.json().get("zpl") or "")
         self.assertFalse(
             AuditEvent.objects.filter(metadata__accion="muestra_etiqueta_print").exists()
         )
 
-    @override_settings(
-        LIMS_LABEL_PRINTER_ENABLED=True,
-        LIMS_LABEL_PRINTER_HOST="127.0.0.1",
-        LIMS_LABEL_PRINTER_PORT=9100,
-    )
-    def test_imprimir_ok_audita_sin_phi(self):
+    def test_confirmar_impresion_audita_sin_phi(self):
         m = self._muestra_lista()
         self.client.force_authenticate(self.lab)
-        with mock.patch(
-            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer"
-        ) as send:
-            with self.captureOnCommitCallbacks(execute=True):
-                r = self.client.post(
-                    f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
-                    {},
-                    format="json",
-                )
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
-        send.assert_called_once()
-        body = r.json()
-        self.assertEqual(body["resultado"], "ok")
-        self.assertNotIn("zpl", body)
-        self.assertNotIn("lines", body)
+        self.assertFalse(
+            AuditEvent.objects.filter(metadata__accion="muestra_etiqueta_print").exists()
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            r2 = self.client.post(
+                f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/confirmar/",
+                {"profile": "3nstar_ldt114_203_40x23"},
+                format="json",
+            )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
+        self.assertEqual(r2.json()["transport"], "local_agent")
+        self.assertNotIn("zpl", r2.json())
 
         ev = AuditEvent.objects.filter(metadata__accion="muestra_etiqueta_print").latest("id")
         meta = ev.metadata or {}
         blob = str(meta) + str(ev.before_state) + str(ev.after_state) + (ev.entity_repr or "")
         self.assertEqual(meta.get("muestra_id"), m.pk)
         self.assertEqual(meta.get("solicitud_id"), m.solicitud_id)
+        self.assertEqual(meta.get("transport"), "local_agent")
         self.assertNotIn(m.codigo_barra or "___", blob)
         self.assertNotIn(self.paciente.dni, blob)
         self.assertNotIn("Perez", blob)
@@ -581,17 +584,13 @@ class TestEtiquetaMuestraApi(TestCase):
         self.assertNotIn("GUARDIA", blob)
         self.assertNotIn("^XA", blob)
 
-        # Reimpresión = segundo evento
-        with mock.patch(
-            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer"
-        ):
-            with self.captureOnCommitCallbacks(execute=True):
-                r2 = self.client.post(
-                    f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/",
-                    {},
-                    format="json",
-                )
-        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        with self.captureOnCommitCallbacks(execute=True):
+            r3 = self.client.post(
+                f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/confirmar/",
+                {},
+                format="json",
+            )
+        self.assertEqual(r3.status_code, status.HTTP_200_OK)
         self.assertEqual(
             AuditEvent.objects.filter(metadata__accion="muestra_etiqueta_print").count(),
             2,
@@ -606,6 +605,12 @@ class TestEtiquetaMuestraApi(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        r2 = self.client.post(
+            f"/api/lab/muestras-transaccionales/{m.pk}/imprimir-etiqueta/confirmar/",
+            {},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_muestra_inexistente_sin_phi(self):
         self.client.force_authenticate(self.lab)
@@ -677,12 +682,8 @@ class TestLabelPrinterTransport(TestCase):
         self.assertEqual(ctx.exception.code, "printer_unreachable")
         self.assertEqual(conn.call_count, 1)
 
-    @override_settings(
-        LIMS_LABEL_PRINTER_ENABLED=True,
-        LIMS_LABEL_PRINTER_HOST="127.0.0.1",
-        LIMS_LABEL_PRINTER_PORT=9100,
-    )
-    def test_imprimir_timeout_no_audit_success(self):
+    def test_imprimir_prepare_no_audita(self):
+        """Preparar ZPL no registra muestra_etiqueta_print (eso es confirmar)."""
         suf = uuid.uuid4().hex[:8]
         lab = User.objects.create_user(
             username=f"lab_to_{suf}",
@@ -711,12 +712,9 @@ class TestLabelPrinterTransport(TestCase):
         )
         aplicar_tomar(m.pk, actor=lab, view="t", lugar_extraccion="GUARDIA")
         m.refresh_from_db()
-        with mock.patch(
-            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer",
-            side_effect=LabelPrinterError("printer_timeout", "fail"),
-        ):
-            with self.assertRaises(LabelPrinterError):
-                imprimir_etiqueta_muestra(m, actor=lab, view="t")
+        result = imprimir_etiqueta_muestra(m, actor=lab, view="t")
+        self.assertEqual(result["resultado"], "prepared")
+        self.assertIn("^XA", result.get("zpl") or "")
         self.assertFalse(
             AuditEvent.objects.filter(metadata__accion="muestra_etiqueta_print").exists()
         )
@@ -993,12 +991,8 @@ class TestCodigoBarraZplIdentity(TestCase):
         self.assertFalse(payload.printable)
         self.assertEqual(payload.zpl, "")
         self.assertTrue(any("lugar" in e.lower() for e in payload.validation_errors))
-        with mock.patch(
-            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer"
-        ) as send:
-            with self.assertRaises(EtiquetaMuestraError):
-                imprimir_etiqueta_muestra(m, actor=lab, view="t")
-            send.assert_not_called()
+        with self.assertRaises(EtiquetaMuestraError):
+            imprimir_etiqueta_muestra(m, actor=lab, view="t")
 
     def test_preview_lines_igual_fd_zpl(self):
         lines = build_label_lines(
@@ -1062,9 +1056,5 @@ class TestCodigoBarraZplIdentity(TestCase):
         )
         with self.assertRaises(EtiquetaMuestraError):
             build_etiqueta_muestra(m, require_printable=True)
-        with mock.patch(
-            "laboratorio.services_etiqueta_muestra.send_zpl_to_network_printer"
-        ) as send:
-            with self.assertRaises(EtiquetaMuestraError):
-                imprimir_etiqueta_muestra(m, actor=lab, view="t")
-            send.assert_not_called()
+        with self.assertRaises(EtiquetaMuestraError):
+            imprimir_etiqueta_muestra(m, actor=lab, view="t")

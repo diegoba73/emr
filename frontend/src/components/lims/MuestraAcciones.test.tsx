@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mockTomar = jest.fn();
-const mockImprimir = jest.fn();
+const mockImprimirLocal = jest.fn();
 const mockGetZpl = jest.fn();
 const mockPatch = jest.fn();
 
@@ -13,10 +13,19 @@ jest.mock('../../services/limsApi', () => ({
   postMuestraConservar: jest.fn(),
   postMuestraDescartar: jest.fn(),
   postMuestraCancelar: jest.fn(),
-  postMuestraImprimirEtiqueta: (...args: unknown[]) => mockImprimir(...args),
+  postMuestraImprimirEtiqueta: jest.fn(),
+  postMuestraConfirmarImpresionEtiqueta: jest.fn(),
   getMuestraEtiquetaZpl: (...args: unknown[]) => mockGetZpl(...args),
   patchMuestraTransaccional: (...args: unknown[]) => mockPatch(...args),
 }));
+
+jest.mock('../../services/labelPrintAgent', () => {
+  const actual = jest.requireActual('../../services/labelPrintAgent') as typeof import('../../services/labelPrintAgent');
+  return {
+    ...actual,
+    imprimirEtiquetaMuestraLocal: (...args: unknown[]) => mockImprimirLocal(...args),
+  };
+});
 
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
@@ -28,6 +37,7 @@ jest.mock('react-hot-toast', () => ({
 
 import toast from 'react-hot-toast';
 import type { MuestraTransaccional } from '../../types/lims';
+import { LabelPrintAgentError, AGENT_DOWN_MSG, NO_PRINTER_MSG, PRINT_UNCERTAIN_MSG } from '../../services/labelPrintAgent';
 import MuestraAcciones from './MuestraAcciones';
 
 const mockToast = toast as unknown as { success: jest.Mock; error: jest.Mock };
@@ -63,7 +73,7 @@ describe('MuestraAcciones etiquetas ZPL', () => {
       printable: true,
       validation_errors: [],
     });
-    mockImprimir.mockResolvedValue({ muestra_id: 42, profile: 'x', resultado: 'ok' });
+    mockImprimirLocal.mockResolvedValue(undefined);
     mockTomar.mockResolvedValue({ ...baseMuestra, estado: 'TOMADA' });
     mockPatch.mockResolvedValue({ ...baseMuestra, lugar_extraccion: 'INTERNACIÓN — UCO — CAMA 3' });
   });
@@ -93,7 +103,7 @@ describe('MuestraAcciones etiquetas ZPL', () => {
 
   it('imprime con snackbar y bloquea doble submit', async () => {
     let resolvePrint: (v: unknown) => void = () => undefined;
-    mockImprimir.mockImplementation(
+    mockImprimirLocal.mockImplementation(
       () =>
         new Promise((resolve) => {
           resolvePrint = resolve;
@@ -103,36 +113,36 @@ describe('MuestraAcciones etiquetas ZPL', () => {
     const btn = screen.getByRole('button', { name: 'Imprimir etiqueta' });
     fireEvent.click(btn);
     fireEvent.click(btn);
-    await waitFor(() => expect(mockImprimir).toHaveBeenCalledTimes(1));
-    resolvePrint({ muestra_id: 42, profile: 'x', resultado: 'ok' });
+    await waitFor(() => expect(mockImprimirLocal).toHaveBeenCalledTimes(1));
+    resolvePrint(undefined);
     await waitFor(() => {
       expect(mockToast.success).toHaveBeenCalledWith('Etiqueta enviada a impresión');
     });
   });
 
-  it('503 impresora no configurada', async () => {
-    mockImprimir.mockRejectedValue({
-      response: { status: 503, data: { error: 'Impresora de etiquetas no configurada' } },
-    });
+  it('agente ausente', async () => {
+    mockImprimirLocal.mockRejectedValue(new LabelPrintAgentError('agent_down', AGENT_DOWN_MSG));
     render(<MuestraAcciones muestra={baseMuestra} canOperate onUpdated={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
     await waitFor(() => {
-      expect(mockToast.error).toHaveBeenCalledWith('Impresora de etiquetas no configurada');
+      expect(mockToast.error).toHaveBeenCalledWith(AGENT_DOWN_MSG);
     });
     const msg = String(mockToast.error.mock.calls[0][0]);
     expect(msg.toLowerCase()).not.toContain('zpl');
     expect(msg).not.toContain('PEREZ');
   });
 
-  it('timeout ambiguo', async () => {
-    mockImprimir.mockRejectedValue({
-      response: {
-        status: 503,
-        data: {
-          error: 'No se pudo confirmar la impresión. Verifique la impresora antes de reimprimir.',
-        },
-      },
+  it('sin impresora USB en esta PC', async () => {
+    mockImprimirLocal.mockRejectedValue(new LabelPrintAgentError('no_printer', NO_PRINTER_MSG));
+    render(<MuestraAcciones muestra={baseMuestra} canOperate onUpdated={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith(NO_PRINTER_MSG);
     });
+  });
+
+  it('timeout ambiguo', async () => {
+    mockImprimirLocal.mockRejectedValue(new LabelPrintAgentError('print_failed', PRINT_UNCERTAIN_MSG));
     render(<MuestraAcciones muestra={baseMuestra} canOperate onUpdated={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
     await waitFor(() => {
@@ -143,7 +153,7 @@ describe('MuestraAcciones etiquetas ZPL', () => {
   });
 
   it('error de red sin response → incertidumbre', async () => {
-    mockImprimir.mockRejectedValue({ message: 'Network Error' });
+    mockImprimirLocal.mockRejectedValue({ message: 'Network Error' });
     render(<MuestraAcciones muestra={baseMuestra} canOperate onUpdated={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
     await waitFor(() => {
@@ -153,7 +163,7 @@ describe('MuestraAcciones etiquetas ZPL', () => {
     });
     const msg = String(mockToast.error.mock.calls[0][0]);
     expect(msg.toLowerCase()).not.toContain('intentá');
-    expect(mockImprimir).toHaveBeenCalledTimes(1);
+    expect(mockImprimirLocal).toHaveBeenCalledTimes(1);
   });
 
   it('toma solicita lugar de extracción', async () => {

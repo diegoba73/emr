@@ -332,7 +332,8 @@ Prefijos **`/api/lab/...`** y alias **`/api/laboratorio/...`** (mismos ViewSets)
 | `.../{id}/eventos/` | GET | admin/lab/médico (médico: solo muestras de órdenes propias) |
 | `.../{id}/etiqueta/` | GET | PDF Code128 (tubo); admin/lab (+ médico vía permiso de acción; object: operadores) |
 | `.../{id}/etiqueta-zpl/` | GET | Vista previa JSON+ZPL 40×23 mm (PHI); **solo** admin/lab/bioquímico/superuser |
-| `.../{id}/imprimir-etiqueta/` | POST | Envío ZPL a impresora de red (env); mismo permiso; completa lugar/fecha de etiqueta sin TOMADA ni EN_PROCESO |
+| `.../{id}/imprimir-etiqueta/` | POST | Prepara ZPL (snapshot lugar/fecha, sin TOMADA ni EN_PROCESO); el navegador lo envía al agente USB local |
+| `.../{id}/imprimir-etiqueta/confirmar/` | POST | Auditoría de impresión local OK (`transport=local_agent`); mismo permiso |
 
 **Etiqueta ZPL 40×23 (3nStar LDT114):** ver `docs/labels-lims-3nstar-ldt114.md`. Identidad = `codigo_barra`; lugar = `lugar_extraccion` (snapshot en `tomar`, no `ubicacion_actual`); fecha = `fecha_toma`. `tomar` acepta `lugar_extraccion` opcional (compat `{}`).
 

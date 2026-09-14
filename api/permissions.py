@@ -888,6 +888,7 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
             "tomar_por_codigo",
             # Nuevas acciones ZPL: misma familia write que tomar/recibir (ROLES_LIMS_WRITE).
             "imprimir_etiqueta",
+            "confirmar_impresion_etiqueta",
         ):
             return role in ROLES_LIMS_WRITE
         if action in ("etiqueta", "por_codigo"):

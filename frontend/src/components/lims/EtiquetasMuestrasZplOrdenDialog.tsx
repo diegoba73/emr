@@ -16,9 +16,9 @@ import type { EtiquetaMuestraZpl, MuestraTransaccional } from '../../types/lims'
 import {
   getMuestraEtiquetaZpl,
   listMuestrasPorSolicitud,
-  postMuestraImprimirEtiqueta,
   printTalonOrden,
 } from '../../services/limsApi';
+import { imprimirEtiquetaMuestraLocal } from '../../services/labelPrintAgent';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import type { OrigenParaLugarExtraccion } from '../../utils/limsOrigenSolicitud';
 import { printerErrorMessage } from './EtiquetaMuestraZplDialog';
@@ -178,7 +178,7 @@ const EtiquetasMuestrasZplOrdenDialog: React.FC<EtiquetasMuestrasZplOrdenDialogP
     printLocks.current[id] = true;
     setRowPrinting(id, true);
     try {
-      await postMuestraImprimirEtiqueta(id);
+      await imprimirEtiquetaMuestraLocal(id);
       toast.success(
         `Etiqueta enviada a impresión${
           row.muestra.codigo_barra ? ` (${row.muestra.codigo_barra})` : ''
@@ -237,8 +237,8 @@ const EtiquetasMuestrasZplOrdenDialog: React.FC<EtiquetasMuestrasZplOrdenDialogP
       </DialogTitle>
       <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Etiqueta = impresora de tubos (ZPL). Talón = media hoja A4 por muestra (impresora
-          común) si la etiquetadora falla. Ninguna opción recepciona la muestra.
+          Etiqueta = impresora USB de tubos en esta PC (agente ZPL). Talón = media hoja A4 por
+          muestra (impresora común) si la etiquetadora falla. Ninguna opción recepciona la muestra.
         </Typography>
         {loadingList && rows.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>

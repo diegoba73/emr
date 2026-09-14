@@ -90,8 +90,26 @@ class TestTalonPedidoClinicoApi(TestCase):
             ).exists()
         )
 
+    def test_talon_una_muestra_sin_copia_ni_borde_punteado(self):
+        """Un tubo → una página, solo media hoja, sin línea de corte."""
+        from laboratorio.talon_pedido_pdf import generar_talon_solicitud_pdf_bytes
+
+        crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=self.lab,
+            view="t",
+        )
+        pdf = generar_talon_solicitud_pdf_bytes(self.sol)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertNotIn(b"cortar", pdf)
+        pages = pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages")
+        self.assertEqual(pages, 1)
+
     def test_talon_dos_muestras_media_hoja_ok(self):
-        """Dos tubos → PDF válido (2 medias hojas en 1 página)."""
+        """Dos tubos → 2 páginas (un talón por hoja, sin copiar abajo)."""
         from laboratorio.talon_pedido_pdf import generar_talon_solicitud_pdf_bytes
 
         crear_muestra(
@@ -113,6 +131,9 @@ class TestTalonPedidoClinicoApi(TestCase):
         pdf = generar_talon_solicitud_pdf_bytes(self.sol)
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 500)
+        self.assertNotIn(b"cortar", pdf)
+        pages = pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages")
+        self.assertEqual(pages, 2)
 
     def test_talon_pdf_medico_403(self):
         self.client.force_authenticate(self.med)

@@ -468,8 +468,19 @@ export async function getMuestraEtiquetaZpl(id: number): Promise<import('../type
 
 export async function postMuestraImprimirEtiqueta(
   id: number
-): Promise<{ muestra_id: number; profile: string; resultado: string }> {
+): Promise<{ muestra_id: number; profile: string; resultado: string; zpl: string }> {
   const { data } = await apiClient.post(`${LAB}/muestras-transaccionales/${id}/imprimir-etiqueta/`, {});
+  return data;
+}
+
+export async function postMuestraConfirmarImpresionEtiqueta(
+  id: number,
+  profile?: string
+): Promise<{ muestra_id: number; profile: string; resultado: string; transport: string }> {
+  const { data } = await apiClient.post(
+    `${LAB}/muestras-transaccionales/${id}/imprimir-etiqueta/confirmar/`,
+    profile ? { profile } : {}
+  );
   return data;
 }
 
@@ -1233,6 +1244,7 @@ export interface IqcEquipoHoy {
   ensayos: IqcEnsayoHoy[];
   aviso_valores?: boolean;
   aviso_valores_mensaje?: string | null;
+  politica_valores?: 'LUN_VIE' | 'A_DEMANDA';
 }
 
 export interface IqcTableroHoy {

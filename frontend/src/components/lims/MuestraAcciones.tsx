@@ -17,11 +17,11 @@ import {
   postMuestraCancelar,
   postMuestraConservar,
   postMuestraDescartar,
-  postMuestraImprimirEtiqueta,
   postMuestraRecibir,
   postMuestraRechazar,
   postMuestraTomar,
 } from '../../services/limsApi';
+import { imprimirEtiquetaMuestraLocal } from '../../services/labelPrintAgent';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   sugerirLugarExtraccionDesdeOrigen,
@@ -76,7 +76,7 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({
     printLock.current = true;
     setPrinting(true);
     try {
-      await postMuestraImprimirEtiqueta(muestra.id);
+      await imprimirEtiquetaMuestraLocal(muestra.id);
       toast.success('Etiqueta enviada a impresión');
     } catch (e) {
       toast.error(printerErrorMessage(e));

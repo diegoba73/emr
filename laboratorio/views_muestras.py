@@ -345,8 +345,7 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="imprimir-etiqueta")
     def imprimir_etiqueta(self, request, pk=None):
-        """Envía ZPL a la impresora de red configurada en el servidor (sin mutar la muestra)."""
-        from laboratorio.label_printer_transport import LabelPrinterError
+        """Prepara ZPL (snapshot lugar/fecha) sin enviar a impresora ni mutar FSM."""
         from laboratorio.services_etiqueta_muestra import (
             EtiquetaMuestraError,
             imprimir_etiqueta_muestra,
@@ -361,10 +360,23 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
             )
         except EtiquetaMuestraError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except LabelPrinterError as e:
-            if e.code in ("printer_disabled", "printer_misconfigured"):
-                return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(result, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="imprimir-etiqueta/confirmar")
+    def confirmar_impresion_etiqueta(self, request, pk=None):
+        """Audita impresión local OK (agente USB). No muta la muestra."""
+        from laboratorio.services_etiqueta_muestra import confirmar_impresion_etiqueta_muestra
+
+        muestra = self.get_object()
+        profile = ""
+        if isinstance(request.data, dict):
+            profile = (request.data.get("profile") or "").strip()
+        result = confirmar_impresion_etiqueta_muestra(
+            muestra,
+            actor=request.user,
+            view="MuestraTransaccionalViewSet.confirmar_impresion_etiqueta",
+            profile_key=profile or None,
+        )
         return Response(result, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path=r"por-codigo/(?P<codigo>[^/]+)")

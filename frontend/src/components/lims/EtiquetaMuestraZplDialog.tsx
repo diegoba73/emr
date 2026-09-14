@@ -11,7 +11,14 @@ import {
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import type { EtiquetaMuestraZpl } from '../../types/lims';
-import { getMuestraEtiquetaZpl, postMuestraImprimirEtiqueta } from '../../services/limsApi';
+import { getMuestraEtiquetaZpl } from '../../services/limsApi';
+import {
+  AGENT_DOWN_MSG,
+  LabelPrintAgentError,
+  NO_PRINTER_MSG,
+  PRINT_UNCERTAIN_MSG,
+  imprimirEtiquetaMuestraLocal,
+} from '../../services/labelPrintAgent';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
 export interface EtiquetaMuestraZplDialogProps {
@@ -22,21 +29,26 @@ export interface EtiquetaMuestraZplDialogProps {
   autoPrint?: boolean;
 }
 
-const PRINT_UNCERTAIN_MSG =
-  'No se pudo confirmar la impresión. Verifique la impresora antes de reimprimir.';
+const PRINT_FAIL_MSG = PRINT_UNCERTAIN_MSG;
 
 /** Errores de impresión: nunca sugerir reintento automático / "Intentá nuevamente". */
 export function printerErrorMessage(error: unknown): string {
+  if (error instanceof LabelPrintAgentError) {
+    return error.message;
+  }
   const status = (error as { response?: { status?: number } })?.response?.status;
   const data = (error as { response?: { data?: { error?: string } } })?.response?.data;
   const msg = typeof data?.error === 'string' ? data.error : '';
   if (status === 400 && msg) {
     return msg;
   }
-  if (status === 503 && msg.toLowerCase().includes('no configurada')) {
-    return 'Impresora de etiquetas no configurada';
+  if (msg === AGENT_DOWN_MSG || msg === NO_PRINTER_MSG) {
+    return msg;
   }
-  return PRINT_UNCERTAIN_MSG;
+  if (status === 503 && msg.toLowerCase().includes('no configurada')) {
+    return AGENT_DOWN_MSG;
+  }
+  return PRINT_FAIL_MSG;
 }
 
 const EtiquetaMuestraZplDialog: React.FC<EtiquetaMuestraZplDialogProps> = ({
@@ -80,7 +92,7 @@ const EtiquetaMuestraZplDialog: React.FC<EtiquetaMuestraZplDialogProps> = ({
     printLock.current = true;
     setPrinting(true);
     try {
-      await postMuestraImprimirEtiqueta(muestraId);
+      await imprimirEtiquetaMuestraLocal(muestraId);
       toast.success('Etiqueta enviada a impresión');
       onClose();
     } catch (e) {

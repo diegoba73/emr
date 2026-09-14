@@ -3,15 +3,24 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mockList = jest.fn();
 const mockGetZpl = jest.fn();
-const mockImprimir = jest.fn();
+const mockImprimirLocal = jest.fn();
 const mockTalon = jest.fn();
 
 jest.mock('../../services/limsApi', () => ({
   listMuestrasPorSolicitud: (...args: unknown[]) => mockList(...args),
   getMuestraEtiquetaZpl: (...args: unknown[]) => mockGetZpl(...args),
-  postMuestraImprimirEtiqueta: (...args: unknown[]) => mockImprimir(...args),
+  postMuestraImprimirEtiqueta: jest.fn(),
+  postMuestraConfirmarImpresionEtiqueta: jest.fn(),
   printTalonOrden: (...args: unknown[]) => mockTalon(...args),
 }));
+
+jest.mock('../../services/labelPrintAgent', () => {
+  const actual = jest.requireActual('../../services/labelPrintAgent') as typeof import('../../services/labelPrintAgent');
+  return {
+    ...actual,
+    imprimirEtiquetaMuestraLocal: (...args: unknown[]) => mockImprimirLocal(...args),
+  };
+});
 
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
@@ -54,7 +63,7 @@ describe('EtiquetasMuestrasZplOrdenDialog', () => {
     jest.clearAllMocks();
     mockList.mockResolvedValue([pendiente]);
     mockGetZpl.mockResolvedValue(zplOk);
-    mockImprimir.mockResolvedValue({ muestra_id: 10, profile: 'x', resultado: 'ok' });
+    mockImprimirLocal.mockResolvedValue(undefined);
     mockTalon.mockResolvedValue(undefined);
   });
 
@@ -74,21 +83,21 @@ describe('EtiquetasMuestrasZplOrdenDialog', () => {
     expect(mockGetZpl).toHaveBeenCalledWith(10);
   });
 
-  it('imprimir solo llama imprimir-etiqueta (no toma)', async () => {
+  it('imprimir solo llama agente local (no toma)', async () => {
     render(
       <EtiquetasMuestrasZplOrdenDialog open solicitudId={18} onClose={jest.fn()} />
     );
     await waitFor(() => screen.getByRole('button', { name: 'Imprimir etiqueta' }));
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
     await waitFor(() => {
-      expect(mockImprimir).toHaveBeenCalledWith(10);
+      expect(mockImprimirLocal).toHaveBeenCalledWith(10);
     });
     expect(mockToast.success).toHaveBeenCalled();
   });
 
   it('lock anti doble click por fila', async () => {
     let resolvePrint: (v: unknown) => void = () => undefined;
-    mockImprimir.mockImplementation(
+    mockImprimirLocal.mockImplementation(
       () =>
         new Promise((resolve) => {
           resolvePrint = resolve;
@@ -101,8 +110,8 @@ describe('EtiquetasMuestrasZplOrdenDialog', () => {
     const btn = screen.getByRole('button', { name: 'Imprimir etiqueta' });
     fireEvent.click(btn);
     fireEvent.click(btn);
-    await waitFor(() => expect(mockImprimir).toHaveBeenCalledTimes(1));
-    resolvePrint({ ok: true });
+    await waitFor(() => expect(mockImprimirLocal).toHaveBeenCalledTimes(1));
+    resolvePrint(undefined);
   });
 
   it('imprimir talón no llama ZPL ni toma', async () => {
@@ -119,6 +128,6 @@ describe('EtiquetasMuestrasZplOrdenDialog', () => {
     await waitFor(() => {
       expect(mockTalon).toHaveBeenCalledWith(18);
     });
-    expect(mockImprimir).not.toHaveBeenCalled();
+    expect(mockImprimirLocal).not.toHaveBeenCalled();
   });
 });

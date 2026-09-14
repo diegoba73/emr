@@ -141,7 +141,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 
 **[HISTÓRICO]** las columnas de orden `cancelar` / `marcar-entregado` se retiraron: esas actions no existen (404).
 
-**Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/` y `POST .../imprimir-etiqueta/` → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
+**Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (prepara ZPL) y `POST .../imprimir-etiqueta/confirmar/` (audit local) → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Impresión USB en la PC del operador vía `scripts/label_print_agent.ps1`. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
 
 **Aliases:** `/api/laboratorio/tipos-examen/` y `/api/laboratorio/solicitudes/` — mismos ViewSets y **misma** matriz de permisos que `/api/lab/...`.
 

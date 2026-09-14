@@ -1,7 +1,8 @@
 """
 Servicio de etiqueta física de Muestra (40×23 mm / ZPL).
 
-Flujo: Muestra persistida → datos seguros → 4 líneas → ZPL (perfil) → transporte.
+Flujo: Muestra persistida → datos seguros → 4 líneas → ZPL (perfil) →
+agente local en la PC (USB). El servidor no envía a la impresora.
 
 Imprimir NO marca TOMADA ni pasa la orden a EN_PROCESO: el tubo sigue
 PENDIENTE_TOMA hasta la recepción.
@@ -19,11 +20,6 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from laboratorio.label_printer_transport import (
-    LabelPrinterError,
-    get_label_printer_config,
-    send_zpl_to_network_printer,
-)
 from laboratorio.label_profiles import get_label_profile
 from laboratorio.label_zpl import (
     CodigoBarraZplError,
@@ -199,8 +195,7 @@ def build_etiqueta_muestra(
     require_printable: bool = False,
     preview_now_if_missing_fecha: bool = True,
 ) -> EtiquetaMuestraPayload:
-    cfg = get_label_printer_config()
-    profile = get_label_profile(profile_key or cfg.profile_key)
+    profile = get_label_profile(profile_key)
     lugar_eff = _lugar_efectivo_etiqueta(muestra)
     fecha_eff = _fecha_efectiva_etiqueta(
         muestra, preview_now_if_missing=preview_now_if_missing_fecha
@@ -313,7 +308,7 @@ def _persistir_snapshot_etiqueta_sin_fsm(muestra: Muestra) -> Muestra:
     update_fields: list[str] = []
     with transaction.atomic():
         locked = (
-            Muestra.objects.select_for_update()
+            Muestra.objects.select_for_update(of=("self",))
             .select_related("solicitud", "paciente", "tipo_contenedor", "tipo_muestra")
             .get(pk=muestra.pk)
         )
@@ -340,25 +335,35 @@ def imprimir_etiqueta_muestra(
     view: str = "MuestraTransaccionalViewSet.imprimir_etiqueta",
 ) -> dict[str, Any]:
     """
-    Completa snapshot de etiqueta si falta (lugar/fecha), genera ZPL, envía y audita.
+    Completa snapshot de etiqueta si falta (lugar/fecha) y devuelve el ZPL.
 
+    No envía a impresora (eso lo hace el agente USB en la PC del operador).
+    No audita éxito: llamar ``confirmar_impresion_etiqueta_muestra`` tras el envío local.
     No muta estado de la muestra ni de la solicitud (sigue pendiente de recepción).
-    No reintenta el envío.
     """
-    from auditoria.audit_service import log_event
-
     muestra = _persistir_snapshot_etiqueta_sin_fsm(muestra)
     payload = build_etiqueta_muestra(
         muestra, require_printable=True, preview_now_if_missing_fecha=False
     )
-    cfg = get_label_printer_config()
+    return {
+        "muestra_id": muestra.pk,
+        "profile": payload.profile,
+        "resultado": "prepared",
+        "zpl": payload.zpl,
+    }
 
-    try:
-        send_zpl_to_network_printer(payload.zpl, config=cfg)
-    except LabelPrinterError:
-        # Sin evento de éxito; el caller traduce a HTTP.
-        raise
 
+def confirmar_impresion_etiqueta_muestra(
+    muestra: Muestra,
+    *,
+    actor=None,
+    view: str = "MuestraTransaccionalViewSet.confirmar_impresion_etiqueta",
+    profile_key: str | None = None,
+) -> dict[str, Any]:
+    """Audita impresión local OK. Sin PHI/ZPL. No muta FSM."""
+    from auditoria.audit_service import log_event
+
+    profile = (profile_key or "").strip() or get_label_profile().key
     log_event(
         action="UPDATE",
         actor=actor,
@@ -368,16 +373,16 @@ def imprimir_etiqueta_muestra(
         module="laboratorio",
         metadata=audit_metadata_etiqueta_print(
             muestra,
-            profile_key=payload.profile,
+            profile_key=profile,
             resultado="ok",
-            transport="network_socket",
+            transport="local_agent",
             view=view,
         ),
         success=True,
     )
     return {
         "muestra_id": muestra.pk,
-        "profile": payload.profile,
+        "profile": profile,
         "resultado": "ok",
-        "printer_enabled": True,
+        "transport": "local_agent",
     }

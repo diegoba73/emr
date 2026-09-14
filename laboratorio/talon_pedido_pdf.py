@@ -1,7 +1,8 @@
 """
 Talón PDF de respaldo (hoja común) para pedidos LIMS clínico y microbiología.
 
-Formato físico: media hoja A4 por muestra (2 talones por página A4, con línea de corte).
+Formato físico: un talón por página, solo en la mitad superior de A4
+(media hoja por muestra). Sin copia inferior ni línea de corte.
 No muta estado ni FSM.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ from laboratorio.models import SolicitudExamen
 from laboratorio.models_catalog import Muestra
 from laboratorio.models_microbiologia import EstudioMicrobiologia
 
-# Media hoja A4 (alto): 2 talones por página.
+# Un talón = mitad superior de A4 (la inferior queda en blanco).
 PAGE_W, PAGE_H = A4
 HALF_H = PAGE_H / 2
 MARGIN_X = 12 * mm
@@ -174,44 +175,13 @@ class TalonHalfData:
     tubo_label: str = ""
 
 
-def _draw_cut_guides(c: canvas.Canvas) -> None:
-    """Línea de corte horizontal al medio + marcas laterales."""
-    mid = HALF_H
-    c.setDash(2, 2)
-    c.setStrokeGray(0.55)
-    c.setLineWidth(0.6)
-    c.line(MARGIN_X, mid, PAGE_W - MARGIN_X, mid)
-    c.setDash()
-    # Marcas de tijera en los bordes
-    c.setFont("Helvetica", 7)
-    c.setFillGray(0.45)
-    c.drawCentredString(PAGE_W / 2, mid + 1.5 * mm, "— cortar aqui (media hoja por muestra) —")
-    c.setFillGray(0)
-
-
-def _draw_talon_in_half(
-    c: canvas.Canvas,
-    data: TalonHalfData,
-    *,
-    half_index: int,
-) -> None:
-    """
-    Dibuja un talón en la mitad superior (half_index=0) o inferior (half_index=1)
-    de una hoja A4.
-    """
-    # Origen del rectángulo de la mitad (esquina inferior izquierda de esa mitad).
-    y0 = HALF_H if half_index == 0 else 0
+def _draw_talon_in_half(c: canvas.Canvas, data: TalonHalfData) -> None:
+    """Dibuja un único talón en la mitad superior de una hoja A4 (sin marco ni copia)."""
+    y0 = HALF_H
     y_top = y0 + HALF_H - MARGIN_Y
     x = MARGIN_X
-    max_w = PAGE_W - 2 * MARGIN_X
     line = 4.6 * mm
     y = y_top
-
-    # Marco suave de la media hoja
-    c.setStrokeGray(0.75)
-    c.setLineWidth(0.5)
-    c.rect(MARGIN_X / 2, y0 + 2 * mm, PAGE_W - MARGIN_X, HALF_H - 4 * mm, stroke=1, fill=0)
-    c.setStrokeGray(0)
 
     c.setFont("Helvetica-Bold", 11)
     c.drawString(x, y, "TALÓN — LABORATORIO (media hoja)")
@@ -269,8 +239,6 @@ def _draw_talon_in_half(
     foot_y = y0 + MARGIN_Y
     c.drawString(x, max(min(y, foot_y + 4 * mm), foot_y), f"Generado: {ahora}")
     c.setFillGray(0)
-    # Evitar unused
-    _ = max_w
 
 
 def _render_talones_pdf(talones: list[TalonHalfData]) -> bytes:
@@ -279,13 +247,9 @@ def _render_talones_pdf(talones: list[TalonHalfData]) -> bytes:
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     for i, data in enumerate(talones):
-        slot = i % 2
-        if i > 0 and slot == 0:
+        if i > 0:
             c.showPage()
-        if slot == 0:
-            # Guía de corte solo cuando hay (o habrá) contenido en la hoja
-            _draw_cut_guides(c)
-        _draw_talon_in_half(c, data, half_index=slot)
+        _draw_talon_in_half(c, data)
     c.save()
     return buf.getvalue()
 
