@@ -1,4 +1,4 @@
-﻿?$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $ScriptDir 'label_print_agent.config.json'
 $LogPath = Join-Path $ScriptDir 'label_print_agent.log'
