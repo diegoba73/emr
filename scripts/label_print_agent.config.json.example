@@ -1,7 +1,12 @@
 {
   "port": 18181,
-  "printerName": "",
+  "printerName": "EMR ZPL RAW",
+  "language": "tspl",
   "allowedOrigins": [
+    "https://emr.sytes.net:8080",
+    "http://emr.sytes.net:8080",
+    "http://emr.sytes.net",
+    "https://emr.sytes.net",
     "http://192.168.10.240",
     "http://192.168.10.240:80",
     "http://192.168.10.240:8080",
