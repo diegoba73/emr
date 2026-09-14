@@ -47,7 +47,7 @@ if (Test-Path -LiteralPath $ConfigPath) {
     }
 }
 
-Add-Type -TypeDefinition @"
+Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 
@@ -123,7 +123,7 @@ public class EmrRawPrinter {
         }
     }
 }
-"@ -ErrorAction Stop
+'@ -ErrorAction Stop
 
 function Get-InstalledPrinterNames {
     $names = @()
