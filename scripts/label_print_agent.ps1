@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+﻿-#Requires -Version 5.1
 # EMR label print agent - local only http://127.0.0.1:18181
 # Requires EmrRawPrinter.cs in the same folder.
 [CmdletBinding()]
@@ -11,6 +11,8 @@ $LogPath = Join-Path $ScriptDir 'label_print_agent.log'
 $ListenHost = '127.0.0.1'
 $Port = 18181
 $PrinterNameOverride = ''
+# zpl = 3nStar / Zebra; tspl = 4BARCODE / TSC-like (feeds blank if fed ZPL)
+$PrinterLanguage = 'tspl'
 $AllowedOrigins = @(
     'https://emr.sytes.net:8080',
     'http://emr.sytes.net:8080',
@@ -31,6 +33,7 @@ if (Test-Path -LiteralPath $ConfigPath) {
         $cfg = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($cfg.port) { $Port = [int]$cfg.port }
         if ($cfg.printerName) { $PrinterNameOverride = [string]$cfg.printerName }
+        if ($cfg.language) { $PrinterLanguage = ([string]$cfg.language).Trim().ToLowerInvariant() }
         if ($cfg.allowedOrigins) {
             $AllowedOrigins = @($cfg.allowedOrigins | ForEach-Object { [string]$_ })
         }
@@ -133,6 +136,50 @@ function Read-RequestBody([System.Net.HttpListenerRequest]$Request) {
     try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
 }
 
+function Convert-ZplToTspl([string]$Zpl) {
+    # Extract ^FD...^FS fields from EMR ZPL and rebuild a 40x23 mm TSPL job.
+    $fields = [regex]::Matches($Zpl, '\^FD(.*?)\^FS') | ForEach-Object { $_.Groups[1].Value }
+    if (-not $fields -or $fields.Count -eq 0) {
+        throw 'No se pudieron leer campos FD del ZPL para convertir a TSPL.'
+    }
+    $safe = @()
+    foreach ($f in $fields) {
+        $t = ($f -replace '"', "'")
+        $safe += $t
+    }
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.AppendLine('SIZE 40 mm,23 mm')
+    [void]$sb.AppendLine('GAP 2 mm,0')
+    [void]$sb.AppendLine('DENSITY 10')
+    [void]$sb.AppendLine('DIRECTION 1')
+    [void]$sb.AppendLine('REFERENCE 0,0')
+    [void]$sb.AppendLine('CLS')
+    $y = 8
+    for ($i = 0; $i -lt $safe.Count; $i++) {
+        $text = $safe[$i]
+        if ($i -eq 0) {
+            # First line: barcode + human text under it when short enough
+            [void]$sb.AppendLine(('BARCODE 12,8,"128",36,0,0,1,2,"{0}"' -f $text))
+            $y = 52
+            [void]$sb.AppendLine(('TEXT 12,{0},"2",0,1,1,"{1}"' -f $y, $text))
+            $y = 78
+        } else {
+            [void]$sb.AppendLine(('TEXT 12,{0},"1",0,1,1,"{1}"' -f $y, $text))
+            $y += 26
+        }
+    }
+    [void]$sb.AppendLine('PRINT 1,1')
+    return $sb.ToString()
+}
+
+function Convert-PrintPayload([string]$Payload) {
+    $lang = ($PrinterLanguage | ForEach-Object { $_ })
+    if ($lang -eq 'tspl' -or $lang -eq 'tsp') {
+        return Convert-ZplToTspl $Payload
+    }
+    return $Payload
+}
+
 $prefix = "http://${ListenHost}:${Port}/"
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($prefix)
@@ -146,7 +193,7 @@ try {
 
 $resolved = $null
 try { $resolved = Resolve-LabelPrinterName } catch { Write-AgentLog "$_" }
-Write-AgentLog "Agente en $prefix impresora=$(if ($resolved) { $resolved } else { 'NO DETECTADA' })"
+Write-AgentLog "Agente en $prefix impresora=$(if ($resolved) { $resolved } else { 'NO DETECTADA' }) language=$PrinterLanguage"
 
 try {
     while ($listener.IsListening) {
@@ -200,12 +247,14 @@ try {
                     continue
                 }
                 try {
-                    $bytes = [System.Text.Encoding]::UTF8.GetBytes($zpl)
+                    $payload = Convert-PrintPayload $zpl
+                    $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
                     [EmrRawPrinter]::SendBytes($printer, $bytes)
                     Write-JsonResponse -Response $res -Status 200 -Origin $origin -Body @{
-                        ok = $true; printer = $printer
+                        ok = $true; printer = $printer; language = $PrinterLanguage
                     }
                 } catch {
+                    Write-AgentLog ("print_failed: " + $_.Exception.Message)
                     Write-JsonResponse -Response $res -Status 500 -Origin $origin -Body @{
                         ok = $false; error = 'print_failed'; message = 'No se pudo enviar a la impresora.'
                     }
