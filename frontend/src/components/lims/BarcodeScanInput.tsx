@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { TextField, TextFieldProps } from '@mui/material';
+import { normalizeBarcodeScan } from '../../utils/normalizeBarcodeScan';
 
 export interface BarcodeScanInputProps extends Omit<TextFieldProps, 'onChange' | 'value'> {
   onScan: (codigo: string) => void;
@@ -9,8 +10,8 @@ export interface BarcodeScanInputProps extends Omit<TextFieldProps, 'onChange' |
 }
 
 /**
- * Input optimizado para lectores USB tipo teclado.
- * Al presionar Enter emite el código escaneado (trim).
+ * Input optimizado para lectores USB/BT tipo teclado (p.ej. 3nStar SC310BT).
+ * Al presionar Enter emite el código escaneado, normalizado (trim + guiones).
  */
 const BarcodeScanInput: React.FC<BarcodeScanInputProps> = ({
   onScan,
@@ -35,7 +36,7 @@ const BarcodeScanInput: React.FC<BarcodeScanInputProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const codigo = valueRef.current.trim();
+    const codigo = normalizeBarcodeScan(valueRef.current);
     if (!codigo) return;
     onScan(codigo);
     if (clearOnScan) {

@@ -12,6 +12,15 @@ describe('BarcodeScanInput', () => {
     expect(onScan).toHaveBeenCalledWith('MUE-2026-000001');
   });
 
+  it('normaliza apóstrofos de pistola HID con teclado ES a guiones', () => {
+    const onScan = jest.fn();
+    render(<BarcodeScanInput onScan={onScan} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: "LAB'2026'00018'01" } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onScan).toHaveBeenCalledWith('LAB-2026-00018-01');
+  });
+
   it('no emite onScan si el campo está vacío', () => {
     const onScan = jest.fn();
     render(<BarcodeScanInput onScan={onScan} />);
