@@ -9,12 +9,9 @@
   impresora Windows instalada en ESTA PC.
 
   Instalación (PC LABORATORIO, una vez):
-    1. Impresora USB instalada (driver 3nStar / ZPL).
-    2. Ejecutar este script (o el .bat) e incluirlo en Inicio de Windows.
-    3. Opcional: copiar label_print_agent.config.json al lado de este .ps1
-       para forzar el nombre de impresora.
-
-  Detener: Ctrl+C en la ventana, o cerrar la ventana.
+    Ejecutar label_print_agent_instalar.bat
+    Queda como tarea de Windows (inicio de sesión, sin ventana).
+    Opcional: label_print_agent.config.json al lado de este .ps1
 #>
 [CmdletBinding()]
 param()
@@ -22,6 +19,7 @@ param()
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigPath = Join-Path $ScriptDir "label_print_agent.config.json"
+$LogPath = Join-Path $ScriptDir "label_print_agent.log"
 $ListenHost = "127.0.0.1"
 $Port = 18181
 $PrinterNameOverride = ""
@@ -202,6 +200,12 @@ function Write-EmptyCors {
     $Response.ContentLength64 = 0
 }
 
+function Write-AgentLog([string]$msg) {
+    $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $msg
+    try { Add-Content -LiteralPath $LogPath -Value $line -Encoding UTF8 } catch { }
+    Write-Host $line
+}
+
 function Read-RequestBody([System.Net.HttpListenerRequest]$Request) {
     if ($Request.ContentLength64 -eq 0) { return "" }
     $reader = New-Object System.IO.StreamReader($Request.InputStream, [System.Text.Encoding]::UTF8)
@@ -215,18 +219,14 @@ $listener.Prefixes.Add($prefix)
 try {
     $listener.Start()
 } catch {
-    Write-Error "No se pudo escuchar en $prefix. ¿El agente ya está corriendo? $_"
-    exit 1
+    Write-AgentLog "Puerto ocupado o agente ya en marcha: $prefix — $_"
+    exit 0
 }
 
 $resolved = $null
-try { $resolved = Resolve-LabelPrinterName } catch { Write-Warning $_ }
+try { $resolved = Resolve-LabelPrinterName } catch { Write-AgentLog "$_" }
 
-Write-Host "EMR label print agent"
-Write-Host "  URL      : $prefix"
-Write-Host "  Impresora: $(if ($resolved) { $resolved } else { '(no detectada — conecte USB / configure printerName)' })"
-Write-Host "  Detener  : Ctrl+C"
-Write-Host ""
+Write-AgentLog "Agente en $prefix impresora=$(if ($resolved) { $resolved } else { 'NO DETECTADA' })"
 
 try {
     while ($listener.IsListening) {
