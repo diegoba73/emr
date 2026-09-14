@@ -5,7 +5,7 @@
 ## Acceso EMR-LIMS
 
 ```bash
-ssh -p 2223 server@dsachubut.sytes.net
+ssh -p 2223 server@emr.sytes.net
 ```
 
 - Código y compose de prod: `/srv/emr/app` + `docker-compose.server.yml`.
@@ -15,12 +15,12 @@ ssh -p 2223 server@dsachubut.sytes.net
 
 ## Aislamiento: no mezclar con la otra app
 
-En `dsachubut.sytes.net` conviven dos sistemas. Al trabajar con **EMR-LIMS**, usar solo sus puertos. No tocar, reiniciar ni redeployar la otra aplicación.
+En `emr.sytes.net` conviven dos sistemas. Al trabajar con **EMR-LIMS**, usar solo sus puertos. No tocar, reiniciar ni redeployar la otra aplicación.
 
 | | EMR-LIMS | Otra aplicación |
 |---|---|---|
 | SSH | puerto **2223** | puerto **22** |
-| URL pública HTTP | `http://dsachubut.sytes.net:8080` | puerto **80** público |
+| URL pública HTTP | `http://emr.sytes.net:8080` | puerto **80** público |
 | Docker nginx en la PC EMR | publicar como **`80:80`** | fuera de alcance |
 | Código | `/srv/emr/app` | fuera de alcance |
 
