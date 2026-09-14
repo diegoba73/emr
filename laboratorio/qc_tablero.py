@@ -12,6 +12,7 @@ from laboratorio.equipos_lab import (
     EXAMENES_POR_EQUIPO,
     codigo_equipo_canonico,
     es_equipo_por_ensayo,
+    es_equipo_valores_a_demanda,
 )
 from laboratorio.models import SolicitudExamen, TipoExamen
 from laboratorio.models_qc import (
@@ -85,8 +86,16 @@ def _rollup(s1: str, s2: str) -> tuple[str, str]:
     return "falta", "Falta " + " y ".join(faltan)
 
 
-def _aviso_valores_s1_s2(p1: dict[str, Any], p2: dict[str, Any], *, fecha) -> dict[str, Any]:
+def _politica_valores(codigo_equipo: str) -> str:
+    return "A_DEMANDA" if es_equipo_valores_a_demanda(codigo_equipo) else "LUN_VIE"
+
+
+def _aviso_valores_s1_s2(
+    p1: dict[str, Any], p2: dict[str, Any], *, fecha, codigo_equipo: str
+) -> dict[str, Any]:
     """Aviso lun/vie si falta corrida ACEPTADA con puntos en S1 o S2. No bloquea."""
+    if es_equipo_valores_a_demanda(codigo_equipo):
+        return {"aviso_valores": False, "aviso_valores_mensaje": None}
     if not es_dia_aviso_control_valores(fecha=fecha):
         return {"aviso_valores": False, "aviso_valores_mensaje": None}
     ok = bool(p1.get("con_valores")) and bool(p2.get("con_valores"))
@@ -199,6 +208,7 @@ def tablero_iqc_hoy() -> dict[str, Any]:
                     "ensayos": [],
                     "aviso_valores": False,
                     "aviso_valores_mensaje": None,
+                    "politica_valores": _politica_valores(eq.codigo),
                 }
             )
 
@@ -276,6 +286,7 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
                 p1 if n1 else {"con_valores": True},
                 p2 if n2 else {"con_valores": True},
                 fecha=hoy,
+                codigo_equipo=eq.codigo,
             )
             filas.append(
                 {
@@ -325,6 +336,7 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
             "ensayos": filas,
             "aviso_valores": aviso_eq,
             "aviso_valores_mensaje": msg_eq,
+            "politica_valores": _politica_valores(eq.codigo),
         }
 
     producto = (
@@ -349,7 +361,7 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
     if producto:
         estado_eq, resumen_eq = _rollup(p1["estado"], p2["estado"])
         tiene = True
-        aviso = _aviso_valores_s1_s2(p1, p2, fecha=hoy)
+        aviso = _aviso_valores_s1_s2(p1, p2, fecha=hoy, codigo_equipo=eq.codigo)
     else:
         estado_eq, resumen_eq = "sin_trabajo", "Sin producto de control"
         tiene = False
@@ -379,5 +391,6 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
         "s2": p2,
         "ensayos_hoy": ensayos_pack,
         "ensayos": [],
+        "politica_valores": _politica_valores(eq.codigo),
         **aviso,
     }

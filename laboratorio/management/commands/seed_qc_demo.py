@@ -16,6 +16,7 @@ from laboratorio.equipos_lab import (
 from laboratorio.models import TipoExamen, TipoMuestra
 from laboratorio.models_qc import (
     Calibracion,
+    CorridaQC,
     EquipoAnalizador,
     LoteControl,
     LoteProductoControl,
@@ -101,7 +102,34 @@ class Command(BaseCommand):
                     eq.save(update_fields=[*updates, "updated_at"])
             out[codigo] = eq
         EquipoAnalizador.objects.filter(codigo="ANALIZADOR-DEMO").update(activo=False)
+        self._retirar_diestro(out)
         return out
+
+    def _retirar_diestro(self, equipos: dict[str, EquipoAnalizador]) -> None:
+        """El Diestro se reemplazó por el ERBA EC90: reasigna FKs y apaga el código viejo."""
+        ec90 = equipos.get("ERBA_EC90")
+        diestro = EquipoAnalizador.objects.filter(codigo="DIESTRO").first()
+        if diestro and ec90 and diestro.id != ec90.id:
+            TipoExamen.objects.filter(equipo_analizador=diestro).update(equipo_analizador=ec90)
+            ProductoControl.objects.filter(equipo=diestro).update(equipo=ec90)
+            MaterialControl.objects.filter(equipo=diestro).update(equipo=ec90)
+            CorridaQC.objects.filter(equipo=diestro).update(equipo=ec90)
+            Calibracion.objects.filter(equipo=diestro).update(equipo=ec90)
+            diestro.activo = False
+            diestro.save(update_fields=["activo", "updated_at"])
+        prod = ProductoControl.objects.filter(codigo="CTRL_DIESTRO").first()
+        if not prod:
+            return
+        if ProductoControl.objects.filter(codigo="CTRL_ERBA_EC90").exists():
+            prod.activo = False
+            prod.save(update_fields=["activo", "updated_at"])
+            return
+        prod.codigo = "CTRL_ERBA_EC90"
+        prod.nombre = "Control electrolitos ERBA EC90"
+        prod.marca = "ERBA"
+        if ec90:
+            prod.equipo = ec90
+        prod.save(update_fields=["codigo", "nombre", "marca", "equipo", "updated_at"])
 
     def _asignar_examenes_a_equipos(self, equipos: dict[str, EquipoAnalizador]) -> int:
         updated = 0

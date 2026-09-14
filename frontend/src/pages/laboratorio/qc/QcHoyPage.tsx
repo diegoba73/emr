@@ -329,7 +329,9 @@ const QcHoyPage: React.FC = () => {
     return <CircularProgress size={28} />;
   }
 
-  const equipos = (board?.equipos || []).filter((e) => e.codigo !== 'ANALIZADOR-DEMO');
+  const equipos = (board?.equipos || []).filter(
+    (e) => e.codigo !== 'ANALIZADOR-DEMO' && e.codigo !== 'DIESTRO'
+  );
 
   return (
     <Box>
@@ -338,7 +340,8 @@ const QcHoyPage: React.FC = () => {
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         Largá los controles <strong>antes</strong> de ensayar. Verde = liberado. Ámbar = falta S1 o S2. Rojo =
-        no OK: calibrá y repetí el control. El OK rápido siempre sirve para salir del apuro.
+        no OK: calibrá y repetí el control. El OK rápido siempre sirve para salir del apuro. Cartas lun/vie
+        en química, hemo, coag y ERBA EC90; VIDAS, Finecare y EDAN cargan valores a demanda.
       </Typography>
       {board && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -379,6 +382,13 @@ const QcHoyPage: React.FC = () => {
               </Typography>
             </Box>
             <Box sx={{ p: 2 }}>
+              {eq.politica_valores === 'A_DEMANDA' && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Valores a demanda: al calibrar, vencer o cambiar lote
+                  {eq.codigo === 'VIDAS_KUBE' ? ' (el control se larga con el calibrador)' : ''}. El OK
+                  del día sigue haciendo falta para liberar.
+                </Typography>
+              )}
               {eq.aviso_valores && eq.aviso_valores_mensaje && (
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
                   {eq.aviso_valores_mensaje}
@@ -424,16 +434,20 @@ const QcHoyPage: React.FC = () => {
                   >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0, minHeight: 36 }}>
                       <Typography variant="body2">
-                        {eq.aviso_valores
-                          ? 'Cargar valores del aparato (recomendado hoy)'
-                          : 'Cargar valores del aparato (opcional)'}
+                        {eq.politica_valores === 'A_DEMANDA'
+                          ? 'Cargar valores del aparato (a demanda)'
+                          : eq.aviso_valores
+                            ? 'Cargar valores del aparato (recomendado hoy)'
+                            : 'Cargar valores del aparato (opcional)'}
                       </Typography>
                     </AccordionSummary>
                     <AccordionDetails sx={{ px: 0 }}>
                       <Typography variant="body2" color="text.secondary">
-                        {eq.aviso_valores
-                          ? 'Lunes y viernes conviene cargar los números del aparato (Catálogo / lotes → Corridas). El OK rápido de arriba sigue valiendo para liberar.'
-                          : 'El día a día es Control OK / no OK. Si querés Westgard con números por ensayo, usá Catálogo / lotes → Corridas.'}
+                        {eq.politica_valores === 'A_DEMANDA'
+                          ? 'No hay recordatorio de lunes y viernes. Cargá números en Catálogo / lotes → Corridas cuando calibres, venza o cambie el lote. El OK de arriba libera el día.'
+                          : eq.aviso_valores
+                            ? 'Lunes y viernes conviene cargar los números del aparato (Catálogo / lotes → Corridas). El OK rápido de arriba sigue valiendo para liberar.'
+                            : 'El día a día es Control OK / no OK. Si querés Westgard con números por ensayo, usá Catálogo / lotes → Corridas.'}
                       </Typography>
                     </AccordionDetails>
                   </Accordion>

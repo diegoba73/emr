@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
-from laboratorio.equipos_lab import EXAMEN_A_EQUIPO, EXAMENES_POR_EQUIPO
+from laboratorio.equipos_lab import EXAMEN_A_EQUIPO, EXAMENES_POR_EQUIPO, codigo_equipo_canonico
 from laboratorio.models import TipoExamen
 from laboratorio.models_qc import EquipoAnalizador
 
@@ -44,7 +44,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        solo_equipo = (options.get("equipo") or "").strip().upper()
+        solo_equipo = codigo_equipo_canonico((options.get("equipo") or "").strip().upper())
 
         equipos = {e.codigo: e for e in EquipoAnalizador.objects.all()}
         if solo_equipo and solo_equipo not in equipos:

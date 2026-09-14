@@ -33,7 +33,7 @@ Fuente de equipos: `laboratorio/equipos_lab.py`.
 
 ### Multiparámetro (`EQUIPOS_MULTIPARAM`)
 
-Equipos: **CM260**, **SYSMEX_XP300** (en prod el código físico suele ser **`HEMO`**), **COATRON**, **DIESTRO**, **EDAN_I15**.
+Equipos: **CM260**, **SYSMEX_XP300** (en prod el código físico suele ser **`HEMO`**), **COATRON**, **ERBA_EC90** (reemplaza al Diestro; alias `DIESTRO`/`EC90`), **EDAN_I15**.
 
 Producto de control (Standatrol, control Sysmex, etc.) con lote y **targets** por ensayo/nivel.
 
@@ -70,7 +70,7 @@ Si la orden no tiene ningún producto multiparam que cubra sus ensayos **ni** ma
 
 - **Última del día** por (producto+equipo+nivel) o (material+equipo).
 - Corrida **sin `equipo`:** no cuenta (mensaje: “use {codigo}”).
-- Alias de código (`codigo_equipo_canonico`): `HEMO` / `SYSMEX` / `XP300` → `SYSMEX_XP300`; `VIDAS` → `VIDAS_KUBE`; `FINECARE` se normaliza a mayúsculas.
+- Alias de código (`codigo_equipo_canonico`): `HEMO` / `SYSMEX` / `XP300` → `SYSMEX_XP300`; `VIDAS` → `VIDAS_KUBE`; `FINECARE` se normaliza a mayúsculas; `DIESTRO` / `EC90` → `ERBA_EC90`.
 - **Control OK (operativo):** modo `ACEPTAR_NIVEL` (default en UI) o `VALORES` que Westgard no marca fuera de control.
 - **No OK:** `RECHAZAR_NIVEL` o evaluación Westgard `fuera_control` → corrida `RECHAZADA`.
 - **Calibración** (`Calibracion`): se muestra en el tablero Hoy; **no** desbloquea el gate ni lo invalida. Después de calibrar hay que **repetir el control** y dejarlo ACEPTADA.
@@ -104,7 +104,8 @@ El vencimiento de lote **no** se exige al cargar ni al liberar.
 - Multiparam: semáforo del **aparato** (S1+S2) y lista de ensayos cubiertos vs pedidos.
 - Por ensayo: **una fila visual por ensayo** (S1/S2), no un combo de catálogo.
 - Si Finecare/VIDAS **no tiene pedidos** en órdenes abiertas (curso + PENDIENTE últimos 14 días), el tablero puede mostrar **todos** los materiales del equipo. El **gate de una orden concreta no usa esa lista completa**: solo los exámenes de esa solicitud.
-- **Lunes y viernes (TZ local):** aviso `aviso_valores` si falta corrida ACEPTADA **con puntos** (modo VALORES) en S1/S2. Es recordatorio: **no** bloquea el OK rápido (`ACEPTAR_NIVEL`) ni el gate de liberación.
+- **Lunes y viernes (TZ local):** aviso `aviso_valores` si falta corrida ACEPTADA **con puntos** (modo VALORES) en S1/S2. Aplica a **CM260, Sysmex, Coatron y ERBA EC90**. Es recordatorio: **no** bloquea el OK rápido (`ACEPTAR_NIVEL`) ni el gate de liberación.
+- **Valores a demanda** (`EQUIPOS_VALORES_A_DEMANDA`): **VIDAS_KUBE** (control con el calibrador), **FINECARE** y **EDAN_I15**. No hay aviso lun/vie. Se cargan números al calibrar, vencer o cambiar lote. El gate sigue pidiendo S1+S2 **ACEPTADA hoy** (el OK rápido alcanza). El tablero marca `politica_valores=A_DEMANDA`.
 - **Catálogo editable** en UI (equipos, productos, lotes, materiales, calibraciones): editar/eliminar; si DELETE falla por FK, se ofrece desactivar. **Corridas** (y puntos) son historial: solo alta, sin editar/borrar en pantalla.
 
 ---

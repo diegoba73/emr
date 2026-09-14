@@ -18,9 +18,9 @@ EQUIPOS_LAB: dict[str, dict[str, str]] = {
         "nombre": "Coagulómetro Coatron",
         "marca_modelo": "Coatron",
     },
-    "DIESTRO": {
-        "nombre": "Analizador de electrolitos Diestro",
-        "marca_modelo": "Diestro",
+    "ERBA_EC90": {
+        "nombre": "Analizador de electrolitos ERBA EC90",
+        "marca_modelo": "ERBA EC90",
     },
     "VIDAS_KUBE": {
         "nombre": "Inmunoensayo VIDAS KUBE",
@@ -92,8 +92,8 @@ EXAMENES_SYSMEX: frozenset[str] = frozenset(
 # Coagulograma Coatron
 EXAMENES_COATRON: frozenset[str] = frozenset({"TP", "PP", "INR", "KPTT"})
 
-# Ionograma Diestro
-EXAMENES_DIESTRO: frozenset[str] = frozenset({"NA", "K", "CL", "CA_ION"})
+# Ionograma ERBA EC90 (reemplaza al Diestro)
+EXAMENES_ERBA_EC90: frozenset[str] = frozenset({"NA", "K", "CL", "CA_ION"})
 
 # VIDAS KUBE — inmunoensayos
 EXAMENES_VIDAS: frozenset[str] = frozenset(
@@ -135,7 +135,7 @@ EXAMENES_POR_EQUIPO: dict[str, frozenset[str]] = {
     "CM260": EXAMENES_CM260,
     "SYSMEX_XP300": EXAMENES_SYSMEX,
     "COATRON": EXAMENES_COATRON,
-    "DIESTRO": EXAMENES_DIESTRO,
+    "ERBA_EC90": EXAMENES_ERBA_EC90,
     "VIDAS_KUBE": EXAMENES_VIDAS,
     "EDAN_I15": EXAMENES_EDAN,
     "FINECARE": EXAMENES_FINECARE,
@@ -150,7 +150,7 @@ EXAMEN_A_EQUIPO: dict[str, str] = {
 
 # Equipos con control de producto multiparámetro (S1+S2 habilitan el equipo).
 EQUIPOS_MULTIPARAM: frozenset[str] = frozenset(
-    {"CM260", "SYSMEX_XP300", "COATRON", "DIESTRO", "EDAN_I15"}
+    {"CM260", "SYSMEX_XP300", "COATRON", "ERBA_EC90", "EDAN_I15"}
 )
 
 # Equipos con material IQC por ensayo (VIDAS / Finecare).
@@ -173,10 +173,10 @@ PRODUCTOS_MULTIPARAM: dict[str, dict[str, str]] = {
         "marca": "Coatron",
         "equipo": "COATRON",
     },
-    "CTRL_DIESTRO": {
-        "nombre": "Control electrolitos Diestro",
-        "marca": "Diestro",
-        "equipo": "DIESTRO",
+    "CTRL_ERBA_EC90": {
+        "nombre": "Control electrolitos ERBA EC90",
+        "marca": "ERBA",
+        "equipo": "ERBA_EC90",
     },
     "CTRL_EDAN": {
         "nombre": "Control gasometría EDAN",
@@ -190,7 +190,7 @@ TARGETS_POR_PRODUCTO: dict[str, frozenset[str]] = {
     "STANDATROL_SE": EXAMENES_CM260,
     "CTRL_SYSMEX": frozenset({"HGB", "PLAQ", "LEUCO", "HTO"}),
     "CTRL_COATRON": frozenset({"TP", "KPTT", "INR"}),
-    "CTRL_DIESTRO": frozenset({"NA", "K", "CL"}),
+    "CTRL_ERBA_EC90": frozenset({"NA", "K", "CL"}),
     "CTRL_EDAN": frozenset({"PH_ART", "PCO2_ART", "PO2_ART", "HCO3_ART"}),
 }
 
@@ -212,7 +212,15 @@ ALIAS_CODIGO_EQUIPO: dict[str, str] = {
     "XP300": "SYSMEX_XP300",
     "VIDAS": "VIDAS_KUBE",
     "FINECARE": "FINECARE",
+    "DIESTRO": "ERBA_EC90",
+    "EC90": "ERBA_EC90",
 }
+
+# Valores numéricos para cartas: lun/vie en química/hemo/coag/iones.
+# VIDAS (control con calibrador), Finecare y EDAN: a demanda (lote / calibración).
+EQUIPOS_VALORES_A_DEMANDA: frozenset[str] = frozenset(
+    {"VIDAS_KUBE", "FINECARE", "EDAN_I15"}
+)
 
 
 def codigo_equipo_canonico(codigo_equipo: str) -> str:
@@ -226,3 +234,7 @@ def es_equipo_multiparam(codigo_equipo: str) -> bool:
 
 def es_equipo_por_ensayo(codigo_equipo: str) -> bool:
     return codigo_equipo_canonico(codigo_equipo) in EQUIPOS_POR_ENSAYO
+
+
+def es_equipo_valores_a_demanda(codigo_equipo: str) -> bool:
+    return codigo_equipo_canonico(codigo_equipo) in EQUIPOS_VALORES_A_DEMANDA

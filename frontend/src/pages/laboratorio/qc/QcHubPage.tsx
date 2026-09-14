@@ -1009,8 +1009,9 @@ const QcHubPage: React.FC = () => {
       {mainTab === 1 && (
         <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        IQC híbrido: productos multiparámetro (Standatrol, Sysmex, Coatron, Diestro, EDAN) habilitan
-        el equipo con S1+S2. VIDAS y Finecare siguen con control por ensayo.
+        IQC híbrido: productos multiparámetro (Standatrol, Sysmex, Coatron, ERBA EC90, EDAN) habilitan
+        el equipo con S1+S2. VIDAS y Finecare siguen con control por ensayo. Cartas lun/vie en química,
+        hemo, coag e iones; VIDAS, Finecare y EDAN cargan valores a demanda (lote / calibración).
       </Typography>
       <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Levey-Jennings" />
@@ -2002,7 +2003,7 @@ const QcHubPage: React.FC = () => {
             Nuevo equipo
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Los equipos del lab (CM260, Sysmex, Coatron, Diestro, VIDAS, EDAN, Finecare) se crean con{' '}
+            Los equipos del lab (CM260, Sysmex, Coatron, ERBA EC90, VIDAS, EDAN, Finecare) se crean con{' '}
             <code>seed_qc_demo</code>. Acá solo hace falta un código que todavía no exista.
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 3 }} flexWrap="wrap">

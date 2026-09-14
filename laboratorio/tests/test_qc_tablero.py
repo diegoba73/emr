@@ -21,6 +21,7 @@ from laboratorio.models_qc import (
 )
 from laboratorio.qc_service import estado_iqc_solicitud
 from laboratorio.qc_tablero import es_dia_aviso_control_valores, tablero_iqc_hoy
+from laboratorio.equipos_lab import codigo_equipo_canonico, es_equipo_valores_a_demanda
 from laboratorio.tests.test_qc_gate import _FakeSolicitud
 
 User = get_user_model()
@@ -29,6 +30,17 @@ User = get_user_model()
 LUNES = date(2026, 9, 7)
 MARTES = date(2026, 9, 8)
 VIERNES = date(2026, 9, 11)
+
+
+class TestEquiposCanonico(TestCase):
+    def test_diestro_alias_ec90(self):
+        self.assertEqual(codigo_equipo_canonico("DIESTRO"), "ERBA_EC90")
+        self.assertEqual(codigo_equipo_canonico("EC90"), "ERBA_EC90")
+        self.assertTrue(es_equipo_valores_a_demanda("VIDAS_KUBE"))
+        self.assertTrue(es_equipo_valores_a_demanda("FINECARE"))
+        self.assertTrue(es_equipo_valores_a_demanda("EDAN_I15"))
+        self.assertFalse(es_equipo_valores_a_demanda("CM260"))
+        self.assertFalse(es_equipo_valores_a_demanda("ERBA_EC90"))
 
 
 def _aware(d: date, t: time | None = None):
@@ -256,4 +268,65 @@ class TestTableroHoy(TestCase):
         self.assertTrue(resp.data["dia_aviso_control_valores"])
         card = next(e for e in resp.data["equipos"] if e["codigo"] == "CM260")
         self.assertTrue(card["aviso_valores"])
+        self.assertEqual(card["politica_valores"], "LUN_VIE")
         self.assertIn("OK rápido", card["aviso_valores_mensaje"])
+
+    def test_vidas_finecare_edan_sin_aviso_lun_vie(self):
+        muestra = TipoMuestra.objects.get(codigo="SANGRE_TAB")
+        vidas = EquipoAnalizador.objects.create(
+            codigo="VIDAS_KUBE", nombre="VIDAS KUBE", activo=True
+        )
+        fine = EquipoAnalizador.objects.create(codigo="FINECARE", nombre="Finecare", activo=True)
+        edan = EquipoAnalizador.objects.create(codigo="EDAN_I15", nombre="EDAN i15", activo=True)
+
+        tsh = TipoExamen.objects.create(
+            codigo="TSH",
+            nombre="TSH",
+            tipo_muestra_requerida=muestra,
+            tipo_resultado="NUMERICO",
+            equipo_analizador=vidas,
+        )
+        hba = TipoExamen.objects.create(
+            codigo="HBA1C",
+            nombre="HbA1c",
+            tipo_muestra_requerida=muestra,
+            tipo_resultado="NUMERICO",
+            equipo_analizador=fine,
+        )
+        for mat_eq, exam, nivel in (
+            (vidas, tsh, MaterialControl.Nivel.N1),
+            (vidas, tsh, MaterialControl.Nivel.N2),
+            (fine, hba, MaterialControl.Nivel.N1),
+            (fine, hba, MaterialControl.Nivel.N2),
+        ):
+            MaterialControl.objects.create(
+                nombre=f"Ctrl {exam.codigo} {nivel}",
+                nivel=nivel,
+                tipo_examen=exam,
+                equipo=mat_eq,
+                media_target=Decimal("100"),
+                de_target=Decimal("5"),
+                activo=True,
+            )
+        prod_edan = ProductoControl.objects.create(
+            codigo="CTRL_EDAN",
+            nombre="Control EDAN",
+            equipo=edan,
+            modo=ProductoControl.Modo.MULTIPARAM,
+            activo=True,
+        )
+        LoteProductoControl.objects.create(
+            producto=prod_edan,
+            codigo_lote="ED1",
+            vencimiento=timezone.localdate() + timedelta(days=30),
+        )
+        with patch("django.utils.timezone.localdate", return_value=LUNES):
+            data = tablero_iqc_hoy()
+        self.assertTrue(data["dia_aviso_control_valores"])
+        for codigo in ("VIDAS_KUBE", "FINECARE", "EDAN_I15"):
+            card = next(e for e in data["equipos"] if e["codigo"] == codigo)
+            self.assertEqual(card["politica_valores"], "A_DEMANDA", codigo)
+            self.assertFalse(card["aviso_valores"], codigo)
+        self.assertFalse(any(a["codigo"] in {"VIDAS_KUBE", "FINECARE", "EDAN_I15"} for a in data["avisos_valores"]))
+        cm = next(e for e in data["equipos"] if e["codigo"] == "CM260")
+        self.assertEqual(cm["politica_valores"], "LUN_VIE")
