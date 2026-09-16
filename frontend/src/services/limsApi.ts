@@ -74,7 +74,9 @@ export function formatLimsHttpError(error: unknown, context?: 'cargar_resultados
 function pathFromDrfNext(nextUrl: string): string {
   const base = apiClient.defaults.baseURL || '';
   try {
-    const u = new URL(nextUrl, base || undefined);
+    // Producción usa /api: URL requiere una base absoluta incluso si next lo es.
+    const absoluteBase = new URL(base || '/api', window.location.origin);
+    const u = new URL(nextUrl, absoluteBase);
     const p = u.pathname + u.search;
     return p.startsWith('/api/') ? p.slice(4) : p.startsWith('/') ? p : `/${p}`;
   } catch {
