@@ -59,6 +59,34 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
   };
 }
 
+/**
+ * El filtro de estado de Lab. Clínico no coincide 1:1 con microbiología
+ * (no existe FINALIZADO; el cierre es VALIDADO / INFORMADO).
+ */
+export function estadosMicroDesdeFiltroLab(estadoLab: string): string[] | null {
+  const estado = (estadoLab || '').trim();
+  if (!estado) return null;
+  if (estado === 'FINALIZADO') return ['VALIDADO', 'INFORMADO'];
+  if (estado === 'INFORMADO_PARCIAL') return ['LECTURA_PRELIMINAR'];
+  if (estado === 'EN_PROCESO') {
+    return ['RECIBIDO', 'SEMBRADO', 'LECTURA_PRELIMINAR', 'IDENTIFICACION', 'ANTIBIOGRAMA'];
+  }
+  if (estado === 'PENDIENTE' || estado === 'LISTO_PARA_VALIDAR') return [estado];
+  return [estado];
+}
+
+/** Última solicitada primero (fecha_solicitud descendente). */
+export function sortPedidosMasRecientesPrimero<
+  T extends { fecha_solicitud?: string | null; id?: number }
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const ta = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
+    const tb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
+    if (tb !== ta) return tb - ta;
+    return (b.id || 0) - (a.id || 0);
+  });
+}
+
 export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow {
   return {
     key: `micro-${e.id}`,

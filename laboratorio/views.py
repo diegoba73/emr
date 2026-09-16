@@ -10,7 +10,6 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Max
 from django.utils import timezone
 from .models import (
     TipoMuestra,
@@ -28,6 +27,7 @@ from .serializers import (
     TipoExamenSerializer,
     PanelExamenSerializer,
     SolicitudExamenSerializer,
+    SolicitudExamenListSerializer,
     SolicitudExamenCreateSerializer,
     ResultadoExamenSerializer,
 )
@@ -258,10 +258,10 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         'resultados__tipo_examen',
         'resultados__muestra',
         'resultados__laboratorio_derivacion',
-        'muestras',
+        'muestras__tipo_contenedor',
     ).all()
     permission_classes = [LimsSolicitudExamenPermission]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['paciente', 'estado', 'origen_solicitud', 'consulta_hc']
     search_fields = [
         'numero',
@@ -271,12 +271,15 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         'medico_interno__nombre',
         'medico_interno__apellido',
     ]
-    ordering = ['-fecha_solicitud']
+    ordering_fields = ['fecha_solicitud', 'id', 'numero', 'estado']
+    ordering = ['-fecha_solicitud', '-id']
     
     def get_serializer_class(self):
-        """Usa SolicitudExamenCreateSerializer para crear, SolicitudExamenSerializer para el resto."""
+        """Create vs listado liviano vs detalle."""
         if self.action == 'create':
             return SolicitudExamenCreateSerializer
+        if self.action == 'list':
+            return SolicitudExamenListSerializer
         return SolicitudExamenSerializer
 
     def create(self, request, *args, **kwargs):
@@ -525,28 +528,41 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         - fecha: Filtro por fecha de solicitud (creación)
         - fecha_muestra: Órdenes con muestra tomada ese día (excluye PENDIENTE)
         """
-        queryset = super().get_queryset()
+        listado = getattr(self, 'action', None) == 'list'
+        if listado:
+            # Sin prefetch de resultados: Todos / FINALIZADO cargan historial
+            # con cientos de analitos y tumbaban el GET (timeout / 500).
+            queryset = (
+                SolicitudExamen.objects.select_related(
+                    'paciente',
+                    'medico_interno',
+                    'consulta_hc__turno__recurso',
+                )
+                .prefetch_related('muestras__tipo_contenedor')
+                .defer('orden_grupos_informe')
+            )
+        else:
+            queryset = super().get_queryset()
+        queryset = self._restringir_solicitudes_por_rol(queryset)
+        return self._aplicar_filtros_listado(queryset)
+
+    def _restringir_solicitudes_por_rol(self, queryset):
         user = self.request.user
         if not user.is_authenticated:
             return queryset.none()
         if user.is_superuser:
-            pass
-        else:
-            role = get_normalized_role(user)
-            if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria', 'medico'):
-                # Lectura institucional: todas las órdenes, todos los estados.
-                pass
-            elif role == 'paciente':
-                try:
-                    queryset = queryset.filter(paciente_id=user.paciente.id)
-                except Exception:
-                    queryset = queryset.none()
-            else:
-                queryset = queryset.none()
+            return queryset
+        role = get_normalized_role(user)
+        if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria', 'medico'):
+            return queryset
+        if role == 'paciente':
+            try:
+                return queryset.filter(paciente_id=user.paciente.id)
+            except Exception:
+                return queryset.none()
+        return queryset.none()
 
-        if getattr(self, 'action', None) == 'list':
-            queryset = queryset.annotate(fecha_toma_muestra=Max('muestras__fecha_toma'))
-
+    def _aplicar_filtros_listado(self, queryset):
         numero = self.request.query_params.get('numero')
         if numero:
             queryset = queryset.filter(numero=numero)
@@ -563,7 +579,58 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             if fecha:
                 queryset = queryset.filter(fecha_solicitud__date=fecha)
 
-        return queryset
+        return queryset.order_by('-fecha_solicitud', '-id')
+
+    def list(self, request, *args, **kwargs):
+        """Todos / FINALIZADO no deben 500 si una fila o el SQL del listado fallan."""
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception:
+            logger.exception("SolicitudExamenViewSet.list falló; fallback sin joins de muestra")
+            from laboratorio.display_names import format_apellido_nombre
+
+            qs = (
+                SolicitudExamen.objects.select_related('paciente', 'medico_interno')
+                .defer('orden_grupos_informe')
+            )
+            qs = self.filter_queryset(self._restringir_solicitudes_por_rol(qs))
+            qs = self._aplicar_filtros_listado(qs)
+            try:
+                page = self.paginate_queryset(qs)
+            except Exception:
+                logger.exception("SolicitudExamenViewSet.list fallback paginate falló")
+                return Response({'count': 0, 'next': None, 'previous': None, 'results': []})
+            instances = page if page is not None else qs
+            rows = []
+            for obj in instances:
+                try:
+                    pac = getattr(obj, 'paciente', None)
+                    rows.append(
+                        {
+                            'id': obj.pk,
+                            'numero': obj.numero,
+                            'paciente': obj.paciente_id,
+                            'paciente_nombre': format_apellido_nombre(pac) if pac else None,
+                            'paciente_dni': getattr(pac, 'dni', None) if pac else None,
+                            'medico_interno': obj.medico_interno_id,
+                            'medico_display': obj.medico_display,
+                            'origen_solicitud': obj.origen_solicitud,
+                            'estado': obj.estado,
+                            'estado_obra_social': obj.estado_obra_social,
+                            'fecha_solicitud': obj.fecha_solicitud,
+                            'fecha_toma_muestra': None,
+                            'resultados': [],
+                            'resultados_visibles': False,
+                            'orden_abierta': obj.estado == 'PENDIENTE',
+                            'esperando_recepcion': False,
+                            'tubos_pendientes_extraccion': [],
+                        }
+                    )
+                except Exception:
+                    logger.exception("listado fallback fila id=%s", getattr(obj, 'pk', None))
+            if page is not None:
+                return self.get_paginated_response(rows)
+            return Response(rows)
     
     @action(detail=True, methods=['post'], url_path='cargar-resultados')
     def cargar_resultados(self, request, pk=None):

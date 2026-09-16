@@ -27,6 +27,7 @@ import { canAccessLimsPendientes, canOperateLims } from '../../utils/limsAccess'
 import {
   mapLabToPendiente,
   mapMicroToPendiente,
+  sortPedidosMasRecientesPrimero,
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
 import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
@@ -85,14 +86,10 @@ const OrdenesLimsPendientes: React.FC = () => {
       } catch {
         micros = [];
       }
-      const merged = [
+      const merged = sortPedidosMasRecientesPrimero([
         ...labs.map(mapLabToPendiente),
         ...micros.map(mapMicroToPendiente),
-      ].sort((a, b) => {
-        const ta = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
-        const tb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
-        return tb - ta;
-      });
+      ]);
       setRows(await attachIqcStatusToRows(merged));
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));

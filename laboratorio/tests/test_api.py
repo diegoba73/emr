@@ -1,6 +1,8 @@
 """
 Tests de integración API para la app laboratorio (LIMS).
 """
+from datetime import timedelta
+
 import pytest
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -1068,6 +1070,63 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         ids_est = {x['id'] for x in r_estado.data.get('results', r_estado.data)}
         assert sol_p.id in ids_est
         assert sol_t.id not in ids_est
+
+    def test_listado_sin_filtro_todas_mas_reciente_primero(self):
+        antigua = self._crear_solicitud_api()
+        reciente = self._crear_solicitud_api()
+        ahora = timezone.now()
+        SolicitudExamen.objects.filter(pk=antigua.pk).update(
+            fecha_solicitud=ahora - timedelta(days=2)
+        )
+        SolicitudExamen.objects.filter(pk=reciente.pk).update(fecha_solicitud=ahora)
+
+        r = self.client.get('/api/lab/solicitudes/', {'page_size': 100}, format='json')
+        assert r.status_code == status.HTTP_200_OK
+        results = r.data.get('results', r.data)
+        ids = [x['id'] for x in results]
+        assert reciente.id in ids
+        assert antigua.id in ids
+        assert ids.index(reciente.id) < ids.index(antigua.id)
+        row_antigua = next(x for x in results if x['id'] == antigua.id)
+        assert row_antigua.get('fecha_toma_muestra') in (None, '')
+        assert row_antigua.get('resultados') == []
+
+    def test_listado_no_falla_con_resultados_sin_validar(self):
+        sol = self._crear_solicitud_api()
+        res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        res.valor_obtenido = '1'
+        res.save(update_fields=['valor_obtenido'])
+        r = self.client.get('/api/lab/solicitudes/', {'page_size': 50}, format='json')
+        assert r.status_code == status.HTTP_200_OK, r.data
+        ids = [x['id'] for x in r.data.get('results', r.data)]
+        assert sol.id in ids
+
+    def test_listado_filtro_finalizado_no_serializa_resultados(self):
+        """Todos y FINALIZADO no deben 500 por analitos nested / validado_por None."""
+        sol = self._crear_solicitud_api()
+        res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        res.valor_obtenido = '99'
+        res.validado_por = None
+        res.save(update_fields=['valor_obtenido', 'validado_por'])
+        SolicitudExamen.objects.filter(pk=sol.pk).update(estado='FINALIZADO')
+
+        r_fin = self.client.get(
+            '/api/lab/solicitudes/',
+            {'estado': 'FINALIZADO', 'page_size': 50},
+            format='json',
+        )
+        assert r_fin.status_code == status.HTTP_200_OK, r_fin.data
+        results_fin = r_fin.data.get('results', r_fin.data)
+        ids_fin = [x['id'] for x in results_fin]
+        assert sol.id in ids_fin
+        row = next(x for x in results_fin if x['id'] == sol.id)
+        assert row.get('resultados') == []
+        assert row.get('estado') == 'FINALIZADO'
+
+        r_todos = self.client.get('/api/lab/solicitudes/', {'page_size': 50}, format='json')
+        assert r_todos.status_code == status.HTTP_200_OK, r_todos.data
+        ids_todos = [x['id'] for x in r_todos.data.get('results', r_todos.data)]
+        assert sol.id in ids_todos
 
     def test_acciones_cancelar_y_entregado_eliminadas(self):
         sol = self._crear_solicitud_api()

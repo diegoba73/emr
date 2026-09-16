@@ -28,8 +28,10 @@ import {
 import { ESTADOS_ORDEN_LIMS, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
 import { withNavBack } from '../utils/navBack';
 import {
+  estadosMicroDesdeFiltroLab,
   mapLabToPendiente,
   mapMicroToPendiente,
+  sortPedidosMasRecientesPrimero,
   type PendientePedidoRow,
 } from '../utils/limsPendientesUnificados';
 import { isPacienteRole } from '../utils/navLabels';
@@ -50,6 +52,7 @@ const Solicitudes: React.FC = () => {
   const esPaciente = isPacienteRole(currentUser);
   const modoEntrega = isSecretariaEntregaLab(currentUser);
   const initialLoadDone = useRef(false);
+  const loadGen = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setBusquedaDebounced(busqueda), 400);
@@ -61,55 +64,86 @@ const Solicitudes: React.FC = () => {
       setLoading(false);
       return;
     }
+    const gen = ++loadGen.current;
     if (!initialLoadDone.current) setLoading(true);
     setError(null);
+
+    const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
+    if (filtroEstado) labParams.estado = filtroEstado;
+    if (busquedaDebounced.trim()) labParams.search = busquedaDebounced.trim();
+
+    const microSearch = busquedaDebounced.trim();
+    const microEstados = estadosMicroDesdeFiltroLab(filtroEstado);
+
+    const labsPromise =
+      filtroTipo === 'MICROBIOLOGIA'
+        ? Promise.resolve([] as Awaited<ReturnType<typeof listSolicitudesExamen>>)
+        : listSolicitudesExamen(labParams);
+
+    const microsPromise =
+      puedeVerMicro && filtroTipo !== 'LAB_CLINICO'
+        ? (async () => {
+            const estados = microEstados === null ? [undefined] : microEstados;
+            const pages = await Promise.all(
+              estados.map((estado) =>
+                listEstudiosMicrobiologia({
+                  ...(estado ? { estado } : {}),
+                  ...(microSearch ? { search: microSearch } : {}),
+                })
+              )
+            );
+            const seen = new Set<number>();
+            const out: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
+            for (const page of pages) {
+              for (const row of page) {
+                if (seen.has(row.id)) continue;
+                seen.add(row.id);
+                out.push(row);
+              }
+            }
+            return out;
+          })()
+        : Promise.resolve([] as Awaited<ReturnType<typeof listEstudiosMicrobiologia>>);
+
+    let labs: Awaited<ReturnType<typeof listSolicitudesExamen>> = [];
+    let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
+    let labError: string | null = null;
+    let microError: string | null = null;
+
     try {
-      const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
-      if (filtroEstado) labParams.estado = filtroEstado;
-      if (busquedaDebounced.trim()) labParams.search = busquedaDebounced.trim();
+      labs = await labsPromise;
+    } catch (e) {
+      labError = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes);
+      labs = [];
+    }
 
-      const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {};
-      if (filtroEstado) microParams.estado = filtroEstado;
-      if (busquedaDebounced.trim()) microParams.search = busquedaDebounced.trim();
+    if (gen !== loadGen.current) return;
 
-      const labsPromise =
-        filtroTipo === 'MICROBIOLOGIA'
-          ? Promise.resolve([])
-          : listSolicitudesExamen(labParams);
+    setRows(sortPedidosMasRecientesPrimero(labs.map(mapLabToPendiente)));
+    initialLoadDone.current = true;
+    setLoading(false);
+    if (labError) setError(labError);
 
-      let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
-      if (puedeVerMicro && filtroTipo !== 'LAB_CLINICO') {
-        try {
-          micros = await listEstudiosMicrobiologia(microParams);
-        } catch (microErr) {
-          // No silenciar: si falla micro, el médico veía Lab. Clínico y “Microbiología: 0”.
-          setError(
-            getSafeClinicalActionMessage(
-              microErr,
-              'No se pudieron cargar los pedidos de microbiología.'
-            )
-          );
-          micros = [];
-        }
-      }
+    try {
+      micros = await microsPromise;
+    } catch (microErr) {
+      microError = getSafeClinicalActionMessage(
+        microErr,
+        'No se pudieron cargar los pedidos de microbiología.'
+      );
+      micros = [];
+    }
 
-      const labs = await labsPromise;
-      const merged = [
+    if (gen !== loadGen.current) return;
+
+    setRows(
+      sortPedidosMasRecientesPrimero([
         ...labs.map(mapLabToPendiente),
         ...micros.map(mapMicroToPendiente),
-      ].sort((a, b) => {
-        const ta = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
-        const tb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
-        return tb - ta;
-      });
-      setRows(merged);
-    } catch (e) {
-      setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-      setRows([]);
-    } finally {
-      initialLoadDone.current = true;
-      setLoading(false);
-    }
+      ])
+    );
+    if (labError) setError(labError);
+    else if (microError) setError(microError);
   }, [allowed, puedeVerMicro, filtroEstado, filtroTipo, busquedaDebounced]);
 
   useEffect(() => {
@@ -156,7 +190,7 @@ const Solicitudes: React.FC = () => {
     ? 'Pedidos de laboratorio realizados desde consultas y sus resultados.'
     : modoEntrega
       ? 'Informes de laboratorio validados para enviar o descargar en PDF.'
-      : 'Órdenes de Lab. Clínico y Microbiología. Se actualiza sola; el pedido aparece al guardar y cerrar la consulta.';
+      : 'Todas las órdenes de Lab. Clínico y Microbiología, de la última solicitada a la primera.';
 
   const handleVer = (row: PendientePedidoRow) => {
     if (row.tipo === 'MICROBIOLOGIA') {
@@ -214,13 +248,17 @@ const Solicitudes: React.FC = () => {
             </FormControl>
           )}
           <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Estado</InputLabel>
+            <InputLabel id="solicitudes-filtro-estado-label">Estado</InputLabel>
             <Select
+              labelId="solicitudes-filtro-estado-label"
               label="Estado"
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
+              value={filtroEstado || 'TODOS'}
+              onChange={(e) => {
+                const v = String(e.target.value);
+                setFiltroEstado(v === 'TODOS' ? '' : v);
+              }}
             >
-              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="TODOS">Todos</MenuItem>
               {ESTADOS_ORDEN_LIMS.map((st) => (
                 <MenuItem key={st} value={st}>
                   {labelEstadoOrdenLims(st)}
@@ -265,7 +303,7 @@ const Solicitudes: React.FC = () => {
         <Paper sx={{ p: 1 }}>
           <OrdenesLimsTabla
             rows={rows}
-            emptyMessage="No hay órdenes de laboratorio para los filtros seleccionados."
+            emptyMessage="No hay órdenes de laboratorio."
             onVer={handleVer}
             accionLabel={modoEntrega ? 'Informe' : 'Ver detalle'}
             modoEntrega={modoEntrega}

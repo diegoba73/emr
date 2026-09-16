@@ -84,7 +84,8 @@ function pathFromDrfNext(nextUrl: string): string {
 
 export async function getPaginatedAll<T>(
   initialPath: string,
-  params?: Record<string, string | number | undefined>
+  params?: Record<string, string | number | undefined>,
+  options?: { maxPages?: number }
 ): Promise<T[]> {
   const qs = new URLSearchParams();
   if (params) {
@@ -96,11 +97,17 @@ export async function getPaginatedAll<T>(
   let path: string | null = `${initialPath}${q ? `?${q}` : ''}`;
   const out: T[] = [];
   const seen = new Set<string>();
-  const maxPages = 8;
+  const maxPages = options?.maxPages ?? 8;
   while (path && seen.size < maxPages) {
     if (seen.has(path)) break;
     seen.add(path);
-    const res = await apiClient.get<Paginated<T> | T[]>(path);
+    let res;
+    try {
+      res = await apiClient.get<Paginated<T> | T[]>(path);
+    } catch (err) {
+      if (out.length) break;
+      throw err;
+    }
     const body = res.data;
     if (Array.isArray(body)) {
       out.push(...body);
@@ -130,10 +137,14 @@ export async function listSolicitudesExamen(params?: {
   /** YYYY-MM-DD — día en que se tomó la muestra (bandeja diaria de laboratorio). */
   fecha_muestra?: string;
 }): Promise<SolicitudExamenLims[]> {
-  return getPaginatedAll<SolicitudExamenLims>(`${LAB}/solicitudes/`, {
-    ...params,
-    page_size: 80,
-  });
+  return getPaginatedAll<SolicitudExamenLims>(
+    `${LAB}/solicitudes/`,
+    {
+      ...params,
+      page_size: 100,
+    },
+    { maxPages: 20 }
+  );
 }
 
 export async function getSolicitudExamen(id: number): Promise<SolicitudExamenLims> {

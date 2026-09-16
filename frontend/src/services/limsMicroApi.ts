@@ -52,12 +52,12 @@ export const listEstudiosMicrobiologia = (params?: {
   sin_etiquetas?: boolean;
   esperando_recepcion?: boolean;
 }) => {
-  const q: Record<string, string | number | undefined> = { page_size: 80 };
+  const q: Record<string, string | number | undefined> = { page_size: 100 };
   if (params?.search) q.search = params.search;
   if (params?.estado) q.estado = params.estado;
   if (params?.sin_etiquetas) q.sin_etiquetas = '1';
   if (params?.esperando_recepcion) q.esperando_recepcion = '1';
-  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q);
+  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages: 20 });
 };
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);

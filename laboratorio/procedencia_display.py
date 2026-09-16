@@ -75,8 +75,10 @@ def resolver_procedencia_solicitud(solicitud: SolicitudExamen) -> dict[str, Any]
             .first()
         )
         if internacion is not None:
-            sector = internacion.cama.sector.nombre if internacion.cama_id else ""
-            cama = internacion.cama.nombre if internacion.cama_id else ""
+            cama_obj = internacion.cama if internacion.cama_id else None
+            sector_obj = getattr(cama_obj, "sector", None) if cama_obj is not None else None
+            sector = getattr(sector_obj, "nombre", "") or ""
+            cama = getattr(cama_obj, "nombre", "") or ""
             detalle = f"{sector} — {cama}".strip(" —")
             return {
                 "procedencia_tipo": "INTERNACION",

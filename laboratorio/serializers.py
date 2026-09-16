@@ -399,11 +399,17 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
     )
     tipo_examen_rango_referencia = serializers.CharField(
         source='tipo_examen.rango_referencia_texto',
-        read_only=True
+        read_only=True,
+        allow_null=True,
+        required=False,
+        allow_blank=True,
     )
     validado_por_nombre = serializers.CharField(
         source='validado_por.username',
-        read_only=True
+        read_only=True,
+        allow_null=True,
+        required=False,
+        default=None,
     )
     muestra_id = serializers.IntegerField(read_only=True, allow_null=True)
     muestra_estado = serializers.CharField(
@@ -529,15 +535,24 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     paciente_nombre = serializers.SerializerMethodField()
     paciente_dni = serializers.CharField(
         source='paciente.dni',
-        read_only=True
+        read_only=True,
+        allow_null=True,
+        required=False,
+        allow_blank=True,
     )
     paciente_email = serializers.EmailField(
         source='paciente.email',
         read_only=True,
+        allow_null=True,
+        required=False,
+        allow_blank=True,
     )
     paciente_telefono = serializers.CharField(
         source='paciente.telefono',
         read_only=True,
+        allow_null=True,
+        required=False,
+        allow_blank=True,
     )
     medico_display = serializers.CharField(read_only=True)
     medico_interno_nombre = serializers.SerializerMethodField()
@@ -550,7 +565,9 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     procedencia_tipo = serializers.SerializerMethodField()
     procedencia_display = serializers.SerializerMethodField()
     origen_solicitud_display = serializers.SerializerMethodField()
-    fecha_toma_muestra = serializers.DateTimeField(read_only=True, required=False)
+    fecha_toma_muestra = serializers.DateTimeField(
+        read_only=True, required=False, allow_null=True
+    )
     extraccion_completa = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
     orden_abierta = serializers.SerializerMethodField()
@@ -650,8 +667,12 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         # Listado: omitir nested resultados (performance / payload).
         # No usar pop+restore en to_representation: re-bind del mismo Field
         # dispara AssertionError en DRF ("redundant source='resultados'").
-        if getattr(view, 'action', None) == 'list':
+        es_listado = getattr(view, 'action', None) == 'list' or getattr(self, 'parent', None)
+        if es_listado:
             fields.pop('resultados', None)
+            fields.pop('derivaciones_resumen', None)
+            fields.pop('paneles_resumen', None)
+            fields.pop('orden_grupos_informe', None)
         return fields
 
     def to_representation(self, instance):
@@ -731,31 +752,51 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         return cached
 
     def get_procedencia_tipo(self, obj):
-        return self._procedencia(obj).get("procedencia_tipo")
+        try:
+            return self._procedencia(obj).get("procedencia_tipo")
+        except Exception:
+            logger.exception("procedencia_tipo solicitud=%s", getattr(obj, "pk", None))
+            return None
 
     def get_procedencia_display(self, obj):
-        return self._procedencia(obj).get("procedencia_display")
+        try:
+            return self._procedencia(obj).get("procedencia_display")
+        except Exception:
+            logger.exception("procedencia_display solicitud=%s", getattr(obj, "pk", None))
+            return "—"
 
     def get_origen_solicitud_display(self, obj):
         return label_origen_solicitud(getattr(obj, 'origen_solicitud', None))
 
-    def get_extraccion_completa(self, obj):
-        from laboratorio.muestra_estado import extraccion_completa
+    def _muestras_prefetched(self, obj):
+        muestras = getattr(obj, 'muestras', None)
+        if muestras is None:
+            return []
+        return list(muestras.all()) if hasattr(muestras, 'all') else list(muestras)
 
-        return extraccion_completa(obj.pk)
+    def get_extraccion_completa(self, obj):
+        terminales = {'RECHAZADA', 'DESCARTADA', 'CANCELADA'}
+        activas = [
+            m for m in self._muestras_prefetched(obj)
+            if getattr(m, 'estado', None) not in terminales
+        ]
+        if not activas:
+            return False
+        return all(getattr(m, 'estado', None) != 'PENDIENTE_TOMA' for m in activas)
 
     def get_tubos_pendientes_extraccion(self, obj):
-        from laboratorio.muestra_estado import tubos_pendientes_extraccion
-
         out = []
-        for p in tubos_pendientes_extraccion(obj.pk):
+        for p in self._muestras_prefetched(obj):
+            if getattr(p, 'estado', None) != 'PENDIENTE_TOMA':
+                continue
+            tc = getattr(p, 'tipo_contenedor', None)
             out.append(
                 {
-                    "id": p.pk,
-                    "codigo_barra": p.codigo_barra,
-                    "tipo_contenedor_codigo": p.tipo_contenedor.codigo if p.tipo_contenedor_id else None,
-                    "tipo_contenedor_nombre": p.tipo_contenedor.nombre if p.tipo_contenedor_id else None,
-                    "estado": p.estado,
+                    'id': p.pk,
+                    'codigo_barra': p.codigo_barra,
+                    'tipo_contenedor_codigo': getattr(tc, 'codigo', None) if p.tipo_contenedor_id else None,
+                    'tipo_contenedor_nombre': getattr(tc, 'nombre', None) if p.tipo_contenedor_id else None,
+                    'estado': p.estado,
                 }
             )
         return out
@@ -841,6 +882,135 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         from laboratorio.obra_social import obra_social_permite_liberar
 
         return obra_social_permite_liberar(obj)
+
+
+class _SolicitudExamenSafeListSerializer(serializers.ListSerializer):
+    """Una fila inválida no debe tumbar el listado completo (500 en /solicitudes)."""
+
+    def to_representation(self, data):
+        iterable = data.all() if hasattr(data, "all") else data
+        out = []
+        for item in iterable:
+            try:
+                out.append(self.child.to_representation(item))
+            except Exception:
+                logger.exception(
+                    "No se pudo serializar SolicitudExamen id=%s",
+                    getattr(item, "pk", None),
+                )
+        return out
+
+
+class SolicitudExamenListSerializer(serializers.ModelSerializer):
+    """Listado de bandeja: sin resultados, paneles ni JSON de informe.
+
+    Subclass de SolicitudExamenSerializer reintroducía campos declared
+    (resultados, orden_grupos_informe) y el prefetch de resultados tumbaba
+    GET ?estado=FINALIZADO y el listado sin filtro (Todos).
+    """
+
+    paciente_nombre = serializers.SerializerMethodField()
+    paciente_dni = serializers.CharField(
+        source="paciente.dni",
+        read_only=True,
+        allow_null=True,
+        required=False,
+        allow_blank=True,
+    )
+    medico_display = serializers.CharField(read_only=True)
+    medico_interno_nombre = serializers.SerializerMethodField()
+    origen_solicitud_display = serializers.SerializerMethodField()
+    procedencia_display = serializers.SerializerMethodField()
+    fecha_toma_muestra = serializers.SerializerMethodField()
+    orden_abierta = serializers.SerializerMethodField()
+    esperando_recepcion = serializers.SerializerMethodField()
+    puede_agregar_examenes = serializers.SerializerMethodField()
+    puede_quitar_examenes = serializers.SerializerMethodField()
+    pedido_adicional = serializers.SerializerMethodField()
+    tubos_pendientes_extraccion = serializers.SerializerMethodField()
+    estado_obra_social_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SolicitudExamen
+        list_serializer_class = _SolicitudExamenSafeListSerializer
+        fields = (
+            "id",
+            "numero",
+            "paciente",
+            "paciente_nombre",
+            "paciente_dni",
+            "medico_interno",
+            "medico_interno_nombre",
+            "medico_externo_nombre",
+            "medico_display",
+            "origen_solicitud",
+            "origen_solicitud_display",
+            "procedencia_display",
+            "estado",
+            "estado_obra_social",
+            "estado_obra_social_display",
+            "fecha_solicitud",
+            "fecha_toma_muestra",
+            "orden_abierta",
+            "esperando_recepcion",
+            "puede_agregar_examenes",
+            "puede_quitar_examenes",
+            "pedido_adicional",
+            "tubos_pendientes_extraccion",
+        )
+        read_only_fields = fields
+
+    _procedencia = SolicitudExamenSerializer._procedencia
+    _muestras_prefetched = SolicitudExamenSerializer._muestras_prefetched
+    get_paciente_nombre = SolicitudExamenSerializer.get_paciente_nombre
+    get_medico_interno_nombre = SolicitudExamenSerializer.get_medico_interno_nombre
+    get_origen_solicitud_display = SolicitudExamenSerializer.get_origen_solicitud_display
+    get_procedencia_display = SolicitudExamenSerializer.get_procedencia_display
+    get_orden_abierta = SolicitudExamenSerializer.get_orden_abierta
+    get_esperando_recepcion = SolicitudExamenSerializer.get_esperando_recepcion
+    get_puede_agregar_examenes = SolicitudExamenSerializer.get_puede_agregar_examenes
+    get_puede_quitar_examenes = SolicitudExamenSerializer.get_puede_quitar_examenes
+    get_pedido_adicional = SolicitudExamenSerializer.get_pedido_adicional
+    get_tubos_pendientes_extraccion = SolicitudExamenSerializer.get_tubos_pendientes_extraccion
+    get_estado_obra_social_display = SolicitudExamenSerializer.get_estado_obra_social_display
+
+    def get_fecha_toma_muestra(self, obj):
+        fechas = [
+            getattr(m, "fecha_toma", None)
+            for m in self._muestras_prefetched(obj)
+            if getattr(m, "fecha_toma", None)
+        ]
+        return max(fechas) if fechas else None
+
+    def to_representation(self, instance):
+        try:
+            data = super().to_representation(instance)
+        except Exception:
+            logger.exception(
+                "to_representation SolicitudExamen id=%s",
+                getattr(instance, "pk", None),
+            )
+            return {
+                "id": getattr(instance, "pk", None),
+                "numero": getattr(instance, "numero", None),
+                "paciente": getattr(instance, "paciente_id", None),
+                "paciente_nombre": None,
+                "paciente_dni": None,
+                "medico_display": None,
+                "origen_solicitud": getattr(instance, "origen_solicitud", None),
+                "origen_solicitud_display": None,
+                "procedencia_display": None,
+                "estado": getattr(instance, "estado", None),
+                "fecha_solicitud": getattr(instance, "fecha_solicitud", None),
+                "fecha_toma_muestra": None,
+                "resultados": [],
+                "resultados_visibles": False,
+            }
+        data["resultados"] = []
+        data["resultados_visibles"] = False
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        return _ocultar_detalle_clinico_secretaria(data, user)
 
 
 class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
