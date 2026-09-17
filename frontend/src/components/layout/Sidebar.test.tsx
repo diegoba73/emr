@@ -217,3 +217,17 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
     expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
   });
 });
+
+
+describe('orden del menú principal', () => {
+  it('muestra el orden institucional para administrador', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'ADMIN' }) });
+    render(<MemoryRouter><SidebarContent /></MemoryRouter>);
+    const labels = ['Inicio', 'Pacientes', 'Turnos', 'Guardia', 'Internación',
+      'Laboratorio', 'Atenciones Clínicas', 'Estudios complementarios', 'Archivos'];
+    const nodes = labels.map((label) => screen.getByText(label));
+    for (let i = 1; i < nodes.length; i++) {
+      expect(nodes[i - 1].compareDocumentPosition(nodes[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+});

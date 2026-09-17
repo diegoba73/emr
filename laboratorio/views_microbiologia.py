@@ -1485,7 +1485,7 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
                     estudio__medico_interno__user_id=user.pk,
                 )
                 qs = qs.filter(q_via_solicitud | q_directo).distinct()
-            elif role not in ("laboratorio", "enfermeria"):
+            elif role not in ("laboratorio", "enfermeria", "secretaria"):
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
 

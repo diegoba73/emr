@@ -21,8 +21,7 @@ export function canAccessLimsModule(user: User | null): boolean {
 
 /**
  * @deprecated El área LIMS ya no admite roles operativos limitados.
- * Secretaría/enfermería: secretaría solo entrega PDF validado en /solicitudes;
- * enfermería consulta resultados validados en /solicitudes.
+ * Secretaría/enfermería consultan resultados en /solicitudes.
  */
 export function canAccessLimsOperativaLimitada(_user: User | null): boolean {
   return false;
@@ -94,16 +93,15 @@ export function pathDetalleOrdenLab(user: User | null, ordenId: number): string 
 }
 
 /**
- * Secretaría en Laboratorio: no ve resultados ni detalle técnico.
- * Solo envía / descarga el PDF del informe cuando está validado.
+ * Compatibilidad con pantallas anteriores: secretaría tiene lectura clínica completa.
  */
-export function isSecretariaEntregaLab(user: User | null): boolean {
-  return normalizeRol(user) === 'secretaria';
+export function isSecretariaEntregaLab(_user: User | null): boolean {
+  return false;
 }
 
 /**
  * Ver valores de resultados en portal clínico.
- * Secretaría nunca ve valores: solo PDF / envío si FINALIZADO.
+ * Secretaría y enfermería pueden consultar los valores.
  */
 export function canSeeResultadosClinicos(
   user: User | null,

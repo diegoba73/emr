@@ -123,9 +123,9 @@ describe('canAccessArchivosMedicos', () => {
     expect(canAccessArchivosMedicos(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('bloquea secretaría, enfermería y laboratorio', () => {
-    expect(canAccessArchivosMedicos(user({ rol: 'SECRETARIA' }))).toBe(false);
-    expect(canAccessArchivosMedicos(user({ rol: 'ENFERMERIA' }))).toBe(false);
+  it('permite lectura a secretaría y enfermería; bloquea laboratorio', () => {
+    expect(canAccessArchivosMedicos(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canAccessArchivosMedicos(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canAccessArchivosMedicos(user({ rol: 'LABORATORIO' }))).toBe(false);
   });
 });

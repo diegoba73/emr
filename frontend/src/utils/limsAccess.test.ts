@@ -158,7 +158,7 @@ describe('canOperateInformeMicro / canSeeInformeMicro / canDownloadInformeMicroP
     expect(canSeeInformeMicro(labUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(medUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(bioUser, 'BORRADOR')).toBe(true);
-    expect(canSeeInformeMicro(secUser, 'VALIDADO')).toBe(false);
+    expect(canSeeInformeMicro(secUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(secUser, 'BORRADOR')).toBe(false);
   });
 
@@ -208,13 +208,13 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
     expect(canSeeResultadosClinicos(adminUser, 'PENDIENTE')).toBe(true);
   });
 
-  it('médico ve resultados en cualquier estado; secretaría nunca; PDF solo FINALIZADO', () => {
+  it('médico y secretaría ven resultados; PDF solo FINALIZADO', () => {
     expect(canSeeResultadosClinicos(medUser, 'EN_PROCESO')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'FINALIZADO')).toBe(true);
-    expect(canSeeResultadosClinicos(secUser, 'EN_PROCESO')).toBe(false);
-    expect(canSeeResultadosClinicos(secUser, 'FINALIZADO')).toBe(false);
-    expect(isSecretariaEntregaLab(secUser)).toBe(true);
+    expect(canSeeResultadosClinicos(secUser, 'EN_PROCESO')).toBe(true);
+    expect(canSeeResultadosClinicos(secUser, 'FINALIZADO')).toBe(true);
+    expect(isSecretariaEntregaLab(secUser)).toBe(false);
     expect(isSecretariaEntregaLab(medUser)).toBe(false);
 
     expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(false);

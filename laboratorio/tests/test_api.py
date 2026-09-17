@@ -622,6 +622,14 @@ class TestLimsAuthorization(APITestCase):
         ids2 = {item['id'] for item in payload2}
         assert self.sol_medico.id in ids2
 
+    def test_secretaria_y_enfermeria_leen_resultados_de_orden_ajena(self):
+        for rol in ('secretaria', 'enfermeria'):
+            user = User.objects.create_user(username=f'resultados_{rol}', password='x', rol=rol)
+            self.client.force_authenticate(user=user)
+            response = self.client.get(f'/api/lab/solicitudes/{self.sol_medico.pk}/')
+            assert response.status_code == 200
+            assert response.data['resultados_visibles'] is True
+
     def test_secretaria_y_enfermeria_no_leen_catalogo_lims(self):
         sec = User.objects.create_user(
             username='sec_cat',

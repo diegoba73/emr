@@ -5,7 +5,7 @@ Cubren:
 - Identidad mínima al crear vía POST (dni, nombre, apellido, fecha_nacimiento).
 - Normalización de nombre/apellido al crear vía POST.
 - Búsqueda inteligente respetando filtros de rol (admin vs médico vs paciente).
-- Privacidad: ``?all=true`` no debe escalar acceso para un médico.
+- Lectura global para médicos/secretaría/enfermería; portal paciente restringido.
 - DELETE físico bloqueado para todos.
 """
 from datetime import date
@@ -219,7 +219,7 @@ class TestPacienteAPIBusquedaPermisos:
 class TestPacienteAPIPrivacidad:
     """Reglas de privacidad por rol."""
 
-    def test_medico_sin_vinculos_no_ve_pacientes(self):
+    def test_medico_sin_vinculos_ve_todos_los_pacientes(self):
         Paciente.objects.create(dni="PRIV-MED-0", nombre="A", apellido="B")
         Paciente.objects.create(dni="PRIV-MED-1", nombre="C", apellido="D")
         user = _medico_user("medico.priv.solo", vincular_medico=True)
@@ -229,10 +229,10 @@ class TestPacienteAPIPrivacidad:
         response = client.get("/api/pacientes/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["results"] == []
+        assert response.data["count"] == 2
 
-    def test_all_true_no_escala_para_medico(self):
-        """``?all=true`` no debe convertir a un médico en lector global."""
+    def test_medico_lectura_global_no_depende_de_all(self):
+        """El médico ya tiene lectura global por rol."""
         Paciente.objects.create(dni="PRIV-ALL-0", nombre="A", apellido="B")
         user = _medico_user("medico.priv.all", vincular_medico=True)
 
@@ -241,7 +241,7 @@ class TestPacienteAPIPrivacidad:
         response = client.get("/api/pacientes/?all=true")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["results"] == []
+        assert response.data["count"] == 1
 
     def test_paciente_solo_ve_su_propia_ficha(self):
         propio_user = _paciente_user("paciente.priv.self")
@@ -425,3 +425,17 @@ class TestPacienteAPIReadOnlyDemographics:
         assert response.status_code == status.HTTP_200_OK
         paciente.refresh_from_db()
         assert paciente.telefono == "3333333333"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("rol", ["admin", "medico", "secretaria", "enfermeria"])
+def test_listado_y_busqueda_global_sin_vinculo_clinico(rol):
+    user = User.objects.create_user(username=f"global_{rol}", password="x", rol=rol)
+    paciente = Paciente.objects.create(dni="GLOBAL-123", nombre="Ana", apellido="Global")
+    client = APIClient()
+    client.force_authenticate(user=user)
+    for url in ("/api/pacientes/", "/api/pacientes/?search=GLOBAL-123"):
+        response = client.get(url)
+        assert response.status_code == 200
+        assert paciente.pk in {row["id"] for row in response.data["results"]}
+    assert client.get(f"/api/pacientes/{paciente.pk}/").status_code == 200

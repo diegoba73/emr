@@ -18,9 +18,9 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 | Rol | Alcance principal |
 |-----|-------------------|
 | `admin` | Administración, validación LIMS (`validar`), override IQC de cierre |
-| `medico` | EMR clínico, órdenes propias, lectura LIMS acotada; puede **agregar** ensayos (no quitar) |
-| `secretaria` | Agenda, pacientes, gestión turnos; lectura LIMS; envío de informe en `FINALIZADO` |
-| `enfermeria` | EMR clínico acotado; lectura LIMS |
+| `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
+| `secretaria` | Agenda, pacientes, gestión turnos; lectura de estudios, archivos y resultados LIMS; envío de informe en `FINALIZADO` |
+| `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
 | `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar` |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
 | `paciente` | Portal propio |
@@ -66,7 +66,7 @@ Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
 | `paciente` vinculado | Solo sus turnos |
 | `laboratorio` y otros roles no contemplados | Lista vacía |
 
-- El query param `?all=true` **no** amplía el alcance de un médico (defensa alineada con `/api/pacientes/`).
+- El query param `?all=true` **no** amplía el alcance de un médico (la agenda médica sigue siendo propia aunque el listado de pacientes sea global).
 - El frontend no envía `all=true` en la carga global de turnos (`DataContext.loadTurnos`).
 - **[OBJETIVO]** Permiso explícito (p. ej. coordinación médica / `turnos.ver_agenda_global`) para excepciones auditables sin reabrir bypass por query param.
 
@@ -165,3 +165,20 @@ Ver `DOC_INVARIANTES.md` (U1–U5).
 - [ ] Matriz rol × endpoint crítica actualizada en `DOC_API_ENDPOINTS.md` tras cada fase LIMS.
 - [x] Tests de permiso negativo create/patch turnos (C5.8.1).
 - [ ] Matriz completa en `DOC_API_ENDPOINTS.md`.
+
+
+## Acceso operativo — 17 de septiembre de 2026
+
+Por instrucción del responsable del sistema, médico, secretaría y enfermería
+pueden listar y buscar todos los pacientes, aunque no haya turnos previos.
+Secretaría y enfermería pueden leer y descargar archivos médicos de cualquier
+paciente y consultar estudios complementarios y análisis. Secretaría también
+lee los valores LIMS y el texto de informes microbiológicos validados.
+La gestión de agenda y entrega de estudios de secretaría permanece habilitada.
+El rol admin tiene acceso administrativo y clínico global, sin exigir vínculos;
+las validaciones de integridad y los mecanismos de rectificación siguen aplicando.
+La lectura no convierte a secretaría/enfermería en autores o validadores de informes.
+
+Menú principal: Inicio, Pacientes, Turnos, Guardia, Internación, Laboratorio,
+Atenciones Clínicas, Estudios complementarios, Archivos. Cada rol ve sus opciones
+habilitadas en ese orden; Indicadores permanece después de Archivos.

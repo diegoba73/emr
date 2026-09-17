@@ -8,8 +8,8 @@ function normalizedRol(user: User | null | undefined): string {
 
 function puedeOperarEstudios(user: User | null | undefined): boolean {
   if (!user) return false;
-  if (isOperadorLimsRole(normalizedRol(user))) return false;
   if (user.is_superuser) return true;
+  if (isOperadorLimsRole(normalizedRol(user))) return false;
   const rol = normalizedRol(user);
   return rol === 'admin' || rol === 'medico' || isProfesionalEstudioRole(rol);
 }
@@ -17,8 +17,8 @@ function puedeOperarEstudios(user: User | null | undefined): boolean {
 export function canAccessEstudiosModule(user: User | null | undefined): boolean {
   if (!user) return false;
   // Laboratorio/bioquímico no usan este módulo: trabajan en LIMS.
-  if (isOperadorLimsRole(normalizedRol(user))) return false;
   if (user.is_superuser) return true;
+  if (isOperadorLimsRole(normalizedRol(user))) return false;
   const rol = normalizedRol(user);
   return (
     rol === 'admin' ||
@@ -99,6 +99,7 @@ export function canDownloadPdfInformeEstudio(
   informe: InformeEstudioComplementario
 ): boolean {
   if (!user) return false;
+  if (user.is_superuser || normalizedRol(user) === 'admin') return true;
   if (!informe.es_vigente || informe.estado !== 'VALIDADO') return false;
   if (canWriteEstudio(user)) {
     return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO' || estudio.estado === 'INFORMADO';

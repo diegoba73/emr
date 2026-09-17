@@ -516,3 +516,19 @@ def test_invalid_extension_rejected(client, paciente, medico, atencion_vinculada
     }
     r = client.post('/api/archivos-medicos/archivos/', payload, format='multipart')
     assert r.status_code == 400
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("rol", ["admin", "secretaria", "enfermeria"])
+def test_lectura_archivos_sin_vinculo_clinico(client, archivo_medico, rol):
+    user = User.objects.create_user(username=f"lectura_{rol}", password="x", rol=rol)
+    client.force_authenticate(user=user)
+    base = "/api/archivos-medicos/archivos/"
+    response = client.get(base)
+    assert response.status_code == 200
+    rows = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
+    assert archivo_medico.pk in {row["id"] for row in rows}
+    assert client.get(f"{base}{archivo_medico.pk}/").status_code == 200
+    download = client.get(f"{base}{archivo_medico.pk}/download/")
+    assert download.status_code == 200
+    download.close()

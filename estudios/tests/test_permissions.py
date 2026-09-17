@@ -30,3 +30,16 @@ def test_laboratorio_sin_acceso(client, db, estudio_solicitado):
     client.force_authenticate(user=u)
     r = client.get(f'{BASE}{estudio_solicitado.id}/')
     assert r.status_code in (403, 404)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("rol", ["secretaria", "enfermeria", "admin"])
+def test_lectura_estudio_sin_vinculo(client, estudio_solicitado, rol):
+    from usuarios.models import User
+    user = User.objects.create_user(username=f"estudio_global_{rol}", password="x", rol=rol)
+    client.force_authenticate(user=user)
+    response = client.get(BASE)
+    assert response.status_code == 200
+    rows = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
+    assert estudio_solicitado.pk in {row["id"] for row in rows}
+    assert client.get(f"{BASE}{estudio_solicitado.pk}/").status_code == 200

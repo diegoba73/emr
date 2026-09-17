@@ -83,15 +83,8 @@ const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
-  { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessAtenciones },
-  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
-  {
-    text: 'Estudios complementarios',
-    icon: <Description />,
-    path: '/estudios-complementarios',
-    canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),
-  },
+  { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },
   {
     text: 'Laboratorio',
     icon: <SolicitudIcon />,
@@ -99,7 +92,14 @@ const navItems: NavItem[] = [
     canAccess: (u) => canAccessSolicitudes(u) && !isLaboratorioRole(u),
     resolveLabel: getSolicitudesModuleLabel,
   },
-  { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },
+  { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
+  {
+    text: 'Estudios complementarios',
+    icon: <Description />,
+    path: '/estudios-complementarios',
+    canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),
+  },
+  { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
   { text: 'Indicadores', icon: <BiIcon />, path: '/bi', canAccess: canAccessBiDashboard },
 ];
 

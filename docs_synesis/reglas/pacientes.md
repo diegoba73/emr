@@ -28,7 +28,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | BD aún permite `NULL` en nombre/apellido/fecha (pacientes legacy). | **[DEUDA]** migración NOT NULL / limpieza futura |
 | PATCH parcial no exige completar identidad legacy vacía. | **[IMPLEMENTADO]** C2 |
 | Búsqueda: numérico → DNI; texto → nombre/apellido con prioridad. | **[IMPLEMENTADO]** `buscar` |
-| Admin/secretaría/enfermería: listado amplio; médico: acotado; `?all=true` no escala médico. | **[IMPLEMENTADO]** `pacientes.views` |
+| Admin/médico/secretaría/enfermería: listado y búsqueda global, sin exigir vínculos clínicos ni `?all=true`. | **[IMPLEMENTADO]** `pacientes.views` |
 | Paciente solo ve su ficha vía queryset activo. | **[IMPLEMENTADO]** |
 | Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
 | DELETE físico API bloqueado (405). | **[IMPLEMENTADO]** |

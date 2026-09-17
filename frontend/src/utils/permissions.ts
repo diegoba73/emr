@@ -51,7 +51,9 @@ export function isLaboratorioRole(user: User | null | undefined): boolean {
  * Alineado con backend `emr_staff_or_admin_global`.
  */
 export function isEmrStaffOrAdmin(user: User | null | undefined): boolean {
-  if (!user || isLaboratorioRole(user)) return false;
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  if (isLaboratorioRole(user)) return false;
   return Boolean(user.is_superuser || user.is_staff || normalizeRol(user) === 'admin');
 }
 
@@ -65,7 +67,7 @@ function hasPacientesLecturaGlobal(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'enfermeria' || isLecturaOperativaRole(rol);
+  return rol === 'medico' || rol === 'secretaria' || rol === 'enfermeria' || isLecturaOperativaRole(rol);
 }
 
 /** Lista / módulo pacientes (médico, operativos y roles administrativos; no paciente). */
@@ -103,12 +105,12 @@ export function canAccessSolicitudes(user: User | null | undefined): boolean {
   return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico' || rol === 'paciente';
 }
 
-/** Archivos médicos: admin/médico/paciente (secretaría/enfermería/laboratorio bloqueados). */
+/** Archivos médicos: lectura para admin, médico, secretaría, enfermería y paciente. */
 export function canAccessArchivosMedicos(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'paciente';
+  return ['medico', 'secretaria', 'enfermeria', 'paciente'].includes(rol);
 }
 
 /** Crear/editar archivo médico (CanWriteArchivoMedico). Paciente: solo lectura. */
@@ -133,7 +135,9 @@ export function canDownloadArchivoMedico(user: User | null | undefined): boolean
 
 /** Auditoría (IsAuditAdmin): superuser, staff o rol admin; laboratorio excluido. */
 export function canAccessAuditoria(user: User | null | undefined): boolean {
-  if (!user || isLaboratorioRole(user)) return false;
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  if (isLaboratorioRole(user)) return false;
   if (user.is_superuser || user.is_staff) return true;
   return normalizeRol(user) === 'admin';
 }
@@ -158,14 +162,18 @@ export function canOperateAtenciones(user: User | null | undefined): boolean {
 
 /** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico (sin secretaría/enfermería/LIMS). */
 export function canAccessCatalogosClinicos(user: User | null | undefined): boolean {
-  if (!user || isLaboratorioRole(user)) return false;
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  if (isLaboratorioRole(user)) return false;
   if (isStaffOrAdmin(user)) return true;
   return normalizeRol(user) === 'medico';
 }
 
 /** Edición de catálogos clínicos (secretaría: solo lectura). */
 export function canEditCatalogosClinicos(user: User | null | undefined): boolean {
-  if (!user || isLaboratorioRole(user)) return false;
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  if (isLaboratorioRole(user)) return false;
   if (isStaffOrAdmin(user)) return true;
   return normalizeRol(user) === 'medico';
 }

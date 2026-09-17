@@ -78,10 +78,10 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         rol = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or rol == 'admin':
+        if user.is_superuser or rol in ('admin', 'secretaria', 'enfermeria'):
             return queryset
 
-        if rol in ('secretaria', 'enfermeria', 'laboratorio'):
+        if rol == 'laboratorio':
             return queryset.none()
 
         if rol == 'medico':
@@ -192,9 +192,9 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
 
     def _tiene_permiso_lectura(self, user, archivo):
         rol = str(getattr(user, 'rol', '') or '').lower()
-        if user.is_superuser or rol == 'admin':
+        if user.is_superuser or rol in ('admin', 'secretaria', 'enfermeria'):
             return True
-        if rol in ('secretaria', 'enfermeria', 'laboratorio'):
+        if rol == 'laboratorio':
             return False
         if rol == 'medico':
             medico = get_medico_perfil(user)

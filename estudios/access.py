@@ -108,6 +108,8 @@ def usuario_puede_descargar_archivo_estudio(user, estudio) -> bool:
     if not user.is_authenticated:
         return False
     rol = _rol(user)
+    if user.is_superuser or rol == 'admin':
+        return True
     if rol == 'laboratorio':
         return False
     if rol in ('secretaria', 'enfermeria'):
@@ -146,9 +148,11 @@ def usuario_puede_descargar_pdf_informe(user, estudio, informe) -> bool:
     if not user.is_authenticated:
         return False
     rol = _rol(user)
-    if rol == 'laboratorio':
-        return False
     if informe.estudio_id != estudio.pk:
+        return False
+    if user.is_superuser or rol == 'admin':
+        return True
+    if rol == 'laboratorio':
         return False
     if rol in ('secretaria', 'enfermeria'):
         return (

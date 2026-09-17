@@ -42,7 +42,7 @@ _AUDIT_AVAILABLE = log_create is not None and log_update is not None
 
 from usuarios.roles import ROLES_LECTURA_OPERATIVA
 
-_ROLES_LECTURA_GLOBAL = frozenset({"admin", "secretaria", "enfermeria"})
+_ROLES_LECTURA_GLOBAL = frozenset({"admin", "medico", "secretaria", "enfermeria"})
 _ROLES_EDICION_PACIENTE = frozenset({"admin", "secretaria", "medico"})
 
 
@@ -65,8 +65,8 @@ class PacienteViewSet(viewsets.ModelViewSet):
     """CRUD de pacientes con filtros estrictos por rol.
 
     - Admin / staff / secretaría / enfermería / laboratorio / profesionales de estudio: ven todos.
-    - Médico: solo pacientes con los que tenga turnos o consultas.
-      ``?all=true`` está deshabilitado por privacidad.
+    - Médico: listado global para localizar pacientes y agendar turnos.
+      No requiere ``?all=true`` ni vínculos clínicos previos.
     - Paciente: solo su propia ficha.
     - Cualquier otro rol: queryset vacío.
     """
@@ -92,9 +92,8 @@ class PacienteViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         action = getattr(self, "action", None)
-        # Lectura de ficha puntual: el médico puede abrir cualquier paciente
-        # localizado por búsqueda (mismo alcance que ``buscar``). El listado
-        # paginado sigue restringido a vínculos clínicos.
+        # Los roles con lectura global no requieren vínculos clínicos.
+        # El acceso por perfil vinculado se conserva para cuentas legacy.
         _detalle_lectura = frozenset(
             {"retrieve", "timeline", "portal_resumen", "partial_update", "update"}
         )
@@ -146,8 +145,8 @@ class PacienteViewSet(viewsets.ModelViewSet):
     def _queryset_busqueda_operativa(self, queryset):
         """Búsqueda por DNI/nombre para guardia, turnos y agenda (sin listado global).
 
-        Médico/enfermería: pueden localizar cualquier paciente al atender (mín. 2 chars
-        en ``buscar``), pero el listado completo sigue restringido por rol.
+        Médico/secretaría/enfermería: búsqueda y listado global (mín. 2 chars
+        en ``buscar``); el portal paciente conserva su alcance propio.
         """
         user = self.request.user
         if _user_tiene_lectura_global(user):

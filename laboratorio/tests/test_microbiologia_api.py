@@ -465,7 +465,6 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             "/api/lab/microbiologia/lecturas/",
             "/api/lab/microbiologia/aislados/",
             "/api/lab/microbiologia/antibiogramas/",
-            "/api/lab/microbiologia/informes/",
         ):
             r = self.client.get(path)
             self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, msg=path)
@@ -1759,7 +1758,7 @@ class TestInformeMicrobiologiaAPI(TestCase):
         self.assertTrue(r2.json().get("contenido_visible"))
         self.assertIn("Texto final", r2.json().get("texto") or "")
 
-    def test_secretaria_no_lee_texto_informe_validado(self):
+    def test_secretaria_lee_texto_informe_validado(self):
         self.client.force_authenticate(self.bio)
         r = self._post_informe(tipo="FINAL", texto="x")
         iid = r.json()["id"]
@@ -1778,11 +1777,13 @@ class TestInformeMicrobiologiaAPI(TestCase):
         )
         self.client.force_authenticate(sec)
         r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")
-        self.assertIn(r2.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertTrue(r2.json()["contenido_visible"])
+        self.assertIn("Texto confidencial secretaria.", r2.json()["texto"])
         r_list = self.client.get(
             f"/api/lab/microbiologia/informes/?estudio_id={self.ctx['estudio'].pk}"
         )
-        self.assertEqual(r_list.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(r_list.status_code, status.HTTP_200_OK)
 
     def test_medico_ajeno_no_lee(self):
         self.client.force_authenticate(self.bio)

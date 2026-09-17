@@ -113,16 +113,14 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
 
 
 def es_secretaria_entrega_lab(user) -> bool:
-    """Secretaría en laboratorio: solo envío/PDF del informe validado, sin detalle clínico."""
-    return get_normalized_role(user) == 'secretaria'
+    """Compatibilidad: secretaría ya tiene lectura clínica, no modo exclusivo de entrega."""
+    return False
 
 
 def usuario_puede_ver_resultados_lims(user, solicitud) -> bool:
     """True si el usuario puede ver valores de resultados / análisis longitudinal.
 
-    Quien puede ver la orden puede ver sus resultados, excepto secretaría:
-    secretaría no ve valores ni detalle clínico; solo envía/descarga el PDF
-    cuando la orden está FINALIZADO (validada).
+    Quien puede ver la orden puede ver sus resultados, incluida secretaría.
     """
     if es_secretaria_entrega_lab(user):
         return False
@@ -176,7 +174,7 @@ def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
 
     Bioquímico/admin: siempre (borrador, emitido, validado).
     Técnico laboratorio / médico / enfermería: solo cuando el informe está VALIDADO.
-    Secretaría: no ve el texto; solo PDF/envío del informe validado.
+    Secretaría: lectura del texto validado y PDF/envío.
     """
     if not user or not getattr(user, 'is_authenticated', False):
         return False
@@ -186,13 +184,10 @@ def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
     if role in ROLES_LIMS_VALIDAR:
         return True
 
-    if role == 'secretaria':
-        return False
-
     if getattr(informe, 'estado', None) != 'VALIDADO':
         return False
 
-    if role == 'laboratorio' or role == 'enfermeria' or role == 'medico':
+    if role in ('laboratorio', 'enfermeria', 'medico', 'secretaria'):
         return True
     return False
 
@@ -385,7 +380,7 @@ class IsSecretariaOrAdmin(permissions.BasePermission):
         
         # Verificar si el usuario está en el grupo Secretarias o es secretaria
         return (request.user.groups.filter(name='Secretarias').exists() or 
-                request.user.rol == 'secretaria')
+                get_normalized_role(request.user) in ('secretaria', 'admin'))
 
 class IsMedicoOrAdmin(permissions.BasePermission):
     """
@@ -401,7 +396,7 @@ class IsMedicoOrAdmin(permissions.BasePermission):
         
         # Verificar si el usuario está en el grupo Médicos o es médico
         return (request.user.groups.filter(name='Médicos').exists() or 
-                request.user.rol == 'medico')
+                get_normalized_role(request.user) in ('medico', 'admin'))
 
 class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
     """
@@ -1063,11 +1058,11 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
     - bioquímico / admin: crear, completar (emitir), anular y validar; ven todo.
     - laboratorio / médico / enfermería: solo list/retrieve de informes
       **VALIDADO**; no ven borradores ni emitidos pendientes.
-    - secretaría: sin lectura del texto; usa PDF/envío sobre el estudio.
+    - secretaría: lectura de informes validados y PDF/envío sobre el estudio.
     - paciente / anónimo: sin acceso.
     """
 
-    _read_roles = frozenset({*ROLES_LIMS_WRITE, "medico", "enfermeria"})
+    _read_roles = frozenset({*ROLES_LIMS_WRITE, "medico", "enfermeria", "secretaria"})
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:

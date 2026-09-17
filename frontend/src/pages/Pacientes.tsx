@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -139,16 +139,6 @@ const Pacientes: React.FC = () => {
   const canCreate = canCreatePaciente(currentUser);
   const canEdit = canUpdatePacienteDemographics(currentUser);
 
-  const medicoHint = useMemo(
-    () =>
-      currentUser?.rol === 'MEDICO' &&
-      totalCount <= 5 &&
-      !debouncedSearch &&
-      !loading &&
-      !loadError,
-    [currentUser?.rol, totalCount, debouncedSearch, loading, loadError]
-  );
-
   if (!currentUser) {
     return (
       <Box sx={{ p: 3 }}>
@@ -196,13 +186,6 @@ const Pacientes: React.FC = () => {
           }
         >
           {loadError}
-        </Alert>
-      )}
-
-      {medicoHint && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Como médico solo ves pacientes con los que tengas turnos o consultas registradas.
-          Usá la búsqueda arriba para encontrar un paciente por DNI o apellido dentro de tu alcance.
         </Alert>
       )}
 

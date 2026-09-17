@@ -1,4 +1,4 @@
-import { canAccessEstudiosModule } from './permissions';
+import { canAccessEstudiosModule, canDownloadPdfInformeEstudio } from './permissions';
 import type { User } from '../../types';
 
 const user = (partial: Partial<User>): User =>
@@ -29,4 +29,13 @@ describe('canAccessEstudiosModule', () => {
     expect(canAccessEstudiosModule(user({ rol: 'BIOQUIMICO', is_staff: true }))).toBe(false);
     expect(canAccessEstudiosModule(null)).toBe(false);
   });
+});
+
+
+it('administrador puede descargar un informe borrador para revisión', () => {
+  expect(canDownloadPdfInformeEstudio(
+    user({ rol: 'ADMIN' }),
+    { estado: 'REALIZADO' } as any,
+    { estado: 'BORRADOR', es_vigente: true } as any
+  )).toBe(true);
 });
