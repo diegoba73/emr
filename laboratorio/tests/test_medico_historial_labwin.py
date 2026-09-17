@@ -77,9 +77,9 @@ class TestMedicoHistorialLabwinFicha(APITestCase):
 
         r_list = self.client.get("/api/pacientes/")
         self.assertEqual(r_list.status_code, status.HTTP_200_OK)
-        # Listado paginado sigue restringido a vínculos (is_staff=False).
+        # El médico tiene lectura global de pacientes aunque is_staff=False.
         ids = {row["id"] for row in r_list.data.get("results", [])}
-        self.assertNotIn(self.paciente.id, ids)
+        self.assertIn(self.paciente.id, ids)
 
     def test_medico_lista_todas_las_ordenes_del_paciente(self):
         self.client.force_authenticate(user=self.user_med)

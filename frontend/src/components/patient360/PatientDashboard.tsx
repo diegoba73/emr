@@ -16,6 +16,8 @@ import {
 import { ArrowBack, Edit, PersonOutline, WarningAmber } from '@mui/icons-material';
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
+import { pathDetalleOrdenLab } from '../../utils/limsAccess';
+import type { User } from '../../types';
 import { listSolicitudesExamen } from '../../services/limsApi';
 import { Atencion, ArchivoMedico, InternacionCama, Paciente, PacienteTimelineEvent } from '../../types';
 import type { SolicitudExamenLims } from '../../types/lims';
@@ -29,10 +31,11 @@ import InfoCard from './InfoCard';
 import Timeline, { TimelineItem, TimelineItemType } from './Timeline';
 import { patientAgeYears } from './patientAge';
 
-function mapTimelineEvent(
+export function mapTimelineEvent(
   ev: PacienteTimelineEvent,
   navigate: (path: string, opts?: { state?: unknown }) => void,
   pacienteId: number,
+  user: User | null,
 ): TimelineItem | null {
   const date = ev.date ? new Date(ev.date) : new Date(0);
   if (Number.isNaN(date.getTime())) return null;
@@ -56,7 +59,7 @@ function mapTimelineEvent(
       }
       if (path.startsWith('/solicitudes/')) {
         navigate(
-          path,
+          pathDetalleOrdenLab(user, Number(path.split('/')[2])),
           withNavBack(pacienteFichaAnalisisPath(pacienteId), '← Volver a la ficha')
         );
         return;
@@ -133,7 +136,7 @@ const PatientDashboard: React.FC = () => {
       const events = await apiService.getPacienteTimeline(paciente.id);
       setTimelineItems(
         events
-          .map((ev) => mapTimelineEvent(ev, navigate, pid))
+          .map((ev) => mapTimelineEvent(ev, navigate, pid, currentUser))
           .filter((x): x is TimelineItem => Boolean(x)),
       );
     } catch {
@@ -141,7 +144,7 @@ const PatientDashboard: React.FC = () => {
     } finally {
       setLoadingTimeline(false);
     }
-  }, [paciente?.id, navigate, pid]);
+  }, [paciente?.id, navigate, pid, currentUser]);
 
   useEffect(() => {
     loadAtenciones();
@@ -429,7 +432,7 @@ const PatientDashboard: React.FC = () => {
                       variant="outlined"
                       onClick={() =>
                         navigate(
-                          `/solicitudes/${s.id}`,
+                          pathDetalleOrdenLab(currentUser, s.id),
                           withNavBack(pacienteFichaAnalisisPath(pid), '← Volver a la ficha')
                         )
                       }

@@ -19,13 +19,11 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import toast from 'react-hot-toast';
 import type {
-  HistorialAnalitoPrevioLims,
   LimsTipoExamen,
   MuestraTransaccional,
   SolicitudExamenLims,
 } from '../../types/lims';
 import {
-  getHistorialAnalitos,
   getIqcPrecheck,
   getTiposExamenMap,
   patchOrdenInformeOrden,
@@ -44,6 +42,7 @@ import {
 import ResultadoRangoInfo from './ResultadoRangoInfo';
 import ResultadosOrdenLista from './ResultadosOrdenLista';
 import AnalisisLongitudinalPanel from './AnalisisLongitudinalPanel';
+import { useHistorialAnalitos } from './useHistorialAnalitos';
 import {
   applyAutofillVcmChcm,
   buildCargarResultadoPayload,
@@ -159,9 +158,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     marcado: boolean;
   } | null>(null);
   const [tiposExamenMap, setTiposExamenMap] = useState<Map<number, LimsTipoExamen>>(new Map());
-  const [previosPorTipo, setPreviosPorTipo] = useState<Map<number, HistorialAnalitoPrevioLims[]>>(
-    new Map()
-  );
+  const tiposHistorialKey = Array.from(new Set(resultados.map((r) => r.tipo_examen))).sort((a, b) => a - b).join(',');
+  const { previosPorTipo, loading: loadingHistorial, error: errorHistorial, actualizar: actualizarHistorial } =
+    useHistorialAnalitos(orden.id, tiposHistorialKey);
 
   const esHemograma = useMemo(
     () =>
@@ -252,26 +251,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getHistorialAnalitos(orden.id, 10);
-        if (cancelled) return;
-        const map = new Map<number, HistorialAnalitoPrevioLims[]>();
-        for (const a of data.analitos || []) {
-          map.set(a.tipo_examen_id, a.previos || []);
-        }
-        setPreviosPorTipo(map);
-      } catch {
-        if (!cancelled) setPreviosPorTipo(new Map());
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [orden.id]);
 
   useEffect(() => {
     indicesManualRef.current = new Set();
@@ -552,6 +531,12 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                 {previos.slice(0, 10).map((p) => (
                   <Chip
                     key={p.resultado_id}
+                    component="a"
+                    href={`/laboratorio/ordenes/${p.solicitud_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    clickable
+                    title={`Ver orden ${p.solicitud_numero || p.solicitud_id} en otra pestaña`}
                     size="small"
                     variant="outlined"
                     label={`${formatFechaHistorialCorta(p.fecha)} ${p.valor}${p.unidad ? ` ${p.unidad}` : ''}`}
@@ -681,6 +666,19 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
 
   return (
     <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <Typography variant="subtitle2">Resultados anteriores del paciente</Typography>
+        <Button size="small" disabled={loadingHistorial} onClick={actualizarHistorial}>
+          {loadingHistorial ? 'Consultando historial…' : 'Actualizar historial'}
+        </Button>
+      </Box>
+      {errorHistorial && <Alert severity="warning" sx={{ mb: 2 }}>{errorHistorial}</Alert>}
+      {!loadingHistorial && !errorHistorial && resultados.length > 0 &&
+        Array.from(previosPorTipo.values()).every((previos) => previos.length === 0) && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            No se encontraron resultados anteriores informados para los ensayos de esta orden.
+          </Typography>
+        )}
       {editable ? (
         <>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>

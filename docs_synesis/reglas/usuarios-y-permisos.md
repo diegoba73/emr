@@ -182,3 +182,19 @@ La lectura no convierte a secretaría/enfermería en autores o validadores de in
 Menú principal: Inicio, Pacientes, Turnos, Guardia, Internación, Laboratorio,
 Atenciones Clínicas, Estudios complementarios, Archivos. Cada rol ve sus opciones
 habilitadas en ese orden; Indicadores permanece después de Archivos.
+
+
+## Historial importado LIMS — 17 de septiembre de 2026
+
+Laboratorio y bioquímico pueden consultar las órdenes históricas importadas
+(p. ej. LabWin / EXTERNO_ICPL), aunque no tengan médico asociado ni muestras
+transaccionales. Desde la ficha del paciente, los enlaces de análisis abren la
+ruta de detalle LIMS según el rol. La bandeja diaria sigue filtrada por toma de
+muestra; el historial completo se consulta en la ficha del paciente.
+
+Durante la carga de resultados se consultan los últimos 10 valores informados
+por paciente y tipo de examen, anteriores a la orden actual. Incluye el historial
+importado que usa los tipos de examen del catálogo. Cada previo permite abrir
+su orden en otra pestaña. La consulta se actualiza al agregar ensayos y permite
+reintentar; un fallo de consulta se muestra y no se presenta como ausencia de
+antecedentes. La comparación longitudinal sigue disponible al guardar y validar.

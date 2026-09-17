@@ -276,6 +276,10 @@ const OrdenLimsDetalle: React.FC = () => {
       </Button>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h5">Orden {orden.numero || orden.id}</Typography>
+        <Button size="small" href={`/paciente/${orden.paciente}?tab=analisis`}
+          target="_blank" rel="noopener noreferrer">
+          Ver historial de laboratorio del paciente
+        </Button>
         <Chip label={labelEstadoOrdenLims(e)} color={estadoOrdenColor(e)} />
         {orden.estado_obra_social ? (
           <Chip
