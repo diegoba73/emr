@@ -1,11 +1,13 @@
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
+from django.core.exceptions import ValidationError
 
 
 class Sector(models.Model):
     """Sectores de internación (UCO, UCE)"""
     nombre = models.CharField(max_length=50, unique=True, verbose_name="Nombre del Sector")
+    activo = models.BooleanField(default=True, verbose_name="En uso")
     
     class Meta:
         verbose_name = "Sector"
@@ -26,9 +28,10 @@ class Cama(models.Model):
     ]
     
     nombre = models.CharField(max_length=50, verbose_name="Nombre de la Cama")
+    activo = models.BooleanField(default=True, verbose_name="En uso")
     sector = models.ForeignKey(
         Sector,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='camas',
         verbose_name="Sector"
     )
@@ -51,6 +54,11 @@ class Cama(models.Model):
     
     def __str__(self):
         return f"{self.nombre} - {self.sector.nombre}"
+
+    def clean(self):
+        super().clean()
+        if self.pk and self.internaciones.filter(activo=True).exists() and self.estado != 'OCUPADA':
+            raise ValidationError({'estado': 'La cama tiene un paciente. Realice el alta o traslado antes de cambiar su estado.'})
 
 
 class TipoDieta(models.Model):
@@ -85,7 +93,7 @@ class Internacion(models.Model):
     )
     cama = models.ForeignKey(
         Cama,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='internaciones',
         verbose_name="Cama"
     )
@@ -150,6 +158,18 @@ class Internacion(models.Model):
     def __str__(self):
         return f"Internación {self.paciente.apellido}, {self.paciente.nombre} - {self.cama.nombre}"
     
+    def clean(self):
+        super().clean()
+        if not self.cama_id or not self.activo:
+            return
+        original = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        nueva_ocupacion = not original or not original.activo or original.cama_id != self.cama_id
+        if nueva_ocupacion:
+            if not self.cama.activo or not self.cama.sector.activo:
+                raise ValidationError({'cama': 'La cama está retirada de uso.'})
+            if type(self).objects.filter(cama_id=self.cama_id, activo=True).exclude(pk=self.pk).exists():
+                raise ValidationError({'cama': 'La cama ya tiene una internación activa.'})
+
     def save(self, *args, **kwargs):
         if not self.numero_internacion:
             fecha_actual = timezone.now()

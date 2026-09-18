@@ -198,3 +198,38 @@ importado que usa los tipos de examen del catálogo. Cada previo permite abrir
 su orden en otra pestaña. La consulta se actualiza al agregar ensayos y permite
 reintentar; un fallo de consulta se muestra y no se presenta como ausencia de
 antecedentes. La comparación longitudinal sigue disponible al guardar y validar.
+
+## Administración avanzada — 18 de septiembre de 2026
+
+Por instrucción del responsable, el rol `admin` dispone de una consola de
+mantenimiento en `/api/administracion/`, accesible desde **Administración avanzada**.
+Incluye creación y edición de los registros de los módulos EMR/LIMS, usuarios,
+catálogos e infraestructura. No exige `is_staff` ni permisos Django individuales.
+También admite superusuarios; `is_staff` por sí solo no da acceso. Conserva las
+validaciones de integridad del modelo. La auditoría permanece de solo lectura.
+Las altas, modificaciones, retiros, recuperaciones y eliminaciones de esta consola
+registran actor y snapshots sanitizados en `AuditEvent`, después del commit.
+
+Política de eliminación elegida explícitamente: **conservar el historial y retirar
+de uso**. Los catálogos con `activo`/`activa` ofrecen acciones de retiro y recuperación.
+La consola solo permite eliminación física individual de configuración sin referencias
+inversas; tampoco vacía relaciones `SET_NULL`. No ofrece borrado masivo ni eliminación
+de historias clínicas. Los registros retirados siguen disponibles para su corrección
+y recuperación. Los formularios y permisos de mantenimiento están en
+`core/maintenance_admin.py`; no se convierten en permisos operativos de otros roles.
+
+En internación, `Sector.activo` y `Cama.activo` separan la vigencia administrativa
+del estado de ocupación. `DELETE` de cama/sector por API retira de uso y es exclusivo
+del administrador. Retirar un sector retira sus camas; recuperarlo no reactiva
+automáticamente camas retiradas, que se recuperan individualmente. Las relaciones
+sector→cama e internación→cama usan `PROTECT`.
+
+Una cama retirada con internación activa sigue visible hasta el alta o traslado.
+Se bloquean nuevos ingresos y traslados hacia camas o sectores retirados, incluyendo
+intercambios que dejarían otro paciente en una cama retirada. El administrador puede
+corregir el sector de una cama ocupada y recuperarla con `PATCH activo=true`.
+`?incluir_retiradas=true` permite al administrador listar toda la infraestructura.
+La consola permite recuperar las camas que ya no aparecen en el tablero.
+
+Requiere `internacion.0008_vigencia_infraestructura` y reconstruir backend/frontend.
+Procedimiento: `docs/deploy-administracion-avanzada.md`.

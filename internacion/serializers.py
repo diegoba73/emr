@@ -5,6 +5,7 @@ from turnos.situacion_paciente import (
     finalizar_atencion_por_derivacion,
 )
 from .models import Sector, Cama, Internacion, TipoDieta
+from core.administracion import cambiar_vigencia, es_admin_sistema
 from pacientes.models import Paciente
 from medicos.models import Medico
 from catalogos.models import DiagnosticoCIE10
@@ -13,6 +14,18 @@ from internacion.serializers_hc import MedicacionHabitualInternacionSerializer
 
 class SectorSerializer(serializers.ModelSerializer):
     """Serializer para Sector con todos los campos"""
+    def validate_activo(self, value):
+        if not es_admin_sistema(getattr(self.context.get('request'), 'user', None)):
+            raise serializers.ValidationError('Solo el administrador puede retirar o recuperar sectores.')
+        return value
+
+    def update(self, instance, validated_data):
+        activo = validated_data.pop('activo', None)
+        instance = super().update(instance, validated_data)
+        if activo is not None:
+            cambiar_vigencia(instance, activo, self.context['request'].user)
+        return instance
+
     class Meta:
         model = Sector
         fields = '__all__'
@@ -169,6 +182,8 @@ class InternacionSerializer(serializers.ModelSerializer):
         if cama:
             # Si es una creación (no tiene pk) o si se está cambiando la cama
             if not self.instance or (self.instance and self.instance.cama != cama):
+                if not cama.activo or not cama.sector.activo:
+                    raise serializers.ValidationError({'cama': 'La cama está retirada de uso.'})
                 if cama.estado != 'DISPONIBLE':
                     raise serializers.ValidationError({
                         'cama': f'La cama {cama.nombre} no está disponible. Estado actual: {cama.estado}'
@@ -265,6 +280,18 @@ class InternacionSerializer(serializers.ModelSerializer):
 
 class CamaSerializer(serializers.ModelSerializer):
     """Serializer para Cama con representación anidada del sector"""
+    def validate_activo(self, value):
+        if not es_admin_sistema(getattr(self.context.get('request'), 'user', None)):
+            raise serializers.ValidationError('Solo el administrador puede retirar o recuperar camas.')
+        return value
+
+    def update(self, instance, validated_data):
+        activo = validated_data.pop('activo', None)
+        instance = super().update(instance, validated_data)
+        if activo is not None:
+            cambiar_vigencia(instance, activo, self.context['request'].user)
+        return instance
+
     sector = SectorSerializer(read_only=True)
     sector_nombre = serializers.CharField(
         source='sector.nombre',
@@ -330,4 +357,3 @@ class CamaSerializer(serializers.ModelSerializer):
         elif medico.user:
             return f"{medico.user.last_name}, {medico.user.first_name}"
         return None
-

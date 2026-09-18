@@ -130,16 +130,12 @@ class InfraestructuraAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_eliminar_cama_ocupada_falla(self):
-        """No se puede eliminar cama ocupada (400)."""
+    def test_admin_retira_cama_ocupada(self):
         self.client.force_authenticate(user=self.user_admin)
-
         response = self.client.delete(f'/api/internacion/camas/{self.cama_ocupada.id}/')
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('estado', response.data)
-        self.assertIn('No se puede eliminar una cama activa/ocupada', str(response.data['estado']))
-        self.assertTrue(Cama.objects.filter(id=self.cama_ocupada.id).exists())
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.cama_ocupada.refresh_from_db()
+        self.assertFalse(self.cama_ocupada.activo)
 
     def test_eliminar_cama_disponible_exitoso(self):
         """Eliminar cama disponible es exitoso (204)."""
@@ -148,7 +144,8 @@ class InfraestructuraAPITestCase(APITestCase):
         response = self.client.delete(f'/api/internacion/camas/{self.cama_disponible.id}/')
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Cama.objects.filter(id=self.cama_disponible.id).exists())
+        self.cama_disponible.refresh_from_db()
+        self.assertFalse(self.cama_disponible.activo)
 
     def test_enfermeria_puede_crear_sector(self):
         """Enfermería puede crear sector (201)."""
@@ -176,8 +173,8 @@ class InfraestructuraAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Sector.objects.count(), before)
 
-    def test_eliminar_cama_en_limpieza_falla(self):
-        """Eliminar cama en limpieza falla (400)."""
+    def test_admin_retira_cama_en_limpieza(self):
+        """Admin retira cama en limpieza (204)."""
         cama_limpieza = Cama.objects.create(
             nombre=f'Cama-limp-{unique_suffix()}',
             sector=self.sector_uco,
@@ -189,11 +186,10 @@ class InfraestructuraAPITestCase(APITestCase):
 
         response = self.client.delete(f'/api/internacion/camas/{cama_limpieza.id}/')
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('estado', response.data)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-    def test_eliminar_cama_en_mantenimiento_falla(self):
-        """Eliminar cama en mantenimiento falla (400)."""
+    def test_admin_retira_cama_en_mantenimiento(self):
+        """Admin retira cama en mantenimiento (204)."""
         cama_mantenimiento = Cama.objects.create(
             nombre=f'Cama-mant-{unique_suffix()}',
             sector=self.sector_uco,
@@ -205,8 +201,7 @@ class InfraestructuraAPITestCase(APITestCase):
 
         response = self.client.delete(f'/api/internacion/camas/{cama_mantenimiento.id}/')
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('estado', response.data)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_editar_cama_disponible(self):
         """Admin puede editar nombre, sector y aislada de cama disponible."""
@@ -247,8 +242,8 @@ class InfraestructuraAPITestCase(APITestCase):
         self.assertEqual(self.cama_ocupada.nombre, nuevo_nombre)
         self.assertTrue(self.cama_ocupada.aislada)
 
-    def test_editar_cama_ocupada_sector_falla(self):
-        """No se puede cambiar sector en cama ocupada."""
+    def test_admin_edita_sector_de_cama_ocupada(self):
+        """Admin puede corregir el sector sin alterar la ocupación."""
         self.client.force_authenticate(user=self.user_admin)
 
         response = self.client.patch(
@@ -257,8 +252,9 @@ class InfraestructuraAPITestCase(APITestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.cama_ocupada.refresh_from_db()
+        self.assertEqual(self.cama_ocupada.sector_id, self.sector_uce.id)
 
     def test_enfermeria_puede_editar_cama(self):
         """Enfermería puede editar cama disponible."""

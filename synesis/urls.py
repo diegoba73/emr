@@ -2,8 +2,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from core.maintenance_admin import maintenance_site
 
 urlpatterns = [
+    path('api/administracion/', maintenance_site.urls),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('api/catalogos/', include('catalogos.urls')),

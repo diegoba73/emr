@@ -102,7 +102,7 @@ const BedCard: React.FC<BedCardProps> = ({
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    if (onDragOver && (cama.estado === 'DISPONIBLE' || cama.estado === 'OCUPADA')) {
+    if (cama.activo !== false && onDragOver && (cama.estado === 'DISPONIBLE' || cama.estado === 'OCUPADA')) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       onDragOver(e, cama);
@@ -110,7 +110,7 @@ const BedCard: React.FC<BedCardProps> = ({
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    if (onDrop && (cama.estado === 'DISPONIBLE' || cama.estado === 'OCUPADA')) {
+    if (cama.activo !== false && onDrop && (cama.estado === 'DISPONIBLE' || cama.estado === 'OCUPADA')) {
       e.preventDefault();
       onDrop(e, cama);
     }
@@ -162,6 +162,9 @@ const BedCard: React.FC<BedCardProps> = ({
           {getStatusIcon()}
         </Box>
 
+        {cama.activo === false && (
+          <Chip label="Retirada de uso · sin nuevos ingresos" color="warning" size="small" sx={{ mb: 1 }} />
+        )}
         {/* Estado */}
         <Chip
           label={cama.estado}
@@ -232,7 +235,7 @@ const BedCard: React.FC<BedCardProps> = ({
         )}
 
         {/* Mensaje para camas disponibles */}
-        {cama.estado === 'DISPONIBLE' && (
+        {cama.activo !== false && cama.estado === 'DISPONIBLE' && (
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: '#4caf50', fontStyle: 'italic' }}>
               Cama disponible

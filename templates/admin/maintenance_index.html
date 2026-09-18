@@ -1,0 +1,9 @@
+{% extends "admin/index.html" %}
+{% block content %}
+<p>Acceso exclusivo del administrador. Puede crear y editar registros del sistema.
+Los cambios quedan auditados. Para sacar de circulación una configuración utilizada,
+seleccione los registros y use <strong>Retirar de uso (conservar historial)</strong>.
+Puede recuperarlos desde esta misma sección. La eliminación definitiva solo aparece
+para configuración sin registros asociados; los historiales y la auditoría se conservan.</p>
+{{ block.super }}
+{% endblock %}

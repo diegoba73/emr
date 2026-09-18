@@ -4,6 +4,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied
+from django.db.models import Q
+from core.administracion import cambiar_vigencia, es_admin_sistema
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 
@@ -31,6 +34,13 @@ class SectorViewSet(viewsets.ModelViewSet):
     ordering_fields = ['nombre']
     ordering = ['nombre']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.action != 'list' or (es_admin_sistema(self.request.user) and
+                self.request.query_params.get('incluir_retiradas') == 'true'):
+            return qs
+        return qs.filter(Q(activo=True) | Q(camas__internaciones__activo=True)).distinct()
+
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
             return [IsAuthenticated(), IsInternacionStaff()]
@@ -45,13 +55,9 @@ class SectorViewSet(viewsets.ModelViewSet):
         )
     
     def perform_destroy(self, instance):
-        """Log de eliminación de sector"""
-        nombre_sector = instance.nombre
-        logger.info(
-            f"Sector '{nombre_sector}' eliminado por usuario {self.request.user.username} "
-            f"(Rol: {self.request.user.rol})"
-        )
-        instance.delete()
+        if not es_admin_sistema(self.request.user):
+            raise PermissionDenied('Solo el administrador puede retirar sectores.')
+        cambiar_vigencia(instance, False, self.request.user)
 
 
 class CamaViewSet(viewsets.ModelViewSet):
@@ -78,40 +84,18 @@ class CamaViewSet(viewsets.ModelViewSet):
         )
     
     def perform_destroy(self, instance):
-        """
-        Validación de eliminación: No se puede eliminar una cama que no esté DISPONIBLE
-        """
-        if instance.estado != 'DISPONIBLE':
-            logger.warning(
-                f"Intento de eliminar cama '{instance.nombre}' con estado '{instance.estado}' "
-                f"por usuario {self.request.user.username} (Rol: {self.request.user.rol})"
-            )
-            raise ValidationError({
-                'estado': 'No se puede eliminar una cama activa/ocupada. '
-                          'Debe estar en estado DISPONIBLE para poder eliminarla.'
-            })
-        
-        # Verificar si tiene internaciones asociadas (aunque esté DISPONIBLE)
-        if instance.internaciones.exists():
-            logger.warning(
-                f"Intento de eliminar cama '{instance.nombre}' con internaciones históricas "
-                f"por usuario {self.request.user.username} (Rol: {self.request.user.rol})"
-            )
-            raise ValidationError({
-                'internaciones': 'No se puede eliminar una cama que tiene internaciones asociadas. '
-                                'Elimine primero las internaciones históricas.'
-            })
-        
-        nombre_cama = instance.nombre
-        logger.info(
-            f"Cama '{nombre_cama}' eliminada por usuario {self.request.user.username} "
-            f"(Rol: {self.request.user.rol})"
-        )
-        instance.delete()
+        if not es_admin_sistema(self.request.user):
+            raise PermissionDenied('Solo el administrador puede retirar camas.')
+        cambiar_vigencia(instance, False, self.request.user)
     
     def get_queryset(self):
         """Permitir filtrar por nombre de sector o ID"""
         queryset = super().get_queryset()
+        if self.action == 'list' and not (es_admin_sistema(self.request.user) and
+                self.request.query_params.get('incluir_retiradas') == 'true'):
+            queryset = queryset.filter(
+                Q(activo=True, sector__activo=True) | Q(internaciones__activo=True)
+            ).distinct()
         sector_param = self.request.query_params.get('sector', None)
         if sector_param:
             # Intentar filtrar por nombre primero
@@ -138,14 +122,16 @@ class CamaViewSet(viewsets.ModelViewSet):
 
         if instance.estado == 'OCUPADA':
             campos_permitidos = {'nombre', 'aislada'}
+            if es_admin_sistema(request.user):
+                campos_permitidos |= {'activo', 'sector_id'}
             campos_solicitados = set(request.data.keys())
             campos_no_permitidos = campos_solicitados - campos_permitidos
             if campos_no_permitidos:
                 return Response(
                     {
                         'error': (
-                            'En una cama ocupada solo se puede editar el nombre y si es aislada. '
-                            'Para cambiar sector o estado, gestioná la internación del paciente.'
+                            'La cama tiene una internación activa. Para liberarla, realice el alta o traslado. '
+                            'El administrador también puede corregir el sector o retirarla de uso.'
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -385,7 +371,15 @@ class InternacionViewSet(viewsets.ModelViewSet):
             )
         
         # Si la cama destino está ocupada, intercambiar pacientes
+        if not cama_destino.activo or not cama_destino.sector.activo:
+            return Response({'error': 'La cama destino está retirada de uso.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         if cama_destino.estado == 'OCUPADA':
+            if not internacion.cama.activo or not internacion.cama.sector.activo:
+                return Response(
+                    {'error': 'La cama de origen está retirada. Traslade a una cama disponible; no puede intercambiar pacientes.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             # Buscar la internación en la cama destino
             internacion_destino = Internacion.objects.filter(
                 cama=cama_destino,

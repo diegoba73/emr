@@ -231,3 +231,18 @@ describe('orden del menú principal', () => {
     }
   });
 });
+
+describe('administración avanzada', () => {
+  it.each(['MEDICO', 'SECRETARIA', 'ENFERMERIA', 'LABORATORIO', 'BIOQUIMICO'] as const)(
+    'no se muestra a %s aunque sea staff', (rol) => {
+      useData.mockReturnValue({ currentUser: mockUser({ rol, is_staff: true }) });
+      render(<MemoryRouter><SidebarContent /></MemoryRouter>);
+      expect(screen.queryByText('Administración avanzada')).not.toBeInTheDocument();
+    }
+  );
+  it('se muestra al administrador sin is_staff', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'ADMIN', is_staff: false }) });
+    render(<MemoryRouter><SidebarContent /></MemoryRouter>);
+    expect(screen.getByText('Administración avanzada')).toBeInTheDocument();
+  });
+});

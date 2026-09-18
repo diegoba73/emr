@@ -197,6 +197,7 @@ export interface Internacion extends BaseModel {
 export interface Sector extends BaseModel {
   id: number;
   nombre: string;
+  activo?: boolean;
 }
 
 export interface TipoDieta extends BaseModel {
@@ -208,6 +209,7 @@ export interface TipoDieta extends BaseModel {
 export interface Cama extends BaseModel {
   id: number;
   nombre: string;
+  activo?: boolean;
   sector: Sector | number; // Puede ser objeto o ID
   sector_nombre?: string; // Nombre del sector (solo lectura desde backend)
   estado: 'DISPONIBLE' | 'OCUPADA' | 'LIMPIEZA' | 'MANTENIMIENTO';
@@ -725,4 +727,4 @@ export interface ApiError {
   code?: string;
 }
 
-export * from './estudios'; 
+export * from './estudios';

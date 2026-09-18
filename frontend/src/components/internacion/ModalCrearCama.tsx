@@ -30,6 +30,8 @@ import {
   deleteCama,
 } from '../../services/internacion';
 import { Sector, Cama } from '../../types';
+import { useData } from '../../contexts/DataContext';
+import { administracionUrl } from '../../utils/administracionUrl';
 import toast from 'react-hot-toast';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 
@@ -72,6 +74,8 @@ const getSectorId = (cama: Cama): number | undefined => {
 };
 
 const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSuccess }) => {
+  const { currentUser } = useData();
+  const esAdmin = Boolean(currentUser?.is_superuser || currentUser?.rol?.toLowerCase() === 'admin');
   const [tabValue, setTabValue] = useState(0);
   const [sectores, setSectores] = useState<Sector[]>([]);
   const [camas, setCamas] = useState<Cama[]>([]);
@@ -228,7 +232,7 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
 
     const esOcupada = camaSeleccionada.estado === 'OCUPADA';
 
-    if (!esOcupada && !data.sector) {
+    if ((!esOcupada || esAdmin) && !data.sector) {
       setError('Debe seleccionar un sector');
       return;
     }
@@ -242,8 +246,10 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
         aislada: data.aislada,
       };
 
-      if (!esOcupada) {
+      if (!esOcupada || esAdmin) {
         updateData.sector = data.sector;
+      }
+      if (!esOcupada) {
         updateData.estado = data.estado;
       }
 
@@ -264,12 +270,12 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
   const handleEliminarCama = async () => {
     if (!camaSeleccionada) return;
 
-    if (camaSeleccionada.estado !== 'DISPONIBLE') {
-      setError('Solo se pueden eliminar camas en estado DISPONIBLE');
+    if (!esAdmin) {
+      setError('Solo el administrador puede retirar camas');
       return;
     }
 
-    if (!window.confirm(`¿Eliminar la cama "${camaSeleccionada.nombre}"?`)) {
+    if (!window.confirm(`¿Retirar de uso la cama "${camaSeleccionada.nombre}"? Se conservarán las internaciones y su historial.`)) {
       return;
     }
 
@@ -278,7 +284,7 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
 
     try {
       await deleteCama(camaSeleccionada.id);
-      toast.success('Cama eliminada exitosamente');
+      toast.success('Cama retirada de uso. Se conservó su historial.');
       resetEditar({
         camaId: undefined,
         nombre: '',
@@ -487,8 +493,9 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
 
                 {esCamaOcupada && (
                   <Alert severity="info" sx={{ mb: 2 }}>
-                    Cama ocupada: solo podés editar el nombre y si es aislada. Para cambiar sector o
-                    estado, gestioná la internación del paciente.
+                    {esAdmin
+                      ? 'Podés corregir el nombre, sector y aislamiento, o retirar la cama conservando la internación. Para liberarla, realizá el alta o traslado del paciente.'
+                      : 'Cama ocupada: podés editar el nombre y si es aislada. Para cambiar sector o estado, gestioná la internación del paciente.'}
                   </Alert>
                 )}
 
@@ -519,14 +526,14 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
                   <Controller
                     name="sector"
                     control={controlEditar}
-                    rules={{ required: esCamaOcupada ? false : 'El sector es obligatorio' }}
+                    rules={{ required: esCamaOcupada && !esAdmin ? false : 'El sector es obligatorio' }}
                     render={({ field }) => (
                       <Select
                         {...field}
                         value={field.value || ''}
                         labelId="sector-edit-label"
                         label="Sector *"
-                        disabled={loadingSectores || esCamaOcupada}
+                        disabled={loadingSectores || (esCamaOcupada && !esAdmin)}
                       >
                         {sectores.map((sector) => (
                           <MenuItem key={sector.id} value={sector.id}>
@@ -570,7 +577,7 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
                   )}
                 />
 
-                {camaSeleccionada.estado === 'DISPONIBLE' && (
+                {esAdmin && camaSeleccionada.activo !== false && (
                   <Box sx={{ mt: 2 }}>
                     <Button
                       color="error"
@@ -578,9 +585,14 @@ const ModalCrearCama: React.FC<ModalCrearCamaProps> = ({ open, onClose, onSucces
                       onClick={handleEliminarCama}
                       disabled={loading}
                     >
-                      Eliminar cama
+                      Retirar cama de uso
                     </Button>
                   </Box>
+                )}
+                {esAdmin && (
+                  <Button href={administracionUrl('internacion/cama/')} target="_blank" rel="noopener noreferrer">
+                    Administración de camas y recuperación de retiradas
+                  </Button>
                 )}
               </>
             )}

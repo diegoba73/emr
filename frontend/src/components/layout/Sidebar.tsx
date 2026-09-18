@@ -37,6 +37,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
 import { User } from '../../types';
 import Logo from '../Logo';
+import { administracionUrl } from '../../utils/administracionUrl';
 import {
   canAccessArchivosMedicos,
   canAccessAtenciones,
@@ -112,6 +113,7 @@ const portalItems: NavItem[] = [
 ];
 
 const adminOnly: NavItem[] = [
+  { text: 'Administración avanzada', icon: <CatalogIcon />, path: '/api/administracion/', roles: ['admin'] },
   { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios', roles: ['admin'] },
   { text: 'Recursos', icon: <MeetingRoomIcon />, path: '/recursos', roles: ['admin'] },
@@ -177,6 +179,10 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
   const labCatalogNav = isPacienteRole(currentUser) ? [] : filterByRole(labCatalogItems, currentUser);
 
   const go = (path: string) => {
+    if (path === '/api/administracion/') {
+      window.open(administracionUrl(), '_blank', 'noopener,noreferrer');
+      return;
+    }
     navigate(path);
     onNavigate?.();
   };

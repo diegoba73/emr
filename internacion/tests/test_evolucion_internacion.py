@@ -177,7 +177,7 @@ class EvolucionInternacionTestCase(APITestCase):
             paciente=self.paciente,
             medico_interno=self.medico,
             origen_solicitud=INTERNACION_UCO,
-            estado='FINALIZADO',
+            estado='EN_PROCESO',
         )
         solicitud.tipos_examen.add(tipo_examen)
         ResultadoExamen.objects.create(
@@ -186,6 +186,8 @@ class EvolucionInternacionTestCase(APITestCase):
             valor_obtenido='110',
             unidad='mg/dL',
         )
+        solicitud.estado = 'FINALIZADO'
+        solicitud.save(update_fields=['estado'])
         ambulatoria = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
