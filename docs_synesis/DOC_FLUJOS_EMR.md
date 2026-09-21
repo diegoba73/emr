@@ -139,6 +139,12 @@ Comando: `python manage.py seed_data` (idempotente; solo desarrollo). Ver `docs/
 | Turno demo | motivo `QA DEMO TURNO MEDICO1-PACIENTE1` | medico1, admin, secretaria, paciente1 |
 | Atención demo | vinculada al turno QA | medico1, admin, enfermeria (lectura) |
 
+Si el paciente demo ya tiene otra atención ambulatoria o de guardia abierta/en
+revisión, o una internación activa, el seed conserva esa situación y omite crear
+una atención adicional. Informa la omisión y continúa con los datos LIMS. Una
+atención ya vinculada al turno QA se reutiliza sin modificarla, incluso finalizada.
+No cierra encuentros ni los reasigna al turno demo para forzar la carga.
+
 Sin PHI real. No ejecutar en producción con datos clínicos.
 
 ---

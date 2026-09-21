@@ -14,6 +14,10 @@ from laboratorio.models import TipoMuestra, TipoExamen, SolicitudExamen, Resulta
 from laboratorio.models_catalog import Muestra
 from pacientes.models import Paciente
 from turnos.models import Turno, Atencion, Recurso
+from turnos.situacion_paciente import (
+    SituacionPacienteConflictError,
+    assert_puede_iniciar_atencion_ambulatoria_o_guardia,
+)
 
 User = get_user_model()
 
@@ -101,16 +105,28 @@ class Command(BaseCommand):
 
         atencion = Atencion.objects.filter(turno=turno).first()
         if not atencion:
-            atencion = Atencion.objects.create(
-                turno=turno,
-                paciente=paciente_uno,
-                medico_principal=medico_obj,
-                tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
-                tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
-                estado_clinico=Atencion.EstadoClinico.ABIERTA,
-                observaciones_generales='QA DEMO - atención sintética para smoke',
-            )
-            self.stdout.write(self.style.SUCCESS(f'  ✓ Atención demo QA #{atencion.id}'))
+            # Un encuentro previo puede pertenecer a otro turno, estar en revisión
+            # o ser de guardia/internación. El seed no debe cerrarlo ni reasignarlo.
+            try:
+                assert_puede_iniciar_atencion_ambulatoria_o_guardia(
+                    paciente_uno.pk, Atencion.ContextoAtencion.AMBULATORIA,
+                )
+            except SituacionPacienteConflictError:
+                self.stdout.write(
+                    '  → Se conserva la situación clínica activa del paciente demo; '
+                    'se omite crear otra atención y se continúa con el seed.'
+                )
+            else:
+                atencion = Atencion.objects.create(
+                    turno=turno,
+                    paciente=paciente_uno,
+                    medico_principal=medico_obj,
+                    tipo_atencion=Recurso.TipoRecurso.CONSULTORIO,
+                    tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
+                    estado_clinico=Atencion.EstadoClinico.ABIERTA,
+                    observaciones_generales='QA DEMO - atención sintética para smoke',
+                )
+                self.stdout.write(self.style.SUCCESS(f'  ✓ Atención demo QA #{atencion.id}'))
         else:
             self.stdout.write(f'  → Ya existe atención demo QA #{atencion.id}')
 
