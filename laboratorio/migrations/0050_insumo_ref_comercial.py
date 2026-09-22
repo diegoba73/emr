@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("laboratorio", "0049_modo_entrada_calculado"),
+        ("laboratorio", "0048_diestro_a_erba_ec90"),
     ]
 
     operations = [
