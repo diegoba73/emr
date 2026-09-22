@@ -54,6 +54,17 @@ class InsumoLab(models.Model):
     )
     stock_min = models.PositiveIntegerField(default=0)
     proveedor = models.CharField(max_length=120, blank=True, default="")
+    ref_comercial = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="REF comercial",
+        help_text=(
+            "Referencia del fabricante (ej. Wiener 1008149, Finecare W216). "
+            "Independiente del código interno SKU. Opcional; vacío en registros legacy."
+        ),
+    )
     # Presentación de compra (opcional): caja con N envases de X ml.
     unidades_por_caja = models.PositiveIntegerField(
         null=True,

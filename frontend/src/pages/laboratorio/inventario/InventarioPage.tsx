@@ -46,6 +46,14 @@ import {
 } from '../../../services/limsApi';
 import type { LimsTipoExamen } from '../../../types/lims';
 import { getSafeApiErrorMessage, isProtectedDeleteError } from '../../../utils/apiError';
+import {
+  estadoCatalogoDisplay,
+  existenciaDisplay,
+  filterReactivosPorEquipo,
+  labelTipoInsumoVista,
+  refComercialDisplay,
+  resumenReactivosVista,
+} from './inventarioReactivosView';
 
 type ProductoTipo = InsumoLab['tipo'];
 
@@ -57,6 +65,7 @@ const emptyReactivoForm = {
   unidad: 'cartucho',
   stock_min: '10',
   proveedor: '',
+  ref_comercial: '',
   volumen_por_unidad: '',
   composicion: '' as InsumoLab['composicion'],
   canal_analizador: '' as InsumoLab['canal_analizador'],
@@ -102,6 +111,8 @@ const InventarioPage: React.FC = () => {
   const [alertas, setAlertas] = useState<InventarioAlertas | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtroEquipo, setFiltroEquipo] = useState('');
+  /** Filtro de lista Reactivos (solo UI; no recarga API). */
+  const [filtroEquipoReactivos, setFiltroEquipoReactivos] = useState('');
   const [examenId, setExamenId] = useState('');
 
   const [reactivoForm, setReactivoForm] = useState(emptyReactivoForm);
@@ -156,11 +167,17 @@ const InventarioPage: React.FC = () => {
   }, [load]);
 
   const reactivos = useMemo(
-    () => productos.filter((p) => p.tipo === 'REACTIVO'),
-    [productos]
+    () => filterReactivosPorEquipo(productos, filtroEquipoReactivos),
+    [productos, filtroEquipoReactivos]
   );
   const insumos = useMemo(
     () => productos.filter((p) => p.tipo !== 'REACTIVO'),
+    [productos]
+  );
+  const resumenReactivos = useMemo(() => resumenReactivosVista(reactivos), [reactivos]);
+  /** Todos los reactivos (sin filtro) para el selector de lotes. */
+  const reactivosTodos = useMemo(
+    () => filterReactivosPorEquipo(productos, ''),
     [productos]
   );
 
@@ -201,6 +218,7 @@ const InventarioPage: React.FC = () => {
         unidad: reactivoForm.unidad.trim() || 'u',
         stock_min: Number(reactivoForm.stock_min) || 0,
         proveedor: reactivoForm.proveedor.trim(),
+        ref_comercial: reactivoForm.ref_comercial.trim(),
         volumen_por_unidad: reactivoForm.volumen_por_unidad
           ? reactivoForm.volumen_por_unidad
           : null,
@@ -364,6 +382,7 @@ const InventarioPage: React.FC = () => {
       unidad: r.unidad || 'cartucho',
       stock_min: String(r.stock_min ?? 0),
       proveedor: r.proveedor || '',
+      ref_comercial: r.ref_comercial || '',
       volumen_por_unidad: r.volumen_por_unidad != null ? String(r.volumen_por_unidad) : '',
       composicion: r.composicion || '',
       canal_analizador: r.canal_analizador || '',
@@ -403,20 +422,15 @@ const InventarioPage: React.FC = () => {
     });
   };
 
-  const labelTipoInsumo = (t: string) => {
-    if (t === 'TUBO') return 'Tubo / contenedor';
-    if (t === 'MEDIO') return 'Medio de cultivo';
-    return 'Otro';
-  };
-
   return (
     <Box sx={{ p: 2, maxWidth: 1200 }}>
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Inventario de laboratorio
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Reactivos (determinaciones) e insumos (tubos/medios). El stock se carga por lote; los
-        reactivos vinculados a un ensayo se descuentan al cargar el primer resultado.
+        Reactivos e insumos por equipo. Un producto catalogado no implica existencia usable: el
+        stock se carga por lote. Los vínculos de consumo por ensayo (si existen) descuentan al
+        cargar el primer resultado.
       </Typography>
 
       <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable">
@@ -431,6 +445,48 @@ const InventarioPage: React.FC = () => {
 
       {tab === 0 && (
         <Box>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ mb: 1.5 }}
+            alignItems={{ sm: 'center' }}
+            flexWrap="wrap"
+            useFlexGap
+          >
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="filtro-equipo-reactivos-label">Filtrar por equipo</InputLabel>
+              <Select
+                labelId="filtro-equipo-reactivos-label"
+                label="Filtrar por equipo"
+                value={filtroEquipoReactivos}
+                onChange={(e) => setFiltroEquipoReactivos(e.target.value)}
+                inputProps={{ 'aria-label': 'Filtrar reactivos por equipo' }}
+              >
+                <MenuItem value="">Todos los equipos</MenuItem>
+                {equipos.map((eq) => (
+                  <MenuItem key={eq.id} value={eq.codigo}>
+                    {eq.codigo}
+                    {eq.nombre ? ` — ${eq.nombre}` : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="body2" color="text.secondary">
+              {resumenReactivos.total} reactivo{resumenReactivos.total === 1 ? '' : 's'}
+              {filtroEquipoReactivos ? ` · equipo ${filtroEquipoReactivos}` : ''}
+              {' · '}
+              {resumenReactivos.sinRef} sin REF
+              {' · '}
+              {resumenReactivos.sinExistencia} sin existencia
+            </Typography>
+          </Stack>
+
+          <Alert severity="info" sx={{ mb: 1.5 }}>
+            Catalogado ≠ disponible. La columna Existencia refleja lotes cargados; stock 0 no
+            habilita uso operativo. Las correspondencias LIS (p. ej. W216×3, 1008161×2) aún no
+            tienen contrato de API informativo: se consultan en la matriz documental, no aquí.
+          </Alert>
+
           <Stack spacing={1.5} sx={{ mb: 2 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} flexWrap="wrap" useFlexGap>
               <TextField
@@ -439,6 +495,14 @@ const InventarioPage: React.FC = () => {
                 value={reactivoForm.codigo}
                 onChange={(e) => setReactivoForm((p) => ({ ...p, codigo: e.target.value }))}
                 sx={{ width: 130 }}
+              />
+              <TextField
+                size="small"
+                label="REF comercial"
+                value={reactivoForm.ref_comercial}
+                onChange={(e) => setReactivoForm((p) => ({ ...p, ref_comercial: e.target.value }))}
+                sx={{ width: 140 }}
+                placeholder="ej. 1008149"
               />
               <TextField
                 size="small"
@@ -558,55 +622,85 @@ const InventarioPage: React.FC = () => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Código</TableCell>
-                <TableCell>Nombre</TableCell>
+                <TableCell>Código interno</TableCell>
+                <TableCell>REF comercial</TableCell>
+                <TableCell>Nombre comercial</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Equipo</TableCell>
+                <TableCell>Catálogo</TableCell>
+                <TableCell align="right">Existencia</TableCell>
                 <TableCell>Unidad</TableCell>
                 <TableCell align="right">ml/env.</TableCell>
                 <TableCell>Contenido</TableCell>
                 <TableCell>Línea</TableCell>
-                <TableCell>Equipo</TableCell>
-                <TableCell align="right">Stock</TableCell>
                 <TableCell align="right">Mín.</TableCell>
                 <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {reactivos.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>{r.codigo}</TableCell>
-                  <TableCell>{r.nombre}</TableCell>
-                  <TableCell>{r.unidad}</TableCell>
-                  <TableCell align="right">{r.volumen_por_unidad ?? '—'}</TableCell>
-                  <TableCell>{labelComposicion(r.composicion)}</TableCell>
-                  <TableCell>{labelCanal(r.canal_analizador)}</TableCell>
-                  <TableCell>{r.equipo_codigo || '—'}</TableCell>
-                  <TableCell align="right">{r.stock_actual}</TableCell>
-                  <TableCell align="right">{r.stock_min}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" onClick={() => startEditReactivo(r)}>
-                      Editar
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={() =>
-                        void deleteWithFallback(
-                          `reactivo ${r.codigo}`,
-                          () => deleteInsumoLab(r.id),
-                          () => patchInsumoLab(r.id, { activo: false })
-                        )
-                      }
-                    >
-                      Eliminar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {reactivos.map((r) => {
+                const refInfo = refComercialDisplay(r.ref_comercial);
+                const exist = existenciaDisplay(r.stock_actual, r.unidad);
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell>{r.codigo}</TableCell>
+                    <TableCell>
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        color={refInfo.pendiente ? 'warning.main' : 'text.primary'}
+                        fontWeight={refInfo.pendiente ? 600 : 400}
+                      >
+                        {refInfo.text}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{r.nombre}</TableCell>
+                    <TableCell>{labelTipoInsumoVista(r.tipo)}</TableCell>
+                    <TableCell>{r.equipo_codigo || '—'}</TableCell>
+                    <TableCell>{estadoCatalogoDisplay()}</TableCell>
+                    <TableCell align="right">
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        color={exist.sinExistencia ? 'text.secondary' : 'text.primary'}
+                        fontWeight={exist.sinExistencia ? 600 : 400}
+                      >
+                        {exist.text}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{r.unidad}</TableCell>
+                    <TableCell align="right">{r.volumen_por_unidad ?? '—'}</TableCell>
+                    <TableCell>{labelComposicion(r.composicion)}</TableCell>
+                    <TableCell>{labelCanal(r.canal_analizador)}</TableCell>
+                    <TableCell align="right">{r.stock_min}</TableCell>
+                    <TableCell align="right">
+                      <Button size="small" onClick={() => startEditReactivo(r)}>
+                        Editar
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() =>
+                          void deleteWithFallback(
+                            `reactivo ${r.codigo}`,
+                            () => deleteInsumoLab(r.id),
+                            () => patchInsumoLab(r.id, { activo: false })
+                          )
+                        }
+                      >
+                        Eliminar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {reactivos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10}>
+                  <TableCell colSpan={13}>
                     <Typography variant="body2" color="text.secondary">
-                      Sin reactivos aún.
+                      {filtroEquipoReactivos
+                        ? `Sin reactivos asociados al equipo ${filtroEquipoReactivos}.`
+                        : 'Sin reactivos aún.'}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -714,7 +808,7 @@ const InventarioPage: React.FC = () => {
                 <TableRow key={i.id}>
                   <TableCell>{i.codigo}</TableCell>
                   <TableCell>{i.nombre}</TableCell>
-                  <TableCell>{labelTipoInsumo(i.tipo)}</TableCell>
+                  <TableCell>{labelTipoInsumoVista(i.tipo)}</TableCell>
                   <TableCell>{i.unidad}</TableCell>
                   <TableCell align="right">{i.stock_actual}</TableCell>
                   <TableCell align="right">{i.stock_min}</TableCell>
@@ -766,7 +860,7 @@ const InventarioPage: React.FC = () => {
                 <MenuItem disabled value="">
                   — Reactivos —
                 </MenuItem>
-                {reactivos.map((r) => (
+                {reactivosTodos.map((r) => (
                   <MenuItem key={r.id} value={String(r.id)}>
                     {r.codigo} ({r.unidad})
                   </MenuItem>
@@ -909,7 +1003,7 @@ const InventarioPage: React.FC = () => {
                 value={consumoForm.reactivo}
                 onChange={(e) => setConsumoForm((p) => ({ ...p, reactivo: e.target.value }))}
               >
-                {reactivos.map((r) => (
+                {reactivosTodos.map((r) => (
                   <MenuItem key={r.id} value={String(r.id)}>
                     {r.codigo} ({r.unidad})
                   </MenuItem>

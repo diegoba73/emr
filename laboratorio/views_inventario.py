@@ -37,7 +37,7 @@ class InsumoLabViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
         "composicion",
         "equipo",
     ]
-    search_fields = ["codigo", "nombre", "proveedor"]
+    search_fields = ["codigo", "nombre", "proveedor", "ref_comercial"]
     ordering = ["codigo"]
 
     def get_queryset(self):

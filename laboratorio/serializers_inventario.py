@@ -43,6 +43,7 @@ class InsumoLabSerializer(serializers.ModelSerializer):
             "stock_min",
             "stock_actual",
             "proveedor",
+            "ref_comercial",
             "unidades_por_caja",
             "volumen_por_unidad",
             "composicion",

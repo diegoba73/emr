@@ -1,0 +1,413 @@
+=== 2026-09-22T00:45:06+00:00 Ticket B apply Docker/dev ===
+-- showmigrations --
+ [X] 0049_modo_entrada_calculado
+ [X] 0050_insumo_ref_comercial
+-- unit tests apply path --
+Found 5 test(s).
+System check identified no issues (0 silenced).
+-- dry-run --
+=== Ticket B — catálogo reactivos (dry-run)
+Propuestos confirmados: 22
+Nuevos: 22
+Reutilizar (sin cambios): 0
+Actualizar campos vacíos: 0
+Conflictos: 0
+Pendientes (no carga): 1
+
+-- NUEVOS --
+  + R-1008109 | REF=1008109 | CM260 | Wiener Uricostat | LIS=AU
+  + R-1008156 | REF=1008156 | CM260 | Wiener Albumin | LIS=ALB
+  + R-1008157 | REF=1008157 | CM260 | Wiener Colesterol total | LIS=COL_TOT
+  + R-1008149 | REF=1008149 | CM260 | Wiener Creatinina enzimática | LIS=CREATI
+  + R-1008158 | REF=1008158 | CM260 | Wiener Glicemia enzimática GOD/POD | LIS=GLU
+  + R-1009804 | REF=1009804 | CM260 | Wiener HDL Cholesterol fast | LIS=HDL
+  + R-1008159 | REF=1008159 | CM260 | Wiener Proteínas totales | LIS=PROT_T
+  + R-1008160 | REF=1008160 | CM260 | Wiener Triglicéridos | LIS=TG
+  + R-1008108 | REF=1008108 | CM260 | Wiener Urea | LIS=UREA
+  + R-1008111 | REF=1008111 | CM260 | Wiener AST/GOT | LIS=GOT
+  + R-1008112 | REF=1008112 | CM260 | Wiener ALT/GPT | LIS=GPT
+  + R-1008110 | REF=1008110 | CM260 | Wiener Fosfatasa alcalina | LIS=FAL
+  + R-1008121 | REF=1008121 | CM260 | Wiener LDH-L | LIS=LDH
+  + R-1008145 | REF=1008145 | CM260 | Wiener Mg-color AA | LIS=MG
+  + R-1008100 | REF=1008100 | CM260 | Wiener CRP hs Turbitest AA | LIS=PCR_US
+  + R-1008161 | REF=1008161 | CM260 | Wiener Proti U/LCR | LIS=PROT_U_AZ,PROT_U_24
+  + R-1008125 | REF=1008125 | CM260 | Wiener PCR Turbitest AA | LIS=PCR
+  + R-1008123 | REF=1008123 | CM260 | Wiener UIBC/TIBC AA líquida | LIS=CF
+  + R-415386 | REF=415386 | VIDAS_KUBE | bioMérieux VIDAS TNHS | LIS=TROP_US
+  + R-30400 | REF=30400 | VIDAS_KUBE | bioMérieux VIDAS TSH | LIS=TSH
+  + R-W227 | REF=W227 | FINECARE | Finecare One Step D-Dimer Rapid Quantitative Test | LIS=DDIM
+  + R-W216 | REF=W216 | FINECARE | Finecare panel cTnI/Myoglobin/CK-MB | LIS=CPK_MB,MIOG,TROP_I
+
+-- REUTILIZAR --
+
+-- ACTUALIZAR (solo campos vacíos/seguros) --
+
+-- CONFLICTOS --
+
+-- PENDIENTES (no escribir) --
+  ? FERR | Wiener hierro / ferremia | REF_PENDIENTE | equipo=CM260
+
+-- LEGACY PROTEGIDO --
+
+NOTA: lis_codigos documentados; NO se crea ConsumoInsumoExamen (evita descuento de stock).
+
+Dry-run: cero escrituras.
+-- backup -> /home/diego/backups_synesis/synesis_db_ticketb_20260922_004513.dump --
+-rw-r--r-- 1 diego diego 10826265 Sep 22 00:45 /home/diego/backups_synesis/synesis_db_ticketb_20260922_004513.dump
+-- BEFORE --
+96 objects imported automatically (use -v 2 for details).
+
+reactivos 2
+r_star 0
+mov 2
+consumos 2
+lotes 12
+cre_glu [('CRE', 'PHARMACORP', ''), ('GLU', 'PHARMACORP', '')]
+-- APPLY 1 --
+=== Ticket B — APPLY ===
+Propuestos confirmados: 22
+Nuevos: 22
+Reutilizar (sin cambios): 0
+Actualizar campos vacíos: 0
+Conflictos: 0
+Pendientes (no carga): 1
+
+-- NUEVOS --
+  + R-1008109 | REF=1008109 | CM260 | Wiener Uricostat | LIS=AU
+  + R-1008156 | REF=1008156 | CM260 | Wiener Albumin | LIS=ALB
+  + R-1008157 | REF=1008157 | CM260 | Wiener Colesterol total | LIS=COL_TOT
+  + R-1008149 | REF=1008149 | CM260 | Wiener Creatinina enzimática | LIS=CREATI
+  + R-1008158 | REF=1008158 | CM260 | Wiener Glicemia enzimática GOD/POD | LIS=GLU
+  + R-1009804 | REF=1009804 | CM260 | Wiener HDL Cholesterol fast | LIS=HDL
+  + R-1008159 | REF=1008159 | CM260 | Wiener Proteínas totales | LIS=PROT_T
+  + R-1008160 | REF=1008160 | CM260 | Wiener Triglicéridos | LIS=TG
+  + R-1008108 | REF=1008108 | CM260 | Wiener Urea | LIS=UREA
+  + R-1008111 | REF=1008111 | CM260 | Wiener AST/GOT | LIS=GOT
+  + R-1008112 | REF=1008112 | CM260 | Wiener ALT/GPT | LIS=GPT
+  + R-1008110 | REF=1008110 | CM260 | Wiener Fosfatasa alcalina | LIS=FAL
+  + R-1008121 | REF=1008121 | CM260 | Wiener LDH-L | LIS=LDH
+  + R-1008145 | REF=1008145 | CM260 | Wiener Mg-color AA | LIS=MG
+  + R-1008100 | REF=1008100 | CM260 | Wiener CRP hs Turbitest AA | LIS=PCR_US
+  + R-1008161 | REF=1008161 | CM260 | Wiener Proti U/LCR | LIS=PROT_U_AZ,PROT_U_24
+  + R-1008125 | REF=1008125 | CM260 | Wiener PCR Turbitest AA | LIS=PCR
+  + R-1008123 | REF=1008123 | CM260 | Wiener UIBC/TIBC AA líquida | LIS=CF
+  + R-415386 | REF=415386 | VIDAS_KUBE | bioMérieux VIDAS TNHS | LIS=TROP_US
+  + R-30400 | REF=30400 | VIDAS_KUBE | bioMérieux VIDAS TSH | LIS=TSH
+  + R-W227 | REF=W227 | FINECARE | Finecare One Step D-Dimer Rapid Quantitative Test | LIS=DDIM
+  + R-W216 | REF=W216 | FINECARE | Finecare panel cTnI/Myoglobin/CK-MB | LIS=CPK_MB,MIOG,TROP_I
+
+-- REUTILIZAR --
+
+-- ACTUALIZAR (solo campos vacíos/seguros) --
+
+-- CONFLICTOS --
+
+-- PENDIENTES (no escribir) --
+  ? FERR | Wiener hierro / ferremia | REF_PENDIENTE | equipo=CM260
+
+-- LEGACY PROTEGIDO --
+
+NOTA: lis_codigos documentados; NO se crea ConsumoInsumoExamen (evita descuento de stock).
+APPLY OK (solo InsumoLab; sin consumos/stock/QC).
+-- APPLY 2 (idempotencia) --
+=== Ticket B — APPLY ===
+Propuestos confirmados: 22
+Nuevos: 0
+Reutilizar (sin cambios): 22
+Actualizar campos vacíos: 0
+Conflictos: 0
+Pendientes (no carga): 1
+
+-- NUEVOS --
+
+-- REUTILIZAR --
+  = R-1008109 id=14 | REF=1008109 | equipo=CM260
+  = R-1008156 id=15 | REF=1008156 | equipo=CM260
+  = R-1008157 id=16 | REF=1008157 | equipo=CM260
+  = R-1008149 id=17 | REF=1008149 | equipo=CM260
+  = R-1008158 id=18 | REF=1008158 | equipo=CM260
+  = R-1009804 id=19 | REF=1009804 | equipo=CM260
+  = R-1008159 id=20 | REF=1008159 | equipo=CM260
+  = R-1008160 id=21 | REF=1008160 | equipo=CM260
+  = R-1008108 id=22 | REF=1008108 | equipo=CM260
+  = R-1008111 id=23 | REF=1008111 | equipo=CM260
+  = R-1008112 id=24 | REF=1008112 | equipo=CM260
+  = R-1008110 id=25 | REF=1008110 | equipo=CM260
+  = R-1008121 id=26 | REF=1008121 | equipo=CM260
+  = R-1008145 id=27 | REF=1008145 | equipo=CM260
+  = R-1008100 id=28 | REF=1008100 | equipo=CM260
+  = R-1008161 id=29 | REF=1008161 | equipo=CM260
+  = R-1008125 id=30 | REF=1008125 | equipo=CM260
+  = R-1008123 id=31 | REF=1008123 | equipo=CM260
+  = R-415386 id=32 | REF=415386 | equipo=VIDAS_KUBE
+  = R-30400 id=33 | REF=30400 | equipo=VIDAS_KUBE
+  = R-W227 id=34 | REF=W227 | equipo=FINECARE
+  = R-W216 id=35 | REF=W216 | equipo=FINECARE
+
+-- ACTUALIZAR (solo campos vacíos/seguros) --
+
+-- CONFLICTOS --
+
+-- PENDIENTES (no escribir) --
+  ? FERR | Wiener hierro / ferremia | REF_PENDIENTE | equipo=CM260
+
+-- LEGACY PROTEGIDO --
+
+NOTA: lis_codigos documentados; NO se crea ConsumoInsumoExamen (evita descuento de stock).
+APPLY OK (solo InsumoLab; sin consumos/stock/QC).
+-- AFTER / VERIFY --
+96 objects imported automatically (use -v 2 for details).
+
+created 22
+stock0 True
+lotes_r 0
+ferr 0
+cre_glu [('CRE', 'PHARMACORP', ''), ('GLU', 'PHARMACORP', '')]
+mov 2
+consumos 2
+reactivos_tot 24
+dup_skus False
+-- regressions inventario --
+Found 23 test(s).
+System check identified no issues (0 silenced).
+-- regressions QC --
+Found 24 test(s).
+System check identified no issues (0 silenced).
+-- git --
+## master...origin/master [ahead 2]
+ M docs_synesis/DOC_FLUJOS_LIMS.md
+ M docs_synesis/reglas/control-calidad.md
+ M docs_synesis/reglas/instrumentos-analizadores.md
+ M docs_synesis/reglas/inventario-reactivos.md
+ M frontend/src/components/lims/CargaResultadosLims.tsx
+ M frontend/src/components/lims/OrdenesLimsTabla.tsx
+ M frontend/src/components/lims/ResultadoEstadoBadge.tsx
+ M frontend/src/components/lims/ResultadosOrdenLista.tsx
+ M frontend/src/pages/laboratorio/ExamenesCatalogo.tsx
+ M frontend/src/pages/laboratorio/OrdenLimsDetalle.tsx
+ M frontend/src/pages/laboratorio/inventario/InventarioPage.tsx
+ M frontend/src/pages/laboratorio/qc/QcHubPage.tsx
+ M frontend/src/services/limsApi.ts
+ M frontend/src/types/lims.ts
+ M frontend/src/utils/entradaResultados.ts
+ M frontend/src/utils/hemogramaIndices.test.ts
+ M frontend/src/utils/hemogramaIndices.ts
+ M frontend/src/utils/limsCargaMuestra.test.ts
+ M frontend/src/utils/limsCargaMuestra.ts
+ M frontend/src/utils/limsIqcPrecheck.ts
+ M frontend/src/utils/limsPendientesUnificados.ts
+ M frontend/src/utils/limsResultadosPanel.ts
+ M frontend/src/utils/limsTubosOrden.ts
+ M frontend/src/utils/sysmexHemograma.ts
+ M laboratorio/catalogo_entrada_default.py
+ M laboratorio/catalogo_referencias_clinicas.py
+ M laboratorio/catalogo_solicitud_papel.py
+ M laboratorio/equipos_lab.py
+ M laboratorio/hemograma_resultados.py
+ M laboratorio/informe_pdf_layout.py
+ M laboratorio/instrumentos_catalogo.py
+ M laboratorio/instrumentos_seed.py
+ M laboratorio/labwin_csv.py
+ M laboratorio/management/commands/import_labwin_csv.py
+ M laboratorio/management/commands/reparar_paneles_iaca.py
+ M laboratorio/management/commands/seed_instrumentos.py
+ M laboratorio/management/commands/seed_qc_demo.py
+ M laboratorio/models.py
+ M laboratorio/models_inventario.py
+ M laboratorio/qc_service.py
+ M laboratorio/resultado_carga.py
+ M laboratorio/resultados_clinicos.py
+ M laboratorio/serializers.py
+ M laboratorio/serializers_inventario.py
+ M laboratorio/tests/test_inventario_reactivos.py
+ M laboratorio/tests/test_labwin_csv_import.py
+ M laboratorio/tests/test_operadores_historial_importado.py
+ M laboratorio/tests/test_seed_catalogo_solicitud_papel.py
+ M laboratorio/tubos_catalogo.py
+ M laboratorio/views.py
+ M laboratorio/views_inventario.py
+ M laboratorio/views_qc.py
+?? _b4_docs_final.txt
+?? _b4_docs_fix.py
+?? _b4_docs_fix2.py
+?? _b4_docs_verify.txt
+?? _b4_final_delivery.txt
+?? _blockers_verify.txt
+?? _build_codex_diff.sh
+?? _commit_inventario.sh
+?? _commit_inventario_precheck.sh
+?? _demo_setup_build.sh
+?? _demo_setup_step1.sh
+?? _demo_verify.sh
+?? _etiquetas_b124.sh
+?? _etiquetas_b124_report.txt
+?? _etiquetas_b124b.sh
+?? _etiquetas_b124b_report.txt
+?? _etiquetas_docs_inspect.txt
+?? _etiquetas_for_codex.diff
+?? _etiquetas_inspect.sh
+?? _etiquetas_phase1.sh
+?? _etiquetas_report.sh
+?? _etiquetas_review.txt
+?? _etiquetas_stage.sh
+?? _etiquetas_staged.txt
+?? _extract_images.py
+?? _extract_images2.py
+?? _extract_pdf.py
+?? _inspect_pdf.py
+?? _inventario_cached.diff
+?? _inventario_commit_result.txt
+?? _inventario_fix_report.txt
+?? _inventario_for_codex.diff
+?? _inventario_for_codex_summary.txt
+?? _inventario_revalidate.txt
+?? _inventario_review.txt
+?? _inventario_staged.txt
+?? _labels_commit_done.txt
+?? _labels_commit_verify.txt
+?? _labels_commit_verify2.txt
+?? _labels_do_commit.sh
+?? _labels_do_commit2.sh
+?? _patch_paneles.py
+?? _patch_sync.py
+?? _patch_tipomuestra.py
+?? _pdf_meta.txt
+?? _pdf_paciente_extract.txt
+?? _pdf_paciente_ocr.txt
+?? _pdf_paciente_rapidocr.txt
+?? _pdf_pages/
+?? _r2_prod_apply.sh
+?? _r2_prod_import_skipped.sh
+?? _r2_prod_rectify_scale.sh
+?? _rapid_ocr.py
+?? _run_cmd_a.sh
+?? _run_cmds.sh
+?? _run_inventario_fix.sh
+?? _unstage_iqc.sh
+?? _verify_closeout.txt
+?? docs/corte-a-matriz-laboratorio-20260921.md
+?? docs/emr_formularios_cursor/CURSOR_PROMPT.md:Zone.Identifier
+?? docs/emr_formularios_cursor/CURSOR_PROMPT.md:mshield
+?? docs/emr_formularios_cursor/FORMULARIOS_TRANSCRIPCION.md:Zone.Identifier
+?? docs/emr_formularios_cursor/FORMULARIOS_TRANSCRIPCION.md:mshield
+?? docs/emr_formularios_cursor/MODELO_DATOS_REFERENCIA.json:Zone.Identifier
+?? docs/emr_formularios_cursor/MODELO_DATOS_REFERENCIA.json:mshield
+?? docs/emr_formularios_cursor/README.md:Zone.Identifier
+?? docs/emr_formularios_cursor/README.md:mshield
+?? docs/emr_formularios_cursor/RECOMENDACIONES_EMR.md:Zone.Identifier
+?? docs/emr_formularios_cursor/RECOMENDACIONES_EMR.md:mshield
+?? docs/emr_formularios_cursor/imagenes/01_historia_clinica_ingreso_p1.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/01_historia_clinica_ingreso_p1.png:mshield
+?? docs/emr_formularios_cursor/imagenes/02_historia_clinica_ingreso_p2.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/02_historia_clinica_ingreso_p2.png:mshield
+?? docs/emr_formularios_cursor/imagenes/03_evolucion_medica.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/03_evolucion_medica.png:mshield
+?? docs/emr_formularios_cursor/imagenes/04_kinesiologia.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/04_kinesiologia.png:mshield
+?? docs/emr_formularios_cursor/imagenes/05_indicaciones_medicas.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/05_indicaciones_medicas.png:mshield
+?? docs/emr_formularios_cursor/imagenes/06_controles_enfermeria.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/06_controles_enfermeria.png:mshield
+?? docs/emr_formularios_cursor/imagenes/07_cumplimiento_indicaciones_medicas.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/07_cumplimiento_indicaciones_medicas.png:mshield
+?? docs/emr_formularios_cursor/imagenes/08_balance_terapia_intensiva.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/08_balance_terapia_intensiva.png:mshield
+?? docs/emr_formularios_cursor/imagenes/09_comentarios_enfermeria.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/09_comentarios_enfermeria.png:mshield
+?? docs/emr_formularios_cursor/imagenes/10_laboratorio.png:Zone.Identifier
+?? docs/emr_formularios_cursor/imagenes/10_laboratorio.png:mshield
+?? docs/investigacion-alineacion-laboratorio-20260921.md
+?? docs/matriz-alineacion-laboratorio-20260921.csv
+?? docs/matriz_laboratorio.xlsm
+?? docs/matriz_laboratorio.xlsm:Zone.Identifier
+?? docs/ticket-a-ref-comercial-20260921.md
+?? docs/ticket-b-apply-dev-report.txt
+?? docs/ticket-b-dryrun-reactivos-20260921.md
+?? examenes_completos.csv
+?? frontend/src/components/lims/CargaResultadosLims.ldl.test.tsx
+?? frontend/src/components/lims/ResultadoNoCalculable.test.tsx
+?? frontend/src/utils/calculosDerivados.test.ts
+?? frontend/src/utils/calculosDerivados.ts
+?? frontend/src/utils/ldlNoCalculable.test.ts
+?? git
+?? laboratorio/calculos_derivados.py
+?? laboratorio/labwin_firebird.py
+?? laboratorio/labwin_firebird_scale.py
+?? laboratorio/labwin_reconcile.py
+?? laboratorio/management/commands/audit_labwin_firebird_scale.py
+?? laboratorio/management/commands/cargar_reactivos_equipo_matriz.py
+?? laboratorio/management/commands/import_labwin_firebird.py
+?? laboratorio/management/commands/import_labwin_skipped_existing.py
+?? laboratorio/management/commands/reconcile_labwin_csv.py
+?? laboratorio/management/commands/rectify_labwin_firebird_scale.py
+?? laboratorio/migrations/0026_inventario_insumos.py.superseded
+?? laboratorio/migrations/0027_qc_westgard.py.superseded
+?? laboratorio/migrations/0049_modo_entrada_calculado.py
+?? laboratorio/migrations/0050_insumo_ref_comercial.py
+?? laboratorio/reactivos_matriz_catalogo.py
+?? laboratorio/scripts_check_labwin_scale.sh
+?? laboratorio/tests/test_calculos_derivados.py
+?? laboratorio/tests/test_cargar_reactivos_matriz.py
+?? laboratorio/tests/test_corte_a_matriz.py
+?? laboratorio/tests/test_labwin_firebird.py
+?? laboratorio/tests/test_labwin_firebird_scale.py
+?? laboratorio/tests/test_labwin_reconcile.py
+?? laboratorio/tests/test_ldl_no_calculable_api.py
+?? nul
+?? scripts/_audit_insumos_ticket_a.py
+?? scripts/_patch_mig_0034.py
+?? scripts/ticket_b_apply_dev.sh
+ docs_synesis/DOC_FLUJOS_LIMS.md                    |  10 +
+ docs_synesis/reglas/control-calidad.md             |   2 +-
+ docs_synesis/reglas/instrumentos-analizadores.md   |   2 +-
+ docs_synesis/reglas/inventario-reactivos.md        |   1 +
+ .../src/components/lims/CargaResultadosLims.tsx    |  94 +++++-
+ frontend/src/components/lims/OrdenesLimsTabla.tsx  |   2 +
+ .../src/components/lims/ResultadoEstadoBadge.tsx   |   4 +
+ .../src/components/lims/ResultadosOrdenLista.tsx   |  31 +-
+ .../src/pages/laboratorio/ExamenesCatalogo.tsx     |  19 +-
+ .../src/pages/laboratorio/OrdenLimsDetalle.tsx     |   6 +
+ .../laboratorio/inventario/InventarioPage.tsx      |  15 +-
+ frontend/src/pages/laboratorio/qc/QcHubPage.tsx    |  12 +-
+ frontend/src/services/limsApi.ts                   |   5 +
+ frontend/src/types/lims.ts                         |   4 +-
+ frontend/src/utils/entradaResultados.ts            |  21 +-
+ frontend/src/utils/hemogramaIndices.test.ts        |  12 +-
+ frontend/src/utils/hemogramaIndices.ts             |  16 +-
+ frontend/src/utils/limsCargaMuestra.test.ts        |  40 +++
+ frontend/src/utils/limsCargaMuestra.ts             |  87 ++++--
+ frontend/src/utils/limsIqcPrecheck.ts              |   5 +-
+ frontend/src/utils/limsPendientesUnificados.ts     |   2 +-
+ frontend/src/utils/limsResultadosPanel.ts          |  10 +-
+ frontend/src/utils/limsTubosOrden.ts               |   1 +
+ frontend/src/utils/sysmexHemograma.ts              |   1 +
+ laboratorio/catalogo_entrada_default.py            |   8 +
+ laboratorio/catalogo_referencias_clinicas.py       |  35 ++-
+ laboratorio/catalogo_solicitud_papel.py            |  17 +-
+ laboratorio/equipos_lab.py                         |   9 +-
+ laboratorio/hemograma_resultados.py                |  43 +--
+ laboratorio/informe_pdf_layout.py                  |  60 +++-
+ laboratorio/instrumentos_catalogo.py               |  10 +-
+ laboratorio/instrumentos_seed.py                   |  16 +-
+ laboratorio/labwin_csv.py                          |  18 +-
+ .../management/commands/import_labwin_csv.py       | 347 ++++++++++++++++++++-
+ .../management/commands/reparar_paneles_iaca.py    |   5 +-
+ .../management/commands/seed_instrumentos.py       |   5 +-
+ laboratorio/management/commands/seed_qc_demo.py    |   9 +-
+ laboratorio/models.py                              |   8 +-
+ laboratorio/models_inventario.py                   |  11 +
+ laboratorio/qc_service.py                          |   4 +
+ laboratorio/resultado_carga.py                     |   6 +
+ laboratorio/resultados_clinicos.py                 |   4 +
+ laboratorio/serializers.py                         |   5 +-
+ laboratorio/serializers_inventario.py              |   1 +
+ laboratorio/tests/test_inventario_reactivos.py     |  82 +++++
+ laboratorio/tests/test_labwin_csv_import.py        | 227 +++++++++++++-
+ .../tests/test_operadores_historial_importado.py   |   2 +-
+ .../tests/test_seed_catalogo_solicitud_papel.py    |  22 +-
+ laboratorio/tubos_catalogo.py                      |   5 +
+ laboratorio/views.py                               |   4 +-
+ laboratorio/views_inventario.py                    |   2 +-
+ laboratorio/views_qc.py                            |   3 +
+ 52 files changed, 1221 insertions(+), 149 deletions(-)
+DONE report=docs/ticket-b-apply-dev-report.txt backup=/home/diego/backups_synesis/synesis_db_ticketb_20260922_004513.dump

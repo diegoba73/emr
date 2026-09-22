@@ -798,6 +798,8 @@ export interface InsumoLab {
   stock_min: number;
   stock_actual: number;
   proveedor: string;
+  /** REF del fabricante (Wiener/VIDAS/Finecare). Independiente del codigo interno. */
+  ref_comercial?: string;
   unidades_por_caja?: number | null;
   volumen_por_unidad?: string | number | null;
   composicion: '' | 'SOLO_A' | 'A_B' | 'OTRO';

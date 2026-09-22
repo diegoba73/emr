@@ -355,3 +355,85 @@ class TestConsumoInsumoApi(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
         self.assertIn("cantidad_por_determinacion", r.data)
+
+
+class TestInsumoRefComercial(TestCase):
+    """Ticket A: REF comercial opcional; no toca CRE/GLU legacy ni QC."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="lab_ref", password="x", rol="laboratorio"
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_crear_reactivo_con_ref_comercial(self):
+        r = self.client.post(
+            "/api/lab/inventario/insumos/",
+            {
+                "codigo": "R-1008149",
+                "nombre": "Wiener Creatinina enzimática",
+                "tipo": "REACTIVO",
+                "unidad": "cartucho",
+                "ref_comercial": "1008149",
+                "proveedor": "Wiener",
+                "activo": True,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(r.data["ref_comercial"], "1008149")
+        self.assertEqual(r.data["codigo"], "R-1008149")
+        obj = InsumoLab.objects.get(pk=r.data["id"])
+        self.assertEqual(obj.ref_comercial, "1008149")
+
+    def test_ref_comercial_vacio_en_legacy(self):
+        legacy = InsumoLab.objects.create(
+            codigo="CRE",
+            nombre="CREATININA COLORIMETRICA",
+            tipo=InsumoLab.Tipo.REACTIVO,
+            unidad="cartucho",
+            proveedor="PHARMACORP",
+            activo=True,
+        )
+        self.assertEqual(legacy.ref_comercial, "")
+        r = self.client.get(f"/api/lab/inventario/insumos/{legacy.id}/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data.get("ref_comercial") or "", "")
+
+    def test_patch_ref_sin_cambiar_codigo(self):
+        ins = InsumoLab.objects.create(
+            codigo="R-W216",
+            nombre="Finecare panel cardíaco",
+            tipo=InsumoLab.Tipo.REACTIVO,
+            unidad="test",
+            activo=True,
+        )
+        r = self.client.patch(
+            f"/api/lab/inventario/insumos/{ins.id}/",
+            {"ref_comercial": "W216"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        ins.refresh_from_db()
+        self.assertEqual(ins.codigo, "R-W216")
+        self.assertEqual(ins.ref_comercial, "W216")
+
+    def test_permite_misma_ref_en_dos_skus_sin_unique_global(self):
+        InsumoLab.objects.create(
+            codigo="R-W216-A",
+            nombre="Panel W216 A",
+            tipo=InsumoLab.Tipo.REACTIVO,
+            ref_comercial="W216",
+            activo=True,
+        )
+        InsumoLab.objects.create(
+            codigo="R-W216-B",
+            nombre="Panel W216 B",
+            tipo=InsumoLab.Tipo.REACTIVO,
+            ref_comercial="W216",
+            activo=True,
+        )
+        self.assertEqual(
+            InsumoLab.objects.filter(ref_comercial="W216").count(), 2
+        )

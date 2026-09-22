@@ -22,6 +22,7 @@ En código el modelo sigue llamándose `InsumoLab` (histórico); en la UI se hab
 
 - **Unidad** (`unidad`): en qué contás el stock — `cartucho`, `ml`, `test`, `pack`.
 - **ml / envase** (`volumen_por_unidad`): volumen de cada cartucho o pack (dato del producto; no es otra unidad de stock).
+- **REF comercial** (`ref_comercial`): referencia del fabricante (Wiener, VIDAS, Finecare, etc.). Independiente del **código interno** (`codigo` SKU). Opcional; vacío en registros legacy. No confundir con controles/calibradores QC.
 - Contenido (solo A / A+B) y línea (dedicada / abierta): visibles en el alta, no ocultos.
 
 Al cargar un lote ingresás la cantidad **en esa unidad** (ej. 10 cartuchos, o 500 ml).
