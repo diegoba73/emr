@@ -24,13 +24,32 @@ for servicio in backend nginx; do
   docker export --output="$respaldo/${servicio}-rootfs.tar" "emr_${servicio}_server"
   tar -tf "$respaldo/${servicio}-rootfs.tar" > /dev/null
 done
-"${compose[@]}" build backend nginx
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+  "${compose[@]}" build backend nginx
+fi
 "${compose[@]}" run --rm --no-deps --entrypoint python backend manage.py check
 "${compose[@]}" run --rm --no-deps --entrypoint python backend manage.py migrate --plan
+# POSTGRES_USER/POSTGRES_DB pueden no existir en el contenedor de PostgreSQL.
+# Usar la configuración efectiva de Django, sin leer ni imprimir contraseñas.
+db_config=$("${compose[@]}" run --rm --no-deps -T --entrypoint python backend -c '
+import os
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "synesis.settings")
+from django.conf import settings
+db = settings.DATABASES["default"]
+values = [db.get("USER"), db.get("NAME")]
+if any(not isinstance(v, str) or not v.strip() or "\n" in v or "\r" in v for v in values):
+    raise SystemExit("Django debe tener USER y NAME de base explícitos para respaldar.")
+print("\n".join(values))')
+mapfile -t db_values <<< "$db_config"
+[[ ${#db_values[@]} -eq 2 ]] || { echo "Configuración de base inesperada" >&2; exit 1; }
+db_user="${db_values[0]}"
+db_name="${db_values[1]}"
+# Comprobar el mismo acceso que utilizará pg_dump antes de detener servicios.
+docker exec emr_postgres_server psql -X -w -U "$db_user" -d "$db_name" -v ON_ERROR_STOP=1 -Atc 'SELECT 1' > /dev/null
 echo "Inicio de ventana de mantenimiento. Respaldo: $respaldo"
 trap 'echo "Actualización interrumpida. Revisar el error antes de reabrir el servicio. Respaldo: $respaldo" >&2' ERR
 "${compose[@]}" stop nginx backend
-docker exec emr_postgres_server sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$respaldo/postgres.dump"
+docker exec emr_postgres_server pg_dump -w -U "$db_user" -d "$db_name" -Fc > "$respaldo/postgres.dump"
 test -s "$respaldo/postgres.dump"
 docker exec -i emr_postgres_server pg_restore --list < "$respaldo/postgres.dump" > "$respaldo/postgres-contenido.txt"
 "${compose[@]}" run --rm --no-deps --entrypoint python backend manage.py migrate --noinput

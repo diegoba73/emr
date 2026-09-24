@@ -47,6 +47,28 @@ Los rootfs no incluyen volúmenes; mantener los respaldos habituales de media.
 Si falla después de detener los servicios, investigar antes de reabrirlos:
 no se restaura automáticamente una base ni se ejecutan seeds de demostración.
 
+## Reanudar si el respaldo falló con «role root does not exist»
+
+Ese error ocurre antes de las migraciones y de la importación. El script corregido
+toma usuario y base de la configuración de Django y comprueba la conexión antes
+de detener servicios. Para este fallo concreto, si ambas imágenes ya se construyeron
+y no cambió el código de la aplicación desde ese build, ejecutar en el servidor:
+
+```bash
+bash <<'BASH'
+set -euo pipefail
+cd /srv/emr/app
+git fetch origin
+git merge --no-edit origin/master
+SKIP_BUILD=1 bash scripts/actualizar_produccion_20260924.sh
+BASH
+```
+
+Se genera otro respaldo; el archivo incompleto de la ejecución fallida no se usa.
+El script puede exportar los contenedores detenidos. Los servicios se levantan
+al finalizar. No usar `SKIP_BUILD=1` si hay cambios posteriores de aplicación
+que todavía no estén incorporados en las imágenes.
+
 ## Reactivos e insumos
 
 Se usa `docs/Catalogo_reactivos.csv`: 56 filas, agrupadas en 53 productos.
