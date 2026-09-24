@@ -5,7 +5,7 @@
 ## Acceso EMR-LIMS
 
 ```bash
-ssh -p 2223 server@dsachubut.sytes.net
+ssh -p 2223 server@emr.sytes.net
 ```
 
 - Código y compose de prod: `/srv/emr/app` + `docker-compose.server.yml`.

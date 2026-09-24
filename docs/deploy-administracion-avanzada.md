@@ -1,6 +1,6 @@
 # Administración avanzada: despliegue en el servidor EMR
 
-Ejecutar en `server@dsachubut.sytes.net`, SSH **2223**, dentro de `/srv/emr/app`.
+Ejecutar en `server@emr.sytes.net`, SSH **2223**, dentro de `/srv/emr/app`.
 Este cambio necesita backend, frontend y la migración `internacion.0008`.
 No alcanza con reconstruir nginx. La consola usa `/api/administracion/`, dentro
 del proxy `/api/` existente. El usuario ingresa con sus credenciales de administrador.

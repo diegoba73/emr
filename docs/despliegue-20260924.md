@@ -19,7 +19,7 @@ Si existen otros procesos que escriben en la base, detenerlos durante esa ventan
 Desde tu computadora:
 
 ```bash
-ssh -p 2223 server@dsachubut.sytes.net
+ssh -p 2223 server@emr.sytes.net
 ```
 
 En el servidor, ejecutar este bloque completo. Se conserva la rama del servidor

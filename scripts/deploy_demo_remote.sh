@@ -4,7 +4,7 @@
 #   bash scripts/deploy_demo_remote.sh
 set -euo pipefail
 
-REMOTE="${DEMO_SSH:-server@dsachubut.sytes.net}"
+REMOTE="${DEMO_SSH:-server@emr.sytes.net}"
 PORT="${DEMO_SSH_PORT:-2223}"
 # Ajustá si el repo en el servidor está en otra ruta
 REMOTE_DIR="${DEMO_REMOTE_DIR:-/srv/emr/app}"
