@@ -29,8 +29,8 @@ STANDATROL_MARCA = "Wiener"
 LOTE_DEMO = "QC-DEMO"
 CALIBRADOR_A_PLUS = "Calibrador A Plus"
 
-TARGET_S1 = (Decimal("100.0000"), Decimal("5.0000"))
-TARGET_S2 = (Decimal("200.0000"), Decimal("10.0000"))
+TARGET_S1 = (Decimal("100.0000"), Decimal("5.0000"))  # solo demo local; no usar en prod
+TARGET_S2 = (Decimal("200.0000"), Decimal("10.0000"))  # solo demo local; no usar en prod
 
 CURVA_PCR_DEMO = [
     {"orden": 1, "concentracion": "0", "senal": "0.010", "unidad": "mg/L"},
@@ -48,8 +48,9 @@ PRODUCTO_POR_EQUIPO_ENSAYO = {
 
 class Command(BaseCommand):
     help = (
-        "Crea equipos, productos multiparámetro (Standatrol/Sysmex/etc.) + lote/targets, "
-        "materiales IQC solo VIDAS/Finecare, y calibraciones CM260."
+        "DEMO LOCAL: crea equipos, productos multiparámetro + lote/targets con media/DE "
+        "placeholder (100/5, 200/10), materiales IQC VIDAS/Finecare, calibraciones CM260. "
+        "NO usar en producción para targets reales; no importa REF/lotes asignados del kit."
     )
 
     def _ensure_examen_pcr(self) -> TipoExamen | None:

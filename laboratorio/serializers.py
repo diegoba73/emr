@@ -280,7 +280,10 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'modo_entrada',
             getattr(self.instance, 'modo_entrada', TipoExamen.ModoEntradaResultado.ESTANDAR),
         )
-        if modo == TipoExamen.ModoEntradaResultado.ESTANDAR:
+        if modo in (
+            TipoExamen.ModoEntradaResultado.ESTANDAR,
+            TipoExamen.ModoEntradaResultado.CALCULADO,
+        ):
             attrs['ticket_decimales'] = 0
             attrs['multiplicador_clinico'] = Decimal('1')
             attrs['formato_informe_entrada'] = ''

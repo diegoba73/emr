@@ -93,6 +93,13 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="80",
         rmax="100",
     ),
+    "HCM": _r(
+        metodo="Calculado (HGB / Hematíes × 10)",
+        unidad="pg",
+        ref="27 - 32 pg",
+        rmin="27",
+        rmax="32",
+    ),
     "CHCM": _r(
         metodo=_M_HEMO,
         unidad="g/dL",
@@ -179,22 +186,40 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="40",
     ),
     "LDL": _r(
-        metodo=_M_ENZ,
-        unidad="mg/dL",
-        ref="< 130 mg/dL",
-        rmax="130",
-    ),
-    "COL_NO_LDL": _r(
         metodo="Calculado (Friedewald)",
         unidad="mg/dL",
         ref="< 130 mg/dL",
         rmax="130",
+    ),
+    "VLDL": _r(
+        metodo="Calculado (TG / 5)",
+        unidad="mg/dL",
+        ref="< 30 mg/dL",
+        rmax="30",
+    ),
+    "COL_NO_LDL": _r(
+        metodo="Calculado (CT − HDL)",
+        unidad="mg/dL",
+        ref="< 130 mg/dL",
+        rmax="130",
+    ),
+    "COL_RESID": _r(
+        metodo="Calculado (CT − HDL − LDL)",
+        unidad="mg/dL",
+        ref="< 20 mg/dL",
+        rmax="20",
     ),
     "TG": _r(
         metodo=_M_ENZ,
         unidad="mg/dL",
         ref="< 150 mg/dL",
         rmax="150",
+    ),
+    "RATIO_CT_HDL": _r(
+        metodo="Calculado (CT / HDL)",
+        unidad="",
+        ref="< 4.50",
+        rmax="4.5",
     ),
     # —— Hepatograma ——
     "GOT": _r(
@@ -231,6 +256,12 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         ref="0.0 - 0.3 mg/dL",
         rmin="0.0",
         rmax="0.3",
+    ),
+    "BIL_I": _r(
+        metodo="Calculado (BT − BD)",
+        unidad="mg/dL",
+        ref="hasta 0.8 mg/dL",
+        rmax="0.8",
     ),
     # —— Ionograma plasmático ——
     "NA": _r(

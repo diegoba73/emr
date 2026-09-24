@@ -10,6 +10,7 @@ import type {
   Antibiotico,
   EnviarInformeMicroResponse,
   EstudioMicrobiologia,
+  FraseRapidaMicrobiologia,
   IdentificacionMicroorganismo,
   InformeMicrobiologia,
   LecturaCultivo,
@@ -120,6 +121,34 @@ export const createEstudiosMicrobiologiaBatch = (body: {
     .post<EstudioMicrobiologia[]>(`${MICRO}/estudios/batch/`, body)
     .then((r) => r.data);
 
+/** Vista previa ZPL 40×23 (sin mutar etiquetas_impresas_at). */
+export async function getEstudioMicroEtiquetaZpl(
+  estudioId: number
+): Promise<import('../types/lims').EtiquetaEstudioMicroZpl> {
+  const { data } = await apiClient.get(`${MICRO}/estudios/${estudioId}/etiqueta-zpl/`);
+  return data;
+}
+
+/** Prepara ZPL (asigna barcode + etiquetas_impresas_at si PENDIENTE). */
+export async function postEstudioMicroImprimirEtiqueta(
+  estudioId: number
+): Promise<{ estudio_id: number; profile: string; resultado: string; zpl: string }> {
+  const { data } = await apiClient.post(`${MICRO}/estudios/${estudioId}/imprimir-etiqueta/`, {});
+  return data;
+}
+
+export async function postEstudioMicroConfirmarImpresionEtiqueta(
+  estudioId: number,
+  profile?: string
+): Promise<{ estudio_id: number; profile: string; resultado: string; transport: string }> {
+  const { data } = await apiClient.post(
+    `${MICRO}/estudios/${estudioId}/imprimir-etiqueta/confirmar/`,
+    profile ? { profile } : {}
+  );
+  return data;
+}
+
+/** @deprecated PDF legacy; preferir flujo ZPL + agente local. */
 export async function downloadEtiquetasEstudioMicro(estudioId: number): Promise<void> {
   const res = await apiClient.post(
     `${MICRO}/estudios/${estudioId}/imprimir-etiquetas/`,
@@ -271,6 +300,17 @@ export const createAntibiotico = (body: Partial<Antibiotico>) =>
 export const updateAntibiotico = (id: number, body: Partial<Antibiotico>) =>
   apiClient.patch<Antibiotico>(`${MICRO}/antibioticos/${id}/`, body).then((r) => r.data);
 
+// --- Frases rápidas LabWin ---
+export const listFrasesRapidasMicro = (params?: { search?: string }) =>
+  getPaginatedAll<FraseRapidaMicrobiologia>(`${MICRO}/frases-rapidas/`, {
+    page_size: 500,
+    ...params,
+  });
+export const createFraseRapidaMicro = (body: Partial<FraseRapidaMicrobiologia>) =>
+  apiClient.post<FraseRapidaMicrobiologia>(`${MICRO}/frases-rapidas/`, body).then((r) => r.data);
+export const updateFraseRapidaMicro = (id: number, body: Partial<FraseRapidaMicrobiologia>) =>
+  apiClient.patch<FraseRapidaMicrobiologia>(`${MICRO}/frases-rapidas/${id}/`, body).then((r) => r.data);
+
 // --- Antibiogramas ---
 export const listAntibiogramas = (params?: { estudio_id?: number }) =>
   getPaginatedAll<Antibiograma>(`${MICRO}/antibiogramas/`, { page_size: 500, ...params });
@@ -297,13 +337,29 @@ export const createResultadoAntibiotico = (body: {
   antibiograma_id: number;
   antibiotico_id: number;
   halo_mm?: number | string | null;
+  unidad_halo?: string;
   mic?: string;
+  unidad_mic?: string;
   interpretacion: string;
+  metodo?: string;
+  estandar_version?: string;
   observaciones?: string;
 }) => apiClient.post<ResultadoAntibiotico>(`${MICRO}/resultados-antibiotico/`, body).then((r) => r.data);
 export const updateResultadoAntibiotico = (
   id: number,
-  body: Partial<Pick<ResultadoAntibiotico, 'halo_mm' | 'mic' | 'interpretacion' | 'observaciones'>>
+  body: Partial<
+    Pick<
+      ResultadoAntibiotico,
+      | 'halo_mm'
+      | 'unidad_halo'
+      | 'mic'
+      | 'unidad_mic'
+      | 'interpretacion'
+      | 'metodo'
+      | 'estandar_version'
+      | 'observaciones'
+    >
+  >
 ) => apiClient.patch<ResultadoAntibiotico>(`${MICRO}/resultados-antibiotico/${id}/`, body).then((r) => r.data);
 
 // --- Informes ---

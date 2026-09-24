@@ -1,0 +1,4 @@
+EXPORTACION DE LABWIN (fixture mínimo)
+CSV UTF-8 sin BOM; separador coma; encabezados; comillas dobles.
+NULL: campo vacio SIN comillas. Cadena vacia: "".
+Este directorio es un fixture de desarrollo/tests, no la exportación completa.

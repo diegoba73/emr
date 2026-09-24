@@ -509,18 +509,72 @@ class LecturaCultivo(models.Model):
 
 
 class Microorganismo(models.Model):
-    """Catálogo de microorganismos (LIMS Fase B3.2).
+    """Catálogo de microorganismos / hallazgos (LIMS Fase B3.2 + LabWin).
 
     Se desactiva con ``activo=False`` en vez de borrar.
-    Escritura: admin y operadores LIMS; lectura amplia para roles LIMS.
+    ``nombre`` es el texto para mostrar; ``nombre_original`` conserva el legado.
+    Una corrección de catálogo no altera informes ya validados (texto snapshot).
     """
 
+    ORIGEN_CHOICES = [
+        ("MANUAL", "Manual"),
+        ("REFERENCIA", "Referencia"),
+        ("LABWIN_BACTE", "LabWin BACTE"),
+    ]
+    TIPO_REGISTRO_CHOICES = [
+        ("MICROORGANISMO", "Microorganismo"),
+        ("HALLAZGO", "Hallazgo"),
+        ("MORFOLOGIA", "Morfología"),
+        ("FLORA", "Flora"),
+        ("NEGATIVO", "Resultado negativo"),
+        ("OTRO", "Otro"),
+    ]
+    CORRECCION_CHOICES = [
+        ("NINGUNA", "Sin corrección"),
+        ("ORTOGRAFIA_AUTO", "Ortografía automática"),
+        ("PENDIENTE_REVISION", "Pendiente revisión profesional"),
+    ]
+
     codigo = models.CharField(max_length=40, unique=True, verbose_name="Código")
-    nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre para mostrar")
+    nombre_original = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Nombre original",
+        help_text="Texto legado sin alterar (LabWin u otra fuente).",
+    )
     genero = models.CharField(max_length=120, blank=True, default="", verbose_name="Género")
     especie = models.CharField(max_length=120, blank=True, default="", verbose_name="Especie")
     grupo = models.CharField(max_length=80, blank=True, default="", verbose_name="Grupo")
     descripcion = models.TextField(blank=True, default="", verbose_name="Descripción")
+    tipo_registro = models.CharField(
+        max_length=20,
+        choices=TIPO_REGISTRO_CHOICES,
+        default="MICROORGANISMO",
+        verbose_name="Tipo de registro",
+    )
+    origen = models.CharField(
+        max_length=20,
+        choices=ORIGEN_CHOICES,
+        default="MANUAL",
+        verbose_name="Origen",
+    )
+    correccion_estado = models.CharField(
+        max_length=24,
+        choices=CORRECCION_CHOICES,
+        default="NINGUNA",
+        verbose_name="Estado de corrección",
+    )
+    requiere_revision = models.BooleanField(default=False, verbose_name="Requiere revisión")
+    motivo_revision = models.TextField(blank=True, default="", verbose_name="Motivo de revisión")
+    archivo_origen = models.CharField(max_length=255, blank=True, default="", verbose_name="Archivo origen")
+    importado_at = models.DateTimeField(null=True, blank=True, verbose_name="Importado en")
+    editado_manualmente = models.BooleanField(
+        default=False,
+        verbose_name="Editado manualmente",
+        help_text="Si es True, reimportaciones no pisan nombre/activo.",
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -532,6 +586,8 @@ class Microorganismo(models.Model):
         indexes = [
             models.Index(fields=["activo", "nombre"]),
             models.Index(fields=["genero", "especie"]),
+            models.Index(fields=["origen", "codigo"]),
+            models.Index(fields=["requiere_revision", "activo"]),
         ]
 
     def __str__(self) -> str:
@@ -763,16 +819,64 @@ class IdentificacionMicroorganismo(models.Model):
 
 
 class Antibiotico(models.Model):
-    """Catálogo de antibióticos (LIMS Fase B3.3).
+    """Catálogo de antimicrobianos (LIMS Fase B3.3 + LabWin ANTIB).
 
-    Se desactiva con ``activo=False`` en vez de borrar.
-    Escritura: admin y operadores LIMS; lectura amplia para roles LIMS.
+    ``nombre`` = texto para mostrar; ``nombre_original`` = legado sin alterar.
+    ``labwin_d1`` / ``labwin_d2`` se conservan crudos; no son grupos clínicos.
     """
 
+    ORIGEN_CHOICES = [
+        ("MANUAL", "Manual"),
+        ("REFERENCIA", "Referencia"),
+        ("LABWIN_ANTIB", "LabWin ANTIB"),
+    ]
+    CORRECCION_CHOICES = [
+        ("NINGUNA", "Sin corrección"),
+        ("ORTOGRAFIA_AUTO", "Ortografía automática"),
+        ("PENDIENTE_REVISION", "Pendiente revisión profesional"),
+    ]
+
     codigo = models.CharField(max_length=40, unique=True, verbose_name="Código")
-    nombre = models.CharField(max_length=200, verbose_name="Nombre")
+    nombre = models.CharField(max_length=200, verbose_name="Nombre para mostrar")
+    nombre_original = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Nombre original",
+    )
     familia = models.CharField(max_length=120, blank=True, default="", verbose_name="Familia")
     descripcion = models.TextField(blank=True, default="", verbose_name="Descripción")
+    origen = models.CharField(
+        max_length=20,
+        choices=ORIGEN_CHOICES,
+        default="MANUAL",
+        verbose_name="Origen",
+    )
+    correccion_estado = models.CharField(
+        max_length=24,
+        choices=CORRECCION_CHOICES,
+        default="NINGUNA",
+        verbose_name="Estado de corrección",
+    )
+    requiere_revision = models.BooleanField(default=False, verbose_name="Requiere revisión")
+    motivo_revision = models.TextField(blank=True, default="", verbose_name="Motivo de revisión")
+    archivo_origen = models.CharField(max_length=255, blank=True, default="", verbose_name="Archivo origen")
+    importado_at = models.DateTimeField(null=True, blank=True, verbose_name="Importado en")
+    editado_manualmente = models.BooleanField(default=False, verbose_name="Editado manualmente")
+    labwin_d1 = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        verbose_name="LabWin D1_FLD",
+        help_text="Valor crudo de exportación; no interpretar como grupo clínico.",
+    )
+    labwin_d2 = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        verbose_name="LabWin D2_FLD",
+        help_text="Valor crudo de exportación; no interpretar como grupo clínico.",
+    )
     activo = models.BooleanField(default=True, verbose_name="Activo")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -784,6 +888,8 @@ class Antibiotico(models.Model):
         indexes = [
             models.Index(fields=["activo", "nombre"]),
             models.Index(fields=["familia"]),
+            models.Index(fields=["origen", "codigo"]),
+            models.Index(fields=["requiere_revision", "activo"]),
         ]
 
     def __str__(self) -> str:
@@ -918,11 +1024,32 @@ class ResultadoAntibiotico(models.Model):
     halo_mm = models.DecimalField(
         max_digits=6, decimal_places=2, null=True, blank=True, verbose_name="Halo (mm)"
     )
-    mic = models.CharField(max_length=40, blank=True, default="", verbose_name="MIC")
+    unidad_halo = models.CharField(
+        max_length=16, blank=True, default="mm", verbose_name="Unidad halo"
+    )
+    mic = models.CharField(max_length=40, blank=True, default="", verbose_name="MIC/CIM")
+    unidad_mic = models.CharField(
+        max_length=24, blank=True, default="", verbose_name="Unidad MIC/CIM"
+    )
     interpretacion = models.CharField(
         max_length=10,
         choices=INTERPRETACION_CHOICES,
         verbose_name="Interpretación",
+        help_text="Interpretación validada por el laboratorio; no se calcula S/I/R automáticamente.",
+    )
+    metodo = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        verbose_name="Método",
+        help_text="Difusión, microdilución, etc. Opcional si ya figura en el antibiograma.",
+    )
+    estandar_version = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Estándar / versión",
+        help_text="Ej. CLSI M100 2024, EUCAST 2024; texto libre del laboratorio.",
     )
     observaciones = models.TextField(blank=True, default="", verbose_name="Observaciones")
 
@@ -1074,3 +1201,160 @@ class InformeMicrobiologia(models.Model):
 
     def __str__(self) -> str:
         return f"Informe {self.tipo} #{self.pk} estudio={self.estudio_id}"
+
+
+# ---------------------------------------------------------------------------
+# Catálogo LabWin — frases rápidas (NEMOTEC) y asociaciones (NEMOESPE)
+# ---------------------------------------------------------------------------
+
+
+class FraseRapidaMicrobiologia(models.Model):
+    """Frase rápida / nemotécnico (LabWin NEMOTEC).
+
+    Espacio de códigos independiente de BACTE/ANTIB (p. ej. PSA en NEMOTEC
+    no se fusiona con PSA en BACTE).
+    """
+
+    ORIGEN_CHOICES = [
+        ("MANUAL", "Manual"),
+        ("LABWIN_NEMOTEC", "LabWin NEMOTEC"),
+    ]
+    CATEGORIA_CHOICES = [
+        ("GENERAL", "General"),
+        ("HALLAZGO", "Hallazgo"),
+        ("INTERPRETACION", "Interpretación clínica"),
+        ("UMBRAL", "Umbral histórico"),
+        ("FENOTIPO", "Fenotipo"),
+        ("OTRO", "Otro"),
+    ]
+    CORRECCION_CHOICES = [
+        ("NINGUNA", "Sin corrección"),
+        ("ORTOGRAFIA_AUTO", "Ortografía automática"),
+        ("PENDIENTE_REVISION", "Pendiente revisión profesional"),
+    ]
+
+    abreviatura = models.CharField(max_length=40, unique=True, verbose_name="Abreviatura original")
+    texto = models.TextField(verbose_name="Texto para mostrar")
+    texto_original = models.TextField(blank=True, default="", verbose_name="Texto original")
+    categoria = models.CharField(
+        max_length=20,
+        choices=CATEGORIA_CHOICES,
+        default="GENERAL",
+        verbose_name="Categoría",
+    )
+    origen = models.CharField(
+        max_length=20,
+        choices=ORIGEN_CHOICES,
+        default="MANUAL",
+        verbose_name="Origen",
+    )
+    correccion_estado = models.CharField(
+        max_length=24,
+        choices=CORRECCION_CHOICES,
+        default="NINGUNA",
+        verbose_name="Estado de corrección",
+    )
+    requiere_revision = models.BooleanField(default=False, verbose_name="Requiere revisión")
+    motivo_revision = models.TextField(blank=True, default="", verbose_name="Motivo de revisión")
+    archivo_origen = models.CharField(max_length=255, blank=True, default="", verbose_name="Archivo origen")
+    importado_at = models.DateTimeField(null=True, blank=True, verbose_name="Importado en")
+    editado_manualmente = models.BooleanField(default=False, verbose_name="Editado manualmente")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Frase rápida microbiológica"
+        verbose_name_plural = "Frases rápidas microbiológicas"
+        ordering = ["abreviatura"]
+        indexes = [
+            models.Index(fields=["activo", "abreviatura"]),
+            models.Index(fields=["origen", "abreviatura"]),
+            models.Index(fields=["categoria", "activo"]),
+            models.Index(fields=["requiere_revision"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.abreviatura}"
+
+
+class FraseRapidaAsociacionAnalisis(models.Model):
+    """Asociación NEMOESPE: nemotécnico ↔ análisis LabWin + posición.
+
+    Claves verificadas en la exportación:
+    - ``analisis_abrev_labwin`` = NEMOESPE.ABREV_FLD (coincide con ANALISIS.ABREV_FLD)
+    - ``posicion`` = POSICION_FLD
+    - ``nemotec_abrev`` = NEMOTEC_FLD (abreviatura en NEMOTEC)
+
+    ``tipo_examen`` queda nullable hasta mapear códigos LabWin → TipoExamen SYNESIS.
+    """
+
+    analisis_abrev_labwin = models.CharField(max_length=40, verbose_name="Análisis LabWin (ABREV_FLD)")
+    posicion = models.PositiveIntegerField(verbose_name="Posición (POSICION_FLD)")
+    nemotec_abrev = models.CharField(max_length=40, verbose_name="Abreviatura NEMOTEC")
+    frase = models.ForeignKey(
+        FraseRapidaMicrobiologia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="asociaciones_analisis",
+        verbose_name="Frase rápida",
+    )
+    numrec_labwin = models.CharField(max_length=40, blank=True, default="", verbose_name="NUMREC_FLD")
+    tipo_examen = models.ForeignKey(
+        "laboratorio.TipoExamen",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="frases_rapidas_labwin",
+        verbose_name="Tipo examen SYNESIS (pendiente de mapeo)",
+    )
+    archivo_origen = models.CharField(max_length=255, blank=True, default="", verbose_name="Archivo origen")
+    importado_at = models.DateTimeField(null=True, blank=True, verbose_name="Importado en")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Asociación frase–análisis LabWin"
+        verbose_name_plural = "Asociaciones frase–análisis LabWin"
+        ordering = ["analisis_abrev_labwin", "posicion", "nemotec_abrev"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["analisis_abrev_labwin", "posicion", "nemotec_abrev"],
+                name="uniq_labwin_nemoespe_analisis_pos_nemo",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["analisis_abrev_labwin", "posicion"]),
+            models.Index(fields=["nemotec_abrev"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.analisis_abrev_labwin}@{self.posicion}:{self.nemotec_abrev}"
+
+
+class LabwinMicroCatalogImportBatch(models.Model):
+    """Registro de una corrida de importación de catálogos micro LabWin."""
+
+    fuente_dir = models.CharField(max_length=512, verbose_name="Directorio fuente")
+    dry_run = models.BooleanField(default=False)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    counts = models.JSONField(default=dict, blank=True)
+    errores = models.JSONField(default=list, blank=True)
+    revision_pendiente = models.JSONField(default=list, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="labwin_micro_catalog_imports",
+    )
+
+    class Meta:
+        verbose_name = "Importación catálogo micro LabWin"
+        verbose_name_plural = "Importaciones catálogo micro LabWin"
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return f"LabWin micro import #{self.pk} dry={self.dry_run}"

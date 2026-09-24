@@ -30,22 +30,31 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { Antibiotico, MedioCultivo, Microorganismo } from '../../types/lims';
+import type {
+  Antibiotico,
+  FraseRapidaMicrobiologia,
+  MedioCultivo,
+  Microorganismo,
+} from '../../types/lims';
 import {
   createAntibiotico,
+  createFraseRapidaMicro,
   createMedioCultivo,
   createMicroorganismo,
   listAntibioticos,
+  listFrasesRapidasMicro,
   listMediosCultivo,
   listMicroorganismos,
   updateAntibiotico,
+  updateFraseRapidaMicro,
   updateMedioCultivo,
   updateMicroorganismo,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canAccessMicrobiologia, canEditMicroCatalogos } from '../../utils/limsAccess';
+import FrasesRapidasCatalogSection from '../../components/lims/micro/FrasesRapidasCatalogSection';
 
-type CatalogTab = 0 | 1 | 2;
+type CatalogTab = 0 | 1 | 2 | 3;
 
 type MedioForm = {
   codigo: string;
@@ -70,6 +79,13 @@ type AntibioticoForm = {
   nombre: string;
   familia: string;
   descripcion: string;
+  activo: boolean;
+};
+
+type FraseForm = {
+  abreviatura: string;
+  texto: string;
+  categoria: string;
   activo: boolean;
 };
 
@@ -106,6 +122,13 @@ const emptyAntibioticoForm = (): AntibioticoForm => ({
   activo: true,
 });
 
+const emptyFraseForm = (): FraseForm => ({
+  abreviatura: '',
+  texto: '',
+  categoria: 'GENERAL',
+  activo: true,
+});
+
 const medioFromRow = (row: MedioCultivo): MedioForm => ({
   codigo: row.codigo,
   nombre: row.nombre,
@@ -132,8 +155,15 @@ const antibioticoFromRow = (row: Antibiotico): AntibioticoForm => ({
   activo: row.activo !== false,
 });
 
-const TAB_NOUN = ['medio', 'microorganismo', 'antibiótico'] as const;
-const TAB_NOUN_PLURAL = ['medios', 'microorganismos', 'antibióticos'] as const;
+const fraseFromRow = (row: FraseRapidaMicrobiologia): FraseForm => ({
+  abreviatura: row.abreviatura,
+  texto: row.texto,
+  categoria: row.categoria ?? 'GENERAL',
+  activo: row.activo !== false,
+});
+
+const TAB_NOUN = ['medio', 'microorganismo', 'antibiótico', 'frase'] as const;
+const TAB_NOUN_PLURAL = ['medios', 'microorganismos', 'antibióticos', 'frases'] as const;
 
 const MicrobiologiaCatalogos: React.FC = () => {
   const navigate = useNavigate();
@@ -142,6 +172,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
   const [medios, setMedios] = useState<MedioCultivo[]>([]);
   const [micros, setMicros] = useState<Microorganismo[]>([]);
   const [abs, setAbs] = useState<Antibiotico[]>([]);
+  const [frases, setFrases] = useState<FraseRapidaMicrobiologia[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -150,6 +181,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
   const [medioForm, setMedioForm] = useState<MedioForm>(emptyMedioForm);
   const [microForm, setMicroForm] = useState<MicroForm>(emptyMicroForm);
   const [antibioticoForm, setAntibioticoForm] = useState<AntibioticoForm>(emptyAntibioticoForm);
+  const [fraseForm, setFraseForm] = useState<FraseForm>(emptyFraseForm);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -160,14 +192,16 @@ const MicrobiologiaCatalogos: React.FC = () => {
     setLoading(true);
     const params = { search: search.trim() || undefined };
     try {
-      const [m, mi, a] = await Promise.all([
+      const [m, mi, a, f] = await Promise.all([
         listMediosCultivo(params),
         listMicroorganismos(params),
         listAntibioticos(params),
+        listFrasesRapidasMicro(params),
       ]);
       setMedios(m);
       setMicros(mi);
       setAbs(a);
+      setFrases(f);
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
     } finally {
@@ -179,7 +213,8 @@ const MicrobiologiaCatalogos: React.FC = () => {
     if (allowed) load();
   }, [allowed, load]);
 
-  const rows = tab === 0 ? medios : tab === 1 ? micros : abs;
+  const rows =
+    tab === 0 ? medios : tab === 1 ? micros : tab === 2 ? abs : frases;
   const colSpan = canEdit ? (tab === 1 ? 6 : 5) : tab === 1 ? 5 : 4;
 
   const openCreate = () => {
@@ -187,6 +222,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
     setMedioForm(emptyMedioForm());
     setMicroForm(emptyMicroForm());
     setAntibioticoForm(emptyAntibioticoForm());
+    setFraseForm(emptyFraseForm());
     setDialogOpen(true);
   };
 
@@ -208,6 +244,12 @@ const MicrobiologiaCatalogos: React.FC = () => {
     setDialogOpen(true);
   };
 
+  const openEditFrase = (row: FraseRapidaMicrobiologia) => {
+    setEditingId(row.id);
+    setFraseForm(fraseFromRow(row));
+    setDialogOpen(true);
+  };
+
   const handleTabChange = (_: unknown, v: CatalogTab) => {
     setTab(v);
     setDialogOpen(false);
@@ -225,6 +267,10 @@ const MicrobiologiaCatalogos: React.FC = () => {
     }
     if (tab === 2 && (!antibioticoForm.codigo.trim() || !antibioticoForm.nombre.trim())) {
       toast.error('Código y nombre son obligatorios');
+      return;
+    }
+    if (tab === 3 && (!fraseForm.abreviatura.trim() || !fraseForm.texto.trim())) {
+      toast.error('Abreviatura y texto son obligatorios');
       return;
     }
     setSaving(true);
@@ -261,7 +307,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
           await createMicroorganismo(body);
           toast.success('Microorganismo creado');
         }
-      } else {
+      } else if (tab === 2) {
         const body = {
           codigo: antibioticoForm.codigo.trim().toUpperCase(),
           nombre: antibioticoForm.nombre.trim(),
@@ -275,6 +321,21 @@ const MicrobiologiaCatalogos: React.FC = () => {
         } else {
           await createAntibiotico(body);
           toast.success('Antibiótico creado');
+        }
+      } else {
+        const body = {
+          abreviatura: fraseForm.abreviatura.trim(),
+          texto: fraseForm.texto.trim(),
+          categoria: fraseForm.categoria.trim() || 'GENERAL',
+          activo: fraseForm.activo,
+          editado_manualmente: true,
+        };
+        if (editingId) {
+          await updateFraseRapidaMicro(editingId, body);
+          toast.success('Frase actualizada');
+        } else {
+          await createFraseRapidaMicro(body);
+          toast.success('Frase creada');
         }
       }
       setDialogOpen(false);
@@ -294,8 +355,13 @@ const MicrobiologiaCatalogos: React.FC = () => {
         await updateMedioCultivo(deleteTarget.id, { activo: false });
       } else if (deleteTarget.tab === 1) {
         await updateMicroorganismo(deleteTarget.id, { activo: false });
-      } else {
+      } else if (deleteTarget.tab === 2) {
         await updateAntibiotico(deleteTarget.id, { activo: false });
+      } else {
+        await updateFraseRapidaMicro(deleteTarget.id, {
+          activo: false,
+          editado_manualmente: true,
+        });
       }
       toast.success(`«${deleteTarget.nombre}» eliminado (desactivado)`);
       setDeleteTarget(null);
@@ -307,9 +373,17 @@ const MicrobiologiaCatalogos: React.FC = () => {
     }
   };
 
-  const createLabels = ['Nuevo medio', 'Nuevo microorganismo', 'Nuevo antibiótico'] as const;
+  const createLabels = ['Nuevo medio', 'Nuevo microorganismo', 'Nuevo antibiótico', 'Nueva frase'] as const;
   const dialogTitle = editingId
-    ? `Editar ${tab === 0 ? medioForm.codigo : tab === 1 ? microForm.codigo : antibioticoForm.codigo}`
+    ? `Editar ${
+        tab === 0
+          ? medioForm.codigo
+          : tab === 1
+            ? microForm.codigo
+            : tab === 2
+              ? antibioticoForm.codigo
+              : fraseForm.abreviatura
+      }`
     : createLabels[tab];
 
   if (!allowed) {
@@ -329,15 +403,38 @@ const MicrobiologiaCatalogos: React.FC = () => {
         Catálogos microbiología
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Medios, microorganismos y antibióticos usados en siembras, identificación y antibiogramas.
+        Medios, microorganismos, antibióticos y frases rápidas (LabWin NEMOTEC) usados en
+        siembras, identificación, antibiogramas e informes.
       </Typography>
 
       <Tabs value={tab} onChange={handleTabChange} sx={{ mb: 2 }}>
         <Tab label="Medios" />
         <Tab label="Microorganismos" />
         <Tab label="Antibióticos" />
+        <Tab label="Frases rápidas" />
       </Tabs>
 
+      {tab === 3 ? (
+        <Box>
+          <TextField
+            size="small"
+            label="Buscar frases"
+            value={search}
+            onChange={(ev) => setSearch(ev.target.value)}
+            placeholder="Abreviatura o texto…"
+            sx={{ minWidth: 260, mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <FrasesRapidasCatalogSection search={search} canEdit={canEdit} />
+        </Box>
+      ) : (
+      <>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2, alignItems: 'center' }}>
         <TextField
           size="small"
@@ -349,7 +446,9 @@ const MicrobiologiaCatalogos: React.FC = () => {
               ? 'Código, nombre, tipo…'
               : tab === 1
                 ? 'Código, nombre, género, especie…'
-                : 'Código, nombre, familia…'
+                : tab === 2
+                  ? 'Código, nombre, familia…'
+                  : 'Abreviatura, texto…'
           }
           sx={{ minWidth: 260 }}
           InputProps={{
@@ -475,7 +574,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
                   )}
                 </TableRow>
               ))
-            ) : (
+            ) : tab === 2 ? (
               abs.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
@@ -505,6 +604,55 @@ const MicrobiologiaCatalogos: React.FC = () => {
                         disabled={r.activo === false}
                         onClick={() =>
                           setDeleteTarget({ tab: 2, id: r.id, codigo: r.codigo, nombre: r.nombre })
+                        }
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            ) : (
+              frases.map((r) => (
+                <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
+                  <TableCell>{r.abreviatura}</TableCell>
+                  <TableCell sx={{ maxWidth: 360, whiteSpace: 'pre-wrap' }}>
+                    {(r.texto || '').slice(0, 160)}
+                    {(r.texto || '').length > 160 ? '…' : ''}
+                    {r.requiere_revision ? (
+                      <Chip size="small" label="Revisión" color="warning" sx={{ ml: 1 }} />
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{r.categoria || '—'}</TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={r.activo === false ? 'Inactivo' : 'Activo'}
+                      color={r.activo === false ? 'default' : 'success'}
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  {canEdit && (
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                      <IconButton
+                        size="small"
+                        aria-label={`Editar ${r.abreviatura}`}
+                        onClick={() => openEditFrase(r)}
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label={`Eliminar ${r.abreviatura}`}
+                        color="error"
+                        disabled={r.activo === false}
+                        onClick={() =>
+                          setDeleteTarget({
+                            tab: 3,
+                            id: r.id,
+                            codigo: r.abreviatura,
+                            nombre: (r.texto || '').slice(0, 40),
+                          })
                         }
                       >
                         <DeleteOutlineIcon fontSize="small" />
@@ -681,7 +829,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
           <Typography>
             ¿Desactivar «{deleteTarget?.codigo} — {deleteTarget?.nombre}»? No se borra de la base
             (para no romper estudios históricos); quedará inactivo y dejará de usarse en nuevas
-            siembras, identificaciones o antibiogramas.
+            siembras, identificaciones, antibiogramas o informes.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -693,6 +841,8 @@ const MicrobiologiaCatalogos: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      </>
+      )}
     </Box>
   );
 };

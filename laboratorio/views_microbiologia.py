@@ -56,6 +56,8 @@ from laboratorio.models_microbiologia import (
     Antibiograma,
     Antibiotico,
     EstudioMicrobiologia,
+    FraseRapidaAsociacionAnalisis,
+    FraseRapidaMicrobiologia,
     IdentificacionMicroorganismo,
     InformeMicrobiologia,
     LecturaCultivo,
@@ -77,6 +79,8 @@ from laboratorio.serializers_microbiologia import (
     AntibiogramaPartialUpdateSerializer,
     AntibiogramaSerializer,
     AntibioticoSerializer,
+    FraseRapidaAsociacionAnalisisSerializer,
+    FraseRapidaMicrobiologiaSerializer,
     EstudioCancelarSerializer,
     EstudioIniciarSerializer,
     EstudioMarcarInformadoSerializer,
@@ -362,6 +366,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="imprimir-etiquetas")
     def imprimir_etiquetas(self, request, pk=None):
+        """PDF legacy Code128. Preferir etiqueta-zpl / imprimir-etiqueta (ZPL 40×23)."""
         from django.http import HttpResponse
 
         from laboratorio.etiquetas_microbiologia import (
@@ -392,6 +397,56 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             f'attachment; filename="{nombre_archivo_etiquetas_micro([int(pk)])}"'
         )
         return resp
+
+    @action(detail=True, methods=["get"], url_path="etiqueta-zpl")
+    def etiqueta_zpl(self, request, pk=None):
+        """Vista previa JSON+ZPL 40×23 mm (sin enviar a impresora ni mutar etiquetas)."""
+        from laboratorio.services_etiqueta_microbiologia import (
+            build_etiqueta_estudio_micro,
+            etiqueta_micro_payload_to_dict,
+        )
+
+        estudio = self.get_object()
+        payload = build_etiqueta_estudio_micro(estudio, require_printable=False)
+        return Response(etiqueta_micro_payload_to_dict(payload), status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="imprimir-etiqueta")
+    def imprimir_etiqueta(self, request, pk=None):
+        """Prepara ZPL (barcode + etiquetas_impresas_at) sin enviar a impresora."""
+        from laboratorio.services_etiqueta_microbiologia import (
+            EtiquetaMicroError,
+            imprimir_etiqueta_estudio_micro,
+        )
+
+        estudio = self.get_object()
+        try:
+            result = imprimir_etiqueta_estudio_micro(
+                estudio,
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.imprimir_etiqueta",
+            )
+        except EtiquetaMicroError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="imprimir-etiqueta/confirmar")
+    def confirmar_impresion_etiqueta(self, request, pk=None):
+        """Audita impresión local OK (agente USB). No muta el estudio."""
+        from laboratorio.services_etiqueta_microbiologia import (
+            confirmar_impresion_etiqueta_estudio_micro,
+        )
+
+        estudio = self.get_object()
+        profile = ""
+        if isinstance(request.data, dict):
+            profile = (request.data.get("profile") or "").strip()
+        result = confirmar_impresion_etiqueta_estudio_micro(
+            estudio,
+            actor=request.user,
+            view="EstudioMicrobiologiaViewSet.confirmar_impresion_etiqueta",
+            profile_key=profile or None,
+        )
+        return Response(result, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="talon-pdf")
     def talon_pdf(self, request, pk=None):
@@ -984,7 +1039,7 @@ class MicroorganismoViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         before = safe_model_snapshot(serializer.instance)
-        instance = serializer.save()
+        instance = serializer.save(editado_manualmente=True)
         log_update(
             actor=getattr(self.request, "user", None),
             entity=instance,
@@ -1208,7 +1263,7 @@ class AntibioticoViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         before = safe_model_snapshot(serializer.instance)
-        instance = serializer.save()
+        instance = serializer.save(editado_manualmente=True)
         log_update(
             actor=getattr(self.request, "user", None),
             entity=instance,
@@ -1409,6 +1464,10 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
                 observaciones=vd.get("observaciones") or "",
                 actor=request.user,
                 view="ResultadoAntibioticoViewSet.create",
+                unidad_halo=vd.get("unidad_halo") or "mm",
+                unidad_mic=vd.get("unidad_mic") or "",
+                metodo=vd.get("metodo") or "",
+                estandar_version=vd.get("estandar_version") or "",
             )
         except MicrobiologiaAccionError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1429,6 +1488,10 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
                 mic=vd.get("mic") if "mic" in vd else None,
                 interpretacion=vd.get("interpretacion") if "interpretacion" in vd else None,
                 observaciones=vd.get("observaciones") if "observaciones" in vd else None,
+                unidad_halo=vd.get("unidad_halo") if "unidad_halo" in vd else None,
+                unidad_mic=vd.get("unidad_mic") if "unidad_mic" in vd else None,
+                metodo=vd.get("metodo") if "metodo" in vd else None,
+                estandar_version=vd.get("estandar_version") if "estandar_version" in vd else None,
             )
         except MicrobiologiaAccionError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1592,4 +1655,76 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
         return Response(
             InformeMicrobiologiaSerializer(informe, context={"request": request}).data,
             status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Frases rápidas LabWin (NEMOTEC / NEMOESPE)
+# ---------------------------------------------------------------------------
+
+
+class FraseRapidaMicrobiologiaViewSet(viewsets.ModelViewSet):
+    """Catálogo de frases rápidas (NEMOTEC). Lectura amplia; escritura operadores LIMS."""
+
+    queryset = FraseRapidaMicrobiologia.objects.all().order_by("abreviatura")
+    serializer_class = FraseRapidaMicrobiologiaSerializer
+    permission_classes = [LimsMicrobiologiaCatalogPermission]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["abreviatura", "texto", "categoria", "texto_original"]
+    ordering_fields = ["abreviatura", "categoria", "created_at"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_create(
+            actor=getattr(self.request, "user", None),
+            entity=instance,
+            module="laboratorio",
+            metadata={
+                "accion": "crear_frase_rapida_micro",
+                "frase_id": instance.pk,
+                "abreviatura": instance.abreviatura,
+                "view": "FraseRapidaMicrobiologiaViewSet.create",
+            },
+        )
+
+    def perform_update(self, serializer):
+        before = safe_model_snapshot(serializer.instance)
+        instance = serializer.save(editado_manualmente=True)
+        log_update(
+            actor=getattr(self.request, "user", None),
+            entity=instance,
+            before=before,
+            module="laboratorio",
+            metadata={
+                "accion": "actualizar_frase_rapida_micro",
+                "frase_id": instance.pk,
+                "abreviatura": instance.abreviatura,
+                "activo_nuevo": instance.activo,
+                "view": "FraseRapidaMicrobiologiaViewSet.partial_update",
+            },
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "No se permite eliminar frases; desactive con activo=false."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+
+class FraseRapidaAsociacionAnalisisViewSet(viewsets.ModelViewSet):
+    """Asociaciones NEMOESPE (análisis LabWin + posición + nemotécnico)."""
+
+    queryset = FraseRapidaAsociacionAnalisis.objects.select_related("frase", "tipo_examen").all()
+    serializer_class = FraseRapidaAsociacionAnalisisSerializer
+    permission_classes = [LimsMicrobiologiaCatalogPermission]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["analisis_abrev_labwin", "nemotec_abrev"]
+    ordering_fields = ["analisis_abrev_labwin", "posicion", "created_at"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "No se permite eliminar asociaciones NEMOESPE."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
         )

@@ -13,6 +13,12 @@ import {
 import type { ResultadoExamenLims, SolicitudExamenLims } from '../../types/lims';
 import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
 import { PANEL_HEMOGRAMA } from '../../utils/limsOrdenInforme';
+import {
+  calcAbsolutoFormula,
+  formatAbsolutoMm3,
+  FORMULA_LEUCO_CODIGOS,
+  esResultadoNoCalculable,
+} from '../../utils/calculosDerivados';
 import ResultadoEstadoBadge from './ResultadoEstadoBadge';
 import ResultadoRangoInfo from './ResultadoRangoInfo';
 
@@ -29,15 +35,35 @@ export interface ResultadosOrdenListaProps {
   modo?: 'laboratorio' | 'clinico';
 }
 
+function valorConAbsolutoFormula(
+  r: ResultadoExamenLims,
+  resultados: ResultadoExamenLims[]
+): string {
+  const base = (r.valor_obtenido ?? '').trim();
+  if (!base) return '';
+  const codigo = (r.tipo_examen_codigo || '').toUpperCase();
+  if (!FORMULA_LEUCO_CODIGOS.has(codigo)) return base;
+  const leuco = resultados.find((x) => (x.tipo_examen_codigo || '').toUpperCase() === 'LEUCO');
+  if (!leuco) return base;
+  const pct = Number(r.valor_numerico ?? base);
+  const leu = Number(leuco.valor_numerico ?? leuco.valor_obtenido);
+  if (!Number.isFinite(pct) || !Number.isFinite(leu)) return base;
+  const abs = calcAbsolutoFormula(pct, leu);
+  if (abs == null) return base;
+  return `${base}  ·  ${formatAbsolutoMm3(abs)}`;
+}
+
 function ResultadoRow({
   r,
   modo,
+  resultados,
 }: {
   r: ResultadoExamenLims;
   modo: 'laboratorio' | 'clinico';
+  resultados: ResultadoExamenLims[];
 }) {
-  const valor = (r.valor_obtenido ?? '').trim();
-  const unidad = (r.unidad ?? '').trim();
+  const valor = valorConAbsolutoFormula(r, resultados);
+  const unidad = esResultadoNoCalculable(valor) ? '' : (r.unidad ?? '').trim();
   const clinico = modo === 'clinico';
 
   return (
@@ -173,6 +199,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
                       key={r.id}
                       r={r}
                       modo={modo}
+                      resultados={resultados}
                     />
                   ))}
                 </TableBody>

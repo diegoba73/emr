@@ -65,6 +65,16 @@
 - **Reglas [VIGENTE]:** rechaza si la orden está `FINALIZADO` (u otro estado no cargable). Transacción + bloqueo de fila (`select_for_update`) sobre la solicitud y cada resultado (`of=("self",)` en PostgreSQL para FK muestra nullable). Tras aplicar cambios: completar todos los valores → `LISTO_PARA_VALIDAR`; incompleto → `INFORMADO_PARCIAL`; vaciar un valor desde `LISTO_PARA_VALIDAR` → `EN_PROCESO` (reabrir carga). **[HISTÓRICO Fase A]** se documentaba rechazo en `CANCELADO`/`VALIDADO`/`ENTREGADO` y auto-paso `PENDIENTE`/`TOMA_MUESTRA` → `EN_PROCESO` por carga.
 - **Auditoría (B2 / B2-A / B3-audit):** `log_update` por resultado con metadata: `resultado_id`, `solicitud_id`, `numero_solicitud`, `muestra_id`, `valor_presente`, `muestra_anterior_id` / `muestra_nueva_id` si cambió la asociación; **sin `codigo_barra`** ni valores clínicos en metadata. Microbiología (B3-audit): metadata con IDs técnicos (`estudio_id`, `muestra_id`, `siembra_id`, etc.) y flags `*_presente`; **sin** resultados micro crudos ni `codigo_barra`. `before_state` / `after_state` redactan vía `safe_model_snapshot`. El `codigo_barra` de la muestra sigue disponible en API operativa, no en `AuditEvent` genérico.
 
+### Corrección de LDL calculado (21 de septiembre de 2026)
+
+En una orden editable, al corregir los triglicéridos y superar el límite admitido por el cálculo existente (TG ≥ 400), el LDL anterior se reemplaza por **«No calculable con estos datos»**, con `valor_numerico = null`. El colesterol residual recibe el mismo aviso porque depende del LDL. Al volver a ingresar datos calculables, ambos se recalculan automáticamente.
+
+El aviso se conserva al guardar, reabrir y generar el PDF; no se presenta como cero, «En rango» ni acompañado de una unidad numérica en la lista de resultados o el informe. El recálculo queda auditado y no modifica resultados ya validados ni órdenes finalizadas. Esto no constituye una corrección retroactiva de informes históricos.
+
+Al editar un campo estándar, la pantalla descarta su número anterior y construye el valor numérico desde el texto actualizado. Al finalizar la carga del catálogo conserva juntos el texto y el número del borrador, incluido el número vacío; no restaura el valor anterior de la orden. Los clientes que envían solamente `valor` también invalidan el número estructurado anterior cuando cambia el texto; los cálculos derivados usan el nuevo dato.
+
+Fuentes: `laboratorio/calculos_derivados.py`, `laboratorio/resultado_carga.py`, `laboratorio/resultados_clinicos.py`, `frontend/src/utils/calculosDerivados.ts`, `frontend/src/utils/limsCargaMuestra.ts`. Regresión: `laboratorio/tests/test_ldl_no_calculable_api.py`, `frontend/src/components/lims/CargaResultadosLims.ldl.test.tsx` y `frontend/src/utils/ldlNoCalculable.test.ts`.
+
 ---
 
 ## Flujo de validación técnica / profesional
@@ -142,6 +152,8 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 **[HISTÓRICO]** las columnas de orden `cancelar` / `marcar-entregado` se retiraron: esas actions no existen (404).
 
 **Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (prepara ZPL) y `POST .../imprimir-etiqueta/confirmar/` (audit local) → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Impresión USB en la PC del operador vía `scripts/label_print_agent.ps1`. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
+
+**Microbiología — misma etiqueta 40×23 (ZPL):** `GET .../microbiologia/estudios/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (asigna barcode + `etiquetas_impresas_at` en PENDIENTE) y `POST .../imprimir-etiqueta/confirmar/` (`micro_etiqueta_print`). Mismo agente USB local. PDF `imprimir-etiquetas` queda como legado.
 
 **Aliases:** `/api/laboratorio/tipos-examen/` y `/api/laboratorio/solicitudes/` — mismos ViewSets y **misma** matriz de permisos que `/api/lab/...`.
 
@@ -353,6 +365,7 @@ Extensión de la cadena B3.3:
 - Varios informes **PRELIMINAR** en cualquier estado (`BORRADOR` / `EMITIDO` / `ANULADO`). La emisión preliminar **no** cambia el estado del estudio.
 - Un solo informe **FINAL** vigente por estudio (`UniqueConstraint` con `tipo=FINAL` y `estado≠ANULADO`).
 - **Emitir** informe (cualquier tipo) exige texto no vacío. **Emitir FINAL** además exige completitud microbiológica (`verificar_completitud_para_informe_final`) y pasa el estudio a `LISTO_PARA_VALIDAR` (si no estaba ya en terminal avanzada).
+- **Completitud FINAL:** al menos una lectura **definitiva** (`crecimiento ≠ PENDIENTE`). `SIN_DESARROLLO` cuenta: **camino corto negativo** — informe final válido **sin** aislados ni antibiograma. Aislados `SOSPECHADO` (salvo `CONTAMINANTE`/`FLORA_HABITUAL`) o `IDENTIFICADO` con AB pendiente siguen bloqueando.
 - **Validar** solo el informe **FINAL** en `EMITIDO`, con estudio en `LISTO_PARA_VALIDAR`. Permiso: **`ROLES_LIMS_VALIDAR`** (`admin` / `bioquimico`) + bypass **superuser**. **No** “solo admin”. `InformeMicrobiologia` es **otra entidad** que `SolicitudExamen` (el `VALIDADO` de este párrafo es del **informe/estudio micro**, no de la orden). Pasa informe y estudio a `VALIDADO` y setea `fecha_cierre` del estudio si estaba vacía.
 - **Anular** con motivo obligatorio solo en `BORRADOR` o `EMITIDO` (no se anula un informe `VALIDADO` en B3.4).
 - **Marcar informado** (`POST …/estudios/{id}/marcar-informado/`): estudio `VALIDADO` + existencia de informe final `VALIDADO` → estudio `INFORMADO`.
@@ -377,7 +390,7 @@ Orden LIMS (SolicitudExamen) → Muestra → EstudioMicrobiologia
 
 **Rutas:** `/laboratorio/microbiologia`, `/laboratorio/microbiologia/estudios`, `/laboratorio/microbiologia/estudios/:id`, `/laboratorio/microbiologia/catalogos`.
 
-**Detalle del estudio (`:id`):** tabs Resumen | Siembras y lecturas | Aislados e identificación | Antibiograma | Informes.
+**Detalle del estudio (`:id`):** tabs Resumen | Siembras y lecturas | Aislados e identificación | Antibiograma | Informes. Si hay lectura `SIN_DESARROLLO` y no hay aislados que bloqueen, la pestaña Informes muestra guía + CTA «Crear informe final (sin desarrollo)»; Aislados avisa que no hace falta aislar.
 
 **API cliente:** solo `/lab/microbiologia/...` (`limsMicroApi.ts`). No usa alias `/laboratorio/microbiologia/` en cliente ni rutas EMR `/solicitudes`.
 

@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 # Sysmex XP-300 (ASTM). Fórmula de 3 partes: LYM / MXD / NEUT.
-# MXD no equivale a MONO/EOS/BAS; se mapea a MONO como aproximación hasta
-# calibrar con una captura real. NEUT_CAY no existe en el XP-300.
+# MXD (mixed cells) NO es monocitos: no se mapea a MONO ni a EOS/BAS.
+# Códigos MXD/MXD%/MXD# se omiten a propósito; la ingesta los ignora.
+# NEUT_CAY no existe en el XP-300. MONO%/MONO solo aplican a 5 partes.
+CODIGOS_SYSMEX_MXD: frozenset[str] = frozenset({"MXD", "MXD%", "MXD#"})
+
 MAPEO_SYSMEX_XP300: dict[str, str] = {
     "WBC": "LEUCO",
     "RBC": "HEMATIES",
@@ -23,9 +26,6 @@ MAPEO_SYSMEX_XP300: dict[str, str] = {
     "LYM%": "LINF",
     "LYM#": "LINF",
     "LYM": "LINF",
-    "MXD%": "MONO",
-    "MXD#": "MONO",
-    "MXD": "MONO",
     "EO%": "EOS",
     "EO": "EOS",
     "BA%": "BAS",

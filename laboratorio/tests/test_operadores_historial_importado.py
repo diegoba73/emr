@@ -21,7 +21,7 @@ def test_operador_consulta_importado_y_compara_orden_nueva(tmp_path, rol):
         writer = csv.writer(stream)
         writer.writerow(['Número', 'Fecha', 'Nº doc.', 'Apellido y nombre', 'Sexo', 'F. nacim.', 'GLU'])
         writer.writerow(['1(1)', '30/06/2022', '90111222', 'PRUEBA HISTORIAL', 'M', '01/01/1980', '75'])
-    call_command('import_labwin_csv', str(archivo), verbosity=0)
+    call_command('import_labwin_csv', str(archivo), allow_new_patients=True, verbosity=0)
     anterior = SolicitudExamen.objects.get(numero='LW-2022-00001')
     assert anterior.estado == 'FINALIZADO'
     assert anterior.medico_interno_id is None

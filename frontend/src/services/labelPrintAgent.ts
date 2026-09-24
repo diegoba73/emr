@@ -3,6 +3,10 @@
  * Escucha solo en 127.0.0.1 — no usa la impresora del servidor.
  */
 import { postMuestraConfirmarImpresionEtiqueta, postMuestraImprimirEtiqueta } from './limsApi';
+import {
+  postEstudioMicroConfirmarImpresionEtiqueta,
+  postEstudioMicroImprimirEtiqueta,
+} from './limsMicroApi';
 
 export const LABEL_PRINT_AGENT_URL = 'http://127.0.0.1:18181';
 
@@ -120,6 +124,27 @@ export async function imprimirEtiquetaMuestraLocal(muestraId: number): Promise<v
   await printZplViaLocalAgent(prepared.zpl || '');
   try {
     await postMuestraConfirmarImpresionEtiqueta(muestraId, prepared.profile);
+  } catch {
+    // La etiqueta ya salió; no pedir reimpresión por un fallo de auditoría.
+  }
+}
+
+/**
+ * Prepara ZPL de estudio micro, imprime en la PC local y confirma auditoría.
+ * Misma impresora USB / agente que lab clínico.
+ */
+export async function imprimirEtiquetaEstudioMicroLocal(estudioId: number): Promise<void> {
+  const health = await pingLabelPrintAgent();
+  if (!health.reachable) {
+    throw new LabelPrintAgentError('agent_down', AGENT_DOWN_MSG);
+  }
+  if (!health.ok || !health.printer) {
+    throw new LabelPrintAgentError('no_printer', NO_PRINTER_MSG);
+  }
+  const prepared = await postEstudioMicroImprimirEtiqueta(estudioId);
+  await printZplViaLocalAgent(prepared.zpl || '');
+  try {
+    await postEstudioMicroConfirmarImpresionEtiqueta(estudioId, prepared.profile);
   } catch {
     // La etiqueta ya salió; no pedir reimpresión por un fallo de auditoría.
   }

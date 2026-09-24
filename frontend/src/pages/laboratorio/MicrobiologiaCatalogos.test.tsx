@@ -6,6 +6,7 @@ import MicrobiologiaCatalogos from './MicrobiologiaCatalogos';
 const mockListMedios = jest.fn();
 const mockListMicros = jest.fn();
 const mockListAbs = jest.fn();
+const mockListFrases = jest.fn();
 const mockCreateMedio = jest.fn();
 const mockUpdateMedio = jest.fn();
 
@@ -13,12 +14,15 @@ jest.mock('../../services/limsApi', () => ({
   listMediosCultivo: (...args: unknown[]) => mockListMedios(...args),
   listMicroorganismos: (...args: unknown[]) => mockListMicros(...args),
   listAntibioticos: (...args: unknown[]) => mockListAbs(...args),
+  listFrasesRapidasMicro: (...args: unknown[]) => mockListFrases(...args),
   createMedioCultivo: (...args: unknown[]) => mockCreateMedio(...args),
   createMicroorganismo: jest.fn(),
   createAntibiotico: jest.fn(),
+  createFraseRapidaMicro: jest.fn(),
   updateMedioCultivo: (...args: unknown[]) => mockUpdateMedio(...args),
   updateMicroorganismo: jest.fn(),
   updateAntibiotico: jest.fn(),
+  updateFraseRapidaMicro: jest.fn(),
 }));
 
 jest.mock('../../contexts/DataContext', () => ({
@@ -39,6 +43,7 @@ describe('MicrobiologiaCatalogos', () => {
     ]);
     mockListMicros.mockResolvedValue([]);
     mockListAbs.mockResolvedValue([]);
+    mockListFrases.mockResolvedValue([]);
     mockCreateMedio.mockResolvedValue({ id: 2, codigo: 'MCA', nombre: 'MacConkey', activo: true });
     mockUpdateMedio.mockResolvedValue({ id: 1, codigo: 'AGS', nombre: 'Agar sangre', activo: false });
   });

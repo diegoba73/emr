@@ -227,6 +227,7 @@ Ver tabla de brechas arriba y `DOC_RIESGOS_DEUDA_TECNICA.md`.
   - **medico**: solo list/retrieve y únicamente sobre estudios/siembras/lecturas cuya `solicitud.medico_interno.user` = usuario actual (filtrado en `get_queryset` + `has_object_permission`).
   - **secretaria**, **enfermeria**, **paciente**, **anónimo**: sin acceso a operación técnica de microbiología en esta fase.
   - **`destroy`** siempre denegado a nivel permiso.
+  - **Etiqueta ZPL 40×23** (`etiqueta_zpl`, `imprimir_etiqueta`, `confirmar_impresion_etiqueta`): solo `ROLES_LIMS_WRITE` (admin/laboratorio/bioquímico) + superuser; mismo agente USB local que lab clínico. Auditoría `micro_etiqueta_print` sin PHI/ZPL/`codigo_barra`. PDF `imprimir_etiquetas` permanece como legado.
 - Cancelación de estudio: **motivo obligatorio**; auditado vía `log_update` con `metadata.accion="cancelar"` y `motivo_cancelacion_presente` (booleano; sin texto del motivo en metadata).
 - Auditoría de microbiología:
   - `log_create` para `MedioCultivo`, `EstudioMicrobiologia`, `SiembraMicrobiologia`, `LecturaCultivo` al crear.

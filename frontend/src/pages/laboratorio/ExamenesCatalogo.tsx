@@ -183,10 +183,11 @@ const ExamenesCatalogo: React.FC = () => {
   };
 
   const buildPayload = (): TipoExamenLimsWriteBody & { codigo?: string } => {
-    const formatoInforme: LimsTipoExamen['formato_informe_entrada'] =
-      form.modo_entrada === 'ESTANDAR'
-        ? ''
-        : form.formato_informe_entrada || undefined;
+    const esTicket =
+      form.modo_entrada === 'TICKET_ENTERO' || form.modo_entrada === 'FORMULA_PORCENTAJE';
+    const formatoInforme: LimsTipoExamen['formato_informe_entrada'] = esTicket
+      ? form.formato_informe_entrada || undefined
+      : '';
 
     const base: TipoExamenLimsWriteBody = {
       nombre: form.nombre.trim(),
@@ -199,9 +200,8 @@ const ExamenesCatalogo: React.FC = () => {
       metodo: form.metodo.trim() || undefined,
       unidad_default: form.unidad_default.trim() || undefined,
       modo_entrada: form.modo_entrada,
-      ticket_decimales: form.modo_entrada === 'ESTANDAR' ? 0 : form.ticket_decimales,
-      multiplicador_clinico:
-        form.modo_entrada === 'ESTANDAR' ? 1 : form.multiplicador_clinico.trim() || '1',
+      ticket_decimales: esTicket ? form.ticket_decimales : 0,
+      multiplicador_clinico: esTicket ? form.multiplicador_clinico.trim() || '1' : 1,
       formato_informe_entrada: formatoInforme,
       rango_referencia_texto: form.rango_referencia_texto.trim() || undefined,
       rango_min: form.rango_min.trim() || undefined,
@@ -229,7 +229,7 @@ const ExamenesCatalogo: React.FC = () => {
       return;
     }
     if (
-      form.modo_entrada !== 'ESTANDAR' &&
+      (form.modo_entrada === 'TICKET_ENTERO' || form.modo_entrada === 'FORMULA_PORCENTAJE') &&
       !(form.formato_informe_entrada as string)
     ) {
       toast.error('Seleccioná el formato de informe para modo ticket/fórmula');
@@ -261,7 +261,8 @@ const ExamenesCatalogo: React.FC = () => {
     }
   };
 
-  const ticketMode = form.modo_entrada !== 'ESTANDAR';
+  const ticketMode =
+    form.modo_entrada === 'TICKET_ENTERO' || form.modo_entrada === 'FORMULA_PORCENTAJE';
   const editingRow = editingId != null ? rows.find((r) => r.id === editingId) : undefined;
 
   if (!allowed) {

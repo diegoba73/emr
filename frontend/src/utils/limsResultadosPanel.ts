@@ -26,8 +26,8 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     codigo: 'PAN_HEMO',
     nombre: 'Hemograma',
     examenes: [
-      'HEMATIES', 'HTO', 'HGB', 'VCM', 'CHCM', 'RDW', 'LEUCO', 'NEUT_CAY',
-      'NEUT_SEG', 'EOS', 'BAS', 'LINF', 'MONO', 'PLAQ',
+      'HEMATIES', 'HTO', 'HGB', 'RDW', 'VCM', 'HCM', 'CHCM', 'PLAQ', 'LEUCO',
+      'NEUT_CAY', 'NEUT_SEG', 'EOS', 'BAS', 'LINF', 'MONO',
     ],
   },
   {
@@ -48,12 +48,14 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
   {
     codigo: 'PAN_LIP',
     nombre: 'Perfil lipídico',
-    examenes: ['COL_TOT', 'HDL', 'LDL', 'COL_NO_LDL', 'TG'],
+    examenes: [
+      'COL_TOT', 'LDL', 'VLDL', 'HDL', 'TG', 'COL_NO_LDL', 'COL_RESID', 'RATIO_CT_HDL',
+    ],
   },
   {
     codigo: 'PAN_HEP',
     nombre: 'Hepatograma',
-    examenes: ['GOT', 'GPT', 'FAL', 'BIL_T', 'BIL_D'],
+    examenes: ['GOT', 'GPT', 'FAL', 'BIL_T', 'BIL_D', 'BIL_I'],
   },
   {
     codigo: 'PAN_COAG',

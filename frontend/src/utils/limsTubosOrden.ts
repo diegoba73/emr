@@ -8,6 +8,7 @@ export const CODIGOS_HEMOGRAMA = new Set([
   'HTO',
   'HGB',
   'VCM',
+  'HCM',
   'CHCM',
   'RDW',
   'LEUCO',

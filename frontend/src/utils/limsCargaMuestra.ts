@@ -4,7 +4,8 @@
  */
 import type { CargarResultadoPayload, LimsTipoExamen, MuestraTransaccional, ResultadoExamenLims } from '../types/lims';
 import { convertTicketEntry, entryFromStored, usesTicketEntry } from './entradaResultados';
-import { calcChcmGdl, calcVcmFl } from './hemogramaIndices';
+import { calcChcmGdl, calcHcmPg, calcVcmFl } from './hemogramaIndices';
+import { calcularDerivados, esResultadoNoCalculable } from './calculosDerivados';
 import { getSysmexUnidad } from './sysmexHemograma';
 
 export const MUESTRA_ESTADOS_PROCESABLES = ['TOMADA', 'RECIBIDA', 'CONSERVADA', 'EN_PROCESO'] as const;
@@ -169,7 +170,9 @@ export function buildCargarResultadoPayload(
 
   // Derivar número para flags/tendencias: draft explícito, o Valor si es parseable.
   const vnFromDraft = parseValorNumerico(vnStr);
-  if (vnFromDraft !== undefined && typeof vnFromDraft === 'number') {
+  if (esResultadoNoCalculable(valor)) {
+    item.valor_numerico = null;
+  } else if (vnFromDraft !== undefined && typeof vnFromDraft === 'number') {
     item.valor_numerico = vnFromDraft;
   } else {
     const vnFromValor = parseValorNumerico(valor);
@@ -206,7 +209,7 @@ export function buildValoresBorradorConclusion(
     const row = draft[r.id];
     if (row && draftRowHasValue(row, te, r.tipo_examen_codigo)) {
       const payload = buildCargarResultadoPayload(r.id, row, te, r.tipo_examen_codigo);
-      if (payload.valor_numerico !== undefined && payload.valor_numerico !== '') {
+      if (payload.valor_numerico != null && payload.valor_numerico !== '') {
         out[codigo] = payload.valor_numerico as string | number;
       } else if (payload.valor?.trim()) {
         out[codigo] = payload.valor.trim();
@@ -233,7 +236,7 @@ export function draftValorClinicoNumerico(
   const row = draft[r.id];
   if (row && draftRowHasValue(row, te, r.tipo_examen_codigo)) {
     const payload = buildCargarResultadoPayload(r.id, row, te, r.tipo_examen_codigo);
-    if (payload.valor_numerico !== undefined && payload.valor_numerico !== '') {
+    if (payload.valor_numerico != null && payload.valor_numerico !== '') {
       const n = Number(payload.valor_numerico);
       return Number.isFinite(n) ? n : null;
     }
@@ -284,8 +287,37 @@ function patchIndiceTicket(
   };
 }
 
+function patchValorCalculado(
+  draft: Record<number, DraftCargaRow>,
+  r: ResultadoExamenLims,
+  catalog: Map<number, LimsTipoExamen>,
+  clinical: number | null,
+  informe: string
+): Record<number, DraftCargaRow> {
+  const te = catalog.get(r.tipo_examen);
+  const row = draft[r.id] || {
+    valor: '',
+    valor_sysmex: '',
+    valor_numerico: '',
+    unidad: '',
+    muestra_id: null,
+  };
+  const unidad = row.unidad.trim() || te?.unidad_default?.trim() || '';
+  return {
+    ...draft,
+    [r.id]: {
+      ...row,
+      valor_sysmex: '',
+      valor: informe,
+      valor_numerico: clinical == null ? '' : String(clinical),
+      unidad,
+    },
+  };
+}
+
 /**
- * Rellena VCM/CHCM (si no fueron editados a mano) desde Hematíes/HTO/HGB.
+ * Rellena índices hemo (VCM/HCM/CHCM) y parámetros calculados (lípidos / BIL_I).
+ * VCM/HCM/CHCM respetan edición manual; los CALCULADO siempre se sobrescriben.
  */
 export function applyAutofillVcmChcm(
   resultados: ResultadoExamenLims[],
@@ -299,27 +331,46 @@ export function applyAutofillVcmChcm(
     const c = (r.tipo_examen_codigo || te?.codigo || '').trim().toUpperCase();
     if (c) byCodigo.set(c, r);
   }
+
+  let next = draft;
   const rHgb = byCodigo.get('HGB');
   const rHto = byCodigo.get('HTO');
   const rRbc = byCodigo.get('HEMATIES');
   const rVcm = byCodigo.get('VCM');
+  const rHcm = byCodigo.get('HCM');
   const rChcm = byCodigo.get('CHCM');
-  if (!rHgb || !rHto || !rRbc || (!rVcm && !rChcm)) return draft;
 
-  const hgb = draftValorClinicoNumerico(rHgb, draft, catalog);
-  const hto = draftValorClinicoNumerico(rHto, draft, catalog);
-  const rbc = draftValorClinicoNumerico(rRbc, draft, catalog);
-  if (hgb == null || hto == null || rbc == null) return draft;
+  if (rHgb && rHto && rRbc) {
+    const hgb = draftValorClinicoNumerico(rHgb, next, catalog);
+    const hto = draftValorClinicoNumerico(rHto, next, catalog);
+    const rbc = draftValorClinicoNumerico(rRbc, next, catalog);
+    if (hgb != null && hto != null && rbc != null) {
+      const vcm = calcVcmFl(hto, rbc);
+      if (rVcm && vcm != null) {
+        next = patchIndiceTicket(next, rVcm, catalog, vcm, manualIds);
+      }
+      const hcm = calcHcmPg(hgb, rbc);
+      if (rHcm && hcm != null) {
+        next = patchIndiceTicket(next, rHcm, catalog, hcm, manualIds);
+      }
+      const chcm = calcChcmGdl(hgb, hto);
+      if (rChcm && chcm != null) {
+        next = patchIndiceTicket(next, rChcm, catalog, chcm, manualIds);
+      }
+    }
+  }
 
-  let next = draft;
-  const vcm = calcVcmFl(hto, rbc);
-  if (rVcm && vcm != null) {
-    next = patchIndiceTicket(next, rVcm, catalog, vcm, manualIds);
+  const valores: Record<string, number | null> = {};
+  byCodigo.forEach((r, codigo) => {
+    valores[codigo] = draftValorClinicoNumerico(r, next, catalog);
+  });
+  const derivados = calcularDerivados(valores);
+  for (const [codigo, val] of Object.entries(derivados)) {
+    const row = byCodigo.get(codigo);
+    if (!row) continue;
+    next = patchValorCalculado(next, row, catalog, val.numerico, val.informe);
   }
-  const chcm = calcChcmGdl(hgb, hto);
-  if (rChcm && chcm != null) {
-    next = patchIndiceTicket(next, rChcm, catalog, chcm, manualIds);
-  }
+
   return next;
 }
 

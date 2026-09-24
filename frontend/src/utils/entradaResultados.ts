@@ -6,7 +6,11 @@ import type { LimsTipoExamen } from '../types/lims';
 
 export type FormatoInformeEntrada = 'decimal1' | 'integer' | 'absolute_int' | 'absolute_millions';
 
-export type ModoEntradaResultado = 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE';
+export type ModoEntradaResultado =
+  | 'ESTANDAR'
+  | 'TICKET_ENTERO'
+  | 'FORMULA_PORCENTAJE'
+  | 'CALCULADO';
 
 /** Defaults legacy hemograma Sysmex (fallback si modo_entrada = ESTANDAR). */
 const LEGACY_ENTRADA_BY_CODIGO: Record<
@@ -19,6 +23,7 @@ const LEGACY_ENTRADA_BY_CODIGO: Record<
   HGB: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   HTO: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   VCM: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
+  HCM: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   CHCM: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   RDW: { modo: 'TICKET_ENTERO', ticketDecimals: 1, clinicalMultiplier: 1, display: 'decimal1' },
   NEUT_CAY: { modo: 'FORMULA_PORCENTAJE', ticketDecimals: 0, clinicalMultiplier: 1, display: 'integer' },
@@ -55,6 +60,7 @@ export const MODO_ENTRADA_LABELS: Record<ModoEntradaResultado, string> = {
   ESTANDAR: 'Estándar',
   TICKET_ENTERO: 'Ticket analizador',
   FORMULA_PORCENTAJE: 'Fórmula % (suma 100)',
+  CALCULADO: 'Calculado (no editable)',
 };
 
 export const FORMATO_INFORME_LABELS: Record<FormatoInformeEntrada, string> = {
@@ -104,6 +110,19 @@ export function isFormulaPercent(te?: LimsTipoExamen | null, codigoFallback?: st
   if (modo === 'FORMULA_PORCENTAJE') return true;
   const rule = legacyRule(te?.codigo ?? codigoFallback);
   return rule?.modo === 'FORMULA_PORCENTAJE' && modo === 'ESTANDAR';
+}
+
+export function isCalculadoEntrada(te?: LimsTipoExamen | null, codigoFallback?: string | null): boolean {
+  if (te?.modo_entrada === 'CALCULADO') return true;
+  const c = (te?.codigo ?? codigoFallback ?? '').trim().toUpperCase();
+  return (
+    c === 'LDL' ||
+    c === 'VLDL' ||
+    c === 'COL_NO_LDL' ||
+    c === 'COL_RESID' ||
+    c === 'RATIO_CT_HDL' ||
+    c === 'BIL_I'
+  );
 }
 
 function parsePositiveInteger(raw: string): number | null {

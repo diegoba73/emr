@@ -47,6 +47,7 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Crear/cargar resultados / QC / quitar ensayos | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`) |
 | Agregar ensayos a orden | `ROLES_LIMS_WRITE` + médico |
 | Etiqueta ZPL 40×23 (preview `etiqueta-zpl` / `imprimir-etiqueta` / `confirmar`) | `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser; **no** médico |
+| Etiqueta ZPL micro (mismos actions bajo `microbiologia/estudios`) | Igual que lab clínico (`ROLES_LIMS_WRITE`); **no** médico |
 | Validar orden LIMS | admin, bioquímico (`ROLES_LIMS_VALIDAR`) |
 | Override IQC al cerrar | admin / superuser + motivo |
 | Gestionar turnos (crear/modificar) | secretaria, admin/staff; médico y paciente solo propios; enfermería solo lectura (C5.8.1) |

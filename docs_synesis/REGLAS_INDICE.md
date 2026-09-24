@@ -24,6 +24,7 @@ Arquitectura: **fuentes canónicas especializadas → este índice → consolida
 | Reglas por dominio | `reglas/` (lista abajo) |
 | Flujos EMR | `DOC_FLUJOS_EMR.md` |
 | Flujos LIMS | `DOC_FLUJOS_LIMS.md` |
+| Catálogo micro LabWin | `DOC_LABWIN_MICRO_CATALOGOS.md`, `reportes/labwin_micro_catalog_revision.md` |
 | Modelos DB | `DOC_MODELOS_DB.md` |
 | API | `DOC_API_ENDPOINTS.md` |
 | Permisos y auditoría | `DOC_PERMISOS_AUDITORIA.md` |

@@ -89,6 +89,9 @@ Si hay otra PC con su propia etiquetadora USB, repetir 1–5 ahí. No hace falta
 - `POST /api/lab/muestras-transaccionales/{id}/imprimir-etiqueta/` — prepara snapshot lugar/fecha y **devuelve ZPL** (no envía a impresora; no muta FSM).
 - `POST /api/lab/muestras-transaccionales/{id}/imprimir-etiqueta/confirmar/` — auditoría de impresión local OK.
 - `GET /api/lab/solicitudes/{id}/etiqueta/` — ZPL simulado a nivel solicitud (**legacy**, no tocar).
+- `GET /api/lab/microbiologia/estudios/{id}/etiqueta-zpl/` — misma geometría; preview sin mutar.
+- `POST /api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/` — asigna barcode/`etiquetas_impresas_at` (PENDIENTE) y devuelve ZPL.
+- `POST /api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/confirmar/` — auditoría `micro_etiqueta_print`.
 
 Permisos ZPL/impresión: `admin`, `laboratorio`, `bioquimico`, `superuser`. No médico/secretaría/enfermería/paciente.
 

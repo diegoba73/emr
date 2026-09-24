@@ -84,3 +84,16 @@ frontend/_jest_*
 frontend/run_jest_capture.sh
 *.code-workspace
 /docs_synesis_gpt_knowledge/
+
+# Exportaciones clínicas y artefactos de trabajo locales
+/data/labwin_export/
+/_*
+/nul
+/git
+/labwin_makemigrations.txt
+/laboratorio/_probe_write.txt
+/scripts/_*.py
+*.superseded
+*:Zone.Identifier
+*:mshield
+/docs/import-reactivos-*.json

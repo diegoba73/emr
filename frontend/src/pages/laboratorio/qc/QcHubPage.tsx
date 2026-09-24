@@ -317,8 +317,8 @@ const QcHubPage: React.FC = () => {
     marca: '',
     producto: 'Control VIDAS',
     nivel: 'N1' as 'N1' | 'N2' | 'N3',
-    media_target: '100',
-    de_target: '5',
+    media_target: '',
+    de_target: '',
   });
   const [formLote, setFormLote] = useState({
     material: '',
@@ -739,6 +739,10 @@ const QcHubPage: React.FC = () => {
   const submitMaterial = async () => {
     if (!formMaterial.tipo_examen) {
       toast.error('Seleccioná el examen.');
+      return;
+    }
+    if (!formMaterial.media_target.trim() || !formMaterial.de_target.trim()) {
+      toast.error('Completá media y DE con valores del lote/control real (sin placeholders).');
       return;
     }
     setSaving(true);
@@ -1793,8 +1797,8 @@ const QcHubPage: React.FC = () => {
                     marca: '',
                     producto: 'Control VIDAS',
                     nivel: 'N1',
-                    media_target: '100',
-                    de_target: '5',
+                    media_target: '',
+                    de_target: '',
                   });
                 }}
               >

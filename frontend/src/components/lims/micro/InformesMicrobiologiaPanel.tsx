@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Paper,
@@ -15,17 +16,28 @@ import {
   Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
-import type { EstudioMicrobiologia, InformeMicrobiologia } from '../../../types/lims';
+import type {
+  AisladoMicrobiologico,
+  EstudioMicrobiologia,
+  FraseRapidaMicrobiologia,
+  InformeMicrobiologia,
+  LecturaCultivo,
+} from '../../../types/lims';
 import {
   anularInformeMicrobiologia,
   createInformeMicrobiologia,
   downloadInformeMicroPdf,
   emitirInformeMicrobiologia,
+  listFrasesRapidasMicro,
   updateInformeMicrobiologia,
   validarInformeMicrobiologia,
 } from '../../../services/limsApi';
 import EnviarInformeMicroDialog from '../EnviarInformeMicroDialog';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import {
+  TEXTO_INFORME_FINAL_SIN_DESARROLLO,
+  cultivoNegativoElegibleParaInformeFinal,
+} from '../../../utils/limsMicroCultivoNegativo';
 import { InformeMicrobiologiaEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 import { ordenPuedeValidarObraSocial } from '../../../utils/limsObraSocial';
@@ -33,6 +45,8 @@ import { ordenPuedeValidarObraSocial } from '../../../utils/limsObraSocial';
 export interface InformesMicrobiologiaPanelProps {
   estudio: EstudioMicrobiologia;
   informes: InformeMicrobiologia[];
+  lecturas?: LecturaCultivo[];
+  aislados?: AisladoMicrobiologico[];
   /** Solo bioquímico/admin: crear, editar, emitir, anular. */
   canOperate: boolean;
   canValidar: boolean;
@@ -47,6 +61,8 @@ const ESTADOS_PDF_PUBLICO = new Set(['VALIDADO']);
 const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   estudio,
   informes,
+  lecturas = [],
+  aislados = [],
   canOperate,
   canValidar,
   canDownloadPdf = false,
@@ -57,7 +73,17 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [downloading, setDownloading] = useState(false);
   const [enviarOpen, setEnviarOpen] = useState(false);
+  const [creandoNegativo, setCreandoNegativo] = useState(false);
+  const [frases, setFrases] = useState<FraseRapidaMicrobiologia[]>([]);
+  const [fraseSel, setFraseSel] = useState<FraseRapidaMicrobiologia | null>(null);
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
+
+  useEffect(() => {
+    if (!canOperate) return;
+    listFrasesRapidasMicro()
+      .then((rows) => setFrases(rows.filter((f) => f.activo !== false)))
+      .catch(() => setFrases([]));
+  }, [canOperate]);
 
   useEffect(() => {
     const d: Record<number, string> = {};
@@ -75,6 +101,11 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   const lecturasolo = !canOperate && !canValidar;
   const osPermiteValidar = ordenPuedeValidarObraSocial(estudio);
 
+  const caminoNegativo = useMemo(
+    () => faltaFinal && cultivoNegativoElegibleParaInformeFinal(lecturas, aislados),
+    [faltaFinal, lecturas, aislados]
+  );
+
   const crear = async (tipo: 'PRELIMINAR' | 'FINAL') => {
     try {
       await createInformeMicrobiologia({
@@ -87,6 +118,24 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarInforme));
+    }
+  };
+
+  const crearFinalSinDesarrollo = async () => {
+    if (creandoNegativo) return;
+    setCreandoNegativo(true);
+    try {
+      await createInformeMicrobiologia({
+        estudio_id: estudio.id,
+        tipo: 'FINAL',
+        texto: TEXTO_INFORME_FINAL_SIN_DESARROLLO,
+      });
+      toast.success('Informe FINAL (sin desarrollo) en borrador');
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarInforme));
+    } finally {
+      setCreandoNegativo(false);
     }
   };
 
@@ -176,7 +225,26 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
           validar y emitir el informe.
         </Alert>
       )}
-      {canOperate && faltaFinal && (
+      {canOperate && caminoNegativo && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              disabled={creandoNegativo}
+              onClick={() => void crearFinalSinDesarrollo()}
+            >
+              Crear informe final (sin desarrollo)
+            </Button>
+          }
+        >
+          Lectura <strong>sin desarrollo</strong>: podés emitir el informe final sin aislados ni
+          antibiograma. Usá el botón o creá un FINAL con el texto que prefieras.
+        </Alert>
+      )}
+      {canOperate && faltaFinal && !caminoNegativo && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           No hay informe final vigente. Se requiere informe final validado para marcar el estudio
           como informado.
@@ -304,13 +372,49 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
             onChange={(e) => setTextoNuevo(e.target.value)}
             sx={{ mb: 1 }}
           />
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Autocomplete
+            size="small"
+            options={frases}
+            value={fraseSel}
+            onChange={(_e, value) => {
+              setFraseSel(value);
+              if (value?.texto) {
+                setTextoNuevo((prev) => (prev ? `${prev.trim()}\n${value.texto}` : value.texto));
+              }
+            }}
+            getOptionLabel={(f) => `${f.abreviatura} — ${(f.texto || '').slice(0, 80)}`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            filterOptions={(options, state) => {
+              const q = state.inputValue.trim().toLowerCase();
+              if (!q) return options;
+              return options.filter(
+                (f) =>
+                  (f.abreviatura || '').toLowerCase().includes(q) ||
+                  (f.texto || '').toLowerCase().includes(q),
+              );
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="Insertar frase rápida" placeholder="Buscar abreviatura o texto" />
+            )}
+            sx={{ mb: 1 }}
+          />
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button variant="outlined" onClick={() => crear('PRELIMINAR')}>
               Preliminar
             </Button>
             <Button variant="contained" onClick={() => crear('FINAL')}>
               Final
             </Button>
+            {caminoNegativo && (
+              <Button
+                variant="outlined"
+                color="secondary"
+                disabled={creandoNegativo}
+                onClick={() => void crearFinalSinDesarrollo()}
+              >
+                Crear informe final (sin desarrollo)
+              </Button>
+            )}
           </Box>
         </Paper>
       )}

@@ -48,6 +48,7 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "HGB", "nombre": "Hemoglobina", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO", "abreviatura": "Hb"},
     {"codigo": "VCM", "nombre": "Volumen corpuscular medio", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO", "abreviatura": "VCM"},
     {"codigo": "CHCM", "nombre": "Concentración de Hb corpuscular media", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO", "abreviatura": "CHCM"},
+    {"codigo": "HCM", "nombre": "Hemoglobina corpuscular media", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO", "abreviatura": "HCM"},
     {"codigo": "RDW", "nombre": "RDW", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO", "abreviatura": "RDW"},
     {"codigo": "LEUCO", "nombre": "Leucocitos", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO", "abreviatura": "GB"},
     {"codigo": "NEUT_CAY", "nombre": "Neutrófilos cayados", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO"},
@@ -61,14 +62,18 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "COL_TOT", "nombre": "Colesterol total", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "COL"},
     {"codigo": "HDL", "nombre": "HDL colesterol", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "HDL"},
     {"codigo": "LDL", "nombre": "LDL colesterol", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "LDL"},
-    {"codigo": "COL_NO_LDL", "nombre": "Colesterol no LDL", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
+    {"codigo": "COL_NO_LDL", "nombre": "Colesterol no-HDL", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
     {"codigo": "TG", "nombre": "Triglicéridos", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "TG"},
+    {"codigo": "VLDL", "nombre": "Colesterol VLDL", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "VLDL"},
+    {"codigo": "COL_RESID", "nombre": "Colesterol residual", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
+    {"codigo": "RATIO_CT_HDL", "nombre": "Relación colesterol total/HDL", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
     # —— Hepatograma —— plasma heparina (rutina)
     {"codigo": "GOT", "nombre": "GOT (AST)", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "GOT"},
     {"codigo": "GPT", "nombre": "GPT (ALT)", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "GPT"},
     {"codigo": "FAL", "nombre": "Fosfatasa alcalina", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "FA"},
     {"codigo": "BIL_T", "nombre": "Bilirrubina total", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
     {"codigo": "BIL_D", "nombre": "Bilirrubina directa", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
+    {"codigo": "BIL_I", "nombre": "Bilirrubina indirecta", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO"},
     # —— Ionograma plasmático —— plasma heparina (rutina)
     {"codigo": "NA", "nombre": "Sodio", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "Na"},
     {"codigo": "K", "nombre": "Potasio", "muestra": "PLASMA_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "K"},
@@ -188,19 +193,21 @@ PANELES: list[PanelDef] = [
         "codigo": "PAN_HEMO",
         "nombre": "Hemograma",
         "componentes": [
-            "HEMATIES", "HTO", "HGB", "VCM", "CHCM", "RDW", "LEUCO", "NEUT_CAY",
-            "NEUT_SEG", "EOS", "BAS", "LINF", "MONO", "PLAQ",
+            "HEMATIES", "HTO", "HGB", "RDW", "VCM", "HCM", "CHCM", "PLAQ", "LEUCO",
+            "NEUT_CAY", "NEUT_SEG", "EOS", "BAS", "LINF", "MONO",
         ],
     },
     {
         "codigo": "PAN_LIP",
         "nombre": "Perfil lipídico",
-        "componentes": ["COL_TOT", "HDL", "LDL", "COL_NO_LDL", "TG"],
+        "componentes": [
+            "COL_TOT", "LDL", "VLDL", "HDL", "TG", "COL_NO_LDL", "COL_RESID", "RATIO_CT_HDL",
+        ],
     },
     {
         "codigo": "PAN_HEP",
         "nombre": "Hepatograma",
-        "componentes": ["GOT", "GPT", "FAL", "BIL_T", "BIL_D"],
+        "componentes": ["GOT", "GPT", "FAL", "BIL_T", "BIL_D", "BIL_I"],
     },
     {
         "codigo": "PAN_IONO",

@@ -85,6 +85,9 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
   const [antibioticoSel, setAntibioticoSel] = useState<Antibiotico | null>(null);
   const [interp, setInterp] = useState('S');
   const [mic, setMic] = useState('');
+  const [halo, setHalo] = useState('');
+  const [metodoRes, setMetodoRes] = useState('');
+  const [estandar, setEstandar] = useState('');
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
 
   const microById = useMemo(() => {
@@ -158,10 +161,16 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
         antibiotico_id: antibioticoSel.id,
         interpretacion: interp,
         mic,
+        halo_mm: halo.trim() ? halo.trim() : null,
+        metodo: metodoRes.trim() || undefined,
+        estandar_version: estandar.trim() || undefined,
       });
       toast.success('Resultado agregado');
       setAntibioticoSel(null);
       setMic('');
+      setHalo('');
+      setMetodoRes('');
+      setEstandar('');
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultadoAntibiograma));
@@ -277,7 +286,29 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                   ))}
                 </Select>
               </FormControl>
-              <TextField size="small" label="MIC" value={mic} onChange={(e) => setMic(e.target.value)} />
+              <TextField size="small" label="MIC/CIM" value={mic} onChange={(e) => setMic(e.target.value)} />
+              <TextField
+                size="small"
+                label="Halo (mm)"
+                value={halo}
+                onChange={(e) => setHalo(e.target.value)}
+                sx={{ width: 110 }}
+              />
+              <TextField
+                size="small"
+                label="Método"
+                value={metodoRes}
+                onChange={(e) => setMetodoRes(e.target.value)}
+                sx={{ minWidth: 140 }}
+              />
+              <TextField
+                size="small"
+                label="Estándar/versión"
+                value={estandar}
+                onChange={(e) => setEstandar(e.target.value)}
+                placeholder="CLSI / EUCAST"
+                sx={{ minWidth: 160 }}
+              />
               <Button
                 variant="contained"
                 onClick={agregarResultado}
@@ -348,14 +379,16 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
             <TableRow>
               <TableCell>Antibiograma</TableCell>
               <TableCell>Antibiótico</TableCell>
+              <TableCell>Halo</TableCell>
               <TableCell>MIC</TableCell>
+              <TableCell>Método</TableCell>
               <TableCell>Interp.</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {resultados.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={6}>
                   <Typography color="text.secondary">Sin resultados.</Typography>
                 </TableCell>
               </TableRow>
@@ -366,7 +399,14 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                   <TableRow key={r.id}>
                     <TableCell>{r.antibiograma}</TableCell>
                     <TableCell>{ab ? labelAntibiotico(ab) : r.antibiotico}</TableCell>
+                    <TableCell>
+                      {r.halo_mm != null && r.halo_mm !== ''
+                        ? `${r.halo_mm}${r.unidad_halo ? ` ${r.unidad_halo}` : ''}`
+                        : '—'}
+                    </TableCell>
                     <TableCell>{r.mic || '—'}</TableCell>
+                    <TableCell>{r.metodo || '—'}</TableCell>
+                    <TableCell>{r.estandar_version || '—'}</TableCell>
                     <TableCell>
                       <InterpretacionAntibioticoBadge interpretacion={r.interpretacion} />
                     </TableCell>

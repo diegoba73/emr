@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Autocomplete,
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -32,6 +33,7 @@ import {
   descartarAisladoMicrobiologico,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import { todasLecturasSinDesarrollo } from '../../../utils/limsMicroCultivoNegativo';
 import { AisladoEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 
@@ -73,6 +75,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
 }) => {
   const [lecturaId, setLecturaId] = useState<number | ''>('');
   const [microSeleccionado, setMicroSeleccionado] = useState<Microorganismo | null>(null);
+  const [hallazgoLibre, setHallazgoLibre] = useState('');
   const [metodo, setMetodo] = useState('');
   const [requiereAb, setRequiereAb] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -105,9 +108,12 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
   const nombreMicroDeAislado = (a: AisladoMicrobiologico): string => {
     const ident = identPorAislado.get(a.id);
     const microId = ident?.microorganismo ?? a.microorganismo ?? null;
-    if (!microId) return '—';
-    const m = microById.get(microId);
-    return m ? labelMicroorganismo(m) : String(microId);
+    if (microId) {
+      const m = microById.get(microId);
+      return m ? labelMicroorganismo(m) : String(microId);
+    }
+    const libre = (a.descripcion || '').trim();
+    return libre ? `Libre: ${libre}` : '—';
   };
 
   const registrar = async () => {
@@ -115,26 +121,39 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
       toast.error('Seleccione lectura de origen');
       return;
     }
-    if (!microSeleccionado) {
-      toast.error('Seleccione el microorganismo identificado');
+    const libre = hallazgoLibre.trim();
+    if (!microSeleccionado && !libre) {
+      toast.error('Seleccione microorganismo del catálogo o escriba un hallazgo libre');
       return;
     }
     setSaving(true);
     try {
-      const aislado = await createAisladoMicrobiologico({
-        estudio_id: estudioId,
-        lectura_id: Number(lecturaId),
-        microorganismo_id: microSeleccionado.id,
-        requiere_antibiograma: requiereAb,
-      });
-      await createIdentificacionMicroorganismo({
-        aislado_id: aislado.id,
-        microorganismo_id: microSeleccionado.id,
-        metodo: metodo.trim() || undefined,
-      });
-      toast.success('Aislado e identificación registrados');
+      if (microSeleccionado) {
+        const aislado = await createAisladoMicrobiologico({
+          estudio_id: estudioId,
+          lectura_id: Number(lecturaId),
+          microorganismo_id: microSeleccionado.id,
+          descripcion: libre || undefined,
+          requiere_antibiograma: requiereAb,
+        });
+        await createIdentificacionMicroorganismo({
+          aislado_id: aislado.id,
+          microorganismo_id: microSeleccionado.id,
+          metodo: metodo.trim() || undefined,
+        });
+        toast.success('Aislado e identificación registrados');
+      } else {
+        await createAisladoMicrobiologico({
+          estudio_id: estudioId,
+          lectura_id: Number(lecturaId),
+          descripcion: libre,
+          requiere_antibiograma: false,
+        });
+        toast.success('Aislado con hallazgo libre (sin identificación formal)');
+      }
       setLecturaId('');
       setMicroSeleccionado(null);
+      setHallazgoLibre('');
       setMetodo('');
       setRequiereAb(true);
       onRefresh();
@@ -170,6 +189,13 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
         Aislados e identificación
       </Typography>
 
+      {canOperate && todasLecturasSinDesarrollo(lecturas) && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Todas las lecturas son <strong>sin desarrollo</strong>: no hace falta aislar. Pasá a la
+          pestaña <strong>Informes</strong> para emitir el informe final negativo.
+        </Alert>
+      )}
+
       {canOperate && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
@@ -192,7 +218,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               </Select>
             </FormControl>
 
-            <Autocomplete
+              <Autocomplete
               size="small"
               sx={{ minWidth: 280, flex: '1 1 240px' }}
               options={microsActivos}
@@ -203,14 +229,22 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               filterOptions={(options, state) =>
                 options.filter((m) => microMatchesQuery(m, state.inputValue))
               }
-              noOptionsText="Sin coincidencias"
+              noOptionsText="Sin coincidencias — use hallazgo libre"
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Microorganismo *"
+                  label="Microorganismo (catálogo)"
                   placeholder="Buscar por código o nombre"
                 />
               )}
+            />
+            <TextField
+              size="small"
+              label="Hallazgo libre"
+              placeholder="Si el catálogo no cubre el hallazgo"
+              value={hallazgoLibre}
+              onChange={(e) => setHallazgoLibre(e.target.value)}
+              sx={{ minWidth: 220, flex: '1 1 200px' }}
             />
 
             <TextField

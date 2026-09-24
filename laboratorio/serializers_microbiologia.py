@@ -16,6 +16,8 @@ from laboratorio.models_microbiologia import (
     Antibiograma,
     Antibiotico,
     EstudioMicrobiologia,
+    FraseRapidaAsociacionAnalisis,
+    FraseRapidaMicrobiologia,
     IdentificacionMicroorganismo,
     InformeMicrobiologia,
     LecturaCultivo,
@@ -676,15 +678,31 @@ class MicroorganismoSerializer(serializers.ModelSerializer):
             "id",
             "codigo",
             "nombre",
+            "nombre_original",
             "genero",
             "especie",
             "grupo",
             "descripcion",
+            "tipo_registro",
+            "origen",
+            "correccion_estado",
+            "requiere_revision",
+            "motivo_revision",
+            "archivo_origen",
+            "importado_at",
+            "editado_manualmente",
             "activo",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "nombre_original",
+            "archivo_origen",
+            "importado_at",
+            "created_at",
+            "updated_at",
+        )
 
 
 class AisladoMicrobiologicoSerializer(serializers.ModelSerializer):
@@ -796,13 +814,32 @@ class AntibioticoSerializer(serializers.ModelSerializer):
             "id",
             "codigo",
             "nombre",
+            "nombre_original",
             "familia",
             "descripcion",
+            "origen",
+            "correccion_estado",
+            "requiere_revision",
+            "motivo_revision",
+            "archivo_origen",
+            "importado_at",
+            "editado_manualmente",
+            "labwin_d1",
+            "labwin_d2",
             "activo",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "nombre_original",
+            "archivo_origen",
+            "importado_at",
+            "labwin_d1",
+            "labwin_d2",
+            "created_at",
+            "updated_at",
+        )
 
 
 class AntibiogramaSerializer(serializers.ModelSerializer):
@@ -873,8 +910,12 @@ class ResultadoAntibioticoSerializer(serializers.ModelSerializer):
             "antibiograma",
             "antibiotico",
             "halo_mm",
+            "unidad_halo",
             "mic",
+            "unidad_mic",
             "interpretacion",
+            "metodo",
+            "estandar_version",
             "observaciones",
             "created_at",
             "updated_at",
@@ -888,10 +929,14 @@ class ResultadoAntibioticoCreateSerializer(serializers.Serializer):
     halo_mm = serializers.DecimalField(
         required=False, allow_null=True, max_digits=6, decimal_places=2
     )
+    unidad_halo = serializers.CharField(required=False, allow_blank=True, default="mm")
     mic = serializers.CharField(required=False, allow_blank=True, default="")
+    unidad_mic = serializers.CharField(required=False, allow_blank=True, default="")
     interpretacion = serializers.ChoiceField(
         choices=[c[0] for c in ResultadoAntibiotico.INTERPRETACION_CHOICES]
     )
+    metodo = serializers.CharField(required=False, allow_blank=True, default="")
+    estandar_version = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
 
 
@@ -901,12 +946,76 @@ class ResultadoAntibioticoPartialUpdateSerializer(serializers.Serializer):
     halo_mm = serializers.DecimalField(
         required=False, allow_null=True, max_digits=6, decimal_places=2
     )
+    unidad_halo = serializers.CharField(required=False, allow_blank=True)
     mic = serializers.CharField(required=False, allow_blank=True)
+    unidad_mic = serializers.CharField(required=False, allow_blank=True)
     interpretacion = serializers.ChoiceField(
         required=False,
         choices=[c[0] for c in ResultadoAntibiotico.INTERPRETACION_CHOICES],
     )
+    metodo = serializers.CharField(required=False, allow_blank=True)
+    estandar_version = serializers.CharField(required=False, allow_blank=True)
     observaciones = serializers.CharField(required=False, allow_blank=True)
+
+
+# ---------------------------------------------------------------------------
+# Frases rápidas LabWin (NEMOTEC / NEMOESPE)
+# ---------------------------------------------------------------------------
+
+
+class FraseRapidaMicrobiologiaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FraseRapidaMicrobiologia
+        fields = (
+            "id",
+            "abreviatura",
+            "texto",
+            "texto_original",
+            "categoria",
+            "origen",
+            "correccion_estado",
+            "requiere_revision",
+            "motivo_revision",
+            "archivo_origen",
+            "importado_at",
+            "editado_manualmente",
+            "activo",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "texto_original",
+            "archivo_origen",
+            "importado_at",
+            "created_at",
+            "updated_at",
+        )
+
+
+class FraseRapidaAsociacionAnalisisSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FraseRapidaAsociacionAnalisis
+        fields = (
+            "id",
+            "analisis_abrev_labwin",
+            "posicion",
+            "nemotec_abrev",
+            "frase",
+            "numrec_labwin",
+            "tipo_examen",
+            "archivo_origen",
+            "importado_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "archivo_origen",
+            "importado_at",
+            "created_at",
+            "updated_at",
+        )
 
 
 # ---------------------------------------------------------------------------

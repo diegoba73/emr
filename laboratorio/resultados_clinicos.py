@@ -142,6 +142,10 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
         elif "valor_numerico" in item and valor_numerico_raw in (None, ""):
             resultado.valor_numerico = None
             valor_numerico = None
+        elif valor_texto is not None and str(valor_texto).strip() != valor_anterior:
+            # El payload histórico puede corregir solo el texto. El número
+            # anterior ya no representa ese resultado ni debe alimentar derivados.
+            resultado.valor_numerico = None
 
     unidad_payload = item.get("unidad")
     if unidad_payload is not None and str(unidad_payload).strip():

@@ -68,7 +68,7 @@ export interface LimsTipoExamen {
   metodo?: string;
   unidad_default?: string;
   tipo_resultado?: 'TEXTO' | 'NUMERICO' | 'CUALITATIVO';
-  modo_entrada?: 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE';
+  modo_entrada?: 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE' | 'CALCULADO';
   ticket_decimales?: number;
   multiplicador_clinico?: string | number;
   formato_informe_entrada?: 'decimal1' | 'integer' | 'absolute_int' | 'absolute_millions' | '';
@@ -94,7 +94,7 @@ export type TipoExamenLimsWriteBody = {
   tipo_resultado?: 'TEXTO' | 'NUMERICO' | 'CUALITATIVO';
   metodo?: string;
   unidad_default?: string;
-  modo_entrada?: 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE';
+  modo_entrada?: 'ESTANDAR' | 'TICKET_ENTERO' | 'FORMULA_PORCENTAJE' | 'CALCULADO';
   ticket_decimales?: number;
   multiplicador_clinico?: string | number;
   formato_informe_entrada?: LimsTipoExamen['formato_informe_entrada'];
@@ -313,6 +313,18 @@ export interface EtiquetaMuestraZpl {
   validation_errors: string[];
 }
 
+/** Misma geometría 40×23 que EtiquetaMuestraZpl; identidad = estudio micro. */
+export interface EtiquetaEstudioMicroZpl {
+  estudio_id: number;
+  profile: string;
+  width_mm: number;
+  height_mm: number;
+  lines: string[];
+  zpl: string;
+  printable: boolean;
+  validation_errors: string[];
+}
+
 export interface MuestraLookupLims extends MuestraTransaccional {
   solicitud_numero?: string | null;
   paciente_nombre?: string;
@@ -503,10 +515,17 @@ export interface Microorganismo {
   id: number;
   codigo: string;
   nombre: string;
+  nombre_original?: string;
   genero?: string;
   especie?: string;
   grupo?: string;
   descripcion?: string;
+  tipo_registro?: string;
+  origen?: string;
+  correccion_estado?: string;
+  requiere_revision?: boolean;
+  motivo_revision?: string;
+  editado_manualmente?: boolean;
   activo?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -549,8 +568,16 @@ export interface Antibiotico {
   id: number;
   codigo: string;
   nombre: string;
+  nombre_original?: string;
   familia?: string;
   descripcion?: string;
+  origen?: string;
+  correccion_estado?: string;
+  requiere_revision?: boolean;
+  motivo_revision?: string;
+  editado_manualmente?: boolean;
+  labwin_d1?: string;
+  labwin_d2?: string;
   activo?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -577,9 +604,29 @@ export interface ResultadoAntibiotico {
   antibiograma: number;
   antibiotico: number;
   halo_mm?: string | number | null;
+  unidad_halo?: string;
   mic?: string;
+  unidad_mic?: string;
   interpretacion: InterpretacionAntibiotico | string;
+  metodo?: string;
+  estandar_version?: string;
   observaciones?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FraseRapidaMicrobiologia {
+  id: number;
+  abreviatura: string;
+  texto: string;
+  texto_original?: string;
+  categoria?: string;
+  origen?: string;
+  correccion_estado?: string;
+  requiere_revision?: boolean;
+  motivo_revision?: string;
+  editado_manualmente?: boolean;
+  activo?: boolean;
   created_at?: string;
   updated_at?: string;
 }

@@ -282,6 +282,12 @@ def cargar_resultados_solicitud(
             )
 
         solicitud.refresh_from_db()
+        from laboratorio.calculos_derivados import aplicar_calculos_derivados_solicitud
+        from laboratorio.hemograma_resultados import asegurar_resultados_paneles_derivados
+
+        asegurar_resultados_paneles_derivados(solicitud)
+        aplicar_calculos_derivados_solicitud(solicitud, solo_calculados=True, actor=actor, view=view)
+
         try:
             sincronizar_estado_tras_carga(
                 solicitud,

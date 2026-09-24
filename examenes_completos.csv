@@ -1,0 +1,2054 @@
+ID,Codigo,Examen,Material
+1,ACMO,6-Acetilmorfina Confirmatorio,orina
+2,ATBGGC1A,Antibiograma Gram y cultivo germenes comunes 1,absceso
+3,CDITX,Clostridium difficile toxina A/B,materia fecal
+4,ATBGGC1F,Antibiograma Gram y cultivo germenes comunes 1,fístula
+5,ATBGGC1H,Antibiograma Gram y cultivo germenes comunes 1,herida
+6,7DHCOL,7-Dehidrocolesterol,suero
+7,ACANPCHC,Acanthamoeba PCR,hisopado conjuntival
+8,ACANPCRO,Acanthamoeba PCR,otro material
+9,CLODES,Clozapina - N-Desmetilclozapina,suero
+10,COSA,Coagulacion y Sangria,sangre
+11,COA,Coagulograma,plasma citrato
+12,ACANPCRC,Acanthamoeba PCR,raspado conjuntival
+13,ATBGGC1,Antibiograma Gram y cultivo germenes comunes 1,otro material
+14,ACYAREP,Acaros y Artropodos Investigacion,escamas de piel
+15,ATBGGC2A,Antibiograma Gram y cultivo germenes comunes 2,absceso
+16,COO,Cobalto,orina post jornada laboral
+17,CO,Cobalto,suero
+18,ACYAR,Acaros y Artropodos Investigacion,pestañas
+19,ATBGGC2F,Antibiograma Gram y cultivo germenes comunes 2,fístula
+20,ATBGGC2H,Antibiograma Gram y cultivo germenes comunes 2,herida
+21,ATBGGC2,Antibiograma Gram y cultivo germenes comunes 2,otro material
+22,COHB,Carboxihemoglobina,sangre heparina
+23,CU24,Cobre,orina 24 h
+24,CUO,Cobre,orina
+25,CU,Cobre,suero
+26,COCAC,Cocaina Confirmatorio,orina
+27,COCAS,Cocaina Screening,orina
+28,COIAC,Coccidiodes spp. Ac.,suero
+29,COAC,Cocleares 68 kD Ac.,suero
+30,FVWF,Cofactor de Ristocetina,plasma citrato
+31,ATBGGC3A,Antibiograma Gram y cultivo germenes comunes 3,absceso
+32,COLESTAN,Colestanol,suero
+33,CARDIOA,Cardiolipinas Ac.IgA,suero
+34,CHDL,Colesterol HDL,suero
+35,CLDL,Colesterol LDL,suero
+36,CARDIOG,Cardiolipinas Ac.IgG,suero
+37,CNOHDL,Colesterol NO HDL,suero
+38,CT,Colesterol Total,suero
+39,CARDIOM,Cardiolipinas Ac.IgM,suero
+40,CVLDL,Colesterol VLDL,suero
+41,CLPU,Colesterol,líquido ascítico
+42,CLOT,Colesterol,otro material
+43,ATBGGC3F,Antibiograma Gram y cultivo germenes comunes 3,fístula
+44,COLREMAN,Colesterol-Remanentes,suero
+45,ATBGGC3H,Antibiograma Gram y cultivo germenes comunes 3,herida
+46,ACEO,Acetona GC-FID,orina post jornada laboral
+47,ATBGGC3,Antibiograma Gram y cultivo germenes comunes 3,otro material
+48,ATBHEMO1,Antibiograma hemocultivo 1,cepa bacteriana
+49,CAR,Cariotipo alta resolucion,sangre heparina de sodio
+50,INCOCI,Complejos inmunes circulantes,suero
+51,CC1Q,Complemento C1q - Proteina 11S,suero
+52,CC3,Complemento C3,suero
+53,CC4,Complemento C4,suero
+54,CH50,Complemento Total 50 % lisis - CH50,suero
+55,5HIAA24,Acido 5 Hidroxi Indol Acetico,orina 24 h
+56,5HIAAL,Acido 5 Hidroxi Indol Acetico,orina
+57,ATBHEMO2,Antibiograma hemocultivo 2,cepa bacteriana
+58,CO26S,Conexina 26 - Secuenciacion,sangre EDTA
+59,CO26PCR,Conexina 26 Screening - 35deIG PCR,sangre EDTA
+60,CIDP,Contactin-1,suero
+61,ATBHEMO3,Antibiograma hemocultivo 3,cepa bacteriana
+62,COOD,Coombs directa,sangre EDTA
+63,COOICL,Coombs indirecta cualitativa,suero
+64,PROAVP,Copeptina - PROAVP,plasma EDTA
+65,COPROCUL,Coprocultivo,materia fecal
+66,CARLA,Cariotipo Liquido Amniotico,liquido amniotico
+67,BG,Cariotipo por Bandeo G,sangre heparina de sodio
+68,COPORMF,Coproporfirinas,materia fecal
+69,COPOR24,Coproporfirinas,orina 24 h
+70,COPORL,Coproporfirinas,orina Litro
+71,COPORERI,Coproporfirinas,sangre heparina
+72,COHU,Corea de Huntington,sangre EDTA
+73,COVPCRAN,Coronavirus PCR,aspirado nasofaríngeo
+74,COVPCRAT,Coronavirus PCR,aspirado traqueal
+75,COVPCRHN,Coronavirus PCR,hisopado nasofaríngeo
+76,COVPCR,Coronavirus PCR,lavado bronqueoalveolar
+77,COAPTT,Correccion con plasma normal - aPTT,plasma citrato
+78,COTP,Correccion con plasma normal - TP,plasma citrato
+79,CORACTH,Cortisol - Prueba de estimulo con ACTH,suero
+80,COR30,Cortisol 30 minutos,suero
+81,COR60,Cortisol 60 minutos,suero
+82,CORSAL12,Cortisol libre mediodia,saliva
+83,CORL24,Cortisol libre,orina 24 h
+84,CORSALM,Cortisol matutino,saliva
+85,CORMA,Cortisol matutino,suero
+86,CORSALN,Cortisol nocturno,saliva
+87,CARVCD,Cariotipo Vellosidades Corionicas directo,vellosidades corionicas
+88,CORDXM,Cortisol post DXM-Dexametasona matutino,suero
+89,CORDXMV,Cortisol post DXM-Dexametasona vespertino,suero
+90,CORSALV,Cortisol vespertino,saliva
+91,CORVES,Cortisol vespertino,suero
+92,COROL,Cortisol,orina Litro
+93,CVLP,Cariotipo Vellosidades Corionicas largo plazo,vellosidades coriónicas
+94,COTIO,Cotinina,orina
+95,COTI,Cotinina,suero
+96,COVID19S,COVID19 Coronavirus Ac. IgG (anti-Spike),suero
+97,COVID19A,COVID19 Coronavirus PCR - aspirado nasofaríngeo,suero
+98,COVID19T,COVID19 Coronavirus PCR - aspirado traqueal,suero
+99,COVID19E,COVID19 Coronavirus PCR - esputo,suero
+100,COVID19Y,COVID19 Coronavirus PCR - hisopado anal,suero
+101,COVID19H,COVID19 Coronavirus PCR - hisopado nasofaringeo,suero
+102,COVID19L,COVID19 Coronavirus PCR - lavado broncoalveolar,suero
+103,COVID19Z,COVID19 Coronavirus PCR - saliva,suero
+104,COBUG,Coxiella burnetti Ac.IgG,suero
+105,COBUM,Coxiella burnetti Ac.IgM,suero
+106,COXM,Coxsackie virus B1-6 Ac. IgM,suero
+107,COXG,Coxsackie virus B1-6 Ac.IgG,suero
+108,ATBHEMA1,Antibiograma hemocultivo automatizado 1,cepa bacteriana
+109,CRE24,Creatina,orina 24 h
+110,CREL,Creatina,orina Litro
+111,CREO,Creatina,orina
+112,CRE,Creatina,suero
+113,CREAC24,Creatinina clearance,suero y orina 24 h
+114,CREA2,Creatinina,orina 2 h
+115,CREA24,Creatinina,orina 24 h
+116,CREAL,Creatinina,orina Litro
+117,CREAO,Creatinina,orina
+118,CREA,Creatinina,suero
+119,CLT,Carnitina libre y total,suero
+120,CRIOA,Crioaglutininas,suero y sangre EDTA
+121,CRIOG,Crioglobulinas,suero
+122,CRISTAO,Cristales de sedimento urinario,orina
+123,CRISMO,Cristalizacion,moco cervical
+124,ATBHEMA2,Antibiograma hemocultivo automatizado 2,cepa bacteriana
+125,ATBHEMA3,Antibiograma hemocultivo automatizado 3,cepa bacteriana
+126,ATBHEMA,Antibiograma hemocultivo automatizado,cepa bacteriana
+127,ATBLV,Antibiograma lavado bronquial,cepa bacteriana
+128,CRO,Cromo,orina post jornada laboral
+129,CR,Cromo,suero
+130,CGA,Cromogranina A,suero
+131,CROX,Cromosoma X fragil,sangre EDTA
+132,CROMAA,Cross Match Autologo Linfocitotoxicidad,suero y sangre heparina
+133,CROSSMPA,Cross Match contra panel,suero
+134,CROMADO,Cross Match donante especifico Linfocitotoxicidad,suero receptor y sangre heparina donante
+135,CROMAMCF,Cross Match Matrimonial Citometria de Flujo,suero esposa y sangre EDTA marido
+136,CRYNET,Cryptococcus neoformans - tinta china,LCR
+137,CRYNEALC,Cryptococcus neoformans Ag.capsulares semicuantitativo,LCR
+138,CRYNEAGS,Cryptococcus neoformans Ag.capsulares semicuantitativo,suero
+139,CRYNEAGL,Cryptococcus neoformans Ag.capsulares,LCR
+140,CRYNEAG,Cryptococcus neoformans Ag.capsulares,suero
+141,CRYPTO,"Cryptosporidium sp., Cyclospora sp., Cystoisospora sp.",materia fecal
+142,CTX,CTX Telopeptidos de Colageno tipo I,plasma EDTA
+143,CURE,Cuerpos reductores,materia fecal
+144,CURE24,Cuerpos reductores,orina representativa de 24 h
+145,CAR24,Carnitinas,orina representativa de 24 h
+146,PCCG,CCP - Peptido Citrulinado Ciclico Ac.IgG,suero
+147,MVACUL1A,cultivo germenes comunes - muestra 1,absceso
+148,MVACUL1F,cultivo germenes comunes - muestra 1,fistula
+149,MVACUL1H,cultivo germenes comunes - muestra 1,herida
+150,MVACUL1,cultivo germenes comunes - muestra 1,otro material
+151,MVACU2AB,cultivo germenes comunes - muestra 2,absceso
+152,MVACU2AF,cultivo germenes comunes - muestra 2,fistula
+153,MVACU2AH,cultivo germenes comunes - muestra 2,herida
+154,MVACUL2,cultivo germenes comunes - muestra 2,otro material
+155,MVACU3AB,cultivo germenes comunes - muestra 3,absceso
+156,MVACU3AF,cultivo germenes comunes - muestra 3,fístula
+157,MVACU3AH,cultivo germenes comunes - muestra 3,herida
+158,MVACUL3O,cultivo germenes comunes - muestra 3,otro material
+159,EPUCUL,cultivo germenes comunes,esputo
+160,LARCUL,cultivo,liquido articular
+161,ATBLCR,Antibiograma LCR,cepa bacteriana
+162,ATBLA,Antibiograma liquido articular,cepa bacteriana
+163,DAO,DAO - Diamino Oxidasa,suero
+164,DAOAOC1,DAO- Estudio genético AOC1,sangre EDTA
+165,DELY,Deleciones Cromosoma Y,sangre EDTA
+166,DALA,Delta Aminolevulinico Dehidratasa actividad,sangre heparina
+167,ATBLPU1,Antibiograma liquido de puncion 1,cepa bacteriana
+168,ATBLPU2,Antibiograma liquido de puncion 2,cepa bacteriana
+169,ACYAR,Demodex folliculorum,pestañas
+170,ACYAREP,Demodex folliculorum,escamas de piel
+171,DENG,Dengue Ac.IgG - ELISA,suero
+172,DENM,Dengue Ac.IgM - ELISA,suero
+173,DENPCR,Dengue PCR,suero
+174,CACRE5,Calciuria,orina
+175,BHB,Acido Beta Hidroxibutirico,suero
+176,ATBLPGC,Antibiograma liquido pleural germenes comunes,cepa bacteriana
+177,DENO,Densidad,orina
+178,DEPIR2,Deoxipiridinolina,orina 2 h
+179,BASOTEST,Desgranulacion de basofilos,sangre EDTA esteril
+180,DEPRA,Desipramina,suero
+181,MBCRABLS,Deteccion de mutaciones en el Dominio Quinasa BCRABL,sangre EDTA
+182,MBCRABLM,Deteccion de mutaciones en el Dominio Quinasa BCRABL,medula osea EDTA
+183,AMIMV,Amilasa,líquido ascítico
+184,ATB2,Antibiograma orina chorro medio - cultivo y tipificacion,cepa bacteriana
+185,CITSEML,Acido Citrico mL,plasma seminal
+186,DHEAV,DHEA - Dehidroepiandrosterona vespertina,suero
+187,DHEA,DHEA - Dehidroepiandrosterona,suero
+188,DHEAS,DHEA sulfato,suero
+189,CD16563,CD16+56/CD3 - Citometria de Flujo,sangre EDTA
+190,DIAZE,Diazepam,suero
+191,ATBOSV,Antibiograma orina por sondeo vesical,cepa bacteriana
+192,DFHIDA,Difenilhidantoina-Fenitoína,suero
+193,ATBOPC,Antibiograma orina primer chorro,cepa bacteriana
+194,CITO24,Acido Citrico,orina 24 h
+195,CITOL,Acido Citrico,orina Litro
+196,DIGO,Digoxina,suero
+197,CD19,CD19 Citometria de Flujo,sangre EDTA
+198,DHT,Dihidrotestosterona,suero
+199,DD,Dimero D,plasma citrato
+200,ATBSC1,Antibiograma secrecion conjuntival 1,cepa bacteriana
+201,ATBSC2,Antibiograma secrecion conjuntival 2,cepa bacteriana
+202,ASPITCUL,directo y cultivo germenes comunes,aspirado traqueal
+203,CD2,CD2 Citometria de Flujo,sangre EDTA
+204,CD20,CD20 Citometria de Flujo,sangre EDTA
+205,DMT1,Distrofia Miotónica tipo 1 (Enf. Steinert),sangre EDTA
+206,DMT2,Distrofia Miotónica tipo 2,sangre EDTA
+207,DMOF,Distrofia Muscular Oculofaringea,sangre EDTA
+208,DNAAC,DNA Ac.,suero
+209,DNAAC,DNA ANTICUERPO,SUERO
+210,SSDNA,DNA Cadena simple,suero
+211,DNAFOR,DNA Forense muestra,muestra cadaverica
+212,EMICIZUM,Dosaje de Emicizumab,plasma citrato
+213,SD9EMP,Drogas de abuso - Screening 9 drogas Empresa,orina
+214,CITO,Acido Citrico,orina
+215,ATBSN1,Antibiograma secrecion nasal 1,cepa bacteriana
+216,TOR1A,DYT1 - Distonia TOR1A,sangre EDTA
+217,ECALCR,ECA - Enzima Convertidora Angiotensina,LCR
+218,ECA,ECA - Enzima Convertidora Angiotensina,suero
+219,ECHIGI,Echinococcus granulosus Ac.IgG - Hidatidosis IFI,suero
+220,ECHIGE,Echinococcus granulosus Ac.IgG - Hidatidosis QL,suero
+221,ECHIMI,Echinococcus granulosus Ac.IgM - Hidatidosis IFI,suero
+222,ECHOG,Echovirus Ac.IgG,suero
+223,ECHOM,Echovirus Ac.IgM,suero
+224,ATBSN2,Antibiograma secrecion nasal 2,cepa bacteriana
+225,AMILPE,Amilasa,líquido peritoneal
+226,CD25,CD25 Citometria de Flujo,sangre EDTA
+227,CD27,CD27 Citometria de Flujo,sangre EDTA
+228,CD3,CD3 Citometria de Flujo,sangre EDTA
+229,CD34,CD34 Citometria de Flujo,sangre EDTA
+230,EIVE,EIVE,semen
+231,ELAPA,Elastasa pancreatica,materia fecal
+232,AGP,Electroforesis de transferrina,suero
+233,CDT,Electroforesis de Transferrina,suero
+234,RTECD4,Emigrantes Timicos Tempranos CD4+,sangre EDTA
+235,ATBSO1,Antibiograma secrecion otica 1,cepa bacteriana
+236,ENA,ENA Ac.(SSA-SSB-RNP-Sm),suero
+237,EAPGLCR,Encefalitis Autoinmune Panel Ac.IgG,LCR
+238,EPG,Encefalitis Autoinmune Panel Ac.IgG,suero
+239,ENDOCUL,Endocervical - gonococo cultivo,hisopado endocervical
+240,ENDOCUL,Endocervical - Neisseria gonorrhoeae cultivo,hisopado endocervical
+241,ENDOA,Endomisio Ac.IgA,suero
+242,ENDOG,Endomisio Ac.IgG,suero
+243,CITSE,Acido Citrico,plasma seminal
+244,CIT,Acido Citrico,suero
+245,AMEB,Enfermedad de Kennedy,sangre EDTA
+246,ENAMPO,Enfermedades ampollosas autoinmunes panel,suero
+247,ELP,Enfermedades Lisosomales Perfil,sangre seca en papel filtro
+248,NSE,Enolasa Especifica Neuronal - NSE,suero
+249,ATBSO2,Antibiograma secrecion otica 2,cepa bacteriana
+250,CACAIGG,Canales de calcio Ac.IgG,suero
+251,TIPIMOEN,Enterobacterias - Secuenciacion rpoB,cepa bacteriana
+252,ATB,ANTIBIOGRAMA,CEPA BACTERIANA
+253,ENVARE,Enterococo Vancomicina resistente,hisopado rectal
+254,CKIGGLCR,Canales de potasio Ac.IgG,LCR
+255,ENTEPCHA,Enterovirus PCR,hisopado anal
+256,ENTEPCRH,Enterovirus PCR,hisopado de fauces
+257,ENTEPCR,Enterovirus PCR,LCR
+258,ENTEPCRO,Enterovirus PCR,otro material
+259,EOME,Eosinofilos,esputo
+260,EOCON,Eosinofilos,hisopado conjuntival
+261,EOHIS,Eosinofilos,hisopado nasofaríngeo
+262,EOML,Eosinofilos,lagrima
+263,EOMF,Eosinofilos,materia fecal
+264,EPO,EPO - Eritropoyetina,suero
+265,CARBAE,Epoxido de Carbamazepina,suero
+266,EBVCV,Epstein Barr DNA Carga Viral,plasma EDTA
+267,EBVAC,Epstein Barr Early Antigen Ac.,suero
+268,EBVEBNA,Epstein Barr EBNA Ac.,suero
+269,EBVVCAG,Epstein Barr VCA Ac.IgG,suero
+270,EBVVCAM,Epstein Barr VCA Ac.IgM,suero
+271,EBVPCRT,Epstein Barr virus PCR,biopsia de tejido
+272,EBVPCRL,Epstein Barr virus PCR,LCR
+273,EBVPCROT,Epstein Barr virus PCR,otro material
+274,EBVPCRP,Epstein Barr virus PCR,plasma EDTA
+275,EBVPCR,Epstein Barr virus PCR,sangre EDTA
+276,ERIDIS,Eritrocitos dismorficos,orina
+277,CD38,CD38 Citometria de Flujo,sangre EDTA
+278,CD4,CD4 Citometria de Flujo,sangre EDTA
+279,ALUPI,Anticoagulante Lupico inhibicion c/TTI,plasma citrato
+280,ALUP,Anticoagulante Lupico,plasma citrato
+281,EMPAG,Esclerodermia - Miositis Panel Ac.IgG,suero
+282,ESPG,Esclerosis Sistemica Panel Ac.IgG,suero
+283,ESPERCUL,Espermocultivo,semen
+284,CD5,CD5 Citometria de Flujo,sangre EDTA
+285,EPUCUL,Esputo - Directo y cultivo de germenes comunes,esputo
+286,ESRE,Estallido respiratorio - Test DHR,sangre EDTA
+287,TIROGACU,Anticuerpos anti-Tiroglobulina - TgAb,suero
+288,ESTE,Esteatocrito,materia fecal
+289,ESTERASA,ESTERASA LEUCOCITARIA,otro material
+290,E2B,Estradiol biodisponible,suero
+291,CD56,CD56 Citometria de Flujo,sangre EDTA
+292,E2,Estradiol,suero
+293,EBHBR,Estreptococo Beta Hemolitico Grupo B (S. agalactiae),hisopado rectal
+294,EBHBV,Estreptococo Beta Hemolitico Grupo B (S. agalactiae),hisopado vaginal
+295,EBHB,Estreptococo Beta Hemolitico Grupo B,hisopado vaginal y rectal
+296,EXFCUL,Estreptococo grupo A - cultivo,hisopado faríngeo
+297,SGAAG,Estreptococo metodo rapido,hisopado faríngeo
+298,E3,Estriol libre,suero
+299,E1,Estrona,suero
+300,ADTCO,Antidepresivos Triciclicos Confirmatorio,orina
+301,EHIPCALD,Estudio de las Hipercalciurias - Derivaciones,orina 2 h/suero
+302,BR1MLPAD,Estudio de rearreglos genomicos del gen BRCA1 - MLPA,ADN extraido
+303,BR1MLPA,Estudio de rearreglos genomicos del gen BRCA1 - MLPA,sangre EDTA
+304,BR2MLPA,Estudio de rearreglos genomicos del gen BRCA2/CHEK2-MLPA,sangre EDTA
+305,BR2MLPAD,Estudio de rearreglos genomicos del gen BRCA2/CHEK2-MLPA,ADN extraido
+306,MUTIGVH,Estudio del estado mutacional de IGVH,sangre EDTA
+307,EGEMOCO2,Estudio Genético Molecular Confirmatorio 2 personas,sangre EDTA
+308,EGEMOCO3,Estudio Genético Molecular Confirmatorio 3 personas,sangre EDTA
+309,EGEMOCON,Estudio Genético Molecular Confirmatorio,sangre EDTA
+310,DMDMLPAD,Estudio genético molecular de Distrofia Muscular de Duchenne – Becker,ADN extraido
+311,DMDMLPA,Estudio genético molecular de Distrofia Muscular de Duchenne – Becker,sangre EDTA
+312,MSMLPA,Estudio genético molecular por MS-MLPA,materiales varios
+313,EGMADN,Estudio Genético Molecular,ADN extraido
+314,EGM,Estudio Genético Molecular,sangre EDTA
+315,EMLR,Estudio metabolico de litiasis renal - Derivaciones,orina 24 h/orina/suero
+316,MICROINT,Estudio Microbioma Intestinal,materia fecal
+317,ENN,Estudio neonatal complementario,sangre seca en papel de filtro
+318,ETHA,Etanol,aire espirado
+319,ETHO,Etanol,orina
+320,ETH,Etanol,suero
+321,ETSX,Etosuximida,suero
+322,EUGPP,Euglobulinas pre y post isquemia,plasma citrato
+323,EUG,Euglobulinas Test,plasma citrato
+324,EVE,Everolimus,sangre EDTA
+325,CRISTA,Examen cristalografico,liquido sinovial EDTA
+326,EXOMAADN,EXOMA COMPLETO SECUENCIACION 17.288 GENES,ADN extraido
+327,EXOMACOM,EXOMA COMPLETO SECUENCIACION 17.288 GENES,sangre EDTA
+328,ADNCULT,Extraccion ADN - cultivo de Liquido Amniotico/Vellosidades Corionicas,líquido amniótico
+329,ADTSO,Antidepresivos Triciclicos Screening,orina
+330,CIMLEV,Antimicograma Levaduras por CIM,cepa levadura
+331,ATM,Antimicograma Levaduras por difusion,cepa levadura
+332,AMIO,Amilasa,orina
+333,ANTIMO,Antimonio,orina post jornada laboral
+334,EXFCUL,Exudado faringeo - cultivo,hisopado faringeo
+335,EXUD,Exudado uretral - examen directo,uretral
+336,EXUCUL,Exudado uretral - Gonococo directo y cultivo,hisopado uretral
+337,EXUCUL,Exudado uretral - Neisseria gonorrhoeae cultivo,hisopado uretral
+338,FII,Factor de coagulacion II,plasma citrato
+339,FIX,Factor de coagulacion IX,plasma citrato
+340,FV,Factor de coagulacion V,plasma citrato
+341,FVII,Factor de coagulacion VII,plasma citrato
+342,FVIIICRO,Factor de coagulacion VIII Cromogenico,plasma citrato
+343,FVIII,Factor de coagulacion VIII,plasma citrato
+344,FX,Factor de coagulacion X,plasma citrato
+345,FXI,Factor de coagulacion XI,plasma citrato
+346,FXII,Factor de coagulacion XII,plasma citrato
+347,FXIII,Factor de coagulacion XIII,plasma citrato
+348,PIGF,Factor de crecimiento placentario - PIGF,suero
+349,DU,Factor Du,sangre EDTA
+350,FIG,Factor intrinseco Ac.IgG,suero
+351,FIX,FACTOR IX,plasma citrato
+352,FRLX,Factor reumatoideo (latex),suero
+353,ROSSER,Factor Reumatoideo - Reaccion de Rosse Ragan,suero
+354,FRMV,Factor reumatoideo,líquido pleural
+355,FRLS,Factor reumatoideo,líquido sinovial
+356,FROT,Factor reumatoideo,otro material
+357,FR,Factor reumatoideo,suero
+358,FVL,Factor V Leiden,sangre EDTA
+359,FVIII,FACTOR VIII,plasma citrato
+360,FVIIICRO,FACTOR VIII Cromogenico,plasma citrato
+361,FVWF,Factor Von Willebrand funcional,plasma citrato
+362,FVWI,Factor Von Willebrand inmunologico,plasma citrato
+363,FAL,FAL - Fosfatasa Alcalina,suero
+364,FANMV,FAN - Factor Antinuclear,líquido pleural
+365,FANLS,FAN - Factor Antinuclear,líquido sinovial
+366,FANOT,FAN - Factor Antinuclear,otro material
+367,FAN,FAN - Factor Antinuclear,suero
+368,CD8,CD8 Citometria de Flujo,sangre EDTA
+369,ANTIM,Antimonio,suero
+370,FASCANH,FASTQ - Cancer Hereditario,sangre EDTA
+371,AT3,Antitrombina funcional,plasma citrato
+372,FEN,Fenciclidina,orina
+373,FEA24,Fenetilamina - FEA,orina 24 h
+374,FEAL,Fenetilamina - FEA,orina Litro
+375,FAC,Fenilalanina Confirmatorio,suero
+376,FEAN,Fenilalanina neonatal,sangre seca en papel filtro
+377,FA,Fenilalanina,suero
+378,APOA,Apolipoproteina AI - APO A,suero
+379,AGP,CDG - Alteraciones congenitas de glicosilacion proteica,suero
+380,FENOB,Fenobarbital,suero
+381,APOB,Apolipoproteina B - APO B,suero
+382,APOE,Apolipoproteina E - Apo E genotipificacion,sangre EDTA
+383,FENOL,Fenoles,orina post jornada laboral
+384,FENTA,Fentanilo,orina
+385,FERRI,Ferritina,suero
+386,ALAO,Acido Delta Aminolevulinico - ALA,orina
+387,ARAB24,Arabinitol,orina representativa de 24 h
+388,AFA24,Acido Fenilacetico - AFA,orina 24 h
+389,ASA,Arilsulfatasa A,suero
+390,AFAL,Acido Fenilacetico - AFA,orina Litro
+391,SPMA,Acido Fenilmercapturico,orina post jornada laboral
+392,FIBRI,Fibrinogeno,plasma citrato
+393,CDT,CDT - Transferrina Deficiente en Carbohidratos,suero
+394,FMAX,FibroMax,suero
+395,FQ508,Fibrosis Quistica - mutacion Delta F 508,sangre EDTA
+396,FQ508SSP,Fibrosis Quistica - mutacion Delta F 508,sangre seca en papel
+397,FQCFTR,Fibrosis quistica- secuenciacion gen CFTR,sangre EDTA
+398,FQ62,Fibrosis Quística - 62 Mutaciones,sangre EDTA
+399,FQ62SSP,Fibrosis Quística - 62 Mutaciones,sangre seca en papel
+400,FTEST,Fibrotest - Actitest,suero
+401,FIBROPDF,Fibrotest PDF,suero
+402,CEA,CEA - Antigeno carcinoembrionario,suero
+403,FILA,Filarias,sangre EDTA
+404,DNAA4,Filiacion DNA - Abuelismo - 4 personas,materiales varios
+405,DNAA5,Filiacion DNA - Abuelismo - 5 personas,materiales varios
+406,DNAA6,Filiacion DNA - Abuelismo - 6 personas,materiales varios
+407,DNAMIT2,Filiacion DNA - ADN Mitocondrial - 2 personas,materiales varios
+408,DNAMIT3,Filiacion DNA - ADN Mitocondrial - 3 personas,materiales varios
+409,DNAMIT1,Filiacion DNA - ADN Mitocondrial - Individuo Extra,materiales varios
+410,DNAMITA2,Filiacion DNA - ADN Mitocondrial Anonimo 2 personas,materiales varios
+411,DNAX2,Filiacion DNA - Cromosoma X - 2 personas,materiales varios
+412,DNAX3,Filiacion DNA - Cromosoma X - 3 personas,materiales varios
+413,DNAX4,Filiacion DNA - Cromosoma X - 4 personas,materiales varios
+414,DNAXANO2,Filiacion DNA - Cromosoma X - Anonimo - 2 personas,materiales varios
+415,DNAXANO3,Filiacion DNA - Cromosoma X - Anonimo - 3 personas,materiales varios
+416,DNAXANO4,Filiacion DNA - Cromosoma X - Anonimo - 4 personas,materiales varios
+417,DNAY2EX,Filiacion DNA - Cromosoma Y - 2 personas Express,materiales varios
+418,DNAY2,Filiacion DNA - Cromosoma Y - 2 personas,materiales varios
+419,DNAY3,Filiacion DNA - Cromosoma Y - 3 personas,materiales varios
+420,DNAEXTRA,Filiacion DNA - Individuo extra,materiales varios
+421,DNAM2,Filiacion DNA - Maternidad - 2 personas,materiales varios
+422,DNAM3,Filiacion DNA - Maternidad - 3 personas,materiales varios
+423,DNAM4,Filiacion DNA - Maternidad - 4 personas,materiales varios
+424,DNAM5,Filiacion DNA - Maternidad - 5 personas,materiales varios
+425,DNAP2EX,Filiacion DNA - Paternidad - 2 personas Express,materiales varios
+426,DNAP2,Filiacion DNA - Paternidad - 2 personas,materiales varios
+427,DNAP3EX,Filiacion DNA - Paternidad - 3 personas Express,materiales varios
+428,DNAP3,Filiacion DNA - Paternidad - 3 personas,materiales varios
+429,DNAP4EX,Filiacion DNA - Paternidad - 4 personas Express,materiales varios
+430,DNAP4,Filiacion DNA - Paternidad - 4 personas,materiales varios
+431,DNAP5,Filiacion DNA - Paternidad - 5 personas,materiales varios
+432,DNAP6,Filiacion DNA - Paternidad - 6 personas,materiales varios
+433,DNAP7,Filiacion DNA - Paternidad - 7 personas,materiales varios
+434,DNANO2EX,Filiacion DNA - Paternidad anonimo - 2 personas Express,mat. varios
+435,DNAANON2,Filiacion DNA - Paternidad anonimo - 2 personas,materiales varios
+436,DNANO3EX,Filiacion DNA - Paternidad anonimo - 3 personas Express,mat. varios
+437,DNAANON3,Filiacion DNA - Paternidad anonimo - 3 personas,materiales varios
+438,DNAANON4,Filiacion DNA - Paternidad anonimo - 4 personas,materiales varios
+439,DNAANON5,Filiacion DNA - Paternidad anonimo - 5 personas,materiales varios
+440,DNAPM3,Filiacion DNA - Paternidad-Maternidad combinadas 3 personas,otro mat
+441,PDNA,Filiacion DNA - Perfil autosomico - 1 persona,materiales varios
+442,DNAPMAN3,Filiacion DNA Paternidad-Maternidad combinadas Anonimo 3 personas,materiales varios
+443,FAMJ,Fish Angelman,material fijado
+444,FANGEO,Fish Angelman,otro material
+445,FANGESH,Fish Angelman,sangre heparina
+446,FCENTRLA,Fish Centrómero,líquido amniótico
+447,FCENTMF,Fish Centrómero,material fijado
+448,FCENTROO,Fish Centrómero,otro material
+449,FCENTRO,Fish Centrómero,sangre heparina
+450,FCENTRVC,Fish Centrómero,vellosidades coriónicas
+451,17HPG60,17-Hidroxi Progesterona 60 minutos,suero
+452,FCROMOLA,Fish Cromosoma Total,líquido amniótico
+453,FCROMOSH,Fish Cromosoma Total,material fijado
+454,FCROMMOH,Fish Cromosoma Total,medula osea heparina
+455,FCROMOO,Fish Cromosoma Total,otro material
+456,FCROMO,Fish Cromosoma Total,sangre heparina
+457,FCROMOVC,Fish Cromosoma Total,vellosidades coriónicas
+458,ALO,Aluminio,orina post jornada laboral
+459,AL,Aluminio,suero
+460,CARLCR,Carnitinas,LCR
+461,RACDN,Albumina en orina diurna y nocturna,orina diurna y nocturna
+462,FONCOG,Fish Oncohematologia - sonda 1,ganglio
+463,FONCOMFI,Fish Oncohematologia - sonda 1,material fijado
+464,FONCOMH,Fish Oncohematologia - sonda 1,medula osea heparina
+465,FONCOSH,Fish Oncohematologia - sonda 1,sangre heparina
+466,FONCOTP,Fish Oncohematologia - sonda 1,tejido en taco de parafina
+467,FONCOG2,Fish Oncohematologia - sonda 2,ganglio
+468,FONCOMF2,Fish Oncohematologia - sonda 2,material fijado
+469,FONCOMH2,Fish Oncohematologia - sonda 2,medula osea heparina
+470,FONCOSH2,Fish Oncohematologia - sonda 2,sangre heparina
+471,FONCOTP2,Fish Oncohematologia - sonda 2,tejido en taco de parafina
+472,FONCOG3,Fish Oncohematologia - sonda 3,ganglio
+473,FONCOMF3,Fish Oncohematologia - sonda 3,material fijado
+474,FONCOMH3,Fish Oncohematologia - sonda 3,medula osea heparina
+475,FONCOSH3,Fish Oncohematologia - sonda 3,sangre heparina
+476,FONCOTP3,Fish Oncohematologia - sonda 3,tejido en taco de parafina
+477,FONCOG4,Fish Oncohematologia - sonda 4,ganglio
+478,FONCOMF4,Fish Oncohematologia - sonda 4,material fijado
+479,FONCOMH4,Fish Oncohematologia - sonda 4,medula osea heparina
+480,FONCOSH4,Fish Oncohematologia - sonda 4,sangre heparina
+481,FONCOTP4,Fish Oncohematologia - sonda 4,tejido en taco de parafina
+482,FONCOG5,Fish Oncohematologia - sonda 5,ganglio
+483,FONCOMF5,Fish Oncohematologia - sonda 5,material fijado
+484,FONCOMH5,Fish Oncohematologia - sonda 5,medula osea heparina
+485,FONCOSH5,Fish Oncohematologia - sonda 5,sangre heparina
+486,FONCOTP5,Fish Oncohematologia - sonda 5,tejido en taco de parafina
+487,FLLAPHL,Fish Panel LLA Ph-like,sangre heparina/medula osea/material fijado
+488,FLLAMJ,Fish Panel LLA,material fijado
+489,FLLAM,Fish Panel LLA,medula osea heparina
+490,FLLAO,Fish Panel LLA,otro material
+491,FLLA,Fish Panel LLA,sangre heparina
+492,FLCCMJ,Fish Panel LLC,material fijado
+493,FLLCM,Fish Panel LLC,medula osea heparina
+494,FLLCO,Fish Panel LLC,otro material
+495,FLLC,Fish Panel LLC,sangre heparina
+496,FLMAMJ,Fish Panel LMA,material fijado
+497,FLMAM,Fish Panel LMA,medula osea heparina
+498,FLMAO,Fish Panel LMA,otro material
+499,FLMA,Fish Panel LMA,sangre heparina
+500,FMM2MF,Fish Panel Mieloma Multiple 2,material fijado
+501,FMM2M,Fish Panel Mieloma Multiple 2,medula osea heparina
+502,FMM2O,Fish Panel Mieloma Multiple 2,otro material
+503,FMM2,Fish Panel Mieloma Multiple 2,sangre heparina
+504,FMMJ,Fish Panel Mieloma Multiple,material fijado
+505,FMMM,Fish Panel Mieloma Multiple,medula osea heparina
+506,FMMO,Fish Panel Mieloma Multiple,otro material
+507,FMM,Fish Panel Mieloma Multiple,sangre heparina
+508,FPSMDMJ,Fish Panel SMD,material fijado
+509,FPSMDM,Fish Panel SMD,medula osea heparina
+510,FSMDO,Fish Panel SMD,otro material
+511,FSMD,Fish Panel SMD,sangre heparina
+512,FPWMJ,Fish Prader Willi,material fijado
+513,FPWOT,Fish Prader Willi,otro material
+514,FPWSH,Fish Prader Willi,sangre heparina
+515,FSULA,Fish Secuencia Unica,liquido amniotico
+516,FSUMJ,Fish Secuencia Unica,material fijado
+517,FSUO,Fish Secuencia Unica,otro material
+518,FSU,Fish Secuencia Unica,sangre heparina
+519,FSUVC,Fish Secuencia Unica,vellosidades corionicas
+520,ALBLCR,Albumina,LCR
+521,ALBMV,Albumina,líquido ascítico
+522,ALBLPER,Albumina,líquido peritoneal
+523,ALBLPL,Albumina,líquido pleural
+524,ALB24,Albumina,orina 24 h
+525,FWMJ,Fish Williams,material fijado
+526,FWO,Fish Williams,otro material
+527,FWSH,Fish Williams,sangre heparina
+528,CALU,Fisicoquimico calculo urinario,orina
+529,CALU,Fisicoquimico litiasis urinaria,orina
+530,FLAVPCRL,Flavivirus PCR,LCR
+531,FLAVOPCR,Flavivirus PCR,orina
+532,FLAVIPCR,Flavivirus PCR,suero
+533,CANNAFLO,Flores de Cannabis - perfil bacteriologico,
+534,FLT3MO,FLT3 - mutaciones en el gen FLT3,medula osea EDTA
+535,FLT3,FLT3 - mutaciones en el gen FLT3,sangre EDTA
+536,FVDCUL,Flujo vaginal - directo y cultivo,vaginal
+537,FVD,Flujo vaginal - directo,vaginal
+538,FL24,Fluoruro,orina 24 h
+539,FLL,Fluoruro,orina
+540,FL,Fluoruro,suero
+541,MICROARR,Array cromosómico (CMA),sangre EDTA
+542,CEBPAM,CEBPA - mutaciones en el gen CEBPA,medula osea EDTA
+543,FIT,Acido Fitanico,plasma EDTA
+544,AAO,Aminoacidos cuantitativos,orina representativa de 24 h
+545,FLEU,Formula leucocitaria -,frotis sanguíneo
+546,FACP,Fosfatasa acida prostatica,suero
+547,FACT,Fosfatasa acida total,suero
+548,FALC,Fosfatasa alcalina citoquimica,frotis sanguíneo
+549,FALOS,Fosfatasa alcalina osea,suero
+550,CEBPA,CEBPA - mutaciones en el gen CEBPA,sangre EDTA
+551,FOING,Fosfatidil Inositol Ac.IgG,suero
+552,FOINM,Fosfatidil Inositol Ac.IgM,suero
+553,FOSEG,Fosfatidil Serina Ac.IgG,suero
+554,FOSEM,Fosfatidil Serina Ac.IgM,suero
+555,21HAC,21 Hidroxilasa Ac.,suero
+556,AALCR,Aminoacidos,LCR
+557,TAU217,Fosfo-Tau 217 (pTau-217),plasma EDTA
+558,FOSLIG,Fosfolipidos Ac.IgG,suero
+559,FOSLIM,Fosfolipidos Ac.IgM,suero
+560,FOLER,Acido Folico en sangre entera,sangre EDTA
+561,ASO,Arsenico,orina post jornada laboral
+562,FOL,Acido Folico,suero
+563,AS,Arsenico,suero
+564,FOSFOC24,Fosforo clearance,suero y orina 24 h
+565,CAKACIGG,Canales de Potasio Ac.IgG,suero
+566,FOSFOR2,Fosforo reabsorcion tubular,suero y orina 2 h
+567,FOSFOR24,Fosforo reabsorcion tubular,suero y orina 24 h
+568,FORO,Acido Formico,orina post jornada laboral
+569,FOSFO2,Fosforo,orina 2 h
+570,FOSFO24,Fosforo,orina 24 h
+571,FOSFOL,Fosforo,orina Litro
+572,FOSFOO,Fosforo,orina
+573,FOSFO,Fosforo,suero
+574,CEFA,Cefazolina,suero
+575,FOSCF,Fragilidad Osmotica - Citometria de Flujo,sangre EDTA
+576,FOS,Fragilidad Osmotica,sangre EDTA
+577,FRUCSEML,Fructosa mL,plasma seminal
+578,FRUCSE,Fructosa,plasma seminal
+579,FRUCSA,Fructosamina,suero
+580,CEFTA,Ceftazidima,suero
+581,FSH30,FSH - Hormona Folículo Estimulante 30 minutos,suero
+582,FSH60,FSH - Hormona Folículo Estimulante 60 minutos,suero
+583,FSH,FSH - Hormona Folículo Estimulante,suero
+584,FSHRH,FSH - Prueba de estímulo con GnRH-LHRH,suero
+585,G6PDH,G6PDH - Glucosa-6-Fosfato Deshidrogenasa,sangre EDTA
+586,GABA,GABA - Acido Gamma Aminobutirico,suero
+587,GAD,GAD 65 kD - Glutamato Decarboxilasa Ac.,suero
+588,GASAGBAL,Galactomanano - Aspergillus Ag.,lavado bronqueoalveolar
+589,GASAG,Galactomanano - Aspergillus Ag.,suero
+590,GALA1FU,Galactosa 1-Fosfato Uridiltransferasa,sangre seca en papel filtro
+591,GALAN,Galactosa Total Neonatal,sangre seca en papel filtro
+592,CEFTRI,Ceftriaxona,suero
+593,GP,Gangliosidos Panel Ac.,suero
+594,GAPF,GAP FECAL,materia fecal
+595,EABA,Gases en sangre,sangre heparina
+596,GASTRI,Gastrina,suero
+597,GSRY,Gen SRY,sangre EDTA
+598,GENO,Genotipo mas probable,sangre EDTA
+599,GGT,GGT - Gamma glutamiltransferasa,suero
+600,STH,GH - Hormona de crecimiento,suero
+601,GHES,GH-STH - Somatotrofina - Prueba de estímulo,suero
+602,GHIN,GH-STH - Somatotrofina - Prueba de inhibición con glucosa,suero
+603,STH120,GH-STH - Somatotrofina 120 minutos,suero
+604,STH150,GH-STH - Somatotrofina 150 minutos,suero
+605,STH180,GH-STH - Somatotrofina 180 minutos,suero
+606,STH30,GH-STH - Somatotrofina 30 minutos,suero
+607,STH60,GH-STH - Somatotrofina 60 minutos,suero
+608,STH90,GH-STH - Somatotrofina 90 minutos,suero
+609,STH,GH-STH - Somatotrofina,suero
+610,GLAE,GLAE - SHBG,suero
+611,GAMCN,Glicosaminoglicanos cuantitativos,orina representativa de 24 h
+612,GLIFO,Glifosato - AMPA,orina
+613,AASS,Aminoacidos,sangre seca en papel filtro
+614,CEPAR,Celula parietal Ac.,suero
+615,PTOG,Glucosa - Prueba de Tolerancia Oral,suero
+616,GLU120,Glucosa 120 minutos,suero
+617,GLU180,Glucosa 180 minutos,suero
+618,GLU240,Glucosa 240 minutos,suero
+619,GLU30,Glucosa 30 minutos,suero
+620,GLU60,Glucosa 60 minutos,suero
+621,GLU90,Glucosa 90 minutos,suero
+622,GLUAZAR,Glucosa al azar,suero
+623,CTOG,Glucosa Curva de Tolerancia Oral,suero
+624,GLUGEDOM,Glucosa gestacional domicilio,plasma fluoruro
+625,GLUGES,Glucosa gestacional,suero
+626,GLUPP,Glucosa posprandial,suero
+627,GLU24,Glucosa,orina 24 h
+628,GLUL,Glucosa,orina Litro
+629,GLUO,Glucosa,orina
+630,SACCERA,ASCA - Ac IgA,suero
+631,GLU,Glucosa,suero
+632,GPO,Glutation Peroxidasa - GPO,sangre heparina
+633,LE,Celulas LE.,sangre desfibrinada
+634,FOSACG,Acido Fosfatidico Ac.IgG,suero
+635,FOSACM,Acido Fosfatidico Ac.IgM,suero
+636,HCGB,Gonadotrofina corionica humana - hCGB,suero
+637,HCGMT,Gonadotrofina corionica marcador tumoral,suero
+638,SACCERG,ASCA - Ac. IgG,suero
+639,ASTO,ASLO - Antiestreptolisina O,suero
+640,GUACO,Acido Guanidinacetico,orina representativa de 24 h
+641,ASMA,ASMA - Musculo liso Ac,suero
+642,MVGC1AB,Gram y cultivo germenes comunes - muestra 1,absceso
+643,MVGC1F,Gram y cultivo germenes comunes - muestra 1,fistula
+644,MVGC1H,Gram y cultivo germenes comunes - muestra 1,herida
+645,MVGC1,Gram y cultivo germenes comunes - muestra 1,otro material
+646,MVGC2AB,Gram y cultivo germenes comunes - muestra 2,absceso
+647,MVGC2AF,Gram y cultivo germenes comunes - muestra 2,fístula
+648,MVGC2AH,Gram y cultivo germenes comunes - muestra 2,herida
+649,MVGC2,Gram y cultivo germenes comunes - muestra 2,otro material
+650,MVGC3O,Gram y cultivo germenes comunes - muestra 3,absceso
+651,MVGC3F,Gram y cultivo germenes comunes - muestra 3,fístula
+652,MVGC3H,Gram y cultivo germenes comunes - muestra 3,herida
+653,MVGC3,Gram y cultivo germenes comunes - muestra 3,otro material
+654,ASPEC,Aspecto suero,suero
+655,ASAC,Aspergillus Ac.,suero
+656,ASTO,ASTO - Antiestreptolisina O,suero
+657,GRAMF,Grasas,materia fecal
+658,GRUPO,Grupo sanguíneo,sangre EDTA
+659,CD56,Celulas NK,sangre EDTA
+660,CD16563,Celulas NK,sangre EDTA
+661,HIBAGO,Haemophilus influenzae b Ag.,orina
+662,HIBAG,Haemophilus influenzae b Ag.,suero
+663,FXNAT,Ataxia de Friedreich,sangre EDTA
+664,HALO,Haloperidol,suero
+665,HAPTO,Haptoglobina,suero
+666,HBA1C,HbA1c - Hemoglobina Glicada-Electroforesis capilar,sangre EDTA
+667,HBA1C,HbA1c - Hemoglobina Glicosilada- Electroforesis capilar,sangre EDTA
+668,HE4,HE4 - Proteína Epididimal Humana,suero
+669,HPA,Helicobacter pylori Ac.IgA,suero
+670,HPG,Helicobacter pylori Ac.IgG,suero
+671,HPM,Helicobacter pylori Ac.IgM,suero
+672,HPYAGMF,Helicobacter pylori Ag.,materia fecal
+673,ALBO,Albumina,orina nocturna
+674,HTO,Hematocrito,sangre EDTA
+675,HEMOCH,Hemocromatosis - C282Y y H63D,sangre EDTA
+676,HEMOS65,Hemocromatosis - S65C,sangre EDTA
+677,PVEPECA,Hemocult automatiz tiempo diferencial vena periferica-cateter arterial,sangre
+678,PVEPECVA,Hemocult automatiz. tiempo dif vena periferica-cateter venoso-arterial,sangre
+679,PVEPECV,Hemocult automatiz. tiempo diferencial vena periferica-cateter venoso,sangre
+680,ATBGC1H,Antibiograma cultivo germenes comunes 1,herida
+681,HEMACUL1,Hemocultivo automatizado - muestra 1,sangre
+682,HEMACUL2,Hemocultivo automatizado - muestra 2,sangre
+683,HEMACUL3,Hemocultivo automatizado - muestra 3,sangre
+684,HEMATDCV,Hemocultivo automatizado: tiempo diferencial-cateter venoso,sangre
+685,HEMATDCA,Hemocultivo automatizado:tiempo diferencial-catéter arterial,sangre
+686,ATBGC1,Antibiograma cultivo germenes comunes 1,otro material
+687,HBA2,Hemoglobina A2,sangre EDTA
+688,HBAR,Hemoglobina Alcali Resistente,sangre EDTA
+689,HBELEC,Hemoglobina electroforesis,sangre EDTA
+690,HBS,Hemoglobina S,sangre EDTA
+691,HB,Hemoglobina,sangre EDTA
+692,HPN,Hemoglobinuria Paroxistica Nocturna HPN - Citometria de Flujo,sangre EDTA
+693,HEM,Hemograma,sangre EDTA
+694,PIGG54,54 Alimentos Panel Ac.IgG,suero
+695,ATBGC2A,Antibiograma cultivo germenes comunes 2,absceso
+696,HAVG,Hepatitis A Ac.IgG,suero
+697,HAVM,Hepatitis A Ac.IgM,suero
+698,HAVT,Hepatitis A Ac.Totales,suero
+699,HBVCM,Hepatitis B Ac.core IgM,suero
+700,HBVCT,Hepatitis B Ac.core Total,suero
+701,HBVE,Hepatitis B Ac.e,suero
+702,HBVS,Hepatitis B Ac.superficie,suero
+703,HBVAGS,Hepatitis B Ag. australiano - HBsAg,suero
+704,HBVAGE,Hepatitis B Ag.e,suero
+705,HBVAGS,Hepatitis B Ag.superficie,suero
+706,HBVCV,Hepatitis B Carga Viral,plasma EDTA
+707,HBVDNA,Hepatitis B-HBV DNA,plasma EDTA
+708,HCVG,Hepatitis C Ac.IgG,suero
+709,HCVCV,Hepatitis C Carga Viral,plasma EDTA
+710,HCVGEN,Hepatitis C Genotipo,plasma EDTA
+711,HCVLIA,Hepatitis C LIA,suero
+712,HCVPCR,Hepatitis C PCR,plasma EDTA
+713,HDVG,Hepatitis Delta Ac.,suero
+714,HEPATO,Hepatograma,suero
+715,CENTRO,Centromero Ac.,suero
+716,HAPG,Hepatopatia Autoinmune Panel Ac.IgG,suero
+717,ATBGC2F,Antibiograma cultivo germenes comunes 2,fistula
+718,ALBOT,Albumina,otro material
+719,HV6G,Herpes 6 Virus Ac.IgG,suero
+720,HV6M,Herpes 6 Virus Ac.IgM,suero
+721,HHV6DLB,Herpes Humano 6 Virus - HHV6 DNA,lavado bronqueoalveolar
+722,HHV6DNAL,Herpes Humano 6 Virus - HHV6 DNA,LCR
+723,HHV6DNAM,Herpes Humano 6 Virus - HHV6 DNA,medula osea
+724,HHV6DNAO,Herpes Humano 6 Virus - HHV6 DNA,otro
+725,HHV6DNAP,Herpes Humano 6 Virus - HHV6 DNA,plasma EDTA
+726,HHV6DNA,Herpes Humano 6 Virus - HHV6 DNA,sangre EDTA
+727,HSV1A,Herpes Simplex 1 Ac.IgA,suero
+728,HSV1G,Herpes Simplex 1 Ac.IgG,suero
+729,HSV1M,Herpes Simplex 1 Ac.IgM,suero
+730,HSVPCRBT,Herpes Simplex 1 y 2 PCR - Tipificacion,biopsia de tejido
+731,HSVPCRHL,Herpes Simplex 1 y 2 PCR - Tipificacion,hisopado de lesión
+732,HSVPCRLB,Herpes Simplex 1 y 2 PCR - Tipificacion,lavado bronqueoalveolar
+733,HSVPCRTL,Herpes Simplex 1 y 2 PCR - Tipificacion,LCR
+734,HSVPCROT,Herpes Simplex 1 y 2 PCR - Tipificacion,otro material
+735,HSVPCRT,Herpes Simplex 1 y 2 PCR - Tipificacion,sangre EDTA
+736,HSV12PBJ,Herpes Simplex 1 y 2 PCR,biopsia de tejido
+737,HSV12PHL,Herpes Simplex 1 y 2 PCR,hisopado de lesión
+738,HSV12PLB,Herpes Simplex 1 y 2 PCR,lavado bronqueoalveolar
+739,HSV12PCL,Herpes Simplex 1 y 2 PCR,LCR
+740,HSV12PCO,Herpes Simplex 1 y 2 PCR,otro material
+741,HSV12PCR,Herpes Simplex 1 y 2 PCR,sangre EDTA
+742,HSV2A,Herpes Simplex 2 Ac.IgA,suero
+743,HSV2G,Herpes Simplex 2 Ac.IgG,suero
+744,HSV2M,Herpes Simplex 2 Ac.IgM,suero
+745,CERU,Ceruloplasmina,suero
+746,ATAXES,"Ataxias Espinocerebelosas tipo 1,2, 3, 6 y 7",sangre EDTA
+747,AME,Atrofia Muscular Espinal (deleción homocigota),sangre EDTA
+748,AMEVC,Atrofia Muscular Espinal(deleción homocigota),vellosidades corionicas
+749,AMEB,Atrofia Muscular Espino Bulbar,sangre EDTA
+750,VITD25,25 OH Vitamina D,suero
+751,AA,Aminoacidos,suero
+752,QTLARGO,Canalopatia - Sindrome QT largo,sangre EDTA
+753,MICBA1,BAAR - directo,esputo
+754,MICBA2,BAAR - directo,esputo
+755,HCQ,Hidroxicloroquina,plasma EDTA
+756,HPIR,Hidroxipireno,orina post jornada laboral
+757,GUAC,Acido Guanidinacetico,suero
+758,MICBA3,BAAR - directo,esputo
+759,PMICCUL1,BAAR - directo y cultivo,esputo
+760,HIPO,Acido Hipurico,orina post jornada laboral
+761,PMICBUL3,BAAR - directo y cultivo,esputo
+762,HIERRST,Hierro y Saturacion de Transferrina,suero
+763,HIERR,Hierro,suero
+764,CMT1A,Charcot-Marie-Tooth tipo 1A,sangre EDTA
+765,HISUCO2,Hiperplasia Suprarrenal Congenita 2 personas,sangre EDTA
+766,HISUCO3,Hiperplasia Suprarrenal Congenita 3 personas,sangre EDTA
+767,HISUCO,Hiperplasia Suprarrenal Congenita- CYP21A2,sangre EDTA
+768,PMICBUL2,BAAR - directo y cultivo,esputo
+769,HIST,Histona Ac.,suero
+770,CHIPCRO,Chikungunya virus PCR,orina
+771,HCAP,Histoplasma capsulatum Ac.,suero
+772,HIVAC,HIV Ac.,suero
+773,HIVDNA,HIV DNA,sangre EDTA
+774,HIVRA,HIV Resistencia a antirretrovirales,plasma EDTA
+775,HIVRI,HIV Resistencia a Inhibidores de la Integrasa,plasma EDTA
+776,HIVRNACV,HIV RNA Carga Viral,plasma EDTA
+777,HIVRNA,HIV RNA,plasma EDTA
+778,HIVSEMEN,HIV RNA,semen
+779,HIVWB,HIV Western Blot,suero
+780,HLAAIN,HLA - A,sangre EDTA
+781,HLABIN,HLA - B,sangre EDTA
+782,HLACIN,HLA - C,sangre EDTA
+783,HLADPIN,HLA - DP,sangre EDTA
+784,HLADQIN,HLA - DQ,sangre EDTA
+785,HLADRCF,HLA - DR Citometria de Flujo,sangre EDTA
+786,HLADRIN,HLA - DR,sangre EDTA
+787,HLAB27,HLA B-27 Molecular,sangre EDTA
+788,HLAB5701,HLA B5701,sangre EDTA
+789,HLADQ28,HLA DQ2/8 Enfermedad Celíaca,sangre EDTA
+790,HLAACE,HLA I y II Ac. Especificos,suero
+791,HLAAC,HLA I y II Ac.,suero
+792,HNMT,HNMT - Histamina N-metil-transferasa,sangre EDTA
+793,HOMAD,HOMA (Homeostasis Model Assessment),Derivacion
+794,PSMET,Homocisteina Prueba de sobrecarga con L-Metionina,plasma EDTA
+795,HOMO,Homocisteina,plasma EDTA
+796,DNAFDBI,Hongos - Deteccion DNA Fungico,biopsia de tejido
+797,DNAFDCA,Hongos - Deteccion DNA Fungico,cepa fungica
+798,DNAFDLCR,Hongos - Deteccion DNA Fungico,LCR
+799,DNAFDLP,Hongos - Deteccion DNA Fungico,liquido pericardico
+800,DNAFDLPL,Hongos - Deteccion DNA Fungico,liquido pleural
+801,DNAFDLS,Hongos - Deteccion DNA Fungico,líquido sinovial
+802,DNAFDO,Hongos - Deteccion DNA Fungico,orina
+803,DNAFDOT,Hongos - Deteccion DNA Fungico,otro material
+804,TIPIMOFU,Hongos - Secuenciacion ITS,producto de PCR
+805,TIPIHO,Hongos - Tipificacion Fenotipica,cepa fungica
+806,MICSISEP,Hongos cultivo esputo,esputo
+807,MICSISD,Hongos directo esputo,esputo
+808,HOMOG,Acido Homogentisico,orina
+809,HVA24,Acido Homovanilico - HVA,orina 24 h
+810,CARDIOFA,Canalopatia - Fibrilacion auricular,sangre EDTA
+811,HVAL,Acido Homovanilico - HVA,orina
+812,AMH,Hormona Antimulleriana - AMH,suero
+813,ALB,Albumina,suero
+814,HPVBJ,HPV- Papiloma Virus Humano - genotipos de alto riesgo,biopsia tejido
+815,HTLVIII,HTLV-I/II Ac.,suero
+816,HTLVPCRL,HTLV-I/II PCR,LCR
+817,HTLVPCRO,HTLV-I/II PCR,otro material
+818,HTLVPCR,HTLV-I/II PCR,sangre EDTA
+819,HU,Hu (ANNA-1) Ac.,suero
+820,LACLCR,Acido Lactico,LCR
+821,BANTH,Bacillus anthracis,absceso
+822,HYG,Hygrina - Cuscohygrina,orina
+823,IA2,IA-2 Ac.,suero
+824,IA2,ICA 512 AC.,suero
+825,CHIPCRS,Chikungunya virus PCR,semen
+826,CHIPCR,Chikungunya virus PCR,suero
+827,ISPE,Identificacion serologica de patogenos entericos,cepa bacteriana
+828,ISG,Identificacion serologica germen,cepa bacteriana
+829,IDH12B,IDH1-IDH2 - Deteccion de mutaciones,biopsia
+830,IDH12MO,IDH1-IDH2 - Deteccion de mutaciones,medula osea
+831,IDH12SE,IDH1-IDH2 - Deteccion de mutaciones,sangre entera con EDTA
+832,RAC,Albuminuria,orina
+833,IGASAL,IgA - Inmunoglobulina A secretoria,suero
+834,IGASAL,IgA - Inmunoglobulina A,saliva
+835,IGA,IgA - Inmunoglobulina A,suero
+836,IGD,IgD - Inmunoglobulina D,suero
+837,IGEVA,IgE - Inmunoglobilina especifica abeja (Apis mellifera),suero
+838,IGE,IgE - Inmunoglobulina E,suero
+839,IGEABE,IgE - Inmunoglobulina especifica abedul (Betula verrucosa),suero
+840,IGEBT,IgE - Inmunoglobulina especifica acaros - Blomia tropicalis,suero
+841,IGEDF,IgE - Inmunoglobulina especifica acaros - D. farinae,suero
+842,IGEDP,IgE - Inmunoglobulina especifica acaros - D. pteronyssinus,suero
+843,IGEALAL,IgE - Inmunoglobulina especifica alfalactoalbumina,suero
+844,IGEALME,IgE - Inmunoglobulina especifica almendra,suero
+845,IGEALTE,IgE - Inmunoglobulina especifica Alternaria tenuis,suero
+846,IGEAMA,IgE - Inmunoglobulina especifica amaranto (Amaranthus retrofle,suero
+847,IGEAMB,IgE - Inmunoglobulina especifica Ambrosia comun (Ambrosia elat,suero
+848,IGEAMOXI,IgE - Inmunoglobulina especifica Amoxicilina,suero
+849,IGEAMPI,IgE - Inmunoglobulina especifica Ampicilina,suero
+850,IGEAF,IgE - Inmunoglobulina especifica Aspergillus fumigatus,suero
+851,IGEANI,IgE - Inmunoglobulina especifica Aspergillus niger,suero
+852,IGEATU,IgE - Inmunoglobulina especifica atun,suero
+853,IGEAA,IgE - Inmunoglobulina especifica avispa amarilla (Vespula sp.),suero
+854,IGEBANA,IgE - Inmunoglobulina especifica banana,suero
+855,IGEBLAC,IgE - Inmunoglobulina especifica betalactoglobulina,suero
+856,IGECACAO,IgE - Inmunoglobulina especifica cacao,suero
+857,IGECAMA,IgE - Inmunoglobulina especifica camaron,suero
+858,IGECAA,IgE - Inmunoglobulina especifica Candida albicans,suero
+859,IGERDO,IgE - Inmunoglobulina especifica carne de cerdo,suero
+860,IGEPOL,IgE - Inmunoglobulina especifica carne de pollo,suero
+861,IGEVAC,IgE - Inmunoglobulina especifica carne de vaca,suero
+862,IGECASE,IgE - Inmunoglobulina especifica caseina,suero
+863,IGECH,IgE - Inmunoglobulina especifica Cladosporium herbarum,suero
+864,IGECHU,IgE - Inmunoglobulina especifica clara de huevo,suero
+865,IGECUCA,IgE - Inmunoglobulina especifica cucaracha (Blatella germanica),suero
+866,IGECYD,IgE - Inmunoglobulina especifica Cynodon dactylon (Cesped Berm,suero
+867,IGEDG,IgE - Inmunoglobulina especifica Dactylis glomerata (Cesped de,suero
+868,IGEDF,IgE - Inmunoglobulina especifica Dermatophagoides farinae,suero
+869,IGEDP,IgE - Inmunoglobulina especifica Dermatophagoides pteronyssinus,suero
+870,IGEDL,IgE - Inmunoglobulina especifica diente de leon (Taraxacum vul,suero
+871,IGEGA,IgE - Inmunoglobulina especifica epitelio de gato,suero
+872,IGEPE,IgE - Inmunoglobulina especifica epitelio de perro,suero
+873,IGEFRE,IgE - Inmunoglobulina especifica fresno,suero
+874,IGEGLU,IgE - Inmunoglobulina especifica gluten,suero
+875,IGEHR,IgE - Inmunoglobulina especifica hormiga roja (Solenopsis invi,suero
+876,IGEHU,IgE - Inmunoglobulina especifica huevo,suero
+877,IGELX,IgE - Inmunoglobulina especifica latex,suero
+878,IGELV,IgE - Inmunoglobulina especifica leche de vaca,suero
+879,IGELP,IgE - Inmunoglobulina especifica Lolium perenne (Cesped perenn,suero
+880,IGEMAIZ,IgE - Inmunoglobulina especifica maiz,suero
+881,IGEMA,IgE - Inmunoglobulina especifica mani,suero
+882,IGEMO,IgE - Inmunoglobulina especifica mosquito (Aedes communis),suero
+883,IGENA,IgE - Inmunoglobulina especifica naranja,suero
+884,IGENU,IgE - Inmunoglobulina especifica nuez,suero
+885,IGEOLI,IgE - Inmunoglobulina especifica olivo (Olea europaea),suero
+886,IGEOVOA,IgE - Inmunoglobulina especifica ovoalbumina,suero
+887,IGEOVOM,IgE - Inmunoglobulina especifica ovomucoide,suero
+888,IGEPA,"IgE - Inmunoglobulina especifica panel arboles (Olea europaea,",suero
+889,IGEPC,"IgE - Inmunoglobulina especifica panel de cereales (trigo, ave",suero
+890,IGEPH,IgE - Inmunoglobulina especifica panel de hierbas (Ambrosia el,suero
+891,IGEPG,IgE - Inmunoglobulina especifica panel gramineas (Cynodon dact,suero
+892,IGEHM,IgE - Inmunoglobulina especifica panel hongos y mohos (Penicil,suero
+893,IGEPI,IgE - Inmunoglobulina especifica panel inhalantes (Dermatophago,suero
+894,IGEPES,"IgE - Inmunoglobulina especifica panel pescados (bacalao, cama",suero
+895,IGEPLU,"IgE - Inmunoglobulina especifica panel plumas (ganso, gallina,",suero
+896,IGEPP,"IgE - Inmunoglobulina especifica panel polvo (Green Labs, Derm",suero
+897,IGEPENIG,IgE - Inmunoglobulina especifica Penicilina G (inyectable),suero
+898,IGEPENIV,IgE - Inmunoglobulina especifica Penicilina V (oral),suero
+899,IGEPENIN,IgE - Inmunoglobulina especifica Penicillium notatum,suero
+900,IGEPLAT,IgE - Inmunoglobulina especifica platano (Platanus acerifolia),suero
+901,IGEPH,IgE - Inmunoglobulina especifica polen (Ambrosia el,suero
+902,IGEPG,IgE - Inmunoglobulina especifica polen (Cynodon dact,suero
+903,IGEPA,"IgE - Inmunoglobulina especifica polen (Olea europaea,",suero
+904,IGEPO,IgE - Inmunoglobulina especifica polvo domestico (Green Labs.),suero
+905,IGEQUI,IgE - Inmunoglobulina especifica quinoa (Chenopodium album),suero
+906,IGESAL,IgE - Inmunoglobulina especifica salmon,suero
+907,IGESOJ,IgE - Inmunoglobulina especifica soja,suero
+908,IGETOM,IgE - Inmunoglobulina especifica tomate,suero
+909,IGETRI,IgE - Inmunoglobulina especifica trigo,suero
+910,IGEYH,IgE - Inmunoglobulina especifica yema de huevo,suero
+911,IGECASE,IgE - Proteina de la leche - caseina,suero
+912,IGEALAL,IgE - Proteina de la leche - lactoalbumina,suero
+913,IGEBLAC,IgE - Proteina de la leche - lactoglobulina,suero
+914,IGEPOA,IgE -Inmunoglobulina especifica Poa pratensis (Cesped de Juni,suero
+915,IGFBP3,IGFBP3,suero
+916,IGGS,IgG - Inmunoglobulina G Subclases,suero
+917,IGGLCR,IgG - Inmunoglobulina G,LCR
+918,IGG,IgG - Inmunoglobulina G,suero
+919,IGG4,IgG4 - Inmunoglobulina G4,suero
+920,IGLON5AC,IgLON5 Ac.,suero
+921,IGM,IgM - Inmunoglobulina M,suero
+922,QFTB,IGRA - Interferón Gamma release assay,suero
+923,TAUBETA,Alzheimer (Tau/Beta en LCR),LCR
+924,AMA,AMA - Mitocondria Ac.,suero
+925,AMAM2,AMA-M2 - Mitocondria M2 Ac.,suero
+926,IL2R,IL2-R - Interleuquina 2 Receptor,suero
+927,LACPLA,Acido Lactico,plasma fluoruro
+928,MAL24,Acido Malico,orina representativa de 24 h
+929,MANFENIL,Acido Mandelico y Acido Fenilglioxilico,orina post jornada laboral
+930,IMI,Imipramina - Desipramina,suero
+931,INGLI,Indice de Glicina,suero y LCR
+932,BANTHF,Bacillus anthracis,fistula
+933,BANTHH,Bacillus anthracis,herida
+934,IIGGLCR,Indice IgG LCR,suero y LCR
+935,IINGLUD,Indice Insulina-Glucosa,Derivacion
+936,17HPGEX,17-Hidroxi Progesterona con extracción,suero
+937,AMIP,Amilasa pancreatica,suero
+938,INFAG,Influenza A Ac.IgG,suero
+939,INFAM,Influenza A Ac.IgM,suero
+940,INFAAGAS,Influenza A Ag.,aspirado nasofaríngeo
+941,INFAAGO,Influenza A Ag.,aspirado traqueal
+942,INFAPCAN,Influenza A PCR,aspirado nasofaríngeo
+943,INFAPCAT,Influenza A PCR,aspirado traqueal
+944,INFAPCHN,Influenza A PCR,hisopado nasofaríngeo
+945,INFAPCR,Influenza A PCR,lavado bronqueoalveolar
+946,INFATIP,Influenza A Virus - Tipificacion,aspirado nasofaringeo
+947,INFATIPA,Influenza A Virus - Tipificacion,aspirado traqueal
+948,INFATIPH,Influenza A Virus - Tipificacion,hisopado nasofaringeo
+949,INFATIPL,Influenza A Virus - Tipificacion,lavado broncoalveolar
+950,INFBG,Influenza B Ac.IgG,suero
+951,INFBM,Influenza B Ac.IgM,suero
+952,INFBAGAN,Influenza B Ag.,aspirado nasofaríngeo
+953,INFBAGOT,Influenza B Ag.,aspirado traqueal
+954,INFBPCAN,Influenza B PCR,aspirado nasofaríngeo
+955,INFBPAT,Influenza B PCR,aspirado traqueal
+956,INFBPHN,Influenza B PCR,hisopado nasofaríngeo
+957,INFBPCR,Influenza B PCR,lavado bronqueoalveolar
+958,IFVIIICR,Inhibidor de Factor VIII- Cromogénico,plasma citrato
+959,IFIX,Inhibidor Factor IX,plasma citrato
+960,IFVIII,Inhibidor Factor VIII,plasma citrato
+961,ALUP,Inhibidor Lupico,plasma citrato
+962,INHB,Inhibina B,suero
+963,IFG,Inmunofenotipo Citometria de Flujo,ganglio
+964,IFL,Inmunofenotipo Citometria de Flujo,LCR
+965,IFLA,Inmunofenotipo Citometria de Flujo,líquido ascítico
+966,IFLP,Inmunofenotipo Citometria de Flujo,líquido pleural
+967,IFM,Inmunofenotipo Citometria de Flujo,medula osea EDTA
+968,IFMHS,Inmunofenotipo Citometria de Flujo,medula osea heparina de sodio
+969,IFO,Inmunofenotipo Citometria de Flujo,otro material
+970,IF,Inmunofenotipo Citometria de Flujo,sangre EDTA
+971,IFSH,Inmunofenotipo Citometria de Flujo,sangre heparina de sodio
+972,IFMC,Inmunofenotipo monocitos/macrofagos circulante,sangre EDTA
+973,IFSL,Inmunofenotipo Subpoblaciones Linfocitarias Citometria de Flujo,sangre EDTA
+974,INFILCR,Inmunofijacion,LCR
+975,INFI24,Inmunofijacion,orina 24 h
+976,INFIO,Inmunofijacion,orina
+977,INFI,Inmunofijacion,suero
+978,ALDOL,Aldolasa,suero
+979,BANTHN,Bacillus anthracis,hisopado nasal
+980,INSUCU,Insulina - Prueba con estímulo,suero
+981,INSU120,Insulina 120 minutos,suero
+982,INSU180,Insulina 180 minutos,suero
+983,INSU30,Insulina 30 minutos,suero
+984,INSU60,Insulina 60 minutos,suero
+985,INSU90,Insulina 90 minutos,suero
+986,INSUAC,Insulina Ac.,suero
+987,CMYPCRAN,Chlamydia - Mycoplasma pneumoniae PCR,aspirado nasofaríngeo
+988,INSU,Insulina,suero
+989,IFNG,Interferon Gamma (IFN-G),suero
+990,IL1,Interleuquina 1 Beta,suero
+991,IL6,Interleuquina 6,suero
+992,IL8,Interleuquina 8,plasma EDTA
+993,ABI3500Q,Inyección ABI 3500-QF,producto de PCR
+994,MYUCULHE,Mycoplasma - Ureaplasma cultivo,hisopado endocervical
+995,CMYPCRAT,Chlamydia - Mycoplasma pneumoniae PCR,aspirado traqueal
+996,IONO24,Ionograma,orina 24 h
+997,IONOL,Ionograma,orina Litro
+998,IONOO,Ionograma,orina
+999,IONO,Ionograma,suero
+1000,EABA,ITAEABA - Estado acido-base arterial,sangre heparina
+1001,ITRA,Itraconazol,suero
+1002,JAK2MO,JAK2 - mutacion V617F exon 14,medula osea
+1003,JAK2,JAK2 - mutacion V617F exon 14,sangre EDTA
+1004,JAK2e12M,JAK2 - mutaciones exon 12,medula osea EDTA
+1005,JAK2e12S,JAK2 - mutaciones exon 12,sangre EDTA
+1006,JO1,Jo-1 Ac.,suero
+1007,KETA,Ketamina,orina
+1008,ALDOS24,Aldosterona,orina 24 h
+1009,ALDOSL,Aldosterona,orina Litro
+1010,KPCPCR,Klebsiella pneumoniae carbapenemasa PCR,cepa bacteriana
+1011,KPCPCRHR,Klebsiella pneumoniae carbapenemasa PCR,hisopado rectal
+1012,LACOS,Lacosamida,suero
+1013,CMYPCRHN,Chlamydia - Mycoplasma pneumoniae PCR,hisopado nasofaríngeo
+1014,LPH,Lactogeno placentario humano,suero
+1015,PTLACTO,Lactosa - Prueba de Tolerancia,suero
+1016,LAMO,Lamotrigina,suero
+1017,MVCUL,Lavado bronquial - cultivo germenes comunes,lavado bronquial
+1018,LCRCUL,LCR - Liquido cefalorraquideo - cultivo,LCR
+1019,LCRFQC,LCR - Liquido cefalorraquideo - fisicoquimico y citologico,LCR
+1020,CMYPCRLB,Chlamydia - Mycoplasma pneumoniae PCR,lavado bronqueoalveolar
+1021,LDHLP,LDH,liquido pericardico
+1022,LDHLPU,LDH,líquido ascítico
+1023,LDHLPL,LDH,líquido pleural
+1024,LDHOT,LDH,otro material
+1025,LDH,LDH,suero
+1026,LEF08,Leflunomide - Teriflunomide,plasma EDTA
+1027,LPG,Legionella pneumophila Ac.IgG,suero
+1028,LPM,Legionella pneumophila Ac.IgM,suero
+1029,CMYPCR,Chlamydia - Mycoplasma pneumoniae PCR,LCR
+1030,CPNEG,Chlamydia pneumoniae Ac.IgG,suero
+1031,LEPTI,Leptina,suero
+1032,LEPTOG,Leptospira Ac.IgG,suero
+1033,LEPTOM,Leptospira Ac.IgM,suero
+1034,CPNEM,Chlamydia pneumoniae Ac.IgM,suero
+1035,LEU,Leucina,sangre seca en papel filtro
+1036,LEUCI,Leucinosis Confirmatorio,suero
+1037,LEUCOMF,Leucocitos,materia fecal
+1038,LEVRMF,Levaduras recuento,materia fecal
+1039,LEVTI,Levaduras tipificacion,cepa levadura
+1040,LEVE,Levetiracetam,suero
+1041,LEVO,Levodopa,plasma heparina
+1042,LH30,LH - Hormona Luteinizante 30 minutos,suero
+1043,LH60,LH - Hormona Luteinizante 60 minutos,suero
+1044,LH,LH - Hormona Luteinizante,suero
+1045,LHRH,LH - Prueba de estímulo con GnRH- LHRH,suero
+1046,AMINOR,Amitriptilina - Nortriptilina,suero
+1047,LINDA,Lindane,suero
+1048,LBNMEM,Linfocitos B naïve/memoria,sangre EDTA
+1049,CD8,Linfocitos T,sangre EDTA
+1050,CD4,Linfocitos T,sangre EDTA
+1051,CD3,Linfocitos T,sangre EDTA
+1052,LTRARO,Linfocitos T naïve/memoria,sangre EDTA
+1053,LTTCR,"Linfocitos T TCR alfa-beta, TCR gamma-delta",sangre EDTA
+1054,LTTCRDN,Linfocitos T TCR alfa/beta dobles negativos,sangre EDTA
+1055,CPSIG,Chlamydia psitacci Ac.IgG,suero
+1056,LIPA,Lipasa,suero
+1057,LIPIE,Lipidograma electroforetico,suero
+1058,LIPT,Lipidos totales,suero
+1059,CPSIM,Chlamydia psitacci Ac.IgM,suero
+1060,LPA,Lipoproteina a - Lpa,suero
+1061,LPUCUL1,Liquido de puncion - cultivo - muestra 1,liquido de puncion
+1062,LASCFQC,Liquido ascitico - fisicoquimico y citologico,liquido ascitico
+1063,CTRAA,Chlamydia trachomatis Ac.IgA,suero
+1064,LPUCUL2,Liquido de puncion - cultivo - muestra 2,liquido de puncion
+1065,LPUFQC,Liquido de puncion - fisicoquimico y citologico,otro material
+1066,CTRAG,Chlamydia trachomatis Ac.IgG,suero
+1067,LPEFQC,Liquido pericardico - fisicoquimico y citologico,liquido pericardico
+1068,LPCUL,Liquido pleural - directo y cultivo germenes comunes,liquido pleural
+1069,LPFQC,Liquido pleural - fisicoquimico y citologico,liquido pleural
+1070,LSIFQC,Liquido sinovial - fisicoquimico y citologico,liquido sinovial
+1071,DNABDBI,Bacterias - Deteccion ARNr 16S,biopsia de tejido
+1072,LCULHE,Listeria cultivo,hisopado endocervical
+1073,LCULLCR,Listeria cultivo,LCR
+1074,LCULLO,Listeria cultivo,loquios
+1075,LCULLA,Listeria cultivo,líquido amniótico
+1076,LCUL,Listeria cultivo,materia fecal
+1077,DNABDCA,Bacterias - Deteccion ARNr 16S,cepa bacteriana
+1078,DNABDLCR,Bacterias - Deteccion ARNr 16S,LCR
+1079,LI,Litio,suero
+1080,LKM,LKM 1 Ac.,suero
+1081,LORA,Lorazepam,suero
+1082,LRP4,LRP4 Ac.,suero
+1083,MHUUE,M. hominis / U.urealyticum - PCR,hisopado endocervical
+1084,MHUUU,M. hominis / U.urealyticum - PCR,hisopado uretral
+1085,MHUUO,M. hominis / U.urealyticum - PCR,orina primer chorro
+1086,MHUUOT,M. hominis / U.urealyticum - PCR,otro material
+1087,MHUUS,M. hominis / U.urealyticum - PCR,semen
+1088,MHGUUE,M. hominis-genitalium / U.urealyticum - PCR,hisopado endocervical
+1089,MHGUUU,M. hominis-genitalium / U.urealyticum - PCR,hisopado uretral
+1090,MHGUUO,M. hominis-genitalium / U.urealyticum - PCR,orina primer chorro
+1091,MHGUUOT,M. hominis-genitalium / U.urealyticum - PCR,otro material
+1092,MHGUUS,M. hominis-genitalium / U.urealyticum - PCR,semen
+1093,MCK,Macro CK,suero
+1094,MAMI,Macroamilasa,suero
+1095,MPRL,Macroprolactina,suero
+1096,MAG,MAG Ac.IgM,suero
+1097,METHIPO,Acido Metil Hipurico,orina post jornada laboral
+1098,DNABDLP,Bacterias - Deteccion ARNr 16S,liquido pericardio
+1099,METMAL24,Acido Metil Malonico,orina representativa de 24 h
+1100,DNABDLPL,Bacterias - Deteccion ARNr 16S,líquido pleural
+1101,MG2,Magnesio,orina 2 h
+1102,MG24,Magnesio,orina 24 h
+1103,MGL,Magnesio,orina Litro
+1104,MG,Magnesio,suero
+1105,CTRAM,Chlamydia trachomatis Ac.IgM,suero
+1106,MICOFEN,Acido Micofenolico,suero
+1107,DNABLS,Bacterias - Deteccion ARNr 16S,líquido sinovial
+1108,CTRAPCHC,Chlamydia trachomatis PCR,hisopado conjuntival
+1109,DNABDO,Bacterias - Deteccion ARNr 16S,orina
+1110,MUCO,Acido Muconico,orina post jornada laboral
+1111,MANGAO,Manganeso,orina post jornada laboral
+1112,MANGA,Manganeso,sangre heparina
+1113,MARTIPS,MAR Test indirecto,plasma seminal
+1114,MARTI,MAR Test indirecto,suero
+1115,DNABDOT,Bacterias - Deteccion ARNr 16S,otro material
+1116,ORO24,Acido Orotico,orina representativa de 24 h
+1117,TIPIMOBA,Bacterias - Secuenciacion ARNr 16S,producto de PCR
+1118,TIPIGER,Bacterias - Tipificacion Bioquimica,cepa bacteriana
+1119,AMI,Amilasa,suero
+1120,OXA2,Acido Oxalico,orina 2 h
+1121,OXA24,Acido Oxalico,orina 24 h
+1122,PAIB,PAI Biologico,plasma citrato
+1123,CALRM,CALR - mutaciones exon 9,medula osea EDTA
+1124,HEXA25,"2,5 Hexanodiona",orina post jornada laboral
+1125,AMO24,Amonio,orina 24 h
+1126,AMOL,Amonio,orina Litro
+1127,AMOO,Amonio,orina
+1128,MDMA,MDMA - Metilendioximetanfetamina,orina
+1129,ALDOS,Aldosterona,suero
+1130,MELA,Melanina,orina
+1131,MEBA,Membrana Basal Glomerular Ac.,suero
+1132,MENIAG,Meningitis Ag bacterianos,LCR
+1133,MENIAGO,Meningitis Ag bacterianos,orina
+1134,AMOPLA,Amonio,plasma EDTA
+1135,OXAL,Acido Oxalico,orina litro
+1136,TIPVITEK,Bacterias tipificacion bioquímica - Sistema VITEK,cepa bacteriana
+1137,BRUGADA,Canalopatia - Sindrome de Brugada,sangre EDTA
+1138,CTRAPCHU,Chlamydia trachomatis PCR,hisopado uretral
+1139,MERCUO,Mercurio,orina post jornada laboral
+1140,MERCU,Mercurio,suero
+1141,CTRAPCOP,Chlamydia trachomatis PCR,orina primer chorro
+1142,METAS,Metadona Screening,orina
+1143,METAHB,Metahemoglobina,sangre heparina
+1144,QTCORTO,Canalopatia - Sindrome QT corto,sangre EDTA
+1145,MET24,Metanefrinas fraccionadas,orina 24 h
+1146,METL,Metanefrinas fraccionadas,orina
+1147,METAPLA,Metanefrinas fraccionadas,plasma EDTA
+1148,METO,Metanol - Alcohol Metilico,orina
+1149,TTR,Amiloidosis hereditaria,suero
+1150,HMPVAN,Metapneumovirus humano PCR,aspirado nasofaríngeo
+1151,HMPVAT,Metapneumovirus humano PCR,aspirado traqueal
+1152,HMPVHN,Metapneumovirus humano PCR,hisopado nasofaríngeo
+1153,HMPVLB,Metapneumovirus humano PCR,lavado broncoalveolar
+1154,MEC,Metil etil cetona,orina post jornada laboral
+1155,MTHFRH,Metilentetrahidrofolato Reductasa Termolabil,sangre EDTA
+1156,MTX,Metotrexato,suero
+1157,TIPIMOMI,Micobacterias - Secuenciacion gyrB,cepa bacteriana
+1158,MICPCRBI,Micobacterias atipicas PCR,biopsia de tejido
+1159,MICPCRES,Micobacterias atipicas PCR,esputo
+1160,MICPCRLB,Micobacterias atipicas PCR,lavado bronqueoalveolar
+1161,MICPCRLC,Micobacterias atipicas PCR,LCR
+1162,MICPCRLP,Micobacterias atipicas PCR,líquido pleural
+1163,MICPCROT,Micobacterias atipicas PCR,otro material
+1164,MICPCR,Micobacterias atipicas PCR,sangre EDTA
+1165,MICBA1,Micobacterias baciloscopia - esputo muestra 1,esputo
+1166,MICBA2,Micobacterias baciloscopia - esputo muestra 2,esputo
+1167,MICBA3,Micobacterias baciloscopia - esputo muestra 3,esputo
+1168,MICBAO,Micobacterias baciloscopia - orina muestra 1,orina
+1169,MICBAO2,Micobacterias baciloscopia - orina muestra 2,orina
+1170,MICBAO3,Micobacterias baciloscopia - orina muestra 3,orina
+1171,MICBASH2,Micobacterias baciloscopia muestra 2,sangre heparina
+1172,MICBALB,Micobacterias baciloscopia,lavado bronqueoalveolar
+1173,MICBALBR,Micobacterias baciloscopia,lavado bronquial
+1174,MICBAMV,Micobacterias baciloscopia,líquido pleural
+1175,MICBAMO,Micobacterias baciloscopia,otro material
+1176,MICBASH,Micobacterias baciloscopia,sangre heparina
+1177,PMICHE1,Micobacterias baciloscopia-hemocultivo muestra 1 lisis centrifugacion,hemocultivo
+1178,PMICHE2,Micobacterias baciloscopia-hemocultivo muestra 2 lisis centrifugacion,hemocultivo
+1179,MICCULB,Micobacterias cultivo - BAL,lavado bronqueoalveolar
+1180,MICCUL1,Micobacterias cultivo - esputo muestra 1,esputo
+1181,MICCUL2,Micobacterias cultivo - esputo muestra 2,esputo
+1182,MICCULO1,Micobacterias cultivo - orina muestra 1,orina
+1183,MICCULO2,Micobacterias cultivo - orina muestra 2,orina
+1184,MICCULO3,Micobacterias cultivo - orina muestra 3,orina
+1185,MICCULLB,Micobacterias cultivo,lavado bronquial
+1186,MICCULLP,Micobacterias cultivo,liquido pleural
+1187,MICCULMV,Micobacterias cultivo,otro material
+1188,MICHEMO1,Micobacterias hemocultivo muestra 1 lisis centrifug.,sangre heparina
+1189,MICHEMO2,Micobacterias hemocultivo muestra 2 lisis centrifug.,sangre heparina
+1190,MHLD1,Micolog dto- Hemocultivo muestra 1 - lisis centrifug,sangre heparina
+1191,MHLD2,Micolog dto- Hemocultivo muestra 2 - lisis centrifug,sangre heparina
+1192,MHLC1,Micologico - Hemocultivo muestra 1 - lisis centrifugacion,hemocultivo
+1193,MHLC2,Micologico - Hemocultivo muestra 2 - lisis centrifugacion,hemocultivo
+1194,MICUL1EC,Micologico cultivo - muestra 1,escamas de cuero cabelludo
+1195,MICCUL1E,Micologico cultivo - muestra 1,escamas de piel
+1196,MICCUL1O,Micologico cultivo - muestra 1,otro material
+1197,MICCUL1U,Micologico cultivo - muestra 1,uñas
+1198,MICCUL2E,Micologico cultivo - muestra 2,escamas de piel
+1199,MICCUL2U,Micologico cultivo - muestra 2,uñas
+1200,MICCUL3E,Micologico cultivo - muestra 3,escamas de piel
+1201,CTRAPCR,Chlamydia trachomatis PCR,semen
+1202,MICOD1EC,Micologico directo - muestra 1,escamas de cuero cabelludo
+1203,MICOD1EP,Micologico directo - muestra 1,escamas de piel
+1204,MICOD1O,Micologico directo - muestra 1,otro material
+1205,MICOD1U,Micologico directo - muestra 1,uñas
+1206,MICOD2EP,Micologico directo - muestra 2,escamas de piel
+1207,MICOD2U,Micologico directo - muestra 2,uñas
+1208,MICOD3EP,Micologico directo - muestra 3,escamas de piel
+1209,CTRAPCRO,Chlamydia trachomatis PCR-Neisseria gonorrhoeae,otro material
+1210,CTRAPCRH,Chlamydia trachomatis PCR-Neisseria gonorrhoeae,hisopado endocervical
+1211,PMHL1,Micosis -hemocultivo muestra 1- lisis centrifugacion,sangre heparina
+1212,PMHL2,Micosis -hemocultivo muestra 2- lisis centrifugacion,sangre hepaina
+1213,MICSISEP,Micosis sistemica - cultivo,esputo
+1214,MICSISD,Micosis sistemica - directo,esputo
+1215,MICOSCUL,Micosis sistemica cultivo,otro material
+1216,MICOSD,Micosis sistemica directo,otro material
+1217,OXAO,Acido Oxalico,orina
+1218,BALCUL,BAL - Directo y cultivo germenes comunes,lavado bronqueoalveolar
+1219,CPNEG,Chlamydophila pneumoniae Ac.IgG,suero
+1220,RAC,Microalbuminuria,orina
+1221,ALB24,Microalbuminuria - Albumina,orina 24 h
+1222,MICROARR,MICROARRAY - Array cromosomico,sangre EDTA
+1223,ARRAYPRE,Microarray cromosómico prenatal - CMA,materiales varios
+1224,MICROSIB,Microsporidia investigacion,biopsia intestinal
+1225,MICROSIC,Microsporidia investigacion,contenido duodenal
+1226,MICROSI,Microsporidia investigacion,materia fecal
+1227,PIPE24,Acido Pipecolico,orina representativa de 24 h
+1228,MINE24,Mineralograma,orina representativa de 24 h
+1229,MIOARVD,Miocardiopatia arritmogenica del ventriculo derecho,sangre EDTA
+1230,MIODIL,Miocardiopatia dilatada,sangre EDTA
+1231,MIOHIPER,Miocardiopatia hipertrofica,sangre EDTA
+1232,MIONOCOM,Miocardiopatia no compactada,sangre EDTA
+1233,MIORES,Miocardiopatia restrictiva,sangre EDTA
+1234,MIOGO,Mioglobina,orina
+1235,MIOG,Mioglobina,suero
+1236,MIOPA,Miopatias inflamatorias autoinmunes – panel de anticuerpos,suero
+1237,MIOPA,Miositis - Panel ampliado Ac.IgG,suero
+1238,MITOTANE,Mitotane,suero
+1239,MLPAADN2,MLPA - Estudio de deleciones/duplicaciones 2 probemix,ADN extraido
+1240,MLPA2,MLPA - Estudio de deleciones/duplicaciones 2 probemix,sangre EDTA
+1241,DMDMLPA,MLPA - Estudio de deleciones/duplicaciones en el gen DMD,sangre EDTA
+1242,DMDMLPAD,MLPA - Estudio de deleciones/duplicaciones en el gen DMD,ADN extraido
+1243,MLPAADN,MLPA - Estudio de deleciones/duplicaciones,ADN extraido
+1244,MLPA,MLPA - Estudio de deleciones/duplicaciones,sangre EDTA
+1245,MODY,MODY - Diabetes juvenil tipo adulto,sangre EDTA
+1246,MOGIGG,MOG Ac. IgG,suero
+1247,PIPE,Acido Pipecolico,suero
+1248,BO,Bandas oligoclonales,suero y LCR
+1249,MONOPB,Mononucleosis - Paul Bunnell,suero
+1250,MONOLX,Mononucleosis - Test de latex,suero
+1251,EABA,Estado acido-base arterial,sangre heparina
+1252,MOPEG24,MOPEG,orina 24 h
+1253,MOPEGL,MOPEG,orina Litro
+1254,CPNEM,Chlamydophila pneumoniae Ac.IgM,suero
+1255,MOP,Morfina - MOP,orina
+1256,MORFESP,Morfologia espermatica,extendidos semen
+1257,MOST,MOST - Modified Sperm Stress Test,semen
+1258,MPLM,MPL - mutaciones exon 10,medula osea EDTA
+1259,MPL,MPL - mutaciones exon 10,sangre EDTA
+1260,MPOG,MPO - Mieloperoxidasa Ac.IgG,suero
+1261,MPSIII,MPSIII - Sanfilipo,sangre heparina
+1262,MSMLPA,MS-MLPA - Estudio de deleciones/duplicaciones y estado de metilación,materiales varios
+1263,BASOALER,Alergeno adicional - Desgranulacion de basofilos,sangre EDTA esteril
+1264,MMR,MSI proteinas reparadoras de errores de emparejamiento (MMR) por Inmunohistoquimica,materiales varios
+1265,EABV,Estado acido-base venoso,sangre heparina
+1266,MUCOPCL,Mucopolisacaridos cualitativos,orina
+1267,BASOALE2,Alergeno adicional - Desgranulacion de basofilos,sangre EDTA esteril
+1268,MEAC,Musculo estriado Ac.,suero
+1269,ASMA,Musculo liso Ac.,suero
+1270,MSTKAC,MuSK - Muscle Specific Tyrosine Kinase Ac.,suero
+1271,MYD88,Mutacion MYD88 L265P,sangre EDTA/médula osea EDTA
+1272,MTPCRBI,Mycobacterium tuberculosis complex PCR,biopsia de tejido
+1273,MTPCRES,Mycobacterium tuberculosis complex PCR,esputo
+1274,MTPCRLB,Mycobacterium tuberculosis complex PCR,lavado bronqueoalveolar
+1275,MTPCRLCR,Mycobacterium tuberculosis complex PCR,LCR
+1276,MTPCRLP,Mycobacterium tuberculosis complex PCR,liquido pleural
+1277,MTPCROT,Mycobacterium tuberculosis complex PCR,otro material
+1278,MTPCR,Mycobacterium tuberculosis complex PCR,sangre EDTA
+1279,MYUAC,Mycoplasma - Ureaplasma Ac.,suero
+1280,MYUCULHU,Mycoplasma - Ureaplasma cultivo,hisopado uretral
+1281,MYUCULOP,Mycoplasma - Ureaplasma cultivo,orina primer chorro
+1282,MYUCUL,Mycoplasma - Ureaplasma cultivo,semen
+1283,MGENHEC,Mycoplasma genitalium - PCR,hisopado endocervical
+1284,MGENHU,Mycoplasma genitalium - PCR,hisopado uretral
+1285,MGENORI,Mycoplasma genitalium - PCR,orina primer chorro
+1286,MGENO,Mycoplasma genitalium - PCR,otro material
+1287,MGENSEM,Mycoplasma genitalium - PCR,semen
+1288,MHOMHEC,Mycoplasma hominis - PCR,hisopado endocervical
+1289,MHOMHU,Mycoplasma hominis - PCR,hisopado uretral
+1290,MHOMOR,Mycoplasma hominis - PCR,orina primer chorro
+1291,MHOMO,Mycoplasma hominis - PCR,otro material
+1292,MHOMSEM,Mycoplasma hominis - PCR,semen
+1293,MYPG,Mycoplasma pneumoniae Ac.IgG,suero
+1294,MYPM,Mycoplasma pneumoniae Ac.IgM,suero
+1295,BARBIC,Barbituricos Confirmatorio,orina
+1296,PIR,Acido Piruvico,sangre desproteinizada
+1297,CTRAPCHC,Neisseria gonorrhoeae PCR,hisopado conjuntival
+1298,CTRAPCRH,Neisseria gonorrhoeae PCR,hisopado endocervical
+1299,CTRAPCHU,Neisseria gonorrhoeae PCR,hisopado uretral
+1300,CTRAPCOP,Neisseria gonorrhoeae PCR,orina primer chorro
+1301,CTRAPCRO,Neisseria gonorrhoeae PCR,otro material
+1302,CTRAPCR,Neisseria gonorrhoeae PCR,semen
+1303,SALI,Acido Salicilico,suero
+1304,SUCC24,Acido Succinico,orina representativa de 24 h
+1305,TRICLORO,Acido Tricloroacetico,orina post jornada laboral
+1306,5HTT,5HTT Alelos Gen Transportador LPR,sangre EDTA
+1307,ATBGC2H,Antibiograma cultivo germenes comunes 2,herida
+1308,HNPP,Neuropatia hereditaria sensible a parálisis por presion,sangre EDTA
+1309,LHON,Neuropatia optica hereditaria de Leber,sangre EDTA
+1310,CIDP,NF-155,suero
+1311,NGS50,NGS 50 genes,sangre EDTA
+1312,BARBIS,Barbituricos Screening,orina
+1313,ACULLP,Anaerobios cultivo,líquido de punción
+1314,NI,Niquel,orina post jornada laboral
+1315,URIC24,Acido Urico clearance,suero y orina 24 h
+1316,ACUL,Anaerobios cultivo,otro material
+1317,URI24,Acido Urico,orina 24 h
+1318,BHG,Bartonella henselae Ac.IgG,suero
+1319,URIL,Acido Urico,orina Litro
+1320,BHM,Bartonella henselae Ac.IgM,suero
+1321,DENAG,Dengue NS1 Ag.,suero
+1322,BZPC,Benzodiazepinas Confirmatorio,orina
+1323,BZPS,Benzodiazepinas Screening,orina
+1324,DENPCRS,Dengue PCR serotipificacion,suero
+1325,NMDAGLCR,NMDA Ac.IgG,LCR
+1326,NMDAG,NMDA Ac.IgG,suero
+1327,NMOLCR,NMO Ac.IgG - Aquaporina 4,LCR
+1328,NMOACIGG,NMO Ac.IgG - Aquaporina 4,suero
+1329,DMT24,NN Dimetiltriptamina,orina 24 h
+1330,DMTL,NN Dimetiltriptamina,orina Litro
+1331,NORTRI,Nortriptilina,suero
+1332,NPM1M,NPM1 - mutaciones exon 12,medula osea EDTA
+1333,NPM1,NPM1 - mutaciones exon 12,sangre EDTA
+1334,BASOALE3,Alergeno adicional - Desgranulacion de basofilos,sangre EDTA esteril
+1335,NTPROBNP,NT-pro BNP,suero
+1336,BC,Beta Carotenos,suero
+1337,CTX,Beta Cross Laps,suero
+1338,OLA,Olanzapina,plasma EDTA
+1339,URIO,Acido Urico,orina
+1340,OLISACC,Oligosacaridos cromatografia,orina representativa de 24 h
+1341,ONPG,Onconeuronales Panel Ac.IgG,suero
+1342,OPIC,Opiaceos Confirmatorio,orina
+1343,OPIPANEL,Opiaceos Panel Confirmatorio,orina
+1344,OPIS,Opiaceos Screening,orina
+1345,URI,Acido Urico,suero
+1346,OMCULTD,Orina chorro medio - cultivo y tipific DERIVANTES,orina chorro medio
+1347,OMCULT,Orina chorro medio - cultivo y tipificacion,orina chorro medio
+1348,OC,Orina Completa,orina
+1349,ATBGC2,Antibiograma cultivo germenes comunes 2,otro material
+1350,OPSCUL,Orina por puncion de sonda - cultivo,orina por puncion de sonda
+1351,OSVCUL,Orina por sondeo vesical - cultivo,orina por sondeo vesical
+1352,OPRCUL,Orina primer chorro - cultivo,orina primer chorro
+1353,OCRESOL,Orto-Cresol (2-metilfenol),orina post jornada laboral
+1354,OMBUFO24,Ortometil Bufotenina,orina 24 h
+1355,OMBUFOL,Ortometil Bufotenina,orina Litro
+1356,OSMO24,Osmolalidad,orina 24 h
+1357,OSMOO,Osmolalidad,orina
+1358,OSMO,Osmolalidad,suero
+1359,OSTEOC,Osteocalcina,plasma EDTA
+1360,OVAAC,Ovario Ac.,suero
+1361,OCZP,Oxcarbazepina,suero
+1362,OXI100,Oxicodona confirmatorio VC100,orina
+1363,OXI,Oxicodona,orina
+1364,HCGBL,Beta hCG libre,suero
+1365,BLAC,Beta lactamasa deteccion,cepa bacteriana
+1366,BTS,Beta talasemia - mutaciones en el gen de la B Globina,sangre EDTA
+1367,PAFEN,P-Aminofenol,orina post jornada laboral
+1368,PNITROF,P-Nitrofenol,orina post jornada laboral
+1369,P1NP,P1NP – Propéptido N terminal del Procolageno 1,suero
+1370,P24,P24 Ag.,suero
+1371,B2GA,Beta-2 Glicoproteina Ac.IgA,suero
+1372,B2GG,Beta-2 Glicoproteina Ac.IgG,suero
+1373,PAI4G5G,PAI 4G/5G,sangre EDTA
+1374,CICLOS,Ciclosporina,sangre EDTA
+1375,NGSPMIEL,Panel de mieloide por NGS,sangre EDTA / medula osea
+1376,BASOALE4,Alergeno adicional - Desgranulacion de basofilos,sangre EDTA esteril
+1377,BASOALER,Alergeno adicional-Prueba activacion de Basofilos,sangre EDTA esteril
+1378,INFCOVHN,Panel Respiratorio Influenza/COVID-19 - hisopado nasofaringeo,hisopado nasofaringeo
+1379,INFCOVAN,Panel Respiratorio Influenza/COVID19 - aspirado nasofaringeo,aspirado nasofaringeo
+1380,INFCOVAT,Panel Respiratorio Influenza/COVID19 - aspirado traqueal,aspirado traqueal
+1381,INFCOVES,Panel Respiratorio Influenza/COVID19 - esputo,esputo
+1382,INFCOVLB,Panel Respiratorio Influenza/COVID19 - lavado bronqueoalveolar,lavado bronqueoalveolar
+1383,INFCOVAN,Panel Respiratorio Influenza/SARS-CoV-2 - aspirado nasofaringeo,aspirado nasofaringeo
+1384,INFCOVAT,Panel Respiratorio Influenza/SARS-CoV-2 - aspirado traqueal,aspirado traqueal
+1385,INFCOVES,Panel Respiratorio Influenza/SARS-CoV-2 - esputo,esputo
+1386,INFCOVHN,Panel Respiratorio Influenza/SARS-CoV-2 - hisopado nasofaringeo,aspirado nasofaringeo
+1387,INFCOVLB,Panel Respiratorio Influenza/SARS-CoV-2 - lavado bronqueoalveolar,lavado bronqueoalveolar
+1388,BASOALE2,Alergeno adicional-Prueba activacion de Basofilos,sangre EDTA esteril
+1389,PAPPA,PAPP-A,suero
+1390,PARACAC,Paracoccidioides brasiliensis Ac.,suero
+1391,PINF1AGN,Parainfluenza 1 Ag.,aspirado nasofaríngeo
+1392,PINF1AGO,Parainfluenza 1 Ag.,aspirado traqueal
+1393,PINF1AG,Parainfluenza 1 Ag.,lavado bronqueoalveolar
+1394,PINFPCAN,Parainfluenza 1-4 PCR,aspirado nasofaríngeo
+1395,PINFPCAT,Parainfluenza 1-4 PCR,aspirado traqueal
+1396,PINFPCHS,Parainfluenza 1-4 PCR,hisopado nasofaríngeo
+1397,PINFPCR,Parainfluenza 1-4 PCR,lavado bronqueoalveolar
+1398,PINF2AGN,Parainfluenza 2 Ag.,aspirado nasofaríngeo
+1399,PINF2AGO,Parainfluenza 2 Ag.,aspirado traqueal
+1400,PINF2AG,Parainfluenza 2 Ag.,lavado bronqueoalveolar
+1401,PINF3AGN,Parainfluenza 3 Ag.,aspirado nasofaríngeo
+1402,PINF3AGO,Parainfluenza 3 Ag.,aspirado traqueal
+1403,PINF3AG,Parainfluenza 3 Ag.,lavado bronqueoalveolar
+1404,P1MF,Parasitologico 1 muestra,materia fecal
+1405,PSMF,Parasitologico seriado,materia fecal
+1406,PARAO,Parasitologico,orina
+1407,PMV,Parasitologico,otro material
+1408,PARACT,Parasitos - clasificacion taxonomica,parasitos
+1409,PARAHE,Parasitos hematicos,frotis sanguíneo
+1410,PARASU,Parasitos superiores,parasitos superiores
+1411,PAROTG,Parotiditis Ac.IgG,suero
+1412,PAROTM,Parotiditis Ac.IgM,suero
+1413,B19G,Parvovirus B19 Ac.IgG,suero
+1414,B19M,Parvovirus B19 Ac.IgM,suero
+1415,B19PCRL,Parvovirus B19 PCR,LCR
+1416,B19PCROT,Parvovirus B19 PCR,otro
+1417,B19PCR,Parvovirus B19 PCR,suero
+1418,CIDP,CIDP panel (Contactin-1 / NF-155),suero
+1419,CIMVITEK,CIM - VITEK,cepa bacteriana
+1420,PCB,PCB's - Bifenilos policlorados,suero
+1421,B2GM,Beta-2 Glicoproteina Ac.IgM,suero
+1422,B2MGO,Beta-2 Microglobulina,orina
+1423,BASOALE3,Alergeno adicional-Prueba activacion de Basofilos,sangre EDTA esteril
+1424,PDF,PDF - Productos de Degradacion del Fibrinogeno,plasma citrato
+1425,BASOALE4,Alergeno adicional-Prueba activacion de Basofilos,sangre EDTA esteril
+1426,PENTACL,Pentaclorofenol,orina post jornada laboral
+1427,B2MG,Beta-2 Microglobulina,suero
+1428,PEPCP,Peptido C - Prueba de estimulo con Glucagon,suero
+1429,PEPC6,Peptido C 6 minutos,suero
+1430,PEPCM,Peptido C matutino,suero
+1431,PEPCV,Peptido C vespertino,suero
+1432,PEPC24,Peptido C,orina 24 h
+1433,PEPCL,Peptido C,orina Litro
+1434,PGDA,Peptidos de Gliadinas Deaminados Ac.IgA,suero
+1435,PGDG,Peptidos de Gliadinas Deaminados Ac.IgG,suero
+1436,CALRSE,CALR - mutaciones exon 9,sangre EDTA
+1437,P149,PERFIL ACCIDENTE DE TRABAJO,absceso
+1438,BICARV,Bicarbonato venoso,sangre heparina
+1439,BICARO,Bicarbonato,orina
+1440,TAVECAP,Canalopatia-Taquicardia ventricular catecol. polimorf,sangre EDTA
+1441,BILI,Bilirrubina,suero
+1442,TAUBETA,Biomarcadores relacionados con Sindromes Neurodegenerativos,LCR
+1443,P056,PERFIL AMPLIADO TIROIDES,absceso
+1444,P053,PERFIL ANEMIAS CLASIFICACION Y ORIGEN,absceso
+1445,P203,PERFIL ANTICUERPOS EE,absceso
+1446,P055,PERFIL BASICO TIROIDES,absceso
+1447,Pbrigada,Perfil Brigada PBB polisur,absceso
+1448,P102,PERFIL C. CALIDAD G.R.P. CITOM. F,absceso
+1449,P069,PERFIL CCI - HORMONAS,absceso
+1450,P068,PERFIL CCI - Q. CLINICA,absceso
+1451,P163,PERFIL CCI SN,absceso
+1452,P062,PERFIL CEMIC Q. CLINICA,absceso
+1453,P097,PERFIL CEMIC SEROLG. A,absceso
+1454,P098,PERFIL CEMIC SEROLOGIA B,absceso
+1455,P099,PERFIL CEMIC SEROLOGIA C,absceso
+1456,P057,PERFIL COMPLETO TIROIDES,absceso
+1457,CIMLEV,CIM - VITEK,cepa levadura
+1458,PAGO,"Perfil de acidos grasos Omega 3,6 y 9",suero
+1459,17HPG30,17-Hidroxi Progesterona 30 minutos,suero
+1460,CALPRO,Calprotectina,materia fecal
+1461,TROMBOP,Perfil de trombosis,suero/plasma citrato/plasma EDTA
+1462,P052,PERFIL DIAG. DIABETES MELLITUS,absceso
+1463,P058,PERFIL DIAG. ENFERMEDAD MUSCULAR,absceso
+1464,P051,PERFIL DIAG. ENFERMEDAD PANCREATICA,absceso
+1465,P054,PERFIL DIAG. PARA COAGULOPATIAS,absceso
+1466,CZP,Carbamazepina,suero
+1467,CC,Cistatina C,suero
+1468,17HPG,17-Hidroxi Progesterona,suero
+1469,P048,PERFIL ENFERMEDAD RENAL,absceso
+1470,P202,PERFIL ESTEROIDES EE,absceso
+1471,P180,PERFIL GRUPOS NEGATIVOS CONT.,absceso
+1472,PLIPI,Perfil lipidico,suero
+1473,P223,PERFIL LIT3,absceso
+1474,P227,PERFIL LIT4,absceso
+1475,P204,PERFIL M. TUMORALES EE,absceso
+1476,C24,Cistina,orina 24 h
+1477,PMICCULB,Perfil Micobacterias baciloscopia y cultivo - BAL,lavado bronqueoalveolar
+1478,PMICBUL2,Perfil Micobacterias baciloscopia y cultivo - esputo muestra 2,esputo
+1479,PMICBUL3,Perfil Micobacterias baciloscopia y cultivo - esputo muestra 3 esputo],esputo
+1480,PMICCO1,Perfil Micobacterias baciloscopia y cultivo - orina muestra 1,orina
+1481,PMICCO2,Perfil Micobacterias baciloscopia y cultivo - orina muestra 2,orina
+1482,PMICCO3,Perfil Micobacterias baciloscopia y cultivo - orina muestra 3,orina
+1483,PMICCUL1,Perfil Micobacterias baciloscopia y cultivo -esputo muestra 1,esputo
+1484,PMICCLB,Perfil Micobacterias baciloscopia y cultivo,lavado bronquial
+1485,PMICCLP,Perfil Micobacterias baciloscopia y cultivo,liquido pleural
+1486,PMICCMV,Perfil Micobacterias baciloscopia y cultivo,otro material
+1487,PMICCULB,Perfil Micobacterias baciloscopia y cultivo- BAL,lav bronqueoalveolar
+1488,PCDM1EC,Perfil Micologico cult y directo muestra 1,escamas de cuero cabelludo
+1489,PCDM1EC,Perfil Micologico cultivo y directo - muestra 1,escamas de cuero cabelludo
+1490,PCDM1EP,Perfil Micologico cultivo y directo - muestra 1,escamas de piel
+1491,PMICOC1,Perfil Micologico cultivo y directo - muestra 1,otro material
+1492,PCDM1U,Perfil Micologico cultivo y directo - muestra 1,uñas
+1493,PCDM2EP,Perfil Micologico cultivo y directo - muestra 2,escamas de piel
+1494,PCDM2U,Perfil Micologico cultivo y directo - muestra 2,uñas
+1495,PCDM3EP,Perfil Micologico cultivo y directo - muestra 3,escamas de piel
+1496,PMICOSC,Perfil Micosis sistemica directo y cultivo,otro
+1497,MICSISP,Perfil Micosis sistemica,esputo
+1498,CISL,Cistina,orina Litro
+1499,P160,PERFIL OLEAGINOSA MORENO,absceso
+1500,P079,PERFIL PECC DROGAS ENCU.,absceso
+1501,P168,PERFIL PEEC AAN,absceso
+1502,P158,PERFIL PEEC CELIACO,absceso
+1503,P169,PERFIL PEEC DNA,absceso
+1504,P191,PERFIL PEEC ENDOCRINOLOGIA,absceso
+1505,P126,PERFIL PEEC INM. SEROL. HEPATITIS,absceso
+1506,P104,PERFIL PEEC INM. SEROLOG.,absceso
+1507,P103,PERFIL PEEC INMUNOGLOB.,absceso
+1508,P143,PERFIL PEEC MARCADORES TUMORALES,absceso
+1509,P190,PERFIL PEEC MDT,absceso
+1510,P130,PERFIL PEEC ORG,absceso
+1511,P161,PERFIL PEEC ORINA,absceso
+1512,P063,PERFIL PEEC Q. CLINICA,absceso
+1513,P170,PERFIL PEEC VDRL,absceso
+1514,P210,PERFIL PICC -MetU,absceso
+1515,P196,PERFIL PRECEVAL DNA,absceso
+1516,P018,PERFIL PREOCUPACIONAL IACA - MUJERES,absceso
+1517,P024,PERFIL PREOCUPACIONAL IACA VARONES,absceso
+1518,P060,PERFIL PREQUIRURGICO AMPLIADO,absceso
+1519,P059,PERFIL PREQUIRURGICO BASICO,absceso
+1520,P195,PERFIL PREVECAL ANA,absceso
+1521,P197,PERFIL PREVECAL CELIACO,absceso
+1522,P157,PERFIL PROGBA MARCADORES OSEOS,absceso
+1523,CISO,Cistina,orina
+1524,P201,PERFIL TIROIDES EE,absceso
+1525,PERFORIN,Perforina y Granzima,sangre EDTA
+1526,VPERITO,Peritonitis infecciosa felina - PIF,liquido peritoneal VETERINARIA
+1527,CITOGAN,Citogenetico ganglio,ganglio
+1528,PEROXTSE,Peroxidasas tinción,semen
+1529,CALBI,Calculo biliar,líquido biliar
+1530,CALUC,Calculo urinario cristalografico,orina
+1531,AVM24,Acido Vainillin Mandelico - AVM,orina 24 h
+1532,AVML,Acido Vainillin Mandelico - AVM,orina
+1533,BSEML,Bioquimica seminal mL,plasma seminal
+1534,PORGCL,Pesticidas organoclorados,suero
+1535,CITOMO,Citogenetico medula osea,medula osea heparina de sodio
+1536,CITOG,Citogenetico,sangre heparina de sodio
+1537,BSE,Bioquimica seminal,plasma seminal
+1538,VALPRO,Acido Valproico,suero
+1539,ABTP,Acidos Biliares Totales Perfil,suero
+1540,BIOT,Biotina,suero
+1541,PORGFO,Pesticidas organofosforados,suero
+1542,PHO4,pH,orina 4h
+1543,BILIA,Acidos Biliares,suero
+1544,BIOTASS,Biotinidasa,sangre seca en papel filtro
+1545,PH2H,pH,orina 2 h
+1546,PH,pH,orina
+1547,PHV,pH,sangre heparina
+1548,AFP,Alfa Feto Proteina - AFP,suero
+1549,ATBBAL,Antibiograma BAL,cepa bacteriana
+1550,PLA2R,PLA2R – Receptor de Fosfolipasa A2 Ac.IgG,suero
+1551,PLAC,Plaquetas Ac.,sangre EDTA
+1552,PL,Plaquetas,sangre EDTA
+1553,ATBGC1A,Antibiograma cultivo germenes comunes 1,absceso
+1554,PRP,Plasma Rico en Plaquetas - PRP,plasma citrato
+1555,ALPRA,Alprazolam,suero
+1556,PLASMI,Plasminogeno,plasma citrato
+1557,BPM,Bordetella pertussis Ac.IgM,suero
+1558,BPPCR,Bordetella pertussis PCR,aspirado nasofaríngeo
+1559,PLATA,Plata,suero
+1560,AGCMLPLA,Acidos Grasos de Cadena Muy Larga,plasma EDTA
+1561,BPPCRHN,Bordetella pertussis PCR,hisopado nasofaríngeo
+1562,BPTOXA,Bordetella pertussis toxina Ac. IgA,suero
+1563,BPTOXG,Bordetella pertussis toxina Ac. IgG,suero
+1564,CMVG,Citomegalovirus Ac.IgG,suero
+1565,PLOMOO,Plomo,orina post jornada laboral
+1566,PLOMO,Plomo,sangre heparina
+1567,CMVM,Citomegalovirus Ac.IgM,suero
+1568,NTPROBNP,PNC - Péptido natriurético cerebral,suero
+1569,PJBAL,Pneumocystis jirovecci PCR,lavado bronqueoalveolar
+1570,PJOTRO,Pneumocystis jirovecci PCR,otro material
+1571,PNEUJI,Pneumocystis jiroveci - coloracion,esputo
+1572,PNEUJILB,Pneumocystis jiroveci - coloracion,lavado bronqueoalveolar
+1573,AGCMLPLH,Acidos Grasos de Cadena Muy Larga,plasma heparina
+1574,CMVCVPE,Citomegalovirus Carga Viral,plasma EDTA
+1575,VITD25,25-Hidroxivitamina D (D2 + D3),suero
+1576,PBKCV,Poliomavirus BK Carga Viral,orina
+1577,PBKCVPE,Poliomavirus BK Carga Viral,plasma EDTA
+1578,PBKDNAO,Poliomavirus BK DNA,orina
+1579,PBKDNA,Poliomavirus BK DNA,plasma EDTA
+1580,JCDNA,Poliomavirus JC DNA,LCR
+1581,ANCA,ANCA - Neutrofilos Ac.,suero
+1582,SARAG,Sarampion Ac.IgG,suero
+1583,PORFI,Porfirinas totales eritrocitarias,sangre heparina
+1584,PORFOCL,Porfobilinogeno cualitativo,orina
+1585,PORFO24,Porfobilinogeno,orina 24 h
+1586,CMVCV,Citomegalovirus Carga Viral,sangre EDTA
+1587,CALSA,Calculo salival,saliva
+1588,NEFA,Acidos Grasos No Esterificados - NEFA,suero
+1589,DMFA24,"3,4 Dimetoxifeniletilamina",orina 24 h
+1590,BBG,Borrelia burgdorferi Ac.IgG,suero
+1591,ACORO,Acidos Organicos,orina representativa de 24 h
+1592,POTMF,Potasio,materia fecal
+1593,POT24,Potasio,orina 24 h
+1594,POTL,Potasio,orina Litro
+1595,POTO,Potasio,orina
+1596,POT,Potasio,suero
+1597,PR3G,PR3 - Proteinasa 3 Ac.IgG,suero
+1598,PREALBU,Prealbumina,suero
+1599,PRIMI,Primidona,suero
+1600,PRLTRH,PRL - Prolactina - Prueba de estímulo con TRH,suero
+1601,PRL25,PRL - Prolactina 25 minutos,suero
+1602,PRL60,PRL - Prolactina 60 minutos,suero
+1603,PRLP,PRL - Prolactina pool,suero
+1604,PRLV,PRL - Prolactina vespertina,suero
+1605,PRL,PRL - Prolactina,suero
+1606,PROCAL,Procalcitonina,suero
+1607,PG,Progesterona,suero
+1608,CMVPCRBT,Citomegalovirus DNA PCR,biopsia de tejido
+1609,PHHRP,Programas varios toma de muestra,materiales varios
+1610,BBM,Borrelia burgdorferi Ac.IgM,suero
+1611,PROPS,Propoxifeno Screening,orina
+1612,ACILCSS,Acilcarnitinas,sangre seca en papel filtro
+1613,PROTCF,Proteina C funcional,plasma citrato
+1614,PCR,Proteina C Reactiva - PCR,suero
+1615,PCRAS,Proteina C reactiva alta sensibilidad - HS-PCR,suero
+1616,PROTBJ24,Proteina de Bence Jones,orina 24 h
+1617,PROTBJ,Proteina de Bence Jones,orina
+1618,PROTSF,Proteina S Funcional,plasma citrato
+1619,PROTSL,Proteina S libre,plasma citrato
+1620,PROTFRAC,Proteinas fraccionadas,suero
+1621,CDNAPCLB,Citomegalovirus DNA PCR,lavado broncoalveolar
+1622,ACRA,ACRA - Receptores Acetil Colina Ac.,suero
+1623,ATBCOPRO,Antibiograma coprocultivo,materia fecal
+1624,CMVPCRL,Citomegalovirus DNA PCR,LCR
+1625,PROTT12,Proteinas totales,orina 12 h
+1626,PROTT24,Proteinas totales,orina 24 h
+1627,PROTTL,Proteinas totales,orina Litro
+1628,PROTT,Proteinas totales,suero
+1629,PELLCR,Proteinograma electroforetico,LCR
+1630,PEL,Proteinograma electroforetico,suero
+1631,CMVPCRLA,Citomegalovirus DNA PCR,líquido amniótico
+1632,PRCR5,Proteinuria,orina
+1633,PROTORDN,Proteinuria ortostatica,orina diurna y orina nocturna
+1634,TAUBETA,Proteínas TAU – Beta amiloide en LCR,LCR
+1635,ACTHPLA,ACTH - Adrenocorticotrofina,plasma EDTA
+1636,COVIDLT,Activacion Linfocitos T con péptidos de SARS-CoV-2,sangre heparina
+1637,HEPBPM,Actividad anti-Xa de la Heparina bajo peso molecular,plasma citrato
+1638,NEM2AB,Proto-oncogen RET – Carcinoma medular de tiroides familiar,sangre EDTA
+1639,NEM2AB,Proto-oncogen RET – Neoplasia Endocrina Multiple,sangre EDTA
+1640,PROTOPOR,Protoporfirina eritrocitaria,sangre EDTA
+1641,PROTOERI,Protoporfirina eritrocitaria,sangre heparina
+1642,PT20210,Protrombina G20210A,sangre EDTA
+1643,CMVPCRO,Citomegalovirus DNA PCR,orina
+1644,BASOTEST,Prueba de activacion de Basofilos,sangre EDTA esteril
+1645,BRCA12,BRCA 1y2 - Cancer hereditario mama y ovario,sangre EDTA
+1646,PSAL,PSA Libre - Ag.Prostatico Especifico Libre,suero
+1647,PSALT,PSA Libre y PSA Total,suero
+1648,PSAT,PSA Total - Ag. Prostatico Especifico Total,suero
+1649,PSEUCOL,Pseudocolinesterasa,suero
+1650,AOL,Androstanediol glucuronido,suero
+1651,ANTIXARI,Actividad anti-Xa del Rivaroxaban,plasma citrato
+1652,ARPLA,Actividad de Renina,plasma EDTA
+1653,PTH,PTH - Parathormona,plasma EDTA
+1654,FVIII,Actividad del Factor VIII,
+1655,ADALCR,Adenosin Deaminasa,LCR
+1656,ADALP,Adenosin Deaminasa,liquido pericardico
+1657,QFTB,QuantiFERON-TB Gold Plus,sangre heparina de sodio o litio
+1658,QUETI,Quetiapina,plasma EDTA
+1659,QUITO,Quitotriosidasa actividad - Enf. Gaucher,suero
+1660,ADALPL,Adenosin Deaminasa,liquido pleural
+1661,RAC,RAC - Relacion Albumina-Creatinina,orina
+1662,AONA,Androstenediona,suero
+1663,BPAM,Bromazepam,suero
+1664,A1AC,Alfa-1 Antitripsina clearance,suero y materia fecal
+1665,RSTRANS,Receptor soluble de transferrina,suero
+1666,ADALV,Adenosin Deaminasa,líquido ascítico
+1667,CAMPYC,Campylobacter spp. coloracion,materia fecal
+1668,ACROPCLA,Aneuploidias Cromosomicas QF-PCR,líquido amniótico
+1669,RECESPO,Recuento de espermatozoides,orina
+1670,RECESP,Recuento de espermatozoides,semen
+1671,CANHERED,Cancer Hereditario,sangre EDTA
+1672,ACROPCOT,Aneuploidias Cromosomicas QF-PCR,otro material
+1673,BR,Bromuro,suero
+1674,RAR,Relacion Aldosterona-Actividad de Renina,suero y plasma EDTA
+1675,CACRE5,Relacion Calcio - Creatinina,orina
+1676,CC2O,Relacion Calcio-Creatinina,orina 2 h
+1677,REL48,Relacion CD4/CD8,sangre EDTA
+1678,PRCR5,Relacion Proteinas-Creatinina,orina
+1679,sFlt1,Relacion sFlt-1/PIGF,suero
+1680,ADAOT,Adenosin Deaminasa,otro material
+1681,RENI,Renina,plasma EDTA
+1682,CAG,Candida albicans Ac.IgG,suero
+1683,HUDD,Brucella abortus - Reaccion de Huddleson,suero
+1684,WRIG,Brucella abortus - Reaccion de Wright,suero
+1685,ADVG,Adenovirus Ac.IgG,suero
+1686,BRU2ME,Brucella abortus Ac - Huddleson 2 mercaptoetanol,suero
+1687,ADVM,Adenovirus Ac.IgM,suero
+1688,RPROTCA,Resistencia a la Proteina C Activada,plasma citrato
+1689,HCVNS5A,Resistencia asociada a inhibidores de NS5A del virus de la Hepatitis C,plasma EDTA
+1690,RETICUA,Reticulina Ac.IgA,suero
+1691,RETI,Reticulocitos,sangre EDTA
+1692,CMVPCROT,Citomegalovirus DNA PCR,otro material
+1693,RETCOA,Retraccion del Coagulo,sangre entera
+1694,A1AMF,Alfa-1 Antitripsina,materia fecal
+1695,RHCDE,Rh - CDE,sangre EDTA
+1696,RHC,RhC,sangre EDTA
+1697,RHCC,Rhc,sangre EDTA
+1698,RHE,RhE,sangre EDTA
+1699,RHEE,Rhe,sangre EDTA
+1700,RIBOPAC,Ribosomal P Ac.,suero
+1701,RICKEIGG,Rickettsia conorii Ac. IgG,suero
+1702,RICKEIGM,Rickettsia conorii Ac. IgM,suero
+1703,CMVPCRP,Citomegalovirus DNA PCR,plasma EDTA
+1704,RISPE9OH,Risperidona,plasma EDTA
+1705,ROMA,ROMA - Riesgo de malignidad ovarica,suero
+1706,A1A,Alfa-1 Antitripsina,suero
+1707,ROTAVAG,Rotavirus Ag.,materia fecal
+1708,A14GNML,"Alfa-1,4 Glucosidasa Neutra mL",plasma seminal
+1709,RUBEOG,Rubeola Ac.IgG,suero
+1710,RUBEOM,Rubeola Ac.IgM,suero
+1711,A14GN,"Alfa-1,4 Glucosidasa Neutra",plasma seminal
+1712,SACCERA,Saccharomyces cerevisiae Ac.IgA,suero
+1713,SACCERG,Saccharomyces cerevisiae Ac.IgG,suero
+1714,WIDAL,Salmonella spp. - Reaccion de Widal,suero
+1715,BRUGI,Brucella abortus Ac.IgG IFI,suero
+1716,MVACUL1,Samr,otro material
+1717,CMVPCRS,Citomegalovirus DNA PCR,sangre EDTA
+1718,SANOC,Sangre oculta,materia fecal
+1719,SANOC2,Sangre oculta,materia fecal
+1720,SANOC3,Sangre oculta,materia fecal
+1721,SARAM,Sarampion Ac.IgM,suero
+1722,SARPCRHN,Sarampion PCR,hisopado nasofaringeo
+1723,SARPCLCR,Sarampion PCR,LCR
+1724,SARPCRO,Sarampion PCR,orina
+1725,SARPCROT,Sarampion PCR,otro material
+1726,COVID19S,SARS-CoV-2 Coronavirus Ac. IgG (anti-Spike),suero
+1727,COVID19A,SARS-CoV-2 Coronavirus PCR - aspirado nasofaríngeo,aspirado nasofaríngeo
+1728,COVID19T,SARS-CoV-2 Coronavirus PCR - aspirado traqueal,aspirado traqueal
+1729,COVID19E,SARS-CoV-2 Coronavirus PCR - esputo,esputo
+1730,COVID19Y,SARS-CoV-2 Coronavirus PCR - hisopado anal,hisopado anal
+1731,COVID19X,SARS-CoV-2 Coronavirus PCR - hisopado de superficie,hisopado de superficie
+1732,COVID19H,SARS-CoV-2 Coronavirus PCR - hisopado nasofaringeo,hisopado nasofaringeo
+1733,COVID19L,SARS-CoV-2 Coronavirus PCR - lavado broncoalveolar,lavado broncoalveolar
+1734,COVID19Z,SARS-CoV-2 Coronavirus PCR - saliva,saliva
+1735,SCL70,SCL 70 Ac.,suero
+1736,SMOCOCER,Score de moco cervical,moco cervical
+1737,SN2,Screening Neonatal 2 (TSH + Fenilalanina),sangre seca en papel
+1738,SN3,Screening Neonatal 3 (2 +Tripsina Inmunoreactiva),sangre seca en papel
+1739,SN4,Screening Neonatal 4 (3 + Galactosa),sangre seca en papel
+1740,SN5,Screening Neonatal 5 (4 + 17-Hidroxi Progesterona),sangre seca en papel
+1741,SN6,Screening Neonatal 6 (5 + Biotinidasa),sangre seca en papel
+1742,SN7,Screening Neonatal 7 (6 + Leucina),sangre seca en papel
+1743,S7,Screening Neonatal 7 (6+Leucina),Ambulatorio - sangre seca en papel
+1744,SECCCUL1,Secrecion conjuntival - cultivo - muestra 1,secrecion conjuntival
+1745,SECCCUL2,Secrecion conjuntival - cultivo - muestra 2,secrecion conjuntival
+1746,SECNCUL1,Secrecion nasal - cultivo - muestra 1,secrecion nasal
+1747,SECNCUL2,secrecion nasal - cultivo - muestra 2,secrecion nasal
+1748,SECOCUL1,Secrecion otica - cultivo - muestra 1,secrecion otica
+1749,SECOCUL2,Secrecion otica - cultivo - muestra 2,secrecion otica
+1750,SECUEN2X,Secuenciacion Sanger bidireccional,producto de PCR
+1751,SECUEN1X,Secuenciacion Sanger unidireccional,producto de PCR
+1752,CMVPCRSP,Citomegalovirus DNA PCR,sangre seca en papel de filtro
+1753,ADVAGNAS,Adenovirus Ag.,aspirado nasofaríngeo
+1754,BRUMI,Brucella abortus Ac.IgM IFI,suero
+1755,ADVAGO,Adenovirus Ag.,aspirado traqueal
+1756,BRUI,Brucella abortus Ac.incompletos,suero
+1757,SEO,Selenio,orina
+1758,SE,Selenio,suero
+1759,SERO24,Serotonina,orina 24 h
+1760,SEROL,Serotonina,orina Litro
+1761,SEROPLAQ,Serotonina,pellet plaquetario
+1762,SERO,Serotonina,suero
+1763,SERTRA,Sertralina,suero
+1764,GLAE,SHBG,suero
+1765,BRUT,Brucella abortus Ac.Totales IFI,suero
+1766,WRIG2ME,Brucella abortus-Reaccion de Wright con 2mercaptoetanol,suero
+1767,CANNAC,Cannabinoides Confirmatorio,orina
+1768,SIHU,Sims-Huhner Test,moco cervical postcoital
+1769,RSVG,Sincicial Respiratorio Virus Ac.IgG,suero
+1770,RSVM,Sincicial Respiratorio Virus Ac.IgM,suero
+1771,RSVAGAN,Sincicial Respiratorio Virus Ag.,aspirado nasofaríngeo
+1772,RSVAGO,Sincicial Respiratorio Virus Ag.,aspirado traqueal
+1773,RSVAG,Sincicial Respiratorio Virus Ag.,lavado bronqueoalveolar
+1774,RSVPCRAN,Sincicial Respiratorio Virus PCR,aspirado nasofaríngeo
+1775,RSVPCRAT,Sincicial Respiratorio Virus PCR,aspirado traqueal
+1776,RSVPCRHN,Sincicial Respiratorio Virus PCR,hisopado nasofaríngeo
+1777,RSVPCR,Sincicial Respiratorio Virus PCR,lavado bronqueoalveolar
+1778,SILYN,Sindrome de Lynch,sangre EDTA
+1779,MECP2,Sindrome de Rett,sangre EDTA
+1780,AZTAVI,Sinergia Aztreonam - Avibactam Predifusion rapida,cepa bacteriana
+1781,SIRO,Sirolimus,sangre EDTA
+1782,RPROTCA,Sistema de la Proteina C Activada,plasma citrato
+1783,SPROTC,Sistema de la Proteina C,plasma citrato
+1784,TSOBRE,Sobrevida Test,semen
+1785,ATBGC1F,Antibiograma cultivo germenes comunes 1,fistula
+1786,ADVAG,Adenovirus Ag.,lavado bronqueoalveolar
+1787,ADVAGMF,Adenovirus Ag.,materia fecal
+1788,CANNAF,Cannabinoides en flores,flores secas de planta de cannabis
+1789,CANNAS,Cannabinoides Screening,orina
+1790,ADVPCRAN,Adenovirus PCR,aspirado nasofaríngeo
+1791,SODIOMF,Sodio,materia fecal
+1792,SODIO24,Sodio,orina 24 h
+1793,SODIOL,Sodio,orina Litro
+1794,SODIOO,Sodio,orina
+1795,SODIO,Sodio,suero
+1796,CANNAX,Cannabinoides,otros materiales
+1797,BUFO24,Bufotenina,orina 24 h
+1798,BUFOL,Bufotenina,orina Litro
+1799,C1I,C1 inhibidor antigenico,suero
+1800,CA125,CA 125 Ovario,suero
+1801,CA153,CA 15-3 Mama,suero
+1802,CA199,CA 19-9 Aparato digestivo,suero
+1803,CA211,CA 21-1 Cyfra 21-1,suero
+1804,SOMATOC,Somatomedina C - IGF-1,suero
+1805,A2APLA,Alfa-2 Antiplasmina,plasma citrato
+1806,MVACUL1,staphylococcus aureus meticilino resistente,otro material
+1807,SGAAG,Streptococcus Grupo A Ag.,hisopado faringeo
+1808,SGBAGO,Streptococcus Grupo B Ag.,orina
+1809,SGBAG,Streptococcus Grupo B Ag.,suero
+1810,NEUMOAC,Streptococcus pneumoniae - Neumococo Ac.,suero
+1811,SPAGO,Streptococcus pneumoniae Ag.,orina
+1812,SPAG,Streptococcus pneumoniae Ag.,suero
+1813,EXFCUL,Streptococcus pyogenes - cultivo,hisopado faríngeo
+1814,Th1Th17,"Subtipo linfocitario de células T CD4+ (Th1, Th2, Th17)",sangre EDTA
+1815,SUCCI24,Succinilpurinas,orina representativa de 24 h
+1816,ADVPCRHC,Adenovirus PCR,hisopado conjuntival
+1817,CA724,CA 72-4 Estomago,suero
+1818,KLTCN,Cadena Kappa-Lambda totales cuantitativo,suero
+1819,ADVPCRHN,Adenovirus PCR,hisopado nasofaríngeo
+1820,SULFA24,Sulfatos,orina 24 h
+1821,SULFAL,Sulfatos,orina Litro
+1822,SULFAO,Sulfatos,orina
+1823,NFL,Cadena ligera de neurofilamentos (NFL),suero
+1824,KLCN,Cadenas Kappa-Lambda libres cuantitativo,suero
+1825,KLCN,Cadenas livianas libres cuantitativo,suero
+1826,DMFAL,"3,4 Dimetoxifeniletilamina",orina Litro
+1827,SOD,Superoxido Dismutasa - SOD,sangre heparina
+1828,ADVPCRLB,Adenovirus PCR,lavado bronqueoalveolar
+1829,SWUPI,Swim up Test inseminación,semen
+1830,SWUP,Swim up Test,semen
+1831,T3,T3 - Triiodotironina,suero
+1832,CK,CK - creatinquinasa,suero
+1833,TOXPCOT,Toxoplasma gondii PCR,otro material
+1834,T3L,T3L - Triiodotironina Libre,suero
+1835,CKMB,CK-MB creatinquinasa isoenzima MB,suero
+1836,T4,T4 - Tiroxina,suero
+1837,CREAC24,Clearance de Creatinina,suero y orina 24 h
+1838,T4L,T4L - Tiroxina Libre,suero
+1839,TACRO,Tacrolimus - FK 506,sangre EDTA
+1840,ACROPCVC,Aneuploidias Cromosomicas QF-PCR,vellosidades coriónicas
+1841,TALIO,Talio,orina
+1842,CREA,Tasa de filtración glomerular estimada,suero
+1843,TBG,TBG - Globulina Transportadora de Tiroxina,suero
+1844,ANMESO,Anfetaminas - Metanfetaminas Screening,orina
+1845,TSG,Tenia solium Ac. IgG,suero
+1846,T1418,"Translocacion (14,18) Rearreglo JH-BCL-2 cualitativa",sangre EDTA
+1847,T1418M,"Translocacion (14,18) Rearreglo JH-BCL-2 cualitativa",medula osea EDTA
+1848,GRAHAM,Test de Graham,material perianal
+1849,TESTOB,Testosterona biodisponible,suero
+1850,TESTOL,Testosterona Libre,suero
+1851,TESTO,Testosterona,suero
+1852,FOSFOC24,Clearance de Fosforo,suero y orina 24 h
+1853,UREAC24,Clearance de Urea,suero y orina 24 h
+1854,TGO,TGO-AST - Aspartato Aminotransferasa,suero
+1855,CLOBA,Clobazam,suero
+1856,TGP,TGP-ALT - Alanino Aminotransferasa,suero
+1857,HERO,Capacidad de degradacion de Histamina,suero
+1858,TP,Tiempo de Protrombina,plasma citrato
+1859,TP,Tiempo de Quick,plasma citrato
+1860,IVY,Tiempo de sangria IVY,plasma citrato
+1861,TT,Tiempo de Trombina,plasma citrato
+1862,TIOP,Tiocianatos plasmaticos,plasma heparina
+1863,TIOO,Tiocianatos urinarios,orina post jornada laboral
+1864,TIOSUL24,Tiosulfatos,orina representativa de 24 h
+1865,TIMOBA,Tipificación molecular de Bacillus,cepa bacteriana
+1866,TIROG,Tiroglobulina - TG,suero
+1867,TIROPAAF,Tiroglobulina PAAF-puncion aspiracion aguja fina,soluc lavado PAAF
+1868,A2MG,Alfa-2 Macroglobulina,suero
+1869,TIROSI,Tirosina,suero
+1870,CDO,Cadmio,orina post jornada laboral
+1871,CD,Cadmio,sangre heparina
+1872,TNF,TNF - Factor de Necrosis Tumoral alfa,suero
+1873,TOLUENO,Tolueno,sangre heparina
+1874,ADVPCROT,Adenovirus PCR,otro material
+1875,ANME,Anfetaminas-Metanfetaminas Confirmatorio,orina
+1876,TOPIRA,Topiramato,plasma EDTA
+1877,TOXOCAG,Toxocara canis - cati Ac.IgG,suero
+1878,TOTE,Toxoide Tetanico Ac.,suero
+1879,TOXAVI,Toxoplasma gondii - Test de avidez Ac.IgG,suero
+1880,TOXAD,Toxoplasma gondii Ac. Aglutinación Directa,suero
+1881,TOXHEA,Toxoplasma gondii Ac.HEA,suero
+1882,TOXIFI,Toxoplasma gondii Ac.IFI,suero
+1883,CLOMI,Clomipramina,suero
+1884,TCRCLON,CLONALIDAD T (REARREGLO TCR-CADENA GAMMA),sangre EDTA/médula/ganglio
+1885,TOXG,Toxoplasma gondii Ac.IgG,suero
+1886,TOXM,Toxoplasma gondii Ac.IgM,suero
+1887,TOXPCLCR,Toxoplasma gondii PCR,LCR
+1888,TOXPCLA,Toxoplasma gondii PCR,líquido amniótico
+1889,TPMT,TPMT - Tiopurina Metil Transferasa - Genotipo,sangre EDTA
+1890,TPOAB,TPOAb Tiroperoxidasa Ac.,suero
+1891,TRABTSH,TRAb - Receptor de TSH Ac.,suero
+1892,TRANS,Transferrina,suero
+1893,TTGAA,Transglutaminasa Ac.IgA,suero
+1894,TTGAG,Transglutaminasa Ac.IgG,suero
+1895,T1221,"Translocacion (12,21) Rearreglo TEL/AML1 cualitativa",sangre EDTA
+1896,T1221M,"Translocacion (12,21) Rearreglo TEL/AML1 cualitativa",medula osea EDTA
+1897,T1517,"Translocacion (15,17) Rearreglo PML/RAR alfa cualitativa",sangre EDTA
+1898,T1517M,"Translocacion (15,17)Rearreglo PML/RAR alfa cualitativa",med osea EDTA
+1899,T1616M,"Translocacion (16,16) Rearreglo MYH11/CBFb cualitativa",med osea EDTA
+1900,T1616,"Translocacion (16,16) Rearreglo MYH11/CBFb cualitativa",sangre EDTA
+1901,T411MLLM,"Translocacion (4,11) Rearreglo MLL - AF4",medula osea
+1902,T411MLLS,"Translocacion (4,11) Rearreglo MLL - AF4",sangre EDTA
+1903,T821M,"Translocacion (8,21) Rearreglo AML1/ETO cualitativa",m. osea EDTA
+1904,T821,"Translocacion (8,21) Rearreglo AML1/ETO cualitativa",sangre EDTA
+1905,922P190M,"Translocacion (9,22) Rearreglo BCR/ABL1 (p190) cuali T922P190M",Medula osea
+1906,922P190M,"Translocacion (9,22) Rearreglo BCR/ABL1 (p190) cuali",med. osea EDTA
+1907,T922P190,"Translocacion (9,22) Rearreglo BCR/ABL1 (p190) cuali",sangre EDTA
+1908,T922LMCM,"Translocacion (9,22) Rearreglo BCR/ABL1 (p210) LMC cuali",m osea EDTA
+1909,T922LMC,"Translocacion (9,22) Rearreglo BCR/ABL1 (p210) LMC cuali",sangre EDTA
+1910,T922LMCC,"Translocacion (9,22) Rearreglo BCR/ABL1 (p210) LMC cuanti",sangre EDTA
+1911,T922LMET,"Translocacion (9,22) Rearreglo BCR/ABL1 (p210)LMC cuanti",m. osea EDTA
+1912,ZNT8,Transportador de Zinc Ac.,suero
+1913,ADVPCRL,Adenovirus PCR,LCR
+1914,ADVPCR,Adenovirus PCR,materia fecal
+1915,ADVPCRO,Adenovirus PCR,orina
+1916,ADVPCRP,Adenovirus PCR,plasma edta
+1917,CAF,Cafeina,suero
+1918,FOSCU,Treponema pallidum - Fondo oscuro,material de lesión
+1919,FTAM,Treponema pallidum - FTA-Abs Ac.IgM,suero
+1920,FTALCR,Treponema pallidum - FTA-Abs,LCR
+1921,FTA,Treponema pallidum - FTA-Abs,suero
+1922,SIFILAC,Treponema pallidum Ac. EQLIA,suero
+1923,TRIQUIG,Trichinella spiralis Ac.IgG,suero
+1924,CLONA,Clonazepam,suero
+1925,ATBGC3AB,Antibiograma cultivo germenes comunes 3,absceso
+1926,TRICLOE,Tricloroetanol,orina post jornada laboral
+1927,ADH24,ADH - Hormona Antidiuretica - AVP - Arginina Vasopresina,orina 24 h
+1928,CC2O,Calcio en orina de 2 horas ayuno prolongado,orina
+1929,TG,Trigliceridos,suero
+1930,ATBGC3F,Antibiograma cultivo germenes comunes 3,fistula
+1931,HBVCT,Anti HBc - anti core,suero
+1932,ATBGC3H,Antibiograma cultivo germenes comunes 3,herida
+1933,TRIN,Tripsina Inmunorreactiva neonatal,sangre seca en papel filtro
+1934,TRIPTO,Triptofano,suero
+1935,TROMBOP,Trombofilia Panel,"suero, plasma citrato y plasma EDTA"
+1936,TROPOT,Troponina T - hs-TNT,suero
+1937,CHAS,Trypanosoma cruzi -parasit. directo-microhematocrito,sangre heparina
+1938,CHAHEA,Trypanosoma cruzi Ac.HEA - Chagas,suero
+1939,CAHIFI,Trypanosoma cruzi Ac.IFI - Chagas,suero
+1940,CHAG,Trypanosoma cruzi Ac.IgG EQL - Chagas,suero
+1941,CHAM,Trypanosoma cruzi Ac.IgM - Chagas,suero
+1942,TSHTRH,TSH - Prueba de estímulo con TRH,suero
+1943,TSH25,TSH - Tirotrofina 25 minutos,suero
+1944,TSH60,TSH - Tirotrofina 60 minutos,suero
+1945,TSHN,TSH - Tirotrofina Neonatal,sangre seca en papel filtro
+1946,TSH,TSH - Tirotrofina,suero
+1947,ATBGC3,Antibiograma cultivo germenes comunes 3,otro material
+1948,5NUC,5'Nucleotidasa,suero
+1949,KPTT,TTPC-KPTT,plasma citrato
+1950,TTR,TTR - Deteccion de mutaciones en el gen de Transtiretina,sangre EDTA
+1951,3METOXL,3-Metoxitiramina,orina
+1952,TUNEL,Tunel Test Citometría de Flujo,semen
+1953,3METOXPL,3-Metoxitiramina,plasma EDTA
+1954,CL24,Cloro,orina 24 h
+1955,UREAC24,Urea Clearance,suero y orina 24 h
+1956,ADHL,ADH - Hormona Antidiuretica - AVP - Arginina Vasopresina,orina Litro
+1957,UREA24,Urea,orina 24 h
+1958,UREAL,Urea,orina Litro
+1959,UREAO,Urea,orina
+1960,CAIE,Calcio ionico estimado,suero
+1961,UREA,Urea,suero
+1962,UUREEC,Ureaplasma urealyticum - PCR,hisopado endocervical
+1963,UUREHU,Ureaplasma urealyticum - PCR,hisopado uretral
+1964,UUREOR,Ureaplasma urealyticum - PCR,orina primer chorro
+1965,UUREO,Ureaplasma urealyticum - PCR,otro material
+1966,UURESEM,Ureaplasma urealyticum - PCR,semen
+1967,OMCULT,Urocultivo,orina
+1968,CLL,Cloro,orina Litro
+1969,OPSCUL,Urocultivo por punción de sonda,orina
+1970,OSVCUL,Urocultivo por sondeo vesical,orina
+1971,UROMF,Uroporfirinas,materia fecal
+1972,URO24,Uroporfirinas,orina 24 h
+1973,UROL,Uroporfirinas,orina Litro
+1974,UROPROT,Uroproteinograma,orina 24 h
+1975,ADH,ADH - Hormona Antidiuretica - AVP - Arginina Vasopresina,plasma EDTA
+1976,CAIISE,Calcio ionico ISE,suero
+1977,VANKA,Van de Kamer,materia fecal
+1978,VANCO,Vancomicina,suero
+1979,3METOX24,3-Metoxitiramina,orina 24 h
+1980,VZG,Varicela Zoster virus Ac.IgG,suero
+1981,VZM,Varicela Zoster virus Ac.IgM,suero
+1982,VZPCRHS,Varicela Zoster virus PCR,hisopado de lesión
+1983,VZPCR,Varicela Zoster virus PCR,LCR
+1984,VZPCRSED,Varicela Zoster virus PCR,sangre EDTA
+1985,VDRL,VDRL cualitativa,suero
+1986,VDRL,VDRL cuantitativa,suero
+1987,VDRLLCR,VDRL,LCR
+1988,VDRL,VDRL,suero
+1989,AACT,Adrenal Ac. Totales,suero
+1990,TOSHI,Verotoxinas 1 y 2 E. coli PCR,cepa de E. coli
+1991,TOSHIMF,Verotoxinas 1 y 2 E.coli PCR,materia fecal
+1992,17HPGN,17-Hidroxi Progesterona neonatal,sangre seca en papel filtro
+1993,CLO,Cloro,orina
+1994,CL,Cloro,suero
+1995,VIGA,Vigabatrin,suero
+1996,ATBESP,Antibiograma espermocultivo,cepa bacteriana
+1997,5HTTVNTR,5HTT Gen VNTR,sangre EDTA
+1998,VINCHU,Vinchuca,vinchuca
+1999,VIP,VIP - Peptido Intestinal Vasoactivo,plasma EDTA
+2000,VSIMHAN,Viruela del mono PCR,hisopado anal
+2001,VSIMHL,Viruela del mono PCR,hisopado de lesion
+2002,VSIMOTR,Viruela del mono PCR,otro material
+2003,VSIMRL,Viruela del mono PCR,raspado de lesion
+2004,VSIMHAN,Viruela Simica PCR,hisopado anal
+2005,VSIMHL,Viruela Simica PCR,hisopado de lesion
+2006,VSIMOTR,Viruela Simica PCR,otro material
+2007,VSIMRL,Viruela Simica PCR,raspado de lesion
+2008,VRPCRAN,Virus Respiratorios PCR Panel ampliado,aspirado nasofaríngeo
+2009,VRPCRAT,Virus Respiratorios PCR Panel ampliado,aspirado traqueal
+2010,VRPCRHN,Virus Respiratorios PCR Panel ampliado,hisopado nasofaríngeo
+2011,VRPCR,Virus Respiratorios PCR Panel ampliado,lavado bronqueoalveolar
+2012,VRPRAN,Virus Respiratorios PCR Panel reducido,aspirado nasofaríngeo
+2013,VRPRAT,Virus Respiratorios PCR Panel reducido,aspirado traqueal
+2014,VRPRHN,Virus Respiratorios PCR Panel reducido,hisopado nasofaríngeo
+2015,VRPRBAL,Virus Respiratorios PCR Panel reducido,lavado bronqueoalveolar
+2016,VITA,Vitamina A - Retinol,suero
+2017,VITAYE,VITAMINA A - VITAMINA E,suero
+2018,VITB1,VITAMINA B1 - TIAMINA DIFOSFATO,sangre EDTA
+2019,VITB12,Vitamina B12,suero
+2020,VITB2,Vitamina B2 - Riboflavina,suero
+2021,VITB6,Vitamina B6,plasma EDTA
+2022,BIOT,Vitamina B7,suero
+2023,FOL,VITAMINA B9,suero
+2024,FOLER,Vitamina B9,suero
+2025,VITC,Vitamina C - Acido Ascorbico,suero desproteinizado
+2026,CA24,Calcio,orina 24 h
+2027,VITE,Vitamina E - Alfa tocoferol,suero
+2028,CAL,Calcio,orina Litro
+2029,17HPGP,17-Hidroxi Progesterona - Prueba de estímulo con ACTH,suero
+2030,CA,Calcio,suero
+2031,VORICO,Voriconazol,suero
+2032,XILO120,Xilosa Prueba 120 minutos,suero
+2033,XILO60,Xilosa Prueba 60 minutos,suero
+2034,XILOADUL,Xilosa prueba adultos,120min
+2035,XILONI,Xilosa prueba niños,60min
+2036,XILO,Xilosa,orina 5 h post xilosa
+2037,YO,Yo (PCA-1) Ac.,suero
+2038,Z704938,"Zap 70,CD49 d,CD38",sangre EDTA
+2039,RH,Aglutininas Rh,suero
+2040,CC4O,Calcio-Creatinina,orina 4h
+2041,ZIKAO,Zika virus PCR,orina
+2042,ZIKAS,Zika virus PCR,semen
+2043,ZIKA,Zika virus PCR,suero
+2044,CALU,Calculo urinario,orina
+2045,CC24O,Calcio-Creatinina,orina 24 h
+2046,CALC,Calcitonina,suero
+2047,VITD125,"Calcitriol - 1,25-Dihidroxivitamina D",suero
+2048,ABO,Aglutininas ABO,suero
+2049,ZINCO,Zinc,orina
+2050,ZINC,Zinc,suero
+2051,ATBESPU,Antibiograma esputo,cepa bacteriana
+2052,ZONULINA,Zonulina,materia fecal
+2053,LSDO,Acido Lisergico LSD,orina

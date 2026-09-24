@@ -33,6 +33,7 @@ export const SYSMEX_HEMOGRAMA_UNIDADES: Record<string, string> = {
   HGB: 'g/dL',
   HTO: '%',
   VCM: 'fL',
+  HCM: 'pg',
   CHCM: 'g/dL',
   RDW: '%',
   NEUT_CAY: '%',

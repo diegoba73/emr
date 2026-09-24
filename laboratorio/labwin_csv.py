@@ -368,10 +368,17 @@ def iter_labwin_rows(csv_path: Path, encoding: str = "utf-8-sig") -> Iterator[tu
 def load_labwin_csv(
     csv_path: Path,
     encoding: str = "utf-8-sig",
+    *,
+    include_skip_dnis: set[str] | frozenset[str] | None = None,
 ) -> tuple[dict[str, LabwinPatient], list[LabwinOrder], LabwinStats]:
+    """
+    Si ``include_skip_dnis`` tiene DNIs de SKIP_DNI, esas filas SÍ se cargan
+    (resto de SKIP sigue omitido). Uso: import dirigido tras revisión.
+    """
     stats = LabwinStats()
     patients: dict[str, LabwinPatient] = {}
     orders: list[LabwinOrder] = []
+    allow_skip = {str(d).strip() for d in (include_skip_dnis or set())}
 
     for line_no, row in iter_labwin_rows(csv_path, encoding=encoding):
         stats.lines_read += 1
@@ -379,14 +386,15 @@ def load_labwin_csv(
         if not dni:
             stats.dni_vacios += 1
             continue
-        if dni in SKIP_DNI:
+        if dni in SKIP_DNI and dni not in allow_skip:
             stats.dni_omitidos_revision += 1
             continue
         if not DNI_RE.match(dni):
             stats.dni_invalidos += 1
             if len(stats.warnings) < 40:
+                # Sin DNI ni nombre: solo metadatos de fila.
                 stats.warnings.append(
-                    f"L{line_no}: DNI inválido {dni!r} ({row.get('Apellido y nombre', '')})"
+                    f"L{line_no}: DNI inválido (len={len(dni)})"
                 )
             continue
 
@@ -396,7 +404,7 @@ def load_labwin_csv(
         telefono = telefono_desde_fila(row.get("Celular") or "", row.get("Teléfono") or "")
         if len(telefono) > 20:
             if len(stats.warnings) < 80:
-                stats.warnings.append(f"L{line_no}: teléfono recortado a 20 ({dni})")
+                stats.warnings.append(f"L{line_no}: teléfono recortado a 20")
             telefono = telefono[:20]
         patient = LabwinPatient(
             dni=dni,
@@ -420,7 +428,9 @@ def load_labwin_csv(
         protocolo = format_protocolo_labwin(fecha, numero)
         if not protocolo:
             if len(stats.warnings) < 80:
-                stats.warnings.append(f"L{line_no}: número LabWin inválido {numero!r}")
+                stats.warnings.append(
+                    f"L{line_no}: número LabWin inválido (len={len(numero)})"
+                )
             continue
 
         resultados = _pick_resultados(row)

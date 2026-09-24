@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from laboratorio.equipos_lab import EQUIPOS_LAB, codigo_equipo_canonico
-from laboratorio.instrumentos_catalogo import MAPEO_POR_DRIVER
+from laboratorio.instrumentos_catalogo import CODIGOS_SYSMEX_MXD, MAPEO_POR_DRIVER
 from laboratorio.models import TipoExamen
 from laboratorio.models_instrumentos import InterfazInstrumento, MapeoAnalitoInstrumento
 from laboratorio.models_qc import EquipoAnalizador
@@ -59,9 +59,23 @@ def seed_mapeos_interfaz(interfaz: InterfazInstrumento) -> tuple[int, int]:
     return creados, omitidos
 
 
+def desactivar_mapeos_mxd_a_mono(interfaz: InterfazInstrumento | None = None) -> int:
+    """Desactiva MXD→MONO legado. No reescribe ResultadoExamen históricos."""
+    qs = MapeoAnalitoInstrumento.objects.filter(
+        codigo_instrumento__in=CODIGOS_SYSMEX_MXD,
+        activo=True,
+        tipo_examen__codigo="MONO",
+    )
+    if interfaz is not None:
+        qs = qs.filter(interfaz=interfaz)
+    return qs.update(activo=False)
+
+
 def seed_instrumentos_default() -> dict[str, tuple[int, int]]:
     out: dict[str, tuple[int, int]] = {}
     for driver in (InterfazInstrumento.Driver.CM260, InterfazInstrumento.Driver.SYSMEX_XP300):
         interfaz = asegurar_interfaz(driver)
         out[driver] = seed_mapeos_interfaz(interfaz)
+        if driver == InterfazInstrumento.Driver.SYSMEX_XP300:
+            desactivar_mapeos_mxd_a_mono(interfaz)
     return out

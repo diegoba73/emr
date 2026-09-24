@@ -485,10 +485,10 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     def retrieve(self, request, *args, **kwargs):
-        from laboratorio.hemograma_resultados import asegurar_resultados_panel_hemograma
+        from laboratorio.hemograma_resultados import asegurar_resultados_paneles_derivados
 
         instance = self.get_object()
-        if asegurar_resultados_panel_hemograma(instance):
+        if asegurar_resultados_paneles_derivados(instance):
             instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)

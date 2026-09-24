@@ -61,10 +61,17 @@ import { ordenPuedeCargarResultados } from '../../utils/limsEstadosOrden';
 import {
   computeFormulaProgress,
   formatFormulaProgressLabel,
+  isCalculadoEntrada,
   isFormulaPercent,
   previewTicketInforme,
   usesTicketEntry,
 } from '../../utils/entradaResultados';
+import {
+  calcAbsolutoFormula,
+  formatAbsolutoMm3,
+  FORMULA_LEUCO_CODIGOS,
+  esResultadoNoCalculable,
+} from '../../utils/calculosDerivados';
 import { getSysmexUnidad } from '../../utils/sysmexHemograma';
 
 export interface CargaResultadosLimsProps {
@@ -101,6 +108,9 @@ function buildCargaFocusOrder(
   for (const grupo of grupos) {
     for (const r of grupo.resultados) {
       const te = tiposExamenMap.get(r.tipo_examen);
+      if (isCalculadoEntrada(te, r.tipo_examen_codigo)) {
+        continue;
+      }
       if (usesTicketEntry(te, r.tipo_examen_codigo)) {
         keys.push(`sysmex-${r.id}`);
       } else {
@@ -281,15 +291,19 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         const prevRow = prev[r.id];
         if (prevRow) {
           if (prevRow.valor_sysmex.trim()) built.valor_sysmex = prevRow.valor_sysmex;
-          if (prevRow.valor.trim()) built.valor = prevRow.valor;
-          if (prevRow.valor_numerico.trim()) built.valor_numerico = prevRow.valor_numerico;
+          if (prevRow.valor.trim() || prevRow.valor_numerico.trim()) {
+            // Texto y número pertenecen al mismo borrador. Si el operador
+            // descartó el número al editar, no restaurarlo al cargar el catálogo.
+            built.valor = prevRow.valor;
+            built.valor_numerico = prevRow.valor_numerico;
+          }
           if (prevRow.unidad.trim()) built.unidad = prevRow.unidad;
           if (prevRow.muestra_id != null) built.muestra_id = prevRow.muestra_id;
         }
         next[r.id] = built;
         const c = (codigo || '').toUpperCase();
         if (
-          (c === 'VCM' || c === 'CHCM') &&
+          (c === 'VCM' || c === 'HCM' || c === 'CHCM') &&
           draftRowHasValue(built, te, codigo) &&
           (r.valor_obtenido || r.valor_numerico != null)
         ) {
@@ -321,6 +335,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   }, [orden.id, orden.estado]);
 
   const iqcBloqueaCarga = Boolean(iqcPrecheck?.aplicable && !iqcPrecheck.ok);
+  const iqcSinConfiguracion = Boolean(
+    iqcPrecheck && (!iqcPrecheck.aplicable || iqcPrecheck.sin_configuracion)
+  );
 
   const editable =
     permitirEdicion &&
@@ -328,18 +345,32 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     ordenPuedeCargarResultados(orden.estado) &&
     resultados.length > 0;
 
+  const tiposExamenMapRef = useRef(tiposExamenMap);
+  tiposExamenMapRef.current = tiposExamenMap;
+  const resultadosRef = useRef(resultados);
+  resultadosRef.current = resultados;
+
   const setRow = (id: number, patch: Partial<DraftCargaRow>) => {
-    const r = resultados.find((x) => x.id === id);
-    const te = r ? tiposExamenMap.get(r.tipo_examen) : undefined;
+    const r = resultadosRef.current.find((x) => x.id === id);
+    const te = r ? tiposExamenMapRef.current.get(r.tipo_examen) : undefined;
     const codigo = (r?.tipo_examen_codigo || te?.codigo || '').toUpperCase();
-    if (codigo === 'VCM' || codigo === 'CHCM') {
+    if (codigo === 'VCM' || codigo === 'HCM' || codigo === 'CHCM') {
       if (patch.valor_sysmex !== undefined || patch.valor !== undefined || patch.valor_numerico !== undefined) {
         indicesManualRef.current.add(id);
       }
     }
     setDraft((d) => {
-      const next = { ...d, [id]: { ...d[id], ...patch } };
-      return applyAutofillVcmChcm(resultados, next, tiposExamenMap, indicesManualRef.current);
+      const merged: DraftCargaRow = {
+        ...(d[id] || emptyDraft()),
+        ...patch,
+      };
+      const next = { ...d, [id]: merged };
+      return applyAutofillVcmChcm(
+        resultadosRef.current,
+        next,
+        tiposExamenMapRef.current,
+        indicesManualRef.current
+      );
     });
   };
 
@@ -496,9 +527,29 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       const sysmexFocusKey = `sysmex-${r.id}`;
       const valorFocusKey = `valor-${r.id}`;
       const esFormula = isFormulaPercent(te, r.tipo_examen_codigo);
+      const esCalculado = isCalculadoEntrada(te, r.tipo_examen_codigo);
       const mostrarIndicadorFormula = esFormula && focusedSysmexKey === sysmexFocusKey;
       const showOrden = ordenOpts?.ordenRowSpan !== undefined;
       const previos = previosPorTipo.get(r.tipo_examen) || [];
+      const codigoUpper = (r.tipo_examen_codigo || te?.codigo || '').toUpperCase();
+      let valorDisplayExtra = '';
+      if (FORMULA_LEUCO_CODIGOS.has(codigoUpper)) {
+        const leucoRow = resultados.find((x) => {
+          const c = (x.tipo_examen_codigo || tiposExamenMap.get(x.tipo_examen)?.codigo || '').toUpperCase();
+          return c === 'LEUCO';
+        });
+        if (leucoRow) {
+          const pct = Number(row.valor_numerico || row.valor || informePreview || '');
+          const leucoDraft = draft[leucoRow.id];
+          const leucoN = Number(
+            leucoDraft?.valor_numerico || leucoDraft?.valor || leucoRow.valor_numerico || ''
+          );
+          if (Number.isFinite(pct) && Number.isFinite(leucoN)) {
+            const abs = calcAbsolutoFormula(pct, leucoN);
+            if (abs != null) valorDisplayExtra = ` · ${formatAbsolutoMm3(abs)}`;
+          }
+        }
+      }
 
       return (
         <TableRow key={r.id}>
@@ -546,7 +597,16 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               </Box>
             )}
           </TableCell>
-          {ticketEntry ? (
+          {esCalculado ? (
+            <TableCell>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" fontWeight={row.valor ? 600 : 400}>
+                  {row.valor || '—'}
+                </Typography>
+                <Chip size="small" variant="outlined" label={esResultadoNoCalculable(row.valor) ? 'No calculable' : 'Calculado'} sx={{ height: 22 }} />
+              </Box>
+            </TableCell>
+          ) : ticketEntry ? (
             <>
               <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, flexWrap: 'nowrap' }}>
@@ -588,7 +648,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               </TableCell>
               <TableCell>
                 <Typography variant="body2" fontWeight={informePreview ? 600 : 400} color={informePreview ? 'text.primary' : 'text.secondary'}>
-                  {informePreview ?? '—'}
+                  {(informePreview ?? '—') + valorDisplayExtra}
                 </Typography>
               </TableCell>
             </>
@@ -598,7 +658,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                 size="small"
                 fullWidth
                 value={row.valor}
-                onChange={(ev) => setRow(r.id, { valor: ev.target.value })}
+                onChange={(ev) => setRow(r.id, { valor: ev.target.value, valor_numerico: '' })}
                 onKeyDown={handleEnterNext(valorFocusKey)}
                 placeholder="Ej. 120 o Positivo · Enter → siguiente"
                 inputProps={{ 'data-carga-focus': valorFocusKey }}
@@ -715,6 +775,18 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                 {(iqcPrecheck?.problemas || []).join('; ')}. Andá a{' '}
                 <strong>Control de calidad</strong>, registrá corridas ACEPTADAS en cada equipo
                 indicado y volvé a intentar.
+              </Typography>
+            </Alert>
+          )}
+          {!iqcBloqueaCarga && iqcSinConfiguracion && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight={600}>
+                IQC no configurado
+              </Typography>
+              <Typography variant="body2">
+                Esta orden no tiene materiales ni productos de control asociados a sus ensayos.
+                No implica control satisfactorio: configurá QC en Control de calidad cuando
+                corresponda.
               </Typography>
             </Alert>
           )}

@@ -179,6 +179,8 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     </Typography>
                   ) : r.iqcStatus === 'ok' ? (
                     <Chip size="small" label="IQC OK" color="success" variant="outlined" />
+                  ) : r.iqcStatus === 'sin_config' ? (
+                    <Chip size="small" label="Sin IQC" color="default" variant="outlined" />
                   ) : (
                     <Chip size="small" label="Falta IQC" color="warning" variant="outlined" />
                   )}

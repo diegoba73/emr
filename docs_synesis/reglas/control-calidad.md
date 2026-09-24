@@ -62,7 +62,7 @@ Equipos: **VIDAS_KUBE**, **FINECARE**.
 
 ### No aplicable
 
-Si la orden no tiene ningún producto multiparam que cubra sus ensayos **ni** materiales canónicos, el gate devuelve `aplicable=False`, `ok=True`: **no bloquea**. Tampoco hay control real: hay que mapear el examen al analizador.
+Si la orden no tiene ningún producto multiparam que cubra sus ensayos **ni** materiales canónicos, el gate devuelve `aplicable=False`, `ok=True`, `sin_configuracion=True`: **no bloquea** la carga. **No es control satisfactorio**: la UI debe etiquetar “Sin IQC” / “IQC no configurado” (nunca “IQC OK”). Hay que mapear el examen al analizador y cargar materiales/productos reales.
 
 ---
 

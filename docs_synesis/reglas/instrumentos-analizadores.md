@@ -39,7 +39,7 @@ Sin control ACEPTADO de hoy para el equipo de la interfaz:
 
 Tabla `MapeoAnalitoInstrumento` por interfaz. Semilla: `manage.py seed_instrumentos`.
 
-- Sysmex XP-300 es fórmula de **3 partes** (LYM / MXD / NEUT). MXD se mapea a `MONO` como aproximación hasta calibrar con una captura real. `NEUT_CAY` no sale del equipo.
+- Sysmex XP-300 es fórmula de **3 partes** (LYM / MXD / NEUT). **MXD no se mapea a `MONO`** (ni a EOS/BAS): la mezcla de células intermedias no es monocitos. Códigos `MXD` / `MXD%` / `MXD#` se omiten en el catálogo y se desactivan en seed si existía el legado. `NEUT_CAY` no sale del equipo.
 - CM260: códigos de canal Wiener (`CRE` → `CREATI`, `URE` → `UREA`, etc.) editables.
 
 Un analito que no está pedido en la orden **no crea** `ResultadoExamen`.

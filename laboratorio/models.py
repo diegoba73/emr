@@ -189,6 +189,7 @@ class TipoExamen(models.Model):
         ESTANDAR = "ESTANDAR", "Estándar (texto o número)"
         TICKET_ENTERO = "TICKET_ENTERO", "Ticket analizador (entero sin decimal)"
         FORMULA_PORCENTAJE = "FORMULA_PORCENTAJE", "Fórmula leucocitaria (% directo, suma 100)"
+        CALCULADO = "CALCULADO", "Calculado (no editable)"
 
     class FormatoInformeEntrada(models.TextChoices):
         DECIMAL_1 = "decimal1", "Un decimal (ej. 7.3)"
@@ -279,10 +280,13 @@ class TipoExamen(models.Model):
                 raise ValidationError(
                     {"ticket_decimales": "Máximo 4 decimales implícitos."}
                 )
-        if self.modo_entrada == self.ModoEntradaResultado.ESTANDAR:
+        if self.modo_entrada in (
+            self.ModoEntradaResultado.ESTANDAR,
+            self.ModoEntradaResultado.CALCULADO,
+        ):
             if self.ticket_decimales != 0:
                 raise ValidationError(
-                    {"ticket_decimales": "Debe ser 0 en modo estándar."}
+                    {"ticket_decimales": "Debe ser 0 en modo estándar o calculado."}
                 )
 
 
@@ -756,14 +760,17 @@ from laboratorio.models_catalog import (  # noqa: E402,F401
     SeccionLaboratorio,
     TipoContenedor,
 )
-# Microbiología B3.1 + B3.2 + B3.3 (registro Django; FK string a SolicitudExamen / Muestra).
+# Microbiología B3.1 + B3.2 + B3.3 + LabWin catálogos (registro Django; FK string a SolicitudExamen / Muestra).
 from laboratorio.models_microbiologia import (  # noqa: E402,F401
     AisladoMicrobiologico,
     Antibiograma,
     Antibiotico,
     EstudioMicrobiologia,
+    FraseRapidaAsociacionAnalisis,
+    FraseRapidaMicrobiologia,
     IdentificacionMicroorganismo,
     InformeMicrobiologia,
+    LabwinMicroCatalogImportBatch,
     LecturaCultivo,
     MedioCultivo,
     Microorganismo,

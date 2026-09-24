@@ -1,6 +1,7 @@
 import React from 'react';
 import { Chip } from '@mui/material';
 import type { ResultadoExamenLims } from '../../types/lims';
+import { esResultadoNoCalculable } from '../../utils/calculosDerivados';
 
 export interface ResultadoEstadoBadgeProps {
   resultado: Pick<ResultadoExamenLims, 'valor_obtenido' | 'es_patologico' | 'es_critico'>;
@@ -11,6 +12,9 @@ const ResultadoEstadoBadge: React.FC<ResultadoEstadoBadgeProps> = ({ resultado, 
   const valor = (resultado.valor_obtenido ?? '').trim();
   if (!valor) {
     return <Chip size={size} label="Pendiente" color="default" variant="outlined" />;
+  }
+  if (esResultadoNoCalculable(valor)) {
+    return <Chip size={size} label="No calculable" color="default" variant="outlined" />;
   }
   if (resultado.es_critico) {
     return <Chip size={size} label="Crítico" color="error" />;

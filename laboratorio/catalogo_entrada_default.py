@@ -17,6 +17,7 @@ ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
     "HGB": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "HTO": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "VCM": ("TICKET_ENTERO", 1, "1", "decimal1"),
+    "HCM": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "CHCM": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "RDW": ("TICKET_ENTERO", 1, "1", "decimal1"),
     "NEUT_CAY": ("FORMULA_PORCENTAJE", 0, "1", "integer"),
@@ -25,6 +26,13 @@ ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
     "BAS": ("FORMULA_PORCENTAJE", 0, "1", "integer"),
     "LINF": ("FORMULA_PORCENTAJE", 0, "1", "integer"),
     "MONO": ("FORMULA_PORCENTAJE", 0, "1", "integer"),
+    # Perfil lipídico / hepatograma: solo se tipan CT, HDL, TG / BIL_T, BIL_D
+    "LDL": ("CALCULADO", 0, "1", ""),
+    "VLDL": ("CALCULADO", 0, "1", ""),
+    "COL_NO_LDL": ("CALCULADO", 0, "1", ""),
+    "COL_RESID": ("CALCULADO", 0, "1", ""),
+    "RATIO_CT_HDL": ("CALCULADO", 0, "1", ""),
+    "BIL_I": ("CALCULADO", 0, "1", ""),
 }
 
 

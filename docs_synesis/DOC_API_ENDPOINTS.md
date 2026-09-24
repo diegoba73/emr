@@ -374,6 +374,10 @@ Implementación: `_apply_estudio_id_query_filter()` en `laboratorio/views_microb
 | `/api/lab/microbiologia/estudios/{id}/` | GET, PATCH | PATCH solo `tipo_estudio` y `observaciones`; **`estado` no se modifica por PATCH**. |
 | `/api/lab/microbiologia/estudios/{id}/iniciar/` | POST | admin/lab. Transición `PENDIENTE→RECIBIDO` (idempotente). |
 | `/api/lab/microbiologia/estudios/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Transición a `CANCELADO`. |
+| `/api/lab/microbiologia/estudios/{id}/etiqueta-zpl/` | GET | Vista previa JSON+ZPL 40×23 (mismo perfil que lab clínico); **no** muta `etiquetas_impresas_at`. Solo `ROLES_LIMS_WRITE`. |
+| `/api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/` | POST | Prepara ZPL; asigna `codigo_barra` + `etiquetas_impresas_at` si PENDIENTE. El navegador lo envía al agente USB local. |
+| `/api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/confirmar/` | POST | Auditoría `micro_etiqueta_print` (`transport=local_agent`). |
+| `/api/lab/microbiologia/estudios/{id}/imprimir-etiquetas/` | POST | **Legacy** PDF Code128; preferir flujo ZPL. |
 | `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). **Query opcional `?estudio_id=`** [IMPLEMENTADO jun 2026]. |
 | `/api/lab/microbiologia/siembras/{id}/` | GET, PATCH | PATCH: `condicion_incubacion`, `temperatura_c`, `atmosfera`, `observaciones`. |
 | `/api/lab/microbiologia/lecturas/` | GET, POST | Crear: admin/lab. Si `es_preliminar=True` y el estudio está `SEMBRADO`, lo pasa a `LECTURA_PRELIMINAR`. **Query opcional `?estudio_id=`**. |

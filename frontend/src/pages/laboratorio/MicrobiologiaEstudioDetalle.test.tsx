@@ -54,9 +54,11 @@ jest.mock('../../utils/limsAccess', () => ({
 }));
 
 jest.mock('../../services/limsMicroApi', () => ({
-  downloadEtiquetasEstudioMicro: jest.fn(),
+  printTalonEstudioMicro: jest.fn(),
+  patchEstadoObraSocialEstudio: jest.fn(),
 }));
 
+jest.mock('../../components/lims/micro/ImprimirPedidoMicroDialog', () => () => null);
 jest.mock('../../components/lims/micro/EstudioMicroPedidoRecepcionPanel', () => () => (
   <div>Pedido recepción</div>
 ));

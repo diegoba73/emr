@@ -5,7 +5,10 @@ from laboratorio.instrumentos_seed import seed_instrumentos_default
 
 
 class Command(BaseCommand):
-    help = "Crea InterfazInstrumento CM260/Sysmex y mapeos de analito (idempotente)."
+    help = (
+        "Crea InterfazInstrumento CM260/Sysmex y mapeos de analito (idempotente). "
+        "También desactiva mapeos legado MXD→MONO en Sysmex."
+    )
 
     def handle(self, *args, **options):
         result = seed_instrumentos_default()

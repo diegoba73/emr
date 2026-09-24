@@ -798,7 +798,7 @@ export interface InsumoLab {
   stock_min: number;
   stock_actual: number;
   proveedor: string;
-  /** REF del fabricante (Wiener/VIDAS/Finecare). Independiente del codigo interno. */
+  /** REF del fabricante (Wiener/VIDAS/Finecare). Independiente del código interno. */
   ref_comercial?: string;
   unidades_por_caja?: number | null;
   volumen_por_unidad?: string | number | null;
@@ -1189,6 +1189,9 @@ export interface IqcPrecheckResult {
   solicitud_id?: number;
   ok: boolean;
   aplicable: boolean;
+  /** True cuando no hay materiales/productos QC para la orden (no es “IQC OK”). */
+  sin_configuracion?: boolean;
+  motivo_no_aplicable?: string | null;
   problemas: string[];
   equipo: { id: number; codigo: string; nombre: string } | null;
   equipos?: Array<{ id: number; codigo: string; nombre: string }>;

@@ -22,7 +22,7 @@ import {
   marcarEstudioMicrobiologiaInformado,
   downloadInformeMicroPdf,
 } from '../../services/limsApi';
-import { downloadEtiquetasEstudioMicro, printTalonEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
+import { printTalonEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessMicrobiologiaLectura,
@@ -37,6 +37,7 @@ import {
   isSecretariaEntregaLab,
 } from '../../utils/limsAccess';
 import EstudioMicroPedidoRecepcionPanel from '../../components/lims/micro/EstudioMicroPedidoRecepcionPanel';
+import ImprimirPedidoMicroDialog from '../../components/lims/micro/ImprimirPedidoMicroDialog';
 import EstudioMicroResumenTab from '../../components/lims/micro/EstudioMicroResumenTab';
 import SiembrasLecturasPanel from '../../components/lims/micro/SiembrasLecturasPanel';
 import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIdentificacionPanel';
@@ -57,9 +58,9 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [tab, setTab] = useState(0);
   const [estudio, setEstudio] = useState<EstudioMicrobiologia | null>(null);
   const [loading, setLoading] = useState(true);
-  const [reprinting, setReprinting] = useState(false);
   const [downloadingTalon, setDownloadingTalon] = useState(false);
   const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
+  const [openImprimirEtiqueta, setOpenImprimirEtiqueta] = useState(false);
   const [openObraSocial, setOpenObraSocial] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
@@ -175,17 +176,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     });
   };
 
-  const onReimprimir = async () => {
-    setReprinting(true);
-    try {
-      await downloadEtiquetasEstudioMicro(estudioId);
-      toast.success('Etiqueta generada.');
-      await loadAll();
-    } catch (e) {
-      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-    } finally {
-      setReprinting(false);
-    }
+  const onReimprimir = () => {
+    setOpenImprimirEtiqueta(true);
   };
 
   const onImprimirTalon = async () => {
@@ -349,14 +341,23 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         <EstudioMicroPedidoRecepcionPanel
           estudio={estudio}
           canOperate={canOp}
-          reprinting={reprinting}
           downloadingTalon={downloadingTalon}
           confirmingRecepcion={confirmingRecepcion}
-          onReimprimirEtiquetas={() => void onReimprimir()}
+          onReimprimirEtiquetas={onReimprimir}
           onImprimirTalon={() => void onImprimirTalon()}
           onConfirmarRecepcion={() => void onConfirmarRecepcion()}
           onCancelar={onCancelar}
           onObraSocial={canOp ? () => setOpenObraSocial(true) : undefined}
+        />
+        <ImprimirPedidoMicroDialog
+          open={openImprimirEtiqueta}
+          estudioId={estudioId}
+          estudioNumero={estudio.numero}
+          reimpresion={Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra)}
+          onClose={() => setOpenImprimirEtiqueta(false)}
+          onEtiquetasOk={() => {
+            void loadAll();
+          }}
         />
         <MotivoDialog {...dialogProps} />
         {estudio && (
@@ -454,6 +455,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         <InformesMicrobiologiaPanel
           estudio={estudio}
           informes={bundle.informes}
+          lecturas={bundle.lecturas}
+          aislados={bundle.aislados}
           canOperate={canOpInforme && !estudioCerrado}
           canValidar={canVal}
           canDownloadPdf={canDownloadInformeMicroPdf(currentUser, estudio.estado)}

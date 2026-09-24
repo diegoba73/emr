@@ -263,6 +263,8 @@ def estado_iqc_solicitud(solicitud, *, equipo: EquipoAnalizador | None = None) -
         return {
             "ok": True,
             "aplicable": False,
+            "sin_configuracion": True,
+            "motivo_no_aplicable": "sin_materiales_ni_productos",
             "equipo": (
                 {"id": default_eq.id, "codigo": default_eq.codigo, "nombre": default_eq.nombre}
                 if default_eq
@@ -299,6 +301,8 @@ def estado_iqc_solicitud(solicitud, *, equipo: EquipoAnalizador | None = None) -
     return {
         "ok": not problemas,
         "aplicable": True,
+        "sin_configuracion": False,
+        "motivo_no_aplicable": None,
         "equipo": equipos[0]
         if len(equipos) == 1
         else (

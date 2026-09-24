@@ -24,6 +24,8 @@ from laboratorio.views_microbiologia import (
     AntibiogramaViewSet,
     AntibioticoViewSet,
     EstudioMicrobiologiaViewSet,
+    FraseRapidaAsociacionAnalisisViewSet,
+    FraseRapidaMicrobiologiaViewSet,
     IdentificacionMicroorganismoViewSet,
     InformeMicrobiologiaViewSet,
     LecturaCultivoViewSet,
@@ -232,6 +234,28 @@ router.register(
     r'laboratorio/microbiologia/resultados-antibiotico',
     ResultadoAntibioticoViewSet,
     basename='laboratorio-micro-resultados-antibiotico',
+)
+
+# LabWin — frases rápidas / asociaciones NEMOESPE (con aliases).
+router.register(
+    r'lab/microbiologia/frases-rapidas',
+    FraseRapidaMicrobiologiaViewSet,
+    basename='lab-micro-frases-rapidas',
+)
+router.register(
+    r'lab/microbiologia/frases-rapidas-asociaciones',
+    FraseRapidaAsociacionAnalisisViewSet,
+    basename='lab-micro-frases-rapidas-asociaciones',
+)
+router.register(
+    r'laboratorio/microbiologia/frases-rapidas',
+    FraseRapidaMicrobiologiaViewSet,
+    basename='laboratorio-micro-frases-rapidas',
+)
+router.register(
+    r'laboratorio/microbiologia/frases-rapidas-asociaciones',
+    FraseRapidaAsociacionAnalisisViewSet,
+    basename='laboratorio-micro-frases-rapidas-asociaciones',
 )
 # B3.4 — Informes microbiológicos (con aliases).
 router.register(

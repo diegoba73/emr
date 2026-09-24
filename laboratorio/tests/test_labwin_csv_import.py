@@ -3,7 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from django.core.management import call_command
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 
 from laboratorio.labwin_csv import (
     COLUMNA_A_CODIGO,
@@ -123,6 +123,14 @@ class LabwinParserTests(SimpleTestCase):
         hemo = next(o for o in orders if o.protocolo == "LW-2022-00010")
         self.assertEqual(hemo.resultados["LEUCO"], "81")
         self.assertEqual(hemo.dni, "22798582")
+        # Warnings nunca exponen DNI, nombres ni valores clínicos.
+        joined = " | ".join(stats.warnings)
+        self.assertNotIn("FUENTEALBA", joined)
+        self.assertNotIn("INGARAMO", joined)
+        self.assertNotIn("27831894", joined)
+        self.assertNotIn("10378931", joined)
+        for w in stats.warnings:
+            self.assertNotRegex(w, r"\b\d{7,11}\b")
 
 
 class LabwinImportCommandTests(TestCase):
@@ -170,13 +178,19 @@ class LabwinImportCommandTests(TestCase):
         )
 
     def test_dry_run_no_write(self):
+        from auditoria.models import AuditEvent
+
         before = Paciente.objects.count()
+        before_audit = AuditEvent.objects.count()
         call_command("import_labwin_csv", str(FIXTURE), dry_run=True, verbosity=0)
         self.assertEqual(Paciente.objects.count(), before)
         self.assertEqual(SolicitudExamen.objects.count(), 0)
+        self.assertEqual(AuditEvent.objects.count(), before_audit)
 
     def test_import_creates_patient_and_orders_idempotent(self):
-        call_command("import_labwin_csv", str(FIXTURE), verbosity=0)
+        call_command(
+            "import_labwin_csv", str(FIXTURE), allow_new_patients=True, verbosity=0
+        )
         self.assertTrue(Paciente.objects.filter(dni="27831894").exists())
         existente = Paciente.objects.get(dni="22798582")
         self.assertEqual(existente.telefono, "999")
@@ -200,23 +214,220 @@ class LabwinImportCommandTests(TestCase):
         self.assertTrue(ven.paneles.filter(codigo="PAN_EAB_VEN").exists())
 
         n_res = ResultadoExamen.objects.count()
-        call_command("import_labwin_csv", str(FIXTURE), verbosity=0)
+        call_command(
+            "import_labwin_csv", str(FIXTURE), allow_new_patients=True, verbosity=0
+        )
         self.assertEqual(SolicitudExamen.objects.count(), 4)
         self.assertEqual(ResultadoExamen.objects.count(), n_res)
         self.assertEqual(Paciente.objects.filter(dni="27831894").count(), 1)
 
-    def test_eab_completa_orden_existente(self):
-        call_command("import_labwin_csv", str(FIXTURE), verbosity=0)
+    def test_import_skips_patients_without_orders(self):
+        """Filas con DNI válido pero sin resultados mapeados no crean ficha."""
+        import tempfile
+
+        raw = (
+            "Número,Fecha,Nº doc.,Apellido y nombre,Sexo,F. nacim.,Teléfono,Localidad,Celular,GLU\n"
+            "1(1),30-06-2022,90909090,\"SOLO FICHA\",1,01-01-1980,,, ,------------\n"
+            "2(2),30-06-2022,27831894,\"CON ORDEN\",1,01-01-1980,,, ,75\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8-sig") as fh:
+            fh.write(raw)
+            path = Path(fh.name)
+        try:
+            call_command(
+                "import_labwin_csv", str(path), allow_new_patients=True, verbosity=0
+            )
+            self.assertFalse(Paciente.objects.filter(dni="90909090").exists())
+            self.assertTrue(Paciente.objects.filter(dni="27831894").exists())
+            self.assertTrue(SolicitudExamen.objects.filter(numero="LW-2022-00002").exists())
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_dry_run_stdout_sin_phi(self):
+        from io import StringIO
+
+        out = StringIO()
+        call_command("import_labwin_csv", str(FIXTURE), dry_run=True, stdout=out)
+        text = out.getvalue()
+        self.assertIn("Dry-run", text)
+        self.assertNotIn("FUENTEALBA", text)
+        self.assertNotIn("INGARAMO", text)
+        # Valores clínicos del fixture
+        self.assertNotIn("SAT_O2", text)
+
+    def test_apply_emite_audit_batch_sin_phi(self):
+        from auditoria.models import AuditEvent
+
+        before = AuditEvent.objects.filter(action="IMPORT_LABWIN_BATCH").count()
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command(
+                "import_labwin_csv", str(FIXTURE), allow_new_patients=True, verbosity=0
+            )
+        events = list(
+            AuditEvent.objects.filter(action="IMPORT_LABWIN_BATCH").order_by("id")
+        )
+        new_events = events[before:]
+        self.assertGreaterEqual(len(new_events), 3)
+        statuses = [(e.metadata or {}).get("status") for e in new_events]
+        self.assertEqual(statuses[0], "started")
+        self.assertIn("patients_committed", statuses)
+        self.assertIn("chunk_committed", statuses)
+        self.assertEqual(statuses[-1], "applied")
+        ev = new_events[-1]
+        self.assertTrue(ev.success)
+        self.assertEqual(ev.request_id, ev.entity_id)
+        meta = ev.metadata or {}
+        self.assertIn("orders_created_set_sha256", meta)
+        self.assertIn("file_sha256", meta)
+        blob = "".join(
+            str((e.metadata or {})) + (e.entity_repr or "") + (e.error_message or "")
+            for e in new_events
+        )
+        self.assertNotIn("FUENTEALBA", blob)
+        self.assertNotIn("27831894", blob)
+        self.assertNotIn("PICCONE", blob)
+        self.assertGreaterEqual(meta.get("orders_created", 0), 1)
+
+    def test_eab_no_muta_orden_finalizado(self):
+        """Política R2: no agregar resultados a órdenes ya FINALIZADO (bulk_create)."""
+        call_command(
+            "import_labwin_csv", str(FIXTURE), allow_new_patients=True, verbosity=0
+        )
         art = SolicitudExamen.objects.get(numero="LW-2025-00020")
+        self.assertEqual(art.estado, "FINALIZADO")
         ResultadoExamen.objects.filter(
             solicitud=art, tipo_examen__codigo__endswith="_ART"
         ).delete()
         art.paneles.clear()
-        call_command("import_labwin_csv", str(FIXTURE), verbosity=0)
-        self.assertTrue(
+        call_command(
+            "import_labwin_csv", str(FIXTURE), allow_new_patients=True, verbosity=0
+        )
+        self.assertFalse(
             ResultadoExamen.objects.filter(
                 solicitud=art, tipo_examen__codigo="PH_ART"
             ).exists()
         )
         art.refresh_from_db()
-        self.assertTrue(art.paneles.filter(codigo="PAN_EAB_ART").exists())
+        self.assertEqual(art.estado, "FINALIZADO")
+        self.assertFalse(art.paneles.filter(codigo="PAN_EAB_ART").exists())
+
+
+class LabwinImportInterruptTests(TransactionTestCase):
+    """Commits reales: AuditEvent post-lote debe verse tras Kill simulado (como en manage.py)."""
+
+    def setUp(self):
+        tm = TipoMuestra.objects.create(codigo="SUERO_LW_INT", nombre="Suero", activo=True)
+        for codigo, nombre in (
+            ("CREATI", "Creatininemia"),
+            ("GLU", "Glucemia"),
+            ("UREA", "Uremia"),
+            ("LEUCO", "Leucocitos"),
+            ("HGB", "Hemoglobina"),
+            ("HTO", "Hematocrito"),
+            ("HEMATIES", "Hematíes"),
+            ("PH_ART", "pH arterial"),
+            ("PO2_ART", "pO2 arterial"),
+            ("PCO2_ART", "pCO2 arterial"),
+            ("SAT_O2_ART", "Sat O2 arterial"),
+            ("HCO3_ART", "HCO3 arterial"),
+            ("BE_ART", "BE arterial"),
+            ("PH_VEN", "pH venoso"),
+            ("PO2_VEN", "pO2 venoso"),
+            ("PCO2_VEN", "pCO2 venoso"),
+            ("SAT_O2_VEN", "Sat O2 venoso"),
+            ("HCO3_VEN", "HCO3 venoso"),
+            ("BE_VEN", "BE venoso"),
+        ):
+            TipoExamen.objects.create(
+                codigo=codigo,
+                nombre=nombre,
+                tipo_muestra_requerida=tm,
+                tipo_resultado="NUMERICO",
+                precio=1,
+                activo=True,
+            )
+        pan_art = PanelExamen.objects.create(
+            codigo="PAN_EAB_ART", nombre="EAB arterial", activo=True
+        )
+        pan_ven = PanelExamen.objects.create(
+            codigo="PAN_EAB_VEN", nombre="EAB venoso", activo=True
+        )
+        pan_art.tipos_examen.add(*TipoExamen.objects.filter(codigo__endswith="_ART"))
+        pan_ven.tipos_examen.add(*TipoExamen.objects.filter(codigo__endswith="_VEN"))
+        Paciente.objects.create(
+            dni="22798582",
+            nombre="Fernando Javier",
+            apellido="Piccone Rey",
+            telefono="999",
+        )
+
+    def test_interrupt_after_chunk_leaves_durable_audit_and_recovers(self):
+        """Tras commit de un lote + kill simulado: audit started/chunk; re-run no duplica."""
+        import laboratorio.management.commands.import_labwin_csv as import_mod
+        from auditoria.models import AuditEvent
+
+        class _SimulatedKill(BaseException):
+            """Simula Kill -9: no es Exception → no dispara failed_partial del comando."""
+
+        def _kill_after_first(chunk_index: int) -> None:
+            if chunk_index >= 1:
+                raise _SimulatedKill("simulated SIGKILL after chunk commit")
+
+        before_audit = AuditEvent.objects.filter(action="IMPORT_LABWIN_BATCH").count()
+        import_mod._labwin_order_chunk_hook = _kill_after_first
+        try:
+            with self.assertRaises(_SimulatedKill):
+                call_command(
+                    "import_labwin_csv",
+                    str(FIXTURE),
+                    allow_new_patients=True,
+                    batch_size=1,
+                    verbosity=0,
+                )
+        finally:
+            import_mod._labwin_order_chunk_hook = None
+
+        self.assertGreaterEqual(SolicitudExamen.objects.count(), 1)
+        self.assertLess(SolicitudExamen.objects.count(), 4)
+        partial_orders = SolicitudExamen.objects.count()
+        partial_results = ResultadoExamen.objects.count()
+        partial_patients = Paciente.objects.count()
+
+        new_events = list(
+            AuditEvent.objects.filter(action="IMPORT_LABWIN_BATCH").order_by("id")
+        )[before_audit:]
+        statuses = [(e.metadata or {}).get("status") for e in new_events]
+        self.assertEqual(statuses[0], "started")
+        self.assertIn("chunk_committed", statuses)
+        self.assertNotIn("applied", statuses)
+        self.assertNotIn("failed_partial", statuses)
+        batch_ids = {e.entity_id for e in new_events}
+        self.assertEqual(len(batch_ids), 1)
+        for e in new_events:
+            blob = str(e.metadata or "") + (e.entity_repr or "")
+            self.assertNotIn("27831894", blob)
+            self.assertNotIn("FUENTEALBA", blob)
+
+        call_command(
+            "import_labwin_csv",
+            str(FIXTURE),
+            allow_new_patients=True,
+            batch_size=1,
+            verbosity=0,
+        )
+        self.assertEqual(SolicitudExamen.objects.count(), 4)
+        self.assertGreater(ResultadoExamen.objects.count(), partial_results)
+        self.assertEqual(Paciente.objects.filter(dni="27831894").count(), 1)
+        self.assertEqual(Paciente.objects.count(), partial_patients)
+        self.assertEqual(
+            SolicitudExamen.objects.filter(numero__startswith="LW-").count(), 4
+        )
+        applied = (
+            AuditEvent.objects.filter(action="IMPORT_LABWIN_BATCH")
+            .order_by("-id")
+            .first()
+        )
+        self.assertEqual((applied.metadata or {}).get("status"), "applied")
+        self.assertEqual(
+            (applied.metadata or {}).get("orders_created"), 4 - partial_orders
+        )

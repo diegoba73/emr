@@ -1132,6 +1132,10 @@ def crear_resultado_antibiotico(
     observaciones: str,
     actor: "AbstractUser | None",
     view: str,
+    unidad_halo: str = "mm",
+    unidad_mic: str = "",
+    metodo: str = "",
+    estandar_version: str = "",
 ) -> ResultadoAntibiotico:
     """Carga un resultado de antibiótico dentro de un antibiograma editable.
 
@@ -1171,8 +1175,12 @@ def crear_resultado_antibiotico(
             antibiograma=antibiograma,
             antibiotico=antibiotico,
             halo_mm=halo_mm,
+            unidad_halo=unidad_halo or "mm",
             mic=mic or "",
+            unidad_mic=unidad_mic or "",
             interpretacion=interpretacion,
+            metodo=metodo or "",
+            estandar_version=estandar_version or "",
             observaciones=observaciones or "",
         )
         resultado.save()
@@ -1215,6 +1223,10 @@ def actualizar_resultado_antibiotico(
     mic: str | None = None,
     interpretacion: str | None = None,
     observaciones: str | None = None,
+    unidad_halo: str | None = None,
+    unidad_mic: str | None = None,
+    metodo: str | None = None,
+    estandar_version: str | None = None,
 ) -> ResultadoAntibiotico:
     """PATCH controlado de un resultado: bloquea si antibiograma COMPLETO/CANCELADO."""
     with transaction.atomic():
@@ -1246,6 +1258,14 @@ def actualizar_resultado_antibiotico(
             resultado.halo_mm = halo_mm
         if mic is not None:
             resultado.mic = mic
+        if unidad_halo is not None:
+            resultado.unidad_halo = unidad_halo
+        if unidad_mic is not None:
+            resultado.unidad_mic = unidad_mic
+        if metodo is not None:
+            resultado.metodo = metodo
+        if estandar_version is not None:
+            resultado.estandar_version = estandar_version
         if interpretacion is not None:
             resultado.interpretacion = interpretacion
         if observaciones is not None:
@@ -1418,7 +1438,8 @@ def _base_informe_metadata(
 def verificar_completitud_para_informe_final(estudio: EstudioMicrobiologia) -> None:
     """Reglas de completitud antes de emitir o validar un informe final.
 
-    - Al menos una ``LecturaCultivo`` del estudio.
+    - Al menos una ``LecturaCultivo`` definitiva (``crecimiento != PENDIENTE``).
+      ``SIN_DESARROLLO`` cuenta: camino válido sin aislados ni antibiograma.
     - Aislados ``DESCARTADO`` no bloquean.
     - ``CONTAMINANTE`` / ``FLORA_HABITUAL`` en ``SOSPECHADO`` no exigen identificación.
     - Resto de ``SOSPECHADO`` bloquea.
@@ -1429,6 +1450,12 @@ def verificar_completitud_para_informe_final(estudio: EstudioMicrobiologia) -> N
     if not LecturaCultivo.objects.filter(estudio_id=estudio.pk).exists():
         raise MicrobiologiaAccionError(
             "Se requiere al menos una lectura de cultivo antes del informe final."
+        )
+    if not LecturaCultivo.objects.filter(estudio_id=estudio.pk).exclude(
+        crecimiento="PENDIENTE"
+    ).exists():
+        raise MicrobiologiaAccionError(
+            "Se requiere al menos una lectura definitiva (no PENDIENTE) antes del informe final."
         )
     lax_sign = frozenset({"CONTAMINANTE", "FLORA_HABITUAL"})
     for aislado in AisladoMicrobiologico.objects.filter(estudio_id=estudio.pk):

@@ -95,9 +95,10 @@ EXAMENES_COATRON: frozenset[str] = frozenset({"TP", "PP", "INR", "KPTT"})
 # Ionograma ERBA EC90 (reemplaza al Diestro)
 EXAMENES_ERBA_EC90: frozenset[str] = frozenset({"NA", "K", "CL", "CA_ION"})
 
-# VIDAS KUBE — inmunoensayos
+# VIDAS KUBE — inmunoensayos (ELFA). B12/VITD confirmados por lab; no fusionar
+# duplicados de catálogo (p. ej. NTPROBNP) ni reescribir resultados históricos.
 EXAMENES_VIDAS: frozenset[str] = frozenset(
-    {"TROP_US", "TSH", "PSA", "T3", "T4", "T4L", "FERRIT"}
+    {"TROP_US", "TSH", "PSA", "T3", "T4", "T4L", "FERRIT", "B12", "VITD"}
 )
 
 # Gasometría EDAN i15
@@ -118,7 +119,8 @@ EXAMENES_EDAN: frozenset[str] = frozenset(
     }
 )
 
-# Finecare — POCT / cardíaco / otros
+# Finecare — POCT / cardíaco / otros (PROBNP = NT-proBNP del kit Finecare;
+# no fusionar con códigos importados tipo NTPROBNP).
 EXAMENES_FINECARE: frozenset[str] = frozenset(
     {
         "DDIM",
@@ -127,6 +129,7 @@ EXAMENES_FINECARE: frozenset[str] = frozenset(
         "TROP_I",
         "CPK_MB",
         "MIOG",
+        "PROBNP",
     }
 )
 

@@ -1,10 +1,12 @@
 import {
+  applyAutofillVcmChcm,
   buildCargarResultadoPayload,
   filterMuestrasProcesables,
   muestrasCompatiblesParaTipo,
   validateCargaResultadosMuestra,
   type DraftCargaRow,
 } from './limsCargaMuestra';
+import { RESULTADO_NO_CALCULABLE } from './calculosDerivados';
 import type { LimsTipoExamen, MuestraTransaccional, ResultadoExamenLims } from '../types/lims';
 
 const draftRow = (muestra_id: number | null): DraftCargaRow => ({
@@ -157,5 +159,43 @@ describe('limsCargaMuestra', () => {
       { ...muestra(2, 1, 'TOMADA'), tipo_contenedor: 99 },
     ] as MuestraTransaccional[];
     expect(muestrasCompatiblesParaTipo(proc, 1, 99).map((m) => m.id)).toEqual([2]);
+  });
+
+  it('al subir TG a 400 deja LDL y residual como no calculables', () => {
+    const codigos = ['COL_TOT', 'HDL', 'TG', 'LDL', 'COL_RESID'] as const;
+    const resultados = codigos.map((codigo, i) => ({
+      id: i + 1,
+      tipo_examen: i + 1,
+      tipo_examen_codigo: codigo,
+      tipo_examen_nombre: codigo,
+      valor_obtenido: '',
+      valor_numerico: null,
+    })) as ResultadoExamenLims[];
+    const catalog = new Map<number, LimsTipoExamen>(
+      codigos.map((codigo, i) => [
+        i + 1,
+        {
+          id: i + 1,
+          codigo,
+          nombre: codigo,
+          tipo_muestra_requerida: 1,
+          modo_entrada: i >= 3 ? 'CALCULADO' : 'ESTANDAR',
+        },
+      ])
+    );
+    const draft: Record<number, DraftCargaRow> = {
+      1: { valor: '101', valor_sysmex: '', valor_numerico: '101', unidad: '', muestra_id: null },
+      2: { valor: '33', valor_sysmex: '', valor_numerico: '33', unidad: '', muestra_id: null },
+      3: { valor: '400', valor_sysmex: '', valor_numerico: '', unidad: '', muestra_id: null },
+      4: { valor: '48', valor_sysmex: '', valor_numerico: '48', unidad: '', muestra_id: null },
+      5: { valor: '20', valor_sysmex: '', valor_numerico: '20', unidad: '', muestra_id: null },
+    };
+    const next = applyAutofillVcmChcm(resultados, draft, catalog, new Set());
+    expect(next[4].valor).toBe(RESULTADO_NO_CALCULABLE);
+    expect(next[4].valor_numerico).toBe('');
+    expect(next[5].valor).toBe(RESULTADO_NO_CALCULABLE);
+    const payloadLdl = buildCargarResultadoPayload(4, next[4], catalog.get(4), 'LDL');
+    expect(payloadLdl.valor).toBe(RESULTADO_NO_CALCULABLE);
+    expect(payloadLdl.valor_numerico).toBeNull();
   });
 });

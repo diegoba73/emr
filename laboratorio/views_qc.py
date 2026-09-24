@@ -295,8 +295,11 @@ class IqcPrecheckView(APIView):
                         "solicitud_id": sid,
                         "ok": True,
                         "aplicable": False,
+                        "sin_configuracion": True,
+                        "motivo_no_aplicable": "solicitud_inexistente",
                         "problemas": [],
                         "equipo": None,
+                        "equipos": [],
                     }
                 )
                 continue

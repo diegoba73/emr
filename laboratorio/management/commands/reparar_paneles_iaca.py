@@ -143,8 +143,9 @@ class Command(BaseCommand):
                     or codigo.startswith("ORI_") or codigo.startswith("ELP_")
                     or codigo.startswith("NEUT_") or codigo in {
                         "VCM", "CHCM", "RDW", "EOS", "BAS", "LINF", "MONO",
-                        "PP", "INR", "CF", "FERR", "SAT_FE", "BIL_T", "BIL_D",
-                        "NA", "K", "COL_TOT", "HDL", "LDL", "COL_NO_LDL",
+                        "PP", "INR", "CF", "FERR", "SAT_FE", "BIL_T", "BIL_D", "BIL_I",
+                        "NA", "K", "COL_TOT", "HDL", "LDL", "VLDL", "COL_NO_LDL",
+                        "COL_RESID", "RATIO_CT_HDL", "TG", "HCM",
                         "GOT", "GPT", "NA_U", "K_U", "CL_U", "CREA_U", "DIUR",
                         "CLEAR_CREA", "MICROALB", "AU", "P", "PROT_T", "VSG",
                         "PCR_US", "AMIL", "LIP", "CPK", "CPK_MB", "DDIM", "B12",

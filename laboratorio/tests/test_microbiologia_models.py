@@ -790,6 +790,51 @@ class TestInformeMicrobiologiaModel:
         inf.refresh_from_db()
         assert inf.estado == "EMITIDO"
 
+    def test_final_bloqueado_solo_lectura_pendiente(self, base_data):
+        m = _muestra_recibida(base_data["sol"], base_data["tm"])
+        medio = _medio()
+        e = EstudioMicrobiologia.objects.create(
+            solicitud=base_data["sol"],
+            muestra=m,
+            paciente=base_data["pac"],
+            tipo_estudio="CULTIVO_RUTINA",
+        )
+        s = SiembraMicrobiologia.objects.create(estudio=e, muestra=m, medio=medio)
+        EstudioMicrobiologia.objects.filter(pk=e.pk).update(estado="SEMBRADO")
+        LecturaCultivo.objects.create(siembra=s, estudio=e, crecimiento="PENDIENTE")
+        with pytest.raises(MicrobiologiaAccionError, match="lectura definitiva"):
+            crear_informe_borrador(
+                estudio_id=e.pk,
+                tipo="FINAL",
+                texto="x",
+                observaciones="",
+                reemplaza_a_id=None,
+                actor=None,
+                view="t",
+            )
+
+    def test_final_sin_desarrollo_sin_aislados_ok(self, base_data):
+        """Camino corto negativo: SIN_DESARROLLO basta; no exige aislados."""
+        ctx = _estudio_con_lectura_sin_aislados(base_data)
+        assert ctx["lectura"].crecimiento == "SIN_DESARROLLO"
+        inf = crear_informe_borrador(
+            estudio_id=ctx["estudio"].pk,
+            tipo="FINAL",
+            texto="Sin desarrollo de microorganismos patógenos.",
+            observaciones="",
+            reemplaza_a_id=None,
+            actor=None,
+            view="t",
+        )
+        aplicar_emitir_informe(
+            inf.pk,
+            actor=None,
+            view="t",
+            texto="Sin desarrollo de microorganismos patógenos.",
+        )
+        ctx["estudio"].refresh_from_db()
+        assert ctx["estudio"].estado == "LISTO_PARA_VALIDAR"
+
     def test_validar_pasa_estudio_a_validado(self, base_data):
         ctx = _estudio_con_lectura_sin_aislados(base_data)
         EstudioMicrobiologia.objects.filter(pk=ctx["estudio"].pk).update(estado="ANTIBIOGRAMA")

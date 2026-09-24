@@ -32,15 +32,29 @@ class TestSeedCatalogoSolicitudPapel:
         )
         assert PanelExamen.objects.filter(activo=True).count() == len(PANELES)
 
-    def test_hemograma_tiene_catorce_componentes(self):
+    def test_hemograma_tiene_quince_componentes(self):
         call_command("seed_catalogo_solicitud_papel")
         panel = PanelExamen.objects.get(codigo="PAN_HEMO")
-        assert panel.tipos_examen.count() == 14
+        assert panel.tipos_examen.count() == 15
         codigos = [te.codigo for te in ordenar_queryset_panel(panel)]
         assert codigos == [
-            "HEMATIES", "HTO", "HGB", "VCM", "CHCM", "RDW", "LEUCO", "NEUT_CAY",
-            "NEUT_SEG", "EOS", "BAS", "LINF", "MONO", "PLAQ",
+            "HEMATIES", "HTO", "HGB", "RDW", "VCM", "HCM", "CHCM", "PLAQ", "LEUCO",
+            "NEUT_CAY", "NEUT_SEG", "EOS", "BAS", "LINF", "MONO",
         ]
+
+    def test_perfil_lipidico_y_hepatograma_derivados(self):
+        call_command("seed_catalogo_solicitud_papel")
+        lip = PanelExamen.objects.get(codigo="PAN_LIP")
+        hep = PanelExamen.objects.get(codigo="PAN_HEP")
+        assert [te.codigo for te in ordenar_queryset_panel(lip)] == [
+            "COL_TOT", "LDL", "VLDL", "HDL", "TG", "COL_NO_LDL", "COL_RESID", "RATIO_CT_HDL",
+        ]
+        assert [te.codigo for te in ordenar_queryset_panel(hep)] == [
+            "GOT", "GPT", "FAL", "BIL_T", "BIL_D", "BIL_I",
+        ]
+        assert TipoExamen.objects.get(codigo="LDL").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="BIL_I").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="COL_NO_LDL").nombre == "Colesterol no-HDL"
 
     def test_sin_duplicar_componentes_entre_registros(self):
         call_command("seed_catalogo_solicitud_papel")

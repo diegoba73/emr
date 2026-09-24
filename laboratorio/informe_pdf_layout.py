@@ -273,9 +273,39 @@ def _material_texto(res: ResultadoExamen) -> str | None:
     return None
 
 
-def _valor_y_unidad(res: ResultadoExamen) -> tuple[str, str]:
+def _valor_y_unidad(
+    res: ResultadoExamen,
+    *,
+    valores_por_codigo: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    from decimal import Decimal, InvalidOperation
+
+    from laboratorio.calculos_derivados import (
+        FORMULA_LEUCO_CODIGOS,
+        RESULTADO_NO_CALCULABLE,
+        calc_absoluto_formula,
+        format_absoluto_mm3,
+    )
+
     valor = (res.valor_obtenido or "").strip() or "—"
+    if valor == RESULTADO_NO_CALCULABLE:
+        return valor, ""
     unidad = (res.unidad or res.tipo_examen.unidad_default or "").strip()
+    codigo = (getattr(res.tipo_examen, "codigo", None) or "").strip().upper()
+    if codigo in FORMULA_LEUCO_CODIGOS and valores_por_codigo:
+        pct = res.valor_numerico
+        if pct is None and valor not in ("", "—"):
+            try:
+                pct = Decimal(str(valor))
+            except (InvalidOperation, TypeError, ValueError):
+                pct = None
+        leuco = valores_por_codigo.get("LEUCO")
+        if pct is not None and leuco is not None:
+            absoluto = calc_absoluto_formula(Decimal(str(pct)), Decimal(str(leuco)))
+            if absoluto is not None:
+                valor = f"{valor}  ·  {format_absoluto_mm3(absoluto)}"
+                if not unidad:
+                    unidad = "%"
     return valor, unidad
 
 
@@ -633,8 +663,13 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
     return tbl
 
 
-def _fila_resultado(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> Table:
-    valor, unidad = _valor_y_unidad(res)
+def _fila_resultado(
+    res: ResultadoExamen,
+    styles: dict[str, ParagraphStyle],
+    *,
+    valores_por_codigo: dict[str, Any] | None = None,
+) -> Table:
+    valor, unidad = _valor_y_unidad(res, valores_por_codigo=valores_por_codigo)
     ref = _referencia_texto(res) or "—"
     flag = _flag_resultado(res)
 
@@ -715,8 +750,25 @@ def _bloque_panel(grupo: GrupoResultadosPdf, styles: dict[str, ParagraphStyle]) 
     flow.append(Spacer(1, 0.08 * cm))
     flow.append(_tabla_encabezado_columnas(styles))
 
+    valores_por_codigo: dict[str, Any] = {}
     for res in grupo.resultados:
-        flow.append(_fila_resultado(res, styles))
+        codigo = (getattr(res.tipo_examen, "codigo", None) or "").strip().upper()
+        if not codigo:
+            continue
+        num = res.valor_numerico
+        if num is None and (res.valor_obtenido or "").strip():
+            from decimal import Decimal, InvalidOperation
+
+            try:
+                num = Decimal(str(res.valor_obtenido).strip())
+            except (InvalidOperation, TypeError, ValueError):
+                num = None
+        valores_por_codigo[codigo] = num
+
+    for res in grupo.resultados:
+        flow.append(
+            _fila_resultado(res, styles, valores_por_codigo=valores_por_codigo)
+        )
 
     flow.append(Spacer(1, 0.25 * cm))
     return [KeepTogether(flow)]
