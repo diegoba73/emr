@@ -423,7 +423,7 @@ const InventarioPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 2, maxWidth: 1200 }}>
+    <Box data-demo="page-lims-inventario" sx={{ p: 2, maxWidth: 1200 }}>
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Inventario de laboratorio
       </Typography>

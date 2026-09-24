@@ -163,7 +163,7 @@ const AtencionesClinicasPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, mt: 8 }}>
+    <Box data-demo="page-atenciones" sx={{ p: { xs: 2, md: 3 }, mt: 8 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={700}>
@@ -198,7 +198,7 @@ const AtencionesClinicasPage: React.FC = () => {
         </Stack>
       </Stack>
 
-      <Card sx={{ mb: 3 }}>
+      <Card data-demo="atenciones-filters" sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} md={3}>

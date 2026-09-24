@@ -1,3 +1,4 @@
+import Logo from '../components/Logo';
 import React, { useState } from 'react';
 import {
   Box,
@@ -103,13 +104,17 @@ const Login: React.FC = () => {
             borderRadius: 3,
           }}
         >
-          {/* Logo */}
+          {/* Identidad genérica en el despliegue demo. */}
+          {process.env.REACT_APP_DEMO_MODE === 'true' ? (
+            <Box sx={{ mb: 3 }}><Logo demo size={150} /></Box>
+          ) : (
           <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
             <MedicalServices sx={{ fontSize: 40, color: 'primary.main' }} />
             <Typography variant="h4" component="h1" fontWeight="bold">
               Synesis EMR
             </Typography>
           </Box>
+          )}
 
           <Typography variant="h6" color="text.secondary" gutterBottom>
             Iniciar Sesión

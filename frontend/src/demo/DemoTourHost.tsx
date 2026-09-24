@@ -3,6 +3,7 @@ import { Box, Button, Fab, Tooltip } from '@mui/material';
 import ReplayIcon from '@mui/icons-material/Replay';
 import { driver, type Driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
+import './demoTour.css';
 import { useNavigate } from 'react-router-dom';
 import {
   DEMO_TOUR_ACTIVE_KEY,
@@ -18,36 +19,24 @@ import { useData } from '../contexts/DataContext';
 function waitForElement(selector: string, timeoutMs = 7000): Promise<Element | null> {
   return new Promise((resolve) => {
     const hit = document.querySelector(selector);
-    if (hit) {
-      resolve(hit);
-      return;
-    }
-    const started = Date.now();
-    const obs = new MutationObserver(() => {
-      const el = document.querySelector(selector);
-      if (el) {
-        obs.disconnect();
-        resolve(el);
-      } else if (Date.now() - started > timeoutMs) {
-        obs.disconnect();
-        resolve(null);
-      }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-    window.setTimeout(() => {
+    if (hit) { resolve(hit); return; }
+    const finish = (element: Element | null) => {
       obs.disconnect();
-      resolve(document.querySelector(selector));
-    }, timeoutMs);
+      window.clearTimeout(timer);
+      resolve(element);
+    };
+    const obs = new MutationObserver(() => {
+      const element = document.querySelector(selector);
+      if (element) finish(element);
+    });
+    const timer = window.setTimeout(() => finish(document.querySelector(selector)), timeoutMs);
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true });
   });
 }
 
 async function resolveStepRoute(step: DemoTourStep): Promise<string | null> {
   if (step.resolveRoute) {
-    try {
-      return await step.resolveRoute();
-    } catch {
-      return step.route || null;
-    }
+    try { return await step.resolveRoute(); } catch { return null; }
   }
   return step.route || null;
 }
@@ -57,11 +46,12 @@ export const DemoTourHost: React.FC = () => {
   const { isAuthenticated } = useData();
   const navigate = useNavigate();
   const driverRef = useRef<Driver | null>(null);
-  const idxRef = useRef(0);
+  const requestRef = useRef(0);
   const stepsRef = useRef<DemoTourStep[]>([]);
   const startedOnceRef = useRef(false);
 
   const destroyDriver = useCallback(() => {
+    requestRef.current += 1;
     try {
       driverRef.current?.destroy();
     } catch {
@@ -78,39 +68,51 @@ export const DemoTourHost: React.FC = () => {
         destroyDriver();
         return;
       }
-      idxRef.current = index;
+      destroyDriver();
+      const request = requestRef.current;
       const step = steps[index];
       const route = await resolveStepRoute(step);
-      if (route) {
-        navigate(route);
+      if (request !== requestRef.current) return;
+      const missingRecord = Boolean(step.resolveRoute && !route);
+      if (route || step.route) {
+        navigate(route || step.route!);
         await new Promise((r) => setTimeout(r, 400));
       }
+      if (request !== requestRef.current) return;
       const selector = typeof step.element === 'string' ? step.element : '';
-      if (selector) {
-        await waitForElement(selector);
+      const target = !missingRecord && selector ? await waitForElement(selector) : null;
+      if (request !== requestRef.current) return;
+      if (target && step.prepare) {
+        step.prepare();
+        await new Promise((r) => setTimeout(r, 50));
       }
-
-      destroyDriver();
+      if (request !== requestRef.current) return;
+      const unavailable = missingRecord || (Boolean(selector) && !target);
       const isLast = index >= steps.length - 1;
       const d = driver({
         showProgress: true,
         progressText: `${index + 1} de ${steps.length}`,
-        animate: true,
+        animate: false,
+        popoverClass: 'demo-tour-popover',
+        disableActiveInteraction: true,
         allowClose: true,
         overlayOpacity: 0.55,
         stagePadding: 6,
         nextBtnText: isLast ? 'Listo' : 'Siguiente',
         prevBtnText: 'Anterior',
         doneBtnText: 'Listo',
-        steps: [
-          {
-            element: selector || undefined,
-            popover: {
-              ...(step.popover || { title: 'Demo', description: '' }),
-              showButtons: ['next', 'previous', 'close'],
-            },
+        // Preserve the real index so Driver enables Previous and keyboard navigation.
+        steps: steps.map((_, i) => i === index ? {
+          element: unavailable ? undefined : selector || undefined,
+          popover: {
+            ...(step.popover || { title: 'Demo', description: '' }),
+            ...(unavailable ? { description: missingRecord
+              ? '<p>No encontramos el registro demo necesario para este paso. Revisá que los ejemplos estén cargados en este entorno.</p><p>Podés continuar con <b>Siguiente</b> o volver con <b>Anterior</b>.</p>'
+              : '<p>Esta sección no está disponible o no terminó de cargar. Podés continuar con <b>Siguiente</b> y volver a intentarlo después.</p>',
+            } : {}),
+            showButtons: ['next', 'previous', 'close'],
           },
-        ],
+        } : {}),
         onNextClick: () => {
           if (isLast) {
             sessionStorage.setItem(DEMO_TOUR_ACTIVE_KEY, '0');
@@ -128,11 +130,12 @@ export const DemoTourHost: React.FC = () => {
           destroyDriver();
         },
         onDestroyStarted: () => {
+          sessionStorage.setItem(DEMO_TOUR_ACTIVE_KEY, '0');
           d.destroy();
         },
       });
       driverRef.current = d;
-      d.drive(0);
+      d.drive(index);
     },
     [destroyDriver, navigate]
   );
@@ -141,7 +144,6 @@ export const DemoTourHost: React.FC = () => {
     (role: DemoTourRole) => {
       activateDemoTour(role);
       stepsRef.current = getTourSteps(role);
-      idxRef.current = 0;
       void showStep(0);
     },
     [showStep]
@@ -156,8 +158,10 @@ export const DemoTourHost: React.FC = () => {
     if (!isDemoTourActive() || startedOnceRef.current) return;
     const role = readDemoTourRole();
     if (!role) return;
-    startedOnceRef.current = true;
-    const t = window.setTimeout(() => startTour(role), 500);
+    const t = window.setTimeout(() => {
+      startedOnceRef.current = true;
+      startTour(role);
+    }, 500);
     return () => window.clearTimeout(t);
   }, [isAuthenticated, destroyDriver, startTour]);
 

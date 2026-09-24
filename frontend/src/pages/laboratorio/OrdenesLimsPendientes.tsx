@@ -178,7 +178,7 @@ const OrdenesLimsPendientes: React.FC = () => {
   const esperandoRecepcion = tab === 'esperando_recepcion';
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box data-demo="page-lims-pendientes" sx={{ p: 2 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h5" gutterBottom>

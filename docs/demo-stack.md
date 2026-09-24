@@ -64,3 +64,50 @@ docker compose -p emr-demo -f docker-compose.demo.yml down
 - `deploy/Dockerfile.demo-nginx` (build React `REACT_APP_API_URL=/api` + nginx)
 - `deploy/nginx/nginx.demo.conf`
 - `.env.demo.example`
+
+## Recorridos guiados por rol
+
+La entrada `/demo` muestra el alcance y la cantidad de pasos de cada recorrido:
+
+| Rol | Pasos | Contenido |
+| --- | --- | --- |
+| Médico | 15 | Agenda y filtros, pacientes, vista 360 y ficha detallada, atenciones, guardia, internación, laboratorio y estudios complementarios. |
+| Laboratorio | 13 | Pendientes, etiquetas, recepción, órdenes, pestañas de muestras y resultados, validación por rol, informe finalizado, trazabilidad e inventario. |
+| Enfermería | 13 | Camas, opciones del episodio y formularios, permisos de ingreso y alta, pacientes, historia, atenciones y laboratorio. |
+| Paciente | 9 | Inicio, próximos turnos e historial, resultados liberados y PDF, documentos e historia. |
+
+La guía navega entre pantallas y abre las pestañas de la orden LIMS. No ejecuta
+recepciones, guarda resultados, valida informes ni envía documentos. Para explorar
+las acciones manualmente se cierra la guía; el botón flotante permite reiniciarla.
+Las explicaciones sobre las pestañas de internación indican cómo abrirlas manualmente.
+
+Los pasos que necesitan un paciente u orden buscan coincidencias exactas con los
+identificadores demo. Si falta el ejemplo, muestran un aviso y permiten continuar;
+no abren el primer registro devuelto por la búsqueda. Si una sección no aparece
+tras la espera de carga, también se informa en lugar de señalar otro elemento.
+
+### Verificación del recorrido
+
+- Entrar por `/demo` con cada rol y completar el recorrido, comprobando avance,
+  retroceso, cierre, reinicio y cambio de rol.
+- En laboratorio comprobar que se abren Resumen, Muestras y Resultados y que
+  el ejemplo finalizado corresponde a `LAB-MKTG-00002`.
+- Comprobar los recorridos con ejemplos ausentes y con pantalla angosta.
+- Revisar que enfermería no presente alta médica y que laboratorio distinga
+  carga de resultados de validación por bioquímico o administrador.
+
+Pruebas automatizadas del controlador y la resolución de ejemplos:
+
+```bash
+cd frontend
+CI=true npm test -- --watchAll=false --runInBand --runTestsByPath src/demo/DemoTourHost.test.tsx src/demo/demoResolve.test.ts
+./node_modules/.bin/tsc --noEmit
+```
+
+## Identidad visual de ejemplo
+
+La imagen demo se compila con `REACT_APP_DEMO_MODE=true`. Usa la identidad
+**EMR DEMO · Entorno de ejemplo**, con un símbolo geométrico en versiones clara
+ y oscura para menú, login y entrada del recorrido. El paso de build
+`frontend/scripts/prepare-demo-branding.cjs` también adapta el título, favicon
+ y manifiesto del demo. El logo institucional sigue disponible para el despliegue habitual.

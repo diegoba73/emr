@@ -40,7 +40,7 @@ const PortalDocumentos: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box data-demo="page-portal-documentos" sx={{ p: 2 }}>
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Mis documentos
       </Typography>

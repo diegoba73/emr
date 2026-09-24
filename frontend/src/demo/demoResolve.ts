@@ -6,14 +6,14 @@ import { MKTG_LIMS_FINAL, MKTG_LIMS_VIVO, MKTG_PORTAL_PACIENTE_DNI } from './tou
 export async function resolveDemoPatientId(): Promise<number | null> {
   try {
     const fromOrden = await listSolicitudesExamen({ numero: MKTG_LIMS_FINAL });
-    const pId = fromOrden[0]?.paciente;
+    const pId = fromOrden.find((o) => o.numero === MKTG_LIMS_FINAL)?.paciente;
     if (typeof pId === 'number' && Number.isFinite(pId)) return pId;
   } catch {
     /* ignore */
   }
   try {
     const fromVivo = await listSolicitudesExamen({ numero: MKTG_LIMS_VIVO });
-    const pId = fromVivo[0]?.paciente;
+    const pId = fromVivo.find((o) => o.numero === MKTG_LIMS_VIVO)?.paciente;
     if (typeof pId === 'number' && Number.isFinite(pId)) return pId;
   } catch {
     /* ignore */
@@ -24,7 +24,6 @@ export async function resolveDemoPatientId(): Promise<number | null> {
       (p) => (p.dni || '').toUpperCase() === MKTG_PORTAL_PACIENTE_DNI
     );
     if (match?.id != null) return Number(match.id);
-    if (list?.[0]?.id != null) return Number(list[0].id);
   } catch {
     /* ignore */
   }
@@ -39,7 +38,6 @@ export async function resolveDemoLimsOrdenId(
     const rows = await listSolicitudesExamen({ numero });
     const match = rows.find((r) => (r.numero || '').toUpperCase() === numero.toUpperCase());
     if (match?.id != null) return Number(match.id);
-    if (rows[0]?.id != null) return Number(rows[0].id);
   } catch {
     /* ignore */
   }

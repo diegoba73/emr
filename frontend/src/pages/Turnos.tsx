@@ -765,7 +765,7 @@ const Turnos: React.FC = () => {
 			</div>
 
       {/* Search and Filters */}
-      <Box sx={{ mb: 3, p: 3, borderRadius: 2, bgcolor: 'background.paper', boxShadow: 1 }}>
+      <Box data-demo="turnos-filters" sx={{ mb: 3, p: 3, borderRadius: 2, bgcolor: 'background.paper', boxShadow: 1 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <TextField
             size="small"

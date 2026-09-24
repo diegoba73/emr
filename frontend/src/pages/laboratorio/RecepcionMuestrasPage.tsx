@@ -131,7 +131,7 @@ const RecepcionMuestrasPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 2, maxWidth: 900, mx: 'auto' }}>
+    <Box data-demo="page-lims-recepcion" sx={{ p: 2, maxWidth: 900, mx: 'auto' }}>
       <Typography variant="h5" gutterBottom>
         Recepción de muestras
       </Typography>

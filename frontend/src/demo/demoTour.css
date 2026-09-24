@@ -1,0 +1,13 @@
+.demo-tour-popover {
+  max-width: min(440px, calc(100vw - 32px));
+  box-sizing: border-box;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.demo-tour-popover .driver-popover-description {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.demo-tour-popover .driver-popover-description p + p {
+  margin-top: 12px;
+}

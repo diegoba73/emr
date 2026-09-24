@@ -307,7 +307,7 @@ const PatientDashboard: React.FC = () => {
           alignItems: 'stretch',
         }}
       >
-        <Box>
+        <Box data-demo="patient-timeline">
           <SectionCard
             title="Línea de tiempo clínica"
             subtitle="Timeline unificada (Atención como eje; sin duplicar HC vinculada)"
@@ -466,7 +466,7 @@ const PatientDashboard: React.FC = () => {
           Información completa, atenciones y laboratorio
         </Typography>
       </Box>
-      <Box id="ficha-paciente-detalle">
+      <Box id="ficha-paciente-detalle" data-demo="patient-detail">
         <PatientIntegratedView
           paciente={paciente}
           variant="page"

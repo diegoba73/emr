@@ -7,9 +7,10 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --legacy-peer-deps
 COPY frontend/ ./
 ENV REACT_APP_API_URL=/api
+ENV REACT_APP_DEMO_MODE=true
 ENV CI=false
 ENV DISABLE_ESLINT_PLUGIN=true
-RUN npm run build
+RUN npm run build && node scripts/prepare-demo-branding.cjs
 
 FROM nginx:1.27-alpine
 COPY deploy/nginx/nginx.demo.conf /etc/nginx/conf.d/default.conf

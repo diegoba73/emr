@@ -11,7 +11,6 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  Biotech,
   LocalHospital,
   MedicalServices,
   Person,
@@ -21,7 +20,9 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../contexts/DataContext';
 import { useThemeMode } from '../contexts/ThemeModeContext';
+import Logo from '../components/Logo';
 import ThemeModeToggle from '../components/ThemeModeToggle';
+import { getTourSteps } from '../demo/tourSteps';
 import { authPageGradient } from '../theme/buildAppTheme';
 import {
   DEMO_ACCOUNTS,
@@ -83,13 +84,13 @@ const DemoLanding: React.FC = () => {
       </Box>
       <Container maxWidth="md">
         <Stack spacing={2} alignItems="center" sx={{ mb: 4, textAlign: 'center' }}>
-          <Biotech sx={{ fontSize: 48, color: 'primary.contrastText' }} />
+          <Logo demo inverse size={160} />
           <Typography variant="h3" fontWeight={700} color="common.white">
-            Demo Synesis EMR
+            Explorá EMR Demo
           </Typography>
           <Typography variant="body1" color="rgba(255,255,255,0.9)" maxWidth={560}>
             Recorrido guiado con datos ficticios (MKTG). Elegí un rol para ingresar y arrancar el
-            tour. Ideal para mostrar agenda, HC 360, internación, LIMS y portal del paciente.
+            tour. Cada paso explica qué muestra la pantalla, para qué sirve y qué opciones ofrece tu rol.
           </Typography>
         </Stack>
 
@@ -118,6 +119,9 @@ const DemoLanding: React.FC = () => {
                   </Stack>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                     {account.description}
+                  </Typography>
+                  <Typography variant="body2" color="primary" sx={{ mb: 1 }}>
+                    {getTourSteps(role).length} pasos · Podés cerrar y reiniciar la guía
                   </Typography>
                   <Typography variant="caption" color="text.secondary" display="block">
                     Usuario: <strong>{account.username}</strong>

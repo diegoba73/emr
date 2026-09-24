@@ -318,7 +318,7 @@ const InternacionDashboard: React.FC = () => {
       <Grid container spacing={3}>
         {/* Sección UCO */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3, mb: 3 }}>
+          <Paper data-demo="internacion-uco" sx={{ p: 3, mb: 3 }}>
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: 'primary.main' }}>
               Unidad Coronaria (UCO)
             </Typography>
@@ -354,7 +354,7 @@ const InternacionDashboard: React.FC = () => {
 
         {/* Sección UCE */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
+          <Paper data-demo="internacion-uce" sx={{ p: 3 }}>
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: 'secondary.main' }}>
               Cuidados Especiales (UCE)
             </Typography>

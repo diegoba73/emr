@@ -102,7 +102,7 @@ const GuardiaPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box data-demo="page-guardia" sx={{ p: 3 }}>
       <Stack direction="row" alignItems="center" spacing={2} mb={3}>
         <LocalHospital color="error" sx={{ fontSize: 36 }} />
         <Box flex={1}>

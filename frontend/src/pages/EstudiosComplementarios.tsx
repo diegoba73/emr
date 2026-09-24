@@ -189,7 +189,7 @@ const EstudiosComplementarios: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }} className="fade-in">
+    <Box data-demo="page-estudios" sx={{ p: 3 }} className="fade-in">
       <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
         Estudios complementarios
       </Typography>

@@ -14,25 +14,25 @@ export const DEMO_ACCOUNTS: Record<
     username: 'medico1',
     password: 'medico123',
     label: 'Médico',
-    description: 'Agenda, historia clínica 360, internación y órdenes de laboratorio.',
+    description: 'Agenda, historia clínica 360, atenciones, guardia, internación, laboratorio y estudios.',
   },
   laboratorio: {
     username: 'laboratorio1',
     password: 'laboratorio123',
     label: 'Laboratorio',
-    description: 'Órdenes LIMS en proceso, resultados y consulta de muestras.',
+    description: 'Pendientes, recepción, muestras, resultados, informes e inventario.',
   },
   enfermeria: {
     username: 'enfermeria1',
     password: 'enfermeria123',
     label: 'Enfermería',
-    description: 'Tablero de camas e internaciones activas.',
+    description: 'Camas, opciones del episodio, registros de enfermería, ficha clínica y laboratorio.',
   },
   paciente: {
     username: 'paciente1',
     password: 'paciente123',
     label: 'Paciente',
-    description: 'Portal: turnos, resultados de laboratorio e historia.',
+    description: 'Portal: próximos turnos, historial, informes PDF, documentos e historia clínica.',
   },
 };
 

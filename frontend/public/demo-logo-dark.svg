@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 166 162" role="img" aria-labelledby="title desc">
+  <title id="title">EMR Demo</title>
+  <desc id="desc">Símbolo abstracto de tres bandas y un punto. Entorno de ejemplo.</desc>
+  <rect x="42" y="19" width="66" height="18" rx="9" fill="#14b8a6"/>
+  <rect x="58" y="45" width="66" height="18" rx="9" fill="#38bdf8"/>
+  <rect x="42" y="71" width="42" height="18" rx="9" fill="#14b8a6"/>
+  <circle cx="108" cy="80" r="9" fill="#818cf8"/>
+  <text x="83" y="124" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="700" letter-spacing="1" fill="#f1f5f9">EMR DEMO</text>
+  <text x="83" y="146" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" letter-spacing="1.2" fill="#bac8da">ENTORNO DE EJEMPLO</text>
+</svg>

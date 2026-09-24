@@ -270,7 +270,7 @@ const OrdenLimsDetalle: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 2 }} data-demo="page-lims-detalle">
+    <Box sx={{ p: 2 }} data-demo="page-lims-detalle" data-demo-order={orden.numero}>
       <Button size="small" onClick={goBack} sx={{ mb: 1 }}>
         {back.label}
       </Button>
@@ -531,48 +531,49 @@ const OrdenLimsDetalle: React.FC = () => {
       </Paper>
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Resumen" />
-        <Tab label="Muestras" />
-        <Tab label="Resultados" />
+        <Tab data-demo="lims-tab-0" label="Resumen" />
+        <Tab data-demo="lims-tab-1" label="Muestras" />
+        <Tab data-demo="lims-tab-2" label="Resultados" />
       </Tabs>
 
-      {tab === 0 && <OrdenLimsResumenPanel orden={orden} />}
+      <Box data-demo="lims-content">
+        {tab === 0 && <OrdenLimsResumenPanel orden={orden} />}
 
-      {tab === 1 && (
-        <MuestrasOrdenPanel
-          solicitudId={orden.id}
-          solicitudNumero={orden.numero}
-          ordenEstado={orden.estado}
-          canOperate={canOp}
-          reloadToken={muestrasReloadToken}
-          origenOrden={{
-            origen_solicitud: orden.origen_solicitud,
-            origen_solicitud_display: orden.origen_solicitud_display,
-            procedencia_display: orden.procedencia_display,
-          }}
-        />
-      )}
+        {tab === 1 && (
+          <MuestrasOrdenPanel
+            solicitudId={orden.id}
+            solicitudNumero={orden.numero}
+            ordenEstado={orden.estado}
+            canOperate={canOp}
+            reloadToken={muestrasReloadToken}
+            origenOrden={{
+              origen_solicitud: orden.origen_solicitud,
+              origen_solicitud_display: orden.origen_solicitud_display,
+              procedencia_display: orden.procedencia_display,
+            }}
+          />
+        )}
 
-      {tab === 2 && (
-        <CargaResultadosLims
-          orden={orden}
-          muestras={muestras}
-          canOperate={canOp}
-          permitirEdicion={(enProceso || informadoParcial) && !finalizada}
-          onGuardado={async (o) => {
-            setOrden(o);
-            await refreshMuestras(o.id, o.numero);
-            setMuestrasReloadToken((t) => t + 1);
-            try {
-              const fresh = await getSolicitudExamen(o.id);
-              setOrden(fresh);
-            } catch {
-              /* keep o */
-            }
-          }}
-        />
-      )}
-
+        {tab === 2 && (
+          <CargaResultadosLims
+            orden={orden}
+            muestras={muestras}
+            canOperate={canOp}
+            permitirEdicion={(enProceso || informadoParcial) && !finalizada}
+            onGuardado={async (o) => {
+              setOrden(o);
+              await refreshMuestras(o.id, o.numero);
+              setMuestrasReloadToken((t) => t + 1);
+              try {
+                const fresh = await getSolicitudExamen(o.id);
+                setOrden(fresh);
+              } catch {
+                /* keep o */
+              }
+            }}
+          />
+        )}
+      </Box>
       <TomarMuestraOrdenDialog
         open={openTomarMuestra}
         orden={orden}
