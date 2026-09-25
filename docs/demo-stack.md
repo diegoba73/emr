@@ -52,9 +52,9 @@ docker compose -p emr-demo -f docker-compose.demo.yml down
 
 1. NAT router: público **8081 → host EMR:8081** (clínico sigue en **8080**).
 2. En el servidor (`ssh -p 2223`), directorio del repo o `/srv/emr-demo`.
-3. `.env.demo` con hosts/CSRF `http://dsachubut.sytes.net:8081` y secreto fuerte.
+3. `.env.demo` con hosts/CSRF `http://emr.sytes.net:8081` y secreto fuerte.
 4. Mismo `up --build` + seeds.
-5. URL: `http://dsachubut.sytes.net:8081/demo`
+5. URL: `http://emr.sytes.net:8081/demo`
 
 **Prohibido:** `seed_demo_marketing` en el backend clínico; reutilizar volumen `postgres_data` / `postgres_data_prod`; `down -v` del proyecto clínico.
 
