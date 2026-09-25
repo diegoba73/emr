@@ -131,6 +131,42 @@ class TiposDietaAPITestCase(APITestCase):
         self.assertEqual(self.internacion_activa.tipo_dieta_id, self.tipo_diabetica.id)
         self.assertEqual(response.data['tipo_dieta']['nombre'], self.tipo_diabetica.nombre)
 
+    def test_secretaria_solo_edita_dieta(self):
+        self.client.force_authenticate(user=self.user_secretaria)
+        url = f'/api/internacion/internaciones/{self.internacion_activa.id}/'
+        for dieta in [self.tipo_diabetica.id, None]:
+            response = self.client.patch(url, {'tipo_dieta_id': dieta}, format='json')
+            self.assertEqual(response.status_code, 200, response.data)
+            self.internacion_activa.refresh_from_db()
+            self.assertEqual(self.internacion_activa.tipo_dieta_id, dieta)
+
+    def test_secretaria_no_puede_agregar_campos_a_dieta(self):
+        self.client.force_authenticate(user=self.user_secretaria)
+        url = f'/api/internacion/internaciones/{self.internacion_activa.id}/'
+        for campo, valor in [('diagnostico_ingreso', 'Cambio'), ('activo', False),
+                             ('medico', None), ('anamnesis_ingreso', 'Cambio')]:
+            response = self.client.patch(url, {
+                'tipo_dieta_id': self.tipo_diabetica.id, campo: valor,
+            }, format='json')
+            self.assertEqual(response.status_code, 403, response.data)
+        self.internacion_activa.refresh_from_db()
+        self.assertEqual(self.internacion_activa.tipo_dieta_id, self.tipo_hiposodica.id)
+        response = self.client.put(url, {'tipo_dieta_id': self.tipo_diabetica.id}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_secretaria_no_edita_dieta_de_internacion_finalizada(self):
+        self.client.force_authenticate(user=self.user_secretaria)
+        Internacion.objects.filter(pk=self.internacion_activa.pk).update(activo=False)
+        url = f'/api/internacion/internaciones/{self.internacion_activa.id}/?historico=1'
+        response = self.client.patch(url, {'tipo_dieta_id': self.tipo_diabetica.id}, format='json')
+        self.assertEqual(response.status_code, 403, response.data)
+
+    def test_secretaria_dieta_inexistente_no_guarda(self):
+        self.client.force_authenticate(user=self.user_secretaria)
+        url = f'/api/internacion/internaciones/{self.internacion_activa.id}/'
+        response = self.client.patch(url, {'tipo_dieta_id': 99999999}, format='json')
+        self.assertEqual(response.status_code, 400, response.data)
+
     def test_internacion_actual_incluye_nombre_dieta(self):
         self.client.force_authenticate(user=self.user_medico)
         response = self.client.get(f'/api/internacion/camas/{self.cama_ocupada.id}/')

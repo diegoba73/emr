@@ -455,11 +455,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     }
 
     // Validaciones
-    if (!editedData.paciente) {
+    if (!soloDieta && !editedData.paciente) {
       setError('Debe seleccionar un paciente');
       return;
     }
-    if (!editedData.diagnostico_cie_id && !editedData.diagnostico_ingreso.trim()) {
+    if (!soloDieta && !editedData.diagnostico_cie_id && !editedData.diagnostico_ingreso.trim()) {
       setError('Debe seleccionar un diagnóstico CIE-10 o ingresar un diagnóstico de texto libre');
       return;
     }
@@ -469,18 +469,18 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     setSuccessMessage(null);
 
     try {
-      const updateData: any = {
+      const updateData: any = soloDieta ? {} : {
         paciente: editedData.paciente,
         medico: editedData.medico || null,
       };
       
       // Incluir diagnóstico CIE-10 si está seleccionado
-      if (editedData.diagnostico_cie_id) {
+      if (!soloDieta && editedData.diagnostico_cie_id) {
         updateData.diagnostico_cie_id = editedData.diagnostico_cie_id;
       }
       
       // Incluir diagnóstico de texto libre si está presente
-      if (editedData.diagnostico_ingreso.trim()) {
+      if (!soloDieta && editedData.diagnostico_ingreso.trim()) {
         updateData.diagnostico_ingreso = editedData.diagnostico_ingreso.trim();
       }
 
@@ -599,6 +599,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   }
 
   const internacionData = cama.internacion_actual;
+  const soloDieta = currentUser?.rol?.trim().toLowerCase() === 'secretaria';
   const canOperateClinica = canOperateInternacionClinica(currentUser);
   const canWriteSoap = canWriteHcMedico(currentUser);
   const canWriteEnfermeria = canWriteHcEnfermeria(currentUser);
@@ -624,7 +625,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           <Typography variant="h6">
             Gestionar Paciente - {cama.nombre} ({typeof cama.sector === 'object' ? cama.sector.nombre : cama.sector_nombre || 'N/A'})
           </Typography>
-          {!isEditing && canOperateClinica && tab === 0 && (
+          {!isEditing && (canOperateClinica || soloDieta) && tab === 0 && (
             <Button
               variant="outlined"
               color="primary"
@@ -633,7 +634,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
               onClick={handleEditToggle}
               disabled={loading || loadingData}
             >
-              Modo Edición
+              {soloDieta ? 'Editar dieta' : 'Modo Edición'}
             </Button>
           )}
         </Box>
@@ -698,7 +699,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                   Paciente:
                 </Typography>
               </Box>
-              {isEditing ? (
+              {isEditing && !soloDieta ? (
                 <Autocomplete
                   options={pacienteOptions}
                   getOptionLabel={(option) => {
@@ -753,7 +754,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                   Médico:
                 </Typography>
               </Box>
-              {isEditing ? (
+              {isEditing && !soloDieta ? (
                 <Autocomplete
                   options={medicoOptions}
                   getOptionLabel={getMedicoLabel}
@@ -846,7 +847,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                   Diagnóstico CIE-10:
                 </Typography>
               </Box>
-              {isEditing ? (
+              {isEditing && !soloDieta ? (
                 <Autocomplete
                   options={diagnosticoOptions}
                   getOptionLabel={(option) => `${option.codigo} - ${option.descripcion}`}
@@ -911,7 +912,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                   Diagnóstico (texto libre):
                 </Typography>
               </Box>
-              {isEditing ? (
+              {isEditing && !soloDieta ? (
                 <TextField
                   fullWidth
                   multiline

@@ -184,6 +184,11 @@ class InternacionViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         action = getattr(self, 'action', None)
+        # Excepción acotada: secretaría solo puede corregir la dieta por PATCH.
+        if (action == 'partial_update'
+                and str(getattr(self.request.user, 'rol', '')).strip().lower() == 'secretaria'
+                and set(self.request.data) == {'tipo_dieta_id'}):
+            return [IsAuthenticated(), IsInternacionStaff()]
         if action == 'alta':
             return [IsAuthenticated(), IsInternacionAlta()]
         if action == 'iniciar_evolucion':
@@ -197,6 +202,15 @@ class InternacionViewSet(viewsets.ModelViewSet):
         if action in ('list', 'retrieve') or self.request.method in SAFE_METHODS:
             return [IsAuthenticated(), IsInternacionStaff()]
         return [IsAuthenticated(), IsInternacionClinica()]
+
+    def update(self, request, *args, **kwargs):
+        if str(getattr(request.user, 'rol', '')).strip().lower() == 'secretaria':
+            if request.method != 'PATCH' or set(request.data) != {'tipo_dieta_id'}:
+                raise PermissionDenied('Secretaría solo puede editar el tipo de dieta.')
+            internacion = self.get_object()
+            if not internacion.activo or internacion.fecha_alta:
+                raise ValidationError('No se puede modificar la dieta de una internación finalizada.')
+        return super().update(request, *args, **kwargs)
 
     def get_queryset(self):
         """Filtrar por usuario según rol y por defecto solo activas"""
