@@ -2,11 +2,11 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import DemoTourHost from './DemoTourHost';
 import { getTourSteps } from './tourSteps';
-import { activateDemoTour, DEMO_TOUR_ACTIVE_KEY } from './demoStorage';
+import { activateDemoSession, DEMO_TOUR_ACTIVE_KEY } from './demoStorage';
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({ useNavigate: () => mockNavigate }));
-jest.mock('../contexts/DataContext', () => ({ useData: () => ({ isAuthenticated: true }) }));
+jest.mock('../contexts/DataContext', () => ({ useData: () => ({ isAuthenticated: true, currentUser: { id: 1, username: 'medico1' }, logout: jest.fn().mockResolvedValue(undefined) }) }));
 jest.mock('./tourSteps', () => ({ getTourSteps: jest.fn() }));
 
 async function tick(ms: number) {
@@ -18,7 +18,7 @@ beforeEach(() => {
   sessionStorage.clear();
   mockNavigate.mockClear();
   Element.prototype.scrollIntoView = jest.fn();
-  activateDemoTour('medico');
+  activateDemoSession('medico', { id: 1, username: 'medico1' });
   (getTourSteps as jest.Mock).mockReturnValue([
     { route: '/first', element: '[data-demo="test"]', popover: { title: 'Primero', description: 'Inicio' } },
     { route: '/second', element: '[data-demo="test"]', popover: { title: 'Segundo', description: 'Detalle' } },

@@ -26,7 +26,6 @@ import { getTourSteps } from '../demo/tourSteps';
 import { authPageGradient } from '../theme/buildAppTheme';
 import {
   DEMO_ACCOUNTS,
-  activateDemoTour,
   type DemoTourRole,
 } from '../demo/demoStorage';
 
@@ -54,8 +53,7 @@ const DemoLanding: React.FC = () => {
           /* ignore */
         }
       }
-      activateDemoTour(role);
-      await login({ username: account.username, password: account.password });
+      await login({ username: account.username, password: account.password }, { demoRole: role });
       toast.success(`Demo como ${account.label}`);
       navigate(role === 'paciente' ? '/portal' : '/dashboard', { replace: true });
     } catch (error: unknown) {

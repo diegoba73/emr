@@ -10,6 +10,7 @@ import {
   activateDemoTour,
   clearDemoTour,
   isDemoTourActive,
+  isDemoSessionForUser,
   readDemoTourRole,
   type DemoTourRole,
 } from './demoStorage';
@@ -43,7 +44,8 @@ async function resolveStepRoute(step: DemoTourStep): Promise<string | null> {
 
 /** Tour guiado marketing (driver.js) + FAB reiniciar / cambiar rol. */
 export const DemoTourHost: React.FC = () => {
-  const { isAuthenticated } = useData();
+  const { isAuthenticated, currentUser, logout } = useData();
+  const demoSession = isDemoSessionForUser(currentUser);
   const navigate = useNavigate();
   const driverRef = useRef<Driver | null>(null);
   const requestRef = useRef(0);
@@ -150,7 +152,7 @@ export const DemoTourHost: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !demoSession) {
       destroyDriver();
       startedOnceRef.current = false;
       return;
@@ -163,12 +165,12 @@ export const DemoTourHost: React.FC = () => {
       startTour(role);
     }, 500);
     return () => window.clearTimeout(t);
-  }, [isAuthenticated, destroyDriver, startTour]);
+  }, [isAuthenticated, demoSession, destroyDriver, startTour]);
 
   useEffect(() => () => destroyDriver(), [destroyDriver]);
 
   const role = readDemoTourRole();
-  if (!isAuthenticated || !role) return null;
+  if (!isAuthenticated || !demoSession || !role) return null;
 
   return (
     <Box sx={{ position: 'fixed', right: 20, bottom: 24, zIndex: 1400, textAlign: 'center' }}>
@@ -195,6 +197,19 @@ export const DemoTourHost: React.FC = () => {
         }}
       >
         Cambiar rol
+      </Button>
+      <Button
+        size="small"
+        sx={{ display: 'block', mt: 1, bgcolor: 'background.paper' }}
+        onClick={async () => {
+          clearDemoTour();
+          destroyDriver();
+          startedOnceRef.current = false;
+          await logout();
+          navigate('/login', { replace: true });
+        }}
+      >
+        Salir del demo
       </Button>
     </Box>
   );

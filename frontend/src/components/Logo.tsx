@@ -1,5 +1,4 @@
 import React from 'react';
-import { readDemoTourRole } from '../demo/demoStorage';
 import { useTheme } from '@mui/material/styles';
 
 interface LogoProps {
@@ -21,7 +20,7 @@ function logoSrc(mode: 'light' | 'dark', demo: boolean): string {
 const Logo: React.FC<LogoProps> = ({ size = 800, className = '', demo = false, inverse = false }) => {
   const theme = useTheme();
   const mode = inverse ? 'dark' : theme.palette.mode;
-  const demoBrand = demo || process.env.REACT_APP_DEMO_MODE === 'true' || readDemoTourRole() != null;
+  const demoBrand = demo || process.env.REACT_APP_DEMO_MODE === 'true';
   const src = logoSrc(mode, demoBrand);
 
   return (

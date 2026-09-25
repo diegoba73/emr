@@ -1,3 +1,4 @@
+import { activateDemoSession, clearDemoTour, type DemoTourRole } from '../demo/demoStorage';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Turno, Paciente, Medico, Especialidad, User, CentroFisico, TipoAtencion, ArchivoMedico, Consulta, Solicitud, Recurso, TipoExamen } from '../types';
 import { authService, LoginCredentials } from '../services/auth';
@@ -76,7 +77,7 @@ interface DataContextType {
   loadSolicitudes: () => void;
   loadTiposExamen: () => void;
   loadCurrentUser: () => void;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials, options?: { demoRole?: DemoTourRole }) => Promise<void>;
   logout: () => Promise<void>;
   setTurnos: React.Dispatch<React.SetStateAction<Turno[]>>;
   setPacientes: React.Dispatch<React.SetStateAction<Paciente[]>>;
@@ -178,13 +179,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = useCallback(async (credentials: LoginCredentials) => {
+  const login = useCallback(async (credentials: LoginCredentials, options?: { demoRole?: DemoTourRole }) => {
+    clearDemoTour();
     try {
       setLoading(prev => ({ ...prev, user: true }));
       await authService.login(credentials);
       const userData = await authService.getCurrentUser();
       if (userData) {
         const normalized = { ...userData, rol: (userData?.rol || '').toUpperCase() as "ADMIN" | "SECRETARIA" | "MEDICO" | "PACIENTE" | "ENFERMERIA" };
+        if (options?.demoRole) activateDemoSession(options.demoRole, normalized);
         setCurrentUser(normalized);
       } else {
         setCurrentUser(null);
@@ -513,6 +516,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchPaginated]);
 
   const logout = useCallback(async () => {
+    clearDemoTour();
     try {
       await authService.logout();
       setCurrentUser(null);

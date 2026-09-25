@@ -1,6 +1,7 @@
 /** Claves sessionStorage para la demo marketing (tour guiado). */
 
 export const DEMO_TOUR_ACTIVE_KEY = 'demoTourActive';
+export const DEMO_SESSION_USER_KEY = 'demoSessionUserId';
 export const DEMO_TOUR_ROLE_KEY = 'demoTourRole';
 export const DEMO_PREFILL_USER_KEY = 'demoPrefillUsername';
 
@@ -45,7 +46,21 @@ export function activateDemoTour(role: DemoTourRole): void {
   sessionStorage.setItem(DEMO_TOUR_ACTIVE_KEY, '1');
 }
 
+/** Marca visual de una sesión iniciada explícitamente desde /demo; no otorga permisos. */
+export function activateDemoSession(role: DemoTourRole, user: { id: number; username: string }): void {
+  if (user.username !== DEMO_ACCOUNTS[role].username) return;
+  sessionStorage.setItem(DEMO_SESSION_USER_KEY, String(user.id));
+  activateDemoTour(role);
+}
+
+export function isDemoSessionForUser(user: { id: number; username: string } | null | undefined): boolean {
+  const role = readDemoTourRole();
+  return Boolean(user && role && user.username === DEMO_ACCOUNTS[role].username &&
+    sessionStorage.getItem(DEMO_SESSION_USER_KEY) === String(user.id));
+}
+
 export function clearDemoTour(): void {
+  sessionStorage.removeItem(DEMO_SESSION_USER_KEY);
   sessionStorage.removeItem(DEMO_TOUR_ACTIVE_KEY);
   sessionStorage.removeItem(DEMO_TOUR_ROLE_KEY);
 }

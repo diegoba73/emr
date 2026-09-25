@@ -1,3 +1,4 @@
+import { isDemoSessionForUser } from '../../demo/demoStorage';
 import React from 'react';
 import {
   Box,
@@ -250,7 +251,7 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
           borderColor: 'divider',
         }}
       >
-        <Logo size={110} />
+        <Logo size={110} demo={isDemoSessionForUser(currentUser)} />
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
         {isPacienteRole(currentUser) ? 'Mi portal' : 'Principal'}

@@ -111,3 +111,16 @@ La imagen demo se compila con `REACT_APP_DEMO_MODE=true`. Usa la identidad
  y oscura para menú, login y entrada del recorrido. El paso de build
 `frontend/scripts/prepare-demo-branding.cjs` también adapta el título, favicon
  y manifiesto del demo. El logo institucional sigue disponible para el despliegue habitual.
+
+### Demo dentro del mismo dominio que la clínica
+
+En el frontend clínico, el logo institucional es el predeterminado. La entrada
+`/demo` muestra la marca genérica y, al autenticar desde sus tarjetas, vincula
+el modo demo al usuario autenticado. Terminar el recorrido conserva esa marca
+para la exploración; **Salir del demo**, cerrar sesión o un ingreso normal
+limpian la identidad demo. Las marcas antiguas del tour sin sesión identificada
+no activan el logo genérico.
+
+`REACT_APP_DEMO_MODE=true` se reserva para la imagen del stack exclusivamente demo
+(`deploy/Dockerfile.demo-nginx`). No debe activarse en el build clínico que sirve
+`emr_nginx_server`, aunque ese frontend también permita entrar a `/demo`.

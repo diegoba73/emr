@@ -1,3 +1,4 @@
+import { isDemoSessionForUser } from '../demo/demoStorage';
 import React, { useState } from 'react';
 import {
   Box,
@@ -153,7 +154,7 @@ const Navigation: React.FC<NavigationProps> = ({ children }) => {
           borderBottom: '1px solid rgba(0,0,0,0.1)',
         }}
       >
-        <Logo size={120} />
+        <Logo size={120} demo={isDemoSessionForUser(currentUser)} />
       </Box>
       <Divider />
       <List sx={{ pt: 1 }}>
