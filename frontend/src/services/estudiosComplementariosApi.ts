@@ -293,3 +293,8 @@ export async function triggerBlobDownload(
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
+
+export const enviarInformeEstudio = async (estudioId: number, informeId: number): Promise<void> => {
+  await api.post(`/estudios-complementarios/${estudioId}/informes/${informeId}/enviar/`, {}, { timeout: 60000 });
+};

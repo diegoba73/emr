@@ -96,6 +96,7 @@ INSTALLED_APPS = [
     'pacientes',
     'medicos',
     'turnos',
+    'movil',
     'historias_clinicas',
     'laboratorio',
     'catalogos',
@@ -334,3 +335,11 @@ AUTH_USER_MODEL = 'usuarios.User'
 
 # Comprobaciones de BD única local (synesis/db_checks.py)
 import synesis.db_checks  # noqa: F401, E402
+
+# SYNESIS movil: envío desactivado hasta configurar credenciales y scheduler.
+MOBILE_PUSH_ENABLED = env_bool('MOBILE_PUSH_ENABLED', default=False)
+EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '').strip()
+
+# Cada despliegue corresponde a una institución y una base independientes.
+MOBILE_INSTITUTION_CODE = os.getenv('MOBILE_INSTITUTION_CODE', 'ICPL' if DEBUG else '').strip().upper()
+MOBILE_INSTITUTION_NAME = os.getenv('MOBILE_INSTITUTION_NAME', 'ICPL' if DEBUG else '').strip()

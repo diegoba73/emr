@@ -385,6 +385,14 @@ def reprogramar_turno(
     medico_efectivo = medico or turno.medico
     recurso_efectivo = recurso if recurso is not None else turno.recurso
 
+    from medicos.agenda import validar_reserva
+    from rest_framework.exceptions import ValidationError as AgendaValidationError
+    try:
+        validar_reserva(medico_efectivo, inicio, fin, recurso_efectivo,
+                        excluir=turno.pk, exigir_horario=rol == 'paciente')
+    except AgendaValidationError as exc:
+        raise TurnoEstadoTransitionError(str(exc.detail)) from exc
+
     before = safe_model_snapshot(turno)
     inicio_ant = turno.fecha_hora_inicio
     fin_ant = turno.fecha_hora_fin

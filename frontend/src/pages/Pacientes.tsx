@@ -248,7 +248,7 @@ const Pacientes: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={paciente.sexo === 'M' ? 'Masculino' : 'Femenino'}
+                        label={paciente.sexo === 'M' ? 'Masculino' : paciente.sexo === 'F' ? 'Femenino' : paciente.sexo === 'O' ? 'Otro' : 'Sin dato'}
                         color={getSexoColor(paciente.sexo)}
                         size="small"
                       />

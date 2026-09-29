@@ -1,3 +1,4 @@
+import { canManageHorarios } from '../../utils/permissions';
 import { isDemoSessionForUser } from '../../demo/demoStorage';
 import React from 'react';
 import {
@@ -84,6 +85,7 @@ export interface NavItem {
 const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
+  { text: 'Horarios de atención', icon: <CalendarIcon />, path: '/horarios-medicos', canAccess: canManageHorarios },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
   { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessAtenciones },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },

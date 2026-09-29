@@ -43,7 +43,7 @@ services:
       DJANGO_DEBUG: "true"
       DJANGO_RUNTIME: runserver
       DJANGO_SECRET_KEY: dev_secret_key_change_me
-      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,backend
+      DJANGO_ALLOWED_HOSTS: "${EMR_DEV_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,backend}"
       DB_ENGINE: django.db.backends.postgresql
       DB_NAME: synesis_db
       DB_USER: postgres

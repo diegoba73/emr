@@ -6,12 +6,17 @@ export interface PacienteDemographicsFormValues {
   apellido: string;
   dni: string;
   fecha_nacimiento: string;
-  sexo: 'M' | 'F' | '';
+  sexo: 'M' | 'F' | 'O' | '';
   telefono: string;
   email: string;
   direccion: string;
   obra_social: string;
   numero_afiliado: string;
+  estado_civil: string;
+  familiar_nombre: string;
+  familiar_telefono: string;
+  antecedentes_personales: string;
+  antecedentes_familiares: string;
   observaciones: string;
 }
 
@@ -26,6 +31,11 @@ export const emptyPacienteFormValues = (): PacienteDemographicsFormValues => ({
   direccion: '',
   obra_social: '',
   numero_afiliado: '',
+  estado_civil: '',
+  familiar_nombre: '',
+  familiar_telefono: '',
+  antecedentes_personales: '',
+  antecedentes_familiares: '',
   observaciones: '',
 });
 
@@ -33,12 +43,14 @@ export interface PacienteDemographicsFormProps {
   values: PacienteDemographicsFormValues;
   onChange: (patch: Partial<PacienteDemographicsFormValues>) => void;
   dniReadOnly?: boolean;
+  requireBirthDate?: boolean;
 }
 
 const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
   values,
   onChange,
   dniReadOnly = false,
+  requireBirthDate = false,
 }) => (
   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
     <TextField
@@ -66,6 +78,8 @@ const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
     />
     <TextField
       label="Fecha de Nacimiento"
+      required={requireBirthDate}
+      helperText={requireBirthDate ? 'Obligatoria para crear el paciente' : undefined}
       type="date"
       value={values.fecha_nacimiento}
       onChange={(e) => onChange({ fecha_nacimiento: e.target.value })}
@@ -76,12 +90,13 @@ const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
       select
       label="Sexo"
       value={values.sexo}
-      onChange={(e) => onChange({ sexo: e.target.value as 'M' | 'F' | '' })}
+      onChange={(e) => onChange({ sexo: e.target.value as 'M' | 'F' | 'O' | '' })}
       sx={{ flex: '1 1 150px' }}
     >
       <MenuItem value="">Seleccionar</MenuItem>
       <MenuItem value="M">Masculino</MenuItem>
       <MenuItem value="F">Femenino</MenuItem>
+      <MenuItem value="O">Otro</MenuItem>
     </TextField>
     <TextField
       label="Teléfono"
@@ -113,6 +128,40 @@ const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
       value={values.numero_afiliado}
       onChange={(e) => onChange({ numero_afiliado: e.target.value })}
       sx={{ flex: '1 1 180px' }}
+    />
+    <TextField
+      label="Estado civil"
+      value={values.estado_civil}
+      onChange={(e) => onChange({ estado_civil: e.target.value })}
+      fullWidth
+    />
+    <TextField
+      label="Nombre del familiar / contacto"
+      value={values.familiar_nombre}
+      onChange={(e) => onChange({ familiar_nombre: e.target.value })}
+      fullWidth
+    />
+    <TextField
+      label="Teléfono del familiar / contacto"
+      value={values.familiar_telefono}
+      onChange={(e) => onChange({ familiar_telefono: e.target.value })}
+      fullWidth
+    />
+    <TextField
+      label="Antecedentes personales"
+      value={values.antecedentes_personales}
+      onChange={(e) => onChange({ antecedentes_personales: e.target.value })}
+      fullWidth
+      multiline
+      minRows={2}
+    />
+    <TextField
+      label="Antecedentes familiares"
+      value={values.antecedentes_familiares}
+      onChange={(e) => onChange({ antecedentes_familiares: e.target.value })}
+      fullWidth
+      multiline
+      minRows={2}
     />
     <TextField
       label="Observaciones"

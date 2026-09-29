@@ -149,6 +149,38 @@ class MedicoSerializer(serializers.ModelSerializer):
 class DisponibilidadMedicoSerializer(serializers.ModelSerializer):
     medico_detalle = MedicoSerializer(source='medico', read_only=True)
 
+    def validate(self, attrs):
+        request = self.context['request']
+        medico = attrs.get('medico', getattr(self.instance, 'medico', None))
+        rol = str(getattr(request.user, 'rol', '')).strip().lower()
+        if not request.user.is_superuser and rol not in ('admin', 'secretaria'):
+            raise serializers.ValidationError('Solo secretaría o administración puede configurar la agenda.')
+        inicio = attrs.get('hora_inicio', getattr(self.instance, 'hora_inicio', None))
+        fin = attrs.get('hora_fin', getattr(self.instance, 'hora_fin', None))
+        if not inicio or not fin or fin <= inicio:
+            raise serializers.ValidationError('La hora de fin debe ser posterior al inicio.')
+        if inicio.second or fin.second or inicio.minute % 20 or fin.minute % 20:
+            raise serializers.ValidationError('Use horarios en bloques de 20 minutos (:00, :20 o :40).')
+        if attrs.get('duracion_slot_min', 20) != 20:
+            raise serializers.ValidationError('La duración del turno es de 20 minutos.')
+        attrs['duracion_slot_min'] = 20
+        tipo = attrs.get('tipo', getattr(self.instance, 'tipo', 'CONSULTA'))
+        recurso = attrs.get('recurso', getattr(self.instance, 'recurso', None))
+        from medicos.agenda import tipo_para_recurso
+        if tipo == 'ESTUDIO' and not recurso:
+            raise serializers.ValidationError('Seleccione la sala para la agenda de estudios.')
+        if recurso and (not recurso.activo or tipo_para_recurso(recurso) != tipo):
+            raise serializers.ValidationError('El recurso no corresponde al tipo de atención.')
+        dia = attrs.get('dia_semana', getattr(self.instance, 'dia_semana', None))
+        activo = attrs.get('activo', getattr(self.instance, 'activo', True))
+        qs = DisponibilidadMedico.objects.filter(medico=medico, dia_semana=dia, activo=True,
+                                                hora_inicio__lt=fin, hora_fin__gt=inicio)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if activo and qs.exists():
+            raise serializers.ValidationError('La franja se superpone con otro horario del médico.')
+        return attrs
+
     class Meta:
         model = DisponibilidadMedico
         fields = '__all__'
@@ -156,6 +188,18 @@ class DisponibilidadMedicoSerializer(serializers.ModelSerializer):
 
 class ExcepcionMedicoSerializer(serializers.ModelSerializer):
     medico_detalle = MedicoSerializer(source='medico', read_only=True)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        medico = attrs.get('medico', getattr(self.instance, 'medico', None))
+        if not user.is_superuser and str(user.rol).strip().lower() not in ('admin', 'secretaria'):
+            raise serializers.ValidationError('Solo secretaría o administración puede configurar la agenda.')
+        inicio = attrs.get('hora_inicio', getattr(self.instance, 'hora_inicio', None))
+        fin = attrs.get('hora_fin', getattr(self.instance, 'hora_fin', None))
+        tipo = attrs.get('tipo', getattr(self.instance, 'tipo', 'BLOQUEO'))
+        if (bool(inicio) != bool(fin)) or (inicio and fin and fin <= inicio) or (tipo == 'AJUSTE' and not inicio):
+            raise serializers.ValidationError('Indique un rango horario válido.')
+        return attrs
 
     class Meta:
         model = ExcepcionMedico

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import ReservaTurnoPaciente from '../../components/ReservaTurnoPaciente';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Chip,
@@ -8,31 +9,23 @@ import {
   ListItemText,
   Typography,
 } from '@mui/material';
-import { useData } from '../../contexts/DataContext';
-import { apiService } from '../../services/api';
+import { getMisTurnos } from '../../services/agendaMedica';
 import type { Turno } from '../../types';
 
 const PortalTurnos: React.FC = () => {
-  const { currentUser } = useData();
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [loading, setLoading] = useState(true);
-  const pacienteId = currentUser?.paciente?.id;
+  const [reload, setReload] = useState(0);
+
 
   useEffect(() => {
-    apiService
-      .getTurnos()
-      .then((res) => setTurnos(res.results || []))
+    getMisTurnos().then(setTurnos)
       .catch(() => setTurnos([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [reload]);
 
-  const mine = useMemo(
-    () =>
-      turnos.filter(
-        (t) => t.paciente_id === pacienteId || t.paciente?.id === pacienteId,
-      ),
-    [turnos, pacienteId],
-  );
+  // La API devuelve únicamente los turnos vinculados al usuario autenticado.
+  const mine = turnos;
 
   const now = Date.now();
   const proximos = mine
@@ -53,6 +46,7 @@ const PortalTurnos: React.FC = () => {
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Mis turnos
       </Typography>
+      <ReservaTurnoPaciente turnos={turnos} onReserved={() => setReload(r => r+1)} />
       {loading && <CircularProgress size={24} />}
       <Typography variant="subtitle1" sx={{ mt: 2 }}>
         Próximos
@@ -67,7 +61,7 @@ const PortalTurnos: React.FC = () => {
           <ListItem key={t.id} secondaryAction={<Chip size="small" label={t.estado} />}>
             <ListItemText
               primary={new Date(t.fecha_hora_inicio).toLocaleString('es-AR')}
-              secondary={t.motivo_reserva || t.recurso?.nombre || 'Turno'}
+              secondary={(t.medico ? `${t.medico.apellido}, ${t.medico.nombre}` : t.motivo_reserva) || 'Turno'}
             />
           </ListItem>
         ))}
@@ -80,7 +74,7 @@ const PortalTurnos: React.FC = () => {
           <ListItem key={t.id} secondaryAction={<Chip size="small" label={t.estado} />}>
             <ListItemText
               primary={new Date(t.fecha_hora_inicio).toLocaleString('es-AR')}
-              secondary={t.motivo_reserva || t.recurso?.nombre || 'Turno'}
+              secondary={(t.medico ? `${t.medico.apellido}, ${t.medico.nombre}` : t.motivo_reserva) || 'Turno'}
             />
           </ListItem>
         ))}

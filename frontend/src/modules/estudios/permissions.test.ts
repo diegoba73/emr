@@ -1,4 +1,4 @@
-import { canAccessEstudiosModule, canDownloadPdfInformeEstudio } from './permissions';
+import { canAccessEstudiosModule, canDownloadPdfInformeEstudio, canEnviarInformeEstudio } from './permissions';
 import type { User } from '../../types';
 
 const user = (partial: Partial<User>): User =>
@@ -38,4 +38,18 @@ it('administrador puede descargar un informe borrador para revisión', () => {
     { estado: 'REALIZADO' } as any,
     { estado: 'BORRADOR', es_vigente: true } as any
   )).toBe(true);
+});
+
+
+it('secretaría puede descargar y enviar el informe vigente validado, pero no borradores ni versiones anteriores', () => {
+  const secretaria = user({ rol: 'SECRETARIA' });
+  for (const estado of ['VALIDADO', 'ENTREGADO']) {
+    const estudio = { estado } as any;
+    const validado = { estado: 'VALIDADO', es_vigente: true } as any;
+    expect(canDownloadPdfInformeEstudio(secretaria, estudio, validado)).toBe(true);
+    expect(canEnviarInformeEstudio(secretaria, estudio, validado)).toBe(true);
+    expect(canEnviarInformeEstudio(secretaria, estudio, { ...validado, es_vigente: false })).toBe(false);
+    expect(canEnviarInformeEstudio(secretaria, estudio, { ...validado, estado: 'BORRADOR' })).toBe(false);
+  }
+  expect(canEnviarInformeEstudio(secretaria, { estado: 'INFORMADO' } as any, { estado: 'VALIDADO', es_vigente: true } as any)).toBe(false);
 });

@@ -98,7 +98,9 @@ class DisponibilidadMedico(models.Model):
     dia_semana = models.IntegerField(choices=DIAS_SEMANA)
     hora_inicio = models.TimeField(default=time(8, 0))
     hora_fin = models.TimeField(default=time(17, 0))
-    duracion_slot_min = models.PositiveIntegerField(default=30)
+    duracion_slot_min = models.PositiveIntegerField(default=20)
+    tipo = models.CharField(max_length=10, choices=[('CONSULTA', 'Consulta'), ('ESTUDIO', 'Estudio')], default='CONSULTA')
+    recurso = models.ForeignKey('turnos.Recurso', null=True, blank=True, on_delete=models.PROTECT, related_name='horarios_medicos')
     activo = models.BooleanField(default=True)
 
     class Meta:

@@ -5,6 +5,15 @@ function responseStatus(error: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined;
 }
 
+/** Distingue CSRF de permisos sin mostrar detalles internos de la respuesta. */
+function forbiddenMessage(error: unknown): string {
+  const data = (error as { response?: { data?: { detail?: unknown } } })?.response?.data;
+  if (typeof data?.detail === 'string' && /^CSRF Failed:/i.test(data.detail)) {
+    return 'No se pudo validar la seguridad de la sesión (CSRF). Volvé a iniciar sesión; si persiste, se debe revisar la configuración del servidor.';
+  }
+  return 'No tiene permisos para realizar esta acción.';
+}
+
 /** Extrae mensajes de validación DRF (`{ campo: ["msg"] }` o `{ non_field_errors: [...] }`). */
 function flattenDrfFieldErrors(data: Record<string, unknown>): string | null {
   const parts: string[] = [];
@@ -33,7 +42,7 @@ export function getSafeApiErrorMessage(
 
   const status = responseStatus(error);
   if (status === 403) {
-    return 'No tiene permisos para realizar esta acción.';
+    return forbiddenMessage(error);
   }
   if (status === 404) {
     return 'El recurso solicitado no está disponible.';
@@ -177,7 +186,7 @@ function validationMessageFrom400(error: unknown): string | null {
 export function getSafeClinicalActionMessage(error: unknown, fallback: string): string {
   const status = responseStatus(error);
   if (status === 403) {
-    return 'No tiene permisos para realizar esta acción.';
+    return forbiddenMessage(error);
   }
   if (status === 404) {
     return 'El recurso solicitado no está disponible.';

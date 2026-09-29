@@ -255,7 +255,7 @@ describe('TurnoModal reprogramación', () => {
     window.alert = jest.fn();
   });
 
-  it('al reprogramar un turno, abre MotivoDialog, exige motivo y llama reprogramarTurno con payload preservado', async () => {
+  it('al reprogramar un turno, abre MotivoDialog, exige motivo y llama reprogramarTurno con duración de 20 minutos', async () => {
     const onClose = jest.fn();
     const onSuccess = jest.fn();
     renderTurnoModal({ onClose, onSuccess });
@@ -277,7 +277,7 @@ describe('TurnoModal reprogramación', () => {
       expect(mockReprogramarTurno).toHaveBeenCalledTimes(1);
       expect(mockReprogramarTurno).toHaveBeenCalledWith(42, {
         fecha_hora_inicio: '2026-06-20T11:00:00',
-        fecha_hora_fin: '2026-06-20T12:00:00',
+        fecha_hora_fin: '2026-06-20T11:20:00',
         motivo: 'Cambio de horario solicitado',
         medico_id: 1,
         recurso_id: 1,

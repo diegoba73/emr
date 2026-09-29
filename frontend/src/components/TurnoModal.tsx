@@ -232,7 +232,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     recurso: '',
     fecha: '',
     horaInicio: '',
-    duracionMin: 60,
+    duracionMin: 20,
     motivo: '',
     estado: 'RESERVADO',
     prioridad: 'NORMAL',
@@ -550,7 +550,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         recurso: '',
         fecha: '',
         horaInicio: '',
-        duracionMin: 60,
+        duracionMin: 20,
         motivo: '',
         estado: 'RESERVADO',
         prioridad: 'NORMAL',
@@ -573,13 +573,13 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       const fechaFormateada = inicioDt ? formatFecha(inicioDt) : '';
       const horaFormateada = inicioDt ? formatHora(inicioDt) : '';
 
-      let duracion = 60;
+      let duracion = 20;
       if (editingTurno.fecha_hora_inicio && editingTurno.fecha_hora_fin) {
         const inicio = turnoInicioFromApi(editingTurno.fecha_hora_inicio);
         const fin = turnoInicioFromApi(editingTurno.fecha_hora_fin);
         if (inicio && fin) {
           duracion = Math.round((fin.getTime() - inicio.getTime()) / (1000 * 60));
-          if (duracion <= 0) duracion = 60;
+          if (duracion <= 0) duracion = 20;
         }
       }
 
@@ -628,7 +628,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         recurso: '',
         fecha: formatFecha(selectedDateTime),
         horaInicio: formatHora(selectedDateTime),
-        duracionMin: 60,
+        duracionMin: 20,
         motivo: '',
         estado: baseEstado,
         prioridad: 'NORMAL',
@@ -640,7 +640,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         recurso: '',
         fecha: '',
         horaInicio: '',
-        duracionMin: 60,
+        duracionMin: 20,
         motivo: '',
         estado: baseEstado,
         prioridad: 'NORMAL',
@@ -710,7 +710,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           setEstudioFormError('Fecha u hora inválida.');
           return;
         }
-        const fin = new Date(inicio.getTime() + formData.duracionMin * 60_000);
+        const fin = new Date(inicio.getTime() + 20 * 60_000);
         const turnoPayload = {
           recurso_id: Number(formData.recurso),
           fecha_hora_inicio: inicio.toISOString(),
@@ -1458,7 +1458,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               label="📅 Fecha"
               type="date"
               value={formData.fecha}
-              onChange={(e) => setFormData({...formData, fecha: e.target.value})}
+              onChange={(e) => setFormData({...formData, fecha: e.target.value, duracionMin: 20})}
               InputLabelProps={{ shrink: true }}
               required
               disabled={!canEditFormFields()}
@@ -1469,7 +1469,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               label="🕐 Hora Inicio"
               type="time"
               value={formData.horaInicio}
-              onChange={(e) => setFormData({...formData, horaInicio: e.target.value})}
+              onChange={(e) => setFormData({...formData, horaInicio: e.target.value, duracionMin: 20})}
               InputLabelProps={{ shrink: true }}
               required
               disabled={!canEditFormFields()}
@@ -1481,7 +1481,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               type="number"
               value={formData.duracionMin}
               onChange={(e) => setFormData({...formData, duracionMin: Number(e.target.value)})}
-              inputProps={{ min: 10, step: 5 }}
+              inputProps={{ readOnly: true }}
               required
               disabled={!canEditFormFields()}
             />

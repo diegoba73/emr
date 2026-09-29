@@ -1,0 +1,9 @@
+# Complemento del Compose REAL del servidor: nunca ejecutar solo.
+# No redefine imágenes, redes, puertos ni volúmenes.
+services:
+  backend:
+    environment:
+      RUN_SEED: "false"
+      MOBILE_INSTITUTION_CODE: ICPL
+      MOBILE_INSTITUTION_NAME: Instituto de Cardiología Pueblo de Luis
+      MOBILE_PUSH_ENABLED: "false"

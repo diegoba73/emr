@@ -2,6 +2,10 @@
 ViewSets para la app medicos.
 """
 from rest_framework import viewsets, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+from datetime import date
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Medico, Especialidad
@@ -40,6 +44,20 @@ class MedicoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['apellido', 'nombre', 'matricula', 'fecha_registro']
     ordering = ['apellido', 'nombre']
     
+    @action(detail=True, methods=['get'])
+    def slots(self, request, pk=None):
+        from .agenda import slots_disponibles
+        medico = self.get_object()
+        try:
+            fecha = date.fromisoformat(request.query_params.get('fecha', ''))
+        except ValueError:
+            raise ValidationError('Indique una fecha válida (AAAA-MM-DD).') from None
+        tipo = request.query_params.get('tipo', 'CONSULTA')
+        if tipo not in ('CONSULTA', 'ESTUDIO'):
+            raise ValidationError('Tipo de atención inválido.')
+        return Response({'fecha': fecha.isoformat(), 'medico_id': medico.pk,
+                         'slots': list(slots_disponibles(medico, fecha, tipo))})
+
     def get_serializer_class(self):
         """
         Usar serializer ligero para listados.

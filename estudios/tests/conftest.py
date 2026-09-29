@@ -189,3 +189,9 @@ def _payload_crear(paciente, tipo_estudio):
         'origen': 'INTERNO',
         'descripcion_clinica': 'Control',
     }
+
+
+@pytest.fixture(autouse=True)
+def estudios_media_aislada(settings, tmp_path):
+    """Los adjuntos de pruebas nunca se escriben en el almacenamiento de la app."""
+    settings.MEDIA_ROOT = str(tmp_path / 'media')

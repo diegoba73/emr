@@ -59,7 +59,7 @@ def test_secretaria_lista_estudios(client, secretaria, estudio_solicitado):
 def test_asignar_turno_confirma_estudio(client, secretaria, estudio_solicitado, recurso_sala):
     client.force_authenticate(user=secretaria)
     inicio = timezone.now() + timedelta(days=2)
-    fin = inicio + timedelta(minutes=30)
+    fin = inicio + timedelta(minutes=20)
     r = client.post(
         f'{BASE}{estudio_solicitado.id}/asignar-turno/',
         {
@@ -84,7 +84,7 @@ def test_agendar_turno_crea_estudio_externo_sin_pedido_previo(
     """Secretaría puede turnar creando el estudio al momento (p. ej. pedido externo)."""
     client.force_authenticate(user=secretaria)
     inicio = timezone.now() + timedelta(days=4)
-    fin = inicio + timedelta(minutes=45)
+    fin = inicio + timedelta(minutes=20)
     r = client.post(
         f'{BASE}agendar-turno/',
         {
@@ -111,7 +111,7 @@ def test_turno_estudio_visible_en_agenda(
     """Tras asignar turno de estudio, aparece en GET /api/turnos/ (secretaría y médico solicitante)."""
     client.force_authenticate(user=secretaria)
     inicio = timezone.now() + timedelta(days=3)
-    fin = inicio + timedelta(minutes=30)
+    fin = inicio + timedelta(minutes=20)
     r = client.post(
         f'{BASE}{estudio_solicitado.id}/asignar-turno/',
         {

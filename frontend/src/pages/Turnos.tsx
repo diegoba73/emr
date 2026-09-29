@@ -83,23 +83,23 @@ type CalendarEvent = {
 	resource: Turno | TurnosCalendarOverflowResource;
 };
 
-function thirtyMinSlotKey(d: Date): string {
+function twentyMinSlotKey(d: Date): string {
 	return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
 }
 
-/** Slots de 30 min (clave local) en los que hay al menos un turno — para mostrar franja punteada. */
+/** Slots de 20 min (clave local) en los que hay al menos un turno — para mostrar franja punteada. */
 function buildSlotKeysConTurno(events: CalendarEvent[]): Set<string> {
 	const s = new Set<string>();
 	for (const e of events) {
 		const endMs = e.end.getTime();
 		const t0 = new Date(e.start);
 		t0.setSeconds(0, 0);
-		const m = t0.getMinutes() % 30;
+		const m = t0.getMinutes() % 20;
 		t0.setMinutes(t0.getMinutes() - m, 0, 0);
 		let t = t0.getTime();
 		while (t < endMs) {
-			s.add(thirtyMinSlotKey(new Date(t)));
-			t += 30 * 60 * 1000;
+			s.add(twentyMinSlotKey(new Date(t)));
+			t += 20 * 60 * 1000;
 		}
 	}
 	return s;
@@ -375,7 +375,7 @@ const Turnos: React.FC = () => {
 				id: turno.id,
 				title,
 				start: new Date(turno.fecha_hora_inicio),
-				end: new Date(turno.fecha_hora_fin || new Date(turno.fecha_hora_inicio).getTime() + 60 * 60 * 1000),
+				end: new Date(turno.fecha_hora_fin || new Date(turno.fecha_hora_inicio).getTime() + 20 * 60 * 1000),
 				resource: turno,
 			};
 		});
@@ -454,11 +454,11 @@ const Turnos: React.FC = () => {
 			for (const grp of slotMetrics.groups) {
 				for (const slotValue of grp) {
 					if (!(slotValue instanceof Date)) continue;
-					if (!slotKeysConTurno.has(thirtyMinSlotKey(slotValue))) continue;
-					const end = new Date(slotValue.getTime() + 30 * 60 * 1000);
+					if (!slotKeysConTurno.has(twentyMinSlotKey(slotValue))) continue;
+					const end = new Date(slotValue.getTime() + 20 * 60 * 1000);
 					const r = slotMetrics.getRange(slotValue, end, false, false);
 					const slotCopy = new Date(slotValue.getTime());
-					const k = `turnos-franja-${thirtyMinSlotKey(slotValue)}`;
+					const k = `turnos-franja-${twentyMinSlotKey(slotValue)}`;
 					strips.push(
 						<div
 							key={k}
@@ -505,7 +505,7 @@ const Turnos: React.FC = () => {
 		};
 	}, [slotKeysConTurno, openNewTurnoAt, currentView, puedeAgendarEnCalendario]);
 
-	// Wrapper que react-big-calendar usa para cada sub-slot de 30 min en day/week.
+	// Wrapper que react-big-calendar usa para cada sub-slot de 20 min en day/week.
 	// Nos pasa `value` con la Date exacta del slot, así el click abre el modal
 	// con la hora correcta sin depender de cálculos por pixel.
 	const TimeSlotWrapper = useMemo(() => {
@@ -1063,8 +1063,8 @@ const Turnos: React.FC = () => {
 					onSelectSlot={puedeAgendarEnCalendario ? handleSelectSlot : undefined}
 					onSelectEvent={handleSelectEvent}
 					selectable={puedeAgendarEnCalendario}
-					step={30}
-					timeslots={2}
+					step={20}
+					timeslots={3}
 					min={calendarMinTime}
 					max={calendarMaxTime}
 					scrollToTime={forcedScrollToTime ?? calendarScrollToTime}

@@ -382,6 +382,15 @@ class IsSecretariaOrAdmin(permissions.BasePermission):
         return (request.user.groups.filter(name='Secretarias').exists() or 
                 get_normalized_role(request.user) in ('secretaria', 'admin'))
 
+class CanManageAgendaMedica(permissions.BasePermission):
+    """Configuración de horarios y excepciones: secretaría o administración."""
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user.is_authenticated and (
+            user.is_superuser or get_normalized_role(user) in ('secretaria', 'admin')
+        ))
+
+
 class IsMedicoOrAdmin(permissions.BasePermission):
     """
     Permiso para médicos y administradores

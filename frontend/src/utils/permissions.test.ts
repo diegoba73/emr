@@ -1,5 +1,6 @@
 import type { User } from '../types';
 import {
+  canManageHorarios,
   canAccessArchivosMedicos,
   canAccessAtenciones,
   canAccessAuditoria,
@@ -286,5 +287,18 @@ describe('canAccessInternacion', () => {
     expect(canWriteHcKinesiologia(user({ rol: 'KINESIOLOGO' }))).toBe(true);
     expect(canWriteHcKinesiologia(user({ rol: 'MEDICO' }))).toBe(false);
     expect(canOperateInternacionClinica(user({ rol: 'KINESIOLOGO' }))).toBe(false);
+  });
+});
+
+describe('canManageHorarios', () => {
+  it('habilita secretaría y administración', () => {
+    expect(canManageHorarios(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canManageHorarios(user({ rol: 'ADMIN' }))).toBe(true);
+  });
+  it('bloquea al médico aunque tenga is_staff y a los demás roles', () => {
+    expect(canManageHorarios(user({ rol: 'MEDICO', is_staff: true }))).toBe(false);
+    expect(canManageHorarios(user({ rol: 'PACIENTE' }))).toBe(false);
+    expect(canManageHorarios(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canManageHorarios(null)).toBe(false);
   });
 });

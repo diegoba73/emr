@@ -1,3 +1,5 @@
+import HorariosMedicos from './pages/HorariosMedicos';
+import { canManageHorarios } from './utils/permissions';
 import React, { useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
@@ -428,6 +430,10 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/horarios-medicos" element={
+            <ProtectedRoute currentUser={currentUser} isAuthenticated={isAuthenticated}
+              isLoading={isLoading} canAccess={canManageHorarios}><HorariosMedicos /></ProtectedRoute>
+          } />
           <Route
             path="/medicos"
             element={

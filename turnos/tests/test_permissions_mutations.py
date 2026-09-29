@@ -35,7 +35,7 @@ def _turno_payload(paciente, medico, recurso, offset_hours=48):
         'medico_id': medico.id,
         'recurso_id': recurso.id,
         'fecha_hora_inicio': base.isoformat(),
-        'fecha_hora_fin': (base + timedelta(minutes=30)).isoformat(),
+        'fecha_hora_fin': (base + timedelta(minutes=20)).isoformat(),
         'estado': Turno.Estado.RESERVADO,
         'motivo_reserva': 'Mutación API',
     }
@@ -219,7 +219,7 @@ class TestTurnoCreatePermissions(APITestCase):
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_paciente_crea_turno_forzado_a_si_mismo(self):
+    def test_paciente_debe_usar_reserva_de_horario(self):
         user = User.objects.create_user(
             username='ta_mut_pac_own',
             email='ta_mut_pac_own@test.com',
@@ -231,8 +231,7 @@ class TestTurnoCreatePermissions(APITestCase):
         self.client.force_authenticate(user=user)
         payload = _turno_payload(self.paciente_b, self.medico_a, self.recurso, 56)
         response = self.client.post('/api/turnos/', payload, format='json')
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['paciente']['id'] == self.paciente_a.id
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_paciente_no_puede_crear_turno_para_otro_paciente(self):
         user = User.objects.create_user(
@@ -246,9 +245,8 @@ class TestTurnoCreatePermissions(APITestCase):
         self.client.force_authenticate(user=user)
         payload = _turno_payload(self.paciente_b, self.medico_a, self.recurso, 57)
         response = self.client.post('/api/turnos/', payload, format='json')
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['paciente']['id'] == self.paciente_a.id
-        assert response.data['paciente']['id'] != self.paciente_b.id
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
 
     def test_laboratorio_no_puede_crear_turno(self):
         lab = User.objects.create_user(

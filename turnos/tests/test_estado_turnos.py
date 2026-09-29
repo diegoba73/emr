@@ -826,7 +826,7 @@ class TestReprogramarTurno(APITestCase):
         )
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 1)
         nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=2)
-        nuevo_fin = nuevo_inicio + timedelta(minutes=30)
+        nuevo_fin = nuevo_inicio + timedelta(minutes=20)
         self.client.force_authenticate(user=sec)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
@@ -846,7 +846,7 @@ class TestReprogramarTurno(APITestCase):
         self.medico_a.save()
         turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 2)
         nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=1)
-        nuevo_fin = nuevo_inicio + timedelta(minutes=30)
+        nuevo_fin = nuevo_inicio + timedelta(minutes=20)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
@@ -902,11 +902,15 @@ class TestReprogramarTurno(APITestCase):
         self.paciente.user = user
         self.paciente.save()
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 5)
-        nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=4)
+        nuevo_inicio = timezone.localtime(turno.fecha_hora_inicio + timedelta(days=4)).replace(hour=9, minute=0, second=0, microsecond=0)
+        from medicos.models import DisponibilidadMedico
+        from datetime import time
+        DisponibilidadMedico.objects.create(medico=self.medico_a, dia_semana=nuevo_inicio.weekday(),
+            hora_inicio=time(9), hora_fin=time(13), recurso=self.recurso)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(turno, nuevo_inicio, nuevo_inicio + timedelta(minutes=30)),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_inicio + timedelta(minutes=20)),
             format='json',
         )
         assert r.status_code == status.HTTP_200_OK
@@ -1052,7 +1056,7 @@ class TestReprogramarTurno(APITestCase):
         )
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 13)
         nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=5)
-        nuevo_fin = nuevo_inicio + timedelta(minutes=30)
+        nuevo_fin = nuevo_inicio + timedelta(minutes=20)
         self.client.force_authenticate(user=admin)
         with capture_on_commit_callbacks(execute=True):
             self.client.post(

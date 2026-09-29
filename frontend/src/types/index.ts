@@ -75,7 +75,10 @@ export interface Paciente extends BaseModel {
   telefono?: string;
   email?: string;
   direccion?: string;
-  sexo?: 'M' | 'F';
+  sexo?: 'M' | 'F' | 'O';
+  estado_civil?: string;
+  familiar_nombre?: string;
+  familiar_telefono?: string;
   obra_social?: string;
   numero_afiliado?: string;
   observaciones?: string;

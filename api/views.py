@@ -10,6 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .permissions import (
     IsSecretariaOrAdmin,
     IsMedicoOrAdmin,
+    CanManageAgendaMedica,
     IsPacienteOrStaff,
     CanManageTurnos,
     IsMedicoOrSecretariaOrAdmin,
@@ -66,30 +67,37 @@ from auditoria.snapshot import safe_model_snapshot
 
 # La función resolve_tipo_intervencion_from_recurso fue movida a turnos/services.py
 # para evitar importaciones circulares. Se importa desde allí (línea 50).
-class DisponibilidadMedicoViewSet(viewsets.ModelViewSet):
+class AgendaMedicoMutationMixin:
+    """Serializa cambios de horarios con las reservas del mismo profesional."""
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            Medico.objects.select_for_update().get(pk=serializer.validated_data['medico'].pk)
+            serializer.validate(serializer.validated_data)
+            serializer.save()
+
+    def perform_update(self, serializer):
+        with transaction.atomic():
+            ids = {serializer.instance.medico_id, serializer.validated_data.get('medico', serializer.instance.medico).pk}
+            list(Medico.objects.select_for_update().filter(pk__in=ids).order_by('pk'))
+            serializer.validate(serializer.validated_data)
+            serializer.save()
+
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            Medico.objects.select_for_update().get(pk=instance.medico_id)
+            instance.delete()
+
+
+class DisponibilidadMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewSet):
     queryset = DisponibilidadMedico.objects.select_related('medico').all()
     serializer_class = DisponibilidadMedicoSerializer
-    permission_classes = [IsMedicoOrAdmin]
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if hasattr(user, 'medico') and not user.is_superuser and str(getattr(user, 'rol', '')).lower() == 'medico':
-            return qs.filter(medico=user.medico)
-        return qs
+    permission_classes = [CanManageAgendaMedica]
 
 
-class ExcepcionMedicoViewSet(viewsets.ModelViewSet):
+class ExcepcionMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewSet):
     queryset = ExcepcionMedico.objects.select_related('medico').all()
     serializer_class = ExcepcionMedicoSerializer
-    permission_classes = [IsMedicoOrAdmin]
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if hasattr(user, 'medico') and not user.is_superuser and str(getattr(user, 'rol', '')).lower() == 'medico':
-            return qs.filter(medico=user.medico)
-        return qs
+    permission_classes = [CanManageAgendaMedica]
 
 
 class PacienteViewSet(viewsets.ModelViewSet):
@@ -524,58 +532,13 @@ class MedicoViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({'error': 'Formato de fecha inválido'}, status=400)
 
-        day_of_week = target_date.weekday()
-        disponibilidades = DisponibilidadMedico.objects.filter(medico=medico, activo=True, dia_semana=day_of_week).order_by('hora_inicio')
-        excepciones = ExcepcionMedico.objects.filter(medico=medico, fecha=target_date)
-        # Turnos existentes del día
-        turnos_ocupados = Turno.objects.filter(medico=medico, fecha_hora_inicio__date=target_date)
+        from medicos.agenda import slots_disponibles
+        tipo = request.query_params.get('tipo', 'CONSULTA')
+        if tipo not in ('CONSULTA', 'ESTUDIO'):
+            return Response({'detail': 'Tipo de atención inválido.'}, status=400)
+        return Response({'fecha': fecha_str, 'medico_id': medico.id,
+                         'slots': list(slots_disponibles(medico, target_date, tipo))})
 
-        # Asegurar comparaciones entre datetimes conscientes de zona horaria
-        tz = timezone.get_current_timezone()
-
-        def overlaps(start_a, end_a, start_b, end_b):
-            return start_a < end_b and start_b < end_a
-
-        slots = []
-        for disp in disponibilidades:
-            slot_len = max(5, disp.duracion_slot_min)
-            current_dt = timezone.make_aware(datetime.combine(target_date, disp.hora_inicio), tz)
-            end_dt = timezone.make_aware(datetime.combine(target_date, disp.hora_fin), tz)
-            while current_dt + timedelta(minutes=slot_len) <= end_dt:
-                slot_start = current_dt
-                slot_end = current_dt + timedelta(minutes=slot_len)
-                # Excepciones
-                blocked = False
-                for ex in excepciones:
-                    if ex.tipo == 'BLOQUEO':
-                        blocked = True
-                        break
-                    if ex.tipo == 'AJUSTE' and ex.hora_inicio and ex.hora_fin:
-                        ex_start = timezone.make_aware(datetime.combine(target_date, ex.hora_inicio), tz)
-                        ex_end = timezone.make_aware(datetime.combine(target_date, ex.hora_fin), tz)
-                        if overlaps(slot_start, slot_end, ex_start, ex_end):
-                            blocked = True
-                            break
-                if blocked:
-                    current_dt += timedelta(minutes=slot_len)
-                    continue
-                # Turnos ocupados (cualquier estado distinto de CANCELADO bloquea)
-                ocupado = False
-                for t in turnos_ocupados:
-                    t_start = timezone.localtime(t.fecha_hora_inicio, tz)
-                    t_end = timezone.localtime(t.fecha_hora_fin, tz) if t.fecha_hora_fin else (t_start + timedelta(minutes=slot_len))
-                    if t.estado != 'CANCELADO' and overlaps(slot_start, slot_end, t_start, t_end):
-                        ocupado = True
-                        break
-                if not ocupado:
-                    slots.append({
-                        'inicio': slot_start.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'fin': slot_end.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'duracion_min': slot_len,
-                    })
-                current_dt += timedelta(minutes=slot_len)
-
-        return Response({'fecha': fecha_str, 'medico_id': medico.id, 'slots': slots})
 
 
 class EspecialidadViewSet(viewsets.ModelViewSet):

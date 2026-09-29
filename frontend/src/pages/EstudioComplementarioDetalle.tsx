@@ -56,6 +56,7 @@ import {
   canDownloadArchivoEstudio,
   canDownloadPdfInformeEstudio,
   canEmitirInforme,
+  canEnviarInformeEstudio,
   canEntregarEstudio,
   canMarcarRealizado,
   canQuitarArchivoEstudio,
@@ -72,6 +73,7 @@ import {
   downloadArchivoEstudio,
   downloadInformeEstudioPdf,
   emitirInformeEstudio,
+  enviarInformeEstudio,
   entregarEstudio,
   listArchivosEstudio,
   listInformesEstudio,
@@ -97,6 +99,9 @@ import ArchivoMedicoPreviewDialog, {
 import { inferTipoArchivoFromFileName } from '../utils/archivoMedicoPreview';
 
 const EstudioComplementarioDetalle: React.FC = () => {
+  const [informeEnvio, setInformeEnvio] = useState<InformeEstudioComplementario | null>(null);
+  const [enviandoInforme, setEnviandoInforme] = useState(false);
+  const [mensajeEnvio, setMensajeEnvio] = useState('');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -664,6 +669,12 @@ const EstudioComplementarioDetalle: React.FC = () => {
                         PDF
                       </Button>
                     )}
+                    {canEnviarInformeEstudio(currentUser, estudio, inf) && (
+                      <Button size="small" startIcon={<Send />} disabled={actionLoading || enviandoInforme}
+                        onClick={() => { setMensajeEnvio(''); setInformeEnvio(inf); }}>
+                        Enviar PDF por correo
+                      </Button>
+                    )}
                     {writeAccess && canEmitirInforme(currentUser, estudio, inf) && (
                       <Button
                         size="small"
@@ -713,6 +724,27 @@ const EstudioComplementarioDetalle: React.FC = () => {
           </List>
         )}
       </Paper>
+
+      <Dialog open={Boolean(informeEnvio)} onClose={enviandoInforme ? undefined : () => setInformeEnvio(null)}>
+        <DialogTitle>Enviar informe validado</DialogTitle>
+        <DialogContent>
+          <Typography>Se enviará el PDF de la versión {informeEnvio?.version} al correo registrado en la ficha del paciente. Verificá que sus datos de contacto sean correctos.</Typography>
+          {mensajeEnvio && <Alert severity="info" sx={{ mt: 2 }}>{mensajeEnvio}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={enviandoInforme} onClick={() => setInformeEnvio(null)}>Cerrar</Button>
+          <Button variant="contained" disabled={enviandoInforme || Boolean(mensajeEnvio)} onClick={async () => {
+            if (!informeEnvio) return;
+            setEnviandoInforme(true);
+            try {
+              await enviarInformeEstudio(estudio.id, informeEnvio.id);
+              setMensajeEnvio('El servidor de correo aceptó el envío del informe.');
+            } catch (e) {
+              setMensajeEnvio(parseEstudiosApiError(e, 'No se pudo enviar el informe.'));
+            } finally { setEnviandoInforme(false); }
+          }}>{enviandoInforme ? 'Enviando…' : 'Enviar PDF'}</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={anularOpen} onClose={() => setAnularOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Anular estudio</DialogTitle>

@@ -67,3 +67,6 @@ DB_GAP_REPORT.txt
 
 # Docs build artifacts
 docs/_build/
+
+# La aplicación móvil no forma parte de la imagen Django.
+/mobile/

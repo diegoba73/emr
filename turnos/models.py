@@ -81,6 +81,8 @@ class Turno(TimestampedModel):
         db_index=True
     )
     motivo_reserva = models.CharField(max_length=255, blank=True, null=True)
+    asistencia_confirmada_en = models.DateTimeField(null=True, blank=True, editable=False)
+
 
     class Meta:
         ordering = ['fecha_hora_inicio']
@@ -101,6 +103,13 @@ class Turno(TimestampedModel):
         """
         Sobrescribe save() para ejecutar validaciones automáticamente.
         """
+        if self.pk:
+            campos_agenda = ('fecha_hora_inicio', 'fecha_hora_fin', 'medico_id', 'recurso_id', 'paciente_id')
+            anterior = type(self).objects.filter(pk=self.pk).values(*campos_agenda).first()
+            if anterior and any(anterior[k] != getattr(self, k) for k in campos_agenda):
+                self.asistencia_confirmada_en = None
+                if kwargs.get('update_fields') is not None:
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'asistencia_confirmada_en'}
         self.full_clean()
         super().save(*args, **kwargs)
 

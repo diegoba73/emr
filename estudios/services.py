@@ -205,6 +205,9 @@ def asignar_turno_estudio(
             {'fecha_hora_fin': 'La fecha/hora de fin debe ser posterior al inicio.'}
         )
 
+    from medicos.agenda import validar_reserva
+    validar_reserva(medico, fecha_hora_inicio, fecha_hora_fin, recurso)
+
     from turnos.validacion_sala import validar_disponibilidad_sala_estudio
 
     validar_disponibilidad_sala_estudio(
@@ -1017,3 +1020,55 @@ def servir_descarga_informe_pdf(
     nombre = nombre_seguro_pdf_informe(estudio.pk, informe.version)
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
+
+
+@transaction.atomic
+def enviar_pdf_informe_estudio(informe, *, user):
+    """Adjunta el PDF al correo registrado del paciente; no altera el estado clínico."""
+    from django.conf import settings
+    from django.core.mail import EmailMessage
+    from django.core.validators import validate_email
+    from .access import usuario_puede_enviar_pdf_informe
+
+    estudio = EstudioComplementario.objects.select_for_update().get(pk=informe.estudio_id)
+    informe = InformeEstudioComplementario.objects.select_for_update().get(pk=informe.pk)
+    if not usuario_puede_enviar_pdf_informe(user, estudio, informe):
+        raise PermissionDenied('Solo se puede enviar un informe validado vigente de un estudio validado o entregado.')
+    if settings.EMAIL_BACKEND in {
+        'django.core.mail.backends.console.EmailBackend',
+        'django.core.mail.backends.dummy.EmailBackend',
+        'django.core.mail.backends.filebased.EmailBackend',
+    }:
+        raise ValidationError('El envío real de correo no está configurado en este entorno.')
+    destino = (estudio.paciente.email or '').strip()
+    if not destino:
+        raise ValidationError('El paciente no tiene correo registrado. Completalo en su ficha antes de enviar.')
+    validate_email(destino)
+    if not informe.archivo_pdf:
+        raise ValidationError('PDF no disponible para este informe.')
+    try:
+        with informe.archivo_pdf.open('rb') as archivo:
+            pdf = archivo.read()
+    except (OSError, ValueError) as exc:
+        raise ValidationError('No se pudo leer el PDF del informe.') from exc
+    mensaje = EmailMessage(
+        subject='Informe de estudio disponible',
+        body='Adjuntamos el informe de su estudio. Ante cualquier consulta, comuníquese con la institución.',
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[destino],
+    )
+    mensaje.attach(nombre_seguro_pdf_informe(estudio.pk, informe.version), pdf, 'application/pdf')
+    try:
+        if mensaje.send(fail_silently=False) != 1:
+            raise ValidationError('El servidor de correo no confirmó el envío.')
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise ValidationError('No se pudo enviar el informe. Revisá la configuración de correo del servidor antes de reintentar.') from exc
+    _safe_audit(
+        log_event, action='UPDATE', actor=user, entity=informe,
+        entity_repr=f'estudios.InformeEstudioComplementario:{informe.pk}',
+        module='estudios',
+        metadata={'accion': 'estudio_informe_email', 'informe_id': informe.pk,
+                  'version_informe': informe.version, **_estudio_meta(estudio)},
+    )

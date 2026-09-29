@@ -8,6 +8,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -485,6 +486,16 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
             ).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=['post'], url_path=r'informes/(?P<informe_id>[^/.]+)/enviar')
+    def enviar_informe(self, request, pk=None, informe_id=None):
+        estudio = self.get_object()
+        informe = get_object_or_404(estudio.informes.all(), pk=informe_id)
+        try:
+            services.enviar_pdf_informe_estudio(informe, user=request.user)
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        return Response({'detail': 'Informe enviado al correo registrado del paciente.'})
 
     @action(
         detail=True,

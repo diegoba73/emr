@@ -238,3 +238,15 @@ def usuario_es_realizador_o_admin(user, estudio) -> bool:
     if user.is_superuser or _rol(user) == 'admin':
         return True
     return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
+
+
+def usuario_puede_enviar_pdf_informe(user, estudio, informe) -> bool:
+    """Distribuir el informe vigente validado, sin habilitar edición ni validación."""
+    return (
+        user.is_authenticated
+        and (user.is_superuser or _rol(user) in {'admin', 'secretaria', 'medico', *ROLES_ESTUDIO_COMPLEMENTARIO})
+        and estudio.estado in (estudio.Estado.VALIDADO, estudio.Estado.ENTREGADO)
+        and informe.estado == informe.EstadoInforme.VALIDADO
+        and informe.es_vigente
+        and usuario_puede_descargar_pdf_informe(user, estudio, informe)
+    )

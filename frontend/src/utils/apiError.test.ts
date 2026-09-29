@@ -70,3 +70,19 @@ describe('getSafeClinicalActionMessage', () => {
     ).toBe('El paciente tiene una atención de guardia abierta (#12).');
   });
 });
+
+// Un rechazo CSRF no implica que el rol carezca de autorización.
+describe('rechazo de sesión CSRF', () => {
+  it.each([getSafeApiErrorMessage, getSafeClinicalActionMessage])(
+    'distingue CSRF sin exponer el origen ni datos del servidor',
+    (formatMessage) => {
+      const error = { response: { status: 403, data: {
+        detail: 'CSRF Failed: Origin checking failed - https://interno.example',
+      } } };
+      const message = formatMessage(error, 'Error');
+      expect(message).toContain('(CSRF)');
+      expect(message).not.toContain('interno.example');
+      expect(message).not.toContain('No tiene permisos');
+    }
+  );
+});

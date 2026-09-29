@@ -25,6 +25,8 @@ class EstudioComplementarioPermission(permissions.BasePermission):
         action = getattr(view, 'action', None)
         if action in ('asignar_turno', 'agendar_turno'):
             return usuario_puede_asignar_turno_estudio(request.user)
+        if action == 'enviar_informe':
+            return usuario_puede_escribir_estudio(request.user) or str(getattr(request.user, 'rol', '') or '').lower() == 'secretaria'
         if action == 'entregar':
             return usuario_puede_escribir_estudio(request.user) or (
                 str(getattr(request.user, 'rol', '') or '').lower() == 'secretaria'
@@ -38,6 +40,8 @@ class EstudioComplementarioPermission(permissions.BasePermission):
                 return usuario_puede_ver_estudio(request.user, obj)
             return usuario_puede_ver_estudio_clinico(request.user, obj)
         action = getattr(view, 'action', None)
+        if action == 'enviar_informe':
+            return usuario_puede_ver_estudio_clinico(request.user, obj)
         if action == 'asignar_turno':
             return usuario_puede_ver_estudio_clinico(request.user, obj) and usuario_puede_asignar_turno_estudio(
                 request.user

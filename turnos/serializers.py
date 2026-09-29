@@ -216,6 +216,7 @@ class TurnoSerializer(serializers.ModelSerializer):
             'fecha_hora_fin',
             'estado',
             'motivo_reserva',
+            'asistencia_confirmada_en',
             'created_at',
             'updated_at',
         ]
@@ -229,6 +230,7 @@ class TurnoSerializer(serializers.ModelSerializer):
             'recurso_nombre',
             'atencion',
             'estudio_complementario',
+            'asistencia_confirmada_en',
             'created_at',
             'updated_at',
         ]

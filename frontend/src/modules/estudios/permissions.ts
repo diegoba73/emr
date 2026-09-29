@@ -205,3 +205,12 @@ export function canQuitarArchivoEstudio(
 ): boolean {
   return canModificarContenidoEstudio(user, estudio);
 }
+
+
+export function canEnviarInformeEstudio(
+  user: User | null | undefined, estudio: EstudioComplementario, informe: InformeEstudioComplementario
+): boolean {
+  return Boolean(user && (user.is_superuser || normalizedRol(user) === 'secretaria' || canWriteEstudio(user)) &&
+    ['VALIDADO', 'ENTREGADO'].includes(estudio.estado) && informe.es_vigente && informe.estado === 'VALIDADO' &&
+    canDownloadPdfInformeEstudio(user, estudio, informe));
+}

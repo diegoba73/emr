@@ -271,3 +271,7 @@ export function canAccessPortalHistoria(user: User | null | undefined): boolean 
 }
 
 export { isPacienteRole } from './navLabels';
+
+export function canManageHorarios(user: User | null | undefined): boolean {
+  return Boolean(user?.is_superuser) || ['admin', 'secretaria'].includes(normalizeRol(user ?? null));
+}
