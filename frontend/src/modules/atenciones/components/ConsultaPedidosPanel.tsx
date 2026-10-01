@@ -234,6 +234,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
     examenes_labels: string[];
     paneles_labels: string[];
     observaciones?: string;
+    fecha_programada_toma: string;
   }) => {
     persistDraft((prev) => ({
       ...prev,
@@ -256,6 +257,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
       muestra_nombre: string;
     }>;
     observaciones?: string;
+    fecha_programada_toma: string;
   }) => {
     if (!payload.items.length) return;
     persistDraft((prev) => ({
@@ -266,6 +268,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
           id: newDraftId(),
           items: payload.items,
           observaciones: payload.observaciones,
+          fecha_programada_toma: payload.fecha_programada_toma,
         },
       ],
     }));

@@ -133,6 +133,13 @@ class Internacion(models.Model):
         related_name='internaciones',
         verbose_name="Tipo de dieta",
     )
+    dieta_texto = models.CharField(
+        max_length=120,
+        blank=True,
+        default='',
+        verbose_name="Dieta (texto)",
+        help_text="Texto libre cuando la dieta no está en el catálogo, o nota adicional.",
+    )
     alergias = models.TextField(blank=True, default='', verbose_name='Alergias')
     tiene_alergias = models.BooleanField(
         null=True,
@@ -233,6 +240,16 @@ class Internacion(models.Model):
         
         super().save(*args, **kwargs)
     
+    @property
+    def dieta_display(self) -> str:
+        """Texto a mostrar: libre si hay, si no el nombre del catálogo."""
+        texto = (self.dieta_texto or '').strip()
+        if texto:
+            return texto
+        if self.tipo_dieta_id and self.tipo_dieta:
+            return self.tipo_dieta.nombre or ''
+        return ''
+
     @property
     def dias_internacion(self):
         """Calcula los días de internación"""

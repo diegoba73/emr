@@ -2,9 +2,17 @@ import type { AisladoMicrobiologico, LecturaCultivo } from '../types/lims';
 
 const LAX_SIGNIFICANCIA = new Set(['CONTAMINANTE', 'FLORA_HABITUAL']);
 
-/** Texto plantilla para informe final de cultivo sin desarrollo. */
+/** Texto base para informe final de cultivo sin desarrollo. */
 export const TEXTO_INFORME_FINAL_SIN_DESARROLLO =
-  'Sin desarrollo de microorganismos patógenos.';
+  'No se obtuvo desarrollo bacteriano.';
+
+/** Opciones típicas de recuento en urocultivo (UFC/ml). */
+export const RECUENTO_BACTERIANO_OPCIONES = [
+  '<10³ UFC/ml',
+  '10³–10⁴ UFC/ml',
+  '10⁴–10⁵ UFC/ml',
+  '≥10⁵ UFC/ml',
+] as const;
 
 /**
  * ¿Hay al menos una lectura SIN_DESARROLLO y ningún aislado que bloquee
@@ -28,4 +36,9 @@ export function cultivoNegativoElegibleParaInformeFinal(
 /** Todas las lecturas (si hay) son SIN_DESARROLLO. */
 export function todasLecturasSinDesarrollo(lecturas: LecturaCultivo[]): boolean {
   return lecturas.length > 0 && lecturas.every((l) => l.crecimiento === 'SIN_DESARROLLO');
+}
+
+/** Texto de informe negativo (el recuento va solo en lecturas de cultivo). */
+export function textoInformeFinalSinDesarrollo(_lecturas?: LecturaCultivo[]): string {
+  return TEXTO_INFORME_FINAL_SIN_DESARROLLO;
 }

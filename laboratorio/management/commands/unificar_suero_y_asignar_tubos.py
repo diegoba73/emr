@@ -163,19 +163,21 @@ class Command(BaseCommand):
         from laboratorio.tubos_catalogo import (
             BIDON_ORINA_24H,
             CITRATO,
-            CITRATO_VSG,
+            ERITRO,
             EDTA,
             FRASCO_ORINA,
             HEPARINA,
             MUESTRA_CANONICA_POR_ANALITO,
+            MUESTRA_ERITRO,
             MUESTRA_ORINA,
             MUESTRA_ORINA_24H,
+            SUERO,
             _CITRATO,
-            _CITRATO_VSG,
             _EAB_ART,
             _EAB_JERINGA_INDIVIDUAL,
             _EAB_VEN,
             _EDTA,
+            _ERITRO,
             _FRASCO_ORINA,
             _HEPARINA_GASES,
             _ORINA_24H,
@@ -186,11 +188,13 @@ class Command(BaseCommand):
         defaults_muestra = {
             "SANGRE_EDTA": ("Sangre EDTA", "Morado"),
             "PLASMA_CITRATO": ("Plasma citrato", "Celeste"),
-            "SANGRE_CITRATO_VSG": ("Sangre citrato VSG", "Negro"),
+            MUESTRA_ERITRO: ("Sangre eritro (VSG)", "Negro"),
+            "SANGRE_CITRATO_VSG": ("Sangre citrato VSG (legacy)", "Negro"),
             "SANGRE_HEPARINA": ("Sangre heparina", "Verde"),
             "SANGRE_HEPARINA_ART": ("Sangre heparina arterial", "Verde"),
             "SANGRE_HEPARINA_VEN": ("Sangre heparina venosa", "Verde"),
-            "PLASMA_HEPARINA": ("Plasma heparina", "Verde"),
+            "PLASMA_HEPARINA": ("Plasma heparina (legacy)", "Verde"),
+            SUERO: ("Suero", "Rojo"),
             MUESTRA_ORINA: ("Orina", "Ámbar"),
             MUESTRA_ORINA_24H: ("Orina 24 hs", "Ámbar"),
         }
@@ -200,7 +204,7 @@ class Command(BaseCommand):
                 codigo=codigo,
                 defaults={"nombre": nombre, "color_tubo": color, "activo": True},
             )
-            if not tm.activo:
+            if not tm.activo and codigo not in ("SANGRE_CITRATO_VSG", "PLASMA_HEPARINA"):
                 tm.activo = True
                 if not dry:
                     tm.save(update_fields=["activo"])
@@ -209,7 +213,7 @@ class Command(BaseCommand):
         tubos = {
             tc.codigo: tc
             for tc in TipoContenedor.objects.filter(
-                codigo__in=[EDTA, CITRATO, CITRATO_VSG, HEPARINA, FRASCO_ORINA, BIDON_ORINA_24H],
+                codigo__in=[EDTA, CITRATO, ERITRO, HEPARINA, SUERO, FRASCO_ORINA, BIDON_ORINA_24H],
                 activo=True,
             )
         }
@@ -218,11 +222,11 @@ class Command(BaseCommand):
         grupos = (
             (_EDTA, EDTA, "SANGRE_EDTA"),
             (_CITRATO, CITRATO, "PLASMA_CITRATO"),
-            (_CITRATO_VSG, CITRATO_VSG, "SANGRE_CITRATO_VSG"),
+            (_ERITRO, ERITRO, MUESTRA_ERITRO),
             (gases_sin_eab, HEPARINA, "SANGRE_HEPARINA"),
             (_EAB_ART, HEPARINA, "SANGRE_HEPARINA_ART"),
             (_EAB_VEN, HEPARINA, "SANGRE_HEPARINA_VEN"),
-            (_QUIMICA_RUTINA, HEPARINA, "PLASMA_HEPARINA"),
+            (_QUIMICA_RUTINA, SUERO, SUERO),
             (_FRASCO_ORINA, FRASCO_ORINA, MUESTRA_ORINA),
             (_ORINA_24H, BIDON_ORINA_24H, MUESTRA_ORINA_24H),
         )

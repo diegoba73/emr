@@ -41,7 +41,8 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
   const [selectedDiagnostico, setSelectedDiagnostico] = useState<DiagnosticoCIE10 | null>(null);
   const [diagnosticoTextoLibre, setDiagnosticoTextoLibre] = useState('');
-  const [selectedTipoDieta, setSelectedTipoDieta] = useState<TipoDieta | null>(null);
+  const [selectedTipoDieta, setSelectedTipoDieta] = useState<TipoDieta | string | null>(null);
+  const [dietaInput, setDietaInput] = useState('');
   const [tiposDieta, setTiposDieta] = useState<TipoDieta[]>([]);
   const [loadingTiposDieta, setLoadingTiposDieta] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,8 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       setSelectedDiagnostico(null);
       setDiagnosticoTextoLibre('');
       setSelectedTipoDieta(null);
+      setDietaInput('');
+      setTiposDieta([]);
       setTiposDieta([]);
       setLoadingTiposDieta(false);
       setError(null);
@@ -291,7 +294,19 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       }
 
       if (selectedTipoDieta) {
-        internacionData.tipo_dieta_id = selectedTipoDieta.id;
+        if (typeof selectedTipoDieta === 'string') {
+          const texto = selectedTipoDieta.trim();
+          if (texto) {
+            internacionData.dieta_texto = texto;
+            internacionData.tipo_dieta_id = null;
+          }
+        } else {
+          internacionData.tipo_dieta_id = selectedTipoDieta.id;
+          internacionData.dieta_texto = '';
+        }
+      } else if (dietaInput.trim()) {
+        internacionData.dieta_texto = dietaInput.trim();
+        internacionData.tipo_dieta_id = null;
       }
 
       if (prefill?.atencionOrigenId) {
@@ -498,10 +513,45 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
           />
 
           <Autocomplete
+            freeSolo
             options={tiposDieta}
-            getOptionLabel={(option) => option.nombre || ''}
+            getOptionLabel={(option) =>
+              typeof option === 'string' ? option : option.nombre || ''
+            }
             value={selectedTipoDieta}
-            onChange={(_, newValue) => setSelectedTipoDieta(newValue)}
+            inputValue={dietaInput}
+            onInputChange={(_, value, reason) => {
+              if (reason === 'input' || reason === 'clear') {
+                setDietaInput(value);
+                if (reason === 'clear') setSelectedTipoDieta(null);
+              } else if (reason === 'reset') {
+                setDietaInput(value);
+              }
+            }}
+            onChange={(_, newValue) => {
+              if (typeof newValue === 'string') {
+                const texto = newValue.trim();
+                const match = tiposDieta.find(
+                  (t) => t.nombre.toLowerCase() === texto.toLowerCase()
+                );
+                setSelectedTipoDieta(match ?? (texto || null));
+                setDietaInput(match?.nombre ?? texto);
+              } else {
+                setSelectedTipoDieta(newValue);
+                setDietaInput(newValue?.nombre || '');
+              }
+            }}
+            onBlur={() => {
+              const texto = dietaInput.trim();
+              if (!texto) {
+                setSelectedTipoDieta(null);
+                return;
+              }
+              const match = tiposDieta.find(
+                (t) => t.nombre.toLowerCase() === texto.toLowerCase()
+              );
+              setSelectedTipoDieta(match ?? texto);
+            }}
             size="small"
             fullWidth
             loading={loadingTiposDieta}
@@ -512,21 +562,24 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
               <TextField
                 {...params}
                 label="Tipo de dieta"
-                placeholder="Opcional: hiposódica, diabética, hipotónica…"
+                placeholder="Elegí del listado o escribí otra"
                 helperText={
                   loadingTiposDieta
                     ? 'Cargando tipos de dieta…'
-                    : tiposDieta.length === 0
-                      ? 'No hay tipos de dieta activos. Revisá Catálogos → Tipos de dieta.'
-                      : undefined
+                    : 'Podés elegir una opción o escribir una dieta que no figure en el listado.'
                 }
               />
             )}
-            isOptionEqualToValue={(option, value) => option.id === value?.id}
+            isOptionEqualToValue={(option, value) => {
+              if (typeof option === 'string' || typeof value === 'string') {
+                return option === value;
+              }
+              return option.id === value?.id;
+            }}
             noOptionsText={
               loadingTiposDieta
                 ? 'Cargando tipos de dieta…'
-                : 'No hay tipos de dieta cargados'
+                : 'Sin coincidencias — Enter para usar el texto escrito'
             }
           />
         </>

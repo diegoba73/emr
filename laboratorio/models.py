@@ -445,6 +445,12 @@ class SolicitudExamen(models.Model):
         auto_now_add=True,
         verbose_name="Fecha de Solicitud"
     )
+    fecha_programada_toma = models.DateField(
+        verbose_name="Fecha programada de toma",
+        help_text="Día en que se debe realizar la extracción de la muestra.",
+        default=timezone.localdate,
+        db_index=True,
+    )
     fecha_entrega_prometida = models.DateTimeField(
         null=True,
         blank=True,
@@ -502,10 +508,14 @@ class SolicitudExamen(models.Model):
     class Meta:
         verbose_name = "Solicitud de Examen"
         verbose_name_plural = "Solicitudes de Examen"
-        ordering = ['-fecha_solicitud']
+        ordering = ['-numero']
         indexes = [
             models.Index(fields=['estado', 'fecha_solicitud']),
             models.Index(fields=['paciente', 'estado']),
+            models.Index(
+                fields=['estado', 'fecha_programada_toma'],
+                name='laboratorio_estado_fpt_idx',
+            ),
         ]
 
     def __str__(self):

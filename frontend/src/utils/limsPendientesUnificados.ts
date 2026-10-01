@@ -16,6 +16,7 @@ export interface PendientePedidoRow {
   estado: string;
   estado_obra_social?: string | null;
   fecha_solicitud?: string | null;
+  fecha_programada_toma?: string | null;
   fecha_toma_muestra?: string | null;
   sin_etiquetas: boolean;
   esperando_recepcion: boolean;
@@ -47,6 +48,7 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
     estado: r.estado,
     estado_obra_social: r.estado_obra_social || '',
     fecha_solicitud: r.fecha_solicitud,
+    fecha_programada_toma: r.fecha_programada_toma,
     fecha_toma_muestra: r.fecha_toma_muestra,
     sin_etiquetas: Boolean(r.orden_abierta),
     esperando_recepcion: Boolean(r.esperando_recepcion),
@@ -75,17 +77,20 @@ export function estadosMicroDesdeFiltroLab(estadoLab: string): string[] | null {
   return [estado];
 }
 
-/** Última solicitada primero (fecha_solicitud descendente). */
-export function sortPedidosMasRecientesPrimero<
-  T extends { fecha_solicitud?: string | null; id?: number }
->(rows: T[]): T[] {
+/** Solo por número de protocolo (descendente). Sin desempates. */
+export function sortPedidosPorNumero<T extends { numero?: string | null }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
-    const ta = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
-    const tb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
-    if (tb !== ta) return tb - ta;
-    return (b.id || 0) - (a.id || 0);
+    const na = (a.numero || '').trim();
+    const nb = (b.numero || '').trim();
+    if (!na && !nb) return 0;
+    if (!na) return 1;
+    if (!nb) return -1;
+    return nb.localeCompare(na, 'es', { numeric: true, sensitivity: 'base' });
   });
 }
+
+/** @deprecated Usar sortPedidosPorNumero. */
+export const sortPedidosMasRecientesPrimero = sortPedidosPorNumero;
 
 export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow {
   return {
@@ -102,6 +107,7 @@ export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow
     estado: e.estado,
     estado_obra_social: e.estado_obra_social || '',
     fecha_solicitud: e.created_at,
+    fecha_programada_toma: e.fecha_programada_toma,
     fecha_toma_muestra: e.fecha_inicio || e.created_at,
     sin_etiquetas: Boolean(e.sin_etiquetas ?? (e.estado === 'PENDIENTE' && !e.etiquetas_impresas_at)),
     esperando_recepcion: Boolean(

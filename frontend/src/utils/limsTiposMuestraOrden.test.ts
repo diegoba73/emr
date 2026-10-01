@@ -25,6 +25,7 @@ const orden: SolicitudExamenLims = {
   origen_solicitud: 'AMBULATORIO_CEHTA',
   estado: 'PENDIENTE',
   fecha_solicitud: '2026-01-01',
+  fecha_programada_toma: '2026-01-01',
   tipos_examen: [10, 11, 12],
   tipos_examen_nombres: ['Glucosa', 'Hemoglobina', 'Urocultivo'],
 };

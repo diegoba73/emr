@@ -615,6 +615,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'requiere_autorizacion_obra_social',
             'obra_social_permite_validar',
             'fecha_solicitud',
+            'fecha_programada_toma',
             'fecha_toma_muestra',
             'fecha_entrega_prometida',
             'observaciones',
@@ -677,6 +678,22 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             fields.pop('paneles_resumen', None)
             fields.pop('orden_grupos_informe', None)
         return fields
+
+    def validate(self, attrs):
+        if 'fecha_programada_toma' in attrs and self.instance is not None:
+            if getattr(self.instance, 'estado', None) != 'PENDIENTE':
+                raise serializers.ValidationError(
+                    {
+                        'fecha_programada_toma': (
+                            'Solo se puede cambiar la fecha de extracción mientras la orden está pendiente.'
+                        )
+                    }
+                )
+            if attrs.get('fecha_programada_toma') is None:
+                raise serializers.ValidationError(
+                    {'fecha_programada_toma': 'La fecha de extracción es obligatoria.'}
+                )
+        return attrs
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -953,6 +970,7 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
             "estado_obra_social",
             "estado_obra_social_display",
             "fecha_solicitud",
+            "fecha_programada_toma",
             "fecha_toma_muestra",
             "orden_abierta",
             "esperando_recepcion",
@@ -1068,16 +1086,25 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             'examenes_ids',
             'paneles_ids',
             'consulta_hc_id',
+            'fecha_programada_toma',
             'fecha_entrega_prometida',
             'observaciones',
         ]
         read_only_fields = ['id']
+        extra_kwargs = {
+            'fecha_programada_toma': {'required': True},
+        }
     
     def validate_origen_solicitud(self, value):
         normalizado = normalizar_origen_solicitud(value)
         if value and not normalizado:
             raise serializers.ValidationError('Origen clínico no válido.')
         return normalizado or value
+
+    def validate_fecha_programada_toma(self, value):
+        if value is None:
+            raise serializers.ValidationError('La fecha de extracción es obligatoria.')
+        return value
 
     def validate(self, attrs):
         origen = normalizar_origen_solicitud(attrs.get('origen_solicitud')) or attrs.get('origen_solicitud')
@@ -1095,13 +1122,18 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             )
         if es_origen_ambulatorio_externo(origen):
             attrs['medico_interno'] = None
+        if not attrs.get('fecha_programada_toma'):
+            raise serializers.ValidationError(
+                {'fecha_programada_toma': 'Indicá el día de la extracción.'}
+            )
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
         """
         Método create atómico:
-        - Si el paciente ya tiene orden abierta (PENDIENTE sin toma), fusiona exámenes.
+        - Si el paciente ya tiene orden abierta (PENDIENTE sin toma) el mismo día
+          de extracción, fusiona exámenes.
         - Si no: crea Solicitud + ResultadoExamen (directos y de paneles, sin duplicados).
         """
         from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
@@ -1117,13 +1149,14 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         origen_explicito = validated_data.pop('origen_solicitud', None)
         paciente = validated_data.get('paciente')
         consulta_hc = validated_data.get('consulta_hc')
+        fecha_toma = validated_data.get('fecha_programada_toma')
         validated_data['origen_solicitud'] = inferir_origen_solicitud(
             paciente_id=paciente.pk,
             consulta_hc=consulta_hc,
             origen_explicito=origen_explicito,
         )
 
-        abierta = buscar_orden_abierta(paciente.pk)
+        abierta = buscar_orden_abierta(paciente.pk, fecha_programada_toma=fecha_toma)
         if abierta is not None:
             solicitud = agregar_examenes_a_solicitud(
                 abierta,
@@ -1135,7 +1168,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
 
         origen = validated_data.get('origen_solicitud')
         if origen in (INTERNACION_UCO, INTERNACION_UCE) and paciente_tiene_analisis_internacion_sin_finalizar(
-            paciente.pk
+            paciente.pk, fecha_programada_toma=fecha_toma
         ):
             raise serializers.ValidationError(MENSAJE_LAB_INTERNACION_SIN_FINALIZAR)
 

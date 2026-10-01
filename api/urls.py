@@ -13,6 +13,11 @@ from laboratorio.views import (
     TipoMuestraViewSet,
     PanelExamenViewSet,
 )
+from laboratorio.views_impresion_ordenes import (
+    ListadoOrdenesDiaPdfView,
+    PedidosPapelPdfView,
+    ResenasSugeridasView,
+)
 from laboratorio.views_muestras import (
     AreaLaboratorioViewSet,
     MuestraTransaccionalViewSet,
@@ -380,6 +385,21 @@ urlpatterns = [
     path('lab/qc/precheck-batch/', IqcPrecheckView.as_view(), name='lab-qc-precheck-batch'),
     path('lab/qc/tablero-hoy/', TableroIqcHoyView.as_view(), name='lab-qc-tablero-hoy'),
     path('lab/qc/levey-jennings/', LeveyJenningsExamenView.as_view(), name='lab-qc-levey-jennings'),
+    path(
+        'lab/ordenes/listado-dia-pdf/',
+        ListadoOrdenesDiaPdfView.as_view(),
+        name='lab-ordenes-listado-dia-pdf',
+    ),
+    path(
+        'lab/ordenes/pedidos-papel-pdf/',
+        PedidosPapelPdfView.as_view(),
+        name='lab-ordenes-pedidos-papel-pdf',
+    ),
+    path(
+        'lab/ordenes/resenas-sugeridas/',
+        ResenasSugeridasView.as_view(),
+        name='lab-ordenes-resenas-sugeridas',
+    ),
     path(
         'lab/instrumentos/consulta-trabajo/',
         ConsultaTrabajoView.as_view(),

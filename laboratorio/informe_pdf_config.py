@@ -17,6 +17,9 @@ INFORME_LAB_CONFIG = {
     "contacto_linea": (
         "Tel: (0280) 4429966 | laboratorio@icpueblodeluis.com.ar | www.icpueblodeluis.com.ar"
     ),
+    # Imagen única con ambas firmas + nombres (tal cual la pasó el laboratorio).
+    "firmas_bloque": "firmas_bloque.png",
+    # Fallback tipográfico si falta el PNG del bloque.
     "firmas": [
         {
             "nombre": "Bioq. Sebastián Fuentealba",
@@ -24,7 +27,7 @@ INFORME_LAB_CONFIG = {
             "imagen": "firma_1.png",
         },
         {
-            "nombre": "Bioq. Diego A. Bayide",
+            "nombre": "Bioq. Diego A. Baulde",
             "mp": "0489",
             "imagen": "firma_2.png",
         },

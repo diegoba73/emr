@@ -190,13 +190,14 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
       </Typography>
 
       {canOperate && todasLecturasSinDesarrollo(lecturas) && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Todas las lecturas son <strong>sin desarrollo</strong>: no hace falta aislar. Pasá a la
-          pestaña <strong>Informes</strong> para emitir el informe final negativo.
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Todas las lecturas son <strong>sin desarrollo</strong>: no hace falta aislar ni hacer
+          antibiograma. Pasá a la pestaña <strong>Informes</strong> para emitir el informe final
+          («No se obtuvo desarrollo bacteriano»).
         </Alert>
       )}
 
-      {canOperate && (
+      {canOperate && !todasLecturasSinDesarrollo(lecturas) && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
             Nuevo aislado e identificación

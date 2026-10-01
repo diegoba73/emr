@@ -12,6 +12,8 @@ export interface DraftSolicitudLab {
   examenes_labels: string[];
   paneles_labels: string[];
   observaciones?: string;
+  /** YYYY-MM-DD */
+  fecha_programada_toma: string;
 }
 
 export interface DraftPedidoMicroItem {
@@ -25,6 +27,8 @@ export interface DraftPedidoMicro {
   id: string;
   items: DraftPedidoMicroItem[];
   observaciones?: string;
+  /** YYYY-MM-DD */
+  fecha_programada_toma: string;
 }
 
 export interface DraftEstudioComplementario {
@@ -48,9 +52,24 @@ const emptyDraft = (): ConsultaPedidosDraft => ({
 });
 
 function normalizeDraft(parsed: Partial<ConsultaPedidosDraft>): ConsultaPedidosDraft {
+  const hoy = new Date();
+  const yyyy = hoy.getFullYear();
+  const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dd = String(hoy.getDate()).padStart(2, '0');
+  const fallbackFecha = `${yyyy}-${mm}-${dd}`;
   return {
-    solicitudesLab: Array.isArray(parsed.solicitudesLab) ? parsed.solicitudesLab : [],
-    solicitudesMicro: Array.isArray(parsed.solicitudesMicro) ? parsed.solicitudesMicro : [],
+    solicitudesLab: (Array.isArray(parsed.solicitudesLab) ? parsed.solicitudesLab : []).map(
+      (s) => ({
+        ...s,
+        fecha_programada_toma: s.fecha_programada_toma || fallbackFecha,
+      })
+    ),
+    solicitudesMicro: (Array.isArray(parsed.solicitudesMicro) ? parsed.solicitudesMicro : []).map(
+      (s) => ({
+        ...s,
+        fecha_programada_toma: s.fecha_programada_toma || fallbackFecha,
+      })
+    ),
     estudios: Array.isArray(parsed.estudios) ? parsed.estudios : [],
   };
 }
@@ -165,10 +184,13 @@ export async function flushConsultaPedidosDrafts(
 
   if (draft.solicitudesLab.length > 0) {
     try {
-      const abierta = await getOrdenAbiertaPaciente(pacienteId);
+      // Chequeo de merge: usa la fecha del primer borrador (misma extracción).
+      const fechaCheck = draft.solicitudesLab[0]?.fecha_programada_toma;
+      const abierta = await getOrdenAbiertaPaciente(pacienteId, fechaCheck);
       if (abierta) {
         const ok = window.confirm(
-          `Ya hay una orden solicitada (${abierta.numero || `#${abierta.id}`}) pendiente de toma. ` +
+          `Ya hay una orden solicitada (${abierta.numero || `#${abierta.id}`}) pendiente de toma ` +
+            `para el ${fechaCheck || 'mismo día'}. ` +
             'Los exámenes de laboratorio se agregarán a esa orden. ¿Continuar?'
         );
         if (!ok) {
@@ -200,6 +222,7 @@ export async function flushConsultaPedidosDrafts(
         paneles_ids: sol.paneles_ids,
         observaciones: sol.observaciones,
         origen_solicitud: origenSolicitud,
+        fecha_programada_toma: sol.fecha_programada_toma,
       });
       if (orden.merged) {
         toast.success(
@@ -226,6 +249,7 @@ export async function flushConsultaPedidosDrafts(
         consulta_hc_id: consultaHcId,
         origen_solicitud: origenSolicitud,
         observaciones: micro.observaciones,
+        fecha_programada_toma: micro.fecha_programada_toma,
         items: items.map((i) => ({
           tipo_cultivo_id: i.tipo_cultivo_id,
           tipo_muestra_micro_id: i.tipo_muestra_micro_id,

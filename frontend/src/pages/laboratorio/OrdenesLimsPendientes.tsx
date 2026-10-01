@@ -27,7 +27,7 @@ import { canAccessLimsPendientes, canOperateLims } from '../../utils/limsAccess'
 import {
   mapLabToPendiente,
   mapMicroToPendiente,
-  sortPedidosMasRecientesPrimero,
+  sortPedidosPorNumero,
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
 import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
@@ -38,9 +38,15 @@ import EtiquetasMuestrasZplOrdenDialog from '../../components/lims/EtiquetasMues
 import ImprimirPedidoMicroDialog from '../../components/lims/micro/ImprimirPedidoMicroDialog';
 
 type TabPendiente = 'sin_etiquetas' | 'esperando_recepcion';
+type VistaExtraccion = 'hoy' | 'programadas';
 
 function parseTabParam(raw: string | null): TabPendiente | null {
   if (raw === 'sin_etiquetas' || raw === 'esperando_recepcion') return raw;
+  return null;
+}
+
+function parseVistaParam(raw: string | null): VistaExtraccion | null {
+  if (raw === 'hoy' || raw === 'programadas') return raw;
   return null;
 }
 
@@ -53,6 +59,9 @@ const OrdenesLimsPendientes: React.FC = () => {
   const [busqueda, setBusqueda] = useState('');
   const [tab, setTab] = useState<TabPendiente>(
     () => parseTabParam(searchParams.get('tab')) || 'sin_etiquetas'
+  );
+  const [vistaExtraccion, setVistaExtraccion] = useState<VistaExtraccion>(
+    () => parseVistaParam(searchParams.get('vista')) || 'hoy'
   );
   const [nuevaOrdenOpen, setNuevaOrdenOpen] = useState(false);
   const [ordenEtiquetas, setOrdenEtiquetas] = useState<SolicitudExamenLims | null>(null);
@@ -75,18 +84,34 @@ const OrdenesLimsPendientes: React.FC = () => {
     [searchParams, setSearchParams]
   );
 
+  const goVista = useCallback(
+    (next: VistaExtraccion) => {
+      setVistaExtraccion(next);
+      const params = new URLSearchParams(searchParams);
+      params.set('vista', next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
   const load = useCallback(async () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const labs = await listSolicitudesExamen({ estado: 'PENDIENTE' });
+      const labs = await listSolicitudesExamen({
+        estado: 'PENDIENTE',
+        vista_extraccion: vistaExtraccion,
+      });
       let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
       try {
-        micros = await listEstudiosMicrobiologia({ estado: 'PENDIENTE' });
+        micros = await listEstudiosMicrobiologia({
+          estado: 'PENDIENTE',
+          vista_extraccion: vistaExtraccion,
+        });
       } catch {
         micros = [];
       }
-      const merged = sortPedidosMasRecientesPrimero([
+      const merged = sortPedidosPorNumero([
         ...labs.map(mapLabToPendiente),
         ...micros.map(mapMicroToPendiente),
       ]);
@@ -96,7 +121,7 @@ const OrdenesLimsPendientes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [allowed]);
+  }, [allowed, vistaExtraccion]);
 
   useEffect(() => {
     load();
@@ -105,6 +130,8 @@ const OrdenesLimsPendientes: React.FC = () => {
   useEffect(() => {
     const fromUrl = parseTabParam(searchParams.get('tab'));
     if (fromUrl && fromUrl !== tab) setTab(fromUrl);
+    const vistaUrl = parseVistaParam(searchParams.get('vista'));
+    if (vistaUrl && vistaUrl !== vistaExtraccion) setVistaExtraccion(vistaUrl);
     // Solo sincronizar desde URL (p. ej. deep-link), no al cambiar tab local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -185,9 +212,9 @@ const OrdenesLimsPendientes: React.FC = () => {
             Pendientes
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Flujo: <strong>Sin etiquetas</strong> → imprimís →{' '}
-            <strong>Esperando recepción</strong> (acá sigue visible hasta que lab recibe la muestra;
-            podés reimprimir si se pierden). Órdenes LIMS es para pedidos ya recibidos / en proceso.
+            Por defecto ves lo que hay que sacar <strong>hoy</strong> (incluye vencidas). Las de
+            mañana u otro día están en <strong>Programadas</strong>. Flujo: Sin etiquetas → imprimís →
+            Esperando recepción.
           </Typography>
         </Box>
         {puedeCrear && (
@@ -198,6 +225,16 @@ const OrdenesLimsPendientes: React.FC = () => {
       </Stack>
 
       <Paper sx={{ px: 2, pt: 1, mb: 2 }}>
+        <Tabs
+          value={vistaExtraccion}
+          onChange={(_, v: VistaExtraccion) => goVista(v)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+          sx={{ mb: 0.5 }}
+        >
+          <Tab value="hoy" label="Para hoy" />
+          <Tab value="programadas" label="Programadas" />
+        </Tabs>
         <Tabs
           value={tab}
           onChange={(_, v: TabPendiente) => goTab(v)}
@@ -225,6 +262,11 @@ const OrdenesLimsPendientes: React.FC = () => {
             variant="outlined"
           />
         </Box>
+        {vistaExtraccion === 'programadas' && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Pedidos con extracción futura. No se mezclan con urgencias ni controles del día.
+          </Alert>
+        )}
         {esperandoRecepcion && (
           <Alert severity="info" sx={{ mb: 2 }}>
             Pedidos con etiquetas impresas, pendientes de recepción en laboratorio. Si se pierden
@@ -242,9 +284,13 @@ const OrdenesLimsPendientes: React.FC = () => {
           <OrdenesLimsTabla
             rows={filtradas}
             emptyMessage={
-              esperandoRecepcion
-                ? 'No hay pedidos esperando recepción.'
-                : 'No hay pedidos pendientes sin etiquetas.'
+              vistaExtraccion === 'programadas'
+                ? esperandoRecepcion
+                  ? 'No hay pedidos programados esperando recepción.'
+                  : 'No hay pedidos programados sin etiquetas.'
+                : esperandoRecepcion
+                  ? 'No hay pedidos esperando recepción para hoy.'
+                  : 'No hay pedidos pendientes sin etiquetas para hoy.'
             }
             columnaFecha="solicitud"
             accionLabel={

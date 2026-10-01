@@ -2,7 +2,18 @@ import ClinicIdentity from './ClinicIdentity';
 import React, { PropsWithChildren } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, TextInput, TextInputProps } from 'react-native';
 export const colors = { bg: '#f1f6f8', ink: '#17364a', primary: '#087e8b', muted: '#547180', border: '#d2e2e8', danger: '#a12736' };
-export function Page({ children }: PropsWithChildren) { return <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={s.page} keyboardShouldPersistTaps="handled"><ClinicIdentity/>{children}</ScrollView>; }
+export function Page({ children, showClinic = true }: PropsWithChildren<{ showClinic?: boolean }>) {
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={s.page}
+      keyboardShouldPersistTaps="handled"
+    >
+      {showClinic ? <ClinicIdentity /> : null}
+      {children}
+    </ScrollView>
+  );
+}
 export function Card({ children }: PropsWithChildren) { return <View style={s.card}>{children}</View>; }
 export function Title({ children }: PropsWithChildren) { return <Text accessibilityRole="header" style={s.title}>{children}</Text>; }
 export function Body({ children }: PropsWithChildren) { return <Text style={s.body}>{children}</Text>; }

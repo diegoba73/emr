@@ -271,8 +271,8 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         'medico_interno__nombre',
         'medico_interno__apellido',
     ]
-    ordering_fields = ['fecha_solicitud', 'id', 'numero', 'estado']
-    ordering = ['-fecha_solicitud', '-id']
+    ordering_fields = ['numero']
+    ordering = ['-numero']
     
     def get_serializer_class(self):
         """Create vs listado liviano vs detalle."""
@@ -395,6 +395,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     def orden_abierta(self, request):
         """Devuelve la orden abierta del paciente (si existe) para alerta de merge."""
         from laboratorio.solicitud_orden_abierta import buscar_orden_abierta
+        from django.utils.dateparse import parse_date
 
         raw = request.query_params.get('paciente_id')
         if not raw:
@@ -409,7 +410,14 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'detail': 'paciente_id inválido.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        sol = buscar_orden_abierta(paciente_id)
+        fecha_raw = request.query_params.get('fecha_programada_toma')
+        fecha_toma = parse_date(fecha_raw) if fecha_raw else None
+        if fecha_raw and fecha_toma is None:
+            return Response(
+                {'detail': 'fecha_programada_toma inválida (use YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        sol = buscar_orden_abierta(paciente_id, fecha_programada_toma=fecha_toma)
         if not sol:
             return Response(None)
         return Response(
@@ -417,6 +425,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 'id': sol.id,
                 'numero': sol.numero,
                 'fecha_solicitud': sol.fecha_solicitud,
+                'fecha_programada_toma': sol.fecha_programada_toma,
                 'estado': sol.estado,
             }
         )
@@ -579,7 +588,18 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             if fecha:
                 queryset = queryset.filter(fecha_solicitud__date=fecha)
 
-        return queryset.order_by('-fecha_solicitud', '-id')
+        fecha_prog = self.request.query_params.get('fecha_programada_toma')
+        if fecha_prog:
+            queryset = queryset.filter(fecha_programada_toma=fecha_prog)
+        vista = (self.request.query_params.get('vista_extraccion') or '').strip().lower()
+        if vista in ('hoy', 'para_hoy'):
+            from django.utils import timezone as dj_tz
+            queryset = queryset.filter(fecha_programada_toma__lte=dj_tz.localdate())
+        elif vista in ('programadas', 'futuras'):
+            from django.utils import timezone as dj_tz
+            queryset = queryset.filter(fecha_programada_toma__gt=dj_tz.localdate())
+
+        return queryset.order_by('-numero')
 
     def list(self, request, *args, **kwargs):
         """Todos / FINALIZADO no deben 500 si una fila o el SQL del listado fallan."""
@@ -618,6 +638,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                             'estado': obj.estado,
                             'estado_obra_social': obj.estado_obra_social,
                             'fecha_solicitud': obj.fecha_solicitud,
+                            'fecha_programada_toma': getattr(obj, 'fecha_programada_toma', None),
                             'fecha_toma_muestra': None,
                             'resultados': [],
                             'resultados_visibles': False,

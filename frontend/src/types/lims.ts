@@ -212,6 +212,8 @@ export interface SolicitudExamenLims {
   /** False si es ambulatoria y aún no está Autorizado. */
   obra_social_permite_validar?: boolean;
   fecha_solicitud: string;
+  /** YYYY-MM-DD — día previsto de extracción (el API lo envía siempre tras la migración). */
+  fecha_programada_toma?: string;
   /** Última fecha de toma física (anotación en listado). */
   fecha_toma_muestra?: string | null;
   fecha_entrega_prometida?: string | null;
@@ -465,6 +467,10 @@ export interface EstudioMicrobiologia {
   requiere_autorizacion_obra_social?: boolean;
   obra_social_permite_validar?: boolean;
   observaciones?: string;
+  examen_orina?: Record<string, string>;
+  admite_examen_orina?: boolean;
+  /** YYYY-MM-DD — día previsto de extracción/recepción (el API lo envía siempre tras la migración). */
+  fecha_programada_toma?: string;
   fecha_inicio?: string | null;
   fecha_cierre?: string | null;
   responsable?: number | null;
@@ -503,6 +509,7 @@ export interface LecturaCultivo {
   leido_por?: number | null;
   horas_incubacion?: number | null;
   crecimiento?: CrecimientoLectura | string;
+  recuento_bacteriano?: string;
   descripcion_colonias?: string;
   tincion_gram?: string;
   observaciones?: string;

@@ -7,9 +7,10 @@ def test_tubo_hemograma_edta():
     assert tubo_codigo_para_examen("HBA1C") == "EDTA"
 
 
-def test_tubo_vsg_citrato_negro():
-    assert tubo_codigo_para_examen("VSG") == "CITRATO_VSG"
-    assert tubo_codigo_para_examen("VSG", "SANGRE_CITRATO_VSG") == "CITRATO_VSG"
+def test_tubo_vsg_eritro():
+    assert tubo_codigo_para_examen("VSG") == "ERITRO"
+    assert tubo_codigo_para_examen("VSG", "SANGRE_ERITRO") == "ERITRO"
+    assert tubo_codigo_para_examen("VSG", "SANGRE_CITRATO_VSG") == "ERITRO"
 
 
 def test_tubo_coag_citrato():
@@ -40,11 +41,11 @@ def test_tubo_orina_24h_bidon():
     assert tubo_codigo_para_examen("AAO", "ORINA_REPRESENTATIVA_DE_24_H") == "BIDON_ORINA_24H"
 
 
-def test_tubo_quimica_rutina_heparina():
-    assert tubo_codigo_para_examen("GLU") == "HEPARINA"
-    assert tubo_codigo_para_examen("GOT") == "HEPARINA"
-    assert tubo_codigo_para_examen("NA") == "HEPARINA"
-    assert tubo_codigo_para_examen("TG") == "HEPARINA"
+def test_tubo_quimica_rutina_suero():
+    assert tubo_codigo_para_examen("GLU") == "SUERO"
+    assert tubo_codigo_para_examen("GOT") == "SUERO"
+    assert tubo_codigo_para_examen("NA") == "SUERO"
+    assert tubo_codigo_para_examen("TG") == "SUERO"
 
 
 def test_tubo_suero_fuera_de_rutina():

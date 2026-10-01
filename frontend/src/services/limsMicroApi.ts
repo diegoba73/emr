@@ -52,12 +52,16 @@ export const listEstudiosMicrobiologia = (params?: {
   estado?: string;
   sin_etiquetas?: boolean;
   esperando_recepcion?: boolean;
+  fecha_programada_toma?: string;
+  vista_extraccion?: 'hoy' | 'programadas';
 }) => {
   const q: Record<string, string | number | undefined> = { page_size: 100 };
   if (params?.search) q.search = params.search;
   if (params?.estado) q.estado = params.estado;
   if (params?.sin_etiquetas) q.sin_etiquetas = '1';
   if (params?.esperando_recepcion) q.esperando_recepcion = '1';
+  if (params?.fecha_programada_toma) q.fecha_programada_toma = params.fecha_programada_toma;
+  if (params?.vista_extraccion) q.vista_extraccion = params.vista_extraccion;
   return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages: 20 });
 };
 export const getEstudioMicrobiologia = (id: number) =>
@@ -115,6 +119,7 @@ export const createEstudiosMicrobiologiaBatch = (body: {
   consulta_hc_id?: number | null;
   origen_solicitud?: string;
   observaciones?: string;
+  fecha_programada_toma: string;
   items: Array<{ tipo_cultivo_id: number; tipo_muestra_micro_id: number }>;
 }) =>
   apiClient
@@ -195,7 +200,11 @@ export async function downloadEtiquetasEstudiosMicroBatch(estudioIds: number[]):
 
 export const updateEstudioMicrobiologia = (
   id: number,
-  body: { tipo_estudio?: string; observaciones?: string }
+  body: {
+    tipo_estudio?: string;
+    observaciones?: string;
+    examen_orina?: Record<string, string>;
+  }
 ) => apiClient.patch<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`, body).then((r) => r.data);
 export const iniciarEstudioMicrobiologia = (id: number) =>
   apiClient.post<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/iniciar/`, {}).then((r) => r.data);
@@ -229,6 +238,7 @@ export const createLecturaCultivo = (body: {
   fecha_lectura?: string | null;
   horas_incubacion?: number | null;
   crecimiento?: string;
+  recuento_bacteriano?: string;
   descripcion_colonias?: string;
   tincion_gram?: string;
   observaciones?: string;
@@ -239,7 +249,13 @@ export const updateLecturaCultivo = (
   body: Partial<
     Pick<
       LecturaCultivo,
-      'horas_incubacion' | 'crecimiento' | 'descripcion_colonias' | 'tincion_gram' | 'observaciones' | 'es_preliminar'
+      | 'horas_incubacion'
+      | 'crecimiento'
+      | 'recuento_bacteriano'
+      | 'descripcion_colonias'
+      | 'tincion_gram'
+      | 'observaciones'
+      | 'es_preliminar'
     >
   >
 ) => apiClient.patch<LecturaCultivo>(`${MICRO}/lecturas/${id}/`, body).then((r) => r.data);

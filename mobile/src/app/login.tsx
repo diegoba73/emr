@@ -14,10 +14,10 @@ export default function Login() {
     finally { setBusy(false); }
   };
   return <SafeAreaView style={{flex:1,backgroundColor:colors.bg}}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1}}><Page>
-    <View style={{paddingTop:46,paddingBottom:24,gap:12}}><Text style={{fontWeight:'900',fontSize:17,color:colors.primary,letterSpacing:3}}>SYNESIS</Text><Title>Tus turnos, a mano.</Title><Body>Reservá, confirmá tu asistencia y organizá tu próxima consulta.</Body></View>
+    <View style={{paddingTop:46,paddingBottom:24,gap:12}}><Text style={{fontWeight:'900',fontSize:17,color:colors.primary,letterSpacing:3}}>SYNESIS</Text><Title>Tu clínica, a mano.</Title><Body>Turnos e informes según tu rol en la institución.</Body></View>
     <Card><Field label="Usuario" value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} autoComplete="username" editable={!busy} />
       <Field label="Contraseña" value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" editable={!busy} onSubmitEditing={submit} />
       <ErrorText text={error} /><Action title={busy?'Ingresando…':'Ingresar'} disabled={busy || !username.trim() || !password} onPress={submit} />
-    </Card><Action secondary title="Cambiar clínica" disabled={busy} onPress={()=>{void changeClinic().catch(e=>setError(e.message));}}/><Body>Ingresá con tu usuario de paciente o médico del EMR. Si no tenés acceso, solicitá tu cuenta a la institución.</Body>
+    </Card><Action secondary title="Cambiar clínica" disabled={busy} onPress={()=>{void changeClinic().catch(e=>setError(e.message));}}/><Body>Pacientes, médicos, secretaría, laboratorio y bioquímicos pueden ingresar con su usuario del EMR.</Body>
   </Page></KeyboardAvoidingView></SafeAreaView>;
 }

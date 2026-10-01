@@ -128,10 +128,10 @@ def usuario_puede_ver_resultados_lims(user, solicitud) -> bool:
 
 
 def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
-    """PDF LIMS: solo orden FINALIZADO (validada por bioquímico). Sin borradores ni parciales."""
+    """PDF LIMS: FINALIZADO o INFORMADO_PARCIAL (el PDF marca claramente el parcial)."""
     if not usuario_puede_ver_solicitud_lims(user, solicitud):
         return False
-    if getattr(solicitud, 'estado', None) != 'FINALIZADO':
+    if getattr(solicitud, 'estado', None) not in ('FINALIZADO', 'INFORMADO_PARCIAL'):
         return False
     if user.is_superuser:
         return True

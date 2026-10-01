@@ -75,6 +75,10 @@ class InternacionSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    dieta_texto = serializers.CharField(
+        required=False, allow_blank=True, max_length=120, default=''
+    )
+    dieta_display = serializers.CharField(read_only=True)
     tiene_alergias = serializers.BooleanField(required=False, allow_null=True)
     paciente_cabecera = serializers.SerializerMethodField()
     medicaciones_habituales = MedicacionHabitualInternacionSerializer(many=True, read_only=True)
@@ -99,6 +103,8 @@ class InternacionSerializer(serializers.ModelSerializer):
             'diagnostico_ingreso',
             'tipo_dieta',
             'tipo_dieta_id',
+            'dieta_texto',
+            'dieta_display',
             'alergias',
             'tiene_alergias',
             'anamnesis_ingreso',
@@ -123,8 +129,50 @@ class InternacionSerializer(serializers.ModelSerializer):
             'paciente_nombre',
             'cama_nombre',
             'numero_internacion',
+            'dieta_display',
         ]
     
+    def validate(self, attrs):
+        """
+        Resuelve dieta catálogo vs texto libre:
+        - Si viene tipo_dieta (FK), limpia dieta_texto (el display usa el catálogo).
+        - Si viene solo dieta_texto y coincide con un tipo activo, vincula el FK.
+        - Si es texto desconocido, guarda libre y deja tipo_dieta en null.
+        """
+        attrs = super().validate(attrs)
+        from .models import TipoDieta as TD
+
+        tiene_fk = 'tipo_dieta' in attrs
+        tiene_texto = 'dieta_texto' in attrs
+        if not tiene_fk and not tiene_texto:
+            return attrs
+
+        tipo = attrs.get('tipo_dieta') if tiene_fk else (
+            getattr(self.instance, 'tipo_dieta', None) if self.instance else None
+        )
+        if tiene_texto:
+            texto = (attrs.get('dieta_texto') or '').strip()
+        else:
+            texto = (getattr(self.instance, 'dieta_texto', '') or '').strip() if self.instance else ''
+
+        if tiene_fk and tipo is not None:
+            attrs['dieta_texto'] = ''
+            return attrs
+
+        if texto:
+            match = TD.objects.filter(activo=True, nombre__iexact=texto).first()
+            if match:
+                attrs['tipo_dieta'] = match
+                attrs['dieta_texto'] = ''
+            else:
+                attrs['tipo_dieta'] = None
+                attrs['dieta_texto'] = texto
+        elif tiene_fk and tipo is None:
+            attrs['dieta_texto'] = ''
+        elif tiene_texto:
+            attrs['dieta_texto'] = ''
+        return attrs
+
     def get_nombre_paciente(self, obj):
         """Retorna 'Apellido, Nombre' del paciente"""
         if obj.paciente:
@@ -343,7 +391,7 @@ class CamaSerializer(serializers.ModelSerializer):
                         'diagnostico': diagnostico_display,
                         'fecha_ingreso': internacion.fecha_ingreso,
                         'dias_internacion': dias,
-                        'tipo_dieta': internacion.tipo_dieta.nombre if internacion.tipo_dieta else None,
+                        'tipo_dieta': internacion.dieta_display or None,
                     }
             except Exception:
                 pass

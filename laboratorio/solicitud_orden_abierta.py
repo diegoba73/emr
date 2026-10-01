@@ -118,18 +118,24 @@ MENSAJE_LAB_INTERNACION_SIN_FINALIZAR = (
 )
 
 
-def paciente_tiene_analisis_internacion_sin_finalizar(paciente_id: int) -> bool:
-    """True si hay alguna orden de internación que aún no está FINALIZADO."""
+def paciente_tiene_analisis_internacion_sin_finalizar(
+    paciente_id: int, *, fecha_programada_toma=None
+) -> bool:
+    """
+    True si hay orden de internación no finalizada que colisiona con el día
+    de extracción indicado. Sin fecha: cualquier orden no finalizada (legado).
+    Con fecha: solo las del mismo día (permite programar mañana con otra
+    orden de hoy aún abierta o en proceso).
+    """
     from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
 
-    return (
-        SolicitudExamen.objects.filter(
-            paciente_id=paciente_id,
-            origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
-        )
-        .exclude(estado='FINALIZADO')
-        .exists()
-    )
+    qs = SolicitudExamen.objects.filter(
+        paciente_id=paciente_id,
+        origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
+    ).exclude(estado="FINALIZADO")
+    if fecha_programada_toma is not None:
+        qs = qs.filter(fecha_programada_toma=fecha_programada_toma)
+    return qs.exists()
 
 
 def paciente_tiene_orden_en_curso(
@@ -180,13 +186,21 @@ def orden_esta_abierta(solicitud: SolicitudExamen) -> bool:
     return not orden_tiene_muestras_activas(solicitud)
 
 
-def buscar_orden_abierta(paciente_id: int) -> SolicitudExamen | None:
-    """Última orden PENDIENTE del paciente aún editable (sin etiquetas)."""
+def buscar_orden_abierta(
+    paciente_id: int, *, fecha_programada_toma=None
+) -> SolicitudExamen | None:
+    """Última orden PENDIENTE del paciente aún editable (sin etiquetas).
+
+    Si ``fecha_programada_toma`` se indica, solo considera órdenes de ese día
+    de extracción (hoy y mañana no se fusionan entre sí).
+    """
     qs = (
         SolicitudExamen.objects.filter(paciente_id=paciente_id, estado="PENDIENTE")
         .prefetch_related("muestras")
         .order_by("-fecha_solicitud", "-id")
     )
+    if fecha_programada_toma is not None:
+        qs = qs.filter(fecha_programada_toma=fecha_programada_toma)
     for sol in qs:
         if orden_esta_abierta(sol):
             return sol

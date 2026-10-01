@@ -4,6 +4,7 @@ from rest_framework.authentication import BaseAuthentication, get_authorization_
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 from .models import SesionMovil
+from .roles import ROLES_MOVIL
 
 
 def token_hash(token):
@@ -32,4 +33,7 @@ class AutenticacionMovil(BaseAuthentication):
 
 class RolMovil(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and str(request.user.rol).lower() in ('paciente', 'medico')
+        return (
+            request.user.is_authenticated
+            and str(request.user.rol).lower() in ROLES_MOVIL
+        )

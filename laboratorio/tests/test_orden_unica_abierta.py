@@ -80,12 +80,15 @@ class TestOrdenUnicaAbierta(TestCase):
         )
 
     def _create(self, examenes_ids):
+        from django.utils import timezone
+
         return self.client.post(
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
                 "examenes_ids": examenes_ids,
                 "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": timezone.localdate().isoformat(),
             },
             format="json",
             HTTP_HOST="localhost",
@@ -301,14 +304,17 @@ class TestOrdenUnicaAbierta(TestCase):
         )
 
     def test_internacion_bloquea_nueva_orden_si_hay_analisis_en_proceso(self):
+        from django.utils import timezone
         from laboratorio.origen_solicitud import INTERNACION_UCO
 
+        hoy = timezone.localdate().isoformat()
         r1 = self.client.post(
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
                 "examenes_ids": [self.glu.id],
                 "origen_solicitud": INTERNACION_UCO,
+                "fecha_programada_toma": hoy,
             },
             format="json",
             HTTP_HOST="localhost",
@@ -324,6 +330,7 @@ class TestOrdenUnicaAbierta(TestCase):
                 "paciente_id": self.pac.id,
                 "examenes_ids": [self.crea.id],
                 "origen_solicitud": INTERNACION_UCO,
+                "fecha_programada_toma": hoy,
             },
             format="json",
             HTTP_HOST="localhost",
@@ -489,6 +496,7 @@ class TestOrdenUnicaAbierta(TestCase):
                 "examenes_ids": [self.orina.id],
                 "paneles_ids": [pan_a.id, pan_b.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": timezone.localdate().isoformat(),
             },
             format="json",
             HTTP_HOST="localhost",
@@ -529,6 +537,7 @@ class TestOrdenUnicaAbierta(TestCase):
                 "examenes_ids": [],
                 "paneles_ids": [pan_a.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": timezone.localdate().isoformat(),
             },
             format="json",
             HTTP_HOST="localhost",

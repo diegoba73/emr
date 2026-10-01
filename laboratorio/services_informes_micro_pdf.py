@@ -6,6 +6,7 @@ Requiere informe FINAL en estado EMITIDO o VALIDADO.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from django.utils import timezone
@@ -178,6 +179,16 @@ def _construir_story_micro(
     story.append(Spacer(1, 0.2 * cm))
 
     # Lecturas
+    from laboratorio.examen_orina_micro import (
+        CAMPOS_SEDIMENTO,
+        CAMPOS_TIRA,
+        examen_orina_tiene_datos,
+        estudio_admite_examen_orina,
+        normalizar_examen_orina,
+    )
+
+    es_urocultivo = estudio_admite_examen_orina(estudio)
+
     lecturas = list(
         LecturaCultivo.objects.filter(estudio_id=estudio.pk)
         .select_related("siembra", "siembra__medio")
@@ -198,18 +209,32 @@ def _construir_story_micro(
             if lec.siembra_id and getattr(lec.siembra, "medio", None):
                 medio = lec.siembra.medio.nombre or lec.siembra.medio.codigo or ""
             medio_lbl = f"#{lec.siembra_id} {medio}".strip()
-            detalle = " · ".join(
+            crecimiento_lbl = (
+                lec.get_crecimiento_display()
+                if lec.crecimiento
+                else "—"
+            )
+            partes_detalle = [
                 x
                 for x in [
                     (lec.tincion_gram or "").strip(),
                     (lec.descripcion_colonias or "").strip(),
                 ]
                 if x
-            ) or "—"
+            ]
+            # Urocultivo: el recuento de colonias siempre figura en la lectura.
+            if es_urocultivo:
+                recuento = (getattr(lec, "recuento_bacteriano", None) or "").strip() or "—"
+                partes_detalle.append(f"Recuento de colonias: {recuento}")
+            else:
+                recuento = (getattr(lec, "recuento_bacteriano", None) or "").strip()
+                if recuento:
+                    partes_detalle.append(f"Recuento de colonias: {recuento}")
+            detalle = " · ".join(partes_detalle) or "—"
             rows.append(
                 [
                     Paragraph(esc(medio_lbl), styles["exam_meta"]),
-                    Paragraph(esc(lec.crecimiento or "—"), styles["exam_title"]),
+                    Paragraph(f"<b>{esc(crecimiento_lbl)}</b>", styles["exam_meta"]),
                     Paragraph(esc(detalle), styles["exam_meta"]),
                 ]
             )
@@ -229,101 +254,140 @@ def _construir_story_micro(
         story.append(table)
     story.append(Spacer(1, 0.25 * cm))
 
-    # Aislados
-    aislados = [
-        a
-        for a in estudio.aislados.all()
-        if a.estado != "DESCARTADO"
-    ]
-    story.append(Paragraph("AISLADOS E IDENTIFICACIÓN", styles["panel"]))
-    if not aislados:
-        story.append(Paragraph("Sin aislados vigentes.", styles["empty"]))
-    else:
-        for a in aislados:
-            micro = a.microorganismo
-            if micro is None:
-                ident = a.identificaciones.order_by("-pk").first()
-                micro = ident.microorganismo if ident else None
-            micro_lbl = "—"
-            if micro is not None:
-                micro_lbl = f"{micro.codigo} — {micro.nombre}".strip(" —")
+    # Examen de orina (tira + sedimento) — solo urocultivo
+    if es_urocultivo:
+        orina = normalizar_examen_orina(getattr(estudio, "examen_orina", None))
+        if examen_orina_tiene_datos(orina):
+            story.append(Paragraph("EXAMEN DE ORINA (TIRA Y SEDIMENTO)", styles["panel"]))
             story.append(
                 Paragraph(
-                    esc(
-                        f"Aislado #{a.pk} · {a.estado} · {micro_lbl} · "
-                        f"Significancia: {a.significancia or '—'}"
-                    ),
+                    "Misma muestra del urocultivo — no es un pedido separado de orina completa.",
                     styles["exam_meta"],
                 )
             )
-    story.append(Spacer(1, 0.25 * cm))
+            story.append(Spacer(1, 0.08 * cm))
+            story.append(Paragraph("Tira reactiva", styles["exam_title"]))
+            for codigo, label in CAMPOS_TIRA:
+                val = (orina.get(codigo) or "").strip() or "—"
+                story.append(
+                    Paragraph(esc(f"{label}: {val}"), styles["exam_meta"])
+                )
+            story.append(Spacer(1, 0.1 * cm))
+            story.append(Paragraph("Sedimento", styles["exam_title"]))
+            for codigo, label in CAMPOS_SEDIMENTO:
+                val = (orina.get(codigo) or "").strip() or "—"
+                story.append(
+                    Paragraph(esc(f"{label}: {val}"), styles["exam_meta"])
+                )
+            story.append(Spacer(1, 0.25 * cm))
 
-    # Antibiogramas completos
-    story.append(Paragraph("ANTIBIOGRAMA", styles["panel"]))
-    abs_completos = list(
-        Antibiograma.objects.filter(
-            aislado__estudio_id=estudio.pk,
-            estado="COMPLETO",
-        )
-        .select_related("aislado", "aislado__microorganismo")
-        .prefetch_related("resultados__antibiotico")
-        .order_by("pk")
+    # Sin desarrollo: no mostrar secciones AISLADOS ni ANTIBIOGRAMA.
+    cultivo_sin_desarrollo = bool(lecturas) and all(
+        (lec.crecimiento or "") == "SIN_DESARROLLO" for lec in lecturas
     )
-    if not abs_completos:
-        story.append(Paragraph("Sin antibiogramas completos.", styles["empty"]))
-    else:
-        for ab in abs_completos:
-            aislado = ab.aislado
-            micro = aislado.microorganismo if aislado else None
-            micro_lbl = (
-                f"{micro.codigo} — {micro.nombre}" if micro else f"Aislado #{aislado.pk}"
-            )
-            story.append(
-                Paragraph(
-                    esc(f"Antibiograma #{ab.pk} · {micro_lbl}"),
-                    styles["exam_title"],
-                )
-            )
-            resultados = list(ab.resultados.all())
-            if not resultados:
-                story.append(Paragraph("Sin resultados cargados.", styles["empty"]))
-                continue
-            header = [
-                Paragraph("Antibiótico", styles["table_header"]),
-                Paragraph("MIC", styles["table_header"]),
-                Paragraph("Interp.", styles["table_header"]),
-            ]
-            rows = [header]
-            for r in resultados:
-                abio = r.antibiotico
-                nom = (
-                    f"{abio.codigo} — {abio.nombre}" if abio else str(r.antibiotico_id)
-                )
-                rows.append(
-                    [
-                        Paragraph(esc(nom), styles["exam_meta"]),
-                        Paragraph(esc(r.mic or "—"), styles["exam_meta"]),
-                        Paragraph(esc(r.interpretacion or "—"), styles["exam_title"]),
-                    ]
-                )
-            table = Table(rows, colWidths=[10.0 * cm, 3.5 * cm, 3.7 * cm])
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F3F4F6")),
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 3),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                        ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#E5E7EB")),
-                    ]
-                )
-            )
-            story.append(table)
-            story.append(Spacer(1, 0.15 * cm))
 
-    # Texto informe
+    if not cultivo_sin_desarrollo:
+        # Aislados
+        aislados = [
+            a
+            for a in estudio.aislados.all()
+            if a.estado != "DESCARTADO"
+        ]
+        story.append(Paragraph("AISLADOS E IDENTIFICACIÓN", styles["panel"]))
+        if not aislados:
+            story.append(Paragraph("Sin aislados vigentes.", styles["empty"]))
+        else:
+            for a in aislados:
+                micro = a.microorganismo
+                if micro is None:
+                    ident = a.identificaciones.order_by("-pk").first()
+                    micro = ident.microorganismo if ident else None
+                micro_lbl = "—"
+                if micro is not None:
+                    micro_lbl = f"{micro.codigo} — {micro.nombre}".strip(" —")
+                story.append(
+                    Paragraph(
+                        esc(
+                            f"Aislado #{a.pk} · {a.estado} · {micro_lbl} · "
+                            f"Significancia: {a.significancia or '—'}"
+                        ),
+                        styles["exam_meta"],
+                    )
+                )
+        story.append(Spacer(1, 0.25 * cm))
+
+        # Antibiogramas completos
+        story.append(Paragraph("ANTIBIOGRAMA", styles["panel"]))
+        abs_completos = list(
+            Antibiograma.objects.filter(
+                aislado__estudio_id=estudio.pk,
+                estado="COMPLETO",
+            )
+            .select_related("aislado", "aislado__microorganismo")
+            .prefetch_related("resultados__antibiotico")
+            .order_by("pk")
+        )
+        if not abs_completos:
+            story.append(Paragraph("Sin antibiogramas completos.", styles["empty"]))
+        else:
+            for ab in abs_completos:
+                aislado = ab.aislado
+                micro = aislado.microorganismo if aislado else None
+                micro_lbl = (
+                    f"{micro.codigo} — {micro.nombre}" if micro else f"Aislado #{aislado.pk}"
+                )
+                story.append(
+                    Paragraph(
+                        esc(f"Antibiograma #{ab.pk} · {micro_lbl}"),
+                        styles["exam_title"],
+                    )
+                )
+                resultados = list(ab.resultados.all())
+                if not resultados:
+                    story.append(Paragraph("Sin resultados cargados.", styles["empty"]))
+                    continue
+                header = [
+                    Paragraph("Antibiótico", styles["table_header"]),
+                    Paragraph("MIC", styles["table_header"]),
+                    Paragraph("Interp.", styles["table_header"]),
+                ]
+                rows = [header]
+                for r in resultados:
+                    abio = r.antibiotico
+                    nom = (
+                        f"{abio.codigo} — {abio.nombre}" if abio else str(r.antibiotico_id)
+                    )
+                    rows.append(
+                        [
+                            Paragraph(esc(nom), styles["exam_meta"]),
+                            Paragraph(esc(r.mic or "—"), styles["exam_meta"]),
+                            Paragraph(esc(r.interpretacion or "—"), styles["exam_title"]),
+                        ]
+                    )
+                table = Table(rows, colWidths=[10.0 * cm, 3.5 * cm, 3.7 * cm])
+                table.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F3F4F6")),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("TOPPADDING", (0, 0), (-1, -1), 3),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                            ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#E5E7EB")),
+                        ]
+                    )
+                )
+                story.append(table)
+                story.append(Spacer(1, 0.15 * cm))
+
+    # Texto informe (el recuento vive en lecturas; no repetirlo en la conclusión).
     texto = (informe.texto or "").strip()
+    texto = re.sub(
+        r"\s*Recuento(?:\s+de\s+colonias)?\s*:\s*.+$",
+        "",
+        texto,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
     story.append(Spacer(1, 0.2 * cm))
     story.append(Paragraph("INFORME / CONCLUSIÓN", styles["observaciones_title"]))
     if texto:

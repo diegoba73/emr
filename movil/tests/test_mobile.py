@@ -72,11 +72,20 @@ def test_other_patient_and_doctor_cannot_answer(data):
     t.medico=Medico.objects.create(nombre='Otro',apellido='Doctor',matricula='MOB-2');t.save()
     assert c.get(f'/api/movil/turnos/{t.pk}/').status_code==404
 
-@pytest.mark.parametrize('rol',['secretaria','admin','enfermeria'])
+@pytest.mark.parametrize('rol',['admin','enfermeria'])
 def test_login_rejects_other_roles(rol):
     cache.clear()
     get_user_model().objects.create_user(username='role',password='test-password',rol=rol)
     assert APIClient().post('/api/movil/login/',{'username':'role','password':'test-password'}).status_code in (401,403)
+
+@pytest.mark.parametrize('rol',['secretaria','laboratorio','bioquimico'])
+def test_login_accepts_staff_clinical_roles(rol):
+    cache.clear()
+    get_user_model().objects.create_user(username=f'ok-{rol}',password='test-password',rol=rol)
+    r = APIClient().post('/api/movil/login/',{'username':f'ok-{rol}','password':'test-password'},format='json')
+    assert r.status_code == 200, r.data
+    assert r.data['user']['rol'] == rol
+    assert r.data['user']['puede_informes'] is True
 
 def test_push_registration_reports_service_disabled(data,settings):
     settings.MOBILE_PUSH_ENABLED=False

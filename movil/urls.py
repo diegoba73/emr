@@ -1,5 +1,12 @@
 from django.urls import path
 from .views import InstitucionMovil, LoginMovil, MiPerfil, LogoutMovil, PushMovil, TurnosMovil, MedicosMovil
+from .views_informes import (
+    InformesMovil,
+    InformeMovilDetalle,
+    InformeMovilPdf,
+    InformeMovilValidar,
+    InformeMovilInformarParcial,
+)
 
 urlpatterns = [
     path('institucion/', InstitucionMovil.as_view()),
@@ -17,4 +24,9 @@ urlpatterns = [
     path('turnos/<int:pk>/cancelar/', TurnosMovil.as_view({'post': 'cancelar'})),
     path('turnos/<int:pk>/reprogramar-horario/', TurnosMovil.as_view({'post': 'reprogramar_horario'})),
     path('turnos/<int:pk>/reprogramar/', TurnosMovil.as_view({'post': 'reprogramar'})),
+    path('informes/', InformesMovil.as_view()),
+    path('informes/<int:pk>/', InformeMovilDetalle.as_view()),
+    path('informes/<int:pk>/pdf/', InformeMovilPdf.as_view()),
+    path('informes/<int:pk>/validar/', InformeMovilValidar.as_view()),
+    path('informes/<int:pk>/informar-parcial/', InformeMovilInformarParcial.as_view()),
 ]

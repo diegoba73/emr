@@ -43,19 +43,19 @@ from laboratorio.procedencia_display import resolver_procedencia_solicitud
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
 HEADER_HEIGHT = 4.2 * cm
-# Reserva vertical del pie (firmas + leyendas + dirección/contacto).
-FOOTER_HEIGHT = 5.2 * cm
+# Reserva vertical del pie (bloque de firmas + dirección/contacto).
+FOOTER_HEIGHT = 5.8 * cm
 CONTENT_TOP_PAD = 0.2 * cm
-# Solo el trazo manuscrito (se recorta el texto embebido del PNG).
-FIRMA_IMG_W = 6.0 * cm
-FIRMA_IMG_H = 2.15 * cm
-FIRMA_IMG_BOTTOM = 2.55 * cm
-FIRMA_NOMBRE_Y = 2.25 * cm
-FIRMA_MP_Y = 1.95 * cm
-PIE_LINEA_Y = 1.55 * cm
-PIE_DIR_Y = 1.22 * cm
-PIE_CONTACTO_Y = 0.92 * cm
-PIE_PAGINA_Y = 0.52 * cm
+# Bloque único: imagen completa de ambas firmas (ancho útil de página).
+FIRMAS_BLOQUE_H = 4.0 * cm
+FIRMAS_BLOQUE_BOTTOM = 1.60 * cm
+# Fallback tipográfico (solo si falta el PNG del bloque).
+FIRMA_NOMBRE_Y = 2.35 * cm
+FIRMA_MP_Y = 2.05 * cm
+PIE_LINEA_Y = 1.50 * cm
+PIE_DIR_Y = 1.18 * cm
+PIE_CONTACTO_Y = 0.88 * cm
+PIE_PAGINA_Y = 0.48 * cm
 
 # Anchos de columna (total ≈ 17.2 cm útiles en A4 con márgenes 1.8 cm)
 COL_EXAMEN = 5.6 * cm
@@ -90,78 +90,12 @@ def _asset_path(filename: str | None) -> str | None:
     return str(path) if path.is_file() else None
 
 
-def _firma_trazo_reader(path: str) -> ImageReader | None:
-    """Carga la firma recortando leyendas/pie embebidos en el PNG.
-
-    Los assets originales (360×200) traen nombre/M.P./laboratorio (y a veces
-    restos de dirección) en la franja inferior; al dibujarlos enteros eso
-    aparece como texto “fantasma” bajo las firmas. También el trazo toca el
-    borde superior: se agrega padding para que no se vea cortado.
-    """
+def _firma_image_reader(path: str) -> ImageReader | None:
+    """Carga el PNG de firma sin modificar píxeles (trazo tal cual)."""
     try:
-        from PIL import Image
-    except ImportError:
         return ImageReader(path)
-
-    try:
-        im = Image.open(path).convert("RGBA")
     except Exception:
-        return ImageReader(path)
-
-    w, h = im.size
-    # Conservar ~78 % superior (trazo); descartar bloque de texto inferior.
-    cut_y = max(1, int(h * 0.78))
-    im = im.crop((0, 0, w, cut_y))
-
-    # Recorte horizontal a tinta no blanca / no transparente.
-    px = im.load()
-    minx, miny, maxx, maxy = w, cut_y, 0, 0
-    found = False
-    for y in range(cut_y):
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            if a < 16:
-                continue
-            if r > 248 and g > 248 and b > 248:
-                continue
-            found = True
-            minx = min(minx, x)
-            miny = min(miny, y)
-            maxx = max(maxx, x)
-            maxy = max(maxy, y)
-    if found and maxx > minx and maxy > miny:
-        pad = 4
-        im = im.crop(
-            (
-                max(0, minx - pad),
-                max(0, miny - pad),
-                min(w, maxx + pad + 1),
-                min(cut_y, maxy + pad + 1),
-            )
-        )
-
-    # Padding superior transparente: el trazo no queda pegado al borde.
-    pad_top = max(10, im.size[1] // 8)
-    canvas_im = Image.new(
-        "RGBA",
-        (im.size[0], im.size[1] + pad_top),
-        (255, 255, 255, 0),
-    )
-    canvas_im.paste(im, (0, pad_top), im)
-
-    # Blancos opacos → transparentes para no tapar el pie.
-    px = canvas_im.load()
-    cw, ch = canvas_im.size
-    for y in range(ch):
-        for x in range(cw):
-            r, g, b, a = px[x, y]
-            if a > 0 and r > 248 and g > 248 and b > 248:
-                px[x, y] = (255, 255, 255, 0)
-
-    buf = BytesIO()
-    canvas_im.save(buf, format="PNG")
-    buf.seek(0)
-    return ImageReader(buf)
+        return None
 
 
 def formatear_fecha_larga(dt: datetime | date) -> str:
@@ -452,36 +386,69 @@ class _InformeIcplDoc(BaseDocTemplate):
         canvas.setLineWidth(0.8)
         canvas.line(doc.leftMargin, box_bottom - 0.08 * cm, w - doc.rightMargin, box_bottom - 0.08 * cm)
 
-        firmas = cfg.get("firmas") or []
-        slot_w = (w - doc.leftMargin - doc.rightMargin) / max(len(firmas), 1)
-        for i, firma in enumerate(firmas):
-            cx = doc.leftMargin + slot_w * i + slot_w / 2
-            img_path = _asset_path(firma.get("imagen"))
-            drew_img = False
-            if img_path:
-                try:
-                    reader = _firma_trazo_reader(img_path)
-                    if reader is not None:
+        # Bloque de firmas: una sola imagen (ambas firmas + nombres), sin reprocesar.
+        bloque_path = _asset_path(cfg.get("firmas_bloque"))
+        drew_bloque = False
+        if bloque_path:
+            try:
+                reader = _firma_image_reader(bloque_path)
+                if reader is not None:
+                    usable_w = w - doc.leftMargin - doc.rightMargin
+                    # Centrar el PNG escalado dentro del box (sin recortar el trazo).
+                    try:
+                        iw, ih = reader.getSize()
+                    except Exception:
+                        iw, ih = 572, 217
+                    if iw > 0 and ih > 0:
+                        scale = min(usable_w / float(iw), FIRMAS_BLOQUE_H / float(ih))
+                        dw = float(iw) * scale
+                        dh = float(ih) * scale
+                        x = doc.leftMargin + (usable_w - dw) / 2.0
+                        y = FIRMAS_BLOQUE_BOTTOM + (FIRMAS_BLOQUE_H - dh) / 2.0
                         canvas.drawImage(
                             reader,
-                            cx - FIRMA_IMG_W / 2,
-                            FIRMA_IMG_BOTTOM,
-                            width=FIRMA_IMG_W,
-                            height=FIRMA_IMG_H,
-                            preserveAspectRatio=True,
+                            x,
+                            y,
+                            width=dw,
+                            height=dh,
                             mask="auto",
                         )
-                        drew_img = True
-                except Exception:
-                    drew_img = False
-            # Nombre / M.P. siempre desde config (el PNG ya no aporta ese texto).
-            canvas.setFont("Helvetica", 8)
-            canvas.setFillColor(colors.black)
-            canvas.drawCentredString(cx, FIRMA_NOMBRE_Y, firma.get("nombre", ""))
-            canvas.drawCentredString(cx, FIRMA_MP_Y, f"M.P. {firma.get('mp', '')}")
-            if not drew_img:
-                # Sin imagen: el bloque de texto ya actúa como firma.
-                pass
+                        drew_bloque = True
+            except Exception:
+                drew_bloque = False
+
+        if not drew_bloque:
+            # Fallback: texto tipográfico (o mitades individuales si existen).
+            firmas = cfg.get("firmas") or []
+            slot_w = (w - doc.leftMargin - doc.rightMargin) / max(len(firmas), 1)
+            for i, firma in enumerate(firmas):
+                cx = doc.leftMargin + slot_w * i + slot_w / 2
+                img_path = _asset_path(firma.get("imagen"))
+                drew_img = False
+                if img_path:
+                    try:
+                        reader = _firma_image_reader(img_path)
+                        if reader is not None:
+                            canvas.drawImage(
+                                reader,
+                                cx,
+                                FIRMAS_BLOQUE_BOTTOM + FIRMAS_BLOQUE_H / 2,
+                                width=slot_w * 0.9,
+                                height=FIRMAS_BLOQUE_H,
+                                preserveAspectRatio=True,
+                                anchor="c",
+                                mask="auto",
+                            )
+                            drew_img = True
+                    except Exception:
+                        drew_img = False
+                if not drew_img:
+                    canvas.setFont("Helvetica", 8)
+                    canvas.setFillColor(colors.black)
+                    canvas.drawCentredString(cx, FIRMA_NOMBRE_Y, firma.get("nombre", ""))
+                    canvas.drawCentredString(
+                        cx, FIRMA_MP_Y, f"M.P. {firma.get('mp', '')}"
+                    )
 
         canvas.setStrokeColor(colors.HexColor(typo["color_rule"]))
         canvas.setLineWidth(0.4)
@@ -718,40 +685,9 @@ def _fila_resultado(
     return row
 
 
-def _bloque_panel(grupo: GrupoResultadosPdf, styles: dict[str, ParagraphStyle]) -> list[Any]:
-    flow: list[Any] = []
-
-    panel_header = Table(
-        [[Paragraph(_escape(grupo.titulo), styles["panel"])]],
-        colWidths=[COL_TOTAL],
-    )
-    panel_header.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(INFORME_TYPO["color_panel_bg"])),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.8, colors.HexColor(INFORME_TYPO["color_rule"])),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    flow.append(panel_header)
-
-    materiales = []
-    for res in grupo.resultados:
-        mat = _material_texto(res)
-        if mat and mat not in materiales:
-            materiales.append(mat)
-    if materiales:
-        mat_txt = " · ".join(materiales)
-        flow.append(Paragraph(f"Material: {_escape(mat_txt)}", styles["panel_meta"]))
-
-    flow.append(Spacer(1, 0.08 * cm))
-    flow.append(_tabla_encabezado_columnas(styles))
-
-    valores_por_codigo: dict[str, Any] = {}
-    for res in grupo.resultados:
+def _valores_por_codigo(resultados: list[ResultadoExamen]) -> dict[str, Any]:
+    valores: dict[str, Any] = {}
+    for res in resultados:
         codigo = (getattr(res.tipo_examen, "codigo", None) or "").strip().upper()
         if not codigo:
             continue
@@ -763,15 +699,63 @@ def _bloque_panel(grupo: GrupoResultadosPdf, styles: dict[str, ParagraphStyle]) 
                 num = Decimal(str(res.valor_obtenido).strip())
             except (InvalidOperation, TypeError, ValueError):
                 num = None
-        valores_por_codigo[codigo] = num
+        valores[codigo] = num
+    return valores
+
+
+def _bloque_panel(
+    grupo: GrupoResultadosPdf,
+    styles: dict[str, ParagraphStyle],
+    *,
+    valores_por_codigo: dict[str, Any] | None = None,
+    mostrar_encabezado_columnas: bool = True,
+) -> list[Any]:
+    """Bloque de resultados. Encabezado de sección solo si es perfil/panel."""
+    flow: list[Any] = []
+    es_perfil = bool(grupo.panel_codigo)
+
+    if es_perfil:
+        panel_header = Table(
+            [[Paragraph(_escape(grupo.titulo), styles["panel"])]],
+            colWidths=[COL_TOTAL],
+        )
+        panel_header.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(INFORME_TYPO["color_panel_bg"])),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.8, colors.HexColor(INFORME_TYPO["color_rule"])),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        flow.append(panel_header)
+
+        materiales = []
+        for res in grupo.resultados:
+            mat = _material_texto(res)
+            if mat and mat not in materiales:
+                materiales.append(mat)
+        if materiales:
+            mat_txt = " · ".join(materiales)
+            flow.append(Paragraph(f"Material: {_escape(mat_txt)}", styles["panel_meta"]))
+
+        flow.append(Spacer(1, 0.08 * cm))
+
+    if mostrar_encabezado_columnas:
+        flow.append(_tabla_encabezado_columnas(styles))
+
+    vals = valores_por_codigo
+    if vals is None:
+        vals = _valores_por_codigo(grupo.resultados)
 
     for res in grupo.resultados:
-        flow.append(
-            _fila_resultado(res, styles, valores_por_codigo=valores_por_codigo)
-        )
+        flow.append(_fila_resultado(res, styles, valores_por_codigo=vals))
 
-    flow.append(Spacer(1, 0.25 * cm))
-    return [KeepTogether(flow)]
+    if es_perfil:
+        flow.append(Spacer(1, 0.25 * cm))
+    return [KeepTogether(flow)] if es_perfil else flow
 
 
 def _bloque_validacion(
@@ -832,12 +816,31 @@ def construir_story_icpl(
     grupos = agrupar_resultados_por_panel(solicitud, resultados)
     obs = (getattr(solicitud, "observaciones", None) or "").strip()
     conclusion_hemo_insertada = False
+    vals_global = _valores_por_codigo(list(resultados))
 
     if not grupos:
         story.append(Paragraph("Sin resultados registrados.", styles["empty"]))
     else:
+        # Encabezado de columnas una sola vez al inicio de una racha de sueltos
+        # (los perfiles ya lo incluyen en su bloque).
+        needs_suelto_header = True
         for grupo in grupos:
-            story.extend(_bloque_panel(grupo, styles))
+            es_perfil = bool(grupo.panel_codigo)
+            if es_perfil:
+                story.extend(
+                    _bloque_panel(grupo, styles, valores_por_codigo=vals_global)
+                )
+                needs_suelto_header = True
+            else:
+                story.extend(
+                    _bloque_panel(
+                        grupo,
+                        styles,
+                        valores_por_codigo=vals_global,
+                        mostrar_encabezado_columnas=needs_suelto_header,
+                    )
+                )
+                needs_suelto_header = False
             if obs and grupo.panel_codigo == PANEL_HEMOGRAMA and not conclusion_hemo_insertada:
                 story.append(Spacer(1, 0.2 * cm))
                 story.append(
@@ -847,6 +850,7 @@ def construir_story_icpl(
                     Paragraph(_escape(obs).replace("\n", "<br/>"), styles["observaciones"])
                 )
                 conclusion_hemo_insertada = True
+                needs_suelto_header = True
 
     if estudios_micro:
         story.append(Spacer(1, 0.3 * cm))

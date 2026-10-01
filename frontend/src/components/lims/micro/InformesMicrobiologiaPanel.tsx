@@ -35,8 +35,8 @@ import {
 import EnviarInformeMicroDialog from '../EnviarInformeMicroDialog';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import {
-  TEXTO_INFORME_FINAL_SIN_DESARROLLO,
   cultivoNegativoElegibleParaInformeFinal,
+  textoInformeFinalSinDesarrollo,
 } from '../../../utils/limsMicroCultivoNegativo';
 import { InformeMicrobiologiaEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
@@ -128,7 +128,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       await createInformeMicrobiologia({
         estudio_id: estudio.id,
         tipo: 'FINAL',
-        texto: TEXTO_INFORME_FINAL_SIN_DESARROLLO,
+        texto: textoInformeFinalSinDesarrollo(lecturas),
       });
       toast.success('Informe FINAL (sin desarrollo) en borrador');
       onRefresh();
@@ -241,7 +241,8 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
           }
         >
           Lectura <strong>sin desarrollo</strong>: podés emitir el informe final sin aislados ni
-          antibiograma. Usá el botón o creá un FINAL con el texto que prefieras.
+          antibiograma («No se obtuvo desarrollo bacteriano»). Usá el botón o creá un FINAL con el
+          texto que prefieras.
         </Alert>
       )}
       {canOperate && faltaFinal && !caminoNegativo && (

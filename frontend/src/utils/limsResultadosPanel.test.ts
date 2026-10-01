@@ -53,9 +53,12 @@ describe('groupResultadosPorPanel', () => {
       { ...res(4, 99), tipo_examen_codigo: 'GLU', tipo_examen_nombre: 'Glucemia', valor_obtenido: '100' },
     ];
     const grupos = groupResultadosPorPanel({ tipos_examen: [] }, resultados);
-    expect(grupos[0].codigo).toBe('PAN_EAB_ART');
-    expect(grupos[0].titulo).toBe('EAB arterial');
-    expect(grupos[0].resultados).toHaveLength(3);
-    expect(grupos[1].resultados[0].tipo_examen_codigo).toBe('GLU');
+    const eab = grupos.find((g) => g.codigo === 'PAN_EAB_ART');
+    const glu = grupos.find((g) => g.resultados[0]?.tipo_examen_codigo === 'GLU');
+    expect(eab?.titulo).toBe('EAB arterial');
+    expect(eab?.resultados).toHaveLength(3);
+    expect(glu).toBeTruthy();
+    // Orden formulario papel: Glucemia antes que EAB arterial
+    expect(grupos.indexOf(glu!)).toBeLessThan(grupos.indexOf(eab!));
   });
 });

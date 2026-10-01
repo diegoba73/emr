@@ -8,7 +8,9 @@ from __future__ import annotations
 # Códigos de contenedor (laboratorio.TipoContenedor.codigo)
 EDTA = "EDTA"
 CITRATO = "CITRATO"
-CITRATO_VSG = "CITRATO_VSG"
+ERITRO = "ERITRO"
+# Alias legacy (mismo código efectivo)
+CITRATO_VSG = ERITRO
 HEPARINA = "HEPARINA"
 SUERO = "SUERO"
 FRASCO_ORINA = "FRASCO_ORINA"
@@ -18,8 +20,8 @@ CONTENEDORES_SEED = (
     (EDTA, "Tubo EDTA", "Morado", "EDTA K2"),
     (CITRATO, "Tubo Citrato coagulación", "Celeste", "Citrato de sodio"),
     (
-        CITRATO_VSG,
-        "Tubo Citrato VSG",
+        ERITRO,
+        "Tubo Eritro (VSG)",
         "Negro",
         "Citrato de sodio trisódico 3,8%",
     ),
@@ -41,8 +43,11 @@ CONTENEDORES_TODOS = (*CONTENEDORES_SEED, *CONTENEDORES_EXTRA)
 
 MUESTRA_ORINA = "ORINA"
 MUESTRA_ORINA_24H = "ORINA_24_H"
+MUESTRA_ERITRO = "SANGRE_ERITRO"
+# Alias legacy del material VSG
+MUESTRA_CITRATO_VSG = MUESTRA_ERITRO
 
-# Hemograma + HbA1c en sangre total EDTA (VSG NO: tubo negro propio)
+# Hemograma + HbA1c en sangre total EDTA (VSG NO: tubo eritro propio)
 _EDTA = frozenset(
     {
         "HEMATIES",
@@ -66,11 +71,12 @@ _EDTA = frozenset(
     }
 )
 
-# Coagulación (tapa celeste) — distinto del VSG
+# Coagulación (tapa celeste) — distinto del VSG/eritro
 _CITRATO = frozenset({"TP", "PP", "INR", "KPTT", "DDIM", "DD"})
 
-# Eritrosedimentación: tubo tapa negra, citrato 3,8%
-_CITRATO_VSG = frozenset({"VSG"})
+# Eritrosedimentación: tubo eritro (tapa negra, citrato 3,8%)
+_ERITRO = frozenset({"VSG"})
+_CITRATO_VSG = _ERITRO  # alias legacy
 
 # Gases / lactato / calcio iónico (sangre total heparina)
 # EAB arterial y venoso = jeringas distintas (no compartir etiqueta)
@@ -81,7 +87,7 @@ _HEPARINA_GASES = _EAB_JERINGA_INDIVIDUAL | frozenset(
     {"LACT", "LACPLA", "CA_ION", "CAIISE", "CAIE"}
 )
 
-# Rutina de química: 1 tubo heparina (plasma) alcanza ~200 µL
+# Química de rutina: mismo tubo suero que el resto de bioquímica
 _QUIMICA_RUTINA = frozenset(
     {
         "GLU",
@@ -107,7 +113,8 @@ _QUIMICA_RUTINA = frozenset(
     }
 )
 
-_HEPARINA = _HEPARINA_GASES | _QUIMICA_RUTINA
+# Solo gases / lactato / Ca iónico siguen en heparina
+_HEPARINA = _HEPARINA_GASES
 
 # Orina al azar / completa → frasco
 _FRASCO_ORINA = frozenset(
@@ -155,11 +162,11 @@ PANELES_ORINA_24H = frozenset({"PAN_IONO_U24", "PAN_CLEAR", "PAN_MALB24"})
 MUESTRA_CANONICA_POR_ANALITO: dict[str, str] = {
     **{c: "SANGRE_EDTA" for c in _EDTA},
     **{c: "PLASMA_CITRATO" for c in _CITRATO},
-    **{c: "SANGRE_CITRATO_VSG" for c in _CITRATO_VSG},
+    **{c: MUESTRA_ERITRO for c in _ERITRO},
     **{c: "SANGRE_HEPARINA" for c in (_HEPARINA_GASES - _EAB_JERINGA_INDIVIDUAL)},
     **{c: "SANGRE_HEPARINA_ART" for c in _EAB_ART},
     **{c: "SANGRE_HEPARINA_VEN" for c in _EAB_VEN},
-    **{c: "PLASMA_HEPARINA" for c in _QUIMICA_RUTINA},
+    **{c: SUERO for c in _QUIMICA_RUTINA},
     **{c: MUESTRA_ORINA for c in _FRASCO_ORINA},
     **{c: MUESTRA_ORINA_24H for c in _ORINA_24H},
 }
@@ -189,14 +196,24 @@ def _tubo_por_muestra(muestra_codigo: str | None, muestra_nombre: str | None = N
     if "ORINA" in raw or raw.strip() in {"ORINA"}:
         return FRASCO_ORINA
 
-    if "VSG" in raw or "WESTERGREN" in raw or "CITRATO_VSG" in raw:
-        return CITRATO_VSG
+    if (
+        "VSG" in raw
+        or "WESTERGREN" in raw
+        or "CITRATO_VSG" in raw
+        or "ERITRO" in raw
+        or "SANGRE_ERITRO" in raw
+    ):
+        return ERITRO
 
     if "EDTA" in raw or "SANGRE ENTERA" in raw or "SANGRE SECA" in raw:
         return EDTA
 
     if "CITRATO" in raw:
         return CITRATO
+
+    # Plasma heparina de química → suero (mismo tubo rojo)
+    if "PLASMA" in raw and ("HEPARINA" in raw or "HEPAINA" in raw):
+        return SUERO
 
     if "HEPARINA" in raw or "HEPAINA" in raw:
         return HEPARINA
@@ -227,12 +244,14 @@ def tubo_codigo_para_examen(
     c = (codigo or "").upper().strip()
     if c in _EDTA:
         return EDTA
-    if c in _CITRATO_VSG:
-        return CITRATO_VSG
+    if c in _ERITRO:
+        return ERITRO
     if c in _CITRATO:
         return CITRATO
-    if c in _QUIMICA_RUTINA or c in _HEPARINA_GASES:
+    if c in _HEPARINA_GASES:
         return HEPARINA
+    if c in _QUIMICA_RUTINA:
+        return SUERO
     if c in _ORINA_24H:
         return BIDON_ORINA_24H
     if c in _FRASCO_ORINA or c.startswith("ORI_"):

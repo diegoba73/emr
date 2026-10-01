@@ -18,7 +18,10 @@ export interface PapelFormRow {
 const p = (codigo: string): PapelItemRef => ({ kind: 'panel', codigo });
 const e = (codigo: string): PapelItemRef => ({ kind: 'examen', codigo });
 
-/** Filas alineadas al PDF institucional (columna izquierda | derecha). */
+/** Filas alineadas al PDF institucional (columna izquierda | derecha).
+ * El orden fila a fila (izq → der) define el orden por defecto del informe PDF
+ * (`ORDEN_FORMULARIO_PAPEL` en backend / `limsOrdenInforme.ts`).
+ */
 export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: p('PAN_HEMO'), right: e('CPK') },
   { left: e('HBA1C'), right: e('CPK_MB') },

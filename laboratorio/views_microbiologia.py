@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -255,8 +256,8 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         "tipo_cultivo__nombre",
         "tipo_muestra_micro__nombre",
     ]
-    ordering_fields = ["created_at", "fecha_inicio", "estado"]
-    ordering = ["-created_at"]
+    ordering_fields = ["numero"]
+    ordering = ["-numero"]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_serializer_class(self):
@@ -290,7 +291,17 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         if esperando in ("1", "true", "True"):
             qs = qs.filter(estado="PENDIENTE", etiquetas_impresas_at__isnull=False)
 
-        return _apply_estudio_id_query_filter(qs, self.request, lookup="pk")
+        fecha_prog = self.request.query_params.get("fecha_programada_toma")
+        if fecha_prog:
+            qs = qs.filter(fecha_programada_toma=fecha_prog)
+        vista = (self.request.query_params.get("vista_extraccion") or "").strip().lower()
+        if vista in ("hoy", "para_hoy"):
+            qs = qs.filter(fecha_programada_toma__lte=timezone.localdate())
+        elif vista in ("programadas", "futuras"):
+            qs = qs.filter(fecha_programada_toma__gt=timezone.localdate())
+
+        qs = _apply_estudio_id_query_filter(qs, self.request, lookup="pk")
+        return qs.order_by("-numero")
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)
@@ -325,6 +336,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     view="EstudioMicrobiologiaViewSet.create",
                     origen_solicitud=vd.get("_origen_solicitud") or "",
                     consulta_hc=vd.get("_consulta_hc"),
+                    fecha_programada_toma=vd.get("fecha_programada_toma"),
                 )
             else:
                 estudio = crear_estudio(
@@ -334,6 +346,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     observaciones=vd.get("observaciones") or "",
                     actor=request.user,
                     view="EstudioMicrobiologiaViewSet.create",
+                    fecha_programada_toma=vd.get("fecha_programada_toma"),
                 )
         except MicrobiologiaAccionError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -356,6 +369,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 view="EstudioMicrobiologiaViewSet.batch",
                 origen_solicitud=vd.get("_origen_solicitud") or "",
                 consulta_hc=vd.get("_consulta_hc"),
+                fecha_programada_toma=vd.get("fecha_programada_toma"),
             )
         except MicrobiologiaAccionError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -554,6 +568,10 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 "estudio_id": instance.pk,
                 "numero_estudio": instance.numero,
                 "solicitud_id": instance.solicitud_id,
+                "examen_orina_presente": bool(
+                    isinstance(getattr(instance, "examen_orina", None), dict)
+                    and any(str(v or "").strip() for v in (instance.examen_orina or {}).values())
+                ),
                 "view": "EstudioMicrobiologiaViewSet.partial_update",
             },
         )
@@ -974,6 +992,7 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
                 fecha_lectura=vd.get("fecha_lectura"),
                 horas_incubacion=vd.get("horas_incubacion"),
                 crecimiento=vd.get("crecimiento") or "PENDIENTE",
+                recuento_bacteriano=vd.get("recuento_bacteriano") or "",
                 descripcion_colonias=vd.get("descripcion_colonias") or "",
                 tincion_gram=vd.get("tincion_gram") or "",
                 observaciones=vd.get("observaciones") or "",

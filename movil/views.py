@@ -12,6 +12,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from .authentication import AutenticacionMovil, RolMovil, token_hash
 from .models import SesionMovil, DispositivoPush
+from .roles import ROLES_MOVIL, ROLES_MOVIL_TURNOS
 from pacientes.services import ensure_paciente_linked_to_user
 from medicos.views import MedicoViewSet
 from turnos.views import TurnoViewSet, _safe_audit
@@ -23,9 +24,17 @@ from auditoria.snapshot import safe_model_snapshot
 def perfil(user):
     paciente = ensure_paciente_linked_to_user(user) if str(user.rol).lower() == 'paciente' else None
     medico = getattr(user, 'medico', None)
-    return {'id': user.pk, 'nombre': user.get_full_name() or user.username,
-            'rol': str(user.rol).lower(), 'medico_id': getattr(medico, 'pk', None),
-            'paciente_id': getattr(paciente, 'pk', None)}
+    rol = str(user.rol).lower()
+    return {
+        'id': user.pk,
+        'nombre': user.get_full_name() or user.username,
+        'rol': rol,
+        'medico_id': getattr(medico, 'pk', None),
+        'paciente_id': getattr(paciente, 'pk', None),
+        'puede_turnos': rol in ROLES_MOVIL_TURNOS,
+        'puede_informes': True,
+        'puede_validar_informes': rol == 'bioquimico',
+    }
 
 
 class LoginThrottle(SimpleRateThrottle):
@@ -46,7 +55,7 @@ class LoginMovil(APIView):
             password = serializers.CharField(max_length=256, trim_whitespace=False)
         datos = Input(data=request.data); datos.is_valid(raise_exception=True)
         user = authenticate(request=request, **datos.validated_data)
-        if not user or str(user.rol).lower() not in ('paciente', 'medico'):
+        if not user or str(user.rol).lower() not in ROLES_MOVIL:
             raise AuthenticationFailed('No se pudo iniciar sesión con esas credenciales.')
         token = secrets.token_urlsafe(48)
         expira = timezone.now() + timedelta(days=30)
@@ -108,6 +117,11 @@ class TurnosMovil(TurnoViewSet):
     authentication_classes = [AutenticacionMovil]
     permission_classes = [RolMovil]
     serializer_class = TurnoMovilSerializer
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if str(request.user.rol).lower() not in ROLES_MOVIL_TURNOS:
+            raise PermissionDenied('Tu rol no gestiona turnos desde la app.')
 
     def get_queryset(self):
         # El rol médico conserva únicamente su propia agenda incluso con is_staff.

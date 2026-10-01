@@ -254,8 +254,7 @@ class InternacionClinicalService:
         else:
             diagnostico = internacion.diagnostico_ingreso or None
 
-        dieta_obj = internacion.tipo_dieta
-        dieta = dieta_obj.nombre if dieta_obj is not None else None
+        dieta = internacion.dieta_display or None
         dias = None
         if internacion.fecha_ingreso:
             delta = (fin or timezone.now()) - internacion.fecha_ingreso

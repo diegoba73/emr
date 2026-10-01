@@ -1,6 +1,6 @@
 import {
   estadosMicroDesdeFiltroLab,
-  sortPedidosMasRecientesPrimero,
+  sortPedidosPorNumero,
 } from './limsPendientesUnificados';
 
 describe('estadosMicroDesdeFiltroLab', () => {
@@ -13,22 +13,26 @@ describe('estadosMicroDesdeFiltroLab', () => {
   });
 });
 
-describe('sortPedidosMasRecientesPrimero', () => {
-  it('ordena de la última solicitada a la primera', () => {
+describe('sortPedidosPorNumero', () => {
+  it('ordena solo por numero descendente', () => {
     const rows = [
-      { id: 1, fecha_solicitud: '2026-01-01T10:00:00Z' },
-      { id: 2, fecha_solicitud: '2026-09-15T18:00:00Z' },
-      { id: 3, fecha_solicitud: '2026-09-15T12:00:00Z' },
+      { id: 1, numero: 'LAB-2026-00001' },
+      { id: 2, numero: 'LAB-2026-00010' },
+      { id: 3, numero: 'LAB-2026-00002' },
     ];
-    expect(sortPedidosMasRecientesPrimero(rows).map((r) => r.id)).toEqual([2, 3, 1]);
+    expect(sortPedidosPorNumero(rows).map((r) => r.numero)).toEqual([
+      'LAB-2026-00010',
+      'LAB-2026-00002',
+      'LAB-2026-00001',
+    ]);
   });
 
-  it('pone sin fecha al final y desempata por id', () => {
+  it('pone sin numero al final', () => {
     const rows = [
-      { id: 1, fecha_solicitud: null },
-      { id: 4, fecha_solicitud: '2026-09-15T12:00:00Z' },
-      { id: 7, fecha_solicitud: '2026-09-15T12:00:00Z' },
+      { id: 1, numero: null },
+      { id: 4, numero: 'LAB-2026-00005' },
+      { id: 7, numero: 'LAB-2026-00003' },
     ];
-    expect(sortPedidosMasRecientesPrimero(rows).map((r) => r.id)).toEqual([7, 4, 1]);
+    expect(sortPedidosPorNumero(rows).map((r) => r.id)).toEqual([4, 7, 1]);
   });
 });

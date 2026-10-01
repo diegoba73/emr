@@ -73,14 +73,17 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     diagnostico_ingreso: string;
     diagnostico_cie_id: number | null;
     tipo_dieta_id: number | null;
+    dieta_texto: string;
   }>({
     paciente: null,
     medico: null,
     diagnostico_ingreso: '',
     diagnostico_cie_id: null,
     tipo_dieta_id: null,
+    dieta_texto: '',
   });
   const [tiposDieta, setTiposDieta] = useState<TipoDieta[]>([]);
+  const [dietaInput, setDietaInput] = useState('');
   const [loadingTiposDieta, setLoadingTiposDieta] = useState(false);
   
   // Estados para búsqueda de pacientes con API
@@ -127,6 +130,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     setMedicoSeleccionado(null);
     setTiposDieta([]);
     setLoadingTiposDieta(false);
+    setDietaInput('');
     setTab(0);
     setRevistaContexto(null);
     setRevistaError(null);
@@ -390,7 +394,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         diagnostico_ingreso: found.diagnostico_ingreso || '',
         diagnostico_cie_id: found.diagnostico_cie?.id || null,
         tipo_dieta_id: found.tipo_dieta?.id || null,
+        dieta_texto: found.dieta_texto || '',
       });
+      setDietaInput(
+        found.dieta_display || found.dieta_texto || found.tipo_dieta?.nombre || ''
+      );
       if (found.diagnostico_cie) {
         setDiagnosticoInputValue(`${found.diagnostico_cie.codigo} - ${found.diagnostico_cie.descripcion}`);
       } else {
@@ -423,7 +431,14 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
           diagnostico_ingreso: internacion.diagnostico_ingreso || '',
           diagnostico_cie_id: internacion.diagnostico_cie?.id || null,
           tipo_dieta_id: internacion.tipo_dieta?.id || null,
+          dieta_texto: internacion.dieta_texto || '',
         });
+        setDietaInput(
+          internacion.dieta_display
+            || internacion.dieta_texto
+            || internacion.tipo_dieta?.nombre
+            || ''
+        );
         
         if (internacion.diagnostico_cie) {
           setDiagnosticoInputValue(`${internacion.diagnostico_cie.codigo} - ${internacion.diagnostico_cie.descripcion}`);
@@ -485,6 +500,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       }
 
       updateData.tipo_dieta_id = editedData.tipo_dieta_id;
+      updateData.dieta_texto = editedData.dieta_texto || '';
 
       const updated = await updateInternacion(internacionId, updateData);
       
@@ -496,7 +512,11 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
         diagnostico_ingreso: updated.diagnostico_ingreso || '',
         diagnostico_cie_id: updated.diagnostico_cie?.id || null,
         tipo_dieta_id: updated.tipo_dieta?.id || null,
+        dieta_texto: updated.dieta_texto || '',
       });
+      setDietaInput(
+        updated.dieta_display || updated.dieta_texto || updated.tipo_dieta?.nombre || ''
+      );
       
       // Actualizar input value del diagnóstico CIE
       if (updated.diagnostico_cie) {
@@ -939,6 +959,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
               </Box>
               {isEditing ? (
                 <Autocomplete
+                  freeSolo
                   options={
                     internacion?.tipo_dieta &&
                     typeof internacion.tipo_dieta === 'object' &&
@@ -947,14 +968,69 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                       ? [...tiposDieta, internacion.tipo_dieta]
                       : tiposDieta
                   }
-                  getOptionLabel={(option) => option.nombre || ''}
-                  value={
-                    tiposDieta.find((t) => t.id === editedData.tipo_dieta_id)
-                    || (internacion?.tipo_dieta?.id === editedData.tipo_dieta_id ? internacion.tipo_dieta : null)
-                    || null
+                  getOptionLabel={(option) =>
+                    typeof option === 'string' ? option : option.nombre || ''
                   }
+                  value={
+                    editedData.tipo_dieta_id
+                      ? tiposDieta.find((t) => t.id === editedData.tipo_dieta_id)
+                        || (internacion?.tipo_dieta?.id === editedData.tipo_dieta_id
+                          ? internacion.tipo_dieta
+                          : null)
+                      : editedData.dieta_texto || null
+                  }
+                  inputValue={dietaInput}
+                  onInputChange={(_e, value, reason) => {
+                    if (reason === 'input' || reason === 'clear') {
+                      setDietaInput(value);
+                    }
+                  }}
                   onChange={(_, newValue) => {
-                    setEditedData((prev) => ({ ...prev, tipo_dieta_id: newValue?.id ?? null }));
+                    if (typeof newValue === 'string') {
+                      const texto = newValue.trim();
+                      const match = tiposDieta.find(
+                        (t) => t.nombre.toLowerCase() === texto.toLowerCase()
+                      );
+                      setEditedData((prev) => ({
+                        ...prev,
+                        tipo_dieta_id: match?.id ?? null,
+                        dieta_texto: match ? '' : texto,
+                      }));
+                      setDietaInput(match?.nombre ?? texto);
+                    } else if (newValue) {
+                      setEditedData((prev) => ({
+                        ...prev,
+                        tipo_dieta_id: newValue.id,
+                        dieta_texto: '',
+                      }));
+                      setDietaInput(newValue.nombre || '');
+                    } else {
+                      setEditedData((prev) => ({
+                        ...prev,
+                        tipo_dieta_id: null,
+                        dieta_texto: '',
+                      }));
+                      setDietaInput('');
+                    }
+                  }}
+                  onBlur={() => {
+                    const texto = dietaInput.trim();
+                    if (!texto) {
+                      setEditedData((prev) => ({
+                        ...prev,
+                        tipo_dieta_id: null,
+                        dieta_texto: '',
+                      }));
+                      return;
+                    }
+                    const match = tiposDieta.find(
+                      (t) => t.nombre.toLowerCase() === texto.toLowerCase()
+                    );
+                    setEditedData((prev) => ({
+                      ...prev,
+                      tipo_dieta_id: match?.id ?? null,
+                      dieta_texto: match ? '' : texto,
+                    }));
                   }}
                   size="small"
                   fullWidth
@@ -966,26 +1042,33 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                     <TextField
                       {...params}
                       label="Tipo de dieta"
-                      placeholder="Sin dieta asignada"
+                      placeholder="Elegí del listado o escribí otra"
                       helperText={
                         loadingTiposDieta
                           ? 'Cargando tipos de dieta…'
-                          : tiposDieta.length === 0
-                            ? 'No hay tipos de dieta activos. Revisá Catálogos → Tipos de dieta.'
-                            : undefined
+                          : 'Podés elegir una opción o escribir una dieta que no esté en el listado.'
                       }
                     />
                   )}
-                  isOptionEqualToValue={(option, value) => option.id === value?.id}
+                  isOptionEqualToValue={(option, value) => {
+                    if (typeof option === 'string' || typeof value === 'string') {
+                      return option === value;
+                    }
+                    return option.id === value?.id;
+                  }}
                   noOptionsText={
                     loadingTiposDieta
                       ? 'Cargando tipos de dieta…'
-                      : 'No hay tipos de dieta cargados'
+                      : 'Sin coincidencias — Enter para usar el texto escrito'
                   }
                 />
               ) : (
                 <Typography variant="body1" sx={{ ml: 4 }}>
-                  {internacion?.tipo_dieta?.nombre || internacionData.tipo_dieta || 'Sin dieta asignada'}
+                  {internacion?.dieta_display
+                    || internacion?.tipo_dieta?.nombre
+                    || internacion?.dieta_texto
+                    || internacionData.tipo_dieta
+                    || 'Sin dieta asignada'}
                 </Typography>
               )}
             </Box>

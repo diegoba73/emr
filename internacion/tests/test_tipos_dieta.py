@@ -119,6 +119,70 @@ class TiposDietaAPITestCase(APITestCase):
         internacion = Internacion.objects.get(paciente=self.paciente_libre, activo=True)
         self.assertIsNone(internacion.tipo_dieta)
 
+    def test_admitir_con_dieta_texto_libre(self):
+        self.client.force_authenticate(user=self.user_medico)
+        response = self.client.post(
+            '/api/internacion/internaciones/',
+            {
+                'paciente': self.paciente_libre.id,
+                'cama': self.cama_disponible.id,
+                'diagnostico_ingreso': 'Ingreso con dieta libre',
+                'dieta_texto': 'Blanda sin lactosa',
+                'tipo_dieta_id': None,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        internacion = Internacion.objects.get(paciente=self.paciente_libre, activo=True)
+        self.assertIsNone(internacion.tipo_dieta_id)
+        self.assertEqual(internacion.dieta_texto, 'Blanda sin lactosa')
+        self.assertEqual(response.data['dieta_display'], 'Blanda sin lactosa')
+        self.assertEqual(response.data['dieta_texto'], 'Blanda sin lactosa')
+
+    def test_admitir_dieta_texto_que_coincide_con_catalogo_vincula_fk(self):
+        self.client.force_authenticate(user=self.user_medico)
+        response = self.client.post(
+            '/api/internacion/internaciones/',
+            {
+                'paciente': self.paciente_libre.id,
+                'cama': self.cama_disponible.id,
+                'diagnostico_ingreso': 'Ingreso con match de dieta',
+                'dieta_texto': self.tipo_diabetica.nombre,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        internacion = Internacion.objects.get(paciente=self.paciente_libre, activo=True)
+        self.assertEqual(internacion.tipo_dieta_id, self.tipo_diabetica.id)
+        self.assertEqual(internacion.dieta_texto, '')
+        self.assertEqual(response.data['dieta_display'], self.tipo_diabetica.nombre)
+
+    def test_patch_dieta_texto_libre_limpia_catalogo(self):
+        self.client.force_authenticate(user=self.user_medico)
+        response = self.client.patch(
+            f'/api/internacion/internaciones/{self.internacion_activa.id}/',
+            {'dieta_texto': 'Cetogénica personalizada', 'tipo_dieta_id': None},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.internacion_activa.refresh_from_db()
+        self.assertIsNone(self.internacion_activa.tipo_dieta_id)
+        self.assertEqual(self.internacion_activa.dieta_texto, 'Cetogénica personalizada')
+        self.assertEqual(response.data['dieta_display'], 'Cetogénica personalizada')
+
+    def test_secretaria_puede_editar_dieta_texto(self):
+        self.client.force_authenticate(user=self.user_secretaria)
+        url = f'/api/internacion/internaciones/{self.internacion_activa.id}/'
+        response = self.client.patch(
+            url,
+            {'dieta_texto': 'Licuados fríos', 'tipo_dieta_id': None},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.internacion_activa.refresh_from_db()
+        self.assertIsNone(self.internacion_activa.tipo_dieta_id)
+        self.assertEqual(self.internacion_activa.dieta_texto, 'Licuados fríos')
+
     def test_patch_cambia_tipo_dieta(self):
         self.client.force_authenticate(user=self.user_medico)
         response = self.client.patch(
@@ -173,6 +237,17 @@ class TiposDietaAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         actual = response.data.get('internacion_actual') or {}
         self.assertEqual(actual.get('tipo_dieta'), self.tipo_hiposodica.nombre)
+
+    def test_internacion_actual_muestra_dieta_texto_libre(self):
+        Internacion.objects.filter(pk=self.internacion_activa.pk).update(
+            tipo_dieta=None,
+            dieta_texto='Sin gluten casera',
+        )
+        self.client.force_authenticate(user=self.user_medico)
+        response = self.client.get(f'/api/internacion/camas/{self.cama_ocupada.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        actual = response.data.get('internacion_actual') or {}
+        self.assertEqual(actual.get('tipo_dieta'), 'Sin gluten casera')
 
     def test_listado_default_omite_inactivos(self):
         self.client.force_authenticate(user=self.user_medico)

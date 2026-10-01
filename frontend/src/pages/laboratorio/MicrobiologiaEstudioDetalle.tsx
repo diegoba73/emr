@@ -43,19 +43,24 @@ import SiembrasLecturasPanel from '../../components/lims/micro/SiembrasLecturasP
 import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIdentificacionPanel';
 import AntibiogramaPanel from '../../components/lims/micro/AntibiogramaPanel';
 import InformesMicrobiologiaPanel from '../../components/lims/micro/InformesMicrobiologiaPanel';
+import EstudioMicroExamenOrinaTab from '../../components/lims/micro/EstudioMicroExamenOrinaTab';
 import EnviarInformeMicroDialog from '../../components/lims/EnviarInformeMicroDialog';
 import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/MotivoDialog';
 import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
 import { ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import { estudioAdmiteExamenOrina } from '../../utils/limsExamenOrinaMicro';
+import { todasLecturasSinDesarrollo } from '../../utils/limsMicroCultivoNegativo';
+
+type DetalleTab = 'resumen' | 'orina' | 'siembras' | 'aislados' | 'antibiograma' | 'informes';
 
 const MicrobiologiaEstudioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useData();
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState<DetalleTab>('resumen');
   const [estudio, setEstudio] = useState<EstudioMicrobiologia | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloadingTalon, setDownloadingTalon] = useState(false);
@@ -86,9 +91,17 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const canOpEstudio = canOperateMicroEstudioTecnico(currentUser, estudio?.estado);
   const canMarcarInformado = canMarcarMicroEstudioInformado(currentUser, estudio?.estado);
   const modoPedidoPendiente = estudio?.estado === 'PENDIENTE';
+  const admiteOrina = estudio ? estudioAdmiteExamenOrina(estudio) : false;
+  const cultivoSinDesarrollo = todasLecturasSinDesarrollo(bundle.lecturas);
 
   const estudioId = Number(id);
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
+
+  useEffect(() => {
+    if (!admiteOrina && tab === 'orina') {
+      setTab('resumen');
+    }
+  }, [admiteOrina, tab]);
 
   const loadAll = useCallback(async () => {
     if (!allowed || Number.isNaN(estudioId)) {
@@ -199,7 +212,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       setEstudio(est);
       toast.success('Recepción confirmada. Ya podés trabajar el estudio.');
       await loadAll();
-      setTab(0);
+      setTab('resumen');
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarEstudioMicro));
     } finally {
@@ -381,12 +394,19 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       <Button size="small" onClick={handleVolver} sx={{ mb: 1 }}>
         ← Volver
       </Button>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Resumen" />
-        <Tab label="Siembras y lecturas" />
-        <Tab label="Aislados" />
-        <Tab label="Antibiograma" />
-        <Tab label="Informes" />
+      <Tabs
+        value={tab}
+        onChange={(_, v: DetalleTab) => setTab(v)}
+        sx={{ mb: 2 }}
+        variant="scrollable"
+        allowScrollButtonsMobile
+      >
+        <Tab value="resumen" label="Resumen" />
+        {admiteOrina && <Tab value="orina" label="Tira y sedimento" />}
+        <Tab value="siembras" label="Siembras y lecturas" />
+        <Tab value="aislados" label="Aislados" />
+        <Tab value="antibiograma" label="Antibiograma" />
+        <Tab value="informes" label="Informes" />
       </Tabs>
 
       {estudioCerrado && (
@@ -403,7 +423,16 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           </Alert>
         )}
 
-      {tab === 0 && (
+      {cultivoSinDesarrollo && !estudioCerrado && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Cultivo <strong>sin desarrollo</strong>: no hace falta aislamiento ni antibiograma.
+          {canOpInforme
+            ? ' En Informes podés crear el informe final («No se obtuvo desarrollo bacteriano»).'
+            : ' El bioquímico puede emitir el informe final en la pestaña Informes.'}
+        </Alert>
+      )}
+
+      {tab === 'resumen' && (
         <EstudioMicroResumenTab
           estudio={estudio}
           canOperateTecnico={canOpEstudio}
@@ -419,7 +448,14 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onObraSocial={() => setOpenObraSocial(true)}
         />
       )}
-      {tab === 1 && (
+      {tab === 'orina' && admiteOrina && (
+        <EstudioMicroExamenOrinaTab
+          estudio={estudio}
+          canOperate={canOpEstudio}
+          onSaved={(fresh) => setEstudio(fresh)}
+        />
+      )}
+      {tab === 'siembras' && (
         <SiembrasLecturasPanel
           estudioId={estudioId}
           siembras={bundle.siembras}
@@ -427,9 +463,10 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           medios={bundle.medios}
           canOperate={canOpEstudio}
           onRefresh={loadAll}
+          onIrAInformes={() => setTab('informes')}
         />
       )}
-      {tab === 2 && (
+      {tab === 'aislados' && (
         <AisladosIdentificacionPanel
           estudioId={estudioId}
           lecturas={bundle.lecturas}
@@ -440,7 +477,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onRefresh={loadAll}
         />
       )}
-      {tab === 3 && (
+      {tab === 'antibiograma' && (
         <AntibiogramaPanel
           aislados={bundle.aislados}
           antibiogramas={bundle.antibiogramas}
@@ -449,9 +486,10 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           microorganismos={bundle.microorganismos}
           canOperate={canOpEstudio}
           onRefresh={loadAll}
+          cultivoSinDesarrollo={cultivoSinDesarrollo}
         />
       )}
-      {tab === 4 && (
+      {tab === 'informes' && (
         <InformesMicrobiologiaPanel
           estudio={estudio}
           informes={bundle.informes}

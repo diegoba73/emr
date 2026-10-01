@@ -66,7 +66,9 @@ class TestInformePdfLayout(TestCase):
         self.assertEqual(len(grupos), 2)
         self.assertEqual(grupos[0].titulo, "PERFIL LIPOPROTEICO")
         self.assertEqual(len(grupos[0].resultados), 1)
+        self.assertTrue(grupos[0].panel_codigo)
         self.assertTrue(grupos[1].key.startswith("resultado-"))
+        self.assertIsNone(grupos[1].panel_codigo)
         self.assertEqual(len(grupos[1].resultados), 1)
 
     def test_genera_pdf_valido(self):
@@ -75,13 +77,15 @@ class TestInformePdfLayout(TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 800)
 
-    def test_firma_trazo_recorta_bloque_inferior(self):
+    def test_firma_bloque_se_carga(self):
         from laboratorio.informe_pdf_config import LABORATORIO_STATIC
-        from laboratorio.informe_pdf_layout import _firma_trazo_reader
+        from laboratorio.informe_pdf_layout import _firma_image_reader
 
-        path = LABORATORIO_STATIC / "firma_1.png"
+        path = LABORATORIO_STATIC / "firmas_bloque.png"
+        if not path.is_file():
+            path = LABORATORIO_STATIC / "firma_1.png"
         self.assertTrue(path.is_file())
-        reader = _firma_trazo_reader(str(path))
+        reader = _firma_image_reader(str(path))
         self.assertIsNotNone(reader)
 
     def test_valor_y_unidad_separados(self):

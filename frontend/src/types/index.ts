@@ -270,6 +270,10 @@ export interface InternacionCama extends BaseModel {
   diagnostico_cie_id?: number | null;
   tipo_dieta?: TipoDieta | null;
   tipo_dieta_id?: number | null;
+  /** Texto libre si la dieta no está en el catálogo. */
+  dieta_texto?: string;
+  /** Nombre a mostrar (texto libre o catálogo). */
+  dieta_display?: string;
   alergias?: string;
   tiene_alergias?: boolean | null;
   anamnesis_ingreso?: string;

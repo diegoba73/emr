@@ -93,9 +93,10 @@ class SolicitudExamenAdmin(admin.ModelAdmin):
         'estado',
         'estado_obra_social',
         'fecha_solicitud',
+        'fecha_programada_toma',
         'fecha_entrega_prometida',
     )
-    list_filter = ('estado', 'estado_obra_social', 'origen_solicitud', 'fecha_solicitud')
+    list_filter = ('estado', 'estado_obra_social', 'origen_solicitud', 'fecha_solicitud', 'fecha_programada_toma')
     search_fields = (
         'numero',
         'paciente__nombre',
@@ -135,6 +136,7 @@ class SolicitudExamenAdmin(admin.ModelAdmin):
         ('Fechas', {
             'fields': (
                 'fecha_solicitud',
+                'fecha_programada_toma',
                 'fecha_entrega_prometida',
             )
         }),

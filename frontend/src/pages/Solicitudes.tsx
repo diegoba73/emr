@@ -31,7 +31,7 @@ import {
   estadosMicroDesdeFiltroLab,
   mapLabToPendiente,
   mapMicroToPendiente,
-  sortPedidosMasRecientesPrimero,
+  sortPedidosPorNumero,
   type PendientePedidoRow,
 } from '../utils/limsPendientesUnificados';
 import { isPacienteRole } from '../utils/navLabels';
@@ -119,7 +119,7 @@ const Solicitudes: React.FC = () => {
 
     if (gen !== loadGen.current) return;
 
-    setRows(sortPedidosMasRecientesPrimero(labs.map(mapLabToPendiente)));
+    setRows(sortPedidosPorNumero(labs.map(mapLabToPendiente)));
     initialLoadDone.current = true;
     setLoading(false);
     if (labError) setError(labError);
@@ -137,7 +137,7 @@ const Solicitudes: React.FC = () => {
     if (gen !== loadGen.current) return;
 
     setRows(
-      sortPedidosMasRecientesPrimero([
+      sortPedidosPorNumero([
         ...labs.map(mapLabToPendiente),
         ...micros.map(mapMicroToPendiente),
       ])

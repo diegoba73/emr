@@ -10,6 +10,7 @@ describe('limsOrdenResultados', () => {
     origen_solicitud: 'AMBULATORIO_CEHTA',
     estado: 'EN_PROCESO',
     fecha_solicitud: '2026-01-01',
+    fecha_programada_toma: '2026-01-01',
     resultados,
   });
 

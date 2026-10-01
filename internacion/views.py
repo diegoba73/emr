@@ -187,7 +187,8 @@ class InternacionViewSet(viewsets.ModelViewSet):
         # Excepción acotada: secretaría solo puede corregir la dieta por PATCH.
         if (action == 'partial_update'
                 and str(getattr(self.request.user, 'rol', '')).strip().lower() == 'secretaria'
-                and set(self.request.data) == {'tipo_dieta_id'}):
+                and set(self.request.data).issubset({'tipo_dieta_id', 'dieta_texto'})
+                and set(self.request.data)):
             return [IsAuthenticated(), IsInternacionStaff()]
         if action == 'alta':
             return [IsAuthenticated(), IsInternacionAlta()]
@@ -205,7 +206,8 @@ class InternacionViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         if str(getattr(request.user, 'rol', '')).strip().lower() == 'secretaria':
-            if request.method != 'PATCH' or set(request.data) != {'tipo_dieta_id'}:
+            keys = set(request.data)
+            if request.method != 'PATCH' or not keys or not keys.issubset({'tipo_dieta_id', 'dieta_texto'}):
                 raise PermissionDenied('Secretaría solo puede editar el tipo de dieta.')
             internacion = self.get_object()
             if not internacion.activo or internacion.fecha_alta:

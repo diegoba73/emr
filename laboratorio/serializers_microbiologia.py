@@ -116,6 +116,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     estado_obra_social_display = serializers.SerializerMethodField()
     requiere_autorizacion_obra_social = serializers.SerializerMethodField()
     obra_social_permite_validar = serializers.SerializerMethodField()
+    admite_examen_orina = serializers.SerializerMethodField()
 
     class Meta:
         model = EstudioMicrobiologia
@@ -157,6 +158,9 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "requiere_autorizacion_obra_social",
             "obra_social_permite_validar",
             "observaciones",
+            "fecha_programada_toma",
+            "examen_orina",
+            "admite_examen_orina",
             "fecha_inicio",
             "fecha_cierre",
             "responsable",
@@ -168,8 +172,16 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def get_admite_examen_orina(self, obj):
+        from laboratorio.examen_orina_micro import estudio_admite_examen_orina
+
+        return estudio_admite_examen_orina(obj)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        from laboratorio.examen_orina_micro import normalizar_examen_orina
+
+        data["examen_orina"] = normalizar_examen_orina(getattr(instance, "examen_orina", None))
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
         from api.permissions import es_secretaria_entrega_lab
@@ -329,12 +341,18 @@ class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
     solicitud_id = serializers.IntegerField(required=False)
     tipo_estudio = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+    fecha_programada_toma = serializers.DateField(required=True)
 
     def validate(self, attrs):
         from pacientes.models import Paciente
         from medicos.models import Medico
         from historias_clinicas.models import Consulta
         from laboratorio.origen_solicitud import normalizar_origen_solicitud
+
+        if not attrs.get("fecha_programada_toma"):
+            raise serializers.ValidationError(
+                {"fecha_programada_toma": "Indicá el día de la extracción."}
+            )
 
         solicitud_id = attrs.get("solicitud_id")
         muestra_id = attrs.get("muestra_id")
@@ -450,6 +468,7 @@ class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
     consulta_hc_id = serializers.IntegerField(required=False, allow_null=True)
     origen_solicitud = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+    fecha_programada_toma = serializers.DateField(required=True)
     items = EstudioMicroItemSerializer(many=True)
 
     def validate(self, attrs):
@@ -457,6 +476,11 @@ class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
         from medicos.models import Medico
         from historias_clinicas.models import Consulta
         from laboratorio.origen_solicitud import normalizar_origen_solicitud
+
+        if not attrs.get("fecha_programada_toma"):
+            raise serializers.ValidationError(
+                {"fecha_programada_toma": "Indicá el día de la extracción."}
+            )
 
         try:
             paciente = Paciente.objects.get(pk=attrs["paciente_id"])
@@ -532,9 +556,47 @@ class EstudioMicroImprimirEtiquetasSerializer(serializers.Serializer):
 class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
     """PATCH: campos no sensibles. ``estado`` se ignora; transiciones vía acciones."""
 
+    examen_orina = serializers.JSONField(required=False)
+
     class Meta:
         model = EstudioMicrobiologia
-        fields = ("tipo_estudio", "observaciones")
+        fields = ("tipo_estudio", "observaciones", "examen_orina", "fecha_programada_toma")
+
+    def validate_fecha_programada_toma(self, value):
+        if value is None:
+            raise serializers.ValidationError("La fecha de extracción es obligatoria.")
+        return value
+
+    def validate(self, attrs):
+        if "fecha_programada_toma" in attrs and self.instance is not None:
+            if getattr(self.instance, "estado", None) != "PENDIENTE":
+                raise serializers.ValidationError(
+                    {
+                        "fecha_programada_toma": (
+                            "Solo se puede cambiar la fecha de extracción mientras el pedido está pendiente."
+                        )
+                    }
+                )
+        return attrs
+
+    def validate_examen_orina(self, value):
+        from laboratorio.examen_orina_micro import (
+            estudio_admite_examen_orina,
+            normalizar_examen_orina,
+        )
+
+        estudio = self.instance
+        if estudio is None:
+            raise serializers.ValidationError("Estudio requerido.")
+        if not estudio_admite_examen_orina(estudio):
+            raise serializers.ValidationError(
+                "El examen de orina (tira/sedimento) solo aplica a urocultivos."
+            )
+        if value is None:
+            return normalizar_examen_orina({})
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("examen_orina debe ser un objeto.")
+        return normalizar_examen_orina(value)
 
 
 class EstudioCancelarSerializer(serializers.Serializer):
@@ -628,6 +690,7 @@ class LecturaCultivoSerializer(serializers.ModelSerializer):
             "leido_por",
             "horas_incubacion",
             "crecimiento",
+            "recuento_bacteriano",
             "descripcion_colonias",
             "tincion_gram",
             "observaciones",
@@ -647,6 +710,7 @@ class LecturaCultivoCreateSerializer(serializers.Serializer):
         required=False,
         default="PENDIENTE",
     )
+    recuento_bacteriano = serializers.CharField(required=False, allow_blank=True, default="")
     descripcion_colonias = serializers.CharField(required=False, allow_blank=True, default="")
     tincion_gram = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
@@ -659,6 +723,7 @@ class LecturaCultivoPartialUpdateSerializer(serializers.ModelSerializer):
         fields = (
             "horas_incubacion",
             "crecimiento",
+            "recuento_bacteriano",
             "descripcion_colonias",
             "tincion_gram",
             "observaciones",

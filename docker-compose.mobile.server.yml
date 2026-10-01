@@ -3,6 +3,11 @@
 services:
   backend:
     environment:
+      DJANGO_DEBUG: "false"
+      # El proxy web interno aún reemplaza X-Forwarded-Proto por http.
+      # No activar redirección Django hasta corregir esa cadena de proxies.
+      DJANGO_SECURE_SSL_REDIRECT: "false"
+      DJANGO_USE_PROXY_SSL_HEADER: "true"
       RUN_SEED: "false"
       MOBILE_INSTITUTION_CODE: ICPL
       MOBILE_INSTITUTION_NAME: Instituto de Cardiología Pueblo de Luis

@@ -11,9 +11,9 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_CLINICS_JSON": "[{\"code\":\"ICPL\",\"name\":\"Instituto de Cardiología Pueblo de Luis\",\"apiUrl\":\"https://emr.sytes.net:8080/api/movil\"}]",
+        "EXPO_PUBLIC_CLINICS_JSON": "[{\"code\":\"ICPL\",\"name\":\"Pueblo de Luis & CEHTA\",\"apiUrl\":\"https://serverprueba.tail94a667.ts.net/api/movil\"}]",
         "EXPO_PUBLIC_ALLOW_LOCAL_HTTP": "false",
-        "EXPO_PUBLIC_API_URL": "https://emr.sytes.net:8080/api/movil"
+        "EXPO_PUBLIC_API_URL": "https://serverprueba.tail94a667.ts.net/api/movil"
       },
       "developmentClient": false,
       "android": {
@@ -24,7 +24,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_CLINICS_JSON": "[{\"code\":\"ICPL\",\"name\":\"Instituto de Cardiología Pueblo de Luis\",\"apiUrl\":\"https://emr.sytes.net:8080/api/movil\"}]",
+        "EXPO_PUBLIC_CLINICS_JSON": "[{\"code\":\"ICPL\",\"name\":\"Pueblo de Luis & CEHTA\",\"apiUrl\":\"https://emr.sytes.net:8080/api/movil\"}]",
         "EXPO_PUBLIC_ALLOW_LOCAL_HTTP": "false",
         "EXPO_PUBLIC_API_URL": "https://emr.sytes.net:8080/api/movil"
       },

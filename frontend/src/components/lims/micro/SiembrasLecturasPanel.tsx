@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -25,6 +27,10 @@ import {
   createSiembraMicrobiologia,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import {
+  RECUENTO_BACTERIANO_OPCIONES,
+  todasLecturasSinDesarrollo,
+} from '../../../utils/limsMicroCultivoNegativo';
 
 const CRECIMIENTOS = ['PENDIENTE', 'SIN_DESARROLLO', 'ESCASO', 'MODERADO', 'ABUNDANTE', 'MIXTO'];
 
@@ -35,6 +41,7 @@ export interface SiembrasLecturasPanelProps {
   medios: MedioCultivo[];
   canOperate: boolean;
   onRefresh: () => void;
+  onIrAInformes?: () => void;
 }
 
 const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
@@ -44,17 +51,21 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
   medios,
   canOperate,
   onRefresh,
+  onIrAInformes,
 }) => {
   const [medioId, setMedioId] = useState<number | ''>('');
   const [siembraIdLectura, setSiembraIdLectura] = useState<number | ''>('');
   const [lecturaForm, setLecturaForm] = useState({
     crecimiento: 'PENDIENTE',
+    recuento_bacteriano: '',
     descripcion_colonias: '',
     tincion_gram: '',
     observaciones: '',
     es_preliminar: false,
     horas_incubacion: '',
   });
+
+  const cultivoNegativo = todasLecturasSinDesarrollo(lecturas);
 
   const crearSiembra = async () => {
     if (medioId === '') {
@@ -80,13 +91,19 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
       await createLecturaCultivo({
         siembra_id: Number(siembraIdLectura),
         crecimiento: lecturaForm.crecimiento,
+        recuento_bacteriano: lecturaForm.recuento_bacteriano.trim() || undefined,
         descripcion_colonias: lecturaForm.descripcion_colonias,
         tincion_gram: lecturaForm.tincion_gram,
         observaciones: lecturaForm.observaciones,
         es_preliminar: lecturaForm.es_preliminar,
         horas_incubacion: lecturaForm.horas_incubacion ? Number(lecturaForm.horas_incubacion) : null,
       });
-      toast.success('Lectura registrada');
+      const negativo = lecturaForm.crecimiento === 'SIN_DESARROLLO';
+      toast.success(
+        negativo
+          ? 'Lectura sin desarrollo registrada. No hace falta aislar ni antibiograma.'
+          : 'Lectura registrada'
+      );
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarLectura));
@@ -95,6 +112,24 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
 
   return (
     <Box>
+      {cultivoNegativo && (
+        <Alert
+          severity="success"
+          sx={{ mb: 2 }}
+          action={
+            onIrAInformes ? (
+              <Button color="inherit" size="small" onClick={onIrAInformes}>
+                Ir a Informes
+              </Button>
+            ) : undefined
+          }
+        >
+          Cultivo <strong>sin desarrollo</strong>: no se requieren aislados ni antibiograma. Se puede
+          emitir el informe final indicando que no hubo desarrollo bacteriano
+          {onIrAInformes ? ' (pestaña Informes).' : '.'}
+        </Alert>
+      )}
+
       <Typography variant="subtitle1" gutterBottom>
         Siembras
       </Typography>
@@ -174,7 +209,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
               <InputLabel>Crecimiento</InputLabel>
               <Select
                 label="Crecimiento"
@@ -183,11 +218,24 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               >
                 {CRECIMIENTOS.map((c) => (
                   <MenuItem key={c} value={c}>
-                    {c}
+                    {c === 'SIN_DESARROLLO' ? 'Sin desarrollo' : c}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
+            <Autocomplete
+              freeSolo
+              size="small"
+              sx={{ minWidth: 200 }}
+              options={[...RECUENTO_BACTERIANO_OPCIONES]}
+              value={lecturaForm.recuento_bacteriano}
+              onInputChange={(_e, value) =>
+                setLecturaForm((f) => ({ ...f, recuento_bacteriano: value }))
+              }
+              renderInput={(params) => (
+                <TextField {...params} label="Recuento bacteriano" placeholder="UFC/ml" />
+              )}
+            />
             <TextField
               size="small"
               label="Horas incub."
@@ -204,6 +252,12 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               label="Preliminar"
             />
           </Box>
+          {lecturaForm.crecimiento === 'SIN_DESARROLLO' && (
+            <Alert severity="info" sx={{ mb: 1, py: 0.5 }}>
+              Sin desarrollo: no hace falta aislamiento ni antibiograma. Podés indicar el recuento
+              (p. ej. &lt;10³ UFC/ml) y pasar a Informes.
+            </Alert>
+          )}
           <TextField
             fullWidth
             size="small"
@@ -211,6 +265,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
             margin="dense"
             value={lecturaForm.descripcion_colonias}
             onChange={(ev) => setLecturaForm((f) => ({ ...f, descripcion_colonias: ev.target.value }))}
+            disabled={lecturaForm.crecimiento === 'SIN_DESARROLLO'}
           />
           <TextField
             fullWidth
@@ -219,6 +274,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
             margin="dense"
             value={lecturaForm.tincion_gram}
             onChange={(ev) => setLecturaForm((f) => ({ ...f, tincion_gram: ev.target.value }))}
+            disabled={lecturaForm.crecimiento === 'SIN_DESARROLLO'}
           />
           <Button sx={{ mt: 1 }} variant="contained" onClick={crearLectura}>
             Registrar lectura
@@ -232,6 +288,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               <TableCell>ID</TableCell>
               <TableCell>Siembra</TableCell>
               <TableCell>Crecimiento</TableCell>
+              <TableCell>Recuento</TableCell>
               <TableCell>Preliminar</TableCell>
               <TableCell>Colonias</TableCell>
             </TableRow>
@@ -239,7 +296,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
           <TableBody>
             {lecturas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography color="text.secondary">Sin lecturas.</Typography>
                 </TableCell>
               </TableRow>
@@ -249,6 +306,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                   <TableCell>{l.id}</TableCell>
                   <TableCell>{l.siembra}</TableCell>
                   <TableCell>{l.crecimiento}</TableCell>
+                  <TableCell>{l.recuento_bacteriano || '—'}</TableCell>
                   <TableCell>{l.es_preliminar ? 'Sí' : 'No'}</TableCell>
                   <TableCell>{l.descripcion_colonias || '—'}</TableCell>
                 </TableRow>

@@ -138,6 +138,10 @@ export async function listSolicitudesExamen(params?: {
   fecha?: string;
   /** YYYY-MM-DD — día en que se tomó la muestra (bandeja diaria de laboratorio). */
   fecha_muestra?: string;
+  /** YYYY-MM-DD — día programado de extracción. */
+  fecha_programada_toma?: string;
+  /** hoy = extracciones de hoy o vencidas; programadas = futuras. */
+  vista_extraccion?: 'hoy' | 'programadas';
 }): Promise<SolicitudExamenLims[]> {
   return getPaginatedAll<SolicitudExamenLims>(
     `${LAB}/solicitudes/`,
@@ -353,6 +357,8 @@ export interface CreateSolicitudExamenLimsPayload {
   examenes_ids?: number[];
   paneles_ids?: number[];
   observaciones?: string;
+  /** YYYY-MM-DD — obligatorio. Día de la extracción. */
+  fecha_programada_toma: string;
 }
 
 export async function createSolicitudExamenLims(
@@ -366,14 +372,27 @@ export async function createSolicitudExamenLims(
 }
 
 export async function getOrdenAbiertaPaciente(
-  pacienteId: number
-): Promise<{ id: number; numero: string | null; fecha_solicitud: string; estado: string } | null> {
+  pacienteId: number,
+  fechaProgramadaToma?: string
+): Promise<{
+  id: number;
+  numero: string | null;
+  fecha_solicitud: string;
+  fecha_programada_toma?: string;
+  estado: string;
+} | null> {
   const { data } = await apiClient.get<{
     id: number;
     numero: string | null;
     fecha_solicitud: string;
+    fecha_programada_toma?: string;
     estado: string;
-  } | null>(`${LAB}/solicitudes/orden-abierta/`, { params: { paciente_id: pacienteId } });
+  } | null>(`${LAB}/solicitudes/orden-abierta/`, {
+    params: {
+      paciente_id: pacienteId,
+      fecha_programada_toma: fechaProgramadaToma,
+    },
+  });
   return data ?? null;
 }
 
@@ -654,6 +673,60 @@ export async function getTalonOrdenPdfBlob(solicitudId: number): Promise<Blob> {
 export async function printTalonOrden(solicitudId: number): Promise<void> {
   const blob = await getTalonOrdenPdfBlob(solicitudId);
   await printPdfBlob(blob);
+}
+
+export interface ItemImpresionOrden {
+  tipo: 'LAB_CLINICO' | 'MICROBIOLOGIA';
+  id: number;
+}
+
+/** PDF con el listado de órdenes del día (en el orden recibido). */
+export async function getListadoOrdenesDiaPdfBlob(
+  items: ItemImpresionOrden[],
+  fecha: string
+): Promise<Blob> {
+  const { data } = await apiClient.post<Blob>(
+    `${LAB}/ordenes/listado-dia-pdf/`,
+    { items, fecha },
+    { responseType: 'blob' }
+  );
+  return data;
+}
+
+export interface ResenaPedido {
+  solicitud_id: number;
+  texto: string;
+}
+
+export interface ResenaSugerida extends ResenaPedido {
+  numero: string;
+  paciente: string;
+  examenes: string[];
+  /** Sugerencia automática: motor de reglas o MedGemma. */
+  fuente: 'reglas' | 'medgemma';
+}
+
+/** Sugerencias de reseña (no persisten) para órdenes con exámenes fuera del listado básico. */
+export async function getResenasSugeridas(items: ItemImpresionOrden[]): Promise<ResenaSugerida[]> {
+  const { data } = await apiClient.post<{ resenas: ResenaSugerida[] }>(
+    `${LAB}/ordenes/resenas-sugeridas/`,
+    { items },
+    { timeout: 120000 }
+  );
+  return data.resenas ?? [];
+}
+
+/** PDF A4 apaisado, 2 formularios por hoja (pedido, reseña y proBNP si corresponde). */
+export async function getPedidosPapelPdfBlob(
+  items: ItemImpresionOrden[],
+  resenas?: ResenaPedido[]
+): Promise<Blob> {
+  const { data } = await apiClient.post<Blob>(
+    `${LAB}/ordenes/pedidos-papel-pdf/`,
+    { items, resenas },
+    { responseType: 'blob' }
+  );
+  return data;
 }
 
 /** @deprecated Usar printTalonOrden — mantiene el nombre por compatibilidad de imports. */

@@ -18,7 +18,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import { listSolicitudesExamen } from '../../services/limsApi';
+import { getListadoOrdenesDiaPdfBlob, listSolicitudesExamen } from '../../services/limsApi';
+import { formatLimsPdfDownloadError, printPdfBlob } from '../../utils/limsDownload';
+import ImprimirPedidosDialog from '../../components/lims/ImprimirPedidosDialog';
 import { listEstudiosMicrobiologia } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
@@ -40,6 +42,7 @@ import { withNavBack } from '../../utils/navBack';
 import {
   mapLabToPendiente,
   mapMicroToPendiente,
+  sortPedidosPorNumero,
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
 import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
@@ -81,6 +84,8 @@ const OrdenesLims: React.FC = () => {
   const [busqueda, setBusqueda] = useState('');
   const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
   const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
+  const [imprimiendoListado, setImprimiendoListado] = useState(false);
+  const [dialogPedidosOpen, setDialogPedidosOpen] = useState(false);
 
   const allowed = canAccessLimsOrdenes(currentUser);
   const vistaLimitada = isLimsOperativaLimitada(currentUser);
@@ -139,7 +144,7 @@ const OrdenesLims: React.FC = () => {
         }
         merged = [...labs.map(mapLabToPendiente), ...microRows];
       }
-      setRows(await attachIqcStatusToRows(merged));
+      setRows(await attachIqcStatusToRows(sortPedidosPorNumero(merged)));
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {
@@ -161,6 +166,22 @@ const OrdenesLims: React.FC = () => {
       return n.includes(q) || pn.includes(q) || pd.includes(q);
     });
   }, [rows, busqueda]);
+
+  const imprimirListado = async () => {
+    if (!filtradas.length) return;
+    setImprimiendoListado(true);
+    try {
+      const blob = await getListadoOrdenesDiaPdfBlob(
+        filtradas.map((r) => ({ tipo: r.tipo, id: r.id })),
+        fechaApi
+      );
+      await printPdfBlob(blob);
+    } catch (e) {
+      toast.error(formatLimsPdfDownloadError(e));
+    } finally {
+      setImprimiendoListado(false);
+    }
+  };
 
   const handleCambioDia = (iso: string) => {
     setDiaSeleccionado(parseFechaLocal(iso));
@@ -304,8 +325,34 @@ const OrdenesLims: React.FC = () => {
           {!buscarPorNumero && (
             <Chip size="small" label={`${filtradas.length} pedido(s)`} variant="outlined" />
           )}
+          {puedeObraSocial && (
+            <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+              <Button
+                variant="outlined"
+                onClick={imprimirListado}
+                disabled={loading || imprimiendoListado || filtradas.length === 0}
+                startIcon={imprimiendoListado ? <CircularProgress size={16} /> : undefined}
+              >
+                Imprimir listado
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => setDialogPedidosOpen(true)}
+                disabled={loading || filtradas.length === 0}
+              >
+                Imprimir pedidos
+              </Button>
+            </Box>
+          )}
         </Box>
       </Paper>
+
+      <ImprimirPedidosDialog
+        open={dialogPedidosOpen}
+        onClose={() => setDialogPedidosOpen(false)}
+        rows={filtradas}
+        diaLabel={labelDiaOrden(diaSeleccionado)}
+      />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

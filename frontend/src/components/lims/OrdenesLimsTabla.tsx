@@ -121,6 +121,15 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       DNI {r.paciente_dni}
                     </Typography>
                   ) : null}
+                  {r.fecha_programada_toma ? (
+                    <Typography variant="caption" display="block" color="primary.main" sx={{ mt: 0.25 }}>
+                      Extracción{' '}
+                      {(() => {
+                        const [y, m, d] = r.fecha_programada_toma.split('-');
+                        return d && m ? `${d}/${m}` : r.fecha_programada_toma;
+                      })()}
+                    </Typography>
+                  ) : null}
                 </TableCell>
                 <TableCell>{r.medico_display || '—'}</TableCell>
                 <TableCell>

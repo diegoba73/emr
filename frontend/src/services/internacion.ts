@@ -194,6 +194,7 @@ export const createInternacion = async (data: {
   atencion_origen?: number;
   motivo_ingreso?: string;
   tipo_dieta_id?: number | null;
+  dieta_texto?: string;
 }): Promise<InternacionCama> => {
   try {
     const response = await api.post<InternacionCama>('/internacion/internaciones/', data);

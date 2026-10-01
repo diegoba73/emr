@@ -7,7 +7,7 @@ cantidad = ceil(n / MAX).
 Excepciones (cuentan como 1 unidad hacia el tope, no como N componentes):
 - Hemograma (PAN_HEMO) → un EDTA
 - Orina completa (PAN_ORI) → un frasco de orina
-- Química de rutina → un heparina (plasma ~200 µL)
+- Química de rutina → un suero (mismo tubo rojo que el resto de bioquímica)
 - Orina 24 hs (clearance, proteinuria 24h, ionograma 24h, etc.) → un bidón
 """
 from __future__ import annotations

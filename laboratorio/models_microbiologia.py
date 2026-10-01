@@ -215,6 +215,21 @@ class EstudioMicrobiologia(models.Model):
         help_text="Situación de cobertura: autorizado, debe orden, falta autorización o debe abonar.",
     )
     observaciones = models.TextField(blank=True, default="", verbose_name="Observaciones")
+    fecha_programada_toma = models.DateField(
+        verbose_name="Fecha programada de toma",
+        help_text="Día en que se debe realizar la extracción/recepción de la muestra.",
+        default=timezone.localdate,
+        db_index=True,
+    )
+    examen_orina = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Examen de orina (tira + sedimento)",
+        help_text=(
+            "Solo urocultivo: resultados de tira reactiva y sedimento de la misma muestra. "
+            "No sustituye un pedido de orina completa en lab. clínico."
+        ),
+    )
 
     fecha_inicio = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de inicio")
     fecha_cierre = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de cierre")
@@ -243,12 +258,16 @@ class EstudioMicrobiologia(models.Model):
     class Meta:
         verbose_name = "Estudio de microbiología"
         verbose_name_plural = "Estudios de microbiología"
-        ordering = ["-created_at"]
+        ordering = ["-numero"]
         indexes = [
             models.Index(fields=["solicitud", "estado"]),
             models.Index(fields=["muestra", "estado"]),
             models.Index(fields=["paciente", "estado"]),
             models.Index(fields=["estado", "created_at"]),
+            models.Index(
+                fields=["estado", "fecha_programada_toma"],
+                name="laboratorio_micro_fpt_idx",
+            ),
             models.Index(fields=["fecha_inicio"]),
         ]
 
@@ -453,6 +472,13 @@ class LecturaCultivo(models.Model):
         choices=CRECIMIENTO_CHOICES,
         default="PENDIENTE",
         verbose_name="Crecimiento",
+    )
+    recuento_bacteriano = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Recuento bacteriano",
+        help_text="Ej. <10³ UFC/ml, ≥10⁵ UFC/ml (típico en urocultivo).",
     )
     descripcion_colonias = models.TextField(blank=True, default="", verbose_name="Descripción colonias")
     tincion_gram = models.TextField(blank=True, default="", verbose_name="Tinción de Gram")

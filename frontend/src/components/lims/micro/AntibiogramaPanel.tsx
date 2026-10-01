@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -45,6 +46,8 @@ export interface AntibiogramaPanelProps {
   microorganismos?: Microorganismo[];
   canOperate: boolean;
   onRefresh: () => void;
+  /** Cultivo sin desarrollo: no corresponde antibiograma. */
+  cultivoSinDesarrollo?: boolean;
 }
 
 function labelMicroorganismo(m: Microorganismo): string {
@@ -79,6 +82,7 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
   microorganismos = [],
   canOperate,
   onRefresh,
+  cultivoSinDesarrollo = false,
 }) => {
   const [aisladoId, setAisladoId] = useState<number | ''>('');
   const [abId, setAbId] = useState<number | ''>('');
@@ -208,7 +212,13 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
 
   return (
     <Box>
-      {canOperate && (
+      {cultivoSinDesarrollo && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Cultivo <strong>sin desarrollo</strong>: no corresponde antibiograma. Emití el informe
+          final en la pestaña <strong>Informes</strong>.
+        </Alert>
+      )}
+      {canOperate && !cultivoSinDesarrollo && (
         <>
           <Paper sx={{ p: 2, mb: 2 }}>
             <Typography variant="subtitle2" gutterBottom>

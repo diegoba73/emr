@@ -62,6 +62,7 @@ import SolicitudAnalisisPapelForm, {
 import SolicitudMicrobiologiaForm, {
   type MicroPedidoItem,
 } from './SolicitudMicrobiologiaForm';
+import { addLocalDays, formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
 
 export type PedidoTab = 'lab' | 'micro';
 
@@ -73,6 +74,7 @@ export interface DraftMicroPayload {
     muestra_nombre: string;
   }>;
   observaciones?: string;
+  fecha_programada_toma: string;
 }
 
 export interface NuevaOrdenLimsDialogProps {
@@ -92,6 +94,7 @@ export interface NuevaOrdenLimsDialogProps {
     examenes_labels: string[];
     paneles_labels: string[];
     observaciones?: string;
+    fecha_programada_toma: string;
   }) => void;
   onAddDraftMicro?: (payload: DraftMicroPayload) => void;
   /** Si se setea, agrega exámenes a esa orden abierta en lugar de crear una nueva. */
@@ -131,6 +134,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const [microItems, setMicroItems] = useState<MicroPedidoItem[]>([]);
   const [observaciones, setObservaciones] = useState('');
   const [observacionesMicro, setObservacionesMicro] = useState('');
+  const [fechaProgramadaToma, setFechaProgramadaToma] = useState(() =>
+    formatFechaLocal(startOfLocalDay())
+  );
 
   const [paciente, setPaciente] = useState<Paciente | null>(pacienteInicial);
   const [pacienteQuery, setPacienteQuery] = useState('');
@@ -163,6 +169,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     setPaciente(pacienteInicial ?? null);
     setObservaciones('');
     setObservacionesMicro('');
+    setFechaProgramadaToma(formatFechaLocal(startOfLocalDay()));
     setMicroItems([]);
     setTab('lab');
     setError('');
@@ -286,6 +293,10 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   };
 
   const executeDraft = () => {
+    if (!fechaProgramadaToma) {
+      setError('Indicá el día de la extracción.');
+      return;
+    }
     if (hasSelection) {
       const { paneles_ids, examenes_ids, paneles_labels, examenes_labels } = resolveLabels();
       onAddDraft?.({
@@ -294,6 +305,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         paneles_labels,
         examenes_labels,
         observaciones: observaciones.trim() || undefined,
+        fecha_programada_toma: fechaProgramadaToma,
       });
     }
     if (microItems.length > 0) {
@@ -305,6 +317,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           muestra_nombre: i.muestra_nombre,
         })),
         observaciones: observacionesMicro.trim() || undefined,
+        fecha_programada_toma: fechaProgramadaToma,
       });
     }
     onClose();
@@ -313,6 +326,10 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const executeCreate = async () => {
     if (!paciente?.id) {
       setError('Seleccioná un paciente.');
+      return;
+    }
+    if (!fechaProgramadaToma) {
+      setError('Indicá el día de la extracción.');
       return;
     }
     if (usarMedicoExterno && !medicoExterno.trim()) {
@@ -344,6 +361,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           examenes_ids,
           paneles_ids,
           observaciones: observaciones.trim() || undefined,
+          fecha_programada_toma: fechaProgramadaToma,
         });
         labId = orden.id;
         if (orden.merged) {
@@ -368,6 +386,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           consulta_hc_id: consultaHcId,
           origen_solicitud: consultaHcId ? undefined : origenManual,
           observaciones: observacionesMicro.trim() || undefined,
+          fecha_programada_toma: fechaProgramadaToma,
           items: microItems.map((i) => ({
             tipo_cultivo_id: i.tipo_cultivo_id,
             tipo_muestra_micro_id: i.tipo_muestra_micro_id,
@@ -421,6 +440,11 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
+    if (!fechaProgramadaToma) {
+      setError('Indicá el día de la extracción.');
+      return;
+    }
+
     if (!hasLab && !hasMicro) {
       setError('Seleccioná análisis de Lab. Clínico y/o cultivos de Microbiología.');
       return;
@@ -429,7 +453,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     const pacienteId = paciente?.id ?? pacienteInicial?.id;
     if (hasLab && pacienteId) {
       try {
-        const abierta = await getOrdenAbiertaPaciente(pacienteId);
+        const abierta = await getOrdenAbiertaPaciente(pacienteId, fechaProgramadaToma);
         if (abierta) {
           setMergeConfirm({ id: abierta.id, numero: abierta.numero });
           setPendingSubmit(draftMode ? 'draft' : 'create');
@@ -521,6 +545,47 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               <Alert severity="info" sx={{ py: 0.5 }}>
                 Paciente: <strong>{formatPacienteLabel(pacienteInicial)}</strong>
               </Alert>
+            )}
+
+            {!agregarAOrdenId && (
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <TextField
+                  required
+                  size="small"
+                  type="date"
+                  label="Extracción"
+                  value={fechaProgramadaToma}
+                  onChange={(e) => setFechaProgramadaToma(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 170 }}
+                  helperText="Día en que se saca la muestra"
+                />
+                <Button
+                  size="small"
+                  variant={
+                    fechaProgramadaToma === formatFechaLocal(startOfLocalDay())
+                      ? 'contained'
+                      : 'outlined'
+                  }
+                  onClick={() => setFechaProgramadaToma(formatFechaLocal(startOfLocalDay()))}
+                >
+                  Hoy
+                </Button>
+                <Button
+                  size="small"
+                  variant={
+                    fechaProgramadaToma ===
+                    formatFechaLocal(addLocalDays(startOfLocalDay(), 1))
+                      ? 'contained'
+                      : 'outlined'
+                  }
+                  onClick={() =>
+                    setFechaProgramadaToma(formatFechaLocal(addLocalDays(startOfLocalDay(), 1)))
+                  }
+                >
+                  Mañana
+                </Button>
+              </Stack>
             )}
 
             {consultaHcId && (

@@ -139,6 +139,7 @@ def crear_estudio(
     medico_externo_nombre: str = "",
     consulta_hc=None,
     origen_solicitud: str = "",
+    fecha_programada_toma=None,
 ) -> EstudioMicrobiologia:
     """Crea un estudio microbiológico en estado PENDIENTE.
 
@@ -177,6 +178,11 @@ def crear_estudio(
     if not origen and solicitud is not None:
         origen = getattr(solicitud, "origen_solicitud", "") or ""
 
+    if fecha_programada_toma is None and solicitud is not None:
+        fecha_programada_toma = getattr(solicitud, "fecha_programada_toma", None)
+    if fecha_programada_toma is None:
+        fecha_programada_toma = timezone.localdate()
+
     with transaction.atomic():
         estudio = EstudioMicrobiologia(
             solicitud=solicitud,
@@ -190,6 +196,7 @@ def crear_estudio(
             tipo_muestra_micro=tipo_muestra_micro,
             tipo_estudio=codigo,
             observaciones=observaciones or "",
+            fecha_programada_toma=fecha_programada_toma,
             estado="PENDIENTE",
         )
         estudio.save()
@@ -221,6 +228,7 @@ def crear_estudio_desde_pedido(
     origen_solicitud: str = "",
     consulta_hc=None,
     muestra_existente=None,
+    fecha_programada_toma=None,
 ) -> EstudioMicrobiologia:
     """
     Alta de estudio de microbiología: paciente + médico + cultivo + muestra micro.
@@ -257,6 +265,7 @@ def crear_estudio_desde_pedido(
             medico_externo_nombre=medico_externo_nombre,
             consulta_hc=consulta_hc,
             origen_solicitud=origen_solicitud,
+            fecha_programada_toma=fecha_programada_toma,
         )
 
     try:
@@ -296,6 +305,7 @@ def crear_estudio_desde_pedido(
         medico_externo_nombre=medico_ext,
         consulta_hc=consulta_hc,
         origen_solicitud=origen,
+        fecha_programada_toma=fecha_programada_toma,
     )
 
 
@@ -310,6 +320,7 @@ def crear_estudios_batch(
     view: str = "",
     origen_solicitud: str = "",
     consulta_hc=None,
+    fecha_programada_toma=None,
 ) -> list[EstudioMicrobiologia]:
     """Crea N estudios (uno por ítem cultivo+muestra) en una transacción."""
     if not items:
@@ -328,6 +339,7 @@ def crear_estudios_batch(
                 view=view,
                 origen_solicitud=origen_solicitud,
                 consulta_hc=consulta_hc,
+                fecha_programada_toma=fecha_programada_toma,
             )
             creados.append(estudio)
         return creados
@@ -680,6 +692,7 @@ def crear_lectura(
     es_preliminar: bool,
     actor: "AbstractUser | None",
     view: str,
+    recuento_bacteriano: str = "",
 ) -> LecturaCultivo:
     with transaction.atomic():
         siembra = (
@@ -699,6 +712,7 @@ def crear_lectura(
             leido_por=actor if getattr(actor, "is_authenticated", False) else None,
             horas_incubacion=horas_incubacion,
             crecimiento=crecimiento or "PENDIENTE",
+            recuento_bacteriano=(recuento_bacteriano or "").strip(),
             descripcion_colonias=descripcion_colonias or "",
             tincion_gram=tincion_gram or "",
             observaciones=observaciones or "",
@@ -717,6 +731,7 @@ def crear_lectura(
             "numero_solicitud": estudio.solicitud.numero if estudio.solicitud_id else None,
             "muestra_id": estudio.muestra_id,
             "crecimiento": lectura.crecimiento,
+            "recuento_presente": bool(lectura.recuento_bacteriano),
             "es_preliminar": lectura.es_preliminar,
             "resultado_presente": bool(
                 lectura.descripcion_colonias or lectura.tincion_gram or lectura.observaciones
