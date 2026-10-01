@@ -1,8 +1,9 @@
 """
 Talón PDF de respaldo (hoja común) para pedidos LIMS clínico y microbiología.
 
-Formato físico: un talón por página, solo en la mitad superior de A4
-(media hoja por muestra). Sin copia inferior ni línea de corte.
+Formato físico: un talón por ORDEN (no por tubo). Lista completa de paneles
+y exámenes sueltos (sin expandir los componentes de cada perfil). Si la lista
+no cabe en una hoja, continúa en páginas siguientes.
 No muta estado ni FSM.
 """
 from __future__ import annotations
@@ -22,13 +23,11 @@ from laboratorio.models import SolicitudExamen
 from laboratorio.models_catalog import Muestra
 from laboratorio.models_microbiologia import EstudioMicrobiologia
 
-# Un talón = mitad superior de A4 (la inferior queda en blanco).
 PAGE_W, PAGE_H = A4
-HALF_H = PAGE_H / 2
 MARGIN_X = 12 * mm
-MARGIN_Y = 8 * mm
-# Máximo de líneas de exámenes para que quepa en media hoja.
-MAX_EXAMENES_LINES = 8
+MARGIN_Y = 10 * mm
+# Pie con fecha de generación.
+FOOTER_RESERVE = 10 * mm
 
 
 def nombre_archivo_talon_solicitud(solicitud: SolicitudExamen) -> str:
@@ -97,24 +96,34 @@ def _lugar_desde_muestra_o_solicitud(solicitud: SolicitudExamen, muestra: Muestr
 
 
 def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
+    """Paneles/perfiles como ítem único + exámenes sueltos (sin componentes del panel)."""
     nombres: list[str] = []
     seen: set[str] = set()
-    for panel in solicitud.paneles.all().order_by("nombre"):
+    paneles = list(solicitud.paneles.all().order_by("nombre"))
+    componentes_panel: set[int] = set()
+    for panel in paneles:
+        componentes_panel.update(te.pk for te in panel.tipos_examen.all())
         n = (panel.nombre or panel.codigo or "").strip()
         if n and n not in seen:
             seen.add(n)
-            nombres.append(f"Panel: {n}")
+            nombres.append(n)
+
     for te in solicitud.tipos_examen.all().order_by("nombre"):
+        if te.pk in componentes_panel:
+            continue
         n = (te.nombre or te.codigo or "").strip()
         if n and n not in seen:
             seen.add(n)
             nombres.append(n)
+
     if not nombres:
         for res in solicitud.resultados.select_related("tipo_examen").order_by(
             "tipo_examen__nombre", "pk"
         ):
             te = res.tipo_examen
-            n = (te.nombre or te.codigo or "").strip() if te else ""
+            if te is None or te.pk in componentes_panel:
+                continue
+            n = (te.nombre or te.codigo or "").strip()
             if n and n not in seen:
                 seen.add(n)
                 nombres.append(n)
@@ -175,70 +184,87 @@ class TalonHalfData:
     tubo_label: str = ""
 
 
-def _draw_talon_in_half(c: canvas.Canvas, data: TalonHalfData) -> None:
-    """Dibuja un único talón en la mitad superior de una hoja A4 (sin marco ni copia)."""
-    y0 = HALF_H
-    y_top = y0 + HALF_H - MARGIN_Y
-    x = MARGIN_X
-    line = 4.6 * mm
-    y = y_top
-
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(x, y, "TALÓN — LABORATORIO (media hoja)")
-    y -= line * 0.85
-    c.setFont("Helvetica", 7.5)
-    c.setFillGray(0.35)
-    c.drawString(x, y, "Respaldo impresora común · no reemplaza etiqueta de tubo")
-    c.setFillGray(0)
-    y -= line * 1.05
-
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(x, y, _trunc(data.titulo, 70))
-    y -= line
-    c.setFont("Helvetica", 9)
-    pedido = f"Pedido: {_texto(data.numero_pedido)}"
-    if data.tubo_label:
-        pedido = f"{pedido}  ·  {data.tubo_label}"
-    c.drawString(x, y, _trunc(pedido, 85))
-    y -= line * 1.15
-
-    def _campo(label: str, value: str) -> None:
-        nonlocal y
-        c.setFont("Helvetica-Bold", 8.5)
-        c.drawString(x, y, f"{label}:")
-        c.setFont("Helvetica", 8.5)
-        c.drawString(x + 32 * mm, y, _trunc(value, 78))
-        y -= line
-
-    _campo("Paciente", data.paciente_nombre)
-    _campo("DNI", data.dni)
-    _campo("Lugar", data.lugar)
-    _campo("Médico", data.medico)
-    _campo("Código", data.codigo_barra or "(sin código aún)")
-
-    y -= line * 0.25
-    c.setFont("Helvetica-Bold", 8.5)
-    c.drawString(x, y, "Exámenes / estudios:")
-    y -= line
-    c.setFont("Helvetica", 8)
-    examenes = data.examenes or ["—"]
-    shown = examenes[:MAX_EXAMENES_LINES]
-    for item in shown:
-        c.drawString(x + 2 * mm, y, f"• {_trunc(item, 90)}")
-        y -= line * 0.92
-    rest = len(examenes) - len(shown)
-    if rest > 0:
-        c.setFont("Helvetica-Oblique", 7.5)
-        c.drawString(x + 2 * mm, y, f"… y {rest} más")
-        y -= line * 0.9
-
+def _draw_footer(c: canvas.Canvas) -> None:
     c.setFont("Helvetica", 7)
     c.setFillGray(0.4)
     ahora = timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M")
-    # Pie anclado cerca del borde inferior de la mitad
-    foot_y = y0 + MARGIN_Y
-    c.drawString(x, max(min(y, foot_y + 4 * mm), foot_y), f"Generado: {ahora}")
+    c.drawString(MARGIN_X, MARGIN_Y, f"Generado: {ahora}")
     c.setFillGray(0)
+
+
+def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
+    """Dibuja el talón de una orden; continúa en páginas siguientes si hace falta."""
+    line = 4.6 * mm
+    exam_line = line * 0.92
+    y_min = MARGIN_Y + FOOTER_RESERVE
+    examenes = data.examenes or ["—"]
+    exam_idx = 0
+    page_idx = 0
+
+    while True:
+        if page_idx > 0:
+            c.showPage()
+        y = PAGE_H - MARGIN_Y
+        x = MARGIN_X
+
+        c.setFont("Helvetica-Bold", 11)
+        if page_idx == 0:
+            c.drawString(x, y, "TALÓN — LABORATORIO (por orden)")
+        else:
+            c.drawString(x, y, "TALÓN — LABORATORIO (continuación)")
+        y -= line * 0.85
+        c.setFont("Helvetica", 7.5)
+        c.setFillGray(0.35)
+        c.drawString(x, y, "Respaldo impresora común · no reemplaza etiqueta de tubo")
+        c.setFillGray(0)
+        y -= line * 1.05
+
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(x, y, _trunc(data.titulo, 70))
+        y -= line
+        c.setFont("Helvetica", 9)
+        pedido = f"Pedido: {_texto(data.numero_pedido)}"
+        if data.tubo_label:
+            pedido = f"{pedido}  ·  {data.tubo_label}"
+        if page_idx > 0:
+            pedido = f"{pedido}  ·  pág. {page_idx + 1}"
+        c.drawString(x, y, _trunc(pedido, 95))
+        y -= line * 1.15
+
+        if page_idx == 0:
+            def _campo(label: str, value: str) -> None:
+                nonlocal y
+                c.setFont("Helvetica-Bold", 8.5)
+                c.drawString(x, y, f"{label}:")
+                c.setFont("Helvetica", 8.5)
+                c.drawString(x + 32 * mm, y, _trunc(value, 78))
+                y -= line
+
+            _campo("Paciente", data.paciente_nombre)
+            _campo("DNI", data.dni)
+            _campo("Lugar", data.lugar)
+            _campo("Médico", data.medico)
+            _campo("Código", data.codigo_barra or "(sin código aún)")
+            y -= line * 0.25
+
+        c.setFont("Helvetica-Bold", 8.5)
+        if page_idx == 0:
+            c.drawString(x, y, "Exámenes / estudios:")
+        else:
+            c.drawString(x, y, "Exámenes / estudios (continuación):")
+        y -= line
+        c.setFont("Helvetica", 8)
+
+        while exam_idx < len(examenes) and y - exam_line >= y_min:
+            c.drawString(x + 2 * mm, y, f"• {_trunc(examenes[exam_idx], 95)}")
+            y -= exam_line
+            exam_idx += 1
+
+        _draw_footer(c)
+
+        if exam_idx >= len(examenes):
+            break
+        page_idx += 1
 
 
 def _render_talones_pdf(talones: list[TalonHalfData]) -> bytes:
@@ -249,13 +275,24 @@ def _render_talones_pdf(talones: list[TalonHalfData]) -> bytes:
     for i, data in enumerate(talones):
         if i > 0:
             c.showPage()
-        _draw_talon_in_half(c, data)
+        _draw_talon_pages(c, data)
     c.save()
     return buf.getvalue()
 
 
+def _codigo_barra_orden(muestras: list[Muestra]) -> str:
+    codigos = [(m.codigo_barra or "").strip() for m in muestras if (m.codigo_barra or "").strip()]
+    if not codigos:
+        return ""
+    if len(codigos) == 1:
+        return codigos[0]
+    # Varios tubos: listar para referencia; no generar un talón por tubo.
+    joined = " · ".join(codigos)
+    return _trunc(joined, 90)
+
+
 def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
-    """Un talón (media hoja) por muestra; si no hay tubos, un talón del pedido."""
+    """Un talón por orden (todos los paneles/exámenes; 1 PDF page-set, no por tubo)."""
     sol = (
         SolicitudExamen.objects.select_related(
             "paciente",
@@ -264,7 +301,7 @@ def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
         )
         .prefetch_related(
             "tipos_examen",
-            "paneles",
+            "paneles__tipos_examen",
             "resultados__tipo_examen",
             "muestras__tipo_contenedor",
             "muestras__tipo_muestra",
@@ -275,50 +312,30 @@ def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
     medico = _fmt_medico(sol.medico_interno)
     examenes = _examenes_solicitud(sol) or ["—"]
     muestras = list(sol.muestras.all().order_by("pk"))
+    primera = muestras[0] if muestras else None
+    n_tubos = len(muestras)
+    tubo_label = ""
+    if n_tubos == 1:
+        tubo_label = "1 tubo"
+    elif n_tubos > 1:
+        tubo_label = f"{n_tubos} tubos"
 
-    talones: list[TalonHalfData] = []
-    if muestras:
-        for idx, m in enumerate(muestras, start=1):
-            tc = getattr(m, "tipo_contenedor", None)
-            tm = getattr(m, "tipo_muestra", None)
-            tubo_bits = []
-            if tc and (tc.codigo or tc.nombre):
-                tubo_bits.append((tc.codigo or tc.nombre or "").strip())
-            elif tm and (tm.codigo or tm.nombre):
-                tubo_bits.append((tm.codigo or tm.nombre or "").strip())
-            tubo_label = f"Tubo {idx}" + (f" ({', '.join(tubo_bits)})" if tubo_bits else "")
-            talones.append(
-                TalonHalfData(
-                    titulo="Pedido clínico — talón por muestra",
-                    numero_pedido=sol.numero or str(sol.pk),
-                    paciente_nombre=pac_nombre,
-                    dni=dni,
-                    lugar=_lugar_desde_muestra_o_solicitud(sol, m),
-                    medico=medico,
-                    examenes=examenes,
-                    codigo_barra=(m.codigo_barra or "").strip(),
-                    tubo_label=tubo_label,
-                )
-            )
-    else:
-        talones.append(
-            TalonHalfData(
-                titulo="Pedido clínico — talón por muestra",
-                numero_pedido=sol.numero or str(sol.pk),
-                paciente_nombre=pac_nombre,
-                dni=dni,
-                lugar=_lugar_desde_muestra_o_solicitud(sol, None),
-                medico=medico,
-                examenes=examenes,
-                codigo_barra="",
-                tubo_label="Sin tubos generados aún",
-            )
-        )
-    return _render_talones_pdf(talones)
+    talon = TalonHalfData(
+        titulo="Pedido clínico — talón por orden",
+        numero_pedido=sol.numero or str(sol.pk),
+        paciente_nombre=pac_nombre,
+        dni=dni,
+        lugar=_lugar_desde_muestra_o_solicitud(sol, primera),
+        medico=medico,
+        examenes=examenes,
+        codigo_barra=_codigo_barra_orden(muestras),
+        tubo_label=tubo_label or ("Sin tubos generados aún" if not muestras else ""),
+    )
+    return _render_talones_pdf([talon])
 
 
 def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> bytes:
-    """Un talón media hoja por estudio (1 muestra de cultivo)."""
+    """Un talón por estudio de microbiología (1 muestra de cultivo)."""
     est = (
         EstudioMicrobiologia.objects.select_related(
             "paciente",
@@ -332,7 +349,7 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
     pac_nombre, dni = _fmt_paciente(est.paciente)
     codigo = (est.codigo_barra or est.numero or "").strip()
     talon = TalonHalfData(
-        titulo="Pedido microbiología — talón por muestra",
+        titulo="Pedido microbiología — talón por orden",
         numero_pedido=est.numero or str(est.pk),
         paciente_nombre=pac_nombre,
         dni=dni,

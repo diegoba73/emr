@@ -91,7 +91,7 @@ class TestTalonPedidoClinicoApi(TestCase):
         )
 
     def test_talon_una_muestra_sin_copia_ni_borde_punteado(self):
-        """Un tubo → una página, solo media hoja, sin línea de corte."""
+        """Un tubo → una página por orden, sin línea de corte."""
         from laboratorio.talon_pedido_pdf import generar_talon_solicitud_pdf_bytes
 
         crear_muestra(
@@ -108,8 +108,8 @@ class TestTalonPedidoClinicoApi(TestCase):
         pages = pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages")
         self.assertEqual(pages, 1)
 
-    def test_talon_dos_muestras_media_hoja_ok(self):
-        """Dos tubos → 2 páginas (un talón por hoja, sin copiar abajo)."""
+    def test_talon_dos_muestras_una_pagina_por_orden(self):
+        """Dos tubos → 1 página (un talón por orden, no por tubo)."""
         from laboratorio.talon_pedido_pdf import generar_talon_solicitud_pdf_bytes
 
         crear_muestra(
@@ -133,7 +133,82 @@ class TestTalonPedidoClinicoApi(TestCase):
         self.assertGreater(len(pdf), 500)
         self.assertNotIn(b"cortar", pdf)
         pages = pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages")
-        self.assertEqual(pages, 2)
+        self.assertEqual(pages, 1)
+
+    def test_talon_lista_todos_examenes_sin_truncar(self):
+        """Con muchos exámenes no aparece “y N más”; se listan todos."""
+        from laboratorio.talon_pedido_pdf import (
+            _examenes_solicitud,
+            generar_talon_solicitud_pdf_bytes,
+        )
+
+        nombres = []
+        for i in range(20):
+            te = TipoExamen.objects.create(
+                codigo=f"EX{i}_{self.te.codigo[-4:]}",
+                nombre=f"Examen Extra {i:02d}",
+                tipo_muestra_requerida=self.tm,
+                precio=1,
+                activo=True,
+            )
+            self.sol.tipos_examen.add(te)
+            ResultadoExamen.objects.create(
+                solicitud=self.sol, tipo_examen=te, valor_obtenido=""
+            )
+            nombres.append(te.nombre)
+
+        listado = _examenes_solicitud(self.sol)
+        for n in nombres:
+            self.assertIn(n, listado)
+        self.assertIn("Glucosa", listado)
+        self.assertGreaterEqual(len(listado), 21)
+
+        pdf = generar_talon_solicitud_pdf_bytes(self.sol)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertNotRegex(pdf.decode("latin-1", errors="ignore"), r"y \d+ m.s")
+        # ReportLab escribe literales; al menos los nombres cortos deben aparecer.
+        self.assertIn(b"Examen Extra 00", pdf)
+        self.assertIn(b"Examen Extra 19", pdf)
+
+    def test_talon_panel_sin_expandir_componentes(self):
+        """Un perfil se muestra como ítem; no lista cada examen del panel."""
+        from laboratorio.models import PanelExamen
+        from laboratorio.talon_pedido_pdf import _examenes_solicitud
+
+        te_a = TipoExamen.objects.create(
+            codigo=f"HA_{self.te.codigo[-4:]}",
+            nombre="Hematies Panel",
+            tipo_muestra_requerida=self.tm,
+            precio=1,
+            activo=True,
+        )
+        te_b = TipoExamen.objects.create(
+            codigo=f"HB_{self.te.codigo[-4:]}",
+            nombre="Hemoglobina Panel",
+            tipo_muestra_requerida=self.tm,
+            precio=1,
+            activo=True,
+        )
+        panel = PanelExamen.objects.create(
+            codigo=f"PAN_HEMO_{self.te.codigo[-4:]}",
+            nombre="Hemograma Completo",
+            activo=True,
+        )
+        panel.tipos_examen.add(te_a, te_b)
+        self.sol.paneles.add(panel)
+        self.sol.tipos_examen.add(te_a, te_b)
+        ResultadoExamen.objects.create(
+            solicitud=self.sol, tipo_examen=te_a, valor_obtenido=""
+        )
+        ResultadoExamen.objects.create(
+            solicitud=self.sol, tipo_examen=te_b, valor_obtenido=""
+        )
+
+        listado = _examenes_solicitud(self.sol)
+        self.assertIn("Hemograma Completo", listado)
+        self.assertNotIn("Hematies Panel", listado)
+        self.assertNotIn("Hemoglobina Panel", listado)
+        self.assertIn("Glucosa", listado)
 
     def test_talon_pdf_medico_403(self):
         self.client.force_authenticate(self.med)

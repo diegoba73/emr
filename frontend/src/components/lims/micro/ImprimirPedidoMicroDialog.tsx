@@ -120,7 +120,7 @@ const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           <strong>Etiqueta</strong>: 40 × 23 mm por USB (agente local), igual que lab clínico
           {reimpresion ? '' : ' — pasa a «Esperando recepción» la primera vez'}.{' '}
-          <strong>Talón</strong>: media hoja A4 — no cambia el estado del pedido.
+          <strong>Talón</strong>: hoja A4 por orden — no cambia el estado del pedido.
         </Typography>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
