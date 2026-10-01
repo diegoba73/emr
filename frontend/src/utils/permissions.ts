@@ -77,11 +77,12 @@ export function canAccessPacientes(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Alta de paciente: secretaría, médico y admin. */
+/** Alta de paciente: secretaría, médico, laboratorio y admin. */
 export function canCreatePaciente(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
+  if (rol === 'laboratorio') return true;
   if (isLecturaOperativaRole(rol)) return false;
   return rol === 'secretaria' || rol === 'medico';
 }

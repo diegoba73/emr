@@ -127,16 +127,32 @@ class TestResolverTubosOrden(TestCase):
         assert len(grupos) == 4
         assert sum(g.cantidad for g in grupos) == 4
 
-    def test_doce_mismo_tubo_dos_fisicos(self):
-        exams = [self._examen(f"P{i}", self.sue) for i in range(12)]
+    def test_doce_suero_siempre_un_fisico(self):
+        """Contenedor SUERO: 1 tubo aunque haya >10 exámenes (reimprimir si hace falta)."""
+        from laboratorio.tubos_catalogo import SUERO
+
+        sue, _ = TipoContenedor.objects.get_or_create(
+            codigo=SUERO,
+            defaults={"nombre": "Tubo Suero", "color": "Rojo", "activo": True},
+        )
+        exams = [self._examen(f"P{i}", sue) for i in range(12)]
+        sol = self._solicitud(*exams)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].cantidad == 1
+        assert grupos[0].tipo_contenedor_codigo == SUERO
+        items = expandir_items_crear_muestras(sol, grupos)
+        assert len(items) == 1
+
+    def test_doce_mismo_tubo_no_suero_dos_fisicos(self):
+        """Otros contenedores siguen el tope de 10/tubo."""
+        exams = [self._examen(f"P{i}", self.edta) for i in range(12)]
         sol = self._solicitud(*exams)
         grupos = resolver_tubos_para_solicitud(sol)
         assert len(grupos) == 1
         assert grupos[0].cantidad == 2
-        assert grupos[0].tipo_contenedor_id == self.sue.pk
         items = expandir_items_crear_muestras(sol, grupos)
         assert len(items) == 2
-        assert all(i["tipo_contenedor_id"] == self.sue.pk for i in items)
 
     def test_diez_mismo_tubo_uno(self):
         exams = [self._examen(f"Q{i}", self.sue) for i in range(10)]
@@ -144,9 +160,20 @@ class TestResolverTubosOrden(TestCase):
         assert resolver_tubos_para_solicitud(sol)[0].cantidad == 1
 
     def test_once_mismo_tubo_dos(self):
-        exams = [self._examen(f"R{i}", self.sue) for i in range(11)]
+        exams = [self._examen(f"R{i}", self.edta) for i in range(11)]
         sol = self._solicitud(*exams)
         assert resolver_tubos_para_solicitud(sol)[0].cantidad == 2
+
+    def test_once_suero_sigue_siendo_uno(self):
+        from laboratorio.tubos_catalogo import SUERO
+
+        sue, _ = TipoContenedor.objects.get_or_create(
+            codigo=SUERO,
+            defaults={"nombre": "Tubo Suero", "color": "Rojo", "activo": True},
+        )
+        exams = [self._examen(f"S{i}", sue) for i in range(11)]
+        sol = self._solicitud(*exams)
+        assert resolver_tubos_para_solicitud(sol)[0].cantidad == 1
 
     def test_sin_tubos_en_catalogo_lista_vacia(self):
         te = TipoExamen.objects.create(
@@ -480,7 +507,13 @@ class TestTomarMuestraAutoTubosAPI(TestCase):
         self.client = APIClient(enforce_csrf_checks=False)
         self.client.force_authenticate(self.lab)
 
-    def test_tomar_auto_crea_dos_tubos_suero(self):
+    def test_tomar_auto_crea_un_tubo_suero(self):
+        from laboratorio.tubos_catalogo import SUERO
+
+        sue, _ = TipoContenedor.objects.get_or_create(
+            codigo=SUERO,
+            defaults={"nombre": "Tubo Suero", "color": "Rojo", "activo": True},
+        )
         exams = []
         for i in range(12):
             exams.append(
@@ -488,7 +521,7 @@ class TestTomarMuestraAutoTubosAPI(TestCase):
                     codigo=f"A{i}{self.suf}",
                     nombre=f"Ex {i}",
                     tipo_muestra_requerida=self.tm,
-                    tipo_contenedor=self.sue,
+                    tipo_contenedor=sue,
                     precio=1,
                     activo=True,
                 )
@@ -503,12 +536,11 @@ class TestTomarMuestraAutoTubosAPI(TestCase):
 
         r_prev = self.client.get(f"/api/lab/solicitudes/{sol.pk}/tubos-preview/")
         self.assertEqual(r_prev.status_code, status.HTTP_200_OK)
-        self.assertEqual(r_prev.json()["tubos"][0]["cantidad"], 2)
+        self.assertEqual(r_prev.json()["tubos"][0]["cantidad"], 1)
 
         r = self.client.post(f"/api/lab/solicitudes/{sol.pk}/tomar-muestra/", {}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
         muestras = Muestra.objects.filter(solicitud=sol)
-        self.assertEqual(muestras.count(), 2)
+        self.assertEqual(muestras.count(), 1)
         self.assertTrue(all(m.estado == "PENDIENTE_TOMA" for m in muestras))
-        self.assertTrue(all(m.tipo_contenedor_id == self.sue.pk for m in muestras))
-        self.assertEqual(len({m.codigo_barra for m in muestras}), 2)
+        self.assertTrue(all(m.tipo_contenedor_id == sue.pk for m in muestras))

@@ -73,16 +73,17 @@ describe('canAccessPacientes', () => {
 });
 
 describe('canCreatePaciente', () => {
-  it('permite admin, secretaría y médico', () => {
+  it('permite admin, secretaría, médico y laboratorio', () => {
     expect(canCreatePaciente(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canCreatePaciente(user({ rol: 'LABORATORIO' }))).toBe(true);
   });
 
-  it('no permite paciente, enfermería ni laboratorio', () => {
+  it('no permite paciente, enfermería ni bioquímico', () => {
     expect(canCreatePaciente(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canCreatePaciente(user({ rol: 'ENFERMERIA' }))).toBe(false);
-    expect(canCreatePaciente(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canCreatePaciente(user({ rol: 'BIOQUIMICO' }))).toBe(false);
   });
 });
 
@@ -228,7 +229,7 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(canAccessAtenciones(labStaff)).toBe(false);
     expect(canOperateAtenciones(labStaff)).toBe(false);
     expect(canAccessAuditoria(labStaff)).toBe(false);
-    expect(canCreatePaciente(labStaff)).toBe(false);
+    expect(canCreatePaciente(labStaff)).toBe(true);
     expect(canAccessSolicitudes(labStaff)).toBe(false);
     expect(canAccessArchivosMedicos(labStaff)).toBe(false);
   });

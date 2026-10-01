@@ -282,6 +282,30 @@ class TestPacienteAPIPrivacidad:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["results"]) == 1
 
+    def test_laboratorio_puede_crear_paciente(self):
+        client = APIClient()
+        client.force_authenticate(user=_laboratorio_user("lab.alta.create"))
+        response = client.post(
+            "/api/pacientes/",
+            _payload_create(dni="LAB-ALTA-1", fecha_nacimiento="1988-01-02"),
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        assert Paciente.objects.filter(dni="LAB-ALTA-1").exists()
+
+    def test_laboratorio_no_puede_patch_paciente(self):
+        paciente = Paciente.objects.create(dni="LAB-PATCH-1", nombre="L", apellido="Ab")
+        client = APIClient()
+        client.force_authenticate(user=_laboratorio_user("lab.alta.patch"))
+        response = client.patch(
+            f"/api/pacientes/{paciente.id}/",
+            {"telefono": "2995551212"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        paciente.refresh_from_db()
+        assert paciente.telefono != "2995551212"
+
     def test_laboratorio_is_staff_lista_pacientes_sin_bypass_emr(self):
         """Operadores LIMS con is_staff no escalan a PHI vía staff; lectura operativa por rol."""
         Paciente.objects.create(dni="PRIV-LAB-ST-0", nombre="Ana", apellido="Demo")

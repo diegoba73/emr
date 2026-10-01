@@ -255,3 +255,14 @@ class TestImpresionOrdenes(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_api_medico_puede_pedidos_papel(self):
+        """Médico imprime pedido institucional (firma) desde guardia/atención."""
+        self.client.force_authenticate(self.med_user)
+        r = self.client.post(
+            URL_PEDIDOS,
+            {"items": self._items(("LAB_CLINICO", self.sol.pk))},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertTrue(r.content.startswith(b"%PDF"))

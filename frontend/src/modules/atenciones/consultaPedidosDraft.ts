@@ -1,5 +1,10 @@
 import toast from 'react-hot-toast';
-import { createSolicitudExamenLims, formatDrfError, getOrdenAbiertaPaciente } from '../../services/limsApi';
+import {
+  createSolicitudExamenLims,
+  formatDrfError,
+  getOrdenAbiertaPaciente,
+  type ItemImpresionOrden,
+} from '../../services/limsApi';
 import { createEstudiosMicrobiologiaBatch } from '../../services/limsMicroApi';
 import { createEstudioComplementario } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../estudios/apiErrors';
@@ -167,19 +172,33 @@ export interface FlushConsultaPedidosParams {
   origenSolicitud?: 'GUARDIA';
 }
 
+export interface FlushConsultaPedidosResult {
+  /** Órdenes lab/micro creadas o mergeadas — para impresión papel institucional. */
+  pedidosPapel: ItemImpresionOrden[];
+}
+
+function pushPedidoUnique(
+  dest: ItemImpresionOrden[],
+  item: ItemImpresionOrden
+): void {
+  if (dest.some((x) => x.tipo === item.tipo && x.id === item.id)) return;
+  dest.push(item);
+}
+
 /** Persiste borradores en LIMS / micro / estudios complementarios. Lanza si alguna creación falla. */
 export async function flushConsultaPedidosDrafts(
   params: FlushConsultaPedidosParams,
   draftOverride?: ConsultaPedidosDraft
-): Promise<void> {
+): Promise<FlushConsultaPedidosResult> {
   const { consultaHcId, pacienteId, medicoId, origenSolicitud } = params;
   const draft = draftOverride ?? loadConsultaPedidosDraft(consultaHcId);
+  const pedidosPapel: ItemImpresionOrden[] = [];
   if (
     draft.solicitudesLab.length === 0 &&
     draft.solicitudesMicro.length === 0 &&
     draft.estudios.length === 0
   ) {
-    return;
+    return { pedidosPapel };
   }
 
   if (draft.solicitudesLab.length > 0) {
@@ -224,6 +243,7 @@ export async function flushConsultaPedidosDrafts(
         origen_solicitud: origenSolicitud,
         fecha_programada_toma: sol.fecha_programada_toma,
       });
+      pushPedidoUnique(pedidosPapel, { tipo: 'LAB_CLINICO', id: orden.id });
       if (orden.merged) {
         toast.success(
           `Exámenes agregados a la orden ${orden.numero || `#${orden.id}`} (aún pendiente de toma).`
@@ -255,6 +275,9 @@ export async function flushConsultaPedidosDrafts(
           tipo_muestra_micro_id: i.tipo_muestra_micro_id,
         })),
       });
+      for (const est of estudios) {
+        pushPedidoUnique(pedidosPapel, { tipo: 'MICROBIOLOGIA', id: est.id });
+      }
       toast.success(
         estudios.length === 1
           ? `Pedido micro ${estudios[0].numero || `#${estudios[0].id}`} creado.`
@@ -292,4 +315,5 @@ export async function flushConsultaPedidosDrafts(
   }
 
   clearConsultaPedidosDraft(consultaHcId);
+  return { pedidosPapel };
 }

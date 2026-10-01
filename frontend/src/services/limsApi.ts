@@ -729,6 +729,27 @@ export async function getPedidosPapelPdfBlob(
   return data;
 }
 
+/**
+ * Abre el diálogo de impresión del navegador con el pedido institucional
+ * (mismo formato que LIMS: A4 apaisado, 2 formularios A5).
+ */
+export async function imprimirPedidosPapel(
+  items: ItemImpresionOrden[],
+  resenas?: ResenaPedido[]
+): Promise<void> {
+  if (!items.length) return;
+  let resenasFinal = resenas;
+  if (resenasFinal === undefined) {
+    try {
+      resenasFinal = await getResenasSugeridas(items);
+    } catch {
+      resenasFinal = [];
+    }
+  }
+  const blob = await getPedidosPapelPdfBlob(items, resenasFinal);
+  await printPdfBlob(blob);
+}
+
 /** @deprecated Usar printTalonOrden — mantiene el nombre por compatibilidad de imports. */
 export async function downloadTalonOrden(solicitudId: number): Promise<void> {
   await printTalonOrden(solicitudId);

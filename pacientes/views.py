@@ -44,6 +44,8 @@ from usuarios.roles import ROLES_LECTURA_OPERATIVA
 
 _ROLES_LECTURA_GLOBAL = frozenset({"admin", "medico", "secretaria", "enfermeria"})
 _ROLES_EDICION_PACIENTE = frozenset({"admin", "secretaria", "medico"})
+# Alta: mismos editores + laboratorio (ficha mínima para pedidos LIMS).
+_ROLES_ALTA_PACIENTE = frozenset({"admin", "secretaria", "medico", "laboratorio"})
 
 
 def _user_rol(user) -> str:
@@ -164,6 +166,15 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return
         raise PermissionDenied("No tiene permiso para editar datos del paciente.")
 
+    def _deny_si_no_puede_alta_paciente(self) -> None:
+        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return
+        rol = _user_rol(user)
+        if rol in _ROLES_ALTA_PACIENTE:
+            return
+        raise PermissionDenied("No tiene permiso para dar de alta pacientes.")
+
     def _deny_operativo_solo_lectura(self) -> None:
         if _user_rol(self.request.user) in ROLES_LECTURA_OPERATIVA:
             raise PermissionDenied('Su rol solo tiene permiso de lectura sobre pacientes.')
@@ -187,9 +198,8 @@ class PacienteViewSet(viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        self._deny_operativo_solo_lectura()
         self._deny_paciente_mutations()
-        self._deny_si_no_puede_editar_paciente()
+        self._deny_si_no_puede_alta_paciente()
         instance = serializer.save(
             creado_por=self.request.user,
             modificado_por=self.request.user,

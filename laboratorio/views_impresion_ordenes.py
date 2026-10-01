@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class LimsImpresionOrdenesPermission(permissions.BasePermission):
-    """Mismo alcance que el talón PDF: operadores LIMS."""
+    """Operadores LIMS (listado del día, pedidos papel)."""
 
     def has_permission(self, request, view):
         user = request.user
@@ -33,6 +33,22 @@ class LimsImpresionOrdenesPermission(permissions.BasePermission):
         if user.is_superuser:
             return True
         return get_normalized_role(user) in ROLES_LIMS_WRITE
+
+
+class PedidosPapelImpresionPermission(permissions.BasePermission):
+    """
+    Pedidos institucionales (firma médico/paciente): operadores LIMS + médico.
+    El listado del día sigue restringido a LIMS.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser:
+            return True
+        rol = get_normalized_role(user)
+        return rol in ROLES_LIMS_WRITE or rol == "medico"
 
 
 def _pdf_response(pdf_bytes: bytes, filename: str) -> HttpResponse:
@@ -83,7 +99,7 @@ class ResenasSugeridasView(APIView):
     órdenes clínicas con exámenes fuera del listado básico. No persiste.
     """
 
-    permission_classes = [LimsImpresionOrdenesPermission]
+    permission_classes = [PedidosPapelImpresionPermission]
 
     def post(self, request):
         try:
@@ -118,7 +134,7 @@ class PedidosPapelPdfView(APIView):
     2 formularios por hoja (pedido, reseña y proBNP cuando corresponde).
     """
 
-    permission_classes = [LimsImpresionOrdenesPermission]
+    permission_classes = [PedidosPapelImpresionPermission]
 
     def post(self, request):
         try:

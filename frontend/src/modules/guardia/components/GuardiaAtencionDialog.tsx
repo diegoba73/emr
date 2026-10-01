@@ -25,6 +25,7 @@ import {
   migrateGuardiaPendingDraftToConsulta,
 } from '../../atenciones/consultaPedidosDraft';
 import { apiService } from '../../../services/api';
+import { imprimirPedidosPapel } from '../../../services/limsApi';
 import { Paciente } from '../../../types';
 import { formatPacienteLabel } from '../../../utils/pacienteFormat';
 
@@ -179,6 +180,15 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       pacienteId,
       medicoId,
       origenSolicitud: 'GUARDIA',
+    }).then(async ({ pedidosPapel }) => {
+      if (pedidosPapel.length === 0) return;
+      try {
+        await imprimirPedidosPapel(pedidosPapel);
+      } catch {
+        toast.error(
+          'Pedidos guardados, pero no se pudo abrir la impresión del pedido para firmar.'
+        );
+      }
     });
 
     // La atención queda ABIERTA: pedidos LIMS/estudios siguen su ciclo;

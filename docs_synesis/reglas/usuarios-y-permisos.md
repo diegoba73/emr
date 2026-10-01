@@ -21,7 +21,7 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 | `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
 | `secretaria` | Agenda, pacientes, gestión turnos; lectura de estudios, archivos y resultados LIMS; envío de informe en `FINALIZADO` |
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
-| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar` |
+| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha) |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
 | `paciente` | Portal propio |
 

@@ -1,4 +1,4 @@
-/** Utilidades: tubos físicos (tope 10/tubo; hemograma y orina completa = 1 unidad c/u). */
+/** Utilidades: tubos físicos (tope 10/tubo; hemograma/orina=1; SUERO siempre 1 en backend). */
 
 export const MAX_EXAMENES_POR_TUBO = 10;
 

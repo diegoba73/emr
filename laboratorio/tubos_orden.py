@@ -9,6 +9,8 @@ Excepciones (cuentan como 1 unidad hacia el tope, no como N componentes):
 - Orina completa (PAN_ORI) → un frasco de orina
 - Química de rutina → un suero (mismo tubo rojo que el resto de bioquímica)
 - Orina 24 hs (clearance, proteinuria 24h, ionograma 24h, etc.) → un bidón
+
+Contenedor SUERO: siempre 1 tubo físico (si hace falta otro, se reimprime la etiqueta).
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ from laboratorio.tubos_catalogo import (
     BIDON_ORINA_24H,
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
+    SUERO,
     _EAB_ART,
     _EAB_VEN,
     _ORINA_24H,
@@ -264,6 +267,9 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
     result: list[TuboOrdenGrupo] = []
     for key, g in meta.items():
         if g.tipo_contenedor_codigo == BIDON_ORINA_24H:
+            g.cantidad = 1
+        elif g.tipo_contenedor_codigo == SUERO:
+            # Un solo tubo suero por orden/grupo; reimprimir etiqueta si hace falta otro físico.
             g.cantidad = 1
         elif key[2]:  # EAB individual
             g.cantidad = 1

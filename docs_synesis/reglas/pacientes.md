@@ -29,6 +29,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | PATCH parcial no exige completar identidad legacy vacía. | **[IMPLEMENTADO]** C2 |
 | Búsqueda: numérico → DNI; texto → nombre/apellido con prioridad. | **[IMPLEMENTADO]** `buscar` |
 | Admin/médico/secretaría/enfermería: listado y búsqueda global, sin exigir vínculos clínicos ni `?all=true`. | **[IMPLEMENTADO]** `pacientes.views` |
+| Laboratorio: listado/búsqueda global y **alta** de pacientes; sin PATCH de demografía. | **[IMPLEMENTADO]** `_ROLES_ALTA_PACIENTE` |
 | Paciente solo ve su ficha vía queryset activo. | **[IMPLEMENTADO]** |
 | Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
 | DELETE físico API bloqueado (405). | **[IMPLEMENTADO]** |
