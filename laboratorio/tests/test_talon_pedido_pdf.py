@@ -139,6 +139,7 @@ class TestTalonPedidoClinicoApi(TestCase):
         """Con muchos exámenes no aparece “y N más”; se listan todos."""
         from laboratorio.talon_pedido_pdf import (
             _examenes_solicitud,
+            columnas_examenes,
             generar_talon_solicitud_pdf_bytes,
         )
 
@@ -163,12 +164,29 @@ class TestTalonPedidoClinicoApi(TestCase):
         self.assertIn("Glucosa", listado)
         self.assertGreaterEqual(len(listado), 21)
 
+        cols = columnas_examenes(listado)
+        self.assertEqual(len(cols), 2)
+        self.assertEqual(len(cols[0]), 15)
+        self.assertEqual(len(cols[1]), len(listado) - 15)
+
         pdf = generar_talon_solicitud_pdf_bytes(self.sol)
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertNotRegex(pdf.decode("latin-1", errors="ignore"), r"y \d+ m.s")
         # ReportLab escribe literales; al menos los nombres cortos deben aparecer.
         self.assertIn(b"Examen Extra 00", pdf)
         self.assertIn(b"Examen Extra 19", pdf)
+
+    def test_columnas_examenes_max_15(self):
+        from laboratorio.talon_pedido_pdf import columnas_examenes
+
+        self.assertEqual(columnas_examenes([f"e{i}" for i in range(15)]), [[f"e{i}" for i in range(15)]])
+        cols = columnas_examenes([f"e{i}" for i in range(16)])
+        self.assertEqual(len(cols), 2)
+        self.assertEqual(len(cols[0]), 15)
+        self.assertEqual(cols[1], ["e15"])
+        cols3 = columnas_examenes([f"e{i}" for i in range(45)])
+        self.assertEqual(len(cols3), 3)
+        self.assertTrue(all(len(c) == 15 for c in cols3))
 
     def test_talon_panel_sin_expandir_componentes(self):
         """Un perfil se muestra como ítem; no lista cada examen del panel."""

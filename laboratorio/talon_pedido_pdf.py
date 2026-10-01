@@ -2,8 +2,9 @@
 Talón PDF de respaldo (hoja común) para pedidos LIMS clínico y microbiología.
 
 Formato físico: un talón por ORDEN (no por tubo). Lista completa de paneles
-y exámenes sueltos (sin expandir los componentes de cada perfil). Si la lista
-no cabe en una hoja, continúa en páginas siguientes.
+y exámenes sueltos (sin expandir los componentes de cada perfil). Hasta 15
+ítems por columna; si hay más, siguen en la columna siguiente (y página
+siguiente si no caben más columnas).
 No muta estado ni FSM.
 """
 from __future__ import annotations
@@ -28,6 +29,10 @@ MARGIN_X = 12 * mm
 MARGIN_Y = 10 * mm
 # Pie con fecha de generación.
 FOOTER_RESERVE = 10 * mm
+# Lista de paneles/exámenes: como máximo 15 por columna; si hay más, otra columna.
+MAX_EXAMENES_POR_COLUMNA = 15
+# En A4 caben hasta 3 columnas legibles; el resto sigue en la página siguiente.
+MAX_COLUMNAS_POR_PAGINA = 3
 
 
 def nombre_archivo_talon_solicitud(solicitud: SolicitudExamen) -> str:
@@ -192,16 +197,36 @@ def _draw_footer(c: canvas.Canvas) -> None:
     c.setFillGray(0)
 
 
+def columnas_examenes(
+    examenes: list[str],
+    *,
+    max_por_columna: int = MAX_EXAMENES_POR_COLUMNA,
+) -> list[list[str]]:
+    """Parte la lista en columnas de a lo sumo ``max_por_columna`` ítems."""
+    items = examenes or ["—"]
+    if max_por_columna < 1:
+        raise ValueError("max_por_columna debe ser >= 1")
+    return [items[i : i + max_por_columna] for i in range(0, len(items), max_por_columna)]
+
+
+def _max_chars_columna(c: canvas.Canvas, col_w: float, font: str = "Helvetica", size: float = 8) -> int:
+    """Estima cuántos caracteres entran en el ancho de columna (bullet + margen)."""
+    usable = max(col_w - 4 * mm, 10 * mm)
+    # Aproximación: medir "M" y acotar.
+    mw = c.stringWidth("M", font, size) or 1.0
+    return max(8, int(usable / mw))
+
+
 def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
-    """Dibuja el talón de una orden; continúa en páginas siguientes si hace falta."""
+    """Dibuja el talón de una orden; exámenes en columnas (máx. 15 c/u)."""
     line = 4.6 * mm
     exam_line = line * 0.92
-    y_min = MARGIN_Y + FOOTER_RESERVE
     examenes = data.examenes or ["—"]
-    exam_idx = 0
+    cols_all = columnas_examenes(examenes)
     page_idx = 0
+    col_offset = 0
 
-    while True:
+    while col_offset < len(cols_all):
         if page_idx > 0:
             c.showPage()
         y = PAGE_H - MARGIN_Y
@@ -232,6 +257,7 @@ def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
         y -= line * 1.15
 
         if page_idx == 0:
+
             def _campo(label: str, value: str) -> None:
                 nonlocal y
                 c.setFont("Helvetica-Bold", 8.5)
@@ -253,17 +279,23 @@ def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
         else:
             c.drawString(x, y, "Exámenes / estudios (continuación):")
         y -= line
-        c.setFont("Helvetica", 8)
 
-        while exam_idx < len(examenes) and y - exam_line >= y_min:
-            c.drawString(x + 2 * mm, y, f"• {_trunc(examenes[exam_idx], 95)}")
-            y -= exam_line
-            exam_idx += 1
+        page_cols = cols_all[col_offset : col_offset + MAX_COLUMNAS_POR_PAGINA]
+        n_cols = max(1, len(page_cols))
+        usable_w = PAGE_W - 2 * MARGIN_X
+        col_w = usable_w / n_cols
+        max_chars = _max_chars_columna(c, col_w)
+        c.setFont("Helvetica", 8)
+        list_top = y
+        for ci, col_items in enumerate(page_cols):
+            cx = MARGIN_X + ci * col_w
+            cy = list_top
+            for item in col_items:
+                c.drawString(cx + 1.5 * mm, cy, f"• {_trunc(item, max_chars)}")
+                cy -= exam_line
 
         _draw_footer(c)
-
-        if exam_idx >= len(examenes):
-            break
+        col_offset += len(page_cols)
         page_idx += 1
 
 
