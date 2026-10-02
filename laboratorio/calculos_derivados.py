@@ -4,6 +4,7 @@ Parametros clinicos derivados (informe / carga LIMS).
 Perfil lipidico — se cargan COL_TOT, HDL, TG; el resto se calcula.
 Hepatograma — BIL_I = BIL_T - BIL_D.
 Hemograma — VCM, HCM, CHCM (y absolutos de formula leucocitaria).
+Perfil ferrico — se cargan FERR, UIBC (, FERRIT); CF, SAT_FE y TRANS se calculan.
 """
 from __future__ import annotations
 
@@ -20,10 +21,16 @@ CODIGOS_LIPIDO_CALCULADOS = frozenset(
 )
 CODIGOS_HEPAT_CALCULADOS = frozenset({"BIL_I"})
 CODIGOS_HEMO_INDICES = frozenset({"VCM", "HCM", "CHCM"})
-CODIGOS_CALCULADOS = CODIGOS_LIPIDO_CALCULADOS | CODIGOS_HEPAT_CALCULADOS
+# TIBC = FERR + UIBC; saturación = FERR/TIBC×100; transferrina ≈ TIBC×0.8
+CODIGOS_FERRICO_CALCULADOS = frozenset({"CF", "SAT_FE", "TRANS"})
+CODIGOS_CALCULADOS = (
+    CODIGOS_LIPIDO_CALCULADOS | CODIGOS_HEPAT_CALCULADOS | CODIGOS_FERRICO_CALCULADOS
+)
 FORMULA_LEUCO_CODIGOS = frozenset(
     {"NEUT_CAY", "NEUT_SEG", "EOS", "BAS", "LINF", "MONO"}
 )
+# Factor habitual: transferrina (mg/dL) ≈ TIBC (µg/dL) × 0.8
+FACTOR_TRANS_DESDE_TIBC = Decimal("0.8")
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -102,6 +109,23 @@ def calc_absoluto_formula(pct: Decimal, leucos: Decimal) -> int | None:
     return int(_q(pct * leucos / Decimal(100), 0))
 
 
+def calc_tibc(ferremia: Decimal, uibc: Decimal) -> Decimal:
+    """Capacidad total de fijación (µg/dL) = ferremia + UIBC."""
+    return _q(ferremia + uibc, 0)
+
+
+def calc_sat_transferrina(ferremia: Decimal, tibc: Decimal) -> Decimal | None:
+    """% saturación = (ferremia / TIBC) × 100."""
+    if tibc <= 0:
+        return None
+    return _q((ferremia / tibc) * Decimal(100), 1)
+
+
+def calc_transferrina_desde_tibc(tibc: Decimal) -> Decimal:
+    """Transferrina (mg/dL) ≈ TIBC (µg/dL) × 0.8."""
+    return _q(tibc * FACTOR_TRANS_DESDE_TIBC, 0)
+
+
 def format_absoluto_mm3(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
@@ -160,6 +184,24 @@ def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[De
         chcm = calc_chcm(hgb, hto)
         if chcm is not None:
             out["CHCM"] = (quantize_valor_numerico(chcm), _fmt(chcm, 2))
+
+    ferr = _dec(valores.get("FERR"))
+    uibc = _dec(valores.get("UIBC"))
+    if ferr is not None and uibc is not None:
+        tibc = calc_tibc(ferr, uibc)
+        out["CF"] = (quantize_valor_numerico(tibc), _fmt(tibc, 0))
+        sat = calc_sat_transferrina(ferr, tibc)
+        if sat is not None:
+            out["SAT_FE"] = (quantize_valor_numerico(sat), _fmt(sat, 1))
+        else:
+            out["SAT_FE"] = (None, RESULTADO_NO_CALCULABLE)
+        trans = calc_transferrina_desde_tibc(tibc)
+        out["TRANS"] = (quantize_valor_numerico(trans), _fmt(trans, 0))
+    elif ferr is not None or uibc is not None:
+        # Falta uno de los dos medidos: no inventar derivados férricos.
+        out["CF"] = (None, RESULTADO_NO_CALCULABLE)
+        out["SAT_FE"] = (None, RESULTADO_NO_CALCULABLE)
+        out["TRANS"] = (None, RESULTADO_NO_CALCULABLE)
 
     return out
 

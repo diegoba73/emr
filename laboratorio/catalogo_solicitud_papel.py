@@ -84,12 +84,13 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "PP", "nombre": "Porcentaje de protrombina", "muestra": "PLASMA_CITRATO", "tipo_resultado": "NUMERICO", "abreviatura": "%PT"},
     {"codigo": "INR", "nombre": "R.I.N.", "muestra": "PLASMA_CITRATO", "tipo_resultado": "NUMERICO", "abreviatura": "INR"},
     {"codigo": "KPTT", "nombre": "KPTT", "muestra": "PLASMA_CITRATO", "tipo_resultado": "NUMERICO", "abreviatura": "KPTT"},
-    # —— Perfil férrico ——
-    {"codigo": "CF", "nombre": "Capacidad de fijación", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    # —— Perfil férrico —— medidos: FERR, UIBC, FERRIT; calculados: CF, SAT_FE, TRANS
     {"codigo": "FERR", "nombre": "Ferremia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
-    {"codigo": "TRANS", "nombre": "Transferrina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    {"codigo": "UIBC", "nombre": "UIBC", "muestra": "SUERO", "tipo_resultado": "NUMERICO", "abreviatura": "UIBC"},
     {"codigo": "FERRIT", "nombre": "Ferritina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    {"codigo": "CF", "nombre": "Capacidad total de fijación", "muestra": "SUERO", "tipo_resultado": "NUMERICO", "abreviatura": "TIBC"},
     {"codigo": "SAT_FE", "nombre": "% de saturación de transferrina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    {"codigo": "TRANS", "nombre": "Transferrina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     # —— Orina completa ——
     {"codigo": "ORI_COLOR", "nombre": "Color (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
     {"codigo": "ORI_ASP", "nombre": "Aspecto (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
@@ -157,6 +158,8 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "T4L", "nombre": "T4 libre", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "B12", "nombre": "Vitamina B12", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "VITD", "nombre": "Vitamina D", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    # —— FiO2 compartido (contexto clínico; no genera tubo propio) ——
+    {"codigo": "FIO2", "nombre": "FiO2", "muestra": "SANGRE_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "FiO2"},
     # —— EAB arterial (panel PAN_EAB_ART) ——
     {"codigo": "PH_ART", "nombre": "pH (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "pH"},
     {"codigo": "PO2_ART", "nombre": "pO2 (arterial)", "muestra": "SANGRE_HEPARINA_ART", "tipo_resultado": "NUMERICO", "abreviatura": "pO2"},
@@ -177,12 +180,12 @@ EXAMENES: list[ExamenDef] = [
 # Códigos legacy del seed demo que se reemplazan por panel + componentes
 LEGACY_CODIGOS_DESACTIVAR = frozenset({"HEMO", "COL", "HEM", "COA", "EAB_ART", "EAB_VEN"})
 
-# Componentes EAB (jeringas art/ven)
+# Componentes EAB (jeringas art/ven). FIO2 es compartido entre ambos paneles.
 COMPONENTES_EAB_ART: list[str] = [
-    "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
+    "FIO2", "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
 ]
 COMPONENTES_EAB_VEN: list[str] = [
-    "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
+    "FIO2", "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
 ]
 
 # ---------------------------------------------------------------------------
@@ -223,7 +226,7 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_FERR",
         "nombre": "Perfil férrico",
-        "componentes": ["CF", "FERR", "TRANS", "FERRIT", "SAT_FE"],
+        "componentes": ["FERR", "UIBC", "FERRIT", "CF", "SAT_FE", "TRANS"],
     },
     {
         "codigo": "PAN_ORI",

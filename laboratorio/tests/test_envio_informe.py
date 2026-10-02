@@ -78,7 +78,7 @@ class TestUrlAlcanzableDestinatario:
         assert url_alcanzable_por_destinatario("http://127.0.0.1:8000/api/x") is None
 
     def test_host_publico_si(self):
-        url = "http://dsachubut.sytes.net:8080/api/lab/solicitudes/informe-entrega/abc/"
+        url = "http://emr.sytes.net:8080/api/lab/solicitudes/informe-entrega/abc/"
         assert url_alcanzable_por_destinatario(url) == url
 
 

@@ -242,9 +242,87 @@ class TestConsultaAPI(APITestCase):
         response = self.client.get(f'/api/consultas/{consulta.id}/')
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data['solicitudes_laboratorio']) == 1
-        resultados = response.data['solicitudes_laboratorio'][0]['resultados']
+        sol_data = response.data['solicitudes_laboratorio'][0]
+        assert 'orden_grupos_informe' in sol_data
+        assert 'paneles_resumen' in sol_data
+        assert 'tipos_examen' in sol_data
+        resultados = sol_data['resultados']
         assert len(resultados) == 1
         assert resultados[0]['estado'] == 'PENDIENTE'
+        assert resultados[0]['tipo_examen'] == tipo_examen.id
+        assert resultados[0]['tipo_examen_codigo'] == 'GLU-HC-DET'
+        assert resultados[0]['tipo_examen_muestra_codigo'] == 'SNG-HC-DET'
+
+    def test_retrieve_consulta_respeta_orden_grupos_informe(self):
+        """Nested lab incluye orden_grupos_informe guardado (reorden pre-validación)."""
+        from laboratorio.models import (
+            PanelExamen,
+            ResultadoExamen,
+            SolicitudExamen,
+            TipoExamen,
+            TipoMuestra,
+        )
+
+        consulta = Consulta.objects.create(
+            historia_clinica=self.historia_clinica,
+            medico=self.medico,
+            fecha_hora_consulta=timezone.now(),
+            motivo_consulta_detalle='Orden con grupos',
+        )
+        tipo_muestra = TipoMuestra.objects.create(
+            codigo='SNG-HC-ORD',
+            nombre='Sangre HC orden',
+            activo=True,
+        )
+        te_glu = TipoExamen.objects.create(
+            codigo='GLU-HC-ORD',
+            nombre='Glucosa',
+            tipo_muestra_requerida=tipo_muestra,
+            activo=True,
+        )
+        te_urea = TipoExamen.objects.create(
+            codigo='UREA-HC-ORD',
+            nombre='Urea',
+            tipo_muestra_requerida=tipo_muestra,
+            activo=True,
+        )
+        panel = PanelExamen.objects.create(
+            codigo='PAN_TEST_HC_ORD',
+            nombre='Panel test HC',
+            activo=True,
+        )
+        panel.tipos_examen.add(te_glu, te_urea)
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            consulta_hc=consulta,
+            origen_solicitud='AMBULATORIO_CEHTA',
+            orden_grupos_informe=[f'panel-{panel.id}'],
+        )
+        solicitud.tipos_examen.add(te_glu, te_urea)
+        solicitud.paneles.add(panel)
+        r_glu = ResultadoExamen.objects.create(
+            solicitud=solicitud,
+            tipo_examen=te_glu,
+            valor_obtenido='100',
+            es_patologico=False,
+        )
+        r_urea = ResultadoExamen.objects.create(
+            solicitud=solicitud,
+            tipo_examen=te_urea,
+            valor_obtenido='40',
+            es_patologico=False,
+        )
+
+        response = self.client.get(f'/api/consultas/{consulta.id}/')
+        assert response.status_code == status.HTTP_200_OK
+        sol_data = response.data['solicitudes_laboratorio'][0]
+        assert sol_data['orden_grupos_informe'] == [f'panel-{panel.id}']
+        assert len(sol_data['paneles_resumen']) == 1
+        assert sol_data['paneles_resumen'][0]['id'] == panel.id
+        assert set(sol_data['paneles_resumen'][0]['tipos_examen_ids']) == {te_glu.id, te_urea.id}
+        ids_res = {r['id'] for r in sol_data['resultados']}
+        assert ids_res == {r_glu.id, r_urea.id}
 
 
 @pytest.mark.django_db

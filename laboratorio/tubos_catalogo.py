@@ -78,6 +78,9 @@ _CITRATO = frozenset({"TP", "PP", "INR", "KPTT", "DDIM", "DD"})
 _ERITRO = frozenset({"VSG"})
 _CITRATO_VSG = _ERITRO  # alias legacy
 
+# Parámetros de contexto clínico: no generan tubo/jeringa propia
+EXAMENES_SIN_CONTENEDOR = frozenset({"FIO2"})
+
 # Gases / lactato / calcio iónico (sangre total heparina)
 # EAB arterial y venoso = jeringas distintas (no compartir etiqueta)
 _EAB_ART = frozenset({"PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART"})
@@ -232,16 +235,19 @@ def tubo_codigo_para_examen(
     muestra: str | None = None,
     *,
     muestra_nombre: str | None = None,
-) -> str:
+) -> str | None:
     """
-    Devuelve el código de TipoContenedor para un examen.
+    Devuelve el código de TipoContenedor para un examen, o None si no aplica tubo.
 
     Prioridad:
-    1) Reglas por código de analito.
-    2) Inferencia por tipo de muestra / material.
-    3) Default: tubo suero.
+    1) Parámetros de contexto (p. ej. FiO2) → None.
+    2) Reglas por código de analito.
+    3) Inferencia por tipo de muestra / material.
+    4) Default: tubo suero.
     """
     c = (codigo or "").upper().strip()
+    if c in EXAMENES_SIN_CONTENEDOR:
+        return None
     if c in _EDTA:
         return EDTA
     if c in _ERITRO:
@@ -269,8 +275,8 @@ def tubo_codigo_para_examen(
     return SUERO
 
 
-def mapa_tubos_catalogo_papel() -> dict[str, str]:
-    """codigo examen → codigo contenedor, según EXAMENES del papel."""
+def mapa_tubos_catalogo_papel() -> dict[str, str | None]:
+    """codigo examen → codigo contenedor (None si no aplica), según EXAMENES del papel."""
     from laboratorio.catalogo_solicitud_papel import EXAMENES
 
     return {

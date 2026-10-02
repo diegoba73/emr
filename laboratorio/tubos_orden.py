@@ -23,6 +23,7 @@ from laboratorio.models_catalog import Muestra, TipoContenedor
 from laboratorio.panel_componentes_orden import PANEL_COMPONENTES_BY_CODIGO
 from laboratorio.tubos_catalogo import (
     BIDON_ORINA_24H,
+    EXAMENES_SIN_CONTENEDOR,
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
     SUERO,
@@ -193,7 +194,11 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
     contexto 24 hs) van al bidón; orina completa/al azar quedan en frasco.
     Todos los de 24 hs juntos → cantidad 1 (un bidón).
     """
-    examenes = _tipos_examen_para_tubos(solicitud)
+    examenes = [
+        e
+        for e in _tipos_examen_para_tubos(solicitud)
+        if (e.codigo or "") not in EXAMENES_SIN_CONTENEDOR
+    ]
     if not examenes:
         return []
 

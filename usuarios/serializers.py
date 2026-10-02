@@ -456,12 +456,15 @@ class UserDetailSerializer(serializers.ModelSerializer):
                 return {
                     'id': obj.medico.id,
                     'matricula': obj.medico.matricula,
+                    'nombre': obj.medico.nombre,
+                    'apellido': obj.medico.apellido,
+                    'ambito_atencion': obj.medico.ambito_atencion,
                     'especialidad': {
                         'id': obj.medico.especialidad.id,
                         'nombre': obj.medico.especialidad.nombre
                     } if obj.medico.especialidad else None
                 }
-        except:
+        except Exception:
             pass
         return None
     

@@ -1,19 +1,17 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { api } from '../../lib/api';
 import { downloadInformePdf } from '../../lib/informePdf';
-import { InformeResumen, ResultadoMovil } from '../../lib/types';
+import { groupResultadosInformeMovil } from '../../lib/ordenResultadosInforme';
+import { InformeResumen, OrdenInformeMovil } from '../../lib/types';
 import { useSession } from '../../lib/session';
 import { Action, Body, Card, colors, ErrorText, Loading, Page, Title } from '../../components/ui';
 
 type Detalle = {
   informe: InformeResumen;
-  orden?: {
-    resultados?: ResultadoMovil[];
-    estado?: string;
-  };
-      historial?: {
+  orden?: OrdenInformeMovil;
+  historial?: {
     analitos?: Array<{
       tipo_examen_nombre: string;
       previos: Array<{ valor?: string; fecha?: string }>;
@@ -68,6 +66,23 @@ export default function InformeDetalle() {
     }
   };
 
+  const resultados = data?.orden?.resultados ?? [];
+  const gruposResultados = useMemo(
+    () =>
+      groupResultadosInformeMovil(
+        {
+          paneles_resumen: data?.orden?.paneles_resumen,
+          orden_grupos_informe: data?.orden?.orden_grupos_informe,
+        },
+        data?.orden?.resultados ?? []
+      ),
+    [
+      data?.orden?.paneles_resumen,
+      data?.orden?.orden_grupos_informe,
+      data?.orden?.resultados,
+    ]
+  );
+
   if (loading) {
     return (
       <Page>
@@ -84,7 +99,6 @@ export default function InformeDetalle() {
   }
 
   const inf = data.informe;
-  const resultados = data.orden?.resultados || [];
   const esBio = user?.rol === 'bioquimico' || user?.puede_validar_informes;
 
   return (
@@ -173,29 +187,40 @@ export default function InformeDetalle() {
           <Card>
             <Text style={{ fontWeight: '800', fontSize: 18, color: colors.ink }}>Resultados</Text>
             {!resultados.length && <Body>Sin resultados cargados.</Body>}
-            {resultados.map((r) => (
-              <View
-                key={r.id}
-                style={{
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
-                  paddingTop: 10,
-                  gap: 2,
-                }}
-              >
-                <Text style={{ fontWeight: '700', color: colors.ink }}>
-                  {r.tipo_examen_nombre || r.tipo_examen_codigo || `Examen ${r.tipo_examen}`}
-                </Text>
-                <Body>
-                  Valor: {r.valor_obtenido ?? r.valor_numerico ?? '—'}
-                  {r.unidad ? ` ${r.unidad}` : ''}
-                </Body>
-                <Body>Referencia: {r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}</Body>
-                {(r.es_patologico || r.es_critico) && (
-                  <Text style={{ color: colors.danger, fontWeight: '700' }}>
-                    {r.es_critico ? 'Crítico' : 'Fuera de rango'}
+            {gruposResultados.map((grupo) => (
+              <View key={grupo.key} style={{ gap: 6, marginTop: 8 }}>
+                {(grupo.codigo || grupo.resultados.length > 1) && (
+                  <Text style={{ fontWeight: '800', fontSize: 15, color: colors.ink }}>
+                    {grupo.titulo}
                   </Text>
                 )}
+                {grupo.resultados.map((r) => (
+                  <View
+                    key={r.id}
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: colors.border,
+                      paddingTop: 10,
+                      gap: 2,
+                    }}
+                  >
+                    <Text style={{ fontWeight: '700', color: colors.ink }}>
+                      {r.tipo_examen_nombre || r.tipo_examen_codigo || `Examen ${r.tipo_examen}`}
+                    </Text>
+                    <Body>
+                      Valor: {r.valor_obtenido ?? r.valor_numerico ?? '—'}
+                      {r.unidad ? ` ${r.unidad}` : ''}
+                    </Body>
+                    <Body>
+                      Referencia: {r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}
+                    </Body>
+                    {(r.es_patologico || r.es_critico) && (
+                      <Text style={{ color: colors.danger, fontWeight: '700' }}>
+                        {r.es_critico ? 'Crítico' : 'Fuera de rango'}
+                      </Text>
+                    )}
+                  </View>
+                ))}
               </View>
             ))}
           </Card>

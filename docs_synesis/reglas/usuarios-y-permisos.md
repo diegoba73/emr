@@ -21,7 +21,7 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 | `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
 | `secretaria` | Agenda, pacientes, gestión turnos; lectura de estudios, archivos y resultados LIMS; envío de informe en `FINALIZADO` |
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
-| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha) |
+| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO` |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
 | `paciente` | Portal propio |
 
@@ -46,14 +46,51 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Leer catálogo LIMS | admin, laboratorio, bioquímico, medico (`ROLES_LIMS_CATALOG_READ`) |
 | Crear/cargar resultados / QC / quitar ensayos | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`) |
 | Agregar ensayos a orden | `ROLES_LIMS_WRITE` + médico |
+| Editar cabecera de orden LIMS (`PATCH` paciente/médico/origen/fechas/obs.) | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`); **bloqueado** si `FINALIZADO` |
 | Etiqueta ZPL 40×23 (preview `etiqueta-zpl` / `imprimir-etiqueta` / `confirmar`) | `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser; **no** médico |
 | Etiqueta ZPL micro (mismos actions bajo `microbiologia/estudios`) | Igual que lab clínico (`ROLES_LIMS_WRITE`); **no** médico |
 | Validar orden LIMS | admin, bioquímico (`ROLES_LIMS_VALIDAR`) |
 | Override IQC al cerrar | admin / superuser + motivo |
+| Alta de pacientes | admin, secretaría, médico, laboratorio, bioquímico (`_ROLES_ALTA_PACIENTE`); sin PATCH demográfico para lab/bio |
+| Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
 | Gestionar turnos (crear/modificar) | secretaria, admin/staff; médico y paciente solo propios; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
 
 Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
+
+---
+
+## Pedidos de laboratorio (médicos)
+
+Los médicos con ficha vinculada ven **Pedir laboratorio** en el inicio.
+
+Flujo: buscar paciente → contexto (guardia / ambulatorio / internado) → favoritos, paquetes del contexto y búsqueda libre de exámenes/paneles → confirmar.
+
+### Ámbito de atención (`Medico.ambito_atencion`)
+
+| Valor | Menús web | Contextos lab (web + móvil) |
+|-------|-----------|------------------------------|
+| `COMPLETO` (default) | Guardia + Internación visibles | Guardia, Ambulatorio, Internado |
+| `AMBULATORIO` | Sin Guardia ni Internación | Solo Ambulatorio (salta chips de contexto en la app) |
+
+Se configura en **Médicos** (web) o Admin Django. No es un rol Django distinto: sigue siendo `rol=medico`.
+
+El backend rechaza contextos/orígenes de guardia e internación y el acceso a APIs de internación / `iniciar-guardia` cuando el médico es solo ambulatorio.
+
+**Frecuencia PROBNP:** solo `laboratorio` / `bioquimico` pueden pedir `PROBNP` si el paciente ya tiene un pedido con ese ensayo en los últimos 31 días. Médico (web/móvil), admin y otros roles reciben rechazo con mensaje de obra social (`laboratorio/restricciones_frecuencia.py`).
+
+Los **paquetes por contexto** se configuran en el EMR web:
+**Laboratorio → Catálogos → Paquetes app móvil** (`/laboratorio/catalogos/paquetes-movil`).
+Roles de escritura: admin / laboratorio / bioquímico (mismo criterio que paneles LIMS).
+
+API móvil:
+
+- `GET /api/movil/lab/pacientes/?q=`
+- `GET /api/movil/lab/pacientes/<id>/contexto/` (incluye `restricciones_ensayos`)
+- `GET /api/movil/lab/pacientes/<id>/restricciones-ensayos/`
+- `GET /api/movil/lab/catalogo/?contexto=&q=`
+- `GET|PUT /api/movil/lab/favoritos/`
+- `GET|POST /api/movil/lab/ordenes/`
 
 ---
 

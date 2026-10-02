@@ -46,7 +46,7 @@ Scripts:
 - Diagnóstico (ventana visible): `scripts/label_print_agent.bat`.
 - Quitar: `scripts/label_print_agent_desinstalar.bat`.
 
-CORS del agente: el origen de la pestaña del navegador tiene que coincidir (p. ej. `http://192.168.10.240`, `http://emr.sytes.net:8080`, `http://dsachubut.sytes.net:8080`). Si usan otra URL, agregarla a `allowedOrigins` en `label_print_agent.config.json`.
+CORS del agente: el origen de la pestaña del navegador tiene que coincidir (p. ej. `http://192.168.10.240`, `http://emr.sytes.net:8080`). Si usan otra URL, agregarla a `allowedOrigins` en `label_print_agent.config.json`.
 
 ### Copiar a LABORATORIO (obligatorio, misma carpeta)
 
@@ -69,7 +69,7 @@ Ejemplo: `C:\EMR\label_print_agent\`
 4. Copiar los archivos de la tabla anterior a esa PC.
 5. Ejecutar **`label_print_agent_instalar.bat` una sola vez** (usuario de LABORATORIO). Debe aparecer un aviso de que ya está corriendo. No hace falta dejar ninguna ventana abierta.
 6. En el servidor EMR, `LIMS_LABEL_PRINTER_ENABLED` puede quedar `false` (ya no se usa HOST:9100 para el botón).
-7. Desde el navegador **en esa misma PC**, abrir el EMR (`http://192.168.10.240` o `http://dsachubut.sytes.net:8080`) e imprimir una etiqueta de prueba.
+7. Desde el navegador **en esa misma PC**, abrir el EMR (`http://192.168.10.240` o `http://emr.sytes.net:8080`) e imprimir una etiqueta de prueba.
 8. Verificar dimensiones, márgenes, Ñ/tildes, apellido largo, CAMA/GUARDIA.
 9. Si no imprime: ver `label_print_agent.log` en la misma carpeta, o correr `label_print_agent_reparar.bat`.
 10. Reimprimir y confirmar un segundo `AuditEvent` (`muestra_etiqueta_print`, `transport=local_agent`).

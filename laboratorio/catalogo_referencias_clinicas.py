@@ -318,14 +318,7 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="25",
         rmax="35",
     ),
-    # —— Perfil férrico ——
-    "CF": _r(
-        metodo="Colorimétrico",
-        unidad="µg/dL",
-        ref="250 - 450 µg/dL",
-        rmin="250",
-        rmax="450",
-    ),
+    # —— Perfil férrico —— medidos FERR/UIBC/FERRIT; CF/SAT_FE/TRANS calculados
     "FERR": _r(
         metodo="Colorimétrico",
         unidad="µg/dL",
@@ -333,12 +326,12 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="60",
         rmax="170",
     ),
-    "TRANS": _r(
-        metodo=_M_INMUNO,
-        unidad="mg/dL",
-        ref="200 - 360 mg/dL",
-        rmin="200",
-        rmax="360",
+    "UIBC": _r(
+        metodo="Colorimétrico",
+        unidad="µg/dL",
+        ref="110 - 370 µg/dL",
+        rmin="110",
+        rmax="370",
     ),
     "FERRIT": _r(
         metodo=_M_INMUNO,
@@ -347,12 +340,26 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="12",
         rmax="300",
     ),
+    "CF": _r(
+        metodo="Calculado",
+        unidad="µg/dL",
+        ref="250 - 450 µg/dL",
+        rmin="250",
+        rmax="450",
+    ),
     "SAT_FE": _r(
         metodo="Calculado",
         unidad="%",
         ref="20 - 50 %",
         rmin="20",
         rmax="50",
+    ),
+    "TRANS": _r(
+        metodo="Calculado",
+        unidad="mg/dL",
+        ref="200 - 360 mg/dL",
+        rmin="200",
+        rmax="360",
     ),
     # —— Orina completa ——
     "ORI_COLOR": _r(metodo="Inspección visual", ref="Amarillo claro"),
@@ -703,6 +710,14 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         unidad="ng/mL",
         ref="30 - 100 ng/mL",
         rmin="30",
+        rmax="100",
+    ),
+    # —— FiO2 (compartido art/ven) ——
+    "FIO2": _r(
+        metodo="Dato clínico / gasometría",
+        unidad="%",
+        ref="21 - 100 %",
+        rmin="21",
         rmax="100",
     ),
     # —— EAB arterial ——

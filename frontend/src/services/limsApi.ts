@@ -158,6 +158,25 @@ export async function getSolicitudExamen(id: number): Promise<SolicitudExamenLim
   return data;
 }
 
+export async function patchSolicitudExamenLims(
+  id: number,
+  body: {
+    paciente_id?: number;
+    medico_id?: number | null;
+    medico_externo_nombre?: string;
+    origen_solicitud?: string;
+    fecha_programada_toma?: string;
+    fecha_entrega_prometida?: string | null;
+    observaciones?: string;
+  }
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.patch<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${id}/`,
+    body
+  );
+  return data;
+}
+
 export async function patchEstadoObraSocialSolicitud(
   id: number,
   estado_obra_social: string
@@ -394,6 +413,23 @@ export async function getOrdenAbiertaPaciente(
     },
   });
   return data ?? null;
+}
+
+export type RestriccionEnsayoLims = {
+  bloqueado: boolean;
+  mensaje: string | null;
+};
+
+export type RestriccionesEnsayosLims = Record<string, RestriccionEnsayoLims>;
+
+export async function getRestriccionesEnsayosPaciente(
+  pacienteId: number
+): Promise<RestriccionesEnsayosLims> {
+  const { data } = await apiClient.get<RestriccionesEnsayosLims>(
+    `${LAB}/solicitudes/restricciones-ensayos/`,
+    { params: { paciente_id: pacienteId } }
+  );
+  return data ?? {};
 }
 
 export async function postMarcarDerivacion(
@@ -867,6 +903,65 @@ export async function patchPanelExamenLims(
   }>
 ): Promise<LimsPanelExamen> {
   const { data } = await apiClient.patch<LimsPanelExamen>(`${LAB}/paneles/${id}/`, body);
+  return data;
+}
+
+export type ContextoPaqueteMovil = 'GUARDIA' | 'AMBULATORIO' | 'INTERNACION';
+
+export interface PaqueteLabMovilWeb {
+  id: number;
+  codigo: string;
+  nombre: string;
+  contexto: ContextoPaqueteMovil;
+  contexto_display: string;
+  descripcion: string;
+  activo: boolean;
+  orden: number;
+  paneles_ids: number[];
+  examenes_ids: number[];
+  paneles_detalle: Array<{ id: number; codigo: string; nombre: string }>;
+  examenes_detalle: Array<{ id: number; codigo: string; nombre: string }>;
+}
+
+export async function listPaquetesLabMovil(params?: {
+  activo?: boolean;
+  contexto?: ContextoPaqueteMovil;
+  search?: string;
+}): Promise<PaqueteLabMovilWeb[]> {
+  const query: Record<string, string | number | undefined> = { page_size: 200 };
+  if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
+  if (params?.contexto) query.contexto = params.contexto;
+  if (params?.search) query.search = params.search;
+  return getPaginatedAll<PaqueteLabMovilWeb>(`${LAB}/paquetes-movil/`, query);
+}
+
+export async function createPaqueteLabMovil(body: {
+  codigo: string;
+  nombre: string;
+  contexto: ContextoPaqueteMovil;
+  descripcion?: string;
+  activo?: boolean;
+  orden?: number;
+  paneles_ids?: number[];
+  examenes_ids?: number[];
+}): Promise<PaqueteLabMovilWeb> {
+  const { data } = await apiClient.post<PaqueteLabMovilWeb>(`${LAB}/paquetes-movil/`, body);
+  return data;
+}
+
+export async function patchPaqueteLabMovil(
+  id: number,
+  body: Partial<{
+    nombre: string;
+    contexto: ContextoPaqueteMovil;
+    descripcion: string;
+    activo: boolean;
+    orden: number;
+    paneles_ids: number[];
+    examenes_ids: number[];
+  }>
+): Promise<PaqueteLabMovilWeb> {
+  const { data } = await apiClient.patch<PaqueteLabMovilWeb>(`${LAB}/paquetes-movil/${id}/`, body);
   return data;
 }
 

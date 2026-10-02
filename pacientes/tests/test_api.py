@@ -83,6 +83,16 @@ def _laboratorio_user(username):
     )
 
 
+def _bioquimico_user(username):
+    return User.objects.create_user(
+        username=username,
+        email=f"{username}@example.com",
+        password="x",
+        rol="bioquimico",
+        is_staff=False,
+    )
+
+
 @pytest.mark.django_db
 class TestPacienteAPICreacionIdentidadMinima:
     def test_post_sin_nombre_400(self):
@@ -292,6 +302,17 @@ class TestPacienteAPIPrivacidad:
         )
         assert response.status_code == status.HTTP_201_CREATED, response.data
         assert Paciente.objects.filter(dni="LAB-ALTA-1").exists()
+
+    def test_bioquimico_puede_crear_paciente(self):
+        client = APIClient()
+        client.force_authenticate(user=_bioquimico_user("bio.alta.create"))
+        response = client.post(
+            "/api/pacientes/",
+            _payload_create(dni="BIO-ALTA-1", fecha_nacimiento="1988-03-04"),
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        assert Paciente.objects.filter(dni="BIO-ALTA-1").exists()
 
     def test_laboratorio_no_puede_patch_paciente(self):
         paciente = Paciente.objects.create(dni="LAB-PATCH-1", nombre="L", apellido="Ab")

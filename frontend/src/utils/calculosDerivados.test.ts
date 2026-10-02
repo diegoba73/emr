@@ -29,4 +29,18 @@ describe('calculosDerivados Corte A', () => {
     const out = calcularDerivados({ BIL_T: 0.5, BIL_D: 0.8 });
     expect(out.BIL_I?.informe).toBe(RESULTADO_NO_CALCULABLE);
   });
+
+  it('perfil férrico calcula TIBC, saturación y transferrina', () => {
+    const out = calcularDerivados({ FERR: 100, UIBC: 250 });
+    expect(out.CF?.numerico).toBe(350);
+    expect(out.SAT_FE?.numerico).toBe(28.6);
+    expect(out.TRANS?.numerico).toBe(280);
+  });
+
+  it('perfil férrico incompleto marca no calculable', () => {
+    const out = calcularDerivados({ FERR: 100 });
+    expect(out.CF?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(out.SAT_FE?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(out.TRANS?.informe).toBe(RESULTADO_NO_CALCULABLE);
+  });
 });

@@ -833,6 +833,14 @@ class AtencionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='iniciar-guardia')
     def iniciar_guardia(self, request):
         """Inicia una atención de guardia cardiológica (walk-in o desde turno)."""
+        from medicos.ambito import user_medico_es_solo_ambulatorio
+
+        if user_medico_es_solo_ambulatorio(request.user):
+            return Response(
+                {'error': 'Tu perfil es solo ambulatorio: no podés iniciar atenciones de guardia.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         paciente_id = request.data.get('paciente_id')
         medico_id = request.data.get('medico_id')
         if not paciente_id:

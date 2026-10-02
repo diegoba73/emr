@@ -25,6 +25,7 @@ def test_tubo_heparina_eab():
     assert tubo_codigo_para_examen("HCO3_ART") == "HEPARINA"
     assert tubo_codigo_para_examen("BE_VEN") == "HEPARINA"
     assert tubo_codigo_para_examen("LACT") == "HEPARINA"
+    assert tubo_codigo_para_examen("FIO2") is None
 
 
 def test_tubo_orina_frasco():

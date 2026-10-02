@@ -282,13 +282,25 @@ class EstudioConsultaResumenSerializer(serializers.Serializer):
     descripcion_clinica = serializers.CharField(allow_blank=True)
 
 
+class PanelLaboratorioResumenSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    codigo = serializers.CharField(allow_null=True, allow_blank=True)
+    nombre = serializers.CharField()
+    tipos_examen_ids = serializers.ListField(child=serializers.IntegerField())
+
+
 class ResultadoLaboratorioResumenSerializer(serializers.Serializer):
     id = serializers.IntegerField()
+    tipo_examen = serializers.IntegerField(allow_null=True)
     tipo_examen_nombre = serializers.CharField(allow_null=True)
+    tipo_examen_codigo = serializers.CharField(allow_null=True, allow_blank=True)
+    tipo_examen_muestra_codigo = serializers.CharField(allow_null=True, allow_blank=True)
     valor_obtenido = serializers.CharField(allow_null=True, allow_blank=True)
     unidad = serializers.CharField(allow_null=True, allow_blank=True)
     estado = serializers.CharField(allow_null=True)
     es_patologico = serializers.BooleanField(allow_null=True)
+    examen = serializers.CharField(allow_null=True, required=False)
+    valor = serializers.CharField(allow_null=True, allow_blank=True, required=False)
 
 
 class SolicitudLaboratorioResumenSerializer(serializers.Serializer):
@@ -297,7 +309,12 @@ class SolicitudLaboratorioResumenSerializer(serializers.Serializer):
     estado = serializers.CharField()
     fecha_solicitud = serializers.DateTimeField()
     tipos_examen_nombres = serializers.ListField(child=serializers.CharField())
+    tipos_examen = serializers.ListField(child=serializers.IntegerField(), required=False)
     paneles_nombres = serializers.ListField(child=serializers.CharField())
+    paneles_resumen = PanelLaboratorioResumenSerializer(many=True, required=False)
+    orden_grupos_informe = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
     resultados = ResultadoLaboratorioResumenSerializer(many=True)
 
 
@@ -369,31 +386,30 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
 
     def get_solicitudes_laboratorio(self, obj):
         from laboratorio.models import SolicitudExamen
+        from laboratorio.solicitud_resumen_informe import (
+            PREFETCH_SOLICITUD_RESUMEN_INFORME,
+            paneles_resumen_solicitud,
+            resultado_resumen_informe,
+        )
+
         solicitudes = (
             SolicitudExamen.objects.filter(consulta_hc_id=obj.pk)
-            .prefetch_related('tipos_examen', 'paneles', 'resultados__tipo_examen')
+            .prefetch_related(*PREFETCH_SOLICITUD_RESUMEN_INFORME)
             .order_by('-fecha_solicitud')
         )
         data = []
         for sol in solicitudes:
-            resultados = []
-            for res in sol.resultados.all():
-                valor = (res.valor_obtenido or '').strip()
-                resultados.append({
-                    'id': res.id,
-                    'tipo_examen_nombre': res.tipo_examen.nombre if res.tipo_examen else None,
-                    'valor_obtenido': res.valor_obtenido,
-                    'unidad': (res.unidad or getattr(res.tipo_examen, 'unidad', None) or '') if res.tipo_examen else res.unidad,
-                    'estado': 'CARGADO' if valor else 'PENDIENTE',
-                    'es_patologico': res.es_patologico,
-                })
+            resultados = [resultado_resumen_informe(res) for res in sol.resultados.all()]
             data.append({
                 'id': sol.id,
                 'numero': sol.numero,
                 'estado': sol.estado,
                 'fecha_solicitud': sol.fecha_solicitud,
+                'tipos_examen': [te.id for te in sol.tipos_examen.all()],
                 'tipos_examen_nombres': [te.nombre for te in sol.tipos_examen.all()],
                 'paneles_nombres': [p.nombre for p in sol.paneles.all()],
+                'paneles_resumen': paneles_resumen_solicitud(sol),
+                'orden_grupos_informe': list(sol.orden_grupos_informe or []),
                 'resultados': resultados,
             })
         return SolicitudLaboratorioResumenSerializer(data, many=True).data

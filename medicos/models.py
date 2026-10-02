@@ -18,6 +18,13 @@ class Especialidad(models.Model):
 
 # Modelo para los Médicos
 class Medico(models.Model):
+    AMBITO_COMPLETO = 'COMPLETO'
+    AMBITO_AMBULATORIO = 'AMBULATORIO'
+    AMBITO_ATENCION_CHOICES = [
+        (AMBITO_COMPLETO, 'Completo (ambulatorio, guardia e internación)'),
+        (AMBITO_AMBULATORIO, 'Solo ambulatorio'),
+    ]
+
     # Relación con el usuario del sistema
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -45,12 +52,24 @@ class Medico(models.Model):
         verbose_name="Especialidad"
     )
 
+    ambito_atencion = models.CharField(
+        max_length=20,
+        choices=AMBITO_ATENCION_CHOICES,
+        default=AMBITO_COMPLETO,
+        db_index=True,
+        verbose_name="Ámbito de atención",
+        help_text="COMPLETO ve guardia e internación; AMBULATORIO solo consultorio.",
+    )
+
     # Campos adicionales para futura integración con IA (ej. áreas de interés, datos de rendimiento)
     areas_interes_ia = models.TextField(blank=True, null=True, verbose_name="Áreas de Interés para IA (Ej. Patologías específicas)")
     # Podríamos añadir campos para un "perfil de rendimiento" o "experiencia en diagnósticos" si los datos están disponibles
 
     fecha_registro = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Registro")
     ultima_actualizacion = models.DateTimeField(auto_now=True, verbose_name="Última Actualización")
+
+    def es_solo_ambulatorio(self) -> bool:
+        return self.ambito_atencion == self.AMBITO_AMBULATORIO
 
     class Meta:
         verbose_name = "Médico"

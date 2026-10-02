@@ -44,8 +44,10 @@ from usuarios.roles import ROLES_LECTURA_OPERATIVA
 
 _ROLES_LECTURA_GLOBAL = frozenset({"admin", "medico", "secretaria", "enfermeria"})
 _ROLES_EDICION_PACIENTE = frozenset({"admin", "secretaria", "medico"})
-# Alta: mismos editores + laboratorio (ficha mínima para pedidos LIMS).
-_ROLES_ALTA_PACIENTE = frozenset({"admin", "secretaria", "medico", "laboratorio"})
+# Alta: mismos editores + operadores LIMS (ficha mínima para pedidos).
+_ROLES_ALTA_PACIENTE = frozenset(
+    {"admin", "secretaria", "medico", "laboratorio", "bioquimico"}
+)
 
 
 def _user_rol(user) -> str:

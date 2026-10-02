@@ -70,6 +70,9 @@ export default function Home() {
       </View>
 
       <Action title="Informes de laboratorio" onPress={() => router.push('/informes')} />
+      {user?.puede_pedir_lab && (
+        <Action title="Pedir laboratorio" onPress={() => router.push('/lab')} />
+      )}
 
       {user?.rol === 'paciente' && (
         <Action title="Reservar un turno" onPress={() => router.push('/reservar')} />

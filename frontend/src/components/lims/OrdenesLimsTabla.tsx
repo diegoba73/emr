@@ -68,7 +68,6 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
     <Table size="small">
       <TableHead>
         <TableRow>
-          <TableCell>Tipo</TableCell>
           <TableCell>Número</TableCell>
           <TableCell>Paciente</TableCell>
           <TableCell>Médico</TableCell>
@@ -82,7 +81,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={modoEntrega ? 8 : 9}>
+            <TableCell colSpan={modoEntrega ? 7 : 8}>
               <Typography color="text.secondary">{emptyMessage}</Typography>
             </TableCell>
           </TableRow>
@@ -100,12 +99,17 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
             return (
               <TableRow key={r.key} hover>
                 <TableCell>
-                  <Chip
-                    size="small"
-                    label={r.tipo === 'MICROBIOLOGIA' ? 'Microbiología' : 'Lab. Clínico'}
-                    color={r.tipo === 'MICROBIOLOGIA' ? 'secondary' : 'primary'}
-                    variant="outlined"
-                  />
+                  <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Typography component="span" variant="body2" fontWeight={600}>
+                      {r.numero || r.id}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={r.tipo === 'MICROBIOLOGIA' ? 'Microbiología' : 'Lab. Clínico'}
+                      color={r.tipo === 'MICROBIOLOGIA' ? 'secondary' : 'primary'}
+                      variant="outlined"
+                    />
+                  </Stack>
                   {r.tipo === 'MICROBIOLOGIA' && r.cultivo_nombre ? (
                     <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
                       {r.cultivo_nombre}
@@ -113,7 +117,6 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     </Typography>
                   ) : null}
                 </TableCell>
-                <TableCell>{r.numero || r.id}</TableCell>
                 <TableCell>
                   {r.paciente_nombre}
                   {r.paciente_dni ? (

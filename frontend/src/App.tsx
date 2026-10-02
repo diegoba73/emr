@@ -46,6 +46,7 @@ import RecepcionMuestrasPage from './pages/laboratorio/RecepcionMuestrasPage';
 import TiposMuestraCatalogo from './pages/laboratorio/TiposMuestraCatalogo';
 import ExamenesCatalogo from './pages/laboratorio/ExamenesCatalogo';
 import PanelesCatalogo from './pages/laboratorio/PanelesCatalogo';
+import PaquetesMovilCatalogo from './pages/laboratorio/PaquetesMovilCatalogo';
 import MicrobiologiaHub from './pages/laboratorio/MicrobiologiaHub';
 import MicrobiologiaEstudios from './pages/laboratorio/MicrobiologiaEstudios';
 import MicrobiologiaEstudioDetalle from './pages/laboratorio/MicrobiologiaEstudioDetalle';
@@ -68,6 +69,8 @@ import {
   canAccessAuditoria,
   canAccessBiDashboard,
   canAccessCatalogosClinicos,
+  canAccessGuardia,
+  canAccessMedicos,
   canAccessPaciente360,
   canAccessPacientes,
   canAccessInternacion,
@@ -344,7 +347,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessAtenciones}
+                canAccess={canAccessGuardia}
               >
                 <GuardiaPage />
               </ProtectedRoute>
@@ -441,7 +444,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                requiredRole="ADMIN"
+                canAccess={canAccessMedicos}
               >
                 <Medicos />
               </ProtectedRoute>
@@ -697,6 +700,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsCatalogos}
               >
                 <PanelesCatalogo />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/catalogos/paquetes-movil"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsCatalogos}
+              >
+                <PaquetesMovilCatalogo />
               </ProtectedRoute>
             }
           />

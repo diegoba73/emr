@@ -35,6 +35,8 @@ import { ESTADO_LABELS, MODALIDAD_OPTIONS } from '../../estudios/constants';
 import type { ConsultaDetalle } from '../../../types';
 import type { EstudioComplementario, TipoEstudioComplementario } from '../../../types/estudios';
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
+import ResultadosOrdenLista from '../../../components/lims/ResultadosOrdenLista';
+import type { ResultadoExamenLims } from '../../../types/lims';
 import {
   loadConsultaPedidosDraft,
   loadGuardiaPendingDraft,
@@ -716,30 +718,32 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                   {[...sol.tipos_examen_nombres, ...sol.paneles_nombres.map((p) => `Panel: ${p}`)].join(' · ') || '—'}
                 </Typography>
                 {sol.resultados.length > 0 ? (
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Examen</TableCell>
-                        <TableCell>Resultado</TableCell>
-                        <TableCell>Estado</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {sol.resultados.map((res) => (
-                        <TableRow key={res.id}>
-                          <TableCell>{res.tipo_examen_nombre || '—'}</TableCell>
-                          <TableCell>
-                            {res.valor_obtenido || '—'}
-                            {res.unidad ? ` ${res.unidad}` : ''}
-                            {res.es_patologico ? (
-                              <Chip label="Fuera de rango" size="small" color="warning" sx={{ ml: 1 }} />
-                            ) : null}
-                          </TableCell>
-                          <TableCell>{res.estado || '—'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <ResultadosOrdenLista
+                    modo="clinico"
+                    orden={{
+                      tipos_examen: sol.tipos_examen,
+                      paneles_resumen: (sol.paneles_resumen ?? []).map((p) => ({
+                        id: p.id,
+                        codigo: p.codigo || '',
+                        nombre: p.nombre,
+                        tipos_examen_ids: p.tipos_examen_ids,
+                      })),
+                      orden_grupos_informe: sol.orden_grupos_informe,
+                    }}
+                    resultados={sol.resultados.map(
+                      (res): ResultadoExamenLims => ({
+                        id: res.id,
+                        solicitud: sol.id,
+                        tipo_examen: res.tipo_examen ?? 0,
+                        tipo_examen_nombre: res.tipo_examen_nombre ?? undefined,
+                        tipo_examen_codigo: res.tipo_examen_codigo ?? undefined,
+                        tipo_examen_muestra_codigo: res.tipo_examen_muestra_codigo ?? undefined,
+                        valor_obtenido: res.valor_obtenido ?? '',
+                        unidad: res.unidad ?? '',
+                        es_patologico: Boolean(res.es_patologico),
+                      })
+                    )}
+                  />
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     Resultados pendientes.

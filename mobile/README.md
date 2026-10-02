@@ -45,6 +45,12 @@ npx expo export --platform android --platform ios
 ## Backend y recordatorios
 
 La nueva API se monta en `/api/movil/`. Usa Bearer móvil independiente del acceso web.
+
+### Pedidos lab (médicos)
+
+Con ficha `Medico` vinculada: pantalla **Pedir laboratorio**.
+Paquetes por contexto (guardia / ambulatorio / internación) en Admin → *Paquetes lab móvil*.
+Favoritos por médico en la app; siempre se puede buscar y agregar exámenes/paneles sueltos.
 El backend guarda solamente un hash del token. Cerrar sesión revoca la sesión y desactiva sus dispositivos.
 
 Antes de actualizar producción: respaldar la base, desplegar el código completo de agenda de 20 minutos y móvil, construir la imagen backend y ejecutar migraciones en esa imagen.

@@ -3,6 +3,7 @@
  */
 
 import type { LimsTipoExamen } from '../types/lims';
+import { esCodigoCalculado } from './calculosDerivados';
 
 export type FormatoInformeEntrada = 'decimal1' | 'integer' | 'absolute_int' | 'absolute_millions';
 
@@ -114,15 +115,8 @@ export function isFormulaPercent(te?: LimsTipoExamen | null, codigoFallback?: st
 
 export function isCalculadoEntrada(te?: LimsTipoExamen | null, codigoFallback?: string | null): boolean {
   if (te?.modo_entrada === 'CALCULADO') return true;
-  const c = (te?.codigo ?? codigoFallback ?? '').trim().toUpperCase();
-  return (
-    c === 'LDL' ||
-    c === 'VLDL' ||
-    c === 'COL_NO_LDL' ||
-    c === 'COL_RESID' ||
-    c === 'RATIO_CT_HDL' ||
-    c === 'BIL_I'
-  );
+  // Fallback alineado a laboratorio/calculos_derivados.CODIGOS_CALCULADOS
+  return esCodigoCalculado(te?.codigo ?? codigoFallback);
 }
 
 function parsePositiveInteger(raw: string): number | null {

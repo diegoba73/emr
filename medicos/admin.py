@@ -24,8 +24,8 @@ class ExcepcionMedicoInline(admin.TabularInline):
 
 @admin.register(Medico)
 class MedicoAdmin(admin.ModelAdmin):
-    list_display = ['matricula', 'apellido', 'especialidad']
-    list_filter = ('especialidad', 'fecha_registro')
+    list_display = ['matricula', 'apellido', 'especialidad', 'ambito_atencion']
+    list_filter = ('especialidad', 'ambito_atencion', 'fecha_registro')
     search_fields = (
         'nombre',
         'apellido',
@@ -44,7 +44,7 @@ class MedicoAdmin(admin.ModelAdmin):
             'fields': ('user',)
         }),
         ('Información Profesional', {
-            'fields': ('nombre', 'apellido', 'matricula', 'especialidad')
+            'fields': ('nombre', 'apellido', 'matricula', 'especialidad', 'ambito_atencion')
         }),
         ('Información Adicional', {
             'fields': ('areas_interes_ia',),

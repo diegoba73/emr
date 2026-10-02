@@ -200,7 +200,7 @@ REACTIVOS_CATALOGO_CONFIRMADOS: list[ReactivoCatalogoRow] = [
         "equipo_codigo": "CM260",
         "proveedor": "Wiener",
         "unidad": "cartucho",
-        "lis_codigos": ["CF"],
+        "lis_codigos": ["UIBC"],
         "estado": "CONFIRMADO",
     },
     {

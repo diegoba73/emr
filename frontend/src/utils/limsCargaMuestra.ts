@@ -316,7 +316,8 @@ function patchValorCalculado(
 }
 
 /**
- * Rellena índices hemo (VCM/HCM/CHCM) y parámetros calculados (lípidos / BIL_I).
+ * Rellena índices hemo (VCM/HCM/CHCM) y parámetros calculados
+ * (lípidos / BIL_I / perfil férrico).
  * VCM/HCM/CHCM respetan edición manual; los CALCULADO siempre se sobrescriben.
  */
 export function applyAutofillVcmChcm(

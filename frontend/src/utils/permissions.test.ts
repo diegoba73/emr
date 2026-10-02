@@ -8,6 +8,7 @@ import {
   canAccessPaciente360,
   canAccessSolicitudes,
   canAccessInternacion,
+  canAccessGuardia,
   canManageInternacionInfra,
   canOperateInternacionClinica,
   canAdmitirInternacion,
@@ -16,6 +17,8 @@ import {
   canWriteHcEnfermeria,
   canWriteHcKinesiologia,
   canCreatePaciente,
+  canCreateMedico,
+  canAccessMedicos,
   canUpdatePacienteDemographics,
   canDownloadArchivoMedico,
   canWriteArchivoMedico,
@@ -73,17 +76,31 @@ describe('canAccessPacientes', () => {
 });
 
 describe('canCreatePaciente', () => {
-  it('permite admin, secretaría, médico y laboratorio', () => {
+  it('permite admin, secretaría, médico, laboratorio y bioquímico', () => {
     expect(canCreatePaciente(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'LABORATORIO' }))).toBe(true);
+    expect(canCreatePaciente(user({ rol: 'BIOQUIMICO' }))).toBe(true);
   });
 
-  it('no permite paciente, enfermería ni bioquímico', () => {
+  it('no permite paciente ni enfermería', () => {
     expect(canCreatePaciente(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canCreatePaciente(user({ rol: 'ENFERMERIA' }))).toBe(false);
-    expect(canCreatePaciente(user({ rol: 'BIOQUIMICO' }))).toBe(false);
+  });
+});
+
+describe('canCreateMedico / canAccessMedicos', () => {
+  it('permite admin, secretaría, laboratorio y bioquímico', () => {
+    expect(canCreateMedico(user({ rol: 'ADMIN' }))).toBe(true);
+    expect(canAccessMedicos(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canCreateMedico(user({ rol: 'LABORATORIO' }))).toBe(true);
+    expect(canCreateMedico(user({ rol: 'BIOQUIMICO' }))).toBe(true);
+  });
+
+  it('bloquea enfermería y paciente', () => {
+    expect(canAccessMedicos(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canCreateMedico(user({ rol: 'PACIENTE' }))).toBe(false);
   });
 });
 
@@ -260,10 +277,18 @@ describe('canAccessInternacion', () => {
     expect(canAccessInternacion(user({ rol: 'KINESIOLOGO' }))).toBe(true);
   });
 
-  it('bloquea paciente, laboratorio y anónimo', () => {
+  it('bloquea paciente, laboratorio, anónimo y médico solo ambulatorio', () => {
     expect(canAccessInternacion(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canAccessInternacion(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canAccessInternacion(null)).toBe(false);
+    expect(
+      canAccessInternacion(
+        user({
+          rol: 'MEDICO',
+          medico: { id: 1, matricula: 'M1', ambito_atencion: 'AMBULATORIO' },
+        })
+      )
+    ).toBe(false);
   });
 
   it('secretaría no gestiona infraestructura ni evoluciones clínicas', () => {
@@ -278,6 +303,13 @@ describe('canAccessInternacion', () => {
     expect(canDarAltaInternacion(user({ rol: 'ENFERMERIA' }))).toBe(false);
     expect(canDarAltaInternacion(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canDarAltaInternacion(user({ rol: 'ADMIN' }))).toBe(true);
+    const amb = user({
+      rol: 'MEDICO',
+      medico: { id: 2, matricula: 'M2', ambito_atencion: 'AMBULATORIO' },
+    });
+    expect(canManageInternacionInfra(amb)).toBe(false);
+    expect(canDarAltaInternacion(amb)).toBe(false);
+    expect(canWriteHcMedico(amb)).toBe(false);
   });
 
   it('escritura de formularios HC según rol', () => {
@@ -288,6 +320,21 @@ describe('canAccessInternacion', () => {
     expect(canWriteHcKinesiologia(user({ rol: 'KINESIOLOGO' }))).toBe(true);
     expect(canWriteHcKinesiologia(user({ rol: 'MEDICO' }))).toBe(false);
     expect(canOperateInternacionClinica(user({ rol: 'KINESIOLOGO' }))).toBe(false);
+  });
+});
+
+describe('canAccessGuardia', () => {
+  it('permite médico completo y enfermería; bloquea solo ambulatorio', () => {
+    expect(canAccessGuardia(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canAccessGuardia(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(
+      canAccessGuardia(
+        user({
+          rol: 'MEDICO',
+          medico: { id: 1, matricula: 'M1', ambito_atencion: 'AMBULATORIO' },
+        })
+      )
+    ).toBe(false);
   });
 });
 

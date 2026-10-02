@@ -304,6 +304,8 @@ def agregar_examenes_a_solicitud(
     solicitud: SolicitudExamen,
     examenes_ids: Iterable[int] | None = None,
     paneles_ids: Iterable[int] | None = None,
+    *,
+    user=None,
 ) -> SolicitudExamen:
     """
     Agrega paneles/exámenes faltantes a una orden.
@@ -311,7 +313,10 @@ def agregar_examenes_a_solicitud(
     - Sin etiquetas (orden abierta): siempre permitido.
     - Con etiquetas o en curso: solo si no hace falta un tubo nuevo.
     - FINALIZADO: rechazado.
+    - Frecuencia PROBNP: ver restricciones_frecuencia (salvo lab/bioquímico).
     """
+    from laboratorio.restricciones_frecuencia import assert_puede_agregar_probnp
+
     sol = (
         SolicitudExamen.objects.select_for_update()
         .prefetch_related("muestras", "tipos_examen", "paneles", "resultados")
@@ -325,6 +330,12 @@ def agregar_examenes_a_solicitud(
         )
 
     tipos_nuevos, paneles_nuevos = _resolver_tipo_examen_ids(examenes_ids or [], paneles_ids or [])
+    assert_puede_agregar_probnp(
+        user,
+        sol.paciente_id,
+        tipos_nuevos,
+        exclude_solicitud_id=sol.pk,
+    )
     existentes = set(sol.resultados.values_list("tipo_examen_id", flat=True))
 
     if not orden_esta_abierta(sol) and orden_tiene_muestras_activas(sol):

@@ -125,17 +125,16 @@ class Command(BaseCommand):
             codigo = item["codigo"]
             muestra = muestras[item["muestra"]]
             tubo_codigo = tubo_codigo_para_examen(codigo, item.get("muestra"))
-            tubo = contenedores.get(tubo_codigo)
+            tubo = contenedores.get(tubo_codigo) if tubo_codigo else None
             defaults = {
                 "nombre": item["nombre"],
                 "tipo_muestra_requerida": muestra,
                 "tipo_resultado": item.get("tipo_resultado", "NUMERICO"),
                 "abreviatura": item.get("abreviatura", "") or "",
                 "activo": True,
+                "tipo_contenedor": tubo,
                 **self._referencia_defaults(codigo),
             }
-            if tubo is not None:
-                defaults["tipo_contenedor"] = tubo
             if dry_run:
                 obj, _ = TipoExamen.objects.get_or_create(codigo=codigo, defaults=defaults)
             else:
@@ -144,11 +143,11 @@ class Command(BaseCommand):
                     defaults=defaults,
                 )
                 if created:
-                    self.stdout.write(f"  Examen {codigo}: creado ({tubo_codigo})")
-                elif tubo is not None and obj.tipo_contenedor_id != tubo.pk:
+                    self.stdout.write(f"  Examen {codigo}: creado ({tubo_codigo or 'sin tubo'})")
+                elif obj.tipo_contenedor_id != (tubo.pk if tubo else None):
                     obj.tipo_contenedor = tubo
                     obj.save(update_fields=["tipo_contenedor"])
-                    self.stdout.write(f"  Examen {codigo}: tubo → {tubo_codigo}")
+                    self.stdout.write(f"  Examen {codigo}: tubo → {tubo_codigo or 'sin tubo'}")
             out[codigo] = obj
         return out
 

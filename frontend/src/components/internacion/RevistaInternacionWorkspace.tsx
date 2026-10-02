@@ -27,6 +27,8 @@ import { canOpenDetalleOrdenLab, pathDetalleOrdenLab } from '../../utils/limsAcc
 import { withNavBack } from '../../utils/navBack';
 import RevistaHcDiarioAccordions from './hc/RevistaHcDiarioAccordions';
 import NuevaOrdenLimsDialog from '../lims/NuevaOrdenLimsDialog';
+import ResultadosOrdenLista from '../lims/ResultadosOrdenLista';
+import type { ResultadoExamenLims } from '../../types/lims';
 import {
   createEstudioComplementario,
   listTiposEstudioComplementario,
@@ -435,24 +437,37 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                   </Stack>
                   {abierto && (
                     <Box sx={{ mt: 1 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography variant="caption" color="text.secondary" display="block" mb={1}>
                         {[...lab.examenes, ...lab.paneles.map((p) => `Panel: ${p}`)].join(' · ') || '—'}
                       </Typography>
-                      {lab.resultados.map((r) => (
-                        <Typography
-                          key={r.id}
-                          variant="body2"
-                          sx={{
-                            color: r.es_patologico ? 'error.main' : 'text.primary',
-                            fontWeight: r.es_patologico ? 600 : 400,
+                      {lab.resultados.length > 0 ? (
+                        <ResultadosOrdenLista
+                          modo="clinico"
+                          orden={{
+                            tipos_examen: lab.tipos_examen,
+                            paneles_resumen: (lab.paneles_resumen ?? []).map((p) => ({
+                              id: p.id,
+                              codigo: p.codigo || '',
+                              nombre: p.nombre,
+                              tipos_examen_ids: p.tipos_examen_ids,
+                            })),
+                            orden_grupos_informe: lab.orden_grupos_informe,
                           }}
-                        >
-                          {r.examen || 'Examen'}: {r.valor}
-                          {r.unidad ? ` ${r.unidad}` : ''}
-                          {r.es_patologico ? ' (fuera de rango)' : ''}
-                        </Typography>
-                      ))}
-                      {!lab.resultados.length && (
+                          resultados={lab.resultados.map(
+                            (r): ResultadoExamenLims => ({
+                              id: r.id,
+                              solicitud: lab.id,
+                              tipo_examen: r.tipo_examen ?? 0,
+                              tipo_examen_nombre: r.tipo_examen_nombre ?? r.examen ?? undefined,
+                              tipo_examen_codigo: r.tipo_examen_codigo ?? undefined,
+                              tipo_examen_muestra_codigo: r.tipo_examen_muestra_codigo ?? undefined,
+                              valor_obtenido: r.valor_obtenido ?? r.valor ?? '',
+                              unidad: r.unidad ?? '',
+                              es_patologico: Boolean(r.es_patologico),
+                            })
+                          )}
+                        />
+                      ) : (
                         <Typography variant="body2" color="text.secondary">
                           Sin resultados cargados todavía.
                         </Typography>

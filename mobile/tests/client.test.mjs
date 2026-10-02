@@ -38,11 +38,22 @@ test('401 invalidates session without retrying mutations',async()=>{
  await assert.rejects(client('/turnos/','POST',{}),ApiError);
  assert.equal(calls,1);assert.equal(expired,true);
 });
-test('transport failure warns to refresh and never retries booking',async()=>{
+test('transport failure asks to retry without turnos-specific copy',async()=>{
  let calls=0;
  const client=createClient('https://example.test',()=>null,()=>{},async()=>{calls++;throw new Error('offline');});
- await assert.rejects(client('/turnos/','POST',{}),/actualizá tus turnos/);
- assert.equal(calls,1);
+ await assert.rejects(client('/turnos/','POST',{}),/Verificá tu conexión/);
+ await assert.rejects(client('/informes/1/pdf/'),/Verificá tu conexión/);
+ assert.equal(calls,2);
+});
+test('404 prefers API detail and stays resource-agnostic',async()=>{
+ const client=createClient('https://example.test',()=>null,()=>{},async(url)=>{
+  if(String(url).includes('/informes/')) {
+   return new Response(JSON.stringify({detail:'Informe no encontrado.'}),{status:404});
+  }
+  return new Response('{}',{status:404});
+ });
+ await assert.rejects(client('/informes/9/pdf/?format=base64'),/Informe no encontrado/);
+ await assert.rejects(client('/turnos/9/'),/No se encontró lo solicitado/);
 });
 test('local HTTP requires explicit opt-in and only accepts private IPv4',async()=>{
  const fetcher=async()=>new Response('{}',{status:200});

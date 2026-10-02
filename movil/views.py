@@ -12,7 +12,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from .authentication import AutenticacionMovil, RolMovil, token_hash
 from .models import SesionMovil, DispositivoPush
-from .roles import ROLES_MOVIL, ROLES_MOVIL_TURNOS
+from .roles import ROLES_MOVIL, ROLES_MOVIL_PEDIR_LAB, ROLES_MOVIL_TURNOS
 from pacientes.services import ensure_paciente_linked_to_user
 from medicos.views import MedicoViewSet
 from turnos.views import TurnoViewSet, _safe_audit
@@ -22,18 +22,27 @@ from auditoria.snapshot import safe_model_snapshot
 
 
 def perfil(user):
+    from medicos.ambito import ambito_atencion_de, contextos_lab_para_api, contextos_lab_permitidos
+
     paciente = ensure_paciente_linked_to_user(user) if str(user.rol).lower() == 'paciente' else None
     medico = getattr(user, 'medico', None)
     rol = str(user.rol).lower()
+    ambito = ambito_atencion_de(medico) if medico is not None else None
     return {
         'id': user.pk,
         'nombre': user.get_full_name() or user.username,
         'rol': rol,
         'medico_id': getattr(medico, 'pk', None),
         'paciente_id': getattr(paciente, 'pk', None),
+        'ambito_atencion': ambito,
+        'contextos_lab_permitidos': list(contextos_lab_permitidos(medico)) if medico else [],
+        'contextos_lab': contextos_lab_para_api(medico) if medico else [],
         'puede_turnos': rol in ROLES_MOVIL_TURNOS,
         'puede_informes': True,
         'puede_validar_informes': rol == 'bioquimico',
+        'puede_pedir_lab': rol in ROLES_MOVIL_PEDIR_LAB and medico is not None,
+        'puede_guardia': rol == 'medico' and medico is not None and ambito != 'AMBULATORIO',
+        'puede_internacion': rol == 'medico' and medico is not None and ambito != 'AMBULATORIO',
     }
 
 

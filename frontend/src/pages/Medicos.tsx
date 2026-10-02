@@ -29,7 +29,12 @@ import {
   Search,
 } from '@mui/icons-material';
 import { useData } from '../contexts/DataContext';
-import { normalizeRol } from '../utils/permissions';
+import {
+  canAccessMedicos,
+  canCreateMedico,
+  isLaboratorioRole,
+  normalizeRol,
+} from '../utils/permissions';
 import { Medico, Especialidad } from '../types';
 import {
   getMedicos,
@@ -54,21 +59,27 @@ const Medicos: React.FC = () => {
     apellido: '',
     matricula: '',
     especialidad_id: '',
+    ambito_atencion: 'COMPLETO' as 'COMPLETO' | 'AMBULATORIO',
     telefono: '',
     email: '',
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Verificar permisos - solo admin
-  const isAdmin = normalizeRol(currentUser) === 'admin' || Boolean(currentUser?.is_superuser);
+  // Admin/secretaría/lab/bio pueden gestionar altas; delete solo admin/staff EMR.
+  const canAccess = canAccessMedicos(currentUser);
+  const canCreate = canCreateMedico(currentUser);
+  const canDelete =
+    normalizeRol(currentUser) === 'admin' ||
+    Boolean(currentUser?.is_superuser) ||
+    (Boolean(currentUser?.is_staff) && !isLaboratorioRole(currentUser));
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!canAccess) {
       return;
     }
     loadData();
-  }, [isAdmin]);
+  }, [canAccess]);
 
   const loadData = async () => {
     try {
@@ -112,6 +123,7 @@ const Medicos: React.FC = () => {
         apellido: medico.apellido || '',
         matricula: medico.matricula || '',
         especialidad_id: medico.especialidad?.id?.toString() || '',
+        ambito_atencion: medico.ambito_atencion === 'AMBULATORIO' ? 'AMBULATORIO' : 'COMPLETO',
         telefono: medico.telefono || '',
         email: medico.email || '',
       });
@@ -122,6 +134,7 @@ const Medicos: React.FC = () => {
         apellido: '',
         matricula: '',
         especialidad_id: '',
+        ambito_atencion: 'COMPLETO',
         telefono: '',
         email: '',
       });
@@ -176,10 +189,12 @@ const Medicos: React.FC = () => {
     }
   };
 
-  if (!isAdmin) {
+  if (!canAccess) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">No tiene permisos para acceder a esta sección. Solo los administradores pueden gestionar médicos.</Alert>
+        <Alert severity="error">
+          No tiene permisos para acceder a esta sección.
+        </Alert>
       </Box>
     );
   }
@@ -198,13 +213,15 @@ const Medicos: React.FC = () => {
         <Typography variant="h4" fontWeight={600}>
           Médicos
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => handleOpenDialog()}
-        >
-          Nuevo Médico
-        </Button>
+        {canCreate && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => handleOpenDialog()}
+          >
+            Nuevo Médico
+          </Button>
+        )}
       </Box>
 
       <Paper sx={{ mb: 2 }}>
@@ -230,6 +247,7 @@ const Medicos: React.FC = () => {
               <TableCell><strong>Apellido</strong></TableCell>
               <TableCell><strong>Matrícula</strong></TableCell>
               <TableCell><strong>Especialidad</strong></TableCell>
+              <TableCell><strong>Ámbito</strong></TableCell>
               <TableCell><strong>Teléfono</strong></TableCell>
               <TableCell><strong>Email</strong></TableCell>
               <TableCell><strong>Acciones</strong></TableCell>
@@ -238,7 +256,7 @@ const Medicos: React.FC = () => {
           <TableBody>
             {paginatedMedicos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
                     {searchTerm ? 'No se encontraron médicos' : 'No hay médicos registrados'}
                   </Typography>
@@ -261,23 +279,39 @@ const Medicos: React.FC = () => {
                       '-'
                     )}
                   </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={
+                        medico.ambito_atencion === 'AMBULATORIO'
+                          ? 'Solo ambulatorio'
+                          : 'Completo'
+                      }
+                      size="small"
+                      variant="outlined"
+                      color={medico.ambito_atencion === 'AMBULATORIO' ? 'default' : 'success'}
+                    />
+                  </TableCell>
                   <TableCell>{medico.telefono || '-'}</TableCell>
                   <TableCell>{medico.email || '-'}</TableCell>
                   <TableCell>
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      onClick={() => handleOpenDialog(medico)}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(medico.id)}
-                    >
-                      <Delete />
-                    </IconButton>
+                    {canCreate && (
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleOpenDialog(medico)}
+                      >
+                        <Edit />
+                      </IconButton>
+                    )}
+                    {canDelete && (
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(medico.id)}
+                      >
+                        <Delete />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
@@ -343,6 +377,22 @@ const Medicos: React.FC = () => {
                   {esp.nombre}
                 </MenuItem>
               ))}
+            </TextField>
+            <TextField
+              select
+              label="Ámbito de atención"
+              value={formData.ambito_atencion}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  ambito_atencion: e.target.value as 'COMPLETO' | 'AMBULATORIO',
+                })
+              }
+              fullWidth
+              helperText="Solo ambulatorio oculta Guardia e Internación en web y app móvil."
+            >
+              <MenuItem value="COMPLETO">Completo (ambulatorio, guardia e internación)</MenuItem>
+              <MenuItem value="AMBULATORIO">Solo ambulatorio</MenuItem>
             </TextField>
             <TextField
               label="Teléfono"

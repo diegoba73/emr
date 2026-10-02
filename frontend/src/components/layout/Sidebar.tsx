@@ -46,6 +46,8 @@ import {
   canAccessAuditoria,
   canAccessBiDashboard,
   canAccessCatalogosClinicos,
+  canAccessGuardia,
+  canAccessMedicos,
   canAccessPacientes,
   canAccessPortal,
   canAccessPortalDocumentos,
@@ -85,9 +87,10 @@ export interface NavItem {
 const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
+  { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', canAccess: canAccessMedicos },
   { text: 'Horarios de atención', icon: <CalendarIcon />, path: '/horarios-medicos', canAccess: canManageHorarios },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
-  { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessAtenciones },
+  { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessGuardia },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },
   {
     text: 'Laboratorio',
@@ -117,7 +120,6 @@ const portalItems: NavItem[] = [
 
 const adminOnly: NavItem[] = [
   { text: 'Administración avanzada', icon: <CatalogIcon />, path: '/api/administracion/', roles: ['admin'] },
-  { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios', roles: ['admin'] },
   { text: 'Recursos', icon: <MeetingRoomIcon />, path: '/recursos', roles: ['admin'] },
   { text: 'Auditoría', icon: <AuditIcon />, path: '/auditoria', canAccess: canAccessAuditoria },
@@ -138,6 +140,7 @@ const labCatalogItems: NavItem[] = [
   { text: 'Exámenes', icon: <CatalogIcon />, path: '/laboratorio/catalogos/examenes', canAccess: canAccessLimsCatalogos },
   { text: 'Tipos de muestra', icon: <CatalogIcon />, path: '/laboratorio/catalogos/tipos-muestra', canAccess: canAccessLimsCatalogos },
   { text: 'Paneles', icon: <CatalogIcon />, path: '/laboratorio/catalogos/paneles', canAccess: canAccessLimsCatalogos },
+  { text: 'Paquetes app móvil', icon: <CatalogIcon />, path: '/laboratorio/catalogos/paquetes-movil', canAccess: canAccessLimsCatalogos },
   { text: 'Catálogos micro', icon: <CatalogIcon />, path: '/laboratorio/microbiologia/catalogos', canAccess: canAccessMicrobiologia },
 ];
 

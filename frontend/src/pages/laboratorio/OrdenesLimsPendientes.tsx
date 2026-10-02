@@ -327,6 +327,7 @@ const OrdenesLimsPendientes: React.FC = () => {
         onClose={() => setOrdenAgregar(null)}
         agregarAOrdenId={ordenAgregar?.id ?? null}
         agregarAOrdenNumero={ordenAgregar?.numero ?? null}
+        pacienteId={ordenAgregar?.paciente ?? null}
         onCreated={() => {
           setOrdenAgregar(null);
           load();

@@ -59,6 +59,7 @@ class MedicoLightSerializer(serializers.ModelSerializer):
             'nombre_completo',
             'matricula',
             'especialidad_nombre',
+            'ambito_atencion',
         ]
         read_only_fields = fields
 
@@ -92,6 +93,7 @@ class MedicoSerializer(serializers.ModelSerializer):
             'especialidad',
             'especialidad_id',
             'user',
+            'ambito_atencion',
             'areas_interes_ia',
             'email',
             'telefono',

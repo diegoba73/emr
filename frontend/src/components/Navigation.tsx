@@ -38,6 +38,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import Logo from './Logo';
 import { getHomeNavLabel, getSolicitudesModuleLabel } from '../utils/navLabels';
+import { canAccessGuardia, canAccessInternacion } from '../utils/permissions';
 
 const drawerWidth = 240;
 
@@ -56,8 +57,9 @@ const menuItems: MenuItemConfig[] = [
   { text: 'Estudios complementarios', icon: <MedicalServices />, path: '/estudios-complementarios', roles: ['medico', 'admin', 'paciente', 'secretaria'] },
   { text: 'Laboratorio', icon: <Schedule />, path: '/solicitudes', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', roles: ['medico', 'admin', 'secretaria', 'enfermeria'] },
+  { text: 'Médicos', icon: <Person />, path: '/medicos', roles: ['admin', 'secretaria', 'laboratorio', 'bioquimico'] },
+  { text: 'Guardia', icon: <LocalHospital />, path: '/guardia', roles: ['medico', 'admin', 'enfermeria'] },
   { text: 'Internación', icon: <Hotel />, path: '/internacion', roles: ['medico', 'admin', 'enfermeria', 'secretaria', 'kinesiologo'] },
-  { text: 'Médicos', icon: <Person />, path: '/medicos', roles: ['admin'] },
   { text: 'Usuarios', icon: <Person />, path: '/usuarios', roles: ['admin'] },
   { text: 'Auditoría', icon: <FactCheck />, path: '/auditoria', roles: ['admin'] },
 ];
@@ -83,6 +85,8 @@ const Navigation: React.FC<NavigationProps> = ({ children }) => {
     const isAdmin = userRole === 'admin' || currentUser.is_superuser;
 
     return menuItems.filter((item) => {
+      if (item.path === '/guardia' && !canAccessGuardia(currentUser)) return false;
+      if (item.path === '/internacion' && !canAccessInternacion(currentUser)) return false;
       if (item.roles.includes('all')) return true;
       if (isAdmin) return true; // Admin ve todo
       return item.roles.includes(userRole);

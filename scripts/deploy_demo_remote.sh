@@ -15,12 +15,12 @@ cd ${REMOTE_DIR}
 git pull origin master
 cp -n .env.demo.example .env.demo || true
 # Asegurar CSRF/hosts de demo pública (idempotente si ya están)
-grep -q 'dsachubut.sytes.net:8081' .env.demo || cat >> .env.demo <<'ENV'
+grep -q 'emr.sytes.net:8081' .env.demo || cat >> .env.demo <<'ENV'
 
 # --- hosts demo pública ---
-DJANGO_ALLOWED_HOSTS=dsachubut.sytes.net,localhost,127.0.0.1
-DJANGO_CORS_ALLOWED_ORIGINS=http://dsachubut.sytes.net:8081,http://localhost:8081
-DJANGO_CSRF_TRUSTED_ORIGINS=http://dsachubut.sytes.net:8081,http://localhost:8081
+DJANGO_ALLOWED_HOSTS=emr.sytes.net,localhost,127.0.0.1
+DJANGO_CORS_ALLOWED_ORIGINS=http://emr.sytes.net:8081,http://localhost:8081
+DJANGO_CSRF_TRUSTED_ORIGINS=http://emr.sytes.net:8081,http://localhost:8081
 ENV
 
 docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo up -d --build
@@ -28,5 +28,5 @@ docker compose -p emr-demo -f docker-compose.demo.yml exec -T backend python man
 docker compose -p emr-demo -f docker-compose.demo.yml exec -T backend python manage.py seed_demo_marketing
 curl -s -o /dev/null -w 'demo:%{http_code}\n' http://127.0.0.1:8081/demo
 curl -s -o /dev/null -w 'health:%{http_code}\n' http://127.0.0.1:8081/api/health/
-echo "Listo. Abrí http://dsachubut.sytes.net:8081/demo (NAT 8081 requerido)."
+echo "Listo. Abrí http://emr.sytes.net:8081/demo (NAT 8081 requerido)."
 EOF

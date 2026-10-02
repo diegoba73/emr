@@ -22,6 +22,8 @@ ROLES_MOVIL_INFORMES = frozenset({
 
 ROLES_MOVIL_VALIDAR = frozenset({'bioquimico'})
 
+ROLES_MOVIL_PEDIR_LAB = frozenset({'medico'})
+
 ESTADOS_INFORME_PDF = frozenset({'FINALIZADO', 'INFORMADO_PARCIAL'})
 ESTADOS_INFORME_LISTADO = frozenset({'FINALIZADO', 'INFORMADO_PARCIAL'})
 ESTADOS_BIOQUIMICO_TRABAJO = frozenset({
@@ -30,3 +32,19 @@ ESTADOS_BIOQUIMICO_TRABAJO = frozenset({
     'LISTO_PARA_VALIDAR',
     'FINALIZADO',
 })
+
+# Chips de contexto en la app → origen_solicitud LIMS
+CONTEXTO_A_ORIGEN = {
+    'GUARDIA': 'GUARDIA',
+    'AMBULATORIO': 'AMBULATORIO_CEHTA',
+    'INTERNACION': 'INTERNACION_UCE',
+}
+
+# Reexport para callers móviles
+from medicos.ambito import (  # noqa: E402
+    CONTEXTOS_LAB_COMPLETOS,
+    CONTEXTOS_LAB_SOLO_AMBULATORIO,
+    contextos_lab_permitidos,
+    contextos_lab_para_api,
+    contexto_lab_permitido,
+)

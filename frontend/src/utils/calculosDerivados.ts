@@ -1,10 +1,12 @@
 /**
- * Parámetros clínicos derivados (perfil lipídico, bilirrubina, índices hemo).
+ * Parámetros clínicos derivados (perfil lipídico, bilirrubina, índices hemo, férrico).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
 export const TG_MAX_FRIEDEWALD = 400;
 export const RESULTADO_NO_CALCULABLE = 'No calculable con estos datos';
+/** Factor habitual: transferrina (mg/dL) ≈ TIBC (µg/dL) × 0.8 */
+export const FACTOR_TRANS_DESDE_TIBC = 0.8;
 
 export function esResultadoNoCalculable(valor?: string | null): boolean {
   return valor?.trim() === RESULTADO_NO_CALCULABLE;
@@ -17,6 +19,9 @@ export const CODIGOS_CALCULADOS = new Set([
   'COL_RESID',
   'RATIO_CT_HDL',
   'BIL_I',
+  'CF',
+  'SAT_FE',
+  'TRANS',
 ]);
 
 export const FORMULA_LEUCO_CODIGOS = new Set([
@@ -64,6 +69,19 @@ export function calcRatioCtHdl(colTot: number, hdl: number): number | null {
 export function calcBilIndirecta(bilT: number, bilD: number): number | null {
   if (bilT < bilD) return null;
   return roundHalfUp(bilT - bilD, 2);
+}
+
+export function calcTibc(ferremia: number, uibc: number): number {
+  return roundHalfUp(ferremia + uibc, 0);
+}
+
+export function calcSatTransferrina(ferremia: number, tibc: number): number | null {
+  if (tibc <= 0) return null;
+  return roundHalfUp((ferremia / tibc) * 100, 1);
+}
+
+export function calcTransferrinaDesdeTibc(tibc: number): number {
+  return roundHalfUp(tibc * FACTOR_TRANS_DESDE_TIBC, 0);
 }
 
 export function calcAbsolutoFormula(pct: number, leucos: number): number | null {
@@ -123,6 +141,25 @@ export function calcularDerivados(
     } else {
       out.BIL_I = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
     }
+  }
+
+  const ferr = valores.FERR;
+  const uibc = valores.UIBC;
+  if (ferr != null && uibc != null) {
+    const tibc = calcTibc(ferr, uibc);
+    out.CF = { numerico: tibc, informe: fmt(tibc, 0) };
+    const sat = calcSatTransferrina(ferr, tibc);
+    if (sat != null) {
+      out.SAT_FE = { numerico: sat, informe: fmt(sat, 1) };
+    } else {
+      out.SAT_FE = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+    const trans = calcTransferrinaDesdeTibc(tibc);
+    out.TRANS = { numerico: trans, informe: fmt(trans, 0) };
+  } else if (ferr != null || uibc != null) {
+    out.CF = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    out.SAT_FE = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    out.TRANS = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
   return out;

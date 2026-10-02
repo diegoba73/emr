@@ -33,6 +33,10 @@ ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
     "COL_RESID": ("CALCULADO", 0, "1", ""),
     "RATIO_CT_HDL": ("CALCULADO", 0, "1", ""),
     "BIL_I": ("CALCULADO", 0, "1", ""),
+    # Perfil férrico: medidos FERR/UIBC(/FERRIT); CF=TIBC, SAT_FE y TRANS calculados
+    "CF": ("CALCULADO", 0, "1", ""),
+    "SAT_FE": ("CALCULADO", 0, "1", ""),
+    "TRANS": ("CALCULADO", 0, "1", ""),
 }
 
 

@@ -64,8 +64,8 @@ MAPEO_CM260: dict[str, str] = {
     "TRIG": "TG",
     "FERR": "FERR",
     "FE": "FERR",
-    "CF": "CF",
-    "UIBC": "CF",
+    "UIBC": "UIBC",
+    "CF": "UIBC",  # legacy: el CM260 reportaba UIBC como CF
     "PROT_T": "PROT_T",
     "TP": "PROT_T",
     "ALB": "ALB",

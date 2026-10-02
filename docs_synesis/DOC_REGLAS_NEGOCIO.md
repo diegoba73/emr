@@ -145,6 +145,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de determinaciones
 
 - Una fila `ResultadoExamen` por par (solicitud, tipo_examen) — `unique_together`.
+- **PROBNP / frecuencia obra social [IMPLEMENTADO]:** si el paciente ya tiene un pedido con `TipoExamen.codigo=PROBNP` en los últimos **31 días** (`fecha_solicitud`), no se puede agregar otro PROBNP al crear orden ni en `agregar-examenes`, **salvo** roles `laboratorio` y `bioquimico` (`ROLES_LIMS_OPERADOR`). Admin, médico y demás roles quedan bloqueados. Mensaje fijo en `laboratorio/restricciones_frecuencia.py`. UX: alerta al tildar en formulario de papel (web) y app móvil; consulta `GET …/solicitudes/restricciones-ensayos/?paciente_id=` (y móvil `…/lab/pacientes/{id}/restricciones-ensayos/`).
 
 ---
 

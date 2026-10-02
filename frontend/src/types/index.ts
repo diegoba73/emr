@@ -41,6 +41,7 @@ export interface User extends BaseModel {
     matricula: string;
     nombre?: string;
     apellido?: string;
+    ambito_atencion?: 'COMPLETO' | 'AMBULATORIO';
     especialidad?: {
       id: number;
       nombre: string;
@@ -99,6 +100,8 @@ export interface Medico extends BaseModel {
   especialidad?: Especialidad | null;
   /** Campo plano del listado light (`MedicoLightSerializer`). */
   especialidad_nombre?: string | null;
+  /** COMPLETO (default) o AMBULATORIO (solo consultorio). */
+  ambito_atencion?: 'COMPLETO' | 'AMBULATORIO';
   telefono?: string;
   email?: string;
   activo: boolean;
@@ -564,11 +567,24 @@ export interface ConsultaEstudioResumen {
 
 export interface ConsultaResultadoLabResumen {
   id: number;
+  tipo_examen?: number | null;
   tipo_examen_nombre?: string | null;
+  tipo_examen_codigo?: string | null;
+  tipo_examen_muestra_codigo?: string | null;
   valor_obtenido?: string | null;
   unidad?: string | null;
   estado?: string | null;
   es_patologico?: boolean | null;
+  /** Compat revista / legacy. */
+  examen?: string | null;
+  valor?: string | null;
+}
+
+export interface ConsultaPanelLabResumen {
+  id: number;
+  codigo?: string | null;
+  nombre: string;
+  tipos_examen_ids: number[];
 }
 
 export interface ConsultaSolicitudLabResumen {
@@ -576,8 +592,11 @@ export interface ConsultaSolicitudLabResumen {
   numero?: string | null;
   estado: string;
   fecha_solicitud: string;
+  tipos_examen?: number[];
   tipos_examen_nombres: string[];
   paneles_nombres: string[];
+  paneles_resumen?: ConsultaPanelLabResumen[];
+  orden_grupos_informe?: string[];
   resultados: ConsultaResultadoLabResumen[];
 }
 

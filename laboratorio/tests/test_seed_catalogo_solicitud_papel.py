@@ -117,13 +117,29 @@ class TestSeedCatalogoSolicitudPapel:
         pan_art = PanelExamen.objects.get(codigo="PAN_EAB_ART")
         pan_ven = PanelExamen.objects.get(codigo="PAN_EAB_VEN")
         assert [te.codigo for te in ordenar_queryset_panel(pan_art)] == [
-            "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
+            "FIO2", "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
         ]
         assert [te.codigo for te in ordenar_queryset_panel(pan_ven)] == [
-            "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
+            "FIO2", "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
         ]
+        assert pan_art.tipos_examen.filter(codigo="FIO2").exists()
+        assert pan_ven.tipos_examen.filter(codigo="FIO2").exists()
+        fio2 = TipoExamen.objects.get(codigo="FIO2")
+        assert fio2.tipo_contenedor_id is None
         assert "EAB_ART" not in EXAMENES_SUELTOS_PDF
         assert "EAB_VEN" not in EXAMENES_SUELTOS_PDF
+
+    def test_perfil_ferrico_medidos_y_calculados(self):
+        call_command("seed_catalogo_solicitud_papel")
+        panel = PanelExamen.objects.get(codigo="PAN_FERR")
+        assert [te.codigo for te in ordenar_queryset_panel(panel)] == [
+            "FERR", "UIBC", "FERRIT", "CF", "SAT_FE", "TRANS",
+        ]
+        assert TipoExamen.objects.get(codigo="CF").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="SAT_FE").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="TRANS").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="CF").nombre == "Capacidad total de fijación"
+        assert TipoExamen.objects.get(codigo="UIBC").modo_entrada != "CALCULADO"
 
     def test_referencias_cargadas_en_catalogo(self):
         call_command("seed_catalogo_solicitud_papel")

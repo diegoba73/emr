@@ -107,7 +107,8 @@ class Command(BaseCommand):
         for item in EXAMENES:
             codigo = item["codigo"]
             muestra = muestras[item["muestra"]]
-            tubo = contenedores.get(tubo_codigo_para_examen(codigo, item.get("muestra")))
+            tubo_codigo = tubo_codigo_para_examen(codigo, item.get("muestra"))
+            tubo = contenedores.get(tubo_codigo) if tubo_codigo else None
             defaults = {
                 "nombre": item["nombre"],
                 "tipo_muestra_requerida": muestra,
@@ -115,10 +116,9 @@ class Command(BaseCommand):
                 "abreviatura": item.get("abreviatura", "") or "",
                 "activo": True,
                 "requiere_muestra": True,
+                "tipo_contenedor": tubo,
                 **self._referencia_defaults(codigo),
             }
-            if tubo is not None:
-                defaults["tipo_contenedor"] = tubo
 
             existing = TipoExamen.objects.filter(codigo=codigo).first()
             if existing is None:
@@ -143,13 +143,13 @@ class Command(BaseCommand):
                     or codigo.startswith("ORI_") or codigo.startswith("ELP_")
                     or codigo.startswith("NEUT_") or codigo in {
                         "VCM", "CHCM", "RDW", "EOS", "BAS", "LINF", "MONO",
-                        "PP", "INR", "CF", "FERR", "SAT_FE", "BIL_T", "BIL_D", "BIL_I",
+                        "PP", "INR", "CF", "FERR", "UIBC", "SAT_FE", "TRANS", "BIL_T", "BIL_D", "BIL_I",
                         "NA", "K", "COL_TOT", "HDL", "LDL", "VLDL", "COL_NO_LDL",
                         "COL_RESID", "RATIO_CT_HDL", "TG", "HCM",
                         "GOT", "GPT", "NA_U", "K_U", "CL_U", "CREA_U", "DIUR",
                         "CLEAR_CREA", "MICROALB", "AU", "P", "PROT_T", "VSG",
                         "PCR_US", "AMIL", "LIP", "CPK", "CPK_MB", "DDIM", "B12",
-                        "VITD", "PSA", "CA_ION", "LACT",
+                        "VITD", "PSA", "CA_ION", "LACT", "FIO2",
                         "PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART",
                         "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
                         "TROP_I", "TROP_US", "PROBNP", "PROT_U_24", "PROT_U_AZ",
@@ -160,7 +160,7 @@ class Command(BaseCommand):
                 if obj.tipo_muestra_requerida_id != muestra.id:
                     obj.tipo_muestra_requerida = muestra
                     changed.append("tipo_muestra_requerida")
-                if tubo and obj.tipo_contenedor_id != tubo.id:
+                if obj.tipo_contenedor_id != (tubo.id if tubo else None):
                     obj.tipo_contenedor = tubo
                     changed.append("tipo_contenedor")
                 for k, v in self._referencia_defaults(codigo).items():

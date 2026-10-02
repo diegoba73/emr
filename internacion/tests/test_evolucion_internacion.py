@@ -217,4 +217,12 @@ class EvolucionInternacionTestCase(APITestCase):
         self.assertEqual(len(response.data['laboratorio']), 1)
         self.assertEqual(response.data['laboratorio'][0]['id'], solicitud.pk)
         self.assertTrue(response.data['laboratorio'][0]['es_de_hoy'])
+        lab = response.data['laboratorio'][0]
+        self.assertIn('orden_grupos_informe', lab)
+        self.assertIn('paneles_resumen', lab)
+        self.assertIn('tipos_examen', lab)
+        self.assertEqual(len(lab['resultados']), 1)
+        self.assertEqual(lab['resultados'][0]['tipo_examen'], tipo_examen.id)
+        self.assertEqual(lab['resultados'][0]['tipo_examen_codigo'], tipo_examen.codigo)
+        self.assertEqual(lab['resultados'][0]['valor_obtenido'], '110')
         self.assertEqual(len(response.data['estudios']), 1)

@@ -1126,6 +1126,28 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'fecha_programada_toma': 'Indicá el día de la extracción.'}
             )
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request is not None else None
+        if user is not None:
+            from medicos.ambito import (
+                medico_de_user,
+                origen_lims_permitido_para_medico,
+                user_medico_es_solo_ambulatorio,
+            )
+            if user_medico_es_solo_ambulatorio(user):
+                origen_check = origen
+                medico_actor = medico_de_user(user)
+                # Si no vino origen explícito pero el médico interno es el actor, igual restringimos.
+                if not origen_lims_permitido_para_medico(medico_actor, origen_check):
+                    raise serializers.ValidationError(
+                        {
+                            'origen_solicitud': (
+                                'Tu perfil es solo ambulatorio: no podés crear órdenes de '
+                                'guardia ni internación.'
+                            )
+                        }
+                    )
         return attrs
 
     @transaction.atomic
@@ -1137,8 +1159,13 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         - Si no: crea Solicitud + ResultadoExamen (directos y de paneles, sin duplicados).
         """
         from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
+        from laboratorio.restricciones_frecuencia import (
+            RestriccionFrecuenciaError,
+            assert_puede_agregar_probnp,
+        )
         from laboratorio.solicitud_orden_abierta import (
             MENSAJE_LAB_INTERNACION_SIN_FINALIZAR,
+            _resolver_tipo_examen_ids,
             agregar_examenes_a_solicitud,
             buscar_orden_abierta,
             paciente_tiene_analisis_internacion_sin_finalizar,
@@ -1150,19 +1177,42 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         paciente = validated_data.get('paciente')
         consulta_hc = validated_data.get('consulta_hc')
         fecha_toma = validated_data.get('fecha_programada_toma')
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request is not None else None
         validated_data['origen_solicitud'] = inferir_origen_solicitud(
             paciente_id=paciente.pk,
             consulta_hc=consulta_hc,
             origen_explicito=origen_explicito,
         )
+        if user is not None:
+            from medicos.ambito import (
+                medico_de_user,
+                origen_lims_permitido_para_medico,
+                user_medico_es_solo_ambulatorio,
+            )
+            if user_medico_es_solo_ambulatorio(user) and not origen_lims_permitido_para_medico(
+                medico_de_user(user), validated_data['origen_solicitud']
+            ):
+                raise serializers.ValidationError(
+                    {
+                        'origen_solicitud': (
+                            'Tu perfil es solo ambulatorio: no podés crear órdenes de '
+                            'guardia ni internación.'
+                        )
+                    }
+                )
 
         abierta = buscar_orden_abierta(paciente.pk, fecha_programada_toma=fecha_toma)
         if abierta is not None:
-            solicitud = agregar_examenes_a_solicitud(
-                abierta,
-                examenes_ids=examenes_ids,
-                paneles_ids=paneles_ids,
-            )
+            try:
+                solicitud = agregar_examenes_a_solicitud(
+                    abierta,
+                    examenes_ids=examenes_ids,
+                    paneles_ids=paneles_ids,
+                    user=user,
+                )
+            except RestriccionFrecuenciaError as exc:
+                raise serializers.ValidationError(str(exc)) from exc
             solicitud._orden_merged = True
             return solicitud
 
@@ -1171,6 +1221,12 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             paciente.pk, fecha_programada_toma=fecha_toma
         ):
             raise serializers.ValidationError(MENSAJE_LAB_INTERNACION_SIN_FINALIZAR)
+
+        tipos_resueltos, _ = _resolver_tipo_examen_ids(examenes_ids, paneles_ids)
+        try:
+            assert_puede_agregar_probnp(user, paciente.pk, tipos_resueltos)
+        except RestriccionFrecuenciaError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
         solicitud = SolicitudExamen.objects.create(**validated_data)
         solicitud._orden_merged = False
@@ -1224,6 +1280,89 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             solicitud.tipos_examen.set(list(tipos_examen_creados))
 
         return solicitud
+
+
+class SolicitudExamenUpdateSerializer(serializers.ModelSerializer):
+    """
+    Edición de cabecera de orden LIMS (lab/bio/admin).
+    Permitido mientras la orden no esté FINALIZADO.
+    """
+
+    paciente_id = serializers.PrimaryKeyRelatedField(
+        queryset=Paciente.objects.all(),
+        source="paciente",
+        required=False,
+    )
+    medico_id = serializers.PrimaryKeyRelatedField(
+        queryset=Medico.objects.all(),
+        source="medico_interno",
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = SolicitudExamen
+        fields = [
+            "paciente_id",
+            "medico_id",
+            "medico_externo_nombre",
+            "origen_solicitud",
+            "fecha_programada_toma",
+            "fecha_entrega_prometida",
+            "observaciones",
+        ]
+
+    def validate_origen_solicitud(self, value):
+        normalizado = normalizar_origen_solicitud(value)
+        if value and not normalizado:
+            raise serializers.ValidationError("Origen clínico no válido.")
+        return normalizado or value
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance is not None and getattr(instance, "estado", None) == "FINALIZADO":
+            raise serializers.ValidationError(
+                "No se puede editar una orden finalizada."
+            )
+
+        origen = attrs.get("origen_solicitud", getattr(instance, "origen_solicitud", None))
+        origen = normalizar_origen_solicitud(origen) or origen
+        consulta = getattr(instance, "consulta_hc", None) if instance else None
+        if "medico_externo_nombre" in attrs:
+            medico_ext = (attrs.get("medico_externo_nombre") or "").strip()
+        else:
+            medico_ext = (getattr(instance, "medico_externo_nombre", None) or "").strip()
+        if "medico_interno" in attrs:
+            medico_int = attrs.get("medico_interno")
+        else:
+            medico_int = getattr(instance, "medico_interno", None) if instance else None
+
+        if consulta and es_origen_ambulatorio_externo(origen):
+            raise serializers.ValidationError(
+                {
+                    "origen_solicitud": (
+                        "Una orden vinculada a consulta no puede ser ambulatorio externo."
+                    )
+                }
+            )
+        if es_origen_ambulatorio_externo(origen) and not medico_ext and not medico_int:
+            raise serializers.ValidationError(
+                {
+                    "medico_externo_nombre": (
+                        "Indique el médico solicitante de la receta externa."
+                    )
+                }
+            )
+        if es_origen_ambulatorio_externo(origen):
+            attrs["medico_interno"] = None
+            if "medico_externo_nombre" in attrs:
+                attrs["medico_externo_nombre"] = medico_ext
+
+        if "fecha_programada_toma" in attrs and attrs.get("fecha_programada_toma") is None:
+            raise serializers.ValidationError(
+                {"fecha_programada_toma": "La fecha de extracción es obligatoria."}
+            )
+        return attrs
 
 
 class TomarMuestraItemSerializer(serializers.Serializer):

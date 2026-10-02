@@ -64,3 +64,17 @@ class TestCalculosDerivados(TestCase):
         )
         self.assertEqual(out["BIL_I"][1], RESULTADO_NO_CALCULABLE)
         self.assertIsNone(out["BIL_I"][0])
+
+    def test_perfil_ferrico_completo(self):
+        out = calcular_derivados(
+            {"FERR": Decimal("100"), "UIBC": Decimal("250")}
+        )
+        self.assertEqual(out["CF"][0], Decimal("350"))
+        self.assertEqual(out["SAT_FE"][0], Decimal("28.6"))
+        self.assertEqual(out["TRANS"][0], Decimal("280"))
+
+    def test_perfil_ferrico_incompleto_no_calculable(self):
+        out = calcular_derivados({"FERR": Decimal("100")})
+        self.assertEqual(out["CF"][1], RESULTADO_NO_CALCULABLE)
+        self.assertEqual(out["SAT_FE"][1], RESULTADO_NO_CALCULABLE)
+        self.assertEqual(out["TRANS"][1], RESULTADO_NO_CALCULABLE)

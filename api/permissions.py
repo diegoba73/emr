@@ -250,6 +250,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in ROLES_LIMS_WRITE
         if action == 'orden_abierta':
             return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria', 'enfermeria')
+        if action == 'restricciones_ensayos':
+            return role in (*ROLES_LIMS_WRITE, 'medico')
         if action == 'marcar_derivacion':
             return role in ROLES_LIMS_WRITE
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):
@@ -430,13 +432,19 @@ class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
 
 
 class IsInternacionStaff(permissions.BasePermission):
-    """Acceso operativo a internación: médico, enfermería, admin y secretaría."""
+    """Acceso operativo a internación: médico, enfermería, admin y secretaría.
+
+    Médicos con ámbito solo ambulatorio no acceden al módulo de internación.
+    """
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
         if request.user.is_superuser:
             return True
+        from medicos.ambito import user_medico_es_solo_ambulatorio
+        if user_medico_es_solo_ambulatorio(request.user):
+            return False
         return get_normalized_role(request.user) in ROLES_INTERNACION
 
 
@@ -448,6 +456,9 @@ class IsInternacionClinica(permissions.BasePermission):
             return False
         if request.user.is_superuser:
             return True
+        from medicos.ambito import user_medico_es_solo_ambulatorio
+        if user_medico_es_solo_ambulatorio(request.user):
+            return False
         return get_normalized_role(request.user) in ROLES_INTERNACION_CLINICA
 
 
@@ -459,6 +470,9 @@ class IsInternacionAlta(permissions.BasePermission):
             return False
         if request.user.is_superuser:
             return True
+        from medicos.ambito import user_medico_es_solo_ambulatorio
+        if user_medico_es_solo_ambulatorio(request.user):
+            return False
         return get_normalized_role(request.user) in ROLES_INTERNACION_ALTA
 
 
@@ -470,6 +484,9 @@ class IsInternacionHcMedico(permissions.BasePermission):
             return False
         if request.user.is_superuser:
             return True
+        from medicos.ambito import user_medico_es_solo_ambulatorio
+        if user_medico_es_solo_ambulatorio(request.user):
+            return False
         return get_normalized_role(request.user) in ROLES_HC_MEDICO
 
 
@@ -593,6 +610,9 @@ class AtencionPermission(permissions.BasePermission):
         if role == 'paciente':
             return action in _ATENCION_READ_ACTIONS
         if role == 'medico':
+            from medicos.ambito import user_medico_es_solo_ambulatorio
+            if action == 'iniciar_guardia' and user_medico_es_solo_ambulatorio(user):
+                return False
             return action in (
                 _ATENCION_READ_ACTIONS
                 | _ATENCION_WRITE_ACTIONS

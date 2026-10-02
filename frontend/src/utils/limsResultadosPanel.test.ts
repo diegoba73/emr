@@ -61,4 +61,16 @@ describe('groupResultadosPorPanel', () => {
     // Orden formulario papel: Glucemia antes que EAB arterial
     expect(grupos.indexOf(glu!)).toBeLessThan(grupos.indexOf(eab!));
   });
+
+  it('aplica orden_grupos_informe custom (reorden manual)', () => {
+    const resultados = [res(1, 1), res(2, 4), res(3, 99)];
+    const grupos = groupResultadosPorPanel(
+      {
+        ...orden,
+        orden_grupos_informe: ['resultado-3', 'panel-11', 'panel-10'],
+      },
+      resultados
+    );
+    expect(grupos.map((g) => g.key)).toEqual(['resultado-3', 'panel-11', 'panel-10']);
+  });
 });

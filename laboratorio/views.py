@@ -29,6 +29,7 @@ from .serializers import (
     SolicitudExamenSerializer,
     SolicitudExamenListSerializer,
     SolicitudExamenCreateSerializer,
+    SolicitudExamenUpdateSerializer,
     ResultadoExamenSerializer,
 )
 from auditoria.audit_service import log_create, log_event, log_update
@@ -275,12 +276,29 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     ordering = ['-numero']
     
     def get_serializer_class(self):
-        """Create vs listado liviano vs detalle."""
+        """Create vs update cabecera vs listado liviano vs detalle."""
         if self.action == 'create':
             return SolicitudExamenCreateSerializer
+        if self.action in ('update', 'partial_update'):
+            return SolicitudExamenUpdateSerializer
         if self.action == 'list':
             return SolicitudExamenListSerializer
         return SolicitudExamenSerializer
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        out = SolicitudExamenSerializer(
+            serializer.instance, context=self.get_serializer_context()
+        )
+        return Response(out.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -304,6 +322,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='agregar-examenes')
     def agregar_examenes(self, request, pk=None):
         """Agrega exámenes/paneles a orden abierta, post-etiquetas o en curso si caben en tubos."""
+        from laboratorio.restricciones_frecuencia import RestriccionFrecuenciaError
         from laboratorio.solicitud_orden_abierta import (
             OrdenNoAbiertaError,
             TuboNuevoRequeridoError,
@@ -328,8 +347,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 solicitud,
                 examenes_ids=examenes_ids,
                 paneles_ids=paneles_ids,
+                user=request.user,
             )
-        except (OrdenNoAbiertaError, TuboNuevoRequeridoError) as exc:
+        except (OrdenNoAbiertaError, TuboNuevoRequeridoError, RestriccionFrecuenciaError) as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         log_update(
@@ -429,6 +449,26 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 'estado': sol.estado,
             }
         )
+
+    @action(detail=False, methods=['get'], url_path='restricciones-ensayos')
+    def restricciones_ensayos(self, request):
+        """Ensayos bloqueados por frecuencia (obra social) para un paciente."""
+        from laboratorio.restricciones_frecuencia import restricciones_ensayos_para
+
+        raw = request.query_params.get('paciente_id')
+        if not raw:
+            return Response(
+                {'detail': 'paciente_id es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            paciente_id = int(raw)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'paciente_id inválido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(restricciones_ensayos_para(request.user, paciente_id))
 
     @action(detail=True, methods=['post'], url_path='marcar-derivacion')
     def marcar_derivacion(self, request, pk=None):

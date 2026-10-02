@@ -59,6 +59,7 @@ import OrdenLimsResumenPanel from '../../components/lims/OrdenLimsResumenPanel';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
 import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDialog';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
+import EditarOrdenLimsDialog from '../../components/lims/EditarOrdenLimsDialog';
 import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
 import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
 import { colorEstadoObraSocial, labelEstadoObraSocial, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
@@ -79,6 +80,7 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
   const [openQuitarExamenes, setOpenQuitarExamenes] = useState(false);
+  const [openEditarOrden, setOpenEditarOrden] = useState(false);
   const [openObraSocial, setOpenObraSocial] = useState(false);
   const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
   const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
@@ -351,6 +353,11 @@ const OrdenLimsDetalle: React.FC = () => {
               Imprimir etiquetas
             </Button>
           )}
+          {canOp && e !== 'FINALIZADO' && (
+            <Button variant="outlined" onClick={() => setOpenEditarOrden(true)}>
+              Editar orden
+            </Button>
+          )}
           {canOp && (
             <Button variant="outlined" onClick={() => setOpenObraSocial(true)}>
               Obra social
@@ -601,6 +608,7 @@ const OrdenLimsDetalle: React.FC = () => {
         onClose={() => setOpenAgregarExamenes(false)}
         agregarAOrdenId={orden.id}
         agregarAOrdenNumero={orden.numero}
+        pacienteId={orden.paciente}
         onCreated={async () => {
           try {
             const fresh = await getSolicitudExamen(orden.id);
@@ -621,6 +629,20 @@ const OrdenLimsDetalle: React.FC = () => {
             setOrden(fresh);
           } catch {
             /* keep o */
+          }
+        }}
+      />
+      <EditarOrdenLimsDialog
+        open={openEditarOrden}
+        orden={orden}
+        onClose={() => setOpenEditarOrden(false)}
+        onSaved={async (updated) => {
+          setOrden(updated);
+          try {
+            const fresh = await getSolicitudExamen(updated.id);
+            setOrden(fresh);
+          } catch {
+            /* keep updated */
           }
         }}
       />

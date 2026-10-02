@@ -53,7 +53,7 @@ EXAMENES_CM260: frozenset[str] = frozenset(
         "HDL",
         "TG",
         "FERR",  # ferremia / hierro sérico
-        "CF",  # capacidad de fijación (UIBC operativo)
+        "UIBC",  # capacidad latente (medido); CF/TIBC se calcula
         "PROT_T",
         "ALB",
         "CA",

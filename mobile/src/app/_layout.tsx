@@ -36,6 +36,8 @@ function Navigation() {
       <Stack.Screen name="turno/[id]" options={{ title:'Detalle del turno' }} />
       <Stack.Screen name="informes/index" options={{ title:'Informes' }} />
       <Stack.Screen name="informes/[id]" options={{ title:'Informe' }} />
+      <Stack.Screen name="lab/index" options={{ title:'Laboratorio' }} />
+      <Stack.Screen name="lab/nueva" options={{ title:'Nuevo pedido' }} />
       <Stack.Screen name="ajustes" options={{ title:'Mi cuenta' }} />
     </Stack.Protected>
   </Stack>;

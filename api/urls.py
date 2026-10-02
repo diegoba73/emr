@@ -62,6 +62,7 @@ from laboratorio.views_qc import (
 )
 from laboratorio.views_lab_codigo import LabCodigoViewSet
 from laboratorio.views_derivacion import LaboratorioDerivacionViewSet
+from movil.views_paquetes_web import PaqueteLabContextoViewSet
 from laboratorio.views_instrumentos import (
     ConsultaTrabajoView,
     IngestaInstrumentoView,
@@ -94,6 +95,7 @@ router.register(r'lab/solicitudes', SolicitudExamenViewSet, basename='lab-solici
 router.register(r'lab/examenes', TipoExamenViewSet, basename='lab-examenes')
 router.register(r'lab/muestras', TipoMuestraViewSet, basename='lab-muestras')
 router.register(r'lab/paneles', PanelExamenViewSet, basename='lab-paneles')
+router.register(r'lab/paquetes-movil', PaqueteLabContextoViewSet, basename='lab-paquetes-movil')
 router.register(r'lab/derivaciones', LaboratorioDerivacionViewSet, basename='lab-derivaciones')
 router.register(r'lab/areas', AreaLaboratorioViewSet, basename='lab-areas')
 router.register(r'lab/secciones', SeccionLaboratorioViewSet, basename='lab-secciones')

@@ -44,6 +44,7 @@ class MedicoSerializer(serializers.ModelSerializer):
             'especialidad_id',
             'especialidad_nombre',
             'nombre_completo',
+            'ambito_atencion',
             'areas_interes_ia',
             'fecha_registro',
             'ultima_actualizacion',

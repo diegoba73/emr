@@ -266,12 +266,27 @@ export interface RevistaLabItem {
   tiene_resultados: boolean;
   examenes: string[];
   paneles: string[];
+  tipos_examen?: number[];
+  paneles_resumen?: Array<{
+    id: number;
+    codigo?: string | null;
+    nombre: string;
+    tipos_examen_ids: number[];
+  }>;
+  orden_grupos_informe?: string[];
   resultados: Array<{
     id: number;
+    tipo_examen?: number | null;
+    tipo_examen_nombre?: string | null;
+    tipo_examen_codigo?: string | null;
+    tipo_examen_muestra_codigo?: string | null;
+    valor_obtenido?: string | null;
+    unidad?: string;
+    estado?: string | null;
+    es_patologico: boolean;
+    /** Compat legacy. */
     examen: string | null;
     valor: string;
-    unidad: string;
-    es_patologico: boolean;
   }>;
 }
 

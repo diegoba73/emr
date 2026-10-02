@@ -77,14 +77,29 @@ export function canAccessPacientes(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Alta de paciente: secretaría, médico, laboratorio y admin. */
+/** Alta de paciente: secretaría, médico, operadores LIMS (lab/bio) y admin. */
 export function canCreatePaciente(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  if (rol === 'laboratorio') return true;
+  if (isOperadorLimsRole(rol)) return true;
   if (isLecturaOperativaRole(rol)) return false;
   return rol === 'secretaria' || rol === 'medico';
+}
+
+/** Listado / gestión de médicos: admin, secretaría y operadores LIMS. */
+export function canAccessMedicos(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  const rol = normalizeRol(user);
+  if (isOperadorLimsRole(rol)) return true;
+  if (user.is_staff && !isLaboratorioRole(user)) return true;
+  return rol === 'secretaria';
+}
+
+/** Alta/edición de ficha médico (sin DELETE para lab/bio; API lo restringe). */
+export function canCreateMedico(user: User | null | undefined): boolean {
+  return canAccessMedicos(user);
 }
 
 /** Vista 360 / detalle de paciente (médico/admin o paciente sobre su ficha). */
@@ -143,6 +158,13 @@ export function canAccessAuditoria(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'admin';
 }
 
+/** Médico con ámbito solo ambulatorio (sin guardia ni internación). */
+export function isMedicoSoloAmbulatorio(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (normalizeRol(user) !== 'medico') return false;
+  return user.medico?.ambito_atencion === 'AMBULATORIO';
+}
+
 /**
  * Módulo /atenciones (QA-ROLE-01): admin/staff, médico, enfermería (lectura), paciente (lectura propia).
  * Secretaría, laboratorio y sin rol: bloqueados.
@@ -152,6 +174,13 @@ export function canAccessAtenciones(user: User | null | undefined): boolean {
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria' || rol === 'paciente';
+}
+
+/** Guardia: mismos roles que atenciones, excepto médico solo ambulatorio. */
+export function canAccessGuardia(user: User | null | undefined): boolean {
+  if (!canAccessAtenciones(user)) return false;
+  if (isMedicoSoloAmbulatorio(user)) return false;
+  return true;
 }
 
 /** Mutaciones clínicas en atenciones: admin/staff y médico (objeto validado en backend). */
@@ -185,11 +214,12 @@ export function canAccessBiDashboard(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'bioquimico';
 }
 
-/** Panel de internación: médico, enfermería, kinesiólogo, admin y secretaría. */
+/** Panel de internación: médico (completo), enfermería, kinesiólogo, admin y secretaría. */
 export function canAccessInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
+  if (isMedicoSoloAmbulatorio(user)) return false;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria' || rol === 'kinesiologo';
 }
@@ -199,6 +229,7 @@ export function canManageInternacionInfra(user: User | null | undefined): boolea
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
+  if (isMedicoSoloAmbulatorio(user)) return false;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria';
 }
@@ -218,6 +249,7 @@ export function canDarAltaInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
+  if (isMedicoSoloAmbulatorio(user)) return false;
   return normalizeRol(user) === 'medico';
 }
 
@@ -225,6 +257,7 @@ export function canDarAltaInternacion(user: User | null | undefined): boolean {
 export function canWriteHcMedico(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  if (isMedicoSoloAmbulatorio(user)) return false;
   return normalizeRol(user) === 'medico';
 }
 

@@ -159,6 +159,11 @@ class InternacionClinicalService:
             EXTERNO_CEHTA,
             EXTERNO_ICPL,
         )
+        from laboratorio.solicitud_resumen_informe import (
+            PREFETCH_SOLICITUD_RESUMEN_INFORME,
+            paneles_resumen_solicitud,
+            resultado_resumen_informe,
+        )
 
         hoy = timezone.localdate()
         inicio = internacion.fecha_ingreso
@@ -182,7 +187,7 @@ class InternacionClinicalService:
         lab_qs = (
             SolicitudExamen.objects.filter(paciente_id=paciente_id, fecha_solicitud__gte=inicio)
             .exclude(origen_solicitud__in=origenes_no_internacion)
-            .prefetch_related('tipos_examen', 'paneles', 'resultados__tipo_examen')
+            .prefetch_related(*PREFETCH_SOLICITUD_RESUMEN_INFORME)
             .order_by('-fecha_solicitud')
         )
         if fin:
@@ -199,14 +204,7 @@ class InternacionClinicalService:
             for res in sol.resultados.all():
                 if not (res.valor_obtenido or '').strip():
                     continue
-                tipo = getattr(res, 'tipo_examen', None)
-                resultados.append({
-                    'id': res.pk,
-                    'examen': tipo.nombre if tipo else None,
-                    'valor': res.valor_obtenido,
-                    'unidad': res.unidad or '',
-                    'es_patologico': bool(res.es_patologico),
-                })
+                resultados.append(resultado_resumen_informe(res))
             laboratorio.append({
                 'id': sol.pk,
                 'numero': sol.numero,
@@ -216,6 +214,9 @@ class InternacionClinicalService:
                 'tiene_resultados': sol.estado in estados_con_resultado or bool(resultados),
                 'examenes': examenes,
                 'paneles': paneles,
+                'tipos_examen': list(sol.tipos_examen.values_list('id', flat=True)),
+                'paneles_resumen': paneles_resumen_solicitud(sol),
+                'orden_grupos_informe': list(sol.orden_grupos_informe or []),
                 'resultados': resultados,
             })
 

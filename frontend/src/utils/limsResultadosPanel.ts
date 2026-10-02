@@ -33,12 +33,12 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
   {
     codigo: 'PAN_EAB_ART',
     nombre: 'EAB arterial',
-    examenes: ['PH_ART', 'PO2_ART', 'PCO2_ART', 'SAT_O2_ART', 'HCO3_ART', 'BE_ART'],
+    examenes: ['FIO2', 'PH_ART', 'PO2_ART', 'PCO2_ART', 'SAT_O2_ART', 'HCO3_ART', 'BE_ART'],
   },
   {
     codigo: 'PAN_EAB_VEN',
     nombre: 'EAB venoso',
-    examenes: ['PH_VEN', 'PO2_VEN', 'PCO2_VEN', 'SAT_O2_VEN', 'HCO3_VEN', 'BE_VEN'],
+    examenes: ['FIO2', 'PH_VEN', 'PO2_VEN', 'PCO2_VEN', 'SAT_O2_VEN', 'HCO3_VEN', 'BE_VEN'],
   },
   {
     codigo: 'PAN_IONO',
@@ -61,6 +61,11 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     codigo: 'PAN_COAG',
     nombre: 'Coagulograma básico',
     examenes: ['TP', 'PP', 'INR', 'KPTT'],
+  },
+  {
+    codigo: 'PAN_FERR',
+    nombre: 'Perfil férrico',
+    examenes: ['FERR', 'UIBC', 'FERRIT', 'CF', 'SAT_FE', 'TRANS'],
   },
   {
     codigo: 'PAN_ORI',

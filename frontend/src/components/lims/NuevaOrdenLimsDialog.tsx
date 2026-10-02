@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -25,12 +25,17 @@ import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
 import type { Medico } from '../../types';
 import { getCurrentMedicoId, shouldLockMedicoField } from '../../utils/turnoPermissions';
+import { canCreateMedico, isMedicoSoloAmbulatorio } from '../../utils/permissions';
+import { createMedico, getEspecialidades } from '../../services/apiService';
+import type { Especialidad } from '../../types';
 import {
   agregarExamenesSolicitudLims,
   createSolicitudExamenLims,
   getOrdenAbiertaPaciente,
+  getRestriccionesEnsayosPaciente,
   getTiposExamenMap,
   listPanelesLims,
+  type RestriccionesEnsayosLims,
 } from '../../services/limsApi';
 import {
   createEstudiosMicrobiologiaBatch,
@@ -63,6 +68,10 @@ import SolicitudMicrobiologiaForm, {
   type MicroPedidoItem,
 } from './SolicitudMicrobiologiaForm';
 import { addLocalDays, formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
+import { isOperadorLimsRole } from '../../utils/roles';
+import {
+  mensajeBloqueoExamen,
+} from '../../utils/limsRestriccionesEnsayos';
 
 export type PedidoTab = 'lab' | 'micro';
 
@@ -84,6 +93,8 @@ export interface NuevaOrdenLimsDialogProps {
   onCreatedMicro?: (estudioIds: number[]) => void;
   /** Paciente preseleccionado (p. ej. desde consulta). */
   pacienteInicial?: Paciente | null;
+  /** Solo para restricciones de ensayos (agregar a orden sin ficha completa). */
+  pacienteId?: number | null;
   consultaHcId?: number;
   medicoId?: number | null;
   /** Si true, solo agrega al borrador vía callback en lugar de POST inmediato. */
@@ -108,6 +119,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   onCreated,
   onCreatedMicro,
   pacienteInicial = null,
+  pacienteId = null,
   consultaHcId,
   medicoId,
   draftMode = false,
@@ -127,6 +139,15 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     numero: string | null;
   } | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<'draft' | 'create' | null>(null);
+  const [restriccionesEnsayos, setRestriccionesEnsayos] = useState<RestriccionesEnsayosLims>({});
+  const { currentUser } = useData();
+  const esOperadorLims = isOperadorLimsRole(currentUser?.rol);
+  const soloAmbulatorio = isMedicoSoloAmbulatorio(currentUser);
+  const origenOptions = soloAmbulatorio
+    ? ORIGEN_SOLICITUD_LIMS_OPTIONS.filter(
+        (opt) => opt.group === 'Ambulatorio' || opt.group === 'Ambulatorio externo'
+      )
+    : ORIGEN_SOLICITUD_LIMS_OPTIONS;
   const [examenes, setExamenes] = useState<LimsTipoExamen[]>([]);
   const [paneles, setPaneles] = useState<LimsPanelExamen[]>([]);
   const [cultivos, setCultivos] = useState<TipoCultivoMicrobiologia[]>([]);
@@ -145,12 +166,22 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const [origenManual, setOrigenManual] = useState<OrigenSolicitudLims>('AMBULATORIO_ICPL');
   const [medicoExterno, setMedicoExterno] = useState('');
   const [medicoExternoMode, setMedicoExternoMode] = useState(false);
-  const { currentUser } = useData();
   const lockMedico = shouldLockMedicoField(currentUser);
   const [medicoInterno, setMedicoInterno] = useState<Medico | null>(null);
   const [medicoQuery, setMedicoQuery] = useState('');
   const [medicoOptions, setMedicoOptions] = useState<Medico[]>([]);
   const [searchingMedico, setSearchingMedico] = useState(false);
+  const [openNuevoMedico, setOpenNuevoMedico] = useState(false);
+  const [nuevoMedicoSaving, setNuevoMedicoSaving] = useState(false);
+  const [nuevoMedicoError, setNuevoMedicoError] = useState('');
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+  const [nuevoMedicoForm, setNuevoMedicoForm] = useState({
+    nombre: '',
+    apellido: '',
+    matricula: '',
+    especialidad_id: '',
+  });
+  const puedeAltaMedico = canCreateMedico(currentUser);
   const usarMedicoExterno =
     medicoExternoMode || esOrigenAmbulatorioExterno(origenManual);
 
@@ -179,9 +210,49 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     setMedicoInterno(null);
     setMedicoQuery('');
     setMedicoOptions([]);
+    setRestriccionesEnsayos({});
     resetSelection();
   }, [open, pacienteInicial, resetSelection]);
 
+  useEffect(() => {
+    if (!open || esOperadorLims) {
+      setRestriccionesEnsayos({});
+      return;
+    }
+    const pid = paciente?.id ?? pacienteInicial?.id ?? pacienteId ?? null;
+    if (!pid) {
+      setRestriccionesEnsayos({});
+      return;
+    }
+    let cancelled = false;
+    getRestriccionesEnsayosPaciente(pid)
+      .then((data) => {
+        if (!cancelled) setRestriccionesEnsayos(data || {});
+      })
+      .catch(() => {
+        if (!cancelled) setRestriccionesEnsayos({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, esOperadorLims, paciente?.id, pacienteInicial?.id, pacienteId]);
+
+  const handleToggleExamen = useCallback(
+    (id: number) => {
+      if (selectedExamenesIds.has(id)) {
+        toggleExamen(id);
+        return;
+      }
+      const exam = examenes.find((e) => e.id === id);
+      const msg = mensajeBloqueoExamen(exam?.codigo, restriccionesEnsayos);
+      if (msg) {
+        window.alert(msg);
+        return;
+      }
+      toggleExamen(id);
+    },
+    [examenes, restriccionesEnsayos, selectedExamenesIds, toggleExamen]
+  );
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -613,7 +684,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                       }
                     }}
                   >
-                    {ORIGEN_SOLICITUD_LIMS_OPTIONS.map((opt) => (
+                    {origenOptions.map((opt) => (
                       <MenuItem key={opt.value} value={opt.value}>
                         {opt.label}
                       </MenuItem>
@@ -655,41 +726,65 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                     }
                   />
                 ) : (
-                  <Autocomplete
-                    options={medicoOptions}
-                    value={medicoInterno}
-                    onChange={(_e, value) => setMedicoInterno(value)}
-                    inputValue={medicoQuery}
-                    onInputChange={(_e, value, reason) => {
-                      if (reason === 'reset' && lockMedico) return;
-                      setMedicoQuery(value);
-                    }}
-                    getOptionLabel={(m) =>
-                      `Dr. ${[m.apellido, m.nombre].filter(Boolean).join(', ')}${
-                        m.matricula ? ` — MP ${m.matricula}` : ''
-                      }`
-                    }
-                    isOptionEqualToValue={(a, b) => a.id === b.id}
-                    loading={searchingMedico}
-                    disabled={lockMedico}
-                    noOptionsText={
-                      medicoQuery.trim().length < 2
-                        ? 'Escribí al menos 2 caracteres'
-                        : 'Sin coincidencias'
-                    }
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Médico solicitante"
-                        placeholder="Apellido o matrícula"
-                        helperText={
-                          lockMedico
-                            ? 'Se asigna automáticamente a tu usuario médico.'
-                            : 'Médico de la clínica que solicita el análisis.'
-                        }
-                      />
+                  <Stack spacing={1}>
+                    <Autocomplete
+                      options={medicoOptions}
+                      value={medicoInterno}
+                      onChange={(_e, value) => setMedicoInterno(value)}
+                      inputValue={medicoQuery}
+                      onInputChange={(_e, value, reason) => {
+                        if (reason === 'reset' && lockMedico) return;
+                        setMedicoQuery(value);
+                      }}
+                      getOptionLabel={(m) =>
+                        `Dr. ${[m.apellido, m.nombre].filter(Boolean).join(', ')}${
+                          m.matricula ? ` — MP ${m.matricula}` : ''
+                        }`
+                      }
+                      isOptionEqualToValue={(a, b) => a.id === b.id}
+                      loading={searchingMedico}
+                      disabled={lockMedico}
+                      noOptionsText={
+                        medicoQuery.trim().length < 2
+                          ? 'Escribí al menos 2 caracteres'
+                          : 'Sin coincidencias'
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Médico solicitante"
+                          placeholder="Apellido o matrícula"
+                          helperText={
+                            lockMedico
+                              ? 'Se asigna automáticamente a tu usuario médico.'
+                              : 'Médico de la clínica que solicita el análisis.'
+                          }
+                        />
+                      )}
+                    />
+                    {puedeAltaMedico && !lockMedico && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        sx={{ alignSelf: 'flex-start' }}
+                        onClick={() => {
+                          setNuevoMedicoError('');
+                          setNuevoMedicoForm({
+                            nombre: '',
+                            apellido: '',
+                            matricula: '',
+                            especialidad_id: '',
+                          });
+                          setOpenNuevoMedico(true);
+                          void getEspecialidades()
+                            .then(setEspecialidades)
+                            .catch(() => setEspecialidades([]));
+                        }}
+                      >
+                        Nuevo médico
+                      </Button>
                     )}
-                  />
+                  </Stack>
                 )}
               </>
             )}
@@ -723,7 +818,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                 selectedPanelesIds={selectedPanelesIds}
                 selectedExamenesIds={selectedExamenesIds}
                 onTogglePanel={togglePanel}
-                onToggleExamen={toggleExamen}
+                onToggleExamen={handleToggleExamen}
                 observaciones={observaciones}
                 onObservacionesChange={setObservaciones}
                 disabled={saving}
@@ -804,6 +899,109 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           </Button>
           <Button variant="contained" onClick={() => void confirmMerge()}>
             Continuar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openNuevoMedico}
+        onClose={nuevoMedicoSaving ? undefined : () => setOpenNuevoMedico(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Nuevo médico</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {nuevoMedicoError && <Alert severity="error">{nuevoMedicoError}</Alert>}
+            <TextField
+              label="Apellido *"
+              size="small"
+              value={nuevoMedicoForm.apellido}
+              onChange={(e) =>
+                setNuevoMedicoForm((f) => ({ ...f, apellido: e.target.value }))
+              }
+            />
+            <TextField
+              label="Nombre *"
+              size="small"
+              value={nuevoMedicoForm.nombre}
+              onChange={(e) =>
+                setNuevoMedicoForm((f) => ({ ...f, nombre: e.target.value }))
+              }
+            />
+            <TextField
+              label="Matrícula *"
+              size="small"
+              value={nuevoMedicoForm.matricula}
+              onChange={(e) =>
+                setNuevoMedicoForm((f) => ({ ...f, matricula: e.target.value }))
+              }
+            />
+            <TextField
+              select
+              label="Especialidad"
+              size="small"
+              value={nuevoMedicoForm.especialidad_id}
+              onChange={(e) =>
+                setNuevoMedicoForm((f) => ({ ...f, especialidad_id: e.target.value }))
+              }
+            >
+              <MenuItem value="">Sin especialidad</MenuItem>
+              {especialidades.map((esp) => (
+                <MenuItem key={esp.id} value={String(esp.id)}>
+                  {esp.nombre}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={nuevoMedicoSaving} onClick={() => setOpenNuevoMedico(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={nuevoMedicoSaving}
+            onClick={() => {
+              void (async () => {
+                const nombre = nuevoMedicoForm.nombre.trim();
+                const apellido = nuevoMedicoForm.apellido.trim();
+                const matricula = nuevoMedicoForm.matricula.trim();
+                if (!nombre || !apellido || !matricula) {
+                  setNuevoMedicoError('Completá nombre, apellido y matrícula.');
+                  return;
+                }
+                setNuevoMedicoSaving(true);
+                setNuevoMedicoError('');
+                try {
+                  const created = await createMedico({
+                    nombre,
+                    apellido,
+                    matricula,
+                    especialidad_id: nuevoMedicoForm.especialidad_id
+                      ? Number(nuevoMedicoForm.especialidad_id)
+                      : undefined,
+                  } as Partial<Medico>);
+                  setMedicoInterno(created);
+                  setMedicoQuery(
+                    `Dr. ${[created.apellido, created.nombre].filter(Boolean).join(', ')}`
+                  );
+                  setMedicoOptions((prev) =>
+                    prev.some((m) => m.id === created.id) ? prev : [created, ...prev]
+                  );
+                  setOpenNuevoMedico(false);
+                  toast.success('Médico dado de alta.');
+                } catch (e) {
+                  setNuevoMedicoError(
+                    getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.genericClinicalAction)
+                  );
+                } finally {
+                  setNuevoMedicoSaving(false);
+                }
+              })();
+            }}
+          >
+            {nuevoMedicoSaving ? <CircularProgress size={20} color="inherit" /> : 'Guardar'}
           </Button>
         </DialogActions>
       </Dialog>
