@@ -139,3 +139,52 @@ class TestEtiquetaZplMicrobiologia(TestCase):
         self.assertTrue(payload.printable, payload.validation_errors)
         self.assertEqual(len(payload.lines), 4)
         self.assertIn("UROCULTIVO", payload.lines[3])
+
+    def test_reimprimir_despues_de_recibido(self):
+        """Reimpresión ZPL permitida fuera de PENDIENTE (paridad con lab clínico)."""
+        from django.utils import timezone
+
+        self.client.force_authenticate(self.lab)
+        with self.captureOnCommitCallbacks(execute=True):
+            r0 = self.client.post(
+                f"/api/lab/microbiologia/estudios/{self.estudio.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
+        self.assertEqual(r0.status_code, status.HTTP_200_OK, r0.content)
+        self.estudio.refresh_from_db()
+        stamped = self.estudio.etiquetas_impresas_at
+        codigo = self.estudio.codigo_barra
+
+        # Avanzar a RECIBIDO (post-recepción).
+        self.estudio.estado = "RECIBIDO"
+        self.estudio.fecha_inicio = timezone.now()
+        self.estudio.save(update_fields=["estado", "fecha_inicio", "updated_at"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/microbiologia/estudios/{self.estudio.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        body = r.json()
+        self.assertEqual(body["resultado"], "prepared")
+        self.assertTrue(body["zpl"].strip().startswith("^XA"))
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.estado, "RECIBIDO")
+        self.assertEqual(self.estudio.codigo_barra, codigo)
+        self.assertEqual(self.estudio.etiquetas_impresas_at, stamped)
+
+    def test_reimprimir_cancelado_rechazado(self):
+        self.client.force_authenticate(self.lab)
+        self.estudio.estado = "CANCELADO"
+        self.estudio.codigo_barra = self.estudio.numero
+        self.estudio.save(update_fields=["estado", "codigo_barra", "updated_at"])
+        r = self.client.post(
+            f"/api/lab/microbiologia/estudios/{self.estudio.pk}/imprimir-etiqueta/",
+            {},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cancelado", (r.json().get("error") or "").lower())

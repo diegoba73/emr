@@ -426,7 +426,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="imprimir-etiqueta")
     def imprimir_etiqueta(self, request, pk=None):
-        """Prepara ZPL (barcode + etiquetas_impresas_at) sin enviar a impresora."""
+        """Prepara ZPL. Primera vez (PENDIENTE) asigna barcode; reimpresión si ya etiquetado."""
         from laboratorio.services_etiqueta_microbiologia import (
             EtiquetaMicroError,
             imprimir_etiqueta_estudio_micro,

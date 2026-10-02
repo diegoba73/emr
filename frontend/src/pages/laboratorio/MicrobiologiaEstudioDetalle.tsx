@@ -446,6 +446,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           }
           canEditarObraSocial={canOp}
           onObraSocial={() => setOpenObraSocial(true)}
+          onReimprimirEtiquetas={canOp ? onReimprimir : undefined}
         />
       )}
       {tab === 'orina' && admiteOrina && (
@@ -502,6 +503,16 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onRefresh={loadAll}
         />
       )}
+      <ImprimirPedidoMicroDialog
+        open={openImprimirEtiqueta}
+        estudioId={estudioId}
+        estudioNumero={estudio.numero}
+        reimpresion
+        onClose={() => setOpenImprimirEtiqueta(false)}
+        onEtiquetasOk={() => {
+          void loadAll();
+        }}
+      />
       <MotivoDialog {...dialogProps} />
       <EstadoObraSocialDialog
         open={openObraSocial}

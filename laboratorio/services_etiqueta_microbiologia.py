@@ -260,6 +260,12 @@ def audit_metadata_etiqueta_print_micro(
     }
 
 
+def _estudio_ya_etiquetado(estudio: EstudioMicrobiologia) -> bool:
+    if estudio.etiquetas_impresas_at is not None:
+        return True
+    return bool((getattr(estudio, "codigo_barra", None) or "").strip())
+
+
 def imprimir_etiqueta_estudio_micro(
     estudio: EstudioMicrobiologia,
     *,
@@ -267,19 +273,30 @@ def imprimir_etiqueta_estudio_micro(
     view: str = "EstudioMicrobiologiaViewSet.imprimir_etiqueta",
 ) -> dict[str, Any]:
     """
-    Asigna barcode / etiquetas_impresas_at (PENDIENTE) y devuelve ZPL.
+    Devuelve ZPL para el agente USB local.
+
+    - Primera impresión: solo en PENDIENTE; asigna barcode + etiquetas_impresas_at.
+    - Reimpresión: si ya hay etiqueta/código, permitido en cualquier estado
+      distinto de CANCELADO (igual que lab clínico tras recepción).
 
     No envía a impresora. No audita éxito: llamar confirmar tras el agente local.
     """
-    try:
-        preparados = imprimir_etiquetas_estudios(
-            [estudio.pk],
-            actor=actor,
-            view=view,
+    if estudio.estado == "CANCELADO":
+        raise EtiquetaMicroError(
+            "No se pueden imprimir etiquetas de un estudio cancelado."
         )
-    except MicrobiologiaAccionError as exc:
-        raise EtiquetaMicroError(str(exc)) from exc
-    estudio = preparados[0]
+
+    if not _estudio_ya_etiquetado(estudio):
+        try:
+            preparados = imprimir_etiquetas_estudios(
+                [estudio.pk],
+                actor=actor,
+                view=view,
+            )
+        except MicrobiologiaAccionError as exc:
+            raise EtiquetaMicroError(str(exc)) from exc
+        estudio = preparados[0]
+
     # Recargar FKs usados en líneas.
     estudio = (
         EstudioMicrobiologia.objects.select_related(

@@ -153,7 +153,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 
 **Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (prepara ZPL) y `POST .../imprimir-etiqueta/confirmar/` (audit local) → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Impresión USB en la PC del operador vía `scripts/label_print_agent.ps1`. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
 
-**Microbiología — misma etiqueta 40×23 (ZPL):** `GET .../microbiologia/estudios/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (asigna barcode + `etiquetas_impresas_at` en PENDIENTE) y `POST .../imprimir-etiqueta/confirmar/` (`micro_etiqueta_print`). Mismo agente USB local. PDF `imprimir-etiquetas` queda como legado.
+**Microbiología — misma etiqueta 40×23 (ZPL):** `GET .../microbiologia/estudios/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (primera vez: asigna barcode + `etiquetas_impresas_at` solo en PENDIENTE; **reimpresión** si ya hay etiqueta/código en cualquier estado ≠ CANCELADO) y `POST .../imprimir-etiqueta/confirmar/` (`micro_etiqueta_print`). Mismo agente USB local. PDF `imprimir-etiquetas` queda como legado.
 
 **Aliases:** `/api/laboratorio/tipos-examen/` y `/api/laboratorio/solicitudes/` — mismos ViewSets y **misma** matriz de permisos que `/api/lab/...`.
 

@@ -375,7 +375,7 @@ Implementación: `_apply_estudio_id_query_filter()` en `laboratorio/views_microb
 | `/api/lab/microbiologia/estudios/{id}/iniciar/` | POST | admin/lab. Transición `PENDIENTE→RECIBIDO` (idempotente). |
 | `/api/lab/microbiologia/estudios/{id}/cancelar/` | POST | admin/lab. Requiere `motivo` no vacío. Transición a `CANCELADO`. |
 | `/api/lab/microbiologia/estudios/{id}/etiqueta-zpl/` | GET | Vista previa JSON+ZPL 40×23 (mismo perfil que lab clínico); **no** muta `etiquetas_impresas_at`. Solo `ROLES_LIMS_WRITE`. |
-| `/api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/` | POST | Prepara ZPL; asigna `codigo_barra` + `etiquetas_impresas_at` si PENDIENTE. El navegador lo envía al agente USB local. |
+| `/api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/` | POST | Prepara ZPL. Primera vez: asigna `codigo_barra` + `etiquetas_impresas_at` si PENDIENTE. **Reimpresión** si ya hay etiqueta/código (estados ≠ CANCELADO). El navegador lo envía al agente USB local. |
 | `/api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/confirmar/` | POST | Auditoría `micro_etiqueta_print` (`transport=local_agent`). |
 | `/api/lab/microbiologia/estudios/{id}/imprimir-etiquetas/` | POST | **Legacy** PDF Code128; preferir flujo ZPL. |
 | `/api/lab/microbiologia/siembras/` | GET, POST | Crear: admin/lab. Listar/ver: admin/lab/médico (filtrado por sus solicitudes). **Query opcional `?estudio_id=`** [IMPLEMENTADO jun 2026]. |

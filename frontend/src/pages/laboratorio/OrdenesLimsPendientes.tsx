@@ -178,7 +178,7 @@ const OrdenesLimsPendientes: React.FC = () => {
     }
   };
 
-  /** Primera impresión (crea tubos lab) o reimpresión ZPL; micro sigue PDF. */
+  /** Primera impresión (crea tubos lab) o reimpresión ZPL; micro ZPL (primera o reimpresión). */
   const handleAccionEtiquetas = async (row: PendientePedidoRow) => {
     if (row.tipo === 'LAB_CLINICO' && row.labOrden) {
       if (tab === 'esperando_recepcion') {

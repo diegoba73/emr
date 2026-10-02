@@ -9,6 +9,8 @@ export interface EstudioMicroResumenTabProps {
   canOperateTecnico: boolean;
   canMarcarInformado: boolean;
   canEditarObraSocial?: boolean;
+  /** Reimpresión ZPL post-recepción (mismo flujo que lab clínico). */
+  onReimprimirEtiquetas?: () => void;
   onIniciar: () => void;
   onCancelar: () => void;
   onMarcarInformado: () => void;
@@ -20,12 +22,17 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   canOperateTecnico,
   canMarcarInformado,
   canEditarObraSocial = false,
+  onReimprimirEtiquetas,
   onIniciar,
   onCancelar,
   onMarcarInformado,
   onObraSocial,
 }) => {
   const e = estudio.estado;
+  const puedeReimprimir =
+    Boolean(onReimprimirEtiquetas) &&
+    e !== 'CANCELADO' &&
+    Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
   return (
     <Paper sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -70,11 +77,19 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       <Typography sx={{ mt: 2 }} variant="body2" color="text.secondary">
         {estudio.observaciones || 'Sin observaciones.'}
       </Typography>
-      {(canOperateTecnico || canMarcarInformado || canEditarObraSocial) && (
+      {(canOperateTecnico ||
+        canMarcarInformado ||
+        canEditarObraSocial ||
+        puedeReimprimir) && (
         <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {canEditarObraSocial && onObraSocial && (
             <Button variant="outlined" onClick={onObraSocial}>
               Obra social
+            </Button>
+          )}
+          {puedeReimprimir && (
+            <Button variant="outlined" onClick={onReimprimirEtiquetas}>
+              Reimprimir etiquetas
             </Button>
           )}
           {canOperateTecnico && e === 'PENDIENTE' && (
