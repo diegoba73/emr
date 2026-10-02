@@ -148,7 +148,7 @@ export default function InformeDetalle() {
               onPress={() =>
                 Alert.alert(
                   'Validar',
-                  'La orden pasará a validada (FINALIZADO) y quedará bloqueada para edición.',
+                  'La orden pasará a validada (FINALIZADO). Si hay que corregir después, se puede reabrir con motivo.',
                   [
                     { text: 'Cancelar', style: 'cancel' },
                     {
@@ -166,6 +166,54 @@ export default function InformeDetalle() {
                   ]
                 )
               }
+            />
+          )}
+          {inf.puede_desvalidar && (
+            <Action
+              secondary
+              title={busy ? 'Reabriendo…' : 'Reabrir para corregir'}
+              disabled={busy}
+              onPress={() => {
+                const reabrir = (motivo: string) =>
+                  void run(
+                    async () => {
+                      await api(`/informes/${inf.id}/desvalidar/`, 'POST', {
+                        motivo: motivo.trim() || 'Corrección de resultados',
+                      });
+                    },
+                    'Informe reabierto para corrección.'
+                  );
+                const promptFn = (
+                  Alert as unknown as {
+                    prompt?: (
+                      title: string,
+                      message?: string,
+                      buttons?: Array<{ text: string; style?: string; onPress?: (t?: string) => void }>,
+                      type?: string
+                    ) => void;
+                  }
+                ).prompt;
+                if (typeof promptFn === 'function') {
+                  promptFn(
+                    'Reabrir informe',
+                    'Indicá el motivo (mínimo 5 caracteres). Luego corregí en LIMS web y volvé a validar.',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'Reabrir', onPress: (motivo?: string) => reabrir(motivo || '') },
+                    ],
+                    'plain-text'
+                  );
+                } else {
+                  Alert.alert(
+                    'Reabrir informe',
+                    'Se reabrirá con motivo «Corrección de resultados». Confirmá.',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'Reabrir', onPress: () => reabrir('Corrección de resultados') },
+                    ]
+                  );
+                }
+              }}
             />
           )}
           {inf.puede_informar_parcial && !inf.es_parcial && (

@@ -6,6 +6,7 @@ import {
   ordenListaParaValidar,
   ordenPuedeCargarResultados,
   ordenPuedeCorregirResultados,
+  ordenPuedeDesvalidar,
   ordenPuedeEnviarInforme,
 } from './limsEstadosOrden';
 
@@ -30,6 +31,12 @@ describe('limsEstadosOrden — LISTO_PARA_VALIDAR', () => {
     expect(ordenPuedeCargarResultados('LISTO_PARA_VALIDAR')).toBe(true);
     expect(ordenPuedeCargarResultados('FINALIZADO')).toBe(false);
     expect(ordenPuedeCorregirResultados('LISTO_PARA_VALIDAR')).toBe(true);
+  });
+
+  it('permite desvalidar solo en FINALIZADO', () => {
+    expect(ordenPuedeDesvalidar('FINALIZADO')).toBe(true);
+    expect(ordenPuedeDesvalidar('LISTO_PARA_VALIDAR')).toBe(false);
+    expect(ordenPuedeDesvalidar('EN_PROCESO')).toBe(false);
   });
 
   it('solo permite enviar informe validado (FINALIZADO)', () => {

@@ -5,6 +5,7 @@ from .views_informes import (
     InformeMovilDetalle,
     InformeMovilPdf,
     InformeMovilValidar,
+    InformeMovilDesvalidar,
     InformeMovilInformarParcial,
 )
 from .views_lab import (
@@ -36,6 +37,7 @@ urlpatterns = [
     path('informes/<int:pk>/', InformeMovilDetalle.as_view()),
     path('informes/<int:pk>/pdf/', InformeMovilPdf.as_view()),
     path('informes/<int:pk>/validar/', InformeMovilValidar.as_view()),
+    path('informes/<int:pk>/desvalidar/', InformeMovilDesvalidar.as_view()),
     path('informes/<int:pk>/informar-parcial/', InformeMovilInformarParcial.as_view()),
     path('lab/pacientes/', PacientesLabMovil.as_view()),
     path('lab/pacientes/<int:pk>/contexto/', PacienteContextoLabMovil.as_view()),

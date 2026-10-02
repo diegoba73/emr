@@ -55,7 +55,7 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 | En proceso | `EN_PROCESO` | **No** es regla universal que `POST .../tomar-muestra/` pase inmediatamente `PENDIENTE` → `EN_PROCESO`. Con tubos reales la orden puede seguir `PENDIENTE` hasta que el tubo correspondiente se registre/escanee como `TOMADA`. El flujo legacy **sin** tubos puede avanzar durante `tomar-muestra`. |
 | Informe parcial | `INFORMADO_PARCIAL` | Carga incompleta |
 | Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa; exige IQC del día. Reapertura: vaciar un resultado completo → `EN_PROCESO`. |
-| Finalizado | `FINALIZADO` | `POST .../validar/` (alias `.../finalizar/`); admin / bioquímico / superuser |
+| Finalizado | `FINALIZADO` | `POST .../validar/` (alias `.../finalizar/`); admin / bioquímico / superuser. Reapertura: `POST .../desvalidar/` (motivo obligatorio) → `LISTO_PARA_VALIDAR` |
 
 Ya **no** existen en este modelo: `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO` (pueden figurar en docs Fase A).
 

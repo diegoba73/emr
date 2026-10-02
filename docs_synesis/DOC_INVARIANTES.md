@@ -50,7 +50,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | O1 | Estado de `SolicitudExamen` solo vía acciones dedicadas, no PATCH CRUD. | **[IMPLEMENTADO]** |
 | O2 | Número de protocolo único. | **[IMPLEMENTADO]** |
 | O3 | Al crear orden LIMS, existen filas `ResultadoExamen` por tipo solicitado. | **[IMPLEMENTADO]** |
-| O4 | Orden `FINALIZADO` es terminal: no vuelve al flujo normal de carga; no hay action pública `cancelar` de `SolicitudExamen`. Cerrar no borra filas `ResultadoExamen`. **[HISTÓRICO]** “cancelar orden → `CANCELADO`”. | **[IMPLEMENTADO]** cierre; sin cancelar orden |
+| O4 | Orden `FINALIZADO` cierra el flujo normal de carga; no hay action pública `cancelar` de `SolicitudExamen`. Cerrar no borra filas `ResultadoExamen`. Reapertura clínica solo vía `POST …/desvalidar/` (bioquímico/admin, con motivo auditado) → `LISTO_PARA_VALIDAR`. **[HISTÓRICO]** “cancelar orden → `CANCELADO`”. | **[IMPLEMENTADO]** |
 | O5 | Orden EMR (`solicitudes`) y orden LIMS nativa son trazables por separado. | **[DEUDA]** sin FK única |
 
 ---
@@ -71,9 +71,9 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | ID | Invariante | Estado |
 |----|------------|--------|
 | R1 | Un resultado por (orden, tipo_examen). | **[IMPLEMENTADO]** |
-| R2 | Orden `FINALIZADO` no vuelve al flujo normal de carga: no se cargan ni mutan resultados de forma silenciosa tras el cierre. Las transiciones respetan la FSM vigente (`PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` opcional → `LISTO_PARA_VALIDAR` → `FINALIZADO`). Una rectificación futura, si se implementa, debe mantener trazabilidad; **no hay** API de rectificación de orden hoy. **[HISTÓRICO]** los nombres `CANCELADO` / `VALIDADO` / `ENTREGADO` no son estados de `SolicitudExamen`. | **[IMPLEMENTADO]** cierre; **[DEUDA]** sin API “corregir” |
+| R2 | Orden `FINALIZADO` no admite carga silenciosa: `cargar-resultados` sigue rechazando mientras esté finalizada. Rectificación: `POST …/desvalidar/` (bioquímico/admin, motivo ≥5 chars, auditoría) → `LISTO_PARA_VALIDAR`, limpia `validado_por`/`fecha_validacion`, luego carga + `validar` de nuevo. FSM: `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` opcional → `LISTO_PARA_VALIDAR` → `FINALIZADO` ↔ (desvalidar) `LISTO_PARA_VALIDAR`. **[HISTÓRICO]** los nombres `CANCELADO` / `VALIDADO` / `ENTREGADO` no son estados de `SolicitudExamen`. | **[IMPLEMENTADO]** |
 | R3 | No validar con valores vacíos. | **[IMPLEMENTADO]** |
-| R4 | Resultado ya validado/cerrado no se edita directamente sin política de corrección. | **[RECTOR]** — **[DEUDA]** no hay API “corregir” |
+| R4 | Resultado ya validado/cerrado no se edita directamente: primero `desvalidar` con motivo y auditoría. | **[IMPLEMENTADO]** |
 | R5 | `muestra_id` en carga debe ser de la misma orden y estados admitidos. | **[IMPLEMENTADO]** B2 |
 
 ---

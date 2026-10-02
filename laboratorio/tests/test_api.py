@@ -306,7 +306,65 @@ class TestSolicitudExamenAPI(APITestCase):
         # Debe recibir 400 Bad Request
         assert response_cargar.status_code == status.HTTP_400_BAD_REQUEST
         assert 'validada' in response_cargar.data.get('error', '').lower()
-    
+
+        # Desvalidar (admin/bio) reabre a LISTO y permite cargar de nuevo
+        self.client.force_authenticate(user=self.user_admin)
+        response_des = self.client.post(
+            f'/api/lab/solicitudes/{solicitud.id}/desvalidar/',
+            {'motivo': 'Corrección de valor glucemia'},
+            format='json',
+        )
+        assert response_des.status_code == status.HTTP_200_OK, response_des.data
+        solicitud.refresh_from_db()
+        assert solicitud.estado == 'LISTO_PARA_VALIDAR'
+        resultado.refresh_from_db()
+        assert resultado.validado_por_id is None
+        assert resultado.fecha_validacion is None
+
+        self.client.force_authenticate(user=self.user_lab)
+        response_cargar2 = self.client.post(
+            f'/api/lab/solicitudes/{solicitud.id}/cargar-resultados/',
+            data,
+            format='json',
+        )
+        assert response_cargar2.status_code == status.HTTP_200_OK, response_cargar2.data
+        resultado.refresh_from_db()
+        assert resultado.valor_obtenido == '100.0'
+
+    def test_desvalidar_exige_motivo_y_rol(self):
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud='AMBULATORIO_CEHTA',
+            estado='FINALIZADO',
+            estado_obra_social='AUTORIZADO',
+        )
+        solicitud.tipos_examen.add(self.tipo_examen_1)
+        ResultadoExamen.objects.create(
+            solicitud=solicitud,
+            tipo_examen=self.tipo_examen_1,
+            valor_obtenido='95.5',
+            es_patologico=False,
+            validado_por=self.user_admin,
+            fecha_validacion=timezone.now(),
+        )
+
+        self.client.force_authenticate(user=self.user_lab)
+        r_lab = self.client.post(
+            f'/api/lab/solicitudes/{solicitud.id}/desvalidar/',
+            {'motivo': 'Corrección de laboratorio'},
+            format='json',
+        )
+        assert r_lab.status_code == status.HTTP_403_FORBIDDEN
+
+        self.client.force_authenticate(user=self.user_admin)
+        r_corto = self.client.post(
+            f'/api/lab/solicitudes/{solicitud.id}/desvalidar/',
+            {'motivo': 'abc'},
+            format='json',
+        )
+        assert r_corto.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_validar_solicitud_sin_resultados_vacios(self):
         """
         Test que no se puede validar una solicitud con resultados vacíos.

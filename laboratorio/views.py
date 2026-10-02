@@ -49,6 +49,7 @@ from .analisis_longitudinal import (
 from .orden_grupos_informe import claves_grupos_validas, validar_orden_grupos
 from .solicitud_cierre import (
     SolicitudCierreError,
+    desvalidar_solicitud_manual,
     finalizar_solicitud_manual,
     sincronizar_estado_tras_carga,
     solicitud_resultados_completos,
@@ -321,7 +322,11 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='agregar-examenes')
     def agregar_examenes(self, request, pk=None):
-        """Agrega exámenes/paneles a orden abierta, post-etiquetas o en curso si caben en tubos."""
+        """Agrega exámenes/paneles a orden abierta, post-etiquetas o en curso.
+
+        Si el examen cabe en tubos existentes se reutilizan; si requiere otro
+        tubo o extracción, se crean muestras en PENDIENTE_TOMA.
+        """
         from laboratorio.restricciones_frecuencia import RestriccionFrecuenciaError
         from laboratorio.solicitud_orden_abierta import (
             OrdenNoAbiertaError,
@@ -801,6 +806,39 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         """Alias de validar: liberación clínica (bioquímico / admin)."""
         return self.validar(request, pk=pk)
 
+    @action(detail=True, methods=['post'], url_path='desvalidar')
+    def desvalidar(self, request, pk=None):
+        """
+        Reabre una orden FINALIZADO para corregir resultados y volver a validar.
+        Solo bioquímico / admin. Exige motivo (auditoría).
+        """
+        motivo = ''
+        if hasattr(request, 'data') and request.data is not None:
+            motivo = str(request.data.get('motivo', '') or '')
+        try:
+            with transaction.atomic():
+                solicitud = SolicitudExamen.objects.select_for_update().get(pk=pk)
+                desvalidar_solicitud_manual(
+                    solicitud,
+                    actor=request.user,
+                    view='SolicitudExamenViewSet.desvalidar',
+                    motivo=motivo,
+                )
+                serializer = self.get_serializer(solicitud)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except SolicitudEstadoTransitionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SolicitudCierreError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SolicitudExamen.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            logger.error("Error desvalidando solicitud", exc_info=True)
+            return Response(
+                {'error': 'Error al reabrir la solicitud para corrección.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=True, methods=['post'], url_path='enviar-informe')
     def enviar_informe(self, request, pk=None):
         """Envía el informe PDF al paciente y/o médico solicitante por email y/o WhatsApp."""
@@ -1036,9 +1074,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             )
         except SolicitudExamen.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        except SolicitudEstadoTransitionError:
+        except SolicitudEstadoTransitionError as exc:
             return Response(
-                {'error': 'Solo se pueden imprimir etiquetas cuando la solicitud está pendiente.'},
+                {'error': str(exc) or 'No se pueden generar etiquetas en el estado actual de la orden.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except MuestraAccionError as exc:

@@ -67,8 +67,13 @@ export function ordenPuedeCargarResultados(estado: EstadoSolicitudLims): boolean
 }
 
 export function ordenPuedeCorregirResultados(estado: EstadoSolicitudLims): boolean {
-  // Tras FINALIZADO los resultados quedan bloqueados.
+  // Tras FINALIZADO hace falta desvalidar explícitamente antes de editar.
   return ordenPuedeCargarResultados(estado);
+}
+
+/** Bio/admin: reabrir informe validado para corregir y volver a validar. */
+export function ordenPuedeDesvalidar(estado: EstadoSolicitudLims): boolean {
+  return estado === 'FINALIZADO';
 }
 
 /** Estado LISTO_PARA_VALIDAR (resultados completos pendientes de bioquímico). */

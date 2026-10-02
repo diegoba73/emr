@@ -27,6 +27,7 @@ import {
   getSolicitudExamen,
   listMuestrasPorSolicitud,
   patchEstadoObraSocialSolicitud,
+  postDesvalidarSolicitud,
   postMarcarDerivacion,
   postValidarSolicitud,
   type IqcPrecheckResult,
@@ -49,6 +50,7 @@ import {
   ordenListaParaValidar,
   ordenPuedeAgregarExamenes,
   ordenPuedeCargarResultados,
+  ordenPuedeDesvalidar,
   ordenPuedeEnviarInforme,
   ordenPuedeQuitarExamenes,
 } from '../../utils/limsEstadosOrden';
@@ -76,6 +78,9 @@ const OrdenLimsDetalle: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [validando, setValidando] = useState(false);
+  const [desvalidando, setDesvalidando] = useState(false);
+  const [openDesvalidar, setOpenDesvalidar] = useState(false);
+  const [motivoDesvalidar, setMotivoDesvalidar] = useState('');
   const [openTomarMuestra, setOpenTomarMuestra] = useState(false);
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
@@ -214,6 +219,33 @@ const OrdenLimsDetalle: React.FC = () => {
     await runValidar({ confirmar_criticos: tieneAlertas });
   };
 
+  const handleDesvalidar = async () => {
+    if (!orden) return;
+    const motivo = motivoDesvalidar.trim();
+    if (motivo.length < 5) {
+      toast.error('Indicá un motivo de la reapertura (mínimo 5 caracteres).');
+      return;
+    }
+    setDesvalidando(true);
+    try {
+      const updated = await postDesvalidarSolicitud(orden.id, motivo);
+      setOrden(updated);
+      setOpenDesvalidar(false);
+      setMotivoDesvalidar('');
+      setTab(2);
+      toast.success('Orden reabierta. Corregí los resultados y volvé a validar.');
+      try {
+        setIqcPrecheck(await getIqcPrecheck(updated.id));
+      } catch {
+        /* keep updated */
+      }
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden));
+    } finally {
+      setDesvalidando(false);
+    }
+  };
+
   if (!allowed && canAccessAnalisisClinicoLab(currentUser) && id) {
     return <Navigate to={`/solicitudes/${id}`} replace state={location.state} />;
   }
@@ -348,7 +380,7 @@ const OrdenLimsDetalle: React.FC = () => {
           Acciones de orden
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {canOp && e === 'PENDIENTE' && (
+          {canOp && (e === 'PENDIENTE' || (orden.tubos_pendientes_extraccion?.length ?? 0) > 0) && (
             <Button variant="outlined" onClick={() => setOpenTomarMuestra(true)}>
               Imprimir etiquetas
             </Button>
@@ -411,6 +443,19 @@ const OrdenLimsDetalle: React.FC = () => {
               variant="outlined"
             />
           )}
+          {ordenPuedeDesvalidar(e) && canValidar && (
+            <Button
+              variant="outlined"
+              color="warning"
+              disabled={desvalidando}
+              onClick={() => {
+                setMotivoDesvalidar('');
+                setOpenDesvalidar(true);
+              }}
+            >
+              Reabrir para corregir
+            </Button>
+          )}
           {puedeEnviarInforme && finalizada && canEnviar && (
             <Button variant="contained" color="primary" onClick={() => setOpenEnviarInforme(true)}>
               Enviar informe
@@ -424,9 +469,9 @@ const OrdenLimsDetalle: React.FC = () => {
         </Box>
         {canOp && (ordenPuedeAgregarExamenes(orden) || ordenPuedeQuitarExamenes(orden)) && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            <strong>Agregar / quitar</strong>: sin etiquetas, libre; con etiquetas o en proceso, solo
-            si el examen cabe en los tubos ya generados (sin nueva extracción). No se pueden quitar
-            exámenes con resultado cargado o validados, ni órdenes finalizadas.
+            <strong>Agregar / quitar</strong>: sin etiquetas, libre; con etiquetas o en proceso se
+            puede agregar aunque haga falta otro tubo (queda pendiente de extracción). No se pueden
+            quitar exámenes con resultado cargado o validados, ni órdenes finalizadas.
           </Typography>
         )}
         {canOp && e === 'PENDIENTE' && (
@@ -662,6 +707,44 @@ const OrdenLimsDetalle: React.FC = () => {
         onClose={() => setOpenEnviarInforme(false)}
         onSuccess={(o) => setOrden(o)}
       />
+
+      <Dialog
+        open={openDesvalidar}
+        onClose={() => !desvalidando && setOpenDesvalidar(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Reabrir informe para corregir</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            La orden vuelve a <strong>Listo para validar</strong>. Podés editar resultados y luego
+            volver a validar. El motivo queda auditado.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            label="Motivo de la reapertura"
+            value={motivoDesvalidar}
+            onChange={(e) => setMotivoDesvalidar(e.target.value)}
+            helperText="Mínimo 5 caracteres"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDesvalidar(false)} disabled={desvalidando}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={desvalidando || motivoDesvalidar.trim().length < 5}
+            onClick={() => void handleDesvalidar()}
+          >
+            {desvalidando ? 'Reabriendo…' : 'Reabrir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={qcOverrideOpen} onClose={() => !validando && setQcOverrideOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Forzar liberación sin IQC vigente</DialogTitle>

@@ -73,6 +73,28 @@ def test_secretaria_lista_todas_y_descarga_parcial_base64():
     assert raw.startswith(b'%PDF')
 
 
+def test_paciente_descarga_pdf_propio_y_no_ajeno():
+    c, user = _login('paciente', 'pac-pdf')
+    p = Paciente.objects.create(user=user, nombre='Ana', apellido='Propia', dni='INF-PDF-1')
+    otro = Paciente.objects.create(nombre='Otro', apellido='Ajeno', dni='INF-PDF-2')
+    propia = _orden(p, 'FINALIZADO')
+    ajena = _orden(otro, 'FINALIZADO')
+
+    det = c.get(f'/api/movil/informes/{propia.id}/')
+    assert det.status_code == 200, det.data
+    assert det.data['informe']['puede_descargar_pdf'] is True
+
+    pdf = c.get(f'/api/movil/informes/{propia.id}/pdf/?format=base64')
+    assert pdf.status_code == 200, pdf.data
+    assert pdf.data['es_parcial'] is False
+    assert isinstance(pdf.data.get('filename'), str) and pdf.data['filename'].endswith('.pdf')
+    raw = base64.b64decode(pdf.data['base64'])
+    assert raw.startswith(b'%PDF')
+
+    deny = c.get(f'/api/movil/informes/{ajena.id}/pdf/?format=base64')
+    assert deny.status_code == 403
+
+
 def test_bioquimico_puede_ver_listo_para_validar():
     c, _ = _login('bioquimico', 'bio-inf')
     p = Paciente.objects.create(nombre='Bio', apellido='Quim', dni='INF-4')
@@ -84,3 +106,23 @@ def test_bioquimico_puede_ver_listo_para_validar():
     assert det.status_code == 200
     assert det.data['informe']['puede_validar'] is True
     assert 'orden' in det.data
+
+
+def test_bioquimico_desvalidar_informe_finalizado():
+    c, _ = _login('bioquimico', 'bio-des')
+    p = Paciente.objects.create(nombre='Bio', apellido='Des', dni='INF-DES')
+    sol = _orden(p, 'FINALIZADO')
+    det = c.get(f'/api/movil/informes/{sol.id}/')
+    assert det.status_code == 200
+    assert det.data['informe']['puede_desvalidar'] is True
+    bad = c.post(f'/api/movil/informes/{sol.id}/desvalidar/', {'motivo': 'x'}, format='json')
+    assert bad.status_code == 400
+    ok = c.post(
+        f'/api/movil/informes/{sol.id}/desvalidar/',
+        {'motivo': 'Corrección de valor'},
+        format='json',
+    )
+    assert ok.status_code == 200, ok.data
+    assert ok.data['estado'] == 'LISTO_PARA_VALIDAR'
+    assert ok.data['puede_validar'] is True
+    assert ok.data['puede_desvalidar'] is False

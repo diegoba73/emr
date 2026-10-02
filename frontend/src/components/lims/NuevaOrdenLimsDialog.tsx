@@ -582,8 +582,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
             {error && <Alert severity="error">{error}</Alert>}
             {agregarAOrdenId ? (
               <Alert severity="info" sx={{ py: 0.5 }}>
-                Con etiquetas o en proceso, el examen tiene que caber en los tubos ya generados
-                (sin nueva extracción).
+                Si el examen cabe en un tubo ya generado se reutiliza; si necesita otro tubo o
+                extracción, se crea uno pendiente de toma para imprimir y recibir.
               </Alert>
             ) : null}
 

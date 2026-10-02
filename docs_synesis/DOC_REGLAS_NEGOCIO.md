@@ -128,7 +128,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 - `SolicitudExamen`: origen EMR/guardia/externo papel; médico interno o nombre externo; generación de número LAB-YYYY-…
 - **`estado`:** no se modifica por `PATCH`/`PUT` del CRUD (`SolicitudExamenSerializer`: `estado` read-only). Cambios vía acciones `POST` dedicadas (`tomar-muestra`, `cargar-resultados`, `validar` / alias `finalizar`) y servicios de muestra que coordinan `PENDIENTE`→`EN_PROCESO`. **[HISTÓRICO]** `cancelar` y `marcar-entregado` de orden: 404.
-- No cargar ni mutar resultados de una orden **`FINALIZADO`**. Estados cargables: `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`.
+- No cargar ni mutar resultados de una orden **`FINALIZADO`** sin desvalidar antes. Estados cargables: `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`. Reapertura: `POST …/desvalidar/` (bioquímico/admin, motivo) → `LISTO_PARA_VALIDAR`.
 - **[HISTÓRICO]** no hay action pública de cancelar la **orden**; `CANCELADO` no es estado de `SolicitudExamen`. Cancelar **muestra** o **estudio micro** son entidades distintas.
 - Al crear: M2M a tipos y paneles; se generan `ResultadoExamen` por tipo (panel expande sin duplicar tipo).
 
@@ -161,7 +161,8 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - **Pendiente de carga:** `valor_obtenido` puede estar **vacío** en modelo (`blank=True`, `default=''`) al crear filas `ResultadoExamen`; eso **no** autoriza validar la orden incompleta: la acción `validar` sigue rechazando si queda algún resultado con valor vacío. Con muestra vinculada, `validar` además rechaza si la muestra quedó en estados incompatibles (listado en `DOC_FLUJOS_LIMS.md`).
 - Carga masiva vía `cargar-resultados` (transacción + bloqueo); no modificar si la orden está **`FINALIZADO`**. Completar todos los valores → `LISTO_PARA_VALIDAR`; `informar_parcial` incompleto → `INFORMADO_PARCIAL`; vaciar un valor desde `LISTO_PARA_VALIDAR` → `EN_PROCESO`.
 - Validación de orden: solo desde **`LISTO_PARA_VALIDAR`** (`POST …/validar/` o `…/finalizar/`). Exige valores no vacíos, IQC y obra social; `confirmar_criticos` si hay alertas. Asigna `validado_por` y `fecha_validacion`. **admin** / **bioquimico** (`ROLES_LIMS_VALIDAR`) / **superuser**. **`laboratorio` no valida.** `is_staff` no alcanza.
-- **Cierre:** `FINALIZADO` es terminal de la orden. **[HISTÓRICO]** no hay `marcar-entregado` ni estado `ENTREGADO` en `SolicitudExamen`. El PDF (`informe-pdf`) no cambia estado.
+- **Rectificación:** `POST …/desvalidar/` (mismos roles que validar) con `motivo` (≥5 caracteres) pasa `FINALIZADO` → `LISTO_PARA_VALIDAR`, limpia sellos de validación y deja auditar la reapertura. Después se puede `cargar-resultados` y volver a `validar`.
+- **Cierre:** `FINALIZADO` cierra el flujo normal; la única salida es `desvalidar`. **[HISTÓRICO]** no hay `marcar-entregado` ni estado `ENTREGADO` en `SolicitudExamen`. El PDF (`informe-pdf`) no cambia estado.
 - **PDF-1 (jun 2026):** `GET informe-pdf` es vista derivada de solo lectura; no valida ni entrega la orden; no persiste archivo. Incluye resultados según API autorizada; laboratorio/admin ven estados técnicos; médico solo solicitudes propias; paciente sin acceso LIMS. Metadata de auditoría sin `codigo_barra`, DNI ni valores clínicos.
 
 ---

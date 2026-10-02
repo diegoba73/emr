@@ -40,6 +40,8 @@ def ensure_paciente_linked_to_user(user) -> Optional[Paciente]:
             if locked.user_id is None:
                 locked.user = user
                 locked.save(update_fields=["user_id"])
+        # Invalidar cache del reverse OneToOne por si falló antes del link.
+        user.__dict__.pop("paciente", None)
         return Paciente.objects.get(user=user)
 
     email = (getattr(user, "email", None) or "").strip()

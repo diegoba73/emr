@@ -183,7 +183,7 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertTrue(r2.data.get("orden_abierta"))
         self.assertFalse(r2.data.get("esperando_recepcion"))
 
-    def test_etiquetas_impresas_bloquean_tubo_nuevo_y_permiten_nueva_orden(self):
+    def test_etiquetas_impresas_crean_tubo_nuevo_y_permiten_nueva_orden(self):
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
         r_tom = self._imprimir_etiquetas(sol_id)
@@ -193,16 +193,29 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertFalse(orden_esta_abierta(sol))
         self.assertEqual(sol.estado, "PENDIENTE")
         self.assertTrue(sol.muestras.filter(estado="PENDIENTE_TOMA").exists())
+        n_antes = Muestra.objects.filter(solicitud_id=sol_id).count()
 
-        # Orina = otro tubo → rechazado
+        # Orina = otro tubo → se crea tubo PENDIENTE_TOMA en la misma orden
         r_add = self.client.post(
             f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
             {"examenes_ids": [self.orina.id]},
             format="json",
             HTTP_HOST="localhost",
         )
-        self.assertEqual(r_add.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("tubo", (r_add.data.get("detail") or "").lower())
+        self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
+        self.assertTrue(
+            ResultadoExamen.objects.filter(
+                solicitud_id=sol_id, tipo_examen_id=self.orina.id
+            ).exists()
+        )
+        self.assertEqual(Muestra.objects.filter(solicitud_id=sol_id).count(), n_antes + 1)
+        self.assertTrue(
+            Muestra.objects.filter(
+                solicitud_id=sol_id,
+                tipo_contenedor=self.frasco,
+                estado="PENDIENTE_TOMA",
+            ).exists()
+        )
 
         r_get = self.client.get(
             f"/api/lab/solicitudes/{sol_id}/",
@@ -214,7 +227,7 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertTrue(r_get.data.get("puede_agregar_examenes"))
         self.assertFalse(r_get.data.get("pedido_adicional"))
 
-        r2 = self._create([self.orina.id])
+        r2 = self._create([self.urea.id])
         self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
         self.assertFalse(r2.data.get("merged"))
         self.assertNotEqual(r2.data["id"], sol_id)
@@ -248,8 +261,8 @@ class TestOrdenUnicaAbierta(TestCase):
         # No se crean tubos nuevos
         self.assertEqual(Muestra.objects.filter(solicitud_id=sol_id).count(), n_muestras)
 
-    def test_etiquetas_impresas_rechazan_si_excede_capacidad_tubo(self):
-        """11 unidades del mismo (tc,tm) → ceil(11/10)=2 tubos; con 1 impreso rechaza."""
+    def test_etiquetas_impresas_crean_tubo_si_excede_capacidad(self):
+        """11 unidades del mismo (tc,tm) → ceil(11/10)=2 tubos; con 1 impreso crea el 2º."""
         extras = []
         for i in range(10):
             extras.append(
@@ -277,12 +290,15 @@ class TestOrdenUnicaAbierta(TestCase):
             format="json",
             HTTP_HOST="localhost",
         )
-        self.assertEqual(r_add.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("tubo", (r_add.data.get("detail") or "").lower())
-        self.assertFalse(
+        self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
+        self.assertTrue(
             ResultadoExamen.objects.filter(
                 solicitud_id=sol_id, tipo_examen_id=extras[9].id
             ).exists()
+        )
+        self.assertEqual(
+            Muestra.objects.filter(solicitud_id=sol_id, estado="PENDIENTE_TOMA").count(),
+            2,
         )
 
     def test_agregar_examenes_endpoint_ok(self):
@@ -384,18 +400,31 @@ class TestOrdenUnicaAbierta(TestCase):
         sol = SolicitudExamen.objects.get(pk=sol_id)
         self.assertIn(pan.id, set(sol.paneles.values_list("id", flat=True)))
 
-    def test_en_proceso_rechaza_tubo_nuevo(self):
+    def test_en_proceso_agrega_tubo_nuevo(self):
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
         self._poner_en_proceso(sol_id)
+        n_antes = Muestra.objects.filter(solicitud_id=sol_id).count()
         r_add = self.client.post(
             f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
             {"examenes_ids": [self.orina.id]},
             format="json",
             HTTP_HOST="localhost",
         )
-        self.assertEqual(r_add.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("tubo", (r_add.data.get("detail") or "").lower())
+        self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
+        self.assertTrue(
+            ResultadoExamen.objects.filter(
+                solicitud_id=sol_id, tipo_examen=self.orina
+            ).exists()
+        )
+        self.assertEqual(Muestra.objects.filter(solicitud_id=sol_id).count(), n_antes + 1)
+        self.assertTrue(
+            Muestra.objects.filter(
+                solicitud_id=sol_id,
+                tipo_contenedor=self.frasco,
+                estado="PENDIENTE_TOMA",
+            ).exists()
+        )
 
     def test_finalizado_bloquea_agregar_y_quitar(self):
         r1 = self._create([self.glu.id, self.crea.id])

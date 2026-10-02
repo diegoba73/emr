@@ -62,6 +62,7 @@ export interface InformeResumen {
   fecha_solicitud: string | null;
   puede_descargar_pdf: boolean;
   puede_validar: boolean;
+  puede_desvalidar?: boolean;
   puede_informar_parcial: boolean;
 }
 

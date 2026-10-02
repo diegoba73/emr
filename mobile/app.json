@@ -30,6 +30,12 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-file-system",
+        {
+          "enableFileSharing": true
+        }
+      ],
+      [
         "expo-notifications",
         {
           "defaultChannel": "turnos",

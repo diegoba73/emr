@@ -268,7 +268,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in ROLES_LIMS_WRITE
         if action == 'enviar_informe':
             return role in (*ROLES_LIMS_WRITE, 'secretaria')
-        if action in ('finalizar', 'validar'):
+        if action in ('finalizar', 'validar', 'desvalidar'):
             return role in ROLES_LIMS_VALIDAR
         if action == 'tubos_preview':
             return role in (*ROLES_LIMS_WRITE, 'medico')
@@ -332,7 +332,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'marcar_derivacion':
             return role in ROLES_LIMS_WRITE
 
-        if action in ('finalizar', 'validar'):
+        if action in ('finalizar', 'validar', 'desvalidar'):
             return role in ROLES_LIMS_VALIDAR
 
         if action == 'tubos_preview':

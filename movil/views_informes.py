@@ -24,6 +24,7 @@ from laboratorio.services_informes_pdf import (
 )
 from laboratorio.solicitud_cierre import (
     SolicitudCierreError,
+    desvalidar_solicitud_manual,
     finalizar_solicitud_manual,
     informar_parcial_si_corresponde,
 )
@@ -76,6 +77,7 @@ class InformeMovilSerializer(serializers.ModelSerializer):
     estado_display = serializers.SerializerMethodField()
     puede_descargar_pdf = serializers.SerializerMethodField()
     puede_validar = serializers.SerializerMethodField()
+    puede_desvalidar = serializers.SerializerMethodField()
     puede_informar_parcial = serializers.SerializerMethodField()
 
     class Meta:
@@ -90,6 +92,7 @@ class InformeMovilSerializer(serializers.ModelSerializer):
             'fecha_solicitud',
             'puede_descargar_pdf',
             'puede_validar',
+            'puede_desvalidar',
             'puede_informar_parcial',
         ]
 
@@ -120,6 +123,10 @@ class InformeMovilSerializer(serializers.ModelSerializer):
     def get_puede_validar(self, obj):
         user = self.context['request'].user
         return _rol(user) in ROLES_MOVIL_VALIDAR and obj.estado == 'LISTO_PARA_VALIDAR'
+
+    def get_puede_desvalidar(self, obj):
+        user = self.context['request'].user
+        return _rol(user) in ROLES_MOVIL_VALIDAR and obj.estado == 'FINALIZADO'
 
     def get_puede_informar_parcial(self, obj):
         user = self.context['request'].user
@@ -192,6 +199,10 @@ class InformeMovilPdf(APIView):
 
     def get(self, request, pk):
         _assert_rol_informes(request.user)
+        # Paciente puede auto-vincularse en listado; hay que hacerlo también aquí
+        # antes de evaluar user.paciente en la regla de descarga.
+        if _rol(request.user) == 'paciente':
+            ensure_paciente_linked_to_user(request.user)
         try:
             sol = SolicitudExamen.objects.select_related('paciente').get(pk=pk)
         except SolicitudExamen.DoesNotExist as exc:
@@ -255,6 +266,35 @@ class InformeMovilValidar(APIView):
         except SolicitudExamen.DoesNotExist as exc:
             raise NotFound('Informe no encontrado.') from exc
         except (SolicitudEstadoTransitionError, SolicitudCierreError, QcGateError) as exc:
+            raise ValidationError(str(exc)) from exc
+
+
+class InformeMovilDesvalidar(APIView):
+    authentication_classes = [AutenticacionMovil]
+    permission_classes = [RolMovil]
+
+    def post(self, request, pk):
+        if _rol(request.user) not in ROLES_MOVIL_VALIDAR:
+            raise PermissionDenied('Solo el bioquímico puede reabrir informes validados.')
+        motivo = str(request.data.get('motivo', '') or '')
+        try:
+            with transaction.atomic():
+                sol = SolicitudExamen.objects.select_for_update().get(pk=pk)
+                if not usuario_puede_ver_solicitud_lims(request.user, sol):
+                    raise NotFound('Informe no encontrado.')
+                desvalidar_solicitud_manual(
+                    sol,
+                    actor=request.user,
+                    view='InformeMovilDesvalidar.post',
+                    motivo=motivo,
+                )
+                return Response(
+                    InformeMovilSerializer(sol, context={'request': request}).data,
+                    status=status.HTTP_200_OK,
+                )
+        except SolicitudExamen.DoesNotExist as exc:
+            raise NotFound('Informe no encontrado.') from exc
+        except (SolicitudEstadoTransitionError, SolicitudCierreError) as exc:
             raise ValidationError(str(exc)) from exc
 
 

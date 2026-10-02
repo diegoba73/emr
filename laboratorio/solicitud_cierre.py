@@ -306,5 +306,59 @@ def finalizar_solicitud_manual(
         raise SolicitudCierreError("No se pudo finalizar la solicitud.")
 
 
+def desvalidar_solicitud_manual(
+    solicitud: SolicitudExamen,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+    motivo: str = "",
+) -> None:
+    """
+    Reabre una orden FINALIZADO → LISTO_PARA_VALIDAR para corregir resultados
+    y volver a validar. Limpia sellos de validación en cada ResultadoExamen.
+    """
+    motivo_limpio = (motivo or "").strip()
+    if len(motivo_limpio) < 5:
+        raise SolicitudCierreError(
+            "Indicá un motivo de la reapertura (mínimo 5 caracteres)."
+        )
+    if solicitud.estado != "FINALIZADO":
+        raise SolicitudEstadoTransitionError(
+            "Solo se pueden reabrir para corrección órdenes ya validadas (FINALIZADO)."
+        )
+
+    qs = list(solicitud.resultados.all())
+    before_resultados = {r.id: safe_model_snapshot(r) for r in qs}
+
+    apply_solicitud_estado_transition(
+        solicitud,
+        "LISTO_PARA_VALIDAR",
+        actor=actor,
+        accion="desvalidar",
+        view=view,
+        extra_metadata={"motivo": motivo_limpio[:500]},
+    )
+
+    ResultadoExamen.objects.filter(solicitud_id=solicitud.pk).update(
+        validado_por=None,
+        fecha_validacion=None,
+    )
+    solicitud.refresh_from_db()
+
+    for res in ResultadoExamen.objects.filter(solicitud_id=solicitud.pk):
+        log_update(
+            actor=actor,
+            entity=res,
+            before=before_resultados.get(res.id),
+            module="laboratorio",
+            metadata={
+                "action": "desvalidar",
+                "accion": "desvalidar",
+                "view": view,
+                "motivo": motivo_limpio[:200],
+            },
+        )
+
+
 def solicitud_permite_cargar_resultados(solicitud: SolicitudExamen) -> bool:
     return solicitud.estado in ESTADOS_SOLICITUD_EDITABLES

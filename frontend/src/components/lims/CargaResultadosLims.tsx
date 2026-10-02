@@ -1014,7 +1014,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               </>
             ) : orden.estado === 'FINALIZADO' ? (
               <>
-                Orden <strong>validada y bloqueada</strong>
+                Orden <strong>validada</strong>
                 {(() => {
                   const val = (orden.resultados || []).find((r) => r.validado_por_nombre || r.fecha_validacion);
                   if (!val) return null;
@@ -1030,7 +1030,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                     </>
                   );
                 })()}{' '}
-                Los resultados no se pueden modificar.
+                Los resultados están bloqueados. Un bioquímico o admin puede usar{' '}
+                <strong>Reabrir para corregir</strong> y volver a validar.
               </>
             ) : !canOperate ? (
               'Solo lectura: se requiere rol laboratorio, bioquímico o administrador para cargar resultados.'

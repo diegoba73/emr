@@ -245,8 +245,14 @@ def tomar_muestras_en_solicitud(
     Sin ítems: resuelve tubos desde los exámenes (ceil(n/10) por contenedor).
     Si no hay tubos a crear y la orden no tiene muestras, transiciona legacy
     PENDIENTE → EN_PROCESO.
+
+    Permite PENDIENTE y órdenes en curso (p. ej. tubo nuevo al agregar examen).
     """
     from laboratorio.tubos_orden import TubosOrdenError, expandir_items_crear_muestras
+
+    estados_ok = frozenset(
+        {"PENDIENTE", "EN_PROCESO", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"}
+    )
 
     with transaction.atomic():
         solicitud = (
@@ -254,9 +260,9 @@ def tomar_muestras_en_solicitud(
             .prefetch_related("tipos_examen")
             .get(pk=solicitud_id)
         )
-        if solicitud.estado != "PENDIENTE":
+        if solicitud.estado not in estados_ok:
             raise SolicitudEstadoTransitionError(
-                "Solo se pueden imprimir etiquetas cuando la solicitud está pendiente."
+                "Solo se pueden imprimir o generar etiquetas en órdenes no finalizadas."
             )
 
         working_items = list(items or [])
@@ -271,6 +277,8 @@ def tomar_muestras_en_solicitud(
             if Muestra.objects.filter(solicitud_id=solicitud.pk).exclude(
                 estado__in=_MUESTRA_ESTADOS_TERMINALES
             ).exists():
+                return solicitud
+            if solicitud.estado != "PENDIENTE":
                 return solicitud
             apply_solicitud_estado_transition(
                 solicitud,

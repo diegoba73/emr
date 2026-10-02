@@ -1,4 +1,8 @@
-"""Orden LIMS única abierta por paciente: merge de exámenes (y post-etiquetas / en curso si cabe en tubos)."""
+"""Orden LIMS única abierta por paciente: merge de exámenes (y post-etiquetas / en curso).
+
+Si el examen cabe en tubos existentes se reutilizan; si requiere otro contenedor
+o supera capacidad, se crean tubos nuevos en PENDIENTE_TOMA para extracción.
+"""
 from __future__ import annotations
 
 import logging
@@ -11,8 +15,8 @@ from laboratorio.panel_componentes_orden import ordenar_queryset_panel
 
 logger = logging.getLogger(__name__)
 
-# Tubos activos: cierran el merge libre. Con solo PENDIENTE_TOMA se puede
-# agregar si el examen cabe en tubos ya impresos (sin nueva extracción).
+# Tubos activos: cierran el merge libre (alta vía create). Agregar a orden
+# con tubos sigue permitido: mismo tubo o tubo/extracción nueva.
 ESTADOS_MUESTRA_CIERRAN_ALTA = frozenset(
     {
         "PENDIENTE_TOMA",
@@ -38,7 +42,7 @@ class OrdenNoAbiertaError(ValueError):
 
 
 class TuboNuevoRequeridoError(ValueError):
-    """El examen no cabe en tubos impresos; requeriría una nueva extracción."""
+    """No se pudo resolver el tubo del examen (p. ej. sin tipo_contenedor)."""
 
 
 class QuitarExamenError(ValueError):
@@ -77,8 +81,8 @@ def _muestras_activas_solo_pendiente_toma(solicitud: SolicitudExamen) -> bool:
 def orden_esperando_recepcion(solicitud: SolicitudExamen) -> bool:
     """
     PENDIENTE con etiquetas impresas (tubos en PENDIENTE_TOMA):
-    lista para recibir muestras. Se pueden agregar exámenes solo si caben
-    en esos tubos (sin nueva extracción).
+    lista para recibir muestras. Se pueden agregar exámenes; si hace falta
+    otro tubo se genera en PENDIENTE_TOMA.
     """
     if getattr(solicitud, "estado", None) != "PENDIENTE":
         return False
@@ -233,20 +237,10 @@ def _resolver_tipo_examen_ids(
     return tipos, paneles_ok
 
 
-def _assert_caben_en_tubos_impresos(
-    sol: SolicitudExamen,
-    tipos_ids: set[int],
-    paneles_ids: set[int],
-) -> None:
-    """
-    Dry-run: los nuevos tipos/paneles no deben exigir tubos adicionales
-    respecto de las muestras ya existentes (impresas o en curso).
-    """
-    from laboratorio.tubos_orden import TubosOrdenError, expandir_items_crear_muestras
-
-    if not tipos_ids and not paneles_ids:
+def _assert_examenes_con_tubo_configurado(tipos_ids: set[int]) -> None:
+    """Rechaza exámenes sin tipo_contenedor (no se puede generar tubo)."""
+    if not tipos_ids:
         return
-
     sin_tubo = list(
         TipoExamen.objects.filter(pk__in=tipos_ids)
         .filter(tipo_contenedor__isnull=True)
@@ -255,48 +249,50 @@ def _assert_caben_en_tubos_impresos(
     if sin_tubo:
         raise TuboNuevoRequeridoError(
             "No se pueden agregar exámenes sin tipo de tubo configurado "
-            f"({', '.join(sin_tubo)}). Si requieren extracción nueva, creá un pedido adicional."
+            f"({', '.join(sin_tubo)})."
         )
 
-    actuales_te = set(sol.tipos_examen.values_list("id", flat=True))
-    actuales_p = set(sol.paneles.values_list("id", flat=True))
-    agregar_te = sorted(tipos_ids - actuales_te)
-    agregar_p = sorted(paneles_ids - actuales_p)
-    if not agregar_te and not agregar_p:
-        return
 
+def _crear_tubos_faltantes_tras_agregar(
+    sol: SolicitudExamen,
+    *,
+    user=None,
+) -> int:
+    """
+    Tras sumar tipos/paneles: crea Muestra PENDIENTE_TOMA por cada tubo faltante
+    (otro contenedor/muestra o capacidad excedida). Devuelve cantidad creada.
+    """
+    from laboratorio.muestra_estado import crear_muestra
+    from laboratorio.tubos_orden import TubosOrdenError, expandir_items_crear_muestras
+
+    sol_fresh = (
+        SolicitudExamen.objects.prefetch_related(
+            "tipos_examen__tipo_contenedor",
+            "tipos_examen__tipo_muestra_requerida",
+            "paneles__tipos_examen__tipo_contenedor",
+            "paneles__tipos_examen__tipo_muestra_requerida",
+            "muestras",
+        ).get(pk=sol.pk)
+    )
     try:
-        if agregar_te:
-            sol.tipos_examen.add(*agregar_te)
-        if agregar_p:
-            sol.paneles.add(*agregar_p)
-        sol_fresh = (
-            SolicitudExamen.objects.prefetch_related(
-                "tipos_examen__tipo_contenedor",
-                "tipos_examen__tipo_muestra_requerida",
-                "paneles__tipos_examen__tipo_contenedor",
-                "paneles__tipos_examen__tipo_muestra_requerida",
-                "muestras",
-            ).get(pk=sol.pk)
+        faltantes = expandir_items_crear_muestras(sol_fresh)
+    except TubosOrdenError as exc:
+        raise TuboNuevoRequeridoError(
+            f"No se pueden generar los tubos para los exámenes agregados: {exc}"
+        ) from exc
+
+    creados = 0
+    for item in faltantes:
+        crear_muestra(
+            solicitud=sol_fresh,
+            tipo_muestra_id=int(item["tipo_muestra_id"]),
+            tipo_contenedor_id=item.get("tipo_contenedor_id"),
+            observaciones=item.get("observaciones") or "Tubo por examen agregado a la orden",
+            actor=user,
+            view="agregar_examenes",
         )
-        try:
-            faltantes = expandir_items_crear_muestras(sol_fresh)
-        except TubosOrdenError as exc:
-            raise TuboNuevoRequeridoError(
-                "No se pueden agregar estos exámenes a la orden con etiquetas ya impresas: "
-                f"{exc}"
-            ) from exc
-        if faltantes:
-            raise TuboNuevoRequeridoError(
-                "Los exámenes seleccionados requieren un tubo o extracción nueva "
-                "(tipo de muestra/contenedor distinto o capacidad del tubo excedida). "
-                "Creá un pedido adicional para ese paciente."
-            )
-    finally:
-        if agregar_te:
-            sol.tipos_examen.remove(*agregar_te)
-        if agregar_p:
-            sol.paneles.remove(*agregar_p)
+        creados += 1
+    return creados
 
 
 @transaction.atomic
@@ -310,8 +306,9 @@ def agregar_examenes_a_solicitud(
     """
     Agrega paneles/exámenes faltantes a una orden.
 
-    - Sin etiquetas (orden abierta): siempre permitido.
-    - Con etiquetas o en curso: solo si no hace falta un tubo nuevo.
+    - Sin etiquetas (orden abierta): siempre permitido (tubos al imprimir).
+    - Con etiquetas o en curso: reutiliza tubos existentes; si hace falta otro
+      tubo/extracción, crea Muestra en PENDIENTE_TOMA.
     - FINALIZADO: rechazado.
     - Frecuencia PROBNP: ver restricciones_frecuencia (salvo lab/bioquímico).
     """
@@ -338,8 +335,9 @@ def agregar_examenes_a_solicitud(
     )
     existentes = set(sol.resultados.values_list("tipo_examen_id", flat=True))
 
+    # Con tubos ya generados, los nuevos ítems deben poder resolverse a contenedor.
     if not orden_esta_abierta(sol) and orden_tiene_muestras_activas(sol):
-        _assert_caben_en_tubos_impresos(sol, tipos_nuevos, paneles_nuevos)
+        _assert_examenes_con_tubo_configurado(tipos_nuevos)
 
     tipos_map = {
         t.id: t
@@ -367,6 +365,9 @@ def agregar_examenes_a_solicitud(
     if paneles_nuevos:
         actuales_p = set(sol.paneles.values_list("id", flat=True))
         sol.paneles.set(actuales_p | paneles_nuevos)
+
+    if not orden_esta_abierta(sol) and orden_tiene_muestras_activas(sol):
+        _crear_tubos_faltantes_tras_agregar(sol, user=user)
 
     if orden_en_curso(sol):
         _sincronizar_estado_tras_cambio_items(sol, view="agregar_examenes")

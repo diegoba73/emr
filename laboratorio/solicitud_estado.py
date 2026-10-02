@@ -6,6 +6,7 @@ EN_PROCESO → INFORMADO_PARCIAL (informe parcial incompleto)
 EN_PROCESO | INFORMADO_PARCIAL → LISTO_PARA_VALIDAR (resultados completos)
 LISTO_PARA_VALIDAR → FINALIZADO (validar bioquímico)
 LISTO_PARA_VALIDAR → EN_PROCESO (reabrir si queda valor vacío)
+FINALIZADO → LISTO_PARA_VALIDAR (desvalidar / reabrir para corrección)
 """
 from __future__ import annotations
 
@@ -36,9 +37,11 @@ _ALLOWED_TRANSITIONS: frozenset[tuple[str, str, str]] = frozenset(
         # Alias legacy: finalizar_auto ya no cierra desde EN_PROCESO (va a LISTO).
         ("finalizar", "LISTO_PARA_VALIDAR", "FINALIZADO"),
         ("finalizar_auto", "LISTO_PARA_VALIDAR", "FINALIZADO"),
+        ("desvalidar", "FINALIZADO", "LISTO_PARA_VALIDAR"),
     }
 )
 
+# Cierre clínico habitual; la salida es solo vía acción explícita ``desvalidar``.
 ESTADOS_SOLICITUD_TERMINALES = frozenset({"FINALIZADO"})
 
 ESTADOS_SOLICITUD_EDITABLES = frozenset(

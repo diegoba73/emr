@@ -351,6 +351,18 @@ export async function postValidarSolicitud(
   return data;
 }
 
+/** Reabre FINALIZADO → Listo para validar (bioquímico / admin). Exige motivo. */
+export async function postDesvalidarSolicitud(
+  id: number,
+  motivo: string
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.post<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${id}/desvalidar/`,
+    { motivo }
+  );
+  return data;
+}
+
 /** @deprecated Usar postValidarSolicitud */
 export async function postFinalizarOrden(
   id: number,
