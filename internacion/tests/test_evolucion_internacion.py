@@ -218,6 +218,11 @@ class EvolucionInternacionTestCase(APITestCase):
         self.assertEqual(response.data['laboratorio'][0]['id'], solicitud.pk)
         self.assertTrue(response.data['laboratorio'][0]['es_de_hoy'])
         lab = response.data['laboratorio'][0]
+        self.assertIn('fecha_programada_toma', lab)
+        self.assertEqual(
+            lab['fecha_programada_toma'],
+            solicitud.fecha_programada_toma.isoformat(),
+        )
         self.assertIn('orden_grupos_informe', lab)
         self.assertIn('paneles_resumen', lab)
         self.assertIn('tipos_examen', lab)
@@ -226,3 +231,41 @@ class EvolucionInternacionTestCase(APITestCase):
         self.assertEqual(lab['resultados'][0]['tipo_examen_codigo'], tipo_examen.codigo)
         self.assertEqual(lab['resultados'][0]['valor_obtenido'], '110')
         self.assertEqual(len(response.data['estudios']), 1)
+
+    def test_contexto_revista_orden_manana_no_es_de_hoy(self):
+        from datetime import timedelta
+
+        from laboratorio.models import TipoMuestra, TipoExamen, SolicitudExamen
+        from laboratorio.origen_solicitud import INTERNACION_UCO
+
+        suffix = unique_suffix()
+        tipo_muestra = TipoMuestra.objects.create(
+            codigo=f'SNM{suffix}'[:20],
+            nombre='Sangre',
+        )
+        tipo_examen = TipoExamen.objects.create(
+            codigo=f'URE{suffix}'[:20],
+            nombre='Urea',
+            tipo_muestra_requerida=tipo_muestra,
+            precio=10,
+            activo=True,
+        )
+        manana = timezone.localdate() + timedelta(days=1)
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud=INTERNACION_UCO,
+            estado='PENDIENTE',
+            fecha_programada_toma=manana,
+        )
+        solicitud.tipos_examen.add(tipo_examen)
+
+        self.client.force_authenticate(user=self.user)
+        url = f'/api/internacion/internaciones/{self.internacion.pk}/contexto-revista/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['laboratorio']), 1)
+        lab = response.data['laboratorio'][0]
+        self.assertEqual(lab['id'], solicitud.pk)
+        self.assertEqual(lab['fecha_programada_toma'], manana.isoformat())
+        self.assertFalse(lab['es_de_hoy'])

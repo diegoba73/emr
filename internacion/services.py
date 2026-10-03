@@ -205,12 +205,19 @@ class InternacionClinicalService:
                 if not (res.valor_obtenido or '').strip():
                     continue
                 resultados.append(resultado_resumen_informe(res))
+            fecha_prog = getattr(sol, 'fecha_programada_toma', None)
             laboratorio.append({
                 'id': sol.pk,
                 'numero': sol.numero,
                 'estado': sol.estado,
                 'fecha_solicitud': fecha.isoformat() if fecha else None,
-                'es_de_hoy': fecha_local == hoy,
+                'fecha_programada_toma': (
+                    fecha_prog.isoformat() if fecha_prog else None
+                ),
+                # Día de extracción (no fecha_solicitud). Si falta, legado por solicitud.
+                'es_de_hoy': (
+                    (fecha_prog == hoy) if fecha_prog is not None else (fecha_local == hoy)
+                ),
                 'tiene_resultados': sol.estado in estados_con_resultado or bool(resultados),
                 'examenes': examenes,
                 'paneles': paneles,

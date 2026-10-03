@@ -43,6 +43,7 @@ import type {
 } from '../../services/internacion';
 import type { Paciente } from '../../types';
 import type { TipoEstudioComplementario } from '../../types/estudios';
+import { formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
 
 type PedidoPanel = 'lab' | 'estudios' | null;
 
@@ -146,7 +147,21 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
 
   const effectiveAtencionId = atencionHoyId ?? localAtencionId;
   const historia = useMemo(() => buildHistoria(contexto), [contexto]);
-  const labSinFinalizar = contexto?.laboratorio.find((l) => l.estado !== 'FINALIZADO') ?? null;
+  const hoyExtraccion = formatFechaLocal(startOfLocalDay());
+  /** Solo colisiona con otra orden activa del mismo día de extracción (hoy). */
+  const labActivaHoy =
+    contexto?.laboratorio.find((l) => {
+      if (l.estado === 'FINALIZADO') return false;
+      if (l.fecha_programada_toma) return l.fecha_programada_toma === hoyExtraccion;
+      return Boolean(l.es_de_hoy);
+    }) ?? null;
+  const labProgramadaOtroDia =
+    contexto?.laboratorio.find(
+      (l) =>
+        l.estado !== 'FINALIZADO' &&
+        Boolean(l.fecha_programada_toma) &&
+        l.fecha_programada_toma !== hoyExtraccion,
+    ) ?? null;
   const showEnfermeria = canWriteEnfermeria;
   const showKinesiologia = canWriteKinesiologia;
   const showEvolucionMedica = canWriteSoap || (!showEnfermeria && !showKinesiologia);
@@ -168,19 +183,12 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
 
   const abrirPedidoLab = () => {
     setPedidoError(null);
-    if (labSinFinalizar) {
-      const numero = labSinFinalizar.numero || `#${labSinFinalizar.id}`;
-      setPedidoError(
-        `No se puede pedir un nuevo análisis: hay uno en proceso (${numero}, ${labSinFinalizar.estado}). ` +
-          'Esperá a que el laboratorio lo finalice.',
-      );
-      setPedidoPanel(null);
-      return;
-    }
     if (!paciente?.id) {
       setPedidoError('No hay paciente cargado para solicitar laboratorio.');
       return;
     }
+    // No bloquear el diálogo: el alta valida por fecha_programada_toma
+    // (hoy y mañana no colisionan; mismo día → merge/400 en API).
     setPedidoPanel('lab');
   };
 
@@ -293,10 +301,22 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
             </Alert>
           )}
           <Stack spacing={1.5} sx={{ mb: 2 }}>
-            {labSinFinalizar && (
+            {labActivaHoy && (
               <Alert severity="warning">
-                Hay un análisis en proceso
-                {labSinFinalizar.numero ? ` (${labSinFinalizar.numero})` : ''}. No se puede pedir otro hasta que el laboratorio lo finalice.
+                Hay un análisis de hoy en proceso
+                {labActivaHoy.numero ? ` (${labActivaHoy.numero})` : ''}. Para el mismo día de
+                extracción no se puede crear otra orden: agregá exámenes a la existente o
+                programá la extracción para otro día.
+              </Alert>
+            )}
+            {!labActivaHoy && labProgramadaOtroDia && (
+              <Alert severity="info">
+                Hay una orden programada para otro día
+                {labProgramadaOtroDia.numero ? ` (${labProgramadaOtroDia.numero})` : ''}
+                {labProgramadaOtroDia.fecha_programada_toma
+                  ? ` — extracción ${labProgramadaOtroDia.fecha_programada_toma}`
+                  : ''}
+                . Podés pedir análisis para hoy igual.
               </Alert>
             )}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -549,7 +569,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
 
       {paciente && (
         <NuevaOrdenLimsDialog
-          open={pedidoPanel === 'lab' && !labSinFinalizar}
+          open={pedidoPanel === 'lab'}
           onClose={() => setPedidoPanel(null)}
           pacienteInicial={paciente}
           medicoId={medicoId}

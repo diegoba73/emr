@@ -262,6 +262,8 @@ export interface RevistaLabItem {
   numero: string | null;
   estado: string;
   fecha_solicitud: string | null;
+  /** YYYY-MM-DD — día de extracción; hoy y mañana no colisionan. */
+  fecha_programada_toma?: string | null;
   es_de_hoy: boolean;
   tiene_resultados: boolean;
   examenes: string[];
