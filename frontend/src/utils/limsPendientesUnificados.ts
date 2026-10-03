@@ -77,7 +77,7 @@ export function estadosMicroDesdeFiltroLab(estadoLab: string): string[] | null {
   return [estado];
 }
 
-/** Solo por número de protocolo (descendente). Sin desempates. */
+/** Solo por número de protocolo (ascendente: primero → último). Sin desempates. */
 export function sortPedidosPorNumero<T extends { numero?: string | null }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const na = (a.numero || '').trim();
@@ -85,11 +85,11 @@ export function sortPedidosPorNumero<T extends { numero?: string | null }>(rows:
     if (!na && !nb) return 0;
     if (!na) return 1;
     if (!nb) return -1;
-    return nb.localeCompare(na, 'es', { numeric: true, sensitivity: 'base' });
+    return na.localeCompare(nb, 'es', { numeric: true, sensitivity: 'base' });
   });
 }
 
-/** @deprecated Usar sortPedidosPorNumero. */
+/** @deprecated Usar sortPedidosPorNumero (ahora ascendente). */
 export const sortPedidosMasRecientesPrimero = sortPedidosPorNumero;
 
 export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow {

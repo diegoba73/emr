@@ -258,7 +258,7 @@ class EstudioMicrobiologia(models.Model):
     class Meta:
         verbose_name = "Estudio de microbiología"
         verbose_name_plural = "Estudios de microbiología"
-        ordering = ["-numero"]
+        ordering = ["numero"]
         indexes = [
             models.Index(fields=["solicitud", "estado"]),
             models.Index(fields=["muestra", "estado"]),
@@ -299,25 +299,40 @@ class EstudioMicrobiologia(models.Model):
                 )
 
     def save(self, *args, **kwargs):
+        from django.db import transaction
+        from laboratorio.lab_codigo import next_protocolo
+
         if self.tipo_cultivo_id:
             codigo = getattr(self.tipo_cultivo, "codigo", None)
             if codigo:
                 self.tipo_estudio = codigo
-        if not self.numero:
-            from laboratorio.lab_codigo import next_protocolo
 
-            self.numero = next_protocolo()
-        self.full_clean()
-        super().save(*args, **kwargs)
+        # Correlativo solo tras validar y en la misma transacción del INSERT.
+        with transaction.atomic():
+            if not self.numero:
+                self.full_clean()
+                self.numero = next_protocolo()
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = list(set(update_fields) | {"numero"})
+            else:
+                self.full_clean()
+            super().save(*args, **kwargs)
 
     def ensure_codigo_barra(self) -> str:
-        """Asigna codigo_barra = numero (LAB-YYYY-XXXXX) si aún no tiene."""
+        """Asigna codigo_barra = numero (LAB-YYYY-XXXXX) si aún no tiene.
+
+        No genera protocolo nuevo: el número debe existir (vía ``save``) para
+        no consumir correlativos huérfanos.
+        """
         if self.codigo_barra:
             return self.codigo_barra
         if not self.numero:
-            from laboratorio.lab_codigo import next_protocolo
+            from laboratorio.lab_codigo import LabCodigoError
 
-            self.numero = next_protocolo()
+            raise LabCodigoError(
+                "El estudio debe tener número de protocolo antes de asignar codigo_barra."
+            )
         self.codigo_barra = self.numero
         return self.codigo_barra
 

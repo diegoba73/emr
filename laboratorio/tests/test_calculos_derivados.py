@@ -1,12 +1,15 @@
-"""Guardas de cálculos derivados (perfil lipídico / bilirrubina)."""
+"""Guardas de cálculos derivados (perfil lipídico / bilirrubina / clearance).
+
+Puras: no requieren base de datos.
+"""
 from __future__ import annotations
 
 from decimal import Decimal
-
-from django.test import TestCase
+from unittest import TestCase
 
 from laboratorio.calculos_derivados import (
     RESULTADO_NO_CALCULABLE,
+    calc_clearance_creatinina,
     calc_ldl_friedewald,
     calcular_derivados,
 )
@@ -78,3 +81,52 @@ class TestCalculosDerivados(TestCase):
         self.assertEqual(out["CF"][1], RESULTADO_NO_CALCULABLE)
         self.assertEqual(out["SAT_FE"][1], RESULTADO_NO_CALCULABLE)
         self.assertEqual(out["TRANS"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_clearance_formula_basica(self):
+        # (100 × 1500) / (1.0 × 1440) = 104.166… → 104.2
+        self.assertEqual(
+            calc_clearance_creatinina(
+                Decimal("1.0"), Decimal("100"), Decimal("1500")
+            ),
+            Decimal("104.2"),
+        )
+
+    def test_clearance_creatininemia_cero_no_calcula(self):
+        self.assertIsNone(
+            calc_clearance_creatinina(
+                Decimal("0"), Decimal("100"), Decimal("1500")
+            )
+        )
+
+    def test_clearance_completo(self):
+        out = calcular_derivados(
+            {
+                "CREATI": Decimal("1.0"),
+                "CREA_U": Decimal("100"),
+                "DIUR": Decimal("1500"),
+            }
+        )
+        self.assertEqual(out["CLEAR_CREA"][0], Decimal("104.2"))
+        self.assertEqual(out["CLEAR_CREA"][1], "104.2")
+
+    def test_clearance_incompleto_no_calculable(self):
+        out = calcular_derivados(
+            {"CREATI": Decimal("1.0"), "CREA_U": Decimal("100")}
+        )
+        self.assertIsNone(out["CLEAR_CREA"][0])
+        self.assertEqual(out["CLEAR_CREA"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_clearance_creatininemia_cero_no_calculable(self):
+        out = calcular_derivados(
+            {
+                "CREATI": Decimal("0"),
+                "CREA_U": Decimal("100"),
+                "DIUR": Decimal("1500"),
+            }
+        )
+        self.assertIsNone(out["CLEAR_CREA"][0])
+        self.assertEqual(out["CLEAR_CREA"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_sin_inputs_clearance_no_emite(self):
+        out = calcular_derivados({"COL_TOT": Decimal("200"), "HDL": Decimal("50")})
+        self.assertNotIn("CLEAR_CREA", out)

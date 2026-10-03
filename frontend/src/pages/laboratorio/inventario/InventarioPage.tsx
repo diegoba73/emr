@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -54,6 +55,15 @@ import {
   refComercialDisplay,
   resumenReactivosVista,
 } from './inventarioReactivosView';
+import {
+  filterConsumosBusqueda,
+  filterInsumosBusqueda,
+  filterLotesBusqueda,
+  filterMovimientosBusqueda,
+  filterPedidosBusqueda,
+  filterReactivosBusqueda,
+  matchesSearch,
+} from './inventarioSearch';
 
 type ProductoTipo = InsumoLab['tipo'];
 
@@ -114,6 +124,12 @@ const InventarioPage: React.FC = () => {
   /** Filtro de lista Reactivos (solo UI; no recarga API). */
   const [filtroEquipoReactivos, setFiltroEquipoReactivos] = useState('');
   const [examenId, setExamenId] = useState('');
+  const [qReactivos, setQReactivos] = useState('');
+  const [qInsumos, setQInsumos] = useState('');
+  const [qLotes, setQLotes] = useState('');
+  const [qConsumos, setQConsumos] = useState('');
+  const [qMovimientos, setQMovimientos] = useState('');
+  const [qPedidos, setQPedidos] = useState('');
 
   const [reactivoForm, setReactivoForm] = useState(emptyReactivoForm);
   const [insumoForm, setInsumoForm] = useState(emptyInsumoForm);
@@ -166,19 +182,24 @@ const InventarioPage: React.FC = () => {
     load();
   }, [load]);
 
-  const reactivos = useMemo(
-    () => filterReactivosPorEquipo(productos, filtroEquipoReactivos),
-    [productos, filtroEquipoReactivos]
-  );
-  const insumos = useMemo(
-    () => productos.filter((p) => p.tipo !== 'REACTIVO'),
-    [productos]
-  );
+  const reactivos = useMemo(() => {
+    const porEquipo = filterReactivosPorEquipo(productos, filtroEquipoReactivos);
+    return filterReactivosBusqueda(porEquipo, qReactivos);
+  }, [productos, filtroEquipoReactivos, qReactivos]);
+  const insumos = useMemo(() => {
+    const base = productos.filter((p) => p.tipo !== 'REACTIVO');
+    return filterInsumosBusqueda(base, qInsumos);
+  }, [productos, qInsumos]);
   const resumenReactivos = useMemo(() => resumenReactivosVista(reactivos), [reactivos]);
-  /** Todos los reactivos (sin filtro) para el selector de lotes. */
+  /** Todos los reactivos (sin filtro de búsqueda) para el selector de lotes. */
   const reactivosTodos = useMemo(
     () => filterReactivosPorEquipo(productos, ''),
     [productos]
+  );
+  const lotesVisibles = useMemo(() => filterLotesBusqueda(lotes, qLotes), [lotes, qLotes]);
+  const movimientosVisibles = useMemo(
+    () => filterMovimientosBusqueda(movimientos, qMovimientos),
+    [movimientos, qMovimientos]
   );
 
   const examenesFiltrados = useMemo(() => {
@@ -190,18 +211,26 @@ const InventarioPage: React.FC = () => {
   }, [examenes, filtroEquipo]);
 
   const consumosVisibles = useMemo(() => {
-    if (!examenId) return consumos;
-    const id = Number(examenId);
-    return consumos.filter((c) => c.tipo_examen === id);
-  }, [consumos, examenId]);
+    let list = consumos;
+    if (examenId) {
+      const id = Number(examenId);
+      list = list.filter((c) => c.tipo_examen === id);
+    }
+    return filterConsumosBusqueda(list, qConsumos);
+  }, [consumos, examenId, qConsumos]);
 
-  const pedidosReactivos = useMemo(
-    () => (alertas?.pedidos || []).filter((p) => p.tipo === 'REACTIVO'),
-    [alertas]
-  );
-  const pedidosInsumos = useMemo(
-    () => (alertas?.pedidos || []).filter((p) => p.tipo !== 'REACTIVO'),
-    [alertas]
+  const pedidosReactivos = useMemo(() => {
+    const base = (alertas?.pedidos || []).filter((p) => p.tipo === 'REACTIVO');
+    return filterPedidosBusqueda(base, qPedidos);
+  }, [alertas, qPedidos]);
+  const pedidosInsumos = useMemo(() => {
+    const base = (alertas?.pedidos || []).filter((p) => p.tipo !== 'REACTIVO');
+    return filterPedidosBusqueda(base, qPedidos);
+  }, [alertas, qPedidos]);
+  /** Insumos sin filtro de búsqueda (selectores de alta). */
+  const insumosTodos = useMemo(
+    () => productos.filter((p) => p.tipo !== 'REACTIVO'),
+    [productos]
   );
 
   const productoLote = useMemo(
@@ -471,6 +500,15 @@ const InventarioPage: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              size="small"
+              label="Buscar"
+              placeholder="Código, REF, nombre…"
+              value={qReactivos}
+              onChange={(e) => setQReactivos(e.target.value)}
+              sx={{ minWidth: 220 }}
+              inputProps={{ 'aria-label': 'Buscar reactivos' }}
+            />
             <Typography variant="body2" color="text.secondary">
               {resumenReactivos.total} reactivo{resumenReactivos.total === 1 ? '' : 's'}
               {filtroEquipoReactivos ? ` · equipo ${filtroEquipoReactivos}` : ''}
@@ -791,6 +829,15 @@ const InventarioPage: React.FC = () => {
               </Button>
             )}
           </Stack>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Código o nombre…"
+            value={qInsumos}
+            onChange={(e) => setQInsumos(e.target.value)}
+            sx={{ mb: 1.5, minWidth: 240, maxWidth: 360 }}
+            inputProps={{ 'aria-label': 'Buscar insumos' }}
+          />
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -868,7 +915,7 @@ const InventarioPage: React.FC = () => {
                 <MenuItem disabled value=" ">
                   — Insumos —
                 </MenuItem>
-                {insumos.map((i) => (
+                {insumosTodos.map((i) => (
                   <MenuItem key={i.id} value={String(i.id)}>
                     {i.codigo} ({i.unidad})
                   </MenuItem>
@@ -912,6 +959,15 @@ const InventarioPage: React.FC = () => {
               </Button>
             )}
           </Stack>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Producto o lote…"
+            value={qLotes}
+            onChange={(e) => setQLotes(e.target.value)}
+            sx={{ mb: 1.5, minWidth: 240, maxWidth: 360 }}
+            inputProps={{ 'aria-label': 'Buscar lotes' }}
+          />
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -923,7 +979,7 @@ const InventarioPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {lotes.map((l) => (
+              {lotesVisibles.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell>
                     {l.insumo_codigo} — {l.insumo_nombre}
@@ -996,20 +1052,33 @@ const InventarioPage: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Reactivo</InputLabel>
-              <Select
-                label="Reactivo"
-                value={consumoForm.reactivo}
-                onChange={(e) => setConsumoForm((p) => ({ ...p, reactivo: e.target.value }))}
-              >
-                {reactivosTodos.map((r) => (
-                  <MenuItem key={r.id} value={String(r.id)}>
-                    {r.codigo} ({r.unidad})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              size="small"
+              sx={{ minWidth: 320, flex: 1, maxWidth: 480 }}
+              options={reactivosTodos}
+              value={reactivosTodos.find((r) => String(r.id) === consumoForm.reactivo) || null}
+              onChange={(_e, r) =>
+                setConsumoForm((p) => ({ ...p, reactivo: r ? String(r.id) : '' }))
+              }
+              getOptionLabel={(r) => `${r.nombre} — ${r.codigo} (${r.unidad})`}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              filterOptions={(opts, state) => {
+                const q = state.inputValue.trim().toLowerCase();
+                if (!q) return opts;
+                return opts.filter((r) =>
+                  `${r.nombre} ${r.codigo} ${r.ref_comercial || ''} ${r.unidad} ${r.equipo_codigo || ''}`
+                    .toLowerCase()
+                    .includes(q)
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Reactivo"
+                  placeholder="Buscar por nombre o código…"
+                />
+              )}
+            />
             <TextField
               size="small"
               label="Cant. / det."
@@ -1033,6 +1102,15 @@ const InventarioPage: React.FC = () => {
               </Button>
             )}
           </Stack>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Ensayo o reactivo…"
+            value={qConsumos}
+            onChange={(e) => setQConsumos(e.target.value)}
+            sx={{ mb: 1.5, minWidth: 240, maxWidth: 360 }}
+            inputProps={{ 'aria-label': 'Buscar consumos por ensayo' }}
+          />
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -1049,7 +1127,7 @@ const InventarioPage: React.FC = () => {
                     {c.tipo_examen_codigo} — {c.tipo_examen_nombre}
                   </TableCell>
                   <TableCell>
-                    {c.insumo_codigo} ({c.insumo_unidad})
+                    {c.insumo_nombre} — {c.insumo_codigo} ({c.insumo_unidad})
                   </TableCell>
                   <TableCell align="right">{c.cantidad_por_determinacion}</TableCell>
                   <TableCell align="right">
@@ -1077,34 +1155,54 @@ const InventarioPage: React.FC = () => {
       )}
 
       {tab === 4 && (
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Fecha</TableCell>
-              <TableCell>Tipo</TableCell>
-              <TableCell>Producto</TableCell>
-              <TableCell>Lote</TableCell>
-              <TableCell align="right">Cant.</TableCell>
-              <TableCell>Motivo</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {movimientos.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell>{new Date(m.created_at).toLocaleString('es-AR')}</TableCell>
-                <TableCell>{m.tipo}</TableCell>
-                <TableCell>{m.insumo_codigo}</TableCell>
-                <TableCell>{m.lote_codigo}</TableCell>
-                <TableCell align="right">{m.cantidad}</TableCell>
-                <TableCell>{m.motivo}</TableCell>
+        <Box>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Producto, lote o motivo…"
+            value={qMovimientos}
+            onChange={(e) => setQMovimientos(e.target.value)}
+            sx={{ mb: 1.5, minWidth: 260, maxWidth: 400 }}
+            inputProps={{ 'aria-label': 'Buscar movimientos' }}
+          />
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Fecha</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Producto</TableCell>
+                <TableCell>Lote</TableCell>
+                <TableCell align="right">Cant.</TableCell>
+                <TableCell>Motivo</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {movimientosVisibles.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell>{new Date(m.created_at).toLocaleString('es-AR')}</TableCell>
+                  <TableCell>{m.tipo}</TableCell>
+                  <TableCell>{m.insumo_codigo}</TableCell>
+                  <TableCell>{m.lote_codigo}</TableCell>
+                  <TableCell align="right">{m.cantidad}</TableCell>
+                  <TableCell>{m.motivo}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
       )}
 
       {tab === 5 && alertas && (
         <Box>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Código, nombre o proveedor…"
+            value={qPedidos}
+            onChange={(e) => setQPedidos(e.target.value)}
+            sx={{ mb: 2, minWidth: 260, maxWidth: 400 }}
+            inputProps={{ 'aria-label': 'Buscar pedidos y alertas' }}
+          />
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>
             Reactivos a pedir
           </Typography>
@@ -1175,12 +1273,16 @@ const InventarioPage: React.FC = () => {
             </Table>
           )}
 
-          {alertas.bajo_minimo.map((a) => (
+          {alertas.bajo_minimo
+            .filter((a) => matchesSearch(qPedidos, a.codigo))
+            .map((a) => (
             <Alert key={`min-${a.insumo_id}`} severity="warning" sx={{ mb: 1 }}>
               Bajo mínimo: {a.codigo} ({a.stock_actual}/{a.stock_min} {a.unidad})
             </Alert>
           ))}
-          {alertas.por_vencer.map((a) => (
+          {alertas.por_vencer
+            .filter((a) => matchesSearch(qPedidos, a.insumo_codigo, a.codigo_lote))
+            .map((a) => (
             <Alert key={`v-${a.lote_id}`} severity="error" sx={{ mb: 1 }}>
               Por vencer: {a.insumo_codigo}/{a.codigo_lote} en {a.dias_restantes} días
             </Alert>
@@ -1188,6 +1290,16 @@ const InventarioPage: React.FC = () => {
           {alertas.bajo_minimo.length === 0 && alertas.por_vencer.length === 0 && (
             <Alert severity="success">Sin alertas de stock.</Alert>
           )}
+          {qPedidos.trim() &&
+            alertas.bajo_minimo.length + alertas.por_vencer.length > 0 &&
+            alertas.bajo_minimo.every((a) => !matchesSearch(qPedidos, a.codigo)) &&
+            alertas.por_vencer.every(
+              (a) => !matchesSearch(qPedidos, a.insumo_codigo, a.codigo_lote)
+            ) && (
+              <Typography variant="body2" color="text.secondary">
+                Sin alertas que coincidan con la búsqueda.
+              </Typography>
+            )}
         </Box>
       )}
     </Box>

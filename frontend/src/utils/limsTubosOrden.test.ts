@@ -35,6 +35,7 @@ describe('limsTubosOrden', () => {
       'ORI_ASP',
       'ORI_DENS',
       'ORI_PH',
+      'ORI_GLU',
       'ORI_BIL',
       'ORI_NIT',
       'ORI_CET',

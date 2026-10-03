@@ -1,7 +1,10 @@
-"""Orden LIMS única abierta por paciente: merge de exámenes (y post-etiquetas / en curso).
+"""Orden LIMS: una activa por paciente y día de extracción (merge / bloqueo).
 
 Si el examen cabe en tubos existentes se reutilizan; si requiere otro contenedor
 o supera capacidad, se crean tubos nuevos en PENDIENTE_TOMA para extracción.
+
+Alta: PENDIENTE sin etiquetas del mismo ``fecha_programada_toma`` → merge;
+otra orden no FINALIZADO ese día → rechazo; otro día o tras FINALIZADO → OK.
 """
 from __future__ import annotations
 
@@ -116,10 +119,39 @@ def orden_permite_quitar_examenes(solicitud: SolicitudExamen) -> bool:
     return estado == "PENDIENTE" or estado in ESTADOS_ORDEN_EN_CURSO
 
 
-MENSAJE_LAB_INTERNACION_SIN_FINALIZAR = (
-    'No se puede solicitar un nuevo análisis: el paciente ya tiene un análisis '
-    'de internación en proceso (no finalizado). Esperá a que el laboratorio lo complete.'
+MENSAJE_ORDEN_ACTIVA_MISMO_DIA = (
+    'No se puede solicitar un nuevo análisis: el paciente ya tiene una orden '
+    'pendiente o en proceso para ese día de extracción. Esperá a que el '
+    'laboratorio la finalice, agregá exámenes a la orden existente, o '
+    'programalo para otro día.'
 )
+
+# Compat: mensaje histórico de internación (mismo criterio, texto legado).
+MENSAJE_LAB_INTERNACION_SIN_FINALIZAR = MENSAJE_ORDEN_ACTIVA_MISMO_DIA
+
+
+def paciente_tiene_orden_activa_mismo_dia(
+    paciente_id: int,
+    *,
+    fecha_programada_toma,
+    exclude_solicitud_id: int | None = None,
+) -> bool:
+    """
+    True si el paciente ya tiene una orden no FINALIZADO para ese día de
+    extracción (PENDIENTE, EN_PROCESO, parcial o a validar).
+
+    Hoy y mañana no colisionan: permite una orden activa por día.
+    Tras FINALIZADO se puede pedir otra el mismo día.
+    """
+    if fecha_programada_toma is None:
+        raise ValueError("fecha_programada_toma es obligatoria para el control por día")
+    qs = SolicitudExamen.objects.filter(
+        paciente_id=paciente_id,
+        fecha_programada_toma=fecha_programada_toma,
+    ).exclude(estado="FINALIZADO")
+    if exclude_solicitud_id is not None:
+        qs = qs.exclude(pk=exclude_solicitud_id)
+    return qs.exists()
 
 
 def paciente_tiene_analisis_internacion_sin_finalizar(
@@ -128,17 +160,22 @@ def paciente_tiene_analisis_internacion_sin_finalizar(
     """
     True si hay orden de internación no finalizada que colisiona con el día
     de extracción indicado. Sin fecha: cualquier orden no finalizada (legado).
-    Con fecha: solo las del mismo día (permite programar mañana con otra
-    orden de hoy aún abierta o en proceso).
+    Con fecha: delega en el control general por día (mismo criterio).
     """
     from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
+
+    if fecha_programada_toma is not None:
+        qs = SolicitudExamen.objects.filter(
+            paciente_id=paciente_id,
+            origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
+            fecha_programada_toma=fecha_programada_toma,
+        ).exclude(estado="FINALIZADO")
+        return qs.exists()
 
     qs = SolicitudExamen.objects.filter(
         paciente_id=paciente_id,
         origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
     ).exclude(estado="FINALIZADO")
-    if fecha_programada_toma is not None:
-        qs = qs.filter(fecha_programada_toma=fecha_programada_toma)
     return qs.exists()
 
 
@@ -146,12 +183,15 @@ def paciente_tiene_orden_en_curso(
     paciente_id: int,
     *,
     exclude_solicitud_id: int | None = None,
+    fecha_programada_toma=None,
 ) -> bool:
     """True si el paciente ya tiene otra orden EN_PROCESO / parcial / a validar."""
     qs = SolicitudExamen.objects.filter(
         paciente_id=paciente_id,
         estado__in=ESTADOS_ORDEN_EN_CURSO,
     )
+    if fecha_programada_toma is not None:
+        qs = qs.filter(fecha_programada_toma=fecha_programada_toma)
     if exclude_solicitud_id is not None:
         qs = qs.exclude(pk=exclude_solicitud_id)
     return qs.exists()
@@ -161,13 +201,17 @@ def paciente_tiene_orden_bloqueada(
     paciente_id: int,
     *,
     exclude_solicitud_id: int | None = None,
+    fecha_programada_toma=None,
 ) -> bool:
     """
     True si el paciente ya tiene otra orden en curso de lab
     (EN_PROCESO / parcial / a validar) o PENDIENTE esperando recepción.
+    Con fecha: solo considera órdenes de ese día de extracción.
     """
     if paciente_tiene_orden_en_curso(
-        paciente_id, exclude_solicitud_id=exclude_solicitud_id
+        paciente_id,
+        exclude_solicitud_id=exclude_solicitud_id,
+        fecha_programada_toma=fecha_programada_toma,
     ):
         return True
     qs = (
@@ -175,6 +219,8 @@ def paciente_tiene_orden_bloqueada(
         .prefetch_related("muestras")
         .order_by("-id")
     )
+    if fecha_programada_toma is not None:
+        qs = qs.filter(fecha_programada_toma=fecha_programada_toma)
     if exclude_solicitud_id is not None:
         qs = qs.exclude(pk=exclude_solicitud_id)
     for sol in qs:
@@ -312,7 +358,7 @@ def agregar_examenes_a_solicitud(
     - FINALIZADO: rechazado.
     - Frecuencia PROBNP: ver restricciones_frecuencia (salvo lab/bioquímico).
     """
-    from laboratorio.restricciones_frecuencia import assert_puede_agregar_probnp
+    from laboratorio.restricciones_frecuencia import assert_puede_agregar_ensayos
 
     sol = (
         SolicitudExamen.objects.select_for_update()
@@ -327,7 +373,7 @@ def agregar_examenes_a_solicitud(
         )
 
     tipos_nuevos, paneles_nuevos = _resolver_tipo_examen_ids(examenes_ids or [], paneles_ids or [])
-    assert_puede_agregar_probnp(
+    assert_puede_agregar_ensayos(
         user,
         sol.paciente_id,
         tipos_nuevos,

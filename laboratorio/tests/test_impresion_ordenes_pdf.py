@@ -119,6 +119,30 @@ class TestImpresionOrdenes(TestCase):
         self.assertEqual(ped.datos.afiliado, "123/45")
         self.assertIn("García", ped.datos.medico)
 
+    def test_pedido_clinico_marca_cl_e_inr_con_sus_paneles(self):
+        tm = self.glu.tipo_muestra_requerida
+        cl = _examen("CL", "Cloro", tm)
+        inr = _examen("INR", "R.I.N.", tm)
+        iono, _ = PanelExamen.objects.get_or_create(
+            codigo="PAN_IONO", defaults={"nombre": "Ionograma plasmático", "activo": True}
+        )
+        coag, _ = PanelExamen.objects.get_or_create(
+            codigo="PAN_COAG", defaults={"nombre": "Coagulograma básico", "activo": True}
+        )
+        iono.tipos_examen.add(cl)
+        coag.tipos_examen.add(inr)
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente, medico_interno=self.medico,
+            origen_solicitud="AMBULATORIO_CEHTA", estado="EN_PROCESO",
+        )
+        sol.paneles.add(iono, coag)
+        sol.tipos_examen.add(cl, inr)
+        ped = construir_pedido_clinico(sol)
+        self.assertIn("PAN_IONO", ped.marcados)
+        self.assertIn("CL", ped.marcados)
+        self.assertIn("PAN_COAG", ped.marcados)
+        self.assertIn("INR", ped.marcados)
+
     def test_pedido_micro_mapea_cultivos_y_cultivo_de(self):
         ped = construir_pedido_micro([self.uro, self.hemoc, self.uretral])
         self.assertIn("UROCULTIVO", ped.marcados)

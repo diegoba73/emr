@@ -351,7 +351,11 @@ def imprimir_etiquetas_estudios(
     actor: "AbstractUser | None" = None,
     view: str = "",
 ) -> list[EstudioMicrobiologia]:
-    """Asigna barcode y marca etiquetas_impresas_at en estudios PENDIENTE."""
+    """Asigna barcode y marca etiquetas_impresas_at (primera impresión).
+
+    Permitido en cualquier estado distinto de CANCELADO (p. ej. ya RECIBIDO
+    sin haber etiquetado antes). No cambia el estado del estudio.
+    """
     if not estudio_ids:
         raise MicrobiologiaAccionError("Indique al menos un estudio.")
     with transaction.atomic():
@@ -372,9 +376,9 @@ def imprimir_etiquetas_estudios(
             .order_by("pk")
         )
         for estudio in estudios:
-            if estudio.estado != "PENDIENTE":
+            if estudio.estado == "CANCELADO":
                 raise MicrobiologiaAccionError(
-                    "Solo se pueden imprimir etiquetas de estudios en estado PENDIENTE."
+                    "No se pueden imprimir etiquetas de un estudio cancelado."
                 )
             before = safe_model_snapshot(estudio)
             estudio.ensure_codigo_barra()

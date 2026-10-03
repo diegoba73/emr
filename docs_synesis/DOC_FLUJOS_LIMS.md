@@ -30,11 +30,12 @@
 ## Flujo de órdenes (`SolicitudExamen`)
 
 1. **Creación:** `POST` al ViewSet registrado como `lab/solicitudes` y duplicado `laboratorio/solicitudes` (mismo ViewSet).
-2. **Serializer lectura:** `SolicitudExamenSerializer` expone `medico_display` (propiedad del modelo) como `CharField(read_only=True)` **sin** `source` redundante (compatible con DRF reciente).
-3. **Serializer escritura:** `SolicitudExamenCreateSerializer` recibe `paciente_id`, `medico_id` opcional, `medico_externo_nombre`, `origen_solicitud`, `examenes_ids`, `paneles_ids`, fechas/observaciones.
-4. **Número de protocolo:** generado en `save()` si vacío: `LAB-YYYY-XXXXX` secuencial.
-5. **Origen:** `EMR`, `GUARDIA`, `EXTERNO_PAPEL`.
-6. **Médico híbrido:** `medico_interno` (FK) o texto `medico_externo_nombre`.
+2. **Día de extracción (`fecha_programada_toma`) [VIGENTE]:** obligatorio al crear. **Una sola orden no `FINALIZADO` por paciente y día** (PENDIENTE / EN_PROCESO / parcial / a validar). Si ya hay orden **PENDIENTE sin etiquetas** ese día → se **fusionan** los exámenes. Si hay orden con etiquetas o en curso ese día → **400** (agregar a la existente o esperar finalización). **Hoy y mañana no colisionan.** Tras `FINALIZADO` se puede pedir otra el mismo día (y así sucesivamente).
+3. **Serializer lectura:** `SolicitudExamenSerializer` expone `medico_display` (propiedad del modelo) como `CharField(read_only=True)` **sin** `source` redundante (compatible con DRF reciente).
+4. **Serializer escritura:** `SolicitudExamenCreateSerializer` recibe `paciente_id`, `medico_id` opcional, `medico_externo_nombre`, `origen_solicitud`, `examenes_ids`, `paneles_ids`, `fecha_programada_toma`, fechas/observaciones.
+5. **Número de protocolo:** generado en `save()` si vacío: `LAB-YYYY-XXXXX` secuencial compartido (lab clínico + microbiología) vía `LabProtocoloCounter` + `select_for_update`. Se valida la entidad **antes** de consumir el correlativo y ambos quedan en la misma transacción (no quemar números por `full_clean` fallido). Listados LIMS ordenan por `numero` **ascendente** (primero → último).
+6. **Origen:** `EMR`, `GUARDIA`, `EXTERNO_PAPEL`, internación, etc.
+7. **Médico híbrido:** `medico_interno` (FK) o texto `medico_externo_nombre`.
 
 ---
 
@@ -153,7 +154,7 @@ Implementación en `api/permissions.py` (`LimsCatalogReadPermission`, `LimsSolic
 
 **Muestra — etiqueta física 40×23 (ZPL):** `GET .../muestras-transaccionales/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (prepara ZPL) y `POST .../imprimir-etiqueta/confirmar/` (audit local) → solo `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser. Impresión USB en la PC del operador vía `scripts/label_print_agent.ps1`. Detalle: `docs/labels-lims-3nstar-ldt114.md`, `DOC_PERMISOS_AUDITORIA.md`.
 
-**Microbiología — misma etiqueta 40×23 (ZPL):** `GET .../microbiologia/estudios/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (primera vez: asigna barcode + `etiquetas_impresas_at` solo en PENDIENTE; **reimpresión** si ya hay etiqueta/código en cualquier estado ≠ CANCELADO) y `POST .../imprimir-etiqueta/confirmar/` (`micro_etiqueta_print`). Mismo agente USB local. PDF `imprimir-etiquetas` queda como legado.
+**Microbiología — misma etiqueta 40×23 (ZPL):** `GET .../microbiologia/estudios/{id}/etiqueta-zpl/`, `POST .../imprimir-etiqueta/` (primera vez: asigna barcode + `etiquetas_impresas_at` en cualquier estado ≠ CANCELADO, incluso ya RECIBIDO; **reimpresión** si ya hay etiqueta/código) y `POST .../imprimir-etiqueta/confirmar/` (`micro_etiqueta_print`). UI: pestaña Resumen del estudio → Reimprimir etiquetas / Imprimir talón. Mismo agente USB local. PDF `imprimir-etiquetas` queda como legado.
 
 **Aliases:** `/api/laboratorio/tipos-examen/` y `/api/laboratorio/solicitudes/` — mismos ViewSets y **misma** matriz de permisos que `/api/lab/...`.
 

@@ -52,6 +52,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | O3 | Al crear orden LIMS, existen filas `ResultadoExamen` por tipo solicitado. | **[IMPLEMENTADO]** |
 | O4 | Orden `FINALIZADO` cierra el flujo normal de carga; no hay action pública `cancelar` de `SolicitudExamen`. Cerrar no borra filas `ResultadoExamen`. Reapertura clínica solo vía `POST …/desvalidar/` (bioquímico/admin, con motivo auditado) → `LISTO_PARA_VALIDAR`. **[HISTÓRICO]** “cancelar orden → `CANCELADO`”. | **[IMPLEMENTADO]** |
 | O5 | Orden EMR (`solicitudes`) y orden LIMS nativa son trazables por separado. | **[DEUDA]** sin FK única |
+| O6 | Como máximo **una** `SolicitudExamen` no `FINALIZADO` por paciente y `fecha_programada_toma` (día de extracción). Hoy ≠ mañana. Tras finalizar se admite otra el mismo día. PENDIENTE sin etiquetas del mismo día se fusiona; con etiquetas/en curso se rechaza el alta. | **[IMPLEMENTADO]** |
 
 ---
 

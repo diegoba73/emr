@@ -102,6 +102,7 @@ COLUMNA_A_CODIGO: dict[str, str] = {
     "ORI.asp": "ORI_ASP",
     "ORI.pH": "ORI_PH",
     "ORI.dens": "ORI_DENS",
+    "ORI.glu": "ORI_GLU",
     "ORI.hemg": "ORI_HEM",
     "ORI.bil": "ORI_BIL",
     "ORI.cc": "ORI_CET",

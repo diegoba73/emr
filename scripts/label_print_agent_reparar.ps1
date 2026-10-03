@@ -73,10 +73,10 @@ $config = @{
     'http://emr.sytes.net:8080',
     'http://emr.sytes.net',
     'https://emr.sytes.net',
-    'http://emr.sytes.net:8080',
-    'https://emr.sytes.net:8080',
-    'http://emr.sytes.net',
-    'https://emr.sytes.net',
+    'https://emr.icpueblodeluis.com.ar:8080',
+    'http://emr.icpueblodeluis.com.ar:8080',
+    'https://emr.icpueblodeluis.com.ar',
+    'http://emr.icpueblodeluis.com.ar',
     'http://192.168.10.240',
     'http://192.168.10.240:80',
     'http://192.168.10.240:8080',
@@ -144,5 +144,5 @@ try {
 
 Write-Host ''
 Write-Host 'OK: agente TSPL listo. Deberia haber salido etiqueta EMR OK + muestra LAB-2026-00018-01.'
-Write-Host 'Ahora pruebe Imprimir etiqueta en https://emr.sytes.net:8080'
+Write-Host 'Ahora pruebe Imprimir etiqueta en https://emr.sytes.net:8080 o https://emr.icpueblodeluis.com.ar:8080'
 Write-Host ("Log: {0}\label_print_agent.log" -f $AgentDir)

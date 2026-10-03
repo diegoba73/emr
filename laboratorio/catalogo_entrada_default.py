@@ -37,6 +37,8 @@ ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
     "CF": ("CALCULADO", 0, "1", ""),
     "SAT_FE": ("CALCULADO", 0, "1", ""),
     "TRANS": ("CALCULADO", 0, "1", ""),
+    # Clearance: medidos CREATI/CREA_U/DIUR; CLEAR_CREA calculado (mL/min, 1 decimal)
+    "CLEAR_CREA": ("CALCULADO", 1, "1", ""),
 }
 
 

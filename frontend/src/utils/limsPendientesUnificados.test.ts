@@ -14,16 +14,16 @@ describe('estadosMicroDesdeFiltroLab', () => {
 });
 
 describe('sortPedidosPorNumero', () => {
-  it('ordena solo por numero descendente', () => {
+  it('ordena solo por numero ascendente', () => {
     const rows = [
       { id: 1, numero: 'LAB-2026-00001' },
       { id: 2, numero: 'LAB-2026-00010' },
       { id: 3, numero: 'LAB-2026-00002' },
     ];
     expect(sortPedidosPorNumero(rows).map((r) => r.numero)).toEqual([
-      'LAB-2026-00010',
-      'LAB-2026-00002',
       'LAB-2026-00001',
+      'LAB-2026-00002',
+      'LAB-2026-00010',
     ]);
   });
 
@@ -33,6 +33,6 @@ describe('sortPedidosPorNumero', () => {
       { id: 4, numero: 'LAB-2026-00005' },
       { id: 7, numero: 'LAB-2026-00003' },
     ];
-    expect(sortPedidosPorNumero(rows).map((r) => r.id)).toEqual([4, 7, 1]);
+    expect(sortPedidosPorNumero(rows).map((r) => r.id)).toEqual([7, 4, 1]);
   });
 });

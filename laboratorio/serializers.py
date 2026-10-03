@@ -1156,19 +1156,20 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         Método create atómico:
         - Si el paciente ya tiene orden abierta (PENDIENTE sin toma) el mismo día
           de extracción, fusiona exámenes.
+        - Si ya hay otra orden no FINALIZADO el mismo día (etiquetas / en curso),
+          rechaza (permite otro día o tras finalizar).
         - Si no: crea Solicitud + ResultadoExamen (directos y de paneles, sin duplicados).
         """
-        from laboratorio.origen_solicitud import INTERNACION_UCE, INTERNACION_UCO
         from laboratorio.restricciones_frecuencia import (
             RestriccionFrecuenciaError,
-            assert_puede_agregar_probnp,
+            assert_puede_agregar_ensayos,
         )
         from laboratorio.solicitud_orden_abierta import (
-            MENSAJE_LAB_INTERNACION_SIN_FINALIZAR,
+            MENSAJE_ORDEN_ACTIVA_MISMO_DIA,
             _resolver_tipo_examen_ids,
             agregar_examenes_a_solicitud,
             buscar_orden_abierta,
-            paciente_tiene_analisis_internacion_sin_finalizar,
+            paciente_tiene_orden_activa_mismo_dia,
         )
 
         examenes_ids = validated_data.pop('examenes_ids', [])
@@ -1216,15 +1217,16 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             solicitud._orden_merged = True
             return solicitud
 
-        origen = validated_data.get('origen_solicitud')
-        if origen in (INTERNACION_UCO, INTERNACION_UCE) and paciente_tiene_analisis_internacion_sin_finalizar(
+        # Una sola orden no finalizada por paciente y día de extracción.
+        # Hoy + mañana OK; tras FINALIZADO se puede pedir otra el mismo día.
+        if fecha_toma is not None and paciente_tiene_orden_activa_mismo_dia(
             paciente.pk, fecha_programada_toma=fecha_toma
         ):
-            raise serializers.ValidationError(MENSAJE_LAB_INTERNACION_SIN_FINALIZAR)
+            raise serializers.ValidationError(MENSAJE_ORDEN_ACTIVA_MISMO_DIA)
 
         tipos_resueltos, _ = _resolver_tipo_examen_ids(examenes_ids, paneles_ids)
         try:
-            assert_puede_agregar_probnp(user, paciente.pk, tipos_resueltos)
+            assert_puede_agregar_ensayos(user, paciente.pk, tipos_resueltos)
         except RestriccionFrecuenciaError as exc:
             raise serializers.ValidationError(str(exc)) from exc
 

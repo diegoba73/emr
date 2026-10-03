@@ -1,4 +1,4 @@
-"""Fase A — validación bioquímico, bloqueo y flags PDF."""
+"""Fase A — validación bioquímico, bloqueo y PDF."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from laboratorio.informe_pdf_layout import _flag_resultado, generar_pdf_icpl_bytes
+from laboratorio.informe_pdf_layout import generar_pdf_icpl_bytes
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from medicos.models import Especialidad, Medico
 from pacientes.models import Paciente
@@ -130,16 +130,6 @@ class TestValidacionLimsFaseA(APITestCase):
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
         sol.refresh_from_db()
         self.assertEqual(sol.estado, "FINALIZADO")
-
-    def test_flag_h_l_critico(self):
-        sol, res = self._orden_con_resultado(valor="120", valor_numerico=120)
-        self.assertEqual(_flag_resultado(res), "H")
-        res.valor_numerico = Decimal("50")
-        res.es_patologico = True
-        res.es_critico = False
-        self.assertEqual(_flag_resultado(res), "L")
-        res.es_critico = True
-        self.assertEqual(_flag_resultado(res), "*")
 
     def test_pdf_incluye_referencia_y_validacion(self):
         sol, res = self._orden_con_resultado()

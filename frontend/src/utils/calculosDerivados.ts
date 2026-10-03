@@ -1,5 +1,5 @@
 /**
- * Parámetros clínicos derivados (perfil lipídico, bilirrubina, índices hemo, férrico).
+ * Parámetros clínicos derivados (perfil lipídico, bilirrubina, índices hemo, férrico, clearance).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
@@ -7,6 +7,8 @@ export const TG_MAX_FRIEDEWALD = 400;
 export const RESULTADO_NO_CALCULABLE = 'No calculable con estos datos';
 /** Factor habitual: transferrina (mg/dL) ≈ TIBC (µg/dL) × 0.8 */
 export const FACTOR_TRANS_DESDE_TIBC = 0.8;
+/** Minutos en 24 horas (denominador del clearance de creatinina). */
+export const MINUTOS_24H = 1440;
 
 export function esResultadoNoCalculable(valor?: string | null): boolean {
   return valor?.trim() === RESULTADO_NO_CALCULABLE;
@@ -22,6 +24,7 @@ export const CODIGOS_CALCULADOS = new Set([
   'CF',
   'SAT_FE',
   'TRANS',
+  'CLEAR_CREA',
 ]);
 
 export const FORMULA_LEUCO_CODIGOS = new Set([
@@ -82,6 +85,16 @@ export function calcSatTransferrina(ferremia: number, tibc: number): number | nu
 
 export function calcTransferrinaDesdeTibc(tibc: number): number {
   return roundHalfUp(tibc * FACTOR_TRANS_DESDE_TIBC, 0);
+}
+
+/** Clearance (mL/min) = (creatinuria × diuresis) / (creatininemia × 1440). */
+export function calcClearanceCreatinina(
+  creati: number,
+  creaU: number,
+  diur: number
+): number | null {
+  if (creati <= 0) return null;
+  return roundHalfUp((creaU * diur) / (creati * MINUTOS_24H), 1);
 }
 
 export function calcAbsolutoFormula(pct: number, leucos: number): number | null {
@@ -160,6 +173,20 @@ export function calcularDerivados(
     out.CF = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
     out.SAT_FE = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
     out.TRANS = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  const creati = valores.CREATI;
+  const creaU = valores.CREA_U;
+  const diur = valores.DIUR;
+  if (creati != null && creaU != null && diur != null) {
+    const clear = calcClearanceCreatinina(creati, creaU, diur);
+    if (clear != null) {
+      out.CLEAR_CREA = { numerico: clear, informe: fmt(clear, 1) };
+    } else {
+      out.CLEAR_CREA = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+  } else if (creati != null || creaU != null || diur != null) {
+    out.CLEAR_CREA = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
   return out;

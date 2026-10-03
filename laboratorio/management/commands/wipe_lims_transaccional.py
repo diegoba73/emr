@@ -5,7 +5,8 @@ Uso (solo Docker local):
   python manage.py wipe_lims_transaccional --confirmo-wipe-local --con-calibraciones
 
 Borra: micro transaccional, muestras/eventos, resultados, solicitudes LIMS,
-corridas/puntos QC, materiales/lotes, productos/lotes/targets.
+corridas/puntos QC, materiales/lotes, productos/lotes/targets,
+contador de protocolo LAB (LabProtocoloCounter) para no dejar huecos al reseedar.
 NO borra: pacientes, exámenes, paneles, equipos, catálogos micro, inventario.
 """
 from __future__ import annotations
@@ -81,6 +82,7 @@ class Command(BaseCommand):
             SolicitudExamen,
             TargetLoteControl,
         )
+        from laboratorio.models_catalog import LabProtocoloCounter
 
         steps = [
             ("ResultadoAntibiotico", ResultadoAntibiotico),
@@ -95,6 +97,7 @@ class Command(BaseCommand):
             ("ResultadoExamen", ResultadoExamen),
             ("Muestra", Muestra),
             ("SolicitudExamen", SolicitudExamen),
+            ("LabProtocoloCounter", LabProtocoloCounter),
             ("PuntoQC", PuntoQC),
             ("CorridaQC", CorridaQC),
             ("TargetLoteControl", TargetLoteControl),
@@ -123,6 +126,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 "Wipe LIMS OK. Catálogos/pacientes/equipos intactos. "
+                "LabProtocoloCounter reiniciado (correlativo LAB sin huecos al reseedar). "
                 "Sugerido: python manage.py seed_qc_demo"
             )
         )

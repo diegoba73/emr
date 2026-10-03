@@ -20,6 +20,13 @@ import {
   type CatalogMaps,
   type PapelItemRef,
 } from '../../modules/laboratorio/solicitudAnalisisPapelLayout';
+import {
+  CARTUCHO_CARDIACO_CODIGOS,
+  EAB_INCLUYE_CODIGOS,
+  EXAMENES_CUBIERTOS_POR_PANEL,
+  esCodigoCartuchoCardiaco,
+  esPanelEab,
+} from '../../modules/laboratorio/solicitudAnalisisSelectionRules';
 
 export interface SolicitudAnalisisPapelFormProps {
   examenes: LimsTipoExamen[];
@@ -135,6 +142,14 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
 
   const total = countPapelSelection(selectedPanelesIds, selectedExamenesIds);
 
+  const panelIdByCodigo = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of paneles) {
+      if (p.activo !== false) m.set(p.codigo, p.id);
+    }
+    return m;
+  }, [paneles]);
+
   const renderCell = (item: PapelItemRef | null | undefined) => {
     if (!item) {
       return <Box sx={{ minHeight: 42 }} />;
@@ -147,8 +162,20 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
         </Typography>
       );
     }
-    const checked =
+    let checked =
       item.kind === 'panel' ? selectedPanelesIds.has(id) : selectedExamenesIds.has(id);
+    let itemDisabled = disabled;
+    if (item.kind === 'examen') {
+      const panelQueCubre = EXAMENES_CUBIERTOS_POR_PANEL[item.codigo];
+      if (panelQueCubre) {
+        const panId = panelIdByCodigo.get(panelQueCubre);
+        if (panId != null && selectedPanelesIds.has(panId)) {
+          checked = true;
+          // Cubierto por el panel: no se pide de nuevo como suelto.
+          itemDisabled = true;
+        }
+      }
+    }
     const onToggle = item.kind === 'panel' ? onTogglePanel : onToggleExamen;
     return (
       <PapelCheckbox
@@ -157,7 +184,7 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
         examenesById={examenesById}
         checked={checked}
         onToggle={onToggle}
-        disabled={disabled}
+        disabled={itemDisabled}
       />
     );
   };
@@ -280,7 +307,12 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
 
 export default SolicitudAnalisisPapelForm;
 
-export function useSolicitudAnalisisSelection() {
+export function useSolicitudAnalisisSelection(
+  catalog?: {
+    examenes: Array<{ id: number; codigo: string }>;
+    paneles: Array<{ id: number; codigo: string }>;
+  }
+) {
   const [selectedPanelesIds, setSelectedPanelesIds] = React.useState<Set<number>>(
     () => new Set()
   );
@@ -288,36 +320,126 @@ export function useSolicitudAnalisisSelection() {
     () => new Set()
   );
 
-  const togglePanel = React.useCallback((id: number) => {
-    setSelectedPanelesIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const examIdByCodigo = React.useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of catalog?.examenes || []) m.set(e.codigo, e.id);
+    return m;
+  }, [catalog?.examenes]);
 
-  const toggleExamen = React.useCallback((id: number) => {
-    setSelectedExamenesIds((prev) => {
+  const panelIdByCodigo = React.useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of catalog?.paneles || []) m.set(p.codigo, p.id);
+    return m;
+  }, [catalog?.paneles]);
+
+  const panelCodigoById = React.useMemo(() => {
+    const m = new Map<number, string>();
+    for (const p of catalog?.paneles || []) m.set(p.id, p.codigo);
+    return m;
+  }, [catalog?.paneles]);
+
+  const examCodigoById = React.useMemo(() => {
+    const m = new Map<number, string>();
+    for (const e of catalog?.examenes || []) m.set(e.id, e.codigo);
+    return m;
+  }, [catalog?.examenes]);
+
+  const addExamenesByCodigo = React.useCallback(
+    (prev: Set<number>, codigos: readonly string[]) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      for (const codigo of codigos) {
+        const id = examIdByCodigo.get(codigo);
+        if (id != null) next.add(id);
+      }
       return next;
-    });
-  }, []);
+    },
+    [examIdByCodigo]
+  );
+
+  const togglePanel = React.useCallback(
+    (id: number) => {
+      const codigo = panelCodigoById.get(id);
+      const selecting = !selectedPanelesIds.has(id);
+      setSelectedPanelesIds((prev) => {
+        const next = new Set(prev);
+        if (selecting) {
+          next.add(id);
+          if (esPanelEab(codigo)) {
+            for (const panCodigo of EAB_INCLUYE_CODIGOS.paneles) {
+              const panId = panelIdByCodigo.get(panCodigo);
+              if (panId != null) next.add(panId);
+            }
+          }
+        } else {
+          next.delete(id);
+        }
+        return next;
+      });
+      if (selecting && esPanelEab(codigo)) {
+        setSelectedExamenesIds((prev) =>
+          addExamenesByCodigo(prev, EAB_INCLUYE_CODIGOS.examenes)
+        );
+      }
+    },
+    [
+      addExamenesByCodigo,
+      panelCodigoById,
+      panelIdByCodigo,
+      selectedPanelesIds,
+    ]
+  );
+
+  const toggleExamen = React.useCallback(
+    (id: number) => {
+      const codigo = examCodigoById.get(id);
+      setSelectedExamenesIds((prev) => {
+        const next = new Set(prev);
+        const selecting = !next.has(id);
+        if (esCodigoCartuchoCardiaco(codigo)) {
+          const ids = CARTUCHO_CARDIACO_CODIGOS.map((c) => examIdByCodigo.get(c)).filter(
+            (x): x is number => x != null
+          );
+          if (selecting) {
+            for (const cartId of ids) next.add(cartId);
+          } else {
+            for (const cartId of ids) next.delete(cartId);
+          }
+          return next;
+        }
+        if (selecting) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    },
+    [examCodigoById, examIdByCodigo]
+  );
 
   const resetSelection = React.useCallback(() => {
     setSelectedPanelesIds(new Set());
     setSelectedExamenesIds(new Set());
   }, []);
 
-  const getSelectionArrays = React.useCallback(
-    () => ({
+  const getSelectionArrays = React.useCallback(() => {
+    const panelesCodigos = new Set(
+      Array.from(selectedPanelesIds)
+        .map((id) => panelCodigoById.get(id))
+        .filter((c): c is string => Boolean(c))
+    );
+    const examenes_ids = Array.from(selectedExamenesIds).filter((id) => {
+      const codigo = examCodigoById.get(id);
+      if (!codigo) return true;
+      const panelQueCubre = EXAMENES_CUBIERTOS_POR_PANEL[codigo];
+      if (panelQueCubre && panelesCodigos.has(panelQueCubre)) {
+        // Ya va dentro del panel (p. ej. INR con coagulograma).
+        return false;
+      }
+      return true;
+    });
+    return {
       paneles_ids: Array.from(selectedPanelesIds),
-      examenes_ids: Array.from(selectedExamenesIds),
-    }),
-    [selectedPanelesIds, selectedExamenesIds]
-  );
+      examenes_ids,
+    };
+  }, [examCodigoById, panelCodigoById, selectedExamenesIds, selectedPanelesIds]);
 
   const hasSelection = selectedPanelesIds.size + selectedExamenesIds.size > 0;
 

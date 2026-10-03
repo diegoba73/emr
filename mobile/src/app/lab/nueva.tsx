@@ -128,17 +128,23 @@ export default function NuevaOrdenLab() {
   const pasoActual =
     step === 'paciente' ? 1 : step === 'contexto' ? 2 : step === 'items' ? (soloAmbulatorio ? 2 : 3) : totalPasos;
 
-  const mensajeProbnpBloqueado =
-    restriccionesEnsayos.PROBNP?.mensaje ||
-    'La Obra Social no le permite realizar la determinación de proBNP debido a que tiene ya una realizada hace menos de 1 mes, de querer de todas maneras realizar el ensayo consulte con el Laboratorio';
-
-  const itemIncluyeProbnp = (item: LabCatalogItem) => {
-    if (item.kind === 'examen') return item.codigo === 'PROBNP';
-    return false;
+  const mensajeBloqueoItem = (item: LabCatalogItem): string | null => {
+    if (item.kind === 'examen') {
+      const r = restriccionesEnsayos[item.codigo];
+      return r?.bloqueado ? r.mensaje || 'Ensayo no permitido por obra social. Comuníquese con el Laboratorio.' : null;
+    }
+    return null;
   };
 
-  const paqueteIncluyeProbnp = (paq: PaqueteLabMovil) =>
-    paq.examenes.some((e) => e.codigo === 'PROBNP');
+  const mensajeBloqueoPaquete = (paq: PaqueteLabMovil): string | null => {
+    for (const e of paq.examenes) {
+      const r = restriccionesEnsayos[e.codigo];
+      if (r?.bloqueado) {
+        return r.mensaje || 'Ensayo no permitido por obra social. Comuníquese con el Laboratorio.';
+      }
+    }
+    return null;
+  };
 
   const buscarPacientes = async () => {
     setBusy(true);
@@ -213,16 +219,18 @@ export default function NuevaOrdenLab() {
       });
       return;
     }
-    if (restriccionesEnsayos.PROBNP?.bloqueado && itemIncluyeProbnp(item)) {
-      Alert.alert('proBNP no permitido', mensajeProbnpBloqueado);
+    const bloqueo = mensajeBloqueoItem(item);
+    if (bloqueo) {
+      Alert.alert('Ensayo no permitido', bloqueo);
       return;
     }
     setSelected((prev) => ({ ...prev, [k]: item }));
   };
 
   const aplicarPaquete = (paq: PaqueteLabMovil) => {
-    if (restriccionesEnsayos.PROBNP?.bloqueado && paqueteIncluyeProbnp(paq)) {
-      Alert.alert('proBNP no permitido', mensajeProbnpBloqueado);
+    const bloqueo = mensajeBloqueoPaquete(paq);
+    if (bloqueo) {
+      Alert.alert('Ensayo no permitido', bloqueo);
       return;
     }
     setSelected((prev) => {

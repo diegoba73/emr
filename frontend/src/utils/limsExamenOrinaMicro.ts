@@ -7,6 +7,7 @@ export const CAMPOS_TIRA_ORINA = [
   { codigo: 'ORI_ASP', label: 'Aspecto' },
   { codigo: 'ORI_DENS', label: 'Densidad' },
   { codigo: 'ORI_PH', label: 'pH' },
+  { codigo: 'ORI_GLU', label: 'Glucosa' },
   { codigo: 'ORI_BIL', label: 'Bilirrubina' },
   { codigo: 'ORI_NIT', label: 'Nitritos' },
   { codigo: 'ORI_CET', label: 'C. cetónicos' },

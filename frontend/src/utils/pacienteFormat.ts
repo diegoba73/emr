@@ -63,6 +63,20 @@ export const formatPacienteNombre = (paciente: Paciente | null | undefined): str
   return paciente.id ? `Paciente ${paciente.id}` : 'Paciente sin datos';
 };
 
+/**
+ * Cobertura del paciente para pantallas operativas (pedido LIMS, etc.).
+ * Formato: "OSDE · Afiliado 12345" o cadena vacía si no hay datos.
+ */
+export const formatPacienteObraSocial = (paciente: Paciente | null | undefined): string => {
+  if (!paciente) return '';
+  const os = (paciente.obra_social || '').trim();
+  const afiliado = (paciente.numero_afiliado || '').trim();
+  if (os && afiliado) return `${os} · Afiliado ${afiliado}`;
+  if (os) return os;
+  if (afiliado) return `Afiliado ${afiliado}`;
+  return '';
+};
+
 
 
 

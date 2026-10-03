@@ -71,9 +71,9 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     codigo: 'PAN_ORI',
     nombre: 'Orina completa',
     examenes: [
-      'ORI_COLOR', 'ORI_ASP', 'ORI_DENS', 'ORI_PH', 'ORI_BIL', 'ORI_NIT',
-      'ORI_CET', 'ORI_CEL', 'ORI_LEU', 'ORI_HEM', 'ORI_PIO', 'ORI_MUC',
-      'ORI_CRIS', 'ORI_CONC',
+      'ORI_COLOR', 'ORI_ASP', 'ORI_DENS', 'ORI_PH', 'ORI_GLU', 'ORI_BIL',
+      'ORI_NIT', 'ORI_CET', 'ORI_CEL', 'ORI_LEU', 'ORI_HEM', 'ORI_PIO',
+      'ORI_MUC', 'ORI_CRIS', 'ORI_CONC',
     ],
   },
 ];

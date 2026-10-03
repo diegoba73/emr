@@ -9,8 +9,11 @@ export interface EstudioMicroResumenTabProps {
   canOperateTecnico: boolean;
   canMarcarInformado: boolean;
   canEditarObraSocial?: boolean;
-  /** Reimpresión ZPL post-recepción (mismo flujo que lab clínico). */
+  /** Impresión / reimpresión ZPL (post-recepción incluido; mismo diálogo que pendientes). */
   onReimprimirEtiquetas?: () => void;
+  /** Talón A4 — no muta estado ni etiquetas_impresas_at. */
+  onImprimirTalon?: () => void;
+  downloadingTalon?: boolean;
   onIniciar: () => void;
   onCancelar: () => void;
   onMarcarInformado: () => void;
@@ -23,16 +26,18 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   canMarcarInformado,
   canEditarObraSocial = false,
   onReimprimirEtiquetas,
+  onImprimirTalon,
+  downloadingTalon,
   onIniciar,
   onCancelar,
   onMarcarInformado,
   onObraSocial,
 }) => {
   const e = estudio.estado;
-  const puedeReimprimir =
-    Boolean(onReimprimirEtiquetas) &&
-    e !== 'CANCELADO' &&
-    Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
+  const tieneEtiqueta = Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
+  const puedeImprimirEtiqueta =
+    Boolean(onReimprimirEtiquetas) && e !== 'CANCELADO';
+  const puedeImprimirTalon = Boolean(onImprimirTalon) && e !== 'CANCELADO';
   return (
     <Paper sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -61,6 +66,11 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
         <strong>Tipo de muestra:</strong>{' '}
         {estudio.tipo_muestra_micro_nombre || estudio.muestra_tipo_nombre || '—'}
       </Typography>
+      {estudio.codigo_barra ? (
+        <Typography sx={{ mt: 1 }} fontFamily="monospace">
+          <strong>Código:</strong> {estudio.codigo_barra}
+        </Typography>
+      ) : null}
       {estudio.solicitud ? (
         <Typography sx={{ mt: 1 }} variant="body2" color="text.secondary">
           Orden LIMS (legado): {estudio.solicitud_numero || `#${estudio.solicitud}`}
@@ -80,16 +90,26 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       {(canOperateTecnico ||
         canMarcarInformado ||
         canEditarObraSocial ||
-        puedeReimprimir) && (
+        puedeImprimirEtiqueta ||
+        puedeImprimirTalon) && (
         <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {canEditarObraSocial && onObraSocial && (
             <Button variant="outlined" onClick={onObraSocial}>
               Obra social
             </Button>
           )}
-          {puedeReimprimir && (
+          {puedeImprimirEtiqueta && (
             <Button variant="outlined" onClick={onReimprimirEtiquetas}>
-              Reimprimir etiquetas
+              {tieneEtiqueta ? 'Reimprimir etiquetas' : 'Imprimir etiquetas'}
+            </Button>
+          )}
+          {puedeImprimirTalon && (
+            <Button
+              variant="outlined"
+              disabled={Boolean(downloadingTalon)}
+              onClick={onImprimirTalon}
+            >
+              {downloadingTalon ? 'Abriendo impresión…' : 'Imprimir talón'}
             </Button>
           )}
           {canOperateTecnico && e === 'PENDIENTE' && (
@@ -108,6 +128,12 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
             </Button>
           )}
         </Box>
+      )}
+      {(puedeImprimirEtiqueta || puedeImprimirTalon) && (
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+          Podés reimprimir la etiqueta (USB) o el talón (hoja A4) aunque la muestra ya esté
+          recibida; no cambia el estado del estudio.
+        </Typography>
       )}
     </Paper>
   );

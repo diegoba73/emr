@@ -150,7 +150,9 @@ class TestOrdenUnicaAbierta(TestCase):
         sol.save(update_fields=["estado"])
         return sol
 
-    def test_post_tomada_permite_agregar_mismo_tubo_y_nueva_orden(self):
+    def test_post_tomada_permite_agregar_mismo_tubo_y_bloquea_nueva_orden_mismo_dia(self):
+        from datetime import timedelta
+
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
         self._poner_en_proceso(sol_id)
@@ -174,16 +176,31 @@ class TestOrdenUnicaAbierta(TestCase):
             {self.glu.id, self.crea.id},
         )
 
+        # Mismo día: no se puede crear otra mientras hay una en proceso
         r2 = self._create([self.urea.id])
-        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
-        self.assertFalse(r2.data.get("merged"))
-        self.assertNotEqual(r2.data["id"], sol_id)
-        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
-        self.assertTrue(r2.data.get("pedido_adicional"))
-        self.assertTrue(r2.data.get("orden_abierta"))
-        self.assertFalse(r2.data.get("esperando_recepcion"))
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
+        self.assertIn("día de extracción", str(r2.data).lower())
 
-    def test_etiquetas_impresas_crean_tubo_nuevo_y_permiten_nueva_orden(self):
+        # Otro día (mañana): sí se puede
+        manana = (timezone.localdate() + timedelta(days=1)).isoformat()
+        r3 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.urea.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": manana,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r3.status_code, status.HTTP_201_CREATED, r3.data)
+        self.assertFalse(r3.data.get("merged"))
+        self.assertNotEqual(r3.data["id"], sol_id)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
+
+    def test_etiquetas_impresas_crean_tubo_nuevo_y_bloquean_nueva_orden_mismo_dia(self):
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
         r_tom = self._imprimir_etiquetas(sol_id)
@@ -227,14 +244,10 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertTrue(r_get.data.get("puede_agregar_examenes"))
         self.assertFalse(r_get.data.get("pedido_adicional"))
 
+        # Mismo día con etiquetas pendientes: nueva orden bloqueada (agregar a la existente)
         r2 = self._create([self.urea.id])
-        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
-        self.assertFalse(r2.data.get("merged"))
-        self.assertNotEqual(r2.data["id"], sol_id)
-        self.assertTrue(r2.data.get("orden_abierta"))
-        self.assertFalse(r2.data.get("esperando_recepcion"))
-        # La 1ª orden sigue PENDIENTE esperando recepción → pedido adicional
-        self.assertTrue(r2.data.get("pedido_adicional"))
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
 
     def test_etiquetas_impresas_permiten_agregar_mismo_tubo(self):
         r1 = self._create([self.glu.id])
@@ -354,6 +367,60 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
         self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
         self.assertIn("en proceso", str(r2.data).lower())
+
+    def test_tras_finalizar_permite_nueva_orden_mismo_dia(self):
+        r1 = self._create([self.glu.id])
+        sol_id = r1.data["id"]
+        self._poner_en_proceso(sol_id, estado="FINALIZADO")
+
+        r2 = self._create([self.crea.id])
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
+        self.assertFalse(r2.data.get("merged"))
+        self.assertNotEqual(r2.data["id"], sol_id)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
+
+        # Si la 2ª también se finaliza, se puede una 3ª el mismo día
+        self._poner_en_proceso(r2.data["id"], estado="FINALIZADO")
+        r3 = self._create([self.urea.id])
+        self.assertEqual(r3.status_code, status.HTTP_201_CREATED, r3.data)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 3)
+
+    def test_internacion_hoy_en_proceso_permite_orden_manana(self):
+        from datetime import timedelta
+        from laboratorio.origen_solicitud import INTERNACION_UCO
+
+        hoy = timezone.localdate()
+        manana = hoy + timedelta(days=1)
+        r1 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.glu.id],
+                "origen_solicitud": INTERNACION_UCO,
+                "fecha_programada_toma": hoy.isoformat(),
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        sol = SolicitudExamen.objects.get(pk=r1.data["id"])
+        sol.estado = "EN_PROCESO"
+        sol.save(update_fields=["estado"])
+
+        r2 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.crea.id],
+                "origen_solicitud": INTERNACION_UCO,
+                "fecha_programada_toma": manana.isoformat(),
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
+        self.assertNotEqual(r2.data["id"], r1.data["id"])
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
 
     def test_en_proceso_agregar_mismo_tubo_ok(self):
         r1 = self._create([self.glu.id])

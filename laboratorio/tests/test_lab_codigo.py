@@ -109,6 +109,69 @@ class TestLabCodigoNumeracion(TestCase):
         self.assertTrue(est.numero.startswith("LAB-"))
         self.assertNotEqual(sol.numero, est.numero)
 
+    def test_validacion_fallida_no_quema_correlativo(self):
+        """full_clean falla antes de consumir el número: last_n intacto."""
+        from django.core.exceptions import ValidationError
+        from django.utils import timezone
+        from historias_clinicas.models import Consulta, HistoriaClinica
+
+        y = timezone.now().year
+        counter, _ = LabProtocoloCounter.objects.get_or_create(year=y, defaults={"last_n": 0})
+        last_before = counter.last_n
+
+        otro = Paciente.objects.create(
+            dni=f"D2{self.suf}",
+            nombre="Q",
+            apellido="Y",
+            user=User.objects.create_user(
+                username=f"pac2_{self.suf}",
+                email=f"p2{self.suf}@t.com",
+                password="x",
+                rol="paciente",
+            ),
+        )
+        hc = HistoriaClinica.objects.create(paciente=otro)
+        consulta = Consulta.objects.create(
+            historia_clinica=hc,
+            medico=self.medico,
+            fecha_hora_consulta=timezone.now(),
+            motivo_consulta_detalle="test correlativo",
+        )
+
+        with self.assertRaises(ValidationError):
+            SolicitudExamen.objects.create(
+                paciente=self.paciente,
+                medico_interno=self.medico,
+                origen_solicitud="AMBULATORIO_CEHTA",
+                estado="PENDIENTE",
+                consulta_hc=consulta,
+            )
+
+        counter.refresh_from_db()
+        self.assertEqual(counter.last_n, last_before)
+        self.assertFalse(SolicitudExamen.objects.filter(consulta_hc=consulta).exists())
+
+    def test_listado_default_meta_ascendente_por_numero(self):
+        LabProtocoloCounter.objects.filter(year=2096).delete()
+        nums = []
+        for _ in range(3):
+            sol = SolicitudExamen.objects.create(
+                paciente=self.paciente,
+                medico_interno=self.medico,
+                origen_solicitud="AMBULATORIO_CEHTA",
+                estado="PENDIENTE",
+                numero=next_protocolo(year=2096),
+            )
+            nums.append(sol.numero)
+        # Meta.ordering = ['numero'] → sin order_by explícito ya es ascendente
+        ordered = list(
+            SolicitudExamen.objects.filter(numero__startswith="LAB-2096-").values_list(
+                "numero", flat=True
+            )
+        )
+        self.assertEqual(ordered, nums)
+        self.assertEqual(ordered, sorted(nums))
+
     def test_tubo_codigo_hijo_del_protocolo(self):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,

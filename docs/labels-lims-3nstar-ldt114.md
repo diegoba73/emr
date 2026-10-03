@@ -46,7 +46,7 @@ Scripts:
 - Diagnóstico (ventana visible): `scripts/label_print_agent.bat`.
 - Quitar: `scripts/label_print_agent_desinstalar.bat`.
 
-CORS del agente: el origen de la pestaña del navegador tiene que coincidir (p. ej. `http://192.168.10.240`, `http://emr.sytes.net:8080`). Si usan otra URL, agregarla a `allowedOrigins` en `label_print_agent.config.json`.
+CORS del agente: el origen de la pestaña del navegador tiene que coincidir (p. ej. `http://192.168.10.240`, `https://emr.sytes.net:8080`, `https://emr.icpueblodeluis.com.ar:8080`). Si usan otra URL, agregarla a `allowedOrigins` en `label_print_agent.config.json` y reiniciar el agente (`label_print_agent_reparar.bat`).
 
 ### Copiar a LABORATORIO (obligatorio, misma carpeta)
 
@@ -90,7 +90,7 @@ Si hay otra PC con su propia etiquetadora USB, repetir 1–5 ahí. No hace falta
 - `POST /api/lab/muestras-transaccionales/{id}/imprimir-etiqueta/confirmar/` — auditoría de impresión local OK.
 - `GET /api/lab/solicitudes/{id}/etiqueta/` — ZPL simulado a nivel solicitud (**legacy**, no tocar).
 - `GET /api/lab/microbiologia/estudios/{id}/etiqueta-zpl/` — misma geometría; preview sin mutar.
-- `POST /api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/` — primera vez: barcode/`etiquetas_impresas_at` (PENDIENTE); reimpresión si ya hay etiqueta (≠ CANCELADO); devuelve ZPL.
+- `POST /api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/` — primera vez: barcode/`etiquetas_impresas_at` (≠ CANCELADO, también si ya está RECIBIDO); reimpresión si ya hay etiqueta; devuelve ZPL.
 - `POST /api/lab/microbiologia/estudios/{id}/imprimir-etiqueta/confirmar/` — auditoría `micro_etiqueta_print`.
 
 Permisos ZPL/impresión: `admin`, `laboratorio`, `bioquimico`, `superuser`. No médico/secretaría/enfermería/paciente.

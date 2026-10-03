@@ -22,9 +22,10 @@ const MUESTRAS_ORINA = new Set(['ORINA', 'ORINA_24_H']);
 export const ORDEN_FORMULARIO_PAPEL: string[] = [
   'PAN_HEMO', 'CPK', 'HBA1C', 'CPK_MB', 'GLU', 'TROP_I', 'UREA', 'MIOG', 'CREATI', 'TROP_US',
   'AU', 'PROBNP', 'CA', 'DDIM', 'MG', 'PAN_ORI', 'P', 'PAN_CLEAR', 'PAN_FERR', 'PAN_IONO_U24',
-  'PAN_IONO', 'PAN_IONO_U', 'CA_ION', 'PROT_U_24', 'PAN_LIP', 'PROT_U_AZ', 'PAN_HEP', 'PAN_MALB24',
-  'PROT_T', 'PAN_MALB_AZ', 'ALB', 'PAN_ELP', 'PAN_COAG', 'LPA', 'VSG', 'PSA', 'PCR_US', 'TSH',
-  'AMIL', 'T3', 'LIP', 'T4', 'GGT', 'T4L', 'LDH', 'B12', 'VITD', 'PAN_EAB_ART', 'PAN_EAB_VEN', 'LACT',
+  'PAN_IONO', 'PAN_IONO_U', 'CL', 'PROT_U_24', 'CA_ION', 'PROT_U_AZ', 'PAN_LIP', 'PAN_MALB24',
+  'PAN_HEP', 'PAN_MALB_AZ', 'PROT_T', 'PAN_ELP', 'ALB', 'LPA', 'PAN_COAG', 'PSA', 'INR', 'TSH',
+  'VSG', 'T3', 'PCR_US', 'T4', 'AMIL', 'T4L', 'LIP', 'B12', 'GGT', 'VITD', 'LDH', 'PAN_EAB_ART',
+  'HBVAGS', 'PAN_EAB_VEN', 'HCVG', 'LACT', 'HIVAC', 'HCGB', 'SANOC', 'ASTO', 'GRUPO',
 ];
 
 const ORDEN_PAPEL_RANK = new Map(ORDEN_FORMULARIO_PAPEL.map((c, i) => [c, i]));
@@ -78,9 +79,9 @@ const PERFILES_POR_CODIGO: ReadonlyArray<{
     codigo: 'PAN_ORI',
     nombre: 'Orina completa',
     examenes: [
-      'ORI_COLOR', 'ORI_ASP', 'ORI_DENS', 'ORI_PH', 'ORI_BIL', 'ORI_NIT',
-      'ORI_CET', 'ORI_CEL', 'ORI_LEU', 'ORI_HEM', 'ORI_PIO', 'ORI_MUC',
-      'ORI_CRIS', 'ORI_CONC',
+      'ORI_COLOR', 'ORI_ASP', 'ORI_DENS', 'ORI_PH', 'ORI_GLU', 'ORI_BIL',
+      'ORI_NIT', 'ORI_CET', 'ORI_CEL', 'ORI_LEU', 'ORI_HEM', 'ORI_PIO',
+      'ORI_MUC', 'ORI_CRIS', 'ORI_CONC',
     ],
   },
 ];

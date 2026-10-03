@@ -131,6 +131,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - No cargar ni mutar resultados de una orden **`FINALIZADO`** sin desvalidar antes. Estados cargables: `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`. Reapertura: `POST …/desvalidar/` (bioquímico/admin, motivo) → `LISTO_PARA_VALIDAR`.
 - **[HISTÓRICO]** no hay action pública de cancelar la **orden**; `CANCELADO` no es estado de `SolicitudExamen`. Cancelar **muestra** o **estudio micro** son entidades distintas.
 - Al crear: M2M a tipos y paneles; se generan `ResultadoExamen` por tipo (panel expande sin duplicar tipo).
+- **Una orden activa por paciente y día de extracción [VIGENTE]:** `fecha_programada_toma` obligatorio. No puede haber dos `SolicitudExamen` no `FINALIZADO` el mismo día (PENDIENTE / EN_PROCESO / parcial / a validar). PENDIENTE sin etiquetas del mismo día → merge. Hoy y mañana son días distintos. Tras `FINALIZADO` se puede otra el mismo día.
 
 ---
 
@@ -145,7 +146,11 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de determinaciones
 
 - Una fila `ResultadoExamen` por par (solicitud, tipo_examen) — `unique_together`.
-- **PROBNP / frecuencia obra social [IMPLEMENTADO]:** si el paciente ya tiene un pedido con `TipoExamen.codigo=PROBNP` en los últimos **31 días** (`fecha_solicitud`), no se puede agregar otro PROBNP al crear orden ni en `agregar-examenes`, **salvo** roles `laboratorio` y `bioquimico` (`ROLES_LIMS_OPERADOR`). Admin, médico y demás roles quedan bloqueados. Mensaje fijo en `laboratorio/restricciones_frecuencia.py`. UX: alerta al tildar en formulario de papel (web) y app móvil; consulta `GET …/solicitudes/restricciones-ensayos/?paciente_id=` (y móvil `…/lab/pacientes/{id}/restricciones-ensayos/`).
+- **Restricciones de frecuencia / cobertura obra social [IMPLEMENTADO]** (`laboratorio/restricciones_frecuencia.py`): aplican al crear orden y en `agregar-examenes`. **Exentos:** `admin`, `laboratorio`, `bioquimico` (`ROLES_LIMS_WRITE`). **Bloqueados:** médico y demás roles. UX: alerta al tildar (web/móvil); `GET …/solicitudes/restricciones-ensayos/?paciente_id=` (móvil: `…/lab/pacientes/{id}/restricciones-ensayos/`).
+  - **PROBNP:** no repetir si hay pedido en los últimos **31 días** (ventana rodante).
+  - **PSA** y **VITD:** máx. **1** pedido en el **año calendario**.
+  - **TSH / T3 / T4 / T4L** (por analito): máx. **2** en el año calendario y **≥ 60 días** desde el último pedido de ese código.
+  - **T4 + SEROS:** si `paciente.obra_social` es SEROS (case-insensitive), el médico no puede agregar `T4`.
 
 ---
 

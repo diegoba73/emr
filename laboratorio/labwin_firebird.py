@@ -81,7 +81,7 @@ FB_PACKED_PANELS: dict[str, list[str | None]] = {
         "ORI_ASP",
         "ORI_PH",
         "ORI_DENS",
-        None,
+        "ORI_GLU",
         "ORI_CET",
         None,
         "ORI_HEM",

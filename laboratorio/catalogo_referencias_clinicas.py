@@ -378,6 +378,7 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="5.0",
         rmax="8.0",
     ),
+    "ORI_GLU": _r(metodo=_M_ORI_TIRA, ref="Negativo"),
     "ORI_BIL": _r(metodo=_M_ORI_TIRA, ref="Negativo"),
     "ORI_NIT": _r(metodo=_M_ORI_TIRA, ref="Negativo"),
     "ORI_CET": _r(metodo=_M_ORI_TIRA, ref="Negativo"),
@@ -832,6 +833,19 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmax="2.2",
         cmax="4",
     ),
+    # —— Pruebas rápidas / sueltos frecuentes ——
+    "HBVAGS": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
+    "HCVG": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
+    "HIVAC": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
+    "HCGB": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
+    "SANOC": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
+    "ASTO": _r(
+        metodo=_M_INMUNO,
+        unidad="UI/mL",
+        ref="< 200 UI/mL",
+        rmax="200",
+    ),
+    "GRUPO": _r(metodo="Aglutinación en tubo / gel", ref="A, B, AB u O; Rh +/-"),
 }
 
 # Códigos legacy del seed demo (referencias alineadas al catálogo nuevo)

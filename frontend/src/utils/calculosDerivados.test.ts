@@ -1,5 +1,6 @@
 import {
   RESULTADO_NO_CALCULABLE,
+  calcClearanceCreatinina,
   calcLdlFriedewald,
   calcularDerivados,
 } from './calculosDerivados';
@@ -42,5 +43,22 @@ describe('calculosDerivados Corte A', () => {
     expect(out.CF?.informe).toBe(RESULTADO_NO_CALCULABLE);
     expect(out.SAT_FE?.informe).toBe(RESULTADO_NO_CALCULABLE);
     expect(out.TRANS?.informe).toBe(RESULTADO_NO_CALCULABLE);
+  });
+
+  it('clearance calcula (CREA_U × DIUR) / (CREATI × 1440)', () => {
+    expect(calcClearanceCreatinina(1.0, 100, 1500)).toBe(104.2);
+    const out = calcularDerivados({ CREATI: 1.0, CREA_U: 100, DIUR: 1500 });
+    expect(out.CLEAR_CREA?.numerico).toBe(104.2);
+    expect(out.CLEAR_CREA?.informe).toBe('104.2');
+  });
+
+  it('clearance incompleto o creatininemia 0 marca no calculable', () => {
+    expect(calcClearanceCreatinina(0, 100, 1500)).toBeNull();
+    expect(calcularDerivados({ CREATI: 1.0, CREA_U: 100 }).CLEAR_CREA?.informe).toBe(
+      RESULTADO_NO_CALCULABLE
+    );
+    expect(
+      calcularDerivados({ CREATI: 0, CREA_U: 100, DIUR: 1500 }).CLEAR_CREA?.informe
+    ).toBe(RESULTADO_NO_CALCULABLE);
   });
 });

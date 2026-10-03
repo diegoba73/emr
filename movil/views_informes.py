@@ -68,7 +68,7 @@ def _queryset_informes(user):
         qs = qs.filter(estado__in=ESTADOS_BIOQUIMICO_TRABAJO)
     else:
         qs = qs.filter(estado__in=ESTADOS_INFORME_LISTADO)
-    return qs.order_by('-numero')
+    return qs.order_by('numero')
 
 
 class InformeMovilSerializer(serializers.ModelSerializer):

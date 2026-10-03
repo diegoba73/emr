@@ -274,7 +274,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         'medico_interno__apellido',
     ]
     ordering_fields = ['numero']
-    ordering = ['-numero']
+    ordering = ['numero']
     
     def get_serializer_class(self):
         """Create vs update cabecera vs listado liviano vs detalle."""
@@ -644,7 +644,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             from django.utils import timezone as dj_tz
             queryset = queryset.filter(fecha_programada_toma__gt=dj_tz.localdate())
 
-        return queryset.order_by('-numero')
+        return queryset.order_by('numero')
 
     def list(self, request, *args, **kwargs):
         """Todos / FINALIZADO no deben 500 si una fila o el SQL del listado fallan."""

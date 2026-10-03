@@ -67,6 +67,22 @@ class TestSeedCatalogoSolicitudPapel:
         clear = PanelExamen.objects.get(codigo="PAN_CLEAR")
         assert clear.tipos_examen.filter(pk=crea.pk).exists()
         assert "CREATI" in EXAMENES_SUELTOS_PDF
+        assert TipoExamen.objects.get(codigo="CLEAR_CREA").modo_entrada == "CALCULADO"
+        assert [te.codigo for te in ordenar_queryset_panel(clear)] == [
+            "CREATI", "CREA_U", "DIUR", "CLEAR_CREA",
+        ]
+
+    def test_orina_completa_incluye_glucosa_tira(self):
+        call_command("seed_catalogo_solicitud_papel")
+        pan = PanelExamen.objects.get(codigo="PAN_ORI")
+        glu = TipoExamen.objects.get(codigo="ORI_GLU")
+        assert glu.tipo_resultado == "CUALITATIVO"
+        assert glu.nombre == "Glucosa (orina)"
+        assert [te.codigo for te in ordenar_queryset_panel(pan)] == [
+            "ORI_COLOR", "ORI_ASP", "ORI_DENS", "ORI_PH", "ORI_GLU", "ORI_BIL",
+            "ORI_NIT", "ORI_CET", "ORI_CEL", "ORI_LEU", "ORI_HEM", "ORI_PIO",
+            "ORI_MUC", "ORI_CRIS", "ORI_CONC",
+        ]
 
     def test_ionograma_urinario_comparte_electrolitos(self):
         call_command("seed_catalogo_solicitud_papel")

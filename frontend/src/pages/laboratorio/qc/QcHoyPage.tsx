@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -24,6 +24,7 @@ import {
   type IqcTableroHoy,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeApiErrorMessage, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import { filterEquiposHoyBusqueda } from './qcSearch';
 
 type Semaforo = 'liberado' | 'falta' | 'no_ok' | 'sin_trabajo';
 
@@ -73,6 +74,7 @@ const QcHoyPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [notaCal, setNotaCal] = useState<Record<number, string>>({});
   const [valorEnsayo, setValorEnsayo] = useState<Record<string, string>>({});
+  const [qHoy, setQHoy] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -325,13 +327,16 @@ const QcHoyPage: React.FC = () => {
     );
   };
 
+  const equipos = useMemo(() => {
+    const base = (board?.equipos || []).filter(
+      (e) => e.codigo !== 'ANALIZADOR-DEMO' && e.codigo !== 'DIESTRO'
+    );
+    return filterEquiposHoyBusqueda(base, qHoy);
+  }, [board, qHoy]);
+
   if (loading && !board) {
     return <CircularProgress size={28} />;
   }
-
-  const equipos = (board?.equipos || []).filter(
-    (e) => e.codigo !== 'ANALIZADOR-DEMO' && e.codigo !== 'DIESTRO'
-  );
 
   return (
     <Box>
@@ -343,6 +348,15 @@ const QcHoyPage: React.FC = () => {
         no OK: calibrá y repetí el control. El OK rápido siempre sirve para salir del apuro. Cartas lun/vie
         en química, hemo, coag y ERBA EC90; VIDAS, Finecare y EDAN cargan valores a demanda.
       </Typography>
+      <TextField
+        size="small"
+        label="Buscar"
+        placeholder="Equipo o ensayo…"
+        value={qHoy}
+        onChange={(e) => setQHoy(e.target.value)}
+        sx={{ mb: 2, minWidth: 240, maxWidth: 360 }}
+        inputProps={{ 'aria-label': 'Buscar equipos del día' }}
+      />
       {board && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
           {board.fecha}
@@ -362,6 +376,11 @@ const QcHoyPage: React.FC = () => {
           gap: 2,
         }}
       >
+        {equipos.length === 0 && (
+          <Typography color="text.secondary">
+            {qHoy.trim() ? 'Ningún equipo coincide con la búsqueda.' : 'Sin equipos en el tablero de hoy.'}
+          </Typography>
+        )}
         {equipos.map((eq) => (
           <Box
             key={eq.id}

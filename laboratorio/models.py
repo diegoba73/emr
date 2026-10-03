@@ -508,7 +508,7 @@ class SolicitudExamen(models.Model):
     class Meta:
         verbose_name = "Solicitud de Examen"
         verbose_name_plural = "Solicitudes de Examen"
-        ordering = ['-numero']
+        ordering = ['numero']
         indexes = [
             models.Index(fields=['estado', 'fecha_solicitud']),
             models.Index(fields=['paciente', 'estado']),
@@ -539,15 +539,23 @@ class SolicitudExamen(models.Model):
     def save(self, *args, **kwargs):
         """
         Generador de Protocolo: Si no tiene número, asigna LAB-YYYY-XXXXX (secuencia compartida).
+
+        El correlativo se consume solo tras validar y dentro de la misma transacción
+        que el INSERT, para no quemar números si falla full_clean/persistencia.
         """
-        if not self.numero:
-            from laboratorio.lab_codigo import next_protocolo
+        from django.db import transaction
+        from laboratorio.lab_codigo import next_protocolo
 
-            self.numero = next_protocolo()
-
-        # Validar antes de guardar
-        self.full_clean()
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            if not self.numero:
+                self.full_clean()
+                self.numero = next_protocolo()
+                update_fields = kwargs.get("update_fields")
+                if update_fields is not None:
+                    kwargs["update_fields"] = list(set(update_fields) | {"numero"})
+            else:
+                self.full_clean()
+            super().save(*args, **kwargs)
 
     @property
     def medico_display(self):

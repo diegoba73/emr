@@ -71,6 +71,13 @@ FORM_CLINICO_IZQ: list[tuple[str, str | None, str | None]] = [
     ("Lipasa", "examen", "LIP"),
     ("GGT", "examen", "GGT"),
     ("LDH", "examen", "LDH"),
+    ("Test rápido HBsAg (Hepatitis B)", "examen", "HBVAGS"),
+    ("Test rápido Hepatitis C", "examen", "HCVG"),
+    ("Test rápido HIV", "examen", "HIVAC"),
+    ("Gonadotrofina coriónica (β-HCG)", "examen", "HCGB"),
+    ("Sangre oculta en materia fecal", "examen", "SANOC"),
+    ("ASTO (Antiestreptolisina O)", "examen", "ASTO"),
+    ("Grupo sanguíneo", "examen", "GRUPO"),
     ("Perfil Férrico", "panel", "PAN_FERR"),
 ]
 FORM_CLINICO_DER: list[tuple[str, str | None, str | None]] = [
@@ -102,6 +109,13 @@ FORM_CLINICO_DER: list[tuple[str, str | None, str | None]] = [
     ("EAB Venoso", "panel", "PAN_EAB_VEN"),
     ("Acido Láctico / Lactato", "examen", "LACT"),
 ]
+
+# Si el panel está pedido, estas casillas del papel también se marcan
+# (aunque el analito no figure suelto fuera del panel).
+_MARCAS_EXTRA_POR_PANEL: dict[str, frozenset[str]] = {
+    "PAN_IONO": frozenset({"CL"}),
+    "PAN_COAG": frozenset({"INR"}),
+}
 
 # --- Formulario microbiología: (etiqueta, códigos de TipoCultivoMicrobiologia) ---
 MICRO_CULTIVO_DE = "__CULTIVO_DE__"
@@ -336,6 +350,7 @@ def construir_pedido_clinico(
     for pan in sorted(paneles, key=lambda p: (p.nombre or "")):
         if pan.codigo in codigos_form:
             marcados.add(pan.codigo)
+            marcados.update(_MARCAS_EXTRA_POR_PANEL.get(pan.codigo, ()))
         else:
             n = _nombre_item(pan)
             if n:

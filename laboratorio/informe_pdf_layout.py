@@ -58,12 +58,11 @@ PIE_CONTACTO_Y = 0.88 * cm
 PIE_PAGINA_Y = 0.48 * cm
 
 # Anchos de columna (total ≈ 17.2 cm útiles en A4 con márgenes 1.8 cm)
-COL_EXAMEN = 5.6 * cm
+COL_EXAMEN = 6.2 * cm
 COL_RESULTADO = 2.8 * cm
 COL_UNIDAD = 2.0 * cm
-COL_REFERENCIA = 5.4 * cm
-COL_FLAG = 1.4 * cm
-COL_TOTAL = COL_EXAMEN + COL_RESULTADO + COL_UNIDAD + COL_REFERENCIA + COL_FLAG
+COL_REFERENCIA = 6.2 * cm
+COL_TOTAL = COL_EXAMEN + COL_RESULTADO + COL_UNIDAD + COL_REFERENCIA
 
 
 @dataclass
@@ -241,23 +240,6 @@ def _valor_y_unidad(
                 if not unidad:
                     unidad = "%"
     return valor, unidad
-
-
-def _flag_resultado(res: ResultadoExamen) -> str:
-    """Marca H/L/* según rango snapshot o flags clínicos."""
-    if res.es_critico:
-        return "*"
-    valor = res.valor_numerico
-    if valor is not None:
-        vmin = res.rango_min_snapshot
-        vmax = res.rango_max_snapshot
-        if vmin is not None and valor < vmin:
-            return "L"
-        if vmax is not None and valor > vmax:
-            return "H"
-    if res.es_patologico:
-        return "H"
-    return ""
 
 
 def _nombre_validador(resultados: list[ResultadoExamen]) -> tuple[str | None, datetime | None]:
@@ -527,14 +509,6 @@ def _styles() -> dict[str, ParagraphStyle]:
             textColor=meta_color,
             alignment=TA_LEFT,
         ),
-        "result_flag": ParagraphStyle(
-            "ResultFlag",
-            fontName="Helvetica-Bold",
-            fontSize=typo["result_value"],
-            leading=typo["result_value"] + 2,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor("#B91C1C"),
-        ),
         "table_header": ParagraphStyle(
             "TableHeader",
             fontName="Helvetica-Bold",
@@ -564,14 +538,6 @@ def _styles() -> dict[str, ParagraphStyle]:
             leading=typo["panel_title"] + 2,
             textColor=colors.HexColor("#B45309"),
             spaceAfter=6,
-        ),
-        "legend": ParagraphStyle(
-            "FlagLegend",
-            fontName="Helvetica",
-            fontSize=7,
-            leading=9,
-            textColor=meta_color,
-            spaceBefore=6,
         ),
         "observaciones_title": ParagraphStyle(
             "ObservacionesTitle",
@@ -611,10 +577,9 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
                 Paragraph("RESULTADO", styles["table_header"]),
                 Paragraph("UNIDAD", styles["table_header"]),
                 Paragraph("REFERENCIA", styles["table_header"]),
-                Paragraph("", styles["table_header"]),
             ]
         ],
-        colWidths=[COL_EXAMEN, COL_RESULTADO, COL_UNIDAD, COL_REFERENCIA, COL_FLAG],
+        colWidths=[COL_EXAMEN, COL_RESULTADO, COL_UNIDAD, COL_REFERENCIA],
     )
     tbl.setStyle(
         TableStyle(
@@ -623,7 +588,6 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("ALIGN", (1, 0), (2, 0), "RIGHT"),
-                ("ALIGN", (4, 0), (4, 0), "CENTER"),
             ]
         )
     )
@@ -638,7 +602,6 @@ def _fila_resultado(
 ) -> Table:
     valor, unidad = _valor_y_unidad(res, valores_por_codigo=valores_por_codigo)
     ref = _referencia_texto(res) or "—"
-    flag = _flag_resultado(res)
 
     left_parts = _celda_examen(res, styles)
     left = Table(
@@ -663,10 +626,9 @@ def _fila_resultado(
                 Paragraph(_escape(valor), styles["result_value"]),
                 Paragraph(_escape(unidad or "—"), styles["result_unit"]),
                 Paragraph(_escape(ref), styles["result_ref"]),
-                Paragraph(_escape(flag), styles["result_flag"]),
             ]
         ],
-        colWidths=[COL_EXAMEN, COL_RESULTADO, COL_UNIDAD, COL_REFERENCIA, COL_FLAG],
+        colWidths=[COL_EXAMEN, COL_RESULTADO, COL_UNIDAD, COL_REFERENCIA],
     )
     row.setStyle(
         TableStyle(
@@ -678,7 +640,6 @@ def _fila_resultado(
                 ("LEFTPADDING", (0, 0), (0, 0), 2),
                 ("RIGHTPADDING", (1, 0), (2, 0), 2),
                 ("ALIGN", (1, 0), (2, 0), "RIGHT"),
-                ("ALIGN", (4, 0), (4, 0), "CENTER"),
             ]
         )
     )
@@ -775,12 +736,6 @@ def _bloque_validacion(
         if fecha_txt:
             partes.append(f"Fecha de validación: {fecha_txt}.")
         flow.append(Paragraph(" ".join(partes), styles["validation_block"]))
-    flow.append(
-        Paragraph(
-            "H = valor por encima del rango de referencia · L = valor por debajo · * = valor crítico",
-            styles["legend"],
-        )
-    )
     return flow
 
 

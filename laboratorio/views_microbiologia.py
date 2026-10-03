@@ -257,7 +257,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         "tipo_muestra_micro__nombre",
     ]
     ordering_fields = ["numero"]
-    ordering = ["-numero"]
+    ordering = ["numero"]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_serializer_class(self):
@@ -301,7 +301,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             qs = qs.filter(fecha_programada_toma__gt=timezone.localdate())
 
         qs = _apply_estudio_id_query_filter(qs, self.request, lookup="pk")
-        return qs.order_by("-numero")
+        return qs.order_by("numero")
 
     def create(self, request, *args, **kwargs):
         ser = self.get_serializer(data=request.data)

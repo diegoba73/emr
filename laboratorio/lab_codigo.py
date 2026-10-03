@@ -154,6 +154,13 @@ def _max_seq_from_queryset(values: list[str], year: int) -> int:
 def next_protocolo(*, year: int | None = None) -> str:
     """
     Asigna el siguiente LAB-YYYY-XXXXX de forma atómica (secuencia compartida).
+
+    Debe llamarse dentro de la misma transacción que persiste la entidad
+    (p. ej. ``SolicitudExamen.save`` / ``EstudioMicrobiologia.save``). Si el
+    caller hace rollback, el correlativo también se revierte (savepoint anidado).
+
+    No invocar antes de validar la entidad: un fallo posterior quemaría el número
+    si no hay transacción envolvente.
     """
     from laboratorio.models_catalog import LabProtocoloCounter
     from laboratorio.models import SolicitudExamen

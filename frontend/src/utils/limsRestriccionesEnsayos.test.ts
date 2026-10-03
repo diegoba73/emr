@@ -6,10 +6,10 @@ import {
 } from './limsRestriccionesEnsayos';
 
 describe('limsRestriccionesEnsayos', () => {
-  it('solo laboratorio/bioquímico omiten el tope', () => {
+  it('admin, laboratorio y bioquímico omiten el tope', () => {
     expect(puedeOmitirRestriccionFrecuenciaEnsayos('laboratorio')).toBe(true);
     expect(puedeOmitirRestriccionFrecuenciaEnsayos('BIOQUIMICO')).toBe(true);
-    expect(puedeOmitirRestriccionFrecuenciaEnsayos('admin')).toBe(false);
+    expect(puedeOmitirRestriccionFrecuenciaEnsayos('admin')).toBe(true);
     expect(puedeOmitirRestriccionFrecuenciaEnsayos('medico')).toBe(false);
   });
 

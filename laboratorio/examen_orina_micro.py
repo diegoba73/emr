@@ -14,6 +14,7 @@ CAMPOS_TIRA: tuple[tuple[str, str], ...] = (
     ("ORI_ASP", "Aspecto"),
     ("ORI_DENS", "Densidad"),
     ("ORI_PH", "pH"),
+    ("ORI_GLU", "Glucosa"),
     ("ORI_BIL", "Bilirrubina"),
     ("ORI_NIT", "Nitritos"),
     ("ORI_CET", "C. cetónicos"),

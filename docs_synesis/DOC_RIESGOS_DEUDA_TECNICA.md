@@ -181,7 +181,7 @@ Este documento las agrupa; detalle en módulos específicos.
 ## Pendiente de confirmar
 
 - Amenazas y controles en producción (HTTPS, WAF, backups).
-- Concurrencia en numeradores de protocolo.
+- Concurrencia en numeradores de protocolo (mitigado parcialmente: `LabProtocoloCounter` + `select_for_update`; asignación tras `full_clean` en la misma transacción del INSERT).
 
 ---
 

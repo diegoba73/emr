@@ -234,7 +234,7 @@ export interface SolicitudExamenLims {
   puede_agregar_examenes?: boolean;
   /** Lab/bioquímico/admin: PENDIENTE o en curso (no FINALIZADO). */
   puede_quitar_examenes?: boolean;
-  /** PENDIENTE editable mientras el paciente ya tiene otra orden en curso. */
+  /** PENDIENTE editable mientras el paciente ya tiene otra orden en curso (otro día). */
   pedido_adicional?: boolean;
   /** Respuesta de create/agregar: se fusionó en orden existente. */
   merged?: boolean;

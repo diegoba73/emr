@@ -68,6 +68,7 @@ _EDTA = frozenset(
         "PLAQ",
         "PL",
         "HBA1C",
+        "GRUPO",
     }
 )
 
@@ -126,6 +127,7 @@ _FRASCO_ORINA = frozenset(
         "ORI_ASP",
         "ORI_DENS",
         "ORI_PH",
+        "ORI_GLU",
         "ORI_BIL",
         "ORI_NIT",
         "ORI_CET",
@@ -136,8 +138,7 @@ _FRASCO_ORINA = frozenset(
         "ORI_MUC",
         "ORI_CRIS",
         "ORI_CONC",
-        "PROT_U_AZ",
-        # Dual (también en paneles 24 hs): default frasco; la orden puede remapear a bidón
+        "PROT_U_AZ",        # Dual (también en paneles 24 hs): default frasco; la orden puede remapear a bidón
         "NA_U",
         "K_U",
         "CL_U",
@@ -197,6 +198,9 @@ def _tubo_por_muestra(muestra_codigo: str | None, muestra_nombre: str | None = N
         return BIDON_ORINA_24H
 
     if "ORINA" in raw or raw.strip() in {"ORINA"}:
+        return FRASCO_ORINA
+
+    if "FECAL" in raw or "HECES" in raw or "MATERIA_FECAL" in raw:
         return FRASCO_ORINA
 
     if (

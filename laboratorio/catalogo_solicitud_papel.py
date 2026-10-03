@@ -36,6 +36,7 @@ MUESTRAS: dict[str, dict[str, str]] = {
     "SANGRE_HEPARINA_ART": {"nombre": "Sangre heparina arterial", "color_tubo": "Verde"},
     "SANGRE_HEPARINA_VEN": {"nombre": "Sangre heparina venosa", "color_tubo": "Verde"},
     "PLASMA_HEPARINA": {"nombre": "Plasma heparina (legacy)", "color_tubo": "Verde"},
+    "MATERIA_FECAL": {"nombre": "Materia fecal", "color_tubo": "Frasco"},
 }
 
 # ---------------------------------------------------------------------------
@@ -96,6 +97,8 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "ORI_ASP", "nombre": "Aspecto (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
     {"codigo": "ORI_DENS", "nombre": "Densidad (orina)", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
     {"codigo": "ORI_PH", "nombre": "pH (orina)", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
+    # Reacciones de tira: se cargan como Negativo / - / + / ++ / +++ (CUALITATIVO)
+    {"codigo": "ORI_GLU", "nombre": "Glucosa (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
     {"codigo": "ORI_BIL", "nombre": "Bilirrubina (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
     {"codigo": "ORI_NIT", "nombre": "Nitritos (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
     {"codigo": "ORI_CET", "nombre": "C. cetónicos (orina)", "muestra": "ORINA", "tipo_resultado": "CUALITATIVO"},
@@ -158,6 +161,14 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "T4L", "nombre": "T4 libre", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "B12", "nombre": "Vitamina B12", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "VITD", "nombre": "Vitamina D", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    # —— Pruebas rápidas / sueltos frecuentes (formulario debajo de LDH) ——
+    {"codigo": "HBVAGS", "nombre": "Test rápido HBsAg (Hepatitis B)", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "HBsAg"},
+    {"codigo": "HCVG", "nombre": "Test rápido Hepatitis C", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "HCV"},
+    {"codigo": "HIVAC", "nombre": "Test rápido HIV", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "HIV"},
+    {"codigo": "HCGB", "nombre": "Gonadotrofina coriónica (β-HCG / embarazo)", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "βHCG"},
+    {"codigo": "SANOC", "nombre": "Sangre oculta en materia fecal", "muestra": "MATERIA_FECAL", "tipo_resultado": "CUALITATIVO", "abreviatura": "SOMF"},
+    {"codigo": "ASTO", "nombre": "ASTO (Antiestreptolisina O)", "muestra": "SUERO", "tipo_resultado": "NUMERICO", "abreviatura": "ASTO"},
+    {"codigo": "GRUPO", "nombre": "Grupo sanguíneo", "muestra": "SANGRE_EDTA", "tipo_resultado": "CUALITATIVO", "abreviatura": "GS"},
     # —— FiO2 compartido (contexto clínico; no genera tubo propio) ——
     {"codigo": "FIO2", "nombre": "FiO2", "muestra": "SANGRE_HEPARINA", "tipo_resultado": "NUMERICO", "abreviatura": "FiO2"},
     # —— EAB arterial (panel PAN_EAB_ART) ——
@@ -232,9 +243,9 @@ PANELES: list[PanelDef] = [
         "codigo": "PAN_ORI",
         "nombre": "Orina completa",
         "componentes": [
-            "ORI_COLOR", "ORI_ASP", "ORI_DENS", "ORI_PH", "ORI_BIL", "ORI_NIT",
-            "ORI_CET", "ORI_CEL", "ORI_LEU", "ORI_HEM", "ORI_PIO", "ORI_MUC",
-            "ORI_CRIS", "ORI_CONC",
+            "ORI_COLOR", "ORI_ASP", "ORI_DENS", "ORI_PH", "ORI_GLU", "ORI_BIL",
+            "ORI_NIT", "ORI_CET", "ORI_CEL", "ORI_LEU", "ORI_HEM", "ORI_PIO",
+            "ORI_MUC", "ORI_CRIS", "ORI_CONC",
         ],
     },
     {
@@ -281,11 +292,12 @@ PANELES: list[PanelDef] = [
 
 # Exámenes sueltos solicitables (aparecen en el papel fuera de paneles)
 EXAMENES_SUELTOS_PDF: list[str] = [
-    "HBA1C", "GLU", "UREA", "CREATI", "AU", "CA", "MG", "P", "CA_ION",
-    "PROT_T", "ALB", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
+    "HBA1C", "GLU", "UREA", "CREATI", "AU", "CA", "MG", "P", "CL", "CA_ION",
+    "PROT_T", "ALB", "INR", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
     "CPK", "CPK_MB", "TROP_I", "TROP_US", "MIOG", "PROBNP", "DDIM",
     "PROT_U_24", "PROT_U_AZ", "LPA", "PSA", "TSH", "T3", "T4", "T4L",
     "B12", "VITD", "LACT",
+    "HBVAGS", "HCVG", "HIVAC", "HCGB", "SANOC", "ASTO", "GRUPO",
 ]
 
 # Orden de lectura del formulario «Solicitud de análisis» (fila a fila, izq → der).
@@ -302,20 +314,25 @@ ORDEN_FORMULARIO_PAPEL: list[str] = [
     "P", "PAN_CLEAR",
     "PAN_FERR", "PAN_IONO_U24",
     "PAN_IONO", "PAN_IONO_U",
-    "CA_ION", "PROT_U_24",
-    "PAN_LIP", "PROT_U_AZ",
-    "PAN_HEP", "PAN_MALB24",
-    "PROT_T", "PAN_MALB_AZ",
-    "ALB", "PAN_ELP",
-    "PAN_COAG", "LPA",
-    "VSG", "PSA",
-    "PCR_US", "TSH",
-    "AMIL", "T3",
-    "LIP", "T4",
-    "GGT", "T4L",
-    "LDH", "B12",
-    "VITD",
-    "PAN_EAB_ART",
-    "PAN_EAB_VEN",
-    "LACT",
+    "CL", "PROT_U_24",
+    "CA_ION", "PROT_U_AZ",
+    "PAN_LIP", "PAN_MALB24",
+    "PAN_HEP", "PAN_MALB_AZ",
+    "PROT_T", "PAN_ELP",
+    "ALB", "LPA",
+    "PAN_COAG", "PSA",
+    "INR", "TSH",
+    "VSG", "T3",
+    "PCR_US", "T4",
+    "AMIL", "T4L",
+    "LIP", "B12",
+    "GGT", "VITD",
+    "LDH", "PAN_EAB_ART",
+    "HBVAGS", "PAN_EAB_VEN",
+    "HCVG", "LACT",
+    "HIVAC",
+    "HCGB",
+    "SANOC",
+    "ASTO",
+    "GRUPO",
 ]

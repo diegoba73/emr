@@ -447,6 +447,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           canEditarObraSocial={canOp}
           onObraSocial={() => setOpenObraSocial(true)}
           onReimprimirEtiquetas={canOp ? onReimprimir : undefined}
+          onImprimirTalon={canOp ? () => void onImprimirTalon() : undefined}
+          downloadingTalon={downloadingTalon}
         />
       )}
       {tab === 'orina' && admiteOrina && (
@@ -507,7 +509,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         open={openImprimirEtiqueta}
         estudioId={estudioId}
         estudioNumero={estudio.numero}
-        reimpresion
+        reimpresion={Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra)}
         onClose={() => setOpenImprimirEtiqueta(false)}
         onEtiquetasOk={() => {
           void loadAll();

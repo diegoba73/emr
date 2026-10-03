@@ -19,6 +19,7 @@ import {
   Tabs,
   TextField,
   ThemeProvider,
+  Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import { apiService } from '../../services/api';
@@ -50,7 +51,7 @@ import type {
   TipoCultivoMicrobiologia,
   TipoMuestraMicrobiologia,
 } from '../../types/lims';
-import { formatPacienteLabel } from '../../utils/pacienteFormat';
+import { formatPacienteLabel, formatPacienteObraSocial } from '../../utils/pacienteFormat';
 import { ORIGEN_SOLICITUD_LIMS_OPTIONS, esOrigenAmbulatorioExterno } from '../../utils/limsOrigenSolicitud';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
@@ -68,10 +69,7 @@ import SolicitudMicrobiologiaForm, {
   type MicroPedidoItem,
 } from './SolicitudMicrobiologiaForm';
 import { addLocalDays, formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
-import { isOperadorLimsRole } from '../../utils/roles';
-import {
-  mensajeBloqueoExamen,
-} from '../../utils/limsRestriccionesEnsayos';
+import { mensajeBloqueoExamen, puedeOmitirRestriccionFrecuenciaEnsayos } from '../../utils/limsRestriccionesEnsayos';
 
 export type PedidoTab = 'lab' | 'micro';
 
@@ -141,7 +139,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const [pendingSubmit, setPendingSubmit] = useState<'draft' | 'create' | null>(null);
   const [restriccionesEnsayos, setRestriccionesEnsayos] = useState<RestriccionesEnsayosLims>({});
   const { currentUser } = useData();
-  const esOperadorLims = isOperadorLimsRole(currentUser?.rol);
+  const omiteRestriccionesEnsayos = puedeOmitirRestriccionFrecuenciaEnsayos(currentUser?.rol);
   const soloAmbulatorio = isMedicoSoloAmbulatorio(currentUser);
   const origenOptions = soloAmbulatorio
     ? ORIGEN_SOLICITUD_LIMS_OPTIONS.filter(
@@ -193,7 +191,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     resetSelection,
     getSelectionArrays,
     hasSelection,
-  } = useSolicitudAnalisisSelection();
+  } = useSolicitudAnalisisSelection({ examenes, paneles });
 
   useEffect(() => {
     if (!open) return;
@@ -214,8 +212,27 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     resetSelection();
   }, [open, pacienteInicial, resetSelection]);
 
+  // Si solo llega pacienteId (agregar a orden), cargar ficha para mostrar obra social.
   useEffect(() => {
-    if (!open || esOperadorLims) {
+    if (!open || pacienteInicial) return;
+    const pid = pacienteId ?? null;
+    if (!pid) return;
+    let cancelled = false;
+    apiService
+      .getPaciente(pid)
+      .then((p) => {
+        if (!cancelled) setPaciente(p);
+      })
+      .catch(() => {
+        /* la orden sigue operativa aunque falle la ficha */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, pacienteId, pacienteInicial]);
+
+  useEffect(() => {
+    if (!open || omiteRestriccionesEnsayos) {
       setRestriccionesEnsayos({});
       return;
     }
@@ -235,7 +252,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, esOperadorLims, paciente?.id, pacienteInicial?.id, pacienteId]);
+  }, [open, omiteRestriccionesEnsayos, paciente?.id, pacienteInicial?.id, pacienteId]);
 
   const handleToggleExamen = useCallback(
     (id: number) => {
@@ -551,6 +568,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   };
 
   const showPacientePicker = !draftMode && !pacienteInicial && !agregarAOrdenId;
+  const pacienteVisible = paciente ?? pacienteInicial;
+  const obraSocialLabel = formatPacienteObraSocial(pacienteVisible);
 
   return (
     <ThemeProvider theme={dialogTheme}>
@@ -602,6 +621,19 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                     ? 'Escribí al menos 2 caracteres'
                     : 'Sin coincidencias'
                 }
+                renderOption={(props, option) => {
+                  const os = formatPacienteObraSocial(option);
+                  return (
+                    <li {...props} key={option.id}>
+                      <Box sx={{ py: 0.25 }}>
+                        <Typography variant="body2">{formatPacienteLabel(option)}</Typography>
+                        <Typography variant="caption" color={os ? 'text.secondary' : 'warning.main'}>
+                          {os || 'Sin obra social cargada'}
+                        </Typography>
+                      </Box>
+                    </li>
+                  );
+                }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -615,6 +647,16 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
             {pacienteInicial && (
               <Alert severity="info" sx={{ py: 0.5 }}>
                 Paciente: <strong>{formatPacienteLabel(pacienteInicial)}</strong>
+              </Alert>
+            )}
+
+            {pacienteVisible && (
+              <Alert
+                severity={obraSocialLabel ? 'info' : 'warning'}
+                sx={{ py: 0.5 }}
+              >
+                Obra social:{' '}
+                <strong>{obraSocialLabel || 'Sin obra social cargada'}</strong>
               </Alert>
             )}
 

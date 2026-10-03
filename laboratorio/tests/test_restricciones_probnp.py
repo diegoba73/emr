@@ -137,10 +137,10 @@ class TestRestriccionProbnpFrecuencia(TestCase):
         self.assertIn("proBNP", body)
         self.assertIn("Obra Social", body)
 
-    def test_admin_bloqueado_si_reciente(self):
+    def test_admin_puede_si_reciente(self):
         self._orden_con_probnp(dias_atras=5)
         r = self._crear(self.admin, [self.probnp.pk])
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(r.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED), r.data)
 
     def test_laboratorio_puede_si_reciente(self):
         self._orden_con_probnp(dias_atras=5)

@@ -5,6 +5,7 @@ Perfil lipidico — se cargan COL_TOT, HDL, TG; el resto se calcula.
 Hepatograma — BIL_I = BIL_T - BIL_D.
 Hemograma — VCM, HCM, CHCM (y absolutos de formula leucocitaria).
 Perfil ferrico — se cargan FERR, UIBC (, FERRIT); CF, SAT_FE y TRANS se calculan.
+Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA se calcula.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from laboratorio.entrada_resultados import quantize_valor_numerico
 
 TG_MAX_FRIEDEWALD = Decimal("400")
 RESULTADO_NO_CALCULABLE = "No calculable con estos datos"
+MINUTOS_24H = Decimal("1440")
 CODIGOS_LIPIDO_MEDIDOS = frozenset({"COL_TOT", "HDL", "TG"})
 CODIGOS_LIPIDO_CALCULADOS = frozenset(
     {"LDL", "VLDL", "COL_NO_LDL", "COL_RESID", "RATIO_CT_HDL"}
@@ -23,8 +25,12 @@ CODIGOS_HEPAT_CALCULADOS = frozenset({"BIL_I"})
 CODIGOS_HEMO_INDICES = frozenset({"VCM", "HCM", "CHCM"})
 # TIBC = FERR + UIBC; saturación = FERR/TIBC×100; transferrina ≈ TIBC×0.8
 CODIGOS_FERRICO_CALCULADOS = frozenset({"CF", "SAT_FE", "TRANS"})
+CODIGOS_CLEARANCE_CALCULADOS = frozenset({"CLEAR_CREA"})
 CODIGOS_CALCULADOS = (
-    CODIGOS_LIPIDO_CALCULADOS | CODIGOS_HEPAT_CALCULADOS | CODIGOS_FERRICO_CALCULADOS
+    CODIGOS_LIPIDO_CALCULADOS
+    | CODIGOS_HEPAT_CALCULADOS
+    | CODIGOS_FERRICO_CALCULADOS
+    | CODIGOS_CLEARANCE_CALCULADOS
 )
 FORMULA_LEUCO_CODIGOS = frozenset(
     {"NEUT_CAY", "NEUT_SEG", "EOS", "BAS", "LINF", "MONO"}
@@ -126,6 +132,15 @@ def calc_transferrina_desde_tibc(tibc: Decimal) -> Decimal:
     return _q(tibc * FACTOR_TRANS_DESDE_TIBC, 0)
 
 
+def calc_clearance_creatinina(
+    creati: Decimal, crea_u: Decimal, diur: Decimal
+) -> Decimal | None:
+    """Clearance (mL/min) = (creatinuria × diuresis) / (creatininemia × 1440)."""
+    if creati <= 0:
+        return None
+    return _q((crea_u * diur) / (creati * MINUTOS_24H), 1)
+
+
 def format_absoluto_mm3(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
@@ -202,6 +217,19 @@ def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[De
         out["CF"] = (None, RESULTADO_NO_CALCULABLE)
         out["SAT_FE"] = (None, RESULTADO_NO_CALCULABLE)
         out["TRANS"] = (None, RESULTADO_NO_CALCULABLE)
+
+    creati = _dec(valores.get("CREATI"))
+    crea_u = _dec(valores.get("CREA_U"))
+    diur = _dec(valores.get("DIUR"))
+    if creati is not None and crea_u is not None and diur is not None:
+        clear = calc_clearance_creatinina(creati, crea_u, diur)
+        if clear is not None:
+            out["CLEAR_CREA"] = (quantize_valor_numerico(clear), _fmt(clear, 1))
+        else:
+            out["CLEAR_CREA"] = (None, RESULTADO_NO_CALCULABLE)
+    elif creati is not None or crea_u is not None or diur is not None:
+        # Falta alguno de los tres medidos: no inventar clearance.
+        out["CLEAR_CREA"] = (None, RESULTADO_NO_CALCULABLE)
 
     return out
 

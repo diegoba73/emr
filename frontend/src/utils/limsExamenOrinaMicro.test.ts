@@ -8,6 +8,11 @@ describe('limsExamenOrinaMicro', () => {
     expect((data as Record<string, string>).HACK).toBeUndefined();
   });
 
+  it('incluye glucosa en tira reactiva', () => {
+    const data = normalizarExamenOrina({ ORI_GLU: '++' });
+    expect(data.ORI_GLU).toBe('++');
+  });
+
   it('admite urocultivo por flag o tipo_estudio', () => {
     expect(estudioAdmiteExamenOrina({ admite_examen_orina: true })).toBe(true);
     expect(estudioAdmiteExamenOrina({ tipo_estudio: 'UROCULTIVO' })).toBe(true);

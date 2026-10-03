@@ -78,6 +78,15 @@ import {
   isProtectedDeleteError,
 } from '../../../utils/apiError';
 import QcHoyPage from './QcHoyPage';
+import {
+  filterCalibracionesBusqueda,
+  filterCorridasBusqueda,
+  filterEquiposBusqueda,
+  filterLotesControlBusqueda,
+  filterLotesProductoBusqueda,
+  filterMaterialesQcBusqueda,
+  filterProductosQcBusqueda,
+} from './qcSearch';
 
 const EQUIPOS_POR_ENSAYO = new Set(['VIDAS_KUBE', 'FINECARE']);
 
@@ -371,6 +380,9 @@ const QcHubPage: React.FC = () => {
   const [editingLoteProdId, setEditingLoteProdId] = useState<number | null>(null);
   const [editingEquipoId, setEditingEquipoId] = useState<number | null>(null);
   const [editingCalId, setEditingCalId] = useState<number | null>(null);
+  const [qCorridas, setQCorridas] = useState('');
+  const [qCatalogo, setQCatalogo] = useState('');
+  const [qEquiposCals, setQEquiposCals] = useState('');
 
   const materialById = useMemo(() => {
     const map = new Map<number, MaterialControl>();
@@ -416,15 +428,74 @@ const QcHubPage: React.FC = () => {
   }, [loteProductoSeleccionado, formCorrida.nivel]);
 
   const productosPorEquipo = useMemo((): Array<[string, ProductoControl[]]> => {
+    const filtrados = filterProductosQcBusqueda(
+      productos.filter((x) => x.activo),
+      qCatalogo
+    );
+    // Si el texto encaja en un lote, también mostrar su producto.
+    const lotesMatch = filterLotesProductoBusqueda(
+      lotesProducto.filter((l) => l.activo),
+      qCatalogo
+    );
+    const idsExtra = new Set(lotesMatch.map((l) => l.producto));
+    const base = productos.filter((x) => x.activo);
+    const conLote = qCatalogo.trim()
+      ? base.filter((p) => idsExtra.has(p.id) || filtrados.some((f) => f.id === p.id))
+      : filtrados;
     const groups = new Map<string, ProductoControl[]>();
-    for (const p of productos.filter((x) => x.activo)) {
+    for (const p of conLote) {
       const key = p.equipo_codigo || '—';
       const arr = groups.get(key) || [];
       arr.push(p);
       groups.set(key, arr);
     }
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [productos]);
+  }, [productos, lotesProducto, qCatalogo]);
+
+  const lotesProductoVisibles = useMemo(
+    () => filterLotesProductoBusqueda(lotesProductoActivos, qCatalogo),
+    [lotesProductoActivos, qCatalogo]
+  );
+
+  const materialesVisibles = useMemo(
+    () => filterMaterialesQcBusqueda(materialesPorEnsayo, qCatalogo),
+    [materialesPorEnsayo, qCatalogo]
+  );
+
+  const lotesControlVisibles = useMemo(
+    () =>
+      filterLotesControlBusqueda(lotes, qCatalogo, (l) => {
+        const mat = materialById.get(l.material);
+        return [
+          mat?.tipo_examen_codigo,
+          mat?.tipo_examen_nombre,
+          mat?.nivel ? NIVEL_LABEL[mat.nivel] || mat.nivel : '',
+          mat?.equipo_codigo,
+        ];
+      }),
+    [lotes, qCatalogo, materialById]
+  );
+
+  const corridasVisibles = useMemo(() => {
+    const equipoById = new Map(equipos.map((e) => [e.id, e.codigo]));
+    return filterCorridasBusqueda(
+      corridas.map((c) => ({
+        ...c,
+        equipo_codigo: c.equipo != null ? equipoById.get(c.equipo) || null : null,
+      })),
+      qCorridas
+    );
+  }, [corridas, equipos, qCorridas]);
+
+  const equiposVisibles = useMemo(
+    () => filterEquiposBusqueda(equipos, qEquiposCals),
+    [equipos, qEquiposCals]
+  );
+
+  const calsVisibles = useMemo(
+    () => filterCalibracionesBusqueda(cals, qEquiposCals),
+    [cals, qEquiposCals]
+  );
 
   const loteTargetsSeleccionado = useMemo(
     () => lotesProducto.find((l) => String(l.id) === loteTargetsEdit),
@@ -1310,6 +1381,15 @@ const QcHubPage: React.FC = () => {
           </Stack>
             </Box>
           )}
+          <TextField
+            size="small"
+            label="Buscar en historial"
+            placeholder="Producto, lote o estado…"
+            value={qCorridas}
+            onChange={(e) => setQCorridas(e.target.value)}
+            sx={{ mb: 1.5, minWidth: 260, maxWidth: 400 }}
+            inputProps={{ 'aria-label': 'Buscar corridas' }}
+          />
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -1324,7 +1404,7 @@ const QcHubPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {corridas.map((c) => {
+              {corridasVisibles.map((c) => {
                 const ultimo = c.puntos?.length ? c.puntos[c.puntos.length - 1] : undefined;
                 const reglas = (c.puntos || []).flatMap((p) => p.reglas_disparadas || []);
                 const esProd = Boolean(c.lote_producto);
@@ -1360,6 +1440,15 @@ const QcHubPage: React.FC = () => {
 
       {tab === 2 && (
         <Box>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Producto, material, lote o ensayo…"
+            value={qCatalogo}
+            onChange={(e) => setQCatalogo(e.target.value)}
+            sx={{ mb: 2, minWidth: 280, maxWidth: 440 }}
+            inputProps={{ 'aria-label': 'Buscar catálogo QC' }}
+          />
           <Typography variant="h6" fontWeight={600} gutterBottom>
             Productos multiparámetro
           </Typography>
@@ -1533,7 +1622,7 @@ const QcHubPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {lotesProductoActivos.map((l) => (
+              {lotesProductoVisibles.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell>{labelLoteProducto(l)}</TableCell>
                   <TableCell>{l.codigo_lote}</TableCell>
@@ -1882,7 +1971,7 @@ const QcHubPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {materialesPorEnsayo.map((m) => {
+              {materialesVisibles.map((m) => {
                 const mg = margenesDeMaterial(m);
                 return (
                   <TableRow key={m.id}>
@@ -1953,7 +2042,7 @@ const QcHubPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {lotes.map((l) => {
+              {lotesControlVisibles.map((l) => {
                 const mat = materialById.get(l.material);
                 return (
                   <TableRow key={l.id}>
@@ -2003,6 +2092,15 @@ const QcHubPage: React.FC = () => {
 
       {tab === 3 && (
         <Box>
+          <TextField
+            size="small"
+            label="Buscar"
+            placeholder="Equipo, calibrador o lote…"
+            value={qEquiposCals}
+            onChange={(e) => setQEquiposCals(e.target.value)}
+            sx={{ mb: 2, minWidth: 260, maxWidth: 400 }}
+            inputProps={{ 'aria-label': 'Buscar equipos y calibraciones' }}
+          />
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>
             Nuevo equipo
           </Typography>
@@ -2070,7 +2168,7 @@ const QcHubPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {equipos.map((e) => (
+              {equiposVisibles.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell>{e.codigo}</TableCell>
                   <TableCell>{e.nombre}</TableCell>
@@ -2328,7 +2426,7 @@ const QcHubPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {cals.map((c) => (
+              {calsVisibles.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>{c.equipo_codigo || c.equipo_nombre}</TableCell>
                   <TableCell>{c.tipo === 'CURVA_MULTIPUNTO' ? 'Curva' : '1 punto'}</TableCell>

@@ -275,9 +275,9 @@ def imprimir_etiqueta_estudio_micro(
     """
     Devuelve ZPL para el agente USB local.
 
-    - Primera impresión: solo en PENDIENTE; asigna barcode + etiquetas_impresas_at.
-    - Reimpresión: si ya hay etiqueta/código, permitido en cualquier estado
-      distinto de CANCELADO (igual que lab clínico tras recepción).
+    - Primera impresión: asigna barcode + etiquetas_impresas_at (cualquier estado
+      ≠ CANCELADO, incluso ya RECIBIDO sin etiqueta previa).
+    - Reimpresión: si ya hay etiqueta/código, no muta timestamps; ≠ CANCELADO.
 
     No envía a impresora. No audita éxito: llamar confirmar tras el agente local.
     """

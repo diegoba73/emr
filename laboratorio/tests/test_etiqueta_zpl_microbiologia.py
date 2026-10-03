@@ -176,6 +176,53 @@ class TestEtiquetaZplMicrobiologia(TestCase):
         self.assertEqual(self.estudio.codigo_barra, codigo)
         self.assertEqual(self.estudio.etiquetas_impresas_at, stamped)
 
+    def test_primera_etiqueta_despues_de_recibido_sin_previa(self):
+        """Si se recibió sin etiquetar, la 1ª impresión ZPL sigue permitida."""
+        from django.utils import timezone
+
+        self.client.force_authenticate(self.lab)
+        self.estudio.estado = "RECIBIDO"
+        self.estudio.fecha_inicio = timezone.now()
+        self.estudio.codigo_barra = None
+        self.estudio.etiquetas_impresas_at = None
+        self.estudio.save(
+            update_fields=[
+                "estado",
+                "fecha_inicio",
+                "codigo_barra",
+                "etiquetas_impresas_at",
+                "updated_at",
+            ]
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f"/api/lab/microbiologia/estudios/{self.estudio.pk}/imprimir-etiqueta/",
+                {},
+                format="json",
+            )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.estado, "RECIBIDO")
+        self.assertIsNotNone(self.estudio.codigo_barra)
+        self.assertIsNotNone(self.estudio.etiquetas_impresas_at)
+        self.assertTrue(r.json()["zpl"].strip().startswith("^XA"))
+
+    def test_talon_pdf_despues_de_recibido(self):
+        self.client.force_authenticate(self.lab)
+        from django.utils import timezone
+
+        self.estudio.estado = "RECIBIDO"
+        self.estudio.fecha_inicio = timezone.now()
+        self.estudio.save(update_fields=["estado", "fecha_inicio", "updated_at"])
+        r = self.client.get(
+            f"/api/lab/microbiologia/estudios/{self.estudio.pk}/talon-pdf/"
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r["Content-Type"], "application/pdf")
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.estado, "RECIBIDO")
+
     def test_reimprimir_cancelado_rechazado(self):
         self.client.force_authenticate(self.lab)
         self.estudio.estado = "CANCELADO"
