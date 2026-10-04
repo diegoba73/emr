@@ -5,8 +5,22 @@
 import type { CargarResultadoPayload, LimsTipoExamen, MuestraTransaccional, ResultadoExamenLims } from '../types/lims';
 import { convertTicketEntry, entryFromStored, usesTicketEntry } from './entradaResultados';
 import { calcChcmGdl, calcHcmPg, calcVcmFl } from './hemogramaIndices';
-import { calcularDerivados, esResultadoNoCalculable } from './calculosDerivados';
+import {
+  CODIGOS_CALCULADOS,
+  calcularDerivados,
+  esResultadoNoCalculable,
+} from './calculosDerivados';
 import { getSysmexUnidad } from './sysmexHemograma';
+
+/** Exámenes derivados: no se asocian a tubo; la muestra va en los medidos. */
+export function esExamenCalculadoSinMuestraObligatoria(
+  te?: LimsTipoExamen | null,
+  codigo?: string | null
+): boolean {
+  if (te?.modo_entrada === 'CALCULADO') return true;
+  const c = (codigo || te?.codigo || '').trim().toUpperCase();
+  return Boolean(c && CODIGOS_CALCULADOS.has(c));
+}
 
 export const MUESTRA_ESTADOS_PROCESABLES = ['TOMADA', 'RECIBIDA', 'CONSERVADA', 'EN_PROCESO'] as const;
 
@@ -71,8 +85,13 @@ export function validateCargaResultadosMuestra(
     const safe = normalizeDraftRow(row);
     const nombre = r.tipo_examen_nombre || String(r.tipo_examen);
     const te = catalog.get(r.tipo_examen);
+    const codigo = r.tipo_examen_codigo ?? te?.codigo;
 
-    if (te?.requiere_muestra && row.muestra_id == null) {
+    if (
+      te?.requiere_muestra &&
+      row.muestra_id == null &&
+      !esExamenCalculadoSinMuestraObligatoria(te, codigo)
+    ) {
       return `El examen ${nombre} requiere una muestra asociada.`;
     }
 
@@ -403,6 +422,12 @@ export function suggestMuestraIdForResultado(
     te?.tipo_contenedor
   );
   if (opciones.length === 1) return opciones[0].id;
-  if (te?.requiere_muestra && opciones.length > 0) return opciones[0].id;
+  if (
+    te?.requiere_muestra &&
+    opciones.length > 0 &&
+    !esExamenCalculadoSinMuestraObligatoria(te, r.tipo_examen_codigo)
+  ) {
+    return opciones[0].id;
+  }
   return null;
 }

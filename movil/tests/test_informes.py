@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 import base64
+import uuid
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -27,11 +28,12 @@ def _login(rol, username='u'):
 
 
 def _orden(paciente, estado='FINALIZADO'):
-    tm = TipoMuestra.objects.create(codigo='SUERO-M', nombre='Suero', activo=True)
-    te = TipoExamen.objects.create(codigo='GLU-M', nombre='Glucemia', tipo_muestra_requerida=tm, activo=True)
+    suf = uuid.uuid4().hex[:8]
+    tm = TipoMuestra.objects.create(codigo=f'SUERO-{suf}', nombre='Suero', activo=True)
+    te = TipoExamen.objects.create(codigo=f'GLU-{suf}', nombre='Glucemia', tipo_muestra_requerida=tm, activo=True)
     sol = SolicitudExamen.objects.create(
         paciente=paciente,
-        estado=estado,
+        estado='EN_PROCESO',
         fecha_solicitud=timezone.now() - timedelta(hours=2),
     )
     sol.tipos_examen.add(te)
@@ -42,6 +44,9 @@ def _orden(paciente, estado='FINALIZADO'):
         valor_numerico=90,
         unidad='mg/dL',
     )
+    if estado != 'EN_PROCESO':
+        sol.estado = estado
+        sol.save(update_fields=['estado'])
     return sol
 
 
@@ -55,22 +60,22 @@ def test_paciente_ve_solo_sus_informes_finalizados_o_parciales():
     r = c.get('/api/movil/informes/')
     assert r.status_code == 200, r.data
     ids = {row['id'] for row in r.data['results']}
-    assert propia.id in ids and parcial.id in ids
-    assert all(row['paciente_nombre'].startswith('Propia') for row in r.data['results'])
+    assert ids == {propia.id, parcial.id}
+    assert all(row['paciente_nombre'].upper().startswith('PROPIA') for row in r.data['results'])
 
 
-def test_secretaria_lista_todas_y_descarga_parcial_base64():
+def test_secretaria_lista_parcial_pero_no_descarga_pdf():
     c, _ = _login('secretaria', 'sec-inf')
     p = Paciente.objects.create(nombre='Pac', apellido='Sec', dni='INF-3')
     sol = _orden(p, 'INFORMADO_PARCIAL')
     listed = c.get('/api/movil/informes/')
     assert listed.status_code == 200
     assert sol.id in {row['id'] for row in listed.data['results']}
-    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/?format=base64')
-    assert pdf.status_code == 200, pdf.data
-    assert pdf.data['es_parcial'] is True
-    raw = base64.b64decode(pdf.data['base64'])
-    assert raw.startswith(b'%PDF')
+    row = next(r for r in listed.data['results'] if r['id'] == sol.id)
+    assert row.get('es_parcial') is True
+    assert row.get('puede_descargar_pdf') is False
+    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/?as_base64=1')
+    assert pdf.status_code == 403
 
 
 def test_paciente_descarga_pdf_propio_y_no_ajeno():
@@ -84,14 +89,14 @@ def test_paciente_descarga_pdf_propio_y_no_ajeno():
     assert det.status_code == 200, det.data
     assert det.data['informe']['puede_descargar_pdf'] is True
 
-    pdf = c.get(f'/api/movil/informes/{propia.id}/pdf/?format=base64')
+    pdf = c.get(f'/api/movil/informes/{propia.id}/pdf/?as_base64=1')
     assert pdf.status_code == 200, pdf.data
     assert pdf.data['es_parcial'] is False
     assert isinstance(pdf.data.get('filename'), str) and pdf.data['filename'].endswith('.pdf')
     raw = base64.b64decode(pdf.data['base64'])
     assert raw.startswith(b'%PDF')
 
-    deny = c.get(f'/api/movil/informes/{ajena.id}/pdf/?format=base64')
+    deny = c.get(f'/api/movil/informes/{ajena.id}/pdf/?as_base64=1')
     assert deny.status_code == 403
 
 

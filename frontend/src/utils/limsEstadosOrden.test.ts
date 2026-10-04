@@ -15,6 +15,7 @@ describe('limsEstadosOrden — LISTO_PARA_VALIDAR', () => {
     expect(ESTADOS_ORDEN_LIMS).toContain('LISTO_PARA_VALIDAR');
     expect(labelEstadoOrdenLims('LISTO_PARA_VALIDAR')).toBe('Listo para validar');
     expect(estadoOrdenColor('LISTO_PARA_VALIDAR')).toBe('warning');
+    expect(labelEstadoOrdenLims('INFORMADO_PARCIAL')).toBe('Informe parcial');
   });
 
   it('ordenListaParaValidar solo mira el estado', () => {

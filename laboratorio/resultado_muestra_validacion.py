@@ -20,10 +20,12 @@ MUESTRA_ESTADOS_ACEPTADOS_CARGA_RESULTADO = frozenset(
     {"RECIBIDA", "CONSERVADA", "EN_PROCESO"}
 )
 
-# Al validar orden: resultado con muestra pendiente/tomada o terminal inválida bloquea.
+# Al validar orden: resultado *con valor* no puede apuntar a muestra pendiente/tomada
+# ni terminal (CANCELADA/RECHAZADA/DESCARTADA). Resultados vacíos sobre tubos
+# cancelados no bloquean (ver solicitud_cierre).
 # Además, cualquier tubo de la orden aún en PENDIENTE_TOMA/TOMADA bloquea listo/validar
-# (aunque no tenga resultado vinculado). Cancelar/rechazar/descartar esos tubos habilita el cierre
-# si los resultados de los tubos recepcionados están completos.
+# (aunque no tenga resultado vinculado). Cancelar/rechazar/descartar esos tubos habilita
+# el cierre si los resultados exigibles de los tubos activos están completos.
 # La carga de valores exige RECIBIDA/CONSERVADA/EN_PROCESO — se puede cargar el tubo recibido
 # aunque queden otros pendientes.
 MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN = frozenset(
@@ -111,10 +113,19 @@ def assert_tipo_examen_muestra_carga(
     Obligatoriedad progresiva (LIMS B2-B / B2-B-A) al cargar resultados.
 
     - ``requiere_muestra``: exige muestra efectiva (payload o FK previa).
+    - Exámenes ``CALCULADO`` (clearance, LDL, orinas 24 hs, etc.) no exigen tubo:
+      el valor se deriva de medidos; la muestra vive en esos insumos.
     - ``tipo_muestra_requerida``: si hay muestra asociada, el tipo físico debe coincidir
       aunque ``requiere_muestra`` sea False.
     """
-    requiere_muestra = getattr(tipo_examen, "requiere_muestra", False)
+    modo = getattr(tipo_examen, "modo_entrada", None) or ""
+    es_calculado = modo == "CALCULADO"
+    if not es_calculado:
+        from laboratorio.calculos_derivados import es_codigo_calculado
+
+        es_calculado = es_codigo_calculado(getattr(tipo_examen, "codigo", None))
+
+    requiere_muestra = getattr(tipo_examen, "requiere_muestra", False) and not es_calculado
 
     if requiere_muestra:
         if muestra_id_en_payload and raw_muestra_id is None:

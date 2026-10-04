@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import EvolucionInternacionForm from '../../modules/atenciones/components/forms/EvolucionInternacionForm';
 import { canOpenDetalleOrdenLab, pathDetalleOrdenLab } from '../../utils/limsAccess';
+import { labelEstadoOrdenLims, estadoOrdenColor } from '../../utils/limsEstadosOrden';
 import { withNavBack } from '../../utils/navBack';
 import RevistaHcDiarioAccordions from './hc/RevistaHcDiarioAccordions';
 import NuevaOrdenLimsDialog from '../lims/NuevaOrdenLimsDialog';
@@ -437,7 +438,17 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                     <Typography variant="body2">
                       {lab.numero || `Orden #${lab.id}`}
                     </Typography>
-                    <Chip size="small" label={lab.estado} color={lab.tiene_resultados ? 'success' : 'default'} />
+                    <Chip
+                      size="small"
+                      label={labelEstadoOrdenLims(lab.estado)}
+                      color={
+                        lab.estado === 'INFORMADO_PARCIAL'
+                          ? estadoOrdenColor('INFORMADO_PARCIAL')
+                          : lab.tiene_resultados
+                            ? 'success'
+                            : 'default'
+                      }
+                    />
                     <Button size="small" onClick={() => setEventoAbierto(abierto ? null : ev.key)}>
                       {abierto ? 'Ocultar' : 'Ver'}
                     </Button>
@@ -457,6 +468,12 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                   </Stack>
                   {abierto && (
                     <Box sx={{ mt: 1 }}>
+                      {lab.estado === 'INFORMADO_PARCIAL' && (
+                        <Alert severity="warning" sx={{ mb: 1 }}>
+                          Informe parcial: hay resultados disponibles, pero la orden aún no está
+                          completa. No es el informe final.
+                        </Alert>
+                      )}
                       <Typography variant="caption" color="text.secondary" display="block" mb={1}>
                         {[...lab.examenes, ...lab.paneles.map((p) => `Panel: ${p}`)].join(' · ') || '—'}
                       </Typography>

@@ -30,7 +30,7 @@ export const ESTADOS_ORDEN_LIMS: EstadoSolicitudLims[] = [
 export const ESTADO_ORDEN_LABEL: Record<EstadoSolicitudLims, string> = {
   PENDIENTE: 'Pendiente',
   EN_PROCESO: 'En proceso',
-  INFORMADO_PARCIAL: 'Informado parcialmente',
+  INFORMADO_PARCIAL: 'Informe parcial',
   LISTO_PARA_VALIDAR: 'Listo para validar',
   FINALIZADO: 'Finalizado',
 };

@@ -62,6 +62,7 @@ import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import ResultadosOrdenLista from './lims/ResultadosOrdenLista';
+import { estadoOrdenColor, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
 
 function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string {
   if (!s) return 'N/A';
@@ -75,8 +76,12 @@ function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string
 
 function chipColorEstado(estado: string): 'success' | 'warning' | 'info' | 'default' {
   if (estado === 'FINALIZADO' || estado === 'COMPLETADA') return 'success';
-  if (estado === 'EN_PROCESO' || estado === 'INFORMADO_PARCIAL' || estado === 'LISTO_PARA_VALIDAR') {
-    return 'warning';
+  if (
+    estado === 'EN_PROCESO' ||
+    estado === 'INFORMADO_PARCIAL' ||
+    estado === 'LISTO_PARA_VALIDAR'
+  ) {
+    return estado === 'INFORMADO_PARCIAL' ? estadoOrdenColor('INFORMADO_PARCIAL') : 'warning';
   }
   if (estado === 'PENDIENTE') return 'info';
   return 'default';
@@ -967,7 +972,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={analisis.estado}
+                          label={labelEstadoOrdenLims(analisis.estado)}
                           color={chipColorEstado(analisis.estado)}
                           size="small"
                         />
@@ -1108,7 +1113,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="subtitle2" color="textSecondary">Estado</Typography>
                         <Chip
-                          label={selectedAnalisis.estado}
+                          label={labelEstadoOrdenLims(selectedAnalisis.estado)}
                           color={chipColorEstado(selectedAnalisis.estado)}
                           size="small"
                         />
@@ -1150,6 +1155,12 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                   subheader="Agrupados por perfil (hemograma, EAB, ionograma, etc.)"
                 />
                 <CardContent>
+                  {selectedAnalisis.estado === 'INFORMADO_PARCIAL' && (
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      Informe parcial: hay resultados disponibles, pero la orden aún no está
+                      completa. No es el informe final.
+                    </Alert>
+                  )}
                   {loadingResultados ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                       <CircularProgress />

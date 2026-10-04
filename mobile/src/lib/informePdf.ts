@@ -20,7 +20,7 @@ function isShareCanceled(error: unknown): boolean {
 
 /** Descarga el PDF del informe y abre el diálogo de compartir/guardar. */
 export async function downloadInformePdf(id: number): Promise<{ esParcial: boolean }> {
-  const data = await api<PdfPayload>(`/informes/${id}/pdf/?format=base64`, 'GET', undefined, {
+  const data = await api<PdfPayload>(`/informes/${id}/pdf/?as_base64=1`, 'GET', undefined, {
     timeoutMs: 90000,
   });
   if (!data?.base64 || typeof data.base64 !== 'string') {

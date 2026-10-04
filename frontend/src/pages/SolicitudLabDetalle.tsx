@@ -152,6 +152,14 @@ const SolicitudLabDetalle: React.FC = () => {
         )}
       </Box>
 
+      {orden.estado === 'INFORMADO_PARCIAL' && puedeVerResultados && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Informe parcial: hay resultados disponibles, pero la orden aún no está completa
+          (faltan determinaciones o muestras). No es el informe final y no hay PDF hasta la
+          validación del laboratorio.
+        </Alert>
+      )}
+
       {modoEntrega ? (
         <Paper sx={{ p: 2 }}>
           <Typography variant="overline" color="text.secondary" display="block">

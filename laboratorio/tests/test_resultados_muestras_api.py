@@ -881,19 +881,32 @@ class TestCargarMuestraPermisosAPI(APITestCase):
 @pytest.mark.django_db
 class TestCargaParcialYValidarConTubosPendientes(APITestCase):
     """
-    2 tubos: se puede cargar el recibido; no listo/validar mientras quede
-    PENDIENTE_TOMA; tras cancelar el pendiente + resultados del recibido → validar OK.
+    2 tubos (contenedores distintos): se puede cargar el recibido; no listo/validar
+    mientras quede PENDIENTE_TOMA; tras cancelar el pendiente + resultados del
+    recibido → listo/validar OK sin quitar el examen vacío del tubo cancelado.
     """
 
     def setUp(self):
+        from laboratorio.models_catalog import TipoContenedor
+
         suf = uuid.uuid4().hex[:6]
         self.tm = TipoMuestra.objects.create(
             codigo=f"TM{suf}", nombre="Sangre", activo=True
+        )
+        self.tm_u = TipoMuestra.objects.create(
+            codigo=f"TU{suf}", nombre="Orina", activo=True
+        )
+        self.tc_a = TipoContenedor.objects.create(
+            codigo=f"SA{suf}", nombre="Suero test", activo=True
+        )
+        self.tc_b = TipoContenedor.objects.create(
+            codigo=f"OR{suf}", nombre="Frasco orina test", activo=True
         )
         self.te_a = TipoExamen.objects.create(
             codigo=f"A{suf}",
             nombre="Examen A",
             tipo_muestra_requerida=self.tm,
+            tipo_contenedor=self.tc_a,
             precio=1,
             activo=True,
             requiere_muestra=True,
@@ -901,10 +914,20 @@ class TestCargaParcialYValidarConTubosPendientes(APITestCase):
         self.te_b = TipoExamen.objects.create(
             codigo=f"B{suf}",
             nombre="Examen B",
-            tipo_muestra_requerida=self.tm,
+            tipo_muestra_requerida=self.tm_u,
+            tipo_contenedor=self.tc_b,
             precio=1,
             activo=True,
             # Sin obligar muestra: permite completar valor sin tubo (escenario gate).
+            requiere_muestra=False,
+        )
+        self.te_c = TipoExamen.objects.create(
+            codigo=f"C{suf}",
+            nombre="Examen C",
+            tipo_muestra_requerida=self.tm,
+            tipo_contenedor=self.tc_a,
+            precio=1,
+            activo=True,
             requiere_muestra=False,
         )
         self.paciente = Paciente.objects.create(
@@ -947,15 +970,15 @@ class TestCargaParcialYValidarConTubosPendientes(APITestCase):
         m_ok = crear_muestra(
             solicitud=sol,
             tipo_muestra_id=self.tm.pk,
-            tipo_contenedor_id=None,
+            tipo_contenedor_id=self.tc_a.pk,
             observaciones="",
             actor=None,
             view="t",
         )
         m_pend = crear_muestra(
             solicitud=sol,
-            tipo_muestra_id=self.tm.pk,
-            tipo_contenedor_id=None,
+            tipo_muestra_id=self.tm_u.pk,
+            tipo_contenedor_id=self.tc_b.pk,
             observaciones="",
             actor=None,
             view="t",
@@ -1018,7 +1041,7 @@ class TestCargaParcialYValidarConTubosPendientes(APITestCase):
         m_pend.refresh_from_db()
         self.assertEqual(m_pend.estado, "PENDIENTE_TOMA")
 
-    def test_validar_ok_tras_cancelar_tubo_pendiente_y_quitar_examen(self):
+    def test_validar_ok_tras_cancelar_tubo_pendiente_sin_quitar_examen(self):
         sol, res_a, res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()
         self.client.force_authenticate(user=self.user_lab)
         r = self.client.post(
@@ -1031,22 +1054,41 @@ class TestCargaParcialYValidarConTubosPendientes(APITestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        # Cancelar sincroniza la orden: B vacío deja de ser exigible → LISTO.
         aplicar_cancelar(m_pend.pk, actor=self.user_lab, view="t", motivo="No llegó")
-        # Quitar examen B vacío (tubo cancelado)
-        from laboratorio.solicitud_orden_abierta import quitar_examenes_de_solicitud
-
-        quitar_examenes_de_solicitud(sol, examenes_ids=[self.te_b.pk])
         sol.refresh_from_db()
-        # Re-sincronizar tras quitar: solo queda A cargado
-        from laboratorio.solicitud_cierre import sincronizar_estado_tras_carga
-
-        sincronizar_estado_tras_carga(
-            sol, actor=self.user_lab, view="test_cancel_pendiente"
-        )
-        sol.refresh_from_db()
+        res_b.refresh_from_db()
+        self.assertEqual(res_b.valor_obtenido, "")
         self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
         self.client.force_authenticate(user=self.user_admin)
         r_val = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
         self.assertEqual(r_val.status_code, status.HTTP_200_OK, r_val.content)
         sol.refresh_from_db()
         self.assertEqual(sol.estado, "FINALIZADO")
+
+    def test_informar_parcial_ok_con_tubo_cancelado_e_incompleto(self):
+        sol, res_a, res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()
+        sol.tipos_examen.add(self.te_c)
+        res_c = ResultadoExamen.objects.create(
+            solicitud=sol, tipo_examen=self.te_c, valor_obtenido=""
+        )
+        aplicar_cancelar(m_pend.pk, actor=self.user_lab, view="t", motivo="Sin orina")
+        self.client.force_authenticate(user=self.user_lab)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "informar_parcial": True,
+                "resultados": [
+                    {"id": res_a.pk, "valor": "11", "muestra_id": m_ok.pk},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        sol.refresh_from_db()
+        res_b.refresh_from_db()
+        res_c.refresh_from_db()
+        self.assertEqual(res_b.valor_obtenido, "")
+        self.assertEqual(res_c.valor_obtenido, "")
+        # B (tubo cancelado) no bloquea; C vacío en tubo activo → parcial.
+        self.assertEqual(sol.estado, "INFORMADO_PARCIAL")

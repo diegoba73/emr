@@ -53,13 +53,13 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 |------------|---------------------|---------------------|
 | Pendiente | `PENDIENTE` | Creación |
 | En proceso | `EN_PROCESO` | **No** es regla universal que `POST .../tomar-muestra/` pase inmediatamente `PENDIENTE` → `EN_PROCESO`. Con tubos reales la orden puede seguir `PENDIENTE` hasta que el tubo correspondiente se registre/escanee como `TOMADA`. El flujo legacy **sin** tubos puede avanzar durante `tomar-muestra`. |
-| Informe parcial | `INFORMADO_PARCIAL` | Carga incompleta |
-| Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa; exige IQC del día. Reapertura: vaciar un resultado completo → `EN_PROCESO`. |
+| Informe parcial | `INFORMADO_PARCIAL` | Carga incompleta de ensayos exigibles; médico ve valores en pantalla (sin PDF). Label UI: «Informe parcial». |
+| Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa de ensayos exigibles (vacíos de tubos `CANCELADA`/`RECHAZADA`/`DESCARTADA` no cuentan); exige IQC del día. Reapertura: vaciar un resultado completo → `EN_PROCESO`. |
 | Finalizado | `FINALIZADO` | `POST .../validar/` (alias `.../finalizar/`); admin / bioquímico / superuser. Reapertura: `POST .../desvalidar/` (motivo obligatorio) → `LISTO_PARA_VALIDAR` |
 
 Ya **no** existen en este modelo: `TOMA_MUESTRA`, `VALIDADO`, `ENTREGADO`, `CANCELADO` (pueden figurar en docs Fase A).
 
-IQC bloquea **carga** y **validar**, no la toma. Agregar/quitar ensayos permitido hasta `FINALIZADO` (con reglas de tubos y resultados vacíos). Ver `DOC_REGLAS_NEGOCIO.md`.
+IQC bloquea **carga** y **validar**, no la toma. Agregar/quitar ensayos permitido hasta `FINALIZADO` (con reglas de tubos y resultados vacíos). Cancelar/rechazar/descartar un tubo re-sincroniza la orden (puede pasar a `LISTO_PARA_VALIDAR` si el resto está completo). PDF solo en `FINALIZADO`. Ver `DOC_REGLAS_NEGOCIO.md`.
 
 Separación técnica vs profesional: **roles** (`laboratorio` opera, `bioquimico` libera), no estados extra.
 

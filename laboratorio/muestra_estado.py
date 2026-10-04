@@ -526,6 +526,24 @@ def aplicar_iniciar_proceso(
         return muestra
 
 
+def _sincronizar_orden_tras_tubo_terminal(
+    muestra: Muestra,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+) -> None:
+    """
+    Tras cancelar/rechazar/descartar un tubo, reevalúa listo/parcial de la orden
+    (ensayos vacíos de ese contenedor dejan de ser exigibles).
+    """
+    from laboratorio.solicitud_cierre import sincronizar_estado_tras_carga
+
+    sol = getattr(muestra, "solicitud", None)
+    if sol is None or sol.estado == "FINALIZADO":
+        return
+    sincronizar_estado_tras_carga(sol, actor=actor, view=view)
+
+
 def aplicar_rechazar(
     muestra_id: int,
     *,
@@ -575,6 +593,7 @@ def aplicar_rechazar(
             metadata={**meta, "motivo_presente": True},
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        _sincronizar_orden_tras_tubo_terminal(muestra, actor=actor, view=view)
         return muestra
 
 
@@ -663,6 +682,7 @@ def aplicar_descartar(
             metadata=meta,
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        _sincronizar_orden_tras_tubo_terminal(muestra, actor=actor, view=view)
         return muestra
 
 
@@ -708,6 +728,7 @@ def aplicar_cancelar(
             metadata=meta,
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
+        _sincronizar_orden_tras_tubo_terminal(muestra, actor=actor, view=view)
         return muestra
 
 

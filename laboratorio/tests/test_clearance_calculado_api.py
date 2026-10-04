@@ -82,3 +82,33 @@ def test_creatininemia_cero_no_calculable(clearance):
     rows["CLEAR_CREA"].refresh_from_db()
     assert rows["CLEAR_CREA"].valor_numerico is None
     assert rows["CLEAR_CREA"].valor_obtenido == RESULTADO_NO_CALCULABLE
+
+
+@pytest.mark.django_db
+def test_clear_crea_calculado_no_exige_muestra_aunque_flag_activo(clearance):
+    """Regresión UI: CLEAR_CREA CALCULADO no debe bloquear carga por requiere_muestra."""
+    sol, _actor, client, rows = clearance
+    clear = TipoExamen.objects.get(codigo="CLEAR_CREA")
+    clear.requiere_muestra = True
+    clear.save(update_fields=["requiere_muestra"])
+    response = client.post(
+        f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+        {
+            "resultados": [
+                {
+                    "id": rows["CREATI"].pk,
+                    "valor": "1.0",
+                    "valor_numerico": "1.0",
+                },
+                {
+                    "id": rows["CLEAR_CREA"].pk,
+                    "valor": RESULTADO_NO_CALCULABLE,
+                    "valor_numerico": None,
+                },
+            ]
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.data
+    rows["CLEAR_CREA"].refresh_from_db()
+    assert rows["CLEAR_CREA"].valor_obtenido == RESULTADO_NO_CALCULABLE

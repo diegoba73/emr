@@ -309,7 +309,12 @@ class Command(BaseCommand):
         if not exam.activo:
             exam.activo = True
             fields.append("activo")
-        if not exam.requiere_muestra:
+        # CALCULADO (clearance, LDL, etc.) no exige tubo propio.
+        if getattr(exam, "modo_entrada", None) == "CALCULADO":
+            if exam.requiere_muestra:
+                exam.requiere_muestra = False
+                fields.append("requiere_muestra")
+        elif not exam.requiere_muestra:
             exam.requiere_muestra = True
             fields.append("requiere_muestra")
 

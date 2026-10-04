@@ -544,17 +544,17 @@ const OrdenLimsDetalle: React.FC = () => {
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             {informadoParcial ? (
               <>
-                Orden <strong>informada parcialmente</strong> ({progreso.conValor} de {progreso.total}{' '}
-                resultados). Seguí completando en Resultados; al completar todos pasa a{' '}
-                <strong>Listo para validar</strong>. El PDF y el envío solo están disponibles tras la
-                validación del bioquímico.
+                Orden en <strong>Informe parcial</strong> ({progreso.conValor} de {progreso.total}{' '}
+                resultados). Seguí completando en Resultados; al completar los ensayos exigibles
+                pasa a <strong>Listo para validar</strong>. El PDF y el envío solo están disponibles
+                tras la validación del bioquímico.
               </>
             ) : (
               <>
-                Podés guardar resultados de a poco en Resultados. Si querés marcar avance interno,
-                usá <strong>Guardar e informar parcialmente</strong>. Al completar todos, la orden
-                pasa a <strong>Listo para validar</strong>. Descarga y envío del informe recién
-                después de <strong>Validar y liberar</strong>.
+                Podés guardar resultados de a poco en Resultados. Si querés que el médico vea el
+                avance, usá <strong>Guardar e informar parcialmente</strong>. Al completar los
+                ensayos exigibles, la orden pasa a <strong>Listo para validar</strong>. Descarga y
+                envío del informe recién después de <strong>Validar y liberar</strong>.
               </>
             )}
           </Typography>

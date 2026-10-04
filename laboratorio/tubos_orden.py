@@ -326,3 +326,50 @@ def expandir_items_crear_muestras(
 
 def preview_tubos_solicitud(solicitud: SolicitudExamen) -> list[dict[str, Any]]:
     return [g.as_dict() for g in resolver_tubos_para_solicitud(solicitud)]
+
+
+def mapa_tipo_examen_a_clave_tubo(
+    solicitud: SolicitudExamen,
+) -> dict[int, tuple[int | None, int | None]]:
+    """
+    ``tipo_examen_id`` → ``(tipo_contenedor_id, tipo_muestra_id)`` efectivo.
+
+    Misma remisión 24 hs / duales que ``resolver_tubos_para_solicitud``, pero
+    omite exámenes sin contenedor y no falla si el catálogo de bidón falta
+    (queda el contenedor del tipo). Usado para cierre/completitud.
+    """
+    examenes = [
+        e
+        for e in _tipos_examen_para_tubos(solicitud)
+        if (e.codigo or "") not in EXAMENES_SIN_CONTENEDOR and e.tipo_contenedor_id
+    ]
+    if not examenes:
+        return {}
+
+    requiere_24h = _orden_requiere_orina_24h(solicitud, examenes)
+    bidon, muestra_24h = (None, None)
+    if requiere_24h:
+        bidon, muestra_24h = _resolver_bidon_y_muestra_24h()
+
+    out: dict[int, tuple[int | None, int | None]] = {}
+    for ex in examenes:
+        tc = ex.tipo_contenedor
+        if tc is None or not tc.activo:
+            continue
+        codigo = ex.codigo or ""
+        tm = ex.tipo_muestra_requerida
+        tm_id = ex.tipo_muestra_requerida_id
+        tc_eff = tc
+        if requiere_24h and bidon is not None and muestra_24h is not None:
+            if (
+                codigo in _ORINA_24H
+                or codigo in _ORINA_DUAL
+                or tc.codigo == BIDON_ORINA_24H
+                or (tm and es_muestra_orina_24h(tm.codigo, tm.nombre))
+            ):
+                tc_eff = bidon
+                tm_id = muestra_24h.pk
+        if not tc_eff.activo:
+            continue
+        out[ex.pk] = (tc_eff.pk, tm_id)
+    return out

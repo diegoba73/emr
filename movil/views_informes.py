@@ -222,7 +222,8 @@ class InformeMovilPdf(APIView):
             )
         auditar_descarga_informe_pdf(actor=request.user, solicitud=sol)
         nombre = nombre_archivo_pdf_seguro(sol.pk)
-        if (request.query_params.get('format') or '').lower() == 'base64':
+        fmt = (request.query_params.get('as_base64') or request.query_params.get('format') or '').lower()
+        if fmt in ('1', 'true', 'yes', 'base64'):
             return Response({
                 'filename': nombre,
                 'content_type': 'application/pdf',

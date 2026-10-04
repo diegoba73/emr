@@ -67,6 +67,28 @@ describe('limsCargaMuestra', () => {
     expect(err).toMatch(/requiere una muestra/i);
   });
 
+  it('examen CALCULADO no exige muestra aunque requiere_muestra sea true', () => {
+    const clear = {
+      ...tipoExamen(20, true, 1),
+      codigo: 'CLEAR_CREA',
+      nombre: 'Clearance de creatinina',
+      modo_entrada: 'CALCULADO' as const,
+    };
+    const cat = new Map([[20, clear]]);
+    const res = {
+      ...resultado(2, 20),
+      tipo_examen_nombre: 'Clearance de creatinina',
+      tipo_examen_codigo: 'CLEAR_CREA',
+    };
+    const err = validateCargaResultadosMuestra(
+      [res],
+      { 2: draftRow(null) },
+      cat,
+      []
+    );
+    expect(err).toBeNull();
+  });
+
   it('payload incluye muestra_id solo si está seleccionado', () => {
     const withM = buildCargarResultadoPayload(1, draftRow(5));
     const without = buildCargarResultadoPayload(2, draftRow(null));

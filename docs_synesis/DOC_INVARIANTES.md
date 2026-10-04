@@ -61,7 +61,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | ID | Invariante | Estado |
 |----|------------|--------|
 | M1 | Muestra pertenece a la misma solicitud y paciente (validación `clean`). | **[IMPLEMENTADO]** |
-| M2 | Muestra `RECHAZADA` / `DESCARTADA` / `CANCELADA` no permite validar orden con resultados que la referencian. | **[IMPLEMENTADO]** en `validar` |
+| M2 | Muestra `RECHAZADA` / `DESCARTADA` / `CANCELADA` no permite validar orden con resultados **que tienen valor** y la referencian. Resultados vacíos sobre esos tubos (o cuyo contenedor solo tiene tubos terminales) no bloquean listo/validar. | **[IMPLEMENTADO]** en `validar` / `solicitud_cierre` |
 | M3 | Transición de muestra genera `EventoMuestra` auditable. | **[IMPLEMENTADO]** |
 | M4 | Toda muestra analizada tiene trazabilidad a orden. | **[IMPLEMENTADO]** |
 
@@ -73,7 +73,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 |----|------------|--------|
 | R1 | Un resultado por (orden, tipo_examen). | **[IMPLEMENTADO]** |
 | R2 | Orden `FINALIZADO` no admite carga silenciosa: `cargar-resultados` sigue rechazando mientras esté finalizada. Rectificación: `POST …/desvalidar/` (bioquímico/admin, motivo ≥5 chars, auditoría) → `LISTO_PARA_VALIDAR`, limpia `validado_por`/`fecha_validacion`, luego carga + `validar` de nuevo. FSM: `PENDIENTE` → `EN_PROCESO` → `INFORMADO_PARCIAL` opcional → `LISTO_PARA_VALIDAR` → `FINALIZADO` ↔ (desvalidar) `LISTO_PARA_VALIDAR`. **[HISTÓRICO]** los nombres `CANCELADO` / `VALIDADO` / `ENTREGADO` no son estados de `SolicitudExamen`. | **[IMPLEMENTADO]** |
-| R3 | No validar con valores vacíos. | **[IMPLEMENTADO]** |
+| R3 | No validar con valores vacíos **exigibles**. Los vacíos de tubos cancelados/rechazados/descartados (contenedor sin tubos activos) no son exigibles. | **[IMPLEMENTADO]** |
 | R4 | Resultado ya validado/cerrado no se edita directamente: primero `desvalidar` con motivo y auditoría. | **[IMPLEMENTADO]** |
 | R5 | `muestra_id` en carga debe ser de la misma orden y estados admitidos. | **[IMPLEMENTADO]** B2 |
 

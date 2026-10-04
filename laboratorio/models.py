@@ -352,7 +352,7 @@ class SolicitudExamen(models.Model):
     ESTADO_CHOICES = [
         ('PENDIENTE', 'Pendiente'),
         ('EN_PROCESO', 'En Proceso'),
-        ('INFORMADO_PARCIAL', 'Informado parcialmente'),
+        ('INFORMADO_PARCIAL', 'Informe parcial'),
         ('LISTO_PARA_VALIDAR', 'Listo para validar'),
         ('FINALIZADO', 'Finalizado'),
     ]

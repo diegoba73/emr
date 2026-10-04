@@ -24,7 +24,8 @@ ROLES_MOVIL_VALIDAR = frozenset({'bioquimico'})
 
 ROLES_MOVIL_PEDIR_LAB = frozenset({'medico'})
 
-ESTADOS_INFORME_PDF = frozenset({'FINALIZADO', 'INFORMADO_PARCIAL'})
+# PDF solo tras validación; el listado sí incluye informe parcial (solo pantalla).
+ESTADOS_INFORME_PDF = frozenset({'FINALIZADO'})
 ESTADOS_INFORME_LISTADO = frozenset({'FINALIZADO', 'INFORMADO_PARCIAL'})
 ESTADOS_BIOQUIMICO_TRABAJO = frozenset({
     'EN_PROCESO',

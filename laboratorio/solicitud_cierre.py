@@ -3,6 +3,7 @@ Cierre y estados de SolicitudExamen al completar resultados / validar / informar
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from django.utils import timezone
@@ -13,8 +14,8 @@ from laboratorio.models import ResultadoExamen, SolicitudExamen
 from laboratorio.models_catalog import Muestra
 from laboratorio.muestra_estado import MuestraAccionError, aplicar_iniciar_proceso
 from laboratorio.resultado_muestra_validacion import (
-    MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN,
     MUESTRA_ESTADOS_PENDIENTES_RECEPCION,
+    MUESTRA_ESTADOS_TERMINALES_SIN_RESULTADO,
     asegurar_muestra_lista_para_carga,
 )
 from laboratorio.solicitud_estado import (
@@ -22,6 +23,7 @@ from laboratorio.solicitud_estado import (
     SolicitudEstadoTransitionError,
     apply_solicitud_estado_transition,
 )
+from laboratorio.tubos_orden import mapa_tipo_examen_a_clave_tubo
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -31,11 +33,103 @@ class SolicitudCierreError(ValueError):
     """No se puede cerrar la solicitud (resultados incompletos o muestras inválidas)."""
 
 
-def solicitud_resultados_completos(solicitud: SolicitudExamen) -> bool:
-    qs = solicitud.resultados.all()
-    if not qs.exists():
+def _resultado_tiene_valor(resultado: ResultadoExamen) -> bool:
+    return bool((resultado.valor_obtenido or "").strip())
+
+
+def _claves_tubo_solo_terminales(solicitud: SolicitudExamen) -> set[tuple[int | None, int | None]]:
+    """
+    Claves (contenedor, tipo_muestra) de la orden que solo tienen tubos
+    CANCELADA / RECHAZADA / DESCARTADA (ninguno activo).
+    """
+    por_clave: dict[tuple[int | None, int | None], list[str]] = defaultdict(list)
+    for tc_id, tm_id, estado in Muestra.objects.filter(solicitud_id=solicitud.pk).values_list(
+        "tipo_contenedor_id", "tipo_muestra_id", "estado"
+    ):
+        por_clave[(tc_id, tm_id)].append(estado)
+
+    solo_terminales: set[tuple[int | None, int | None]] = set()
+    for clave, estados in por_clave.items():
+        if not estados:
+            continue
+        if all(e in MUESTRA_ESTADOS_TERMINALES_SIN_RESULTADO for e in estados):
+            solo_terminales.add(clave)
+    return solo_terminales
+
+
+def _resultado_exigible_para_cierre(
+    resultado: ResultadoExamen,
+    *,
+    mapa_tubo: dict[int, tuple[int | None, int | None]],
+    claves_solo_terminales: set[tuple[int | None, int | None]],
+    muestra_por_id: dict[int, Muestra],
+) -> bool:
+    """
+    True si el resultado cuenta para completitud / validar.
+
+    - Con valor: siempre exigible.
+    - Vacío vinculado a tubo terminal: no exigible.
+    - Vacío cuyo contenedor requerido solo tiene tubos terminales: no exigible.
+    - Resto de vacíos: exigibles.
+    """
+    if _resultado_tiene_valor(resultado):
+        return True
+
+    if resultado.muestra_id:
+        m = muestra_por_id.get(resultado.muestra_id)
+        if m is not None and m.estado in MUESTRA_ESTADOS_TERMINALES_SIN_RESULTADO:
+            return False
+
+    clave = mapa_tubo.get(resultado.tipo_examen_id)
+    if clave is not None and clave in claves_solo_terminales:
         return False
-    return not qs.filter(valor_obtenido="").exists()
+    return True
+
+
+def _resultados_exigibles_cierre(solicitud: SolicitudExamen) -> list[ResultadoExamen]:
+    resultados = list(solicitud.resultados.select_related("muestra", "tipo_examen").all())
+    if not resultados:
+        return []
+    mapa_tubo = mapa_tipo_examen_a_clave_tubo(solicitud)
+    claves_solo_terminales = _claves_tubo_solo_terminales(solicitud)
+    muestra_por_id = {
+        r.muestra_id: r.muestra
+        for r in resultados
+        if r.muestra_id and getattr(r, "muestra", None) is not None
+    }
+    # Completar muestras no prefetchadas por FK directa
+    faltantes = {
+        r.muestra_id
+        for r in resultados
+        if r.muestra_id and r.muestra_id not in muestra_por_id
+    }
+    if faltantes:
+        for m in Muestra.objects.filter(pk__in=faltantes):
+            muestra_por_id[m.pk] = m
+
+    return [
+        r
+        for r in resultados
+        if _resultado_exigible_para_cierre(
+            r,
+            mapa_tubo=mapa_tubo,
+            claves_solo_terminales=claves_solo_terminales,
+            muestra_por_id=muestra_por_id,
+        )
+    ]
+
+
+def solicitud_resultados_completos(solicitud: SolicitudExamen) -> bool:
+    """
+    True si todo resultado *exigible* tiene valor.
+
+    Los vacíos asociados a tubos cancelados/rechazados/descartados (o cuyo
+    contenedor solo tiene esos tubos) no bloquean el cierre.
+    """
+    exigibles = _resultados_exigibles_cierre(solicitud)
+    if not exigibles:
+        return False
+    return all(_resultado_tiene_valor(r) for r in exigibles)
 
 
 def _preparar_muestras_para_cierre(
@@ -49,7 +143,8 @@ def _preparar_muestras_para_cierre(
     Evita fallos al finalizar cuando la muestra ya estaba vinculada al resultado.
     """
     muestra_ids = list(
-        solicitud.resultados.filter(muestra_id__isnull=False)
+        solicitud.resultados.exclude(valor_obtenido="")
+        .filter(muestra_id__isnull=False)
         .values_list("muestra_id", flat=True)
         .distinct()
     )
@@ -88,18 +183,25 @@ def _validar_muestras_para_cierre(solicitud: SolicitudExamen) -> None:
     """
     Reglas al validar:
     1) No puede haber tubos aún PENDIENTE_TOMA/TOMADA en la orden.
-    2) Resultados vinculados no pueden apuntar a muestra en estado inválido.
+    2) Resultados *con valor* no pueden apuntar a muestra pendiente/tomada
+       ni terminal (CANCELADA/RECHAZADA/DESCARTADA). Los vacíos sobre tubos
+       cancelados no bloquean (no son exigibles).
     """
     _assert_sin_tubos_pendientes_recepcion(solicitud)
     muestra_ids = list(
-        solicitud.resultados.filter(muestra_id__isnull=False)
+        solicitud.resultados.exclude(valor_obtenido="")
+        .filter(muestra_id__isnull=False)
         .values_list("muestra_id", flat=True)
         .distinct()
     )
     if not muestra_ids:
         return
+    # Pendiente/tomada o terminal: no validar valores atados a esos tubos.
+    estados_invalidos_con_valor = (
+        MUESTRA_ESTADOS_PENDIENTES_RECEPCION | MUESTRA_ESTADOS_TERMINALES_SIN_RESULTADO
+    )
     for m in Muestra.objects.filter(pk__in=muestra_ids):
-        if m.estado in MUESTRA_ESTADOS_INVALIDOS_VALIDACION_ORDEN:
+        if m.estado in estados_invalidos_con_valor:
             raise SolicitudCierreError(
                 "Hay un resultado vinculado a una muestra en estado incompatible."
             )
