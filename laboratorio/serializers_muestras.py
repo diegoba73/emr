@@ -72,6 +72,11 @@ class MuestraSerializer(serializers.ModelSerializer):
     """Lectura (estado y vínculos core read-only vía acciones)."""
 
     eventos = EventoMuestraSerializer(many=True, read_only=True)
+    tipo_muestra_codigo = serializers.CharField(source="tipo_muestra.codigo", read_only=True)
+    tipo_muestra_nombre = serializers.CharField(source="tipo_muestra.nombre", read_only=True)
+    tipo_contenedor_codigo = serializers.CharField(
+        source="tipo_contenedor.codigo", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Muestra
@@ -81,7 +86,10 @@ class MuestraSerializer(serializers.ModelSerializer):
             "solicitud",
             "paciente",
             "tipo_muestra",
+            "tipo_muestra_codigo",
+            "tipo_muestra_nombre",
             "tipo_contenedor",
+            "tipo_contenedor_codigo",
             "estado",
             "fecha_toma",
             "tomada_por",

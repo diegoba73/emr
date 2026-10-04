@@ -3,6 +3,7 @@ import {
   buildCargarResultadoPayload,
   filterMuestrasProcesables,
   muestrasCompatiblesParaTipo,
+  suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
   type DraftCargaRow,
 } from './limsCargaMuestra';
@@ -181,6 +182,80 @@ describe('limsCargaMuestra', () => {
       { ...muestra(2, 1, 'TOMADA'), tipo_contenedor: 99 },
     ] as MuestraTransaccional[];
     expect(muestrasCompatiblesParaTipo(proc, 1, 99).map((m) => m.id)).toEqual([2]);
+  });
+
+  it('mismo contenedor HEPARINA distingue material art vs ven', () => {
+    const proc = [
+      {
+        ...muestra(1, 10, 'RECIBIDA'),
+        tipo_muestra_codigo: 'SANGRE_HEPARINA_ART',
+        tipo_contenedor: 50,
+      },
+      {
+        ...muestra(2, 11, 'RECIBIDA'),
+        tipo_muestra_codigo: 'SANGRE_HEPARINA_VEN',
+        tipo_contenedor: 50,
+      },
+    ] as MuestraTransaccional[];
+    expect(
+      muestrasCompatiblesParaTipo(proc, 10, 50, 'SANGRE_HEPARINA_ART', 'PH_ART').map((m) => m.id)
+    ).toEqual([1]);
+  });
+
+  it('dual CREA_U acepta bidón ORINA_24_H aunque el catálogo diga ORINA', () => {
+    const proc = [
+      {
+        ...muestra(7, 3, 'RECIBIDA'),
+        tipo_muestra_codigo: 'ORINA_24_H',
+        tipo_contenedor: 80,
+      },
+    ] as MuestraTransaccional[];
+    const cat = new Map([
+      [40, { ...tipoExamen(40, true, 2), codigo: 'CREA_U', tipo_muestra_codigo: 'ORINA' }],
+    ]);
+    const res = {
+      ...resultado(9, 40),
+      tipo_examen_codigo: 'CREA_U',
+      tipo_examen_muestra_codigo: 'ORINA',
+    };
+    expect(suggestMuestraIdForResultado(res, proc, cat, null)).toBe(7);
+    expect(
+      validateCargaResultadosMuestra(
+        [res],
+        { 9: draftRow(7) },
+        cat,
+        proc
+      )
+    ).toBeNull();
+  });
+
+  it('con Suero+EDTA sugiere el tubo del tipo del examen', () => {
+    const proc = [
+      { ...muestra(10, 1, 'RECIBIDA'), tipo_muestra_codigo: 'SUERO', tipo_contenedor: 100 },
+      { ...muestra(11, 2, 'RECIBIDA'), tipo_muestra_codigo: 'SANGRE_EDTA', tipo_contenedor: 101 },
+    ] as MuestraTransaccional[];
+    const cat = new Map([
+      [30, { ...tipoExamen(30, true, 1), codigo: 'CPK_MB', tipo_contenedor: 100 }],
+    ]);
+    const res = {
+      ...resultado(5, 30),
+      tipo_examen_codigo: 'CPK_MB',
+      tipo_examen_muestra_codigo: 'SUERO',
+    };
+    expect(suggestMuestraIdForResultado(res, proc, cat, null)).toBe(10);
+  });
+
+  it('sin catálogo pero con código de muestra en el resultado asocia el tubo', () => {
+    const proc = [
+      { ...muestra(10, 1, 'RECIBIDA'), tipo_muestra_codigo: 'SUERO' },
+      { ...muestra(11, 2, 'RECIBIDA'), tipo_muestra_codigo: 'SANGRE_EDTA' },
+    ] as MuestraTransaccional[];
+    const res = {
+      ...resultado(5, 30),
+      tipo_examen_codigo: 'CPK_MB',
+      tipo_examen_muestra_codigo: 'SUERO',
+    };
+    expect(suggestMuestraIdForResultado(res, proc, new Map(), null)).toBe(10);
   });
 
   it('al subir TG a 400 deja LDL y residual como no calculables', () => {

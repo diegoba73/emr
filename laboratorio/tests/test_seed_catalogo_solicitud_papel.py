@@ -67,7 +67,10 @@ class TestSeedCatalogoSolicitudPapel:
         clear = PanelExamen.objects.get(codigo="PAN_CLEAR")
         assert clear.tipos_examen.filter(pk=crea.pk).exists()
         assert "CREATI" in EXAMENES_SUELTOS_PDF
-        assert TipoExamen.objects.get(codigo="CLEAR_CREA").modo_entrada == "CALCULADO"
+        clear_crea = TipoExamen.objects.get(codigo="CLEAR_CREA")
+        assert clear_crea.modo_entrada == "CALCULADO"
+        assert clear_crea.requiere_muestra is False
+        assert clear_crea.tipo_contenedor_id is None
         assert [te.codigo for te in ordenar_queryset_panel(clear)] == [
             "CREATI", "CREA_U", "DIUR", "CLEAR_CREA",
         ]
@@ -163,6 +166,7 @@ class TestSeedCatalogoSolicitudPapel:
         assert pan_ven.tipos_examen.filter(codigo="FIO2").exists()
         fio2 = TipoExamen.objects.get(codigo="FIO2")
         assert fio2.tipo_contenedor_id is None
+        assert fio2.requiere_muestra is False
         assert "EAB_ART" not in EXAMENES_SUELTOS_PDF
         assert "EAB_VEN" not in EXAMENES_SUELTOS_PDF
 
@@ -175,8 +179,11 @@ class TestSeedCatalogoSolicitudPapel:
         assert TipoExamen.objects.get(codigo="CF").modo_entrada == "CALCULADO"
         assert TipoExamen.objects.get(codigo="SAT_FE").modo_entrada == "CALCULADO"
         assert TipoExamen.objects.get(codigo="TRANS").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="CF").requiere_muestra is False
+        assert TipoExamen.objects.get(codigo="CF").tipo_contenedor_id is None
         assert TipoExamen.objects.get(codigo="CF").nombre == "Capacidad total de fijación"
         assert TipoExamen.objects.get(codigo="UIBC").modo_entrada != "CALCULADO"
+        assert TipoExamen.objects.get(codigo="UIBC").requiere_muestra is True
 
     def test_referencias_cargadas_en_catalogo(self):
         call_command("seed_catalogo_solicitud_papel")

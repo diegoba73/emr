@@ -35,11 +35,19 @@ def test_tubo_orina_frasco():
 
 
 def test_tubo_orina_24h_bidon():
-    assert tubo_codigo_para_examen("PROT_U_24") == "BIDON_ORINA_24H"
-    assert tubo_codigo_para_examen("CLEAR_CREA") == "BIDON_ORINA_24H"
+    # Medidos / contexto 24h → bidón; CALCULADO no genera tubo propio.
+    assert tubo_codigo_para_examen("PROT_U_24") is None
+    assert tubo_codigo_para_examen("CLEAR_CREA") is None
     assert tubo_codigo_para_examen("DIUR") == "BIDON_ORINA_24H"
     assert tubo_codigo_para_examen("CA24", "ORINA_24_H") == "BIDON_ORINA_24H"
     assert tubo_codigo_para_examen("AAO", "ORINA_REPRESENTATIVA_DE_24_H") == "BIDON_ORINA_24H"
+
+
+def test_calculados_y_fio2_sin_tubo():
+    assert tubo_codigo_para_examen("FIO2") is None
+    assert tubo_codigo_para_examen("LDL") is None
+    assert tubo_codigo_para_examen("BIL_I") is None
+    assert tubo_codigo_para_examen("MICROALB_24") is None
 
 
 def test_tubo_quimica_rutina_suero():

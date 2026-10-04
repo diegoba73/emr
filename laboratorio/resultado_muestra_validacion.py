@@ -77,6 +77,31 @@ MSG_TIPO_MUESTRA_INCORRECTO = (
     "La muestra no corresponde al tipo requerido para este examen."
 )
 
+
+def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> bool:
+    """
+    True si el material físico de la muestra satisface el catálogo del examen.
+
+    Duales de orina (NA_U/CREA_U/…) pueden ir a frasco (ORINA) o a bidón
+    (ORINA_24_H) según el contexto de la orden; el FK del catálogo no siempre
+    refleja el tubo efectivo.
+    """
+    tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
+    if tipo_req_id is None:
+        return True
+    if muestra.tipo_muestra_id == tipo_req_id:
+        return True
+
+    from laboratorio.tubos_catalogo import MUESTRA_ORINA, MUESTRA_ORINA_24H, _ORINA_DUAL
+
+    codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
+    if codigo not in _ORINA_DUAL:
+        return False
+    req = getattr(getattr(tipo_examen, "tipo_muestra_requerida", None), "codigo", None) or ""
+    got = getattr(getattr(muestra, "tipo_muestra", None), "codigo", None) or ""
+    pair = {MUESTRA_ORINA, MUESTRA_ORINA_24H}
+    return req in pair and got in pair
+
 from laboratorio.muestra_estado import aplicar_recibir
 
 
@@ -119,13 +144,16 @@ def assert_tipo_examen_muestra_carga(
       aunque ``requiere_muestra`` sea False.
     """
     modo = getattr(tipo_examen, "modo_entrada", None) or ""
+    codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
     es_calculado = modo == "CALCULADO"
     if not es_calculado:
         from laboratorio.calculos_derivados import es_codigo_calculado
 
-        es_calculado = es_codigo_calculado(getattr(tipo_examen, "codigo", None))
+        es_calculado = es_codigo_calculado(codigo)
+    # FiO2: dato de contexto de gases, sin tubo propio.
+    sin_tubo_fisico = es_calculado or codigo == "FIO2"
 
-    requiere_muestra = getattr(tipo_examen, "requiere_muestra", False) and not es_calculado
+    requiere_muestra = getattr(tipo_examen, "requiere_muestra", False) and not sin_tubo_fisico
 
     if requiere_muestra:
         if muestra_id_en_payload and raw_muestra_id is None:
@@ -136,6 +164,5 @@ def assert_tipo_examen_muestra_carga(
     if resultado_muestra is None:
         return
 
-    tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
-    if tipo_req_id is not None and resultado_muestra.tipo_muestra_id != tipo_req_id:
+    if not tipo_muestra_fisica_compatible_con_examen(tipo_examen, resultado_muestra):
         raise ValueError(MSG_TIPO_MUESTRA_INCORRECTO)

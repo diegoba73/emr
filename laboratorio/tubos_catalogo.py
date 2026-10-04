@@ -82,6 +82,29 @@ _CITRATO_VSG = _ERITRO  # alias legacy
 # Parámetros de contexto clínico: no generan tubo/jeringa propia
 EXAMENES_SIN_CONTENEDOR = frozenset({"FIO2"})
 
+# Derivados de informe: figuran en el panel pero no tienen material físico propio.
+# (misma lista que laboratorio.calculos_derivados.CODIGOS_CALCULADOS; se duplica
+# acá para no acoplar tubos ↔ fórmulas en import).
+EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
+    {
+        "LDL",
+        "VLDL",
+        "COL_NO_LDL",
+        "COL_RESID",
+        "RATIO_CT_HDL",
+        "BIL_I",
+        "CF",
+        "SAT_FE",
+        "TRANS",
+        "CLEAR_CREA",
+        "PROT_U_24",
+        "NA_U24",
+        "K_U24",
+        "CL_U24",
+        "MICROALB_24",
+    }
+)
+
 # Gases / lactato / calcio iónico (sangre total heparina)
 # EAB arterial y venoso = jeringas distintas (no compartir etiqueta)
 _EAB_ART = frozenset({"PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART"})
@@ -255,7 +278,7 @@ def tubo_codigo_para_examen(
     4) Default: tubo suero.
     """
     c = (codigo or "").upper().strip()
-    if c in EXAMENES_SIN_CONTENEDOR:
+    if c in EXAMENES_SIN_CONTENEDOR or c in EXAMENES_CALCULADOS_SIN_TUBO:
         return None
     if c in _EDTA:
         return EDTA

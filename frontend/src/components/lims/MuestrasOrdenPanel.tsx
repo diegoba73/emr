@@ -42,6 +42,8 @@ export interface MuestrasOrdenPanelProps {
   canOperate: boolean;
   /** Incrementar para forzar recarga tras cambios externos (ej. carga de resultados). */
   reloadToken?: number;
+  /** Sincroniza el listado con el padre (p. ej. carga de resultados). */
+  onMuestrasChange?: (muestras: MuestraTransaccional[]) => void;
   /** Origen/procedencia de la orden para prellenar lugar de extracción. */
   origenOrden?: OrigenParaLugarExtraccion | null;
 }
@@ -52,6 +54,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   ordenEstado,
   canOperate,
   reloadToken = 0,
+  onMuestrasChange,
   origenOrden = null,
 }) => {
   const [rows, setRows] = useState<MuestraTransaccional[]>([]);
@@ -73,6 +76,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
         listContenedoresLims(),
       ]);
       setRows(m);
+      onMuestrasChange?.(m);
       setTipos(t);
       setConts(c);
     } catch (e) {

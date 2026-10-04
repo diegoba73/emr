@@ -51,6 +51,7 @@ import {
   draftSysmexTicketFromResultado,
   filterMuestrasProcesables,
   getTipoExamenCatalog,
+  normalizeDraftRow,
   suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
   validateCargaResultadosValores,
@@ -447,14 +448,37 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       return;
     }
 
+    // Re-asociar tubo al guardar: con Suero+EDTA recibidos el borrador a veces
+    // queda sin muestra_id si el catálogo llegó tarde o hay varios tubos.
+    const draftSave: Record<number, DraftCargaRow> = { ...draft };
+    for (const r of filasAGuardar) {
+      const prev = normalizeDraftRow(draftSave[r.id] || emptyDraft());
+      if (prev.muestra_id != null) continue;
+      const suggested = suggestMuestraIdForResultado(
+        r,
+        muestrasProcesables,
+        tiposExamenMap,
+        null
+      );
+      if (suggested != null) {
+        draftSave[r.id] = { ...prev, muestra_id: suggested };
+      }
+    }
+    setDraft(draftSave);
+
     const payload = filasAGuardar.map((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
-      return buildCargarResultadoPayload(r.id, draft[r.id] || emptyDraft(), te, r.tipo_examen_codigo);
+      return buildCargarResultadoPayload(
+        r.id,
+        draftSave[r.id] || emptyDraft(),
+        te,
+        r.tipo_examen_codigo
+      );
     });
 
     const errMuestra = validateCargaResultadosMuestra(
       resultados,
-      draft,
+      draftSave,
       tiposExamenMap,
       muestras,
       filasAGuardar.map((r) => r.id)

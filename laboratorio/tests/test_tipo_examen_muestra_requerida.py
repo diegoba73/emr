@@ -298,6 +298,55 @@ class TestTipoExamenMuestraRequerida(APITestCase):
         )
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_dual_crea_u_acepta_bidon_orina_24h(self):
+        """CREA_U catálogo ORINA puede asociarse al bidón ORINA_24_H de la orden."""
+        from laboratorio.resultado_muestra_validacion import (
+            MSG_TIPO_MUESTRA_INCORRECTO,
+            assert_tipo_examen_muestra_carga,
+        )
+
+        tm_orina, _ = TipoMuestra.objects.get_or_create(
+            codigo="ORINA", defaults={"nombre": "Orina", "activo": True}
+        )
+        tm_24, _ = TipoMuestra.objects.get_or_create(
+            codigo="ORINA_24_H", defaults={"nombre": "Orina 24 hs", "activo": True}
+        )
+        te, _ = TipoExamen.objects.update_or_create(
+            codigo="CREA_U",
+            defaults={
+                "nombre": "Creatininuria",
+                "tipo_muestra_requerida": tm_orina,
+                "requiere_muestra": True,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        sol, _res = self._solicitud_con_tipo(te)
+        m = self._muestra_recibida(sol, tipo_muestra=tm_24)
+        # Dual: compatible
+        assert_tipo_examen_muestra_carga(
+            tipo_examen=te,
+            resultado_muestra=m,
+            muestra_id_en_payload=True,
+            raw_muestra_id=m.pk,
+        )
+        # Orina al azar no es dual: bidón 24h debe rechazarse
+        te_ori = TipoExamen.objects.create(
+            codigo=f"ORI{uuid.uuid4().hex[:4]}",
+            nombre="Color orina",
+            tipo_muestra_requerida=tm_orina,
+            requiere_muestra=True,
+            precio=1,
+            activo=True,
+        )
+        with pytest.raises(ValueError, match=MSG_TIPO_MUESTRA_INCORRECTO):
+            assert_tipo_examen_muestra_carga(
+                tipo_examen=te_ori,
+                resultado_muestra=m,
+                muestra_id_en_payload=True,
+                raw_muestra_id=m.pk,
+            )
+
     def test_resultado_validado_no_cambia_muestra_aunque_tipo_requiera(self):
         from django.utils import timezone
 

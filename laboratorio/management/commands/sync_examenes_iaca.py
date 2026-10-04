@@ -274,12 +274,22 @@ class Command(BaseCommand):
                 stats["examenes_creados"] += 1
                 continue
 
+            from laboratorio.tubos_catalogo import (
+                EXAMENES_CALCULADOS_SIN_TUBO,
+                EXAMENES_SIN_CONTENEDOR,
+            )
+
+            codigo_ex = r["codigo"]
+            sin_tubo = (
+                codigo_ex in EXAMENES_SIN_CONTENEDOR
+                or codigo_ex in EXAMENES_CALCULADOS_SIN_TUBO
+            )
             exam = TipoExamen.objects.create(
-                codigo=r["codigo"],
+                codigo=codigo_ex,
                 nombre=r["nombre"][:200],
                 tipo_muestra_requerida=muestra,
                 activo=True,
-                requiere_muestra=True,
+                requiere_muestra=not sin_tubo,
             )
             claimed.add(exam.pk)
             by_code[r["codigo"]] = exam
@@ -309,8 +319,19 @@ class Command(BaseCommand):
         if not exam.activo:
             exam.activo = True
             fields.append("activo")
-        # CALCULADO (clearance, LDL, etc.) no exige tubo propio.
-        if getattr(exam, "modo_entrada", None) == "CALCULADO":
+        # CALCULADO / FiO2: no exigen tubo propio.
+        from laboratorio.tubos_catalogo import (
+            EXAMENES_CALCULADOS_SIN_TUBO,
+            EXAMENES_SIN_CONTENEDOR,
+        )
+
+        codigo_ex = (exam.codigo or "").strip().upper()
+        sin_tubo = (
+            getattr(exam, "modo_entrada", None) == "CALCULADO"
+            or codigo_ex in EXAMENES_CALCULADOS_SIN_TUBO
+            or codigo_ex in EXAMENES_SIN_CONTENEDOR
+        )
+        if sin_tubo:
             if exam.requiere_muestra:
                 exam.requiere_muestra = False
                 fields.append("requiere_muestra")

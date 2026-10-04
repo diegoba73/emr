@@ -406,8 +406,8 @@ class TestResolverTubosOrden(TestCase):
         by_tc = {g.tipo_contenedor_codigo: g for g in grupos}
         assert BIDON_ORINA_24H in by_tc
         assert by_tc[BIDON_ORINA_24H].cantidad == 1
-        # Dual CREA_U remapped into bidón because PAN_CLEAR
-        assert len(by_tc[BIDON_ORINA_24H].examenes) == 4
+        # CALCULADO (CLEAR_CREA, PROT_U_24) no cuentan para tubo; quedan DIUR + CREA_U dual.
+        assert len(by_tc[BIDON_ORINA_24H].examenes) == 2
         assert frasco.codigo in by_tc
         assert by_tc[frasco.codigo].cantidad == 1
 

@@ -19,7 +19,12 @@ from laboratorio.iaca_compat import (
 )
 from laboratorio.models import PanelExamen, TipoExamen, TipoMuestra
 from laboratorio.models_catalog import TipoContenedor
-from laboratorio.tubos_catalogo import CONTENEDORES_TODOS, tubo_codigo_para_examen
+from laboratorio.tubos_catalogo import (
+    CONTENEDORES_TODOS,
+    EXAMENES_CALCULADOS_SIN_TUBO,
+    EXAMENES_SIN_CONTENEDOR,
+    tubo_codigo_para_examen,
+)
 
 
 class Command(BaseCommand):
@@ -109,15 +114,22 @@ class Command(BaseCommand):
             muestra = muestras[item["muestra"]]
             tubo_codigo = tubo_codigo_para_examen(codigo, item.get("muestra"))
             tubo = contenedores.get(tubo_codigo) if tubo_codigo else None
+            ref = self._referencia_defaults(codigo)
+            modo = ref.get("modo_entrada") or TipoExamen.ModoEntradaResultado.ESTANDAR
+            sin_tubo_fisico = (
+                codigo in EXAMENES_SIN_CONTENEDOR
+                or codigo in EXAMENES_CALCULADOS_SIN_TUBO
+                or modo == TipoExamen.ModoEntradaResultado.CALCULADO
+            )
             defaults = {
                 "nombre": item["nombre"],
                 "tipo_muestra_requerida": muestra,
                 "tipo_resultado": item.get("tipo_resultado", "NUMERICO"),
                 "abreviatura": item.get("abreviatura", "") or "",
                 "activo": True,
-                "requiere_muestra": True,
-                "tipo_contenedor": tubo,
-                **self._referencia_defaults(codigo),
+                "requiere_muestra": not sin_tubo_fisico,
+                "tipo_contenedor": None if sin_tubo_fisico else tubo,
+                **ref,
             }
 
             existing = TipoExamen.objects.filter(codigo=codigo).first()
@@ -160,10 +172,14 @@ class Command(BaseCommand):
                 if obj.tipo_muestra_requerida_id != muestra.id:
                     obj.tipo_muestra_requerida = muestra
                     changed.append("tipo_muestra_requerida")
-                if obj.tipo_contenedor_id != (tubo.id if tubo else None):
-                    obj.tipo_contenedor = tubo
+                want_tc = None if sin_tubo_fisico else (tubo.id if tubo else None)
+                if obj.tipo_contenedor_id != want_tc:
+                    obj.tipo_contenedor_id = want_tc
                     changed.append("tipo_contenedor")
-                for k, v in self._referencia_defaults(codigo).items():
+                if obj.requiere_muestra != (not sin_tubo_fisico):
+                    obj.requiere_muestra = not sin_tubo_fisico
+                    changed.append("requiere_muestra")
+                for k, v in ref.items():
                     if getattr(obj, k) in (None, "", 0) and v not in (None, ""):
                         setattr(obj, k, v)
                         changed.append(k)

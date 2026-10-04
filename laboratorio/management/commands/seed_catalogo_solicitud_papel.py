@@ -22,7 +22,12 @@ from laboratorio.catalogo_solicitud_papel import (
 )
 from laboratorio.models import PanelExamen, TipoExamen, TipoMuestra
 from laboratorio.models_catalog import TipoContenedor
-from laboratorio.tubos_catalogo import CONTENEDORES_TODOS, tubo_codigo_para_examen
+from laboratorio.tubos_catalogo import (
+    CONTENEDORES_TODOS,
+    EXAMENES_CALCULADOS_SIN_TUBO,
+    EXAMENES_SIN_CONTENEDOR,
+    tubo_codigo_para_examen,
+)
 
 
 class Command(BaseCommand):
@@ -126,14 +131,23 @@ class Command(BaseCommand):
             muestra = muestras[item["muestra"]]
             tubo_codigo = tubo_codigo_para_examen(codigo, item.get("muestra"))
             tubo = contenedores.get(tubo_codigo) if tubo_codigo else None
+            ref = self._referencia_defaults(codigo)
+            modo = ref.get("modo_entrada") or TipoExamen.ModoEntradaResultado.ESTANDAR
+            sin_tubo_fisico = (
+                codigo in EXAMENES_SIN_CONTENEDOR
+                or codigo in EXAMENES_CALCULADOS_SIN_TUBO
+                or modo == TipoExamen.ModoEntradaResultado.CALCULADO
+            )
             defaults = {
                 "nombre": item["nombre"],
                 "tipo_muestra_requerida": muestra,
                 "tipo_resultado": item.get("tipo_resultado", "NUMERICO"),
                 "abreviatura": item.get("abreviatura", "") or "",
                 "activo": True,
-                "tipo_contenedor": tubo,
-                **self._referencia_defaults(codigo),
+                # CALCULADO / FiO2: figuran en panel, no exigen ni generan tubo.
+                "tipo_contenedor": None if sin_tubo_fisico else tubo,
+                "requiere_muestra": not sin_tubo_fisico,
+                **ref,
             }
             if dry_run:
                 obj, _ = TipoExamen.objects.get_or_create(codigo=codigo, defaults=defaults)
@@ -144,10 +158,21 @@ class Command(BaseCommand):
                 )
                 if created:
                     self.stdout.write(f"  Examen {codigo}: creado ({tubo_codigo or 'sin tubo'})")
-                elif obj.tipo_contenedor_id != (tubo.pk if tubo else None):
-                    obj.tipo_contenedor = tubo
-                    obj.save(update_fields=["tipo_contenedor"])
-                    self.stdout.write(f"  Examen {codigo}: tubo → {tubo_codigo or 'sin tubo'}")
+                else:
+                    touched = []
+                    want_tc = None if sin_tubo_fisico else (tubo.pk if tubo else None)
+                    if obj.tipo_contenedor_id != want_tc:
+                        obj.tipo_contenedor_id = want_tc
+                        touched.append("tipo_contenedor")
+                    if obj.requiere_muestra != (not sin_tubo_fisico):
+                        obj.requiere_muestra = not sin_tubo_fisico
+                        touched.append("requiere_muestra")
+                    if touched:
+                        obj.save(update_fields=touched)
+                        self.stdout.write(
+                            f"  Examen {codigo}: {', '.join(touched)} → "
+                            f"{'sin tubo' if sin_tubo_fisico else (tubo_codigo or '—')}"
+                        )
             out[codigo] = obj
         return out
 

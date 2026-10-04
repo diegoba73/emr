@@ -290,7 +290,10 @@ export interface MuestraTransaccional {
   solicitud: number;
   paciente: number;
   tipo_muestra: number;
+  tipo_muestra_codigo?: string;
+  tipo_muestra_nombre?: string;
   tipo_contenedor?: number | null;
+  tipo_contenedor_codigo?: string | null;
   estado: EstadoMuestraLims;
   fecha_toma?: string | null;
   fecha_recepcion?: string | null;

@@ -12,13 +12,14 @@ import {
 } from './calculosDerivados';
 import { getSysmexUnidad } from './sysmexHemograma';
 
-/** Exámenes derivados: no se asocian a tubo; la muestra va en los medidos. */
+/** FiO2 / derivados: figuran en panel pero no se asocian a tubo. */
 export function esExamenCalculadoSinMuestraObligatoria(
   te?: LimsTipoExamen | null,
   codigo?: string | null
 ): boolean {
   if (te?.modo_entrada === 'CALCULADO') return true;
   const c = (codigo || te?.codigo || '').trim().toUpperCase();
+  if (c === 'FIO2') return true;
   return Boolean(c && CODIGOS_CALCULADOS.has(c));
 }
 
@@ -51,17 +52,55 @@ export function filterMuestrasProcesables(muestras: MuestraTransaccional[]): Mue
   return muestras.filter((m) => isMuestraProcesable(m.estado));
 }
 
+/** Duales: catálogo ORINA + tubo efectivo ORINA_24_H (bidón) en órdenes 24 hs. */
+export const CODIGOS_ORINA_DUAL = new Set(['NA_U', 'K_U', 'CL_U', 'CREA_U', 'MICROALB']);
+
+const ORINA_COMPAT = new Set(['ORINA', 'ORINA_24_H']);
+
+export function muestraTipoCompatibleConExamen(
+  muestra: MuestraTransaccional,
+  tipoMuestraRequeridaId?: number | null,
+  tipoMuestraCodigo?: string | null,
+  codigoExamen?: string | null
+): boolean {
+  if (tipoMuestraRequeridaId != null && muestra.tipo_muestra === tipoMuestraRequeridaId) {
+    return true;
+  }
+  const req = (tipoMuestraCodigo || '').trim().toUpperCase();
+  const got = (muestra.tipo_muestra_codigo || '').trim().toUpperCase();
+  if (req && got && req === got) return true;
+  const exam = (codigoExamen || '').trim().toUpperCase();
+  if (exam && CODIGOS_ORINA_DUAL.has(exam) && ORINA_COMPAT.has(req) && ORINA_COMPAT.has(got)) {
+    return true;
+  }
+  // Sin criterio de material: no excluir por tipo.
+  if (tipoMuestraRequeridaId == null && !req) return true;
+  return false;
+}
+
 export function muestrasCompatiblesParaTipo(
   procesables: MuestraTransaccional[],
   tipoMuestraRequeridaId: number | undefined,
-  tipoContenedorId?: number | null
+  tipoContenedorId?: number | null,
+  tipoMuestraCodigo?: string | null,
+  codigoExamen?: string | null
 ): MuestraTransaccional[] {
+  let pool = procesables;
   if (tipoContenedorId != null) {
-    const byCont = procesables.filter((m) => m.tipo_contenedor === tipoContenedorId);
-    if (byCont.length > 0) return byCont;
+    const byCont = pool.filter((m) => m.tipo_contenedor === tipoContenedorId);
+    if (byCont.length > 0) pool = byCont;
   }
-  if (!tipoMuestraRequeridaId) return procesables;
-  return procesables.filter((m) => m.tipo_muestra === tipoMuestraRequeridaId);
+
+  const hasMaterialFilter = tipoMuestraRequeridaId != null || Boolean((tipoMuestraCodigo || '').trim());
+  if (hasMaterialFilter) {
+    const byMat = pool.filter((m) =>
+      muestraTipoCompatibleConExamen(m, tipoMuestraRequeridaId, tipoMuestraCodigo, codigoExamen)
+    );
+    if (byMat.length > 0) return byMat;
+    // Contenedor matcheó pero material no (p. ej. dual 24h / EAB art vs ven).
+    return [];
+  }
+  return pool;
 }
 
 export function getTipoExamenCatalog(
@@ -95,9 +134,17 @@ export function validateCargaResultadosMuestra(
       return `El examen ${nombre} requiere una muestra asociada.`;
     }
 
-    if (row.muestra_id != null && te?.tipo_muestra_requerida != null) {
+    if (row.muestra_id != null && (te?.tipo_muestra_requerida != null || r.tipo_examen_muestra_codigo)) {
       const muestra = muestras.find((m) => m.id === row.muestra_id);
-      if (muestra && muestra.tipo_muestra !== te.tipo_muestra_requerida) {
+      if (
+        muestra &&
+        !muestraTipoCompatibleConExamen(
+          muestra,
+          te?.tipo_muestra_requerida,
+          r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo,
+          codigo
+        )
+      ) {
         return `La muestra seleccionada no corresponde al tipo requerido para ${nombre}.`;
       }
     }
@@ -415,19 +462,27 @@ export function suggestMuestraIdForResultado(
   currentMuestraId: number | null
 ): number | null {
   if (currentMuestraId != null) return currentMuestraId;
+  if (procesables.length === 0) return null;
   const te = catalog.get(r.tipo_examen);
+  const codigo = r.tipo_examen_codigo ?? te?.codigo;
+  if (esExamenCalculadoSinMuestraObligatoria(te, codigo)) return null;
+
   const opciones = muestrasCompatiblesParaTipo(
     procesables,
     te?.tipo_muestra_requerida,
-    te?.tipo_contenedor
+    te?.tipo_contenedor,
+    r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo,
+    codigo
   );
   if (opciones.length === 1) return opciones[0].id;
-  if (
-    te?.requiere_muestra &&
-    opciones.length > 0 &&
-    !esExamenCalculadoSinMuestraObligatoria(te, r.tipo_examen_codigo)
-  ) {
-    return opciones[0].id;
+  if (opciones.length > 1) {
+    // Solo autoelegir entre varios si el filtro redujo el universo (evita EDTA en CPK_MB).
+    const filtroActivo =
+      Boolean(te?.tipo_contenedor || te?.tipo_muestra_requerida) ||
+      opciones.length < procesables.length;
+    if (filtroActivo) return opciones[0].id;
   }
+  // Un solo tubo procesable → asociarlo (catálogo tarde o sin tipo en examen).
+  if (procesables.length === 1) return procesables[0].id;
   return null;
 }

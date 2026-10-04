@@ -23,6 +23,7 @@ from laboratorio.models_catalog import Muestra, TipoContenedor
 from laboratorio.panel_componentes_orden import PANEL_COMPONENTES_BY_CODIGO
 from laboratorio.tubos_catalogo import (
     BIDON_ORINA_24H,
+    EXAMENES_CALCULADOS_SIN_TUBO,
     EXAMENES_SIN_CONTENEDOR,
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
@@ -34,6 +35,16 @@ from laboratorio.tubos_catalogo import (
     _QUIMICA_RUTINA,
     es_muestra_orina_24h,
 )
+
+
+def _examen_sin_tubo_fisico(ex) -> bool:
+    """FiO2 / CALCULADO: figuran en panel pero no generan ni exigen tubo."""
+    codigo = (getattr(ex, "codigo", None) or "").strip().upper()
+    if codigo in EXAMENES_SIN_CONTENEDOR or codigo in EXAMENES_CALCULADOS_SIN_TUBO:
+        return True
+    modo = getattr(ex, "modo_entrada", None) or ""
+    return modo == "CALCULADO"
+
 
 MAX_EXAMENES_POR_TUBO = 10
 PANEL_HEMOGRAMA_CODIGO = "PAN_HEMO"
@@ -195,9 +206,7 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
     Todos los de 24 hs juntos → cantidad 1 (un bidón).
     """
     examenes = [
-        e
-        for e in _tipos_examen_para_tubos(solicitud)
-        if (e.codigo or "") not in EXAMENES_SIN_CONTENEDOR
+        e for e in _tipos_examen_para_tubos(solicitud) if not _examen_sin_tubo_fisico(e)
     ]
     if not examenes:
         return []
@@ -341,7 +350,7 @@ def mapa_tipo_examen_a_clave_tubo(
     examenes = [
         e
         for e in _tipos_examen_para_tubos(solicitud)
-        if (e.codigo or "") not in EXAMENES_SIN_CONTENEDOR and e.tipo_contenedor_id
+        if not _examen_sin_tubo_fisico(e) and e.tipo_contenedor_id
     ]
     if not examenes:
         return {}

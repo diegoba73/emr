@@ -598,6 +598,7 @@ const OrdenLimsDetalle: React.FC = () => {
             ordenEstado={orden.estado}
             canOperate={canOp}
             reloadToken={muestrasReloadToken}
+            onMuestrasChange={setMuestras}
             origenOrden={{
               origen_solicitud: orden.origen_solicitud,
               origen_solicitud_display: orden.origen_solicitud_display,
