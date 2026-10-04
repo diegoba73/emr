@@ -9,8 +9,23 @@ from django.db import transaction
 from django.http import HttpResponse
 from rest_framework import serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+class _PdfBinaryRenderer(BaseRenderer):
+    """Permite Accept: application/pdf sin 406 (el view puede devolver HttpResponse)."""
+
+    media_type = 'application/pdf'
+    format = 'pdf'
+    charset = None
+    render_style = 'binary'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            return bytes(data)
+        return b''
 
 from api.permissions import usuario_puede_descargar_informe_lims, usuario_puede_ver_solicitud_lims
 from laboratorio.analisis_longitudinal import analizar_solicitud_optimizado, historial_analitos_solicitud
@@ -200,6 +215,7 @@ class InformeMovilDetalle(APIView):
 class InformeMovilPdf(APIView):
     authentication_classes = [AutenticacionMovil]
     permission_classes = [RolMovil]
+    renderer_classes = [JSONRenderer, _PdfBinaryRenderer]
 
     def get(self, request, pk):
         _assert_rol_informes(request.user)

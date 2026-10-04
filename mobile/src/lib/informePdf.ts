@@ -44,8 +44,8 @@ export async function downloadInformePdf(id: number): Promise<void> {
       method: 'GET',
       redirect: 'error',
       signal: controller.signal,
+      // No forzar Accept: application/pdf — DRF responde 406 Not Acceptable.
       headers: {
-        Accept: 'application/pdf',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });

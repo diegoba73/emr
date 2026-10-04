@@ -97,6 +97,13 @@ def test_bioquimico_descarga_pdf_finalizado_binario():
     assert pdf.status_code == 200, getattr(pdf, 'data', pdf.content[:200])
     assert pdf['Content-Type'] == 'application/pdf'
     assert pdf.content.startswith(b'%PDF')
+    # El cliente móvil pedía Accept: application/pdf y DRF respondía 406.
+    pdf_accept = c.get(
+        f'/api/movil/informes/{sol.id}/pdf/',
+        HTTP_ACCEPT='application/pdf',
+    )
+    assert pdf_accept.status_code == 200, getattr(pdf_accept, 'data', pdf_accept.content[:200])
+    assert pdf_accept.content.startswith(b'%PDF')
 
 
 def test_paciente_descarga_pdf_propio_y_no_ajeno():
