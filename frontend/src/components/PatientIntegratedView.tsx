@@ -62,7 +62,7 @@ import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import ResultadosOrdenLista from './lims/ResultadosOrdenLista';
-import { estadoOrdenColor, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import { labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
 
 function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string {
   if (!s) return 'N/A';
@@ -76,13 +76,8 @@ function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string
 
 function chipColorEstado(estado: string): 'success' | 'warning' | 'info' | 'default' {
   if (estado === 'FINALIZADO' || estado === 'COMPLETADA') return 'success';
-  if (
-    estado === 'EN_PROCESO' ||
-    estado === 'INFORMADO_PARCIAL' ||
-    estado === 'LISTO_PARA_VALIDAR'
-  ) {
-    return estado === 'INFORMADO_PARCIAL' ? estadoOrdenColor('INFORMADO_PARCIAL') : 'warning';
-  }
+  if (estado === 'INFORMADO_PARCIAL') return 'info';
+  if (estado === 'EN_PROCESO' || estado === 'LISTO_PARA_VALIDAR') return 'warning';
   if (estado === 'PENDIENTE') return 'info';
   return 'default';
 }
