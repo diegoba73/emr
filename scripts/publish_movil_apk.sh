@@ -45,3 +45,10 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx emr_nginx_server; then
 fi
 
 echo "Probar: curl -sSI 'https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk' | head -15"
+echo
+echo "Si nginx (Docker) aún no sirve el archivo:"
+echo "  1) Incluí el location de deploy/nginx/synesis-movil-apk.snippet.conf"
+echo "     en el server HTTPS :8080 y montá /srv/emr/public en el contenedor."
+echo "  2) O, prueba rápida:"
+echo "     docker cp $DEST_FILE emr_nginx_server:/usr/share/nginx/html/synesis-movil.apk"
+echo "     (requiere location o root que sirva ese path)"
