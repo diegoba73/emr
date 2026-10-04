@@ -76,6 +76,21 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
       'ORI_MUC', 'ORI_CRIS', 'ORI_CONC',
     ],
   },
+  {
+    codigo: 'PAN_IONO_U24',
+    nombre: 'Ionograma urinario 24 hs',
+    examenes: ['NA_U', 'K_U', 'CL_U', 'DIUR', 'NA_U24', 'K_U24', 'CL_U24'],
+  },
+  {
+    codigo: 'PAN_MALB24',
+    nombre: 'Microalbuminuria 24 hs',
+    examenes: ['MICROALB', 'DIUR', 'MICROALB_24'],
+  },
+  {
+    codigo: 'PAN_PROT24',
+    nombre: 'Proteinuria 24 hs',
+    examenes: ['PROT_U_EQ', 'DIUR', 'PROT_U_24'],
+  },
 ];
 
 function sortByPanelOrder(

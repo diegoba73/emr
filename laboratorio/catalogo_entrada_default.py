@@ -39,6 +39,12 @@ ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
     "TRANS": ("CALCULADO", 0, "1", ""),
     # Clearance: medidos CREATI/CREA_U/DIUR; CLEAR_CREA calculado (mL/min, 1 decimal)
     "CLEAR_CREA": ("CALCULADO", 1, "1", ""),
+    # Orinas 24 hs: concentración + DIUR → excreción
+    "PROT_U_24": ("CALCULADO", 0, "1", ""),
+    "NA_U24": ("CALCULADO", 0, "1", ""),
+    "K_U24": ("CALCULADO", 0, "1", ""),
+    "CL_U24": ("CALCULADO", 0, "1", ""),
+    "MICROALB_24": ("CALCULADO", 1, "1", ""),
 }
 
 

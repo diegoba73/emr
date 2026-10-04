@@ -100,39 +100,84 @@ def _lugar_desde_muestra_o_solicitud(solicitud: SolicitudExamen, muestra: Muestr
     return resolver_lugar_etiqueta_desde_solicitud(solicitud) or "—"
 
 
+def _rank_presentacion_item(codigo: str, *, es_orina: bool, nombre: str) -> tuple:
+    """Misma política que orden_grupos_informe: presentación → resto → orinas."""
+    from laboratorio.orden_grupos_informe import (
+        ORDEN_PRESENTACION_RANK,
+        PANEL_ORINA_COMPLETA,
+        PANELES_ORINA,
+        CODIGOS_ORINA_SUELTOS,
+    )
+
+    code = (codigo or "").strip().upper()
+    if es_orina or code in PANELES_ORINA or code in CODIGOS_ORINA_SUELTOS:
+        if code == PANEL_ORINA_COMPLETA:
+            sub = 10_000
+        else:
+            sub = ORDEN_PRESENTACION_RANK.get(code, 5_000)
+        return (2, sub, nombre, code)
+    if code in ORDEN_PRESENTACION_RANK:
+        return (0, ORDEN_PRESENTACION_RANK[code], nombre, code)
+    return (1, 2, nombre, code)
+
+
 def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
-    """Paneles/perfiles como ítem único + exámenes sueltos (sin componentes del panel)."""
-    nombres: list[str] = []
+    """Paneles/perfiles como ítem único + exámenes sueltos (sin componentes del panel).
+
+    Orden: ORDEN_PRESENTACION_PEDIDO; orinas al final (orina completa última).
+    """
+    from laboratorio.orden_grupos_informe import PANELES_ORINA, CODIGOS_ORINA_SUELTOS, MUESTRAS_ORINA
+
+    items: list[tuple[str, str, bool]] = []  # (nombre, codigo, es_orina)
     seen: set[str] = set()
-    paneles = list(solicitud.paneles.all().order_by("nombre"))
+    paneles = list(solicitud.paneles.all().prefetch_related("tipos_examen"))
     componentes_panel: set[int] = set()
     for panel in paneles:
         componentes_panel.update(te.pk for te in panel.tipos_examen.all())
+        codigo = (panel.codigo or "").strip().upper()
         n = (panel.nombre or panel.codigo or "").strip()
         if n and n not in seen:
             seen.add(n)
-            nombres.append(n)
+            items.append((n, codigo, codigo in PANELES_ORINA))
 
-    for te in solicitud.tipos_examen.all().order_by("nombre"):
+    for te in solicitud.tipos_examen.select_related("tipo_muestra_requerida").all():
         if te.pk in componentes_panel:
             continue
         n = (te.nombre or te.codigo or "").strip()
-        if n and n not in seen:
-            seen.add(n)
-            nombres.append(n)
+        if not n or n in seen:
+            continue
+        seen.add(n)
+        codigo = (te.codigo or "").strip().upper()
+        muestra = (
+            (getattr(te.tipo_muestra_requerida, "codigo", None) or "").strip().upper()
+            if te.tipo_muestra_requerida_id
+            else ""
+        )
+        es_orina = codigo in CODIGOS_ORINA_SUELTOS or muestra in MUESTRAS_ORINA
+        items.append((n, codigo, es_orina))
 
-    if not nombres:
-        for res in solicitud.resultados.select_related("tipo_examen").order_by(
-            "tipo_examen__nombre", "pk"
-        ):
+    if not items:
+        for res in solicitud.resultados.select_related(
+            "tipo_examen__tipo_muestra_requerida"
+        ).all():
             te = res.tipo_examen
             if te is None or te.pk in componentes_panel:
                 continue
             n = (te.nombre or te.codigo or "").strip()
-            if n and n not in seen:
-                seen.add(n)
-                nombres.append(n)
-    return nombres
+            if not n or n in seen:
+                continue
+            seen.add(n)
+            codigo = (te.codigo or "").strip().upper()
+            muestra = (
+                (getattr(te.tipo_muestra_requerida, "codigo", None) or "").strip().upper()
+                if te.tipo_muestra_requerida_id
+                else ""
+            )
+            es_orina = codigo in CODIGOS_ORINA_SUELTOS or muestra in MUESTRAS_ORINA
+            items.append((n, codigo, es_orina))
+
+    items.sort(key=lambda it: _rank_presentacion_item(it[1], es_orina=it[2], nombre=it[0]))
+    return [n for n, _c, _o in items]
 
 
 def _lugar_estudio_micro(estudio: EstudioMicrobiologia) -> str:

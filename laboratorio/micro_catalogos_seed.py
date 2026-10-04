@@ -25,6 +25,7 @@ TIPOS_CULTIVO_MICRO_SEED = [
     ("LIQUIDO_SINOVIAL", "Cultivo de líquido sinovial / articular", 220),
     ("LIQUIDO_PERICARDICO", "Cultivo de líquido pericárdico", 230),
     ("VIGILANCIA_EPIDEMIOLOGICA", "Cultivo de vigilancia epidemiológica", 240),
+    ("HISOPADO_ANAL", "Cultivo Hisopado Anal", 245),
     ("AMBIENTAL", "Cultivo ambiental", 250),
 ]
 

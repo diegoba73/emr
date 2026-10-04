@@ -10,10 +10,12 @@ from rest_framework.test import APIClient
 
 from auditoria.models import AuditEvent
 from laboratorio.impresion_ordenes_pdf import (
+    FORM_MICRO_DER,
     ImpresionOrdenesError,
     MICRO_CULTIVO_DE,
     construir_pedido_clinico,
     construir_pedido_micro,
+    generar_listado_ordenes_dia_pdf_bytes,
     generar_pedidos_papel_pdf_bytes,
     parsear_items,
     parsear_resenas,
@@ -115,9 +117,26 @@ class TestImpresionOrdenes(TestCase):
         # Componente del panel: no se marca suelto ni va a "Otro".
         self.assertNotIn("HGB", ped.marcados)
         self.assertEqual(ped.otros, ["Examen fuera de formulario"])
+        self.assertIn("Hemograma", ped.solicitados)
+        self.assertIn("Glucemia", ped.solicitados)
+        self.assertIn("Examen fuera de formulario", ped.solicitados)
+        self.assertNotIn("Hemoglobina", ped.solicitados)
         self.assertEqual(ped.datos.obra_social, "OSDE")
         self.assertEqual(ped.datos.afiliado, "123/45")
         self.assertIn("García", ped.datos.medico)
+
+    def test_pedido_clinico_incluye_observaciones_y_pdf(self):
+        self.sol.observaciones = "Ayuno 8 hs. Control post operatorio."
+        self.sol.save(update_fields=["observaciones"])
+        ped = construir_pedido_clinico(self.sol)
+        self.assertIn("Ayuno 8 hs", ped.datos.observaciones)
+        self.assertTrue(ped.datos.fecha)
+        self.assertIn("García", ped.datos.medico)
+        pdf, n = generar_pedidos_papel_pdf_bytes(
+            parsear_items(self._items(("LAB_CLINICO", self.sol.pk)))
+        )
+        self.assertEqual(n, 1)
+        self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_pedido_clinico_marca_cl_e_inr_con_sus_paneles(self):
         tm = self.glu.tipo_muestra_requerida
@@ -149,6 +168,29 @@ class TestImpresionOrdenes(TestCase):
         self.assertIn("HEMOCULTIVO", ped.marcados)
         self.assertIn(MICRO_CULTIVO_DE, ped.marcados)
         self.assertEqual(ped.cultivo_de, ["uretral"])
+
+    def test_pedido_micro_incluye_hisopado_anal(self):
+        from laboratorio.micro_catalogos_seed import TIPOS_CULTIVO_MICRO_SEED
+
+        self.assertIn(
+            ("Cultivo Hisopado Anal", frozenset({"HISOPADO_ANAL"})),
+            FORM_MICRO_DER,
+        )
+        self.assertTrue(
+            any(c == "HISOPADO_ANAL" for c, _n, _o in TIPOS_CULTIVO_MICRO_SEED)
+        )
+        hisop = _cultivo("HISOPADO_ANAL", "Cultivo Hisopado Anal")
+        est = EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="RECIBIDO",
+            tipo_cultivo=hisop,
+            tipo_estudio="HISOPADO_ANAL",
+        )
+        ped = construir_pedido_micro([est])
+        self.assertIn("HISOPADO_ANAL", ped.marcados)
+        self.assertNotIn(MICRO_CULTIVO_DE, ped.marcados)
 
     def test_micro_agrupado_por_paciente_dos_pedidos_por_hoja(self):
         items = parsear_items(self._items(
@@ -199,6 +241,45 @@ class TestImpresionOrdenes(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
         self.assertTrue(r.content.startswith(b"%PDF"))
+        # Columnas Origen/sin Tipo: ver test_origen_listado_* (texto PDF comprimido).
+
+    def test_listado_dia_genera_pdf_con_orden_de_items(self):
+        """Listado del día: índice visual en celda Pedido (sin columna # aparte)."""
+        pdf, total = generar_listado_ordenes_dia_pdf_bytes(
+            parsear_items(
+                self._items(("LAB_CLINICO", self.sol.pk), ("MICROBIOLOGIA", self.uro.pk))
+            ),
+            fecha_label="03/10/2026",
+        )
+        self.assertEqual(total, 2)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+
+    def test_origen_listado_usa_lugar_extraccion_o_procedencia(self):
+        from laboratorio.impresion_ordenes_pdf import _origen_extraccion_listado
+        from laboratorio.muestra_estado import crear_muestra
+        from laboratorio.models import TipoMuestra
+
+        tm = TipoMuestra.objects.filter(activo=True).first()
+        self.assertIsNotNone(tm)
+        m = crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=self.lab,
+            view="t",
+        )
+        m.lugar_extraccion = "UCO CAMA 3"
+        m.save(update_fields=["lugar_extraccion"])
+        self.assertEqual(_origen_extraccion_listado(self.sol), "UCO CAMA 3")
+        m.lugar_extraccion = ""
+        m.save(update_fields=["lugar_extraccion"])
+        origen = _origen_extraccion_listado(self.sol)
+        self.assertTrue(origen)
+        self.assertNotEqual(origen, "—")
+        # Micro: label de origen (Ambulatorio — CEHTA)
+        origen_micro = _origen_extraccion_listado(self.uro)
+        self.assertIn("CEHTA", origen_micro)
 
     def test_api_sin_items_400(self):
         self.client.force_authenticate(self.lab)

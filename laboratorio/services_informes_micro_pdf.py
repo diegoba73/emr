@@ -256,8 +256,10 @@ def _construir_story_micro(
 
     # Examen de orina (tira + sedimento) — solo urocultivo
     if es_urocultivo:
-        orina = normalizar_examen_orina(getattr(estudio, "examen_orina", None))
-        if examen_orina_tiene_datos(orina):
+        raw_orina = getattr(estudio, "examen_orina", None)
+        # Usar raw (no normalizado): los defaults NO CONTIENE no cuentan como “cargado”.
+        if examen_orina_tiene_datos(raw_orina if isinstance(raw_orina, dict) else None):
+            orina = normalizar_examen_orina(raw_orina)
             story.append(Paragraph("EXAMEN DE ORINA (TIRA Y SEDIMENTO)", styles["panel"]))
             story.append(
                 Paragraph(

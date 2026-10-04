@@ -29,10 +29,27 @@ export type CodigoExamenOrinaMicro =
 
 export type ExamenOrinaMicro = Record<CodigoExamenOrinaMicro, string>;
 
+/** Tira + sedimento cualitativos (no color/aspecto/densidad/pH/conclusión). */
+export const VALOR_NO_CONTIENE = 'NO CONTIENE';
+export const CODIGOS_DEFAULT_NO_CONTIENE = new Set<CodigoExamenOrinaMicro>([
+  'ORI_GLU',
+  'ORI_BIL',
+  'ORI_NIT',
+  'ORI_CET',
+  'ORI_LEU',
+  'ORI_HEM',
+  'ORI_CEL',
+  'ORI_PIO',
+  'ORI_MUC',
+  'ORI_CRIS',
+]);
+
 export function examenOrinaVacio(): ExamenOrinaMicro {
   const out = {} as ExamenOrinaMicro;
   for (const c of [...CAMPOS_TIRA_ORINA, ...CAMPOS_SEDIMENTO_ORINA]) {
-    out[c.codigo] = '';
+    out[c.codigo] = CODIGOS_DEFAULT_NO_CONTIENE.has(c.codigo)
+      ? VALOR_NO_CONTIENE
+      : '';
   }
   return out;
 }

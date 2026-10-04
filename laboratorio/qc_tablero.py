@@ -27,6 +27,7 @@ from laboratorio.models_qc import (
 from laboratorio.qc_service import (
     _ultima_corrida_producto,
     _ventana_hoy,
+    fecha_dia_operativo_iqc,
     materiales_iqc_canonicos,
 )
 from laboratorio.solicitud_orden_abierta import ESTADOS_ORDEN_EN_CURSO
@@ -174,7 +175,8 @@ def _calibracion_hoy(equipo: EquipoAnalizador, *, fecha) -> Calibracion | None:
 
 def tablero_iqc_hoy() -> dict[str, Any]:
     start, end = _ventana_hoy()
-    hoy = timezone.localdate()
+    # Fecha del inicio del día operativo (08:00→08:00), no medianoche civil.
+    hoy = fecha_dia_operativo_iqc()
     dia_aviso = es_dia_aviso_control_valores(fecha=hoy)
     try:
         exam_ids_hoy = _exam_ids_abiertos()

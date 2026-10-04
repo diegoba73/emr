@@ -36,6 +36,14 @@
 5. **Número de protocolo:** generado en `save()` si vacío: `LAB-YYYY-XXXXX` secuencial compartido (lab clínico + microbiología) vía `LabProtocoloCounter` + `select_for_update`. Se valida la entidad **antes** de consumir el correlativo y ambos quedan en la misma transacción (no quemar números por `full_clean` fallido). Listados LIMS ordenan por `numero` **ascendente** (primero → último).
 6. **Origen:** `EMR`, `GUARDIA`, `EXTERNO_PAPEL`, internación, etc.
 7. **Médico híbrido:** `medico_interno` (FK) o texto `medico_externo_nombre`.
+8. **Orden de presentación (talón / carga de resultados / informe) [VIGENTE]:**
+   `ORDEN_PRESENTACION_PEDIDO` en `laboratorio/catalogo_solicitud_papel.py` (mirror FE
+   `limsOrdenInforme.ts`). Secuencia: Hemograma → química CM260 suelta (GLU, UREA,
+   CREATI, AU primero) → Hepatograma → Perfil lipídico → Ionograma → CPK / CK-MB /
+   troponinas / mioglobina → resto → **orinas al final** (orina completa última).
+   Los paneles se listan como un ítem (no se duplican sus componentes). El layout del
+   formulario papel (`ORDEN_FORMULARIO_PAPEL` / `SOLICITUD_ANALISIS_PAPEL_ROWS`) es
+   independiente. Si la orden tiene `orden_grupos_informe` custom, prevalece ese orden.
 
 ---
 

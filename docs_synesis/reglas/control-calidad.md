@@ -23,7 +23,7 @@ No es EQC, no es CAPA, no es ISO 15189 completo. Es el ciclo: registrar control 
 | `POST …/cargar-resultados/` | Sí | **No** (`permitir_override=False`) |
 | `POST …/validar/` (cierre `FINALIZADO`) | Sí | Solo **admin/superuser** + `confirmar_qc_override` + `motivo_qc_override` |
 
-Ventana temporal: **hoy** en `America/Argentina/Buenos_Aires` (`timezone.localdate()`), de 00:00 a 24:00. Un control de ayer no vale. Un rechazo de hoy anula si es la **última** corrida del nivel; un ACEPTADA posterior el mismo día **sí** vale.
+Ventana temporal: **día operativo** en `America/Argentina/Buenos_Aires`, de **08:00 a 08:00** del día siguiente (`IQC_DIA_OPERATIVO_HORA`, default 8). Antes de las 08:00 sigue valiendo el control de la rutina anterior (p. ej. guardia a la 01:00 no exige IQC nuevo). A partir de las 08:00 hace falta ACEPTADA en la ventana nueva. Un rechazo en la ventana vigente anula si es la **última** corrida del nivel; un ACEPTADA posterior en la misma ventana **sí** vale. Fuente: `laboratorio/qc_service.py` `_ventana_hoy`.
 
 ---
 

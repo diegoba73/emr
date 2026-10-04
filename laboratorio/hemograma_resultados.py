@@ -11,7 +11,17 @@ from laboratorio.panel_componentes_orden import PANEL_COMPONENTES_BY_CODIGO
 _ESTADOS_ABIERTOS = frozenset(
     {"PENDIENTE", "EN_PROCESO", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"}
 )
-_PANELES_ASEGURAR = frozenset({"PAN_HEMO", "PAN_LIP", "PAN_HEP"})
+_PANELES_ASEGURAR = frozenset(
+    {
+        "PAN_HEMO",
+        "PAN_LIP",
+        "PAN_HEP",
+        "PAN_CLEAR",
+        "PAN_PROT24",
+        "PAN_IONO_U24",
+        "PAN_MALB24",
+    }
+)
 
 
 def _asegurar_codigos_panel(solicitud: SolicitudExamen, panel_codigo: str) -> int:
@@ -39,6 +49,8 @@ def _asegurar_codigos_panel(solicitud: SolicitudExamen, panel_codigo: str) -> in
     if not faltan:
         return 0
 
+    from laboratorio.examen_orina_micro import valor_inicial_resultado
+
     tipos = {
         te.codigo: te
         for te in TipoExamen.objects.filter(codigo__in=faltan, activo=True)
@@ -51,7 +63,7 @@ def _asegurar_codigos_panel(solicitud: SolicitudExamen, panel_codigo: str) -> in
         _, was_created = ResultadoExamen.objects.get_or_create(
             solicitud=solicitud,
             tipo_examen=te,
-            defaults={"valor_obtenido": ""},
+            defaults={"valor_obtenido": valor_inicial_resultado(te)},
         )
         if was_created:
             creados += 1

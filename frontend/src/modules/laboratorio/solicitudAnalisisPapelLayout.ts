@@ -19,8 +19,8 @@ const p = (codigo: string): PapelItemRef => ({ kind: 'panel', codigo });
 const e = (codigo: string): PapelItemRef => ({ kind: 'examen', codigo });
 
 /** Filas alineadas al PDF institucional (columna izquierda | derecha).
- * El orden fila a fila (izq → der) define el orden por defecto del informe PDF
- * (`ORDEN_FORMULARIO_PAPEL` en backend / `limsOrdenInforme.ts`).
+ * Solo layout del formulario de pedido. El orden del talón / carga de resultados
+ * está en `ORDEN_PRESENTACION_PEDIDO` (`limsOrdenInforme.ts` / backend).
  */
 export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: p('PAN_HEMO'), right: e('CPK') },
@@ -34,7 +34,7 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: e('P'), right: p('PAN_CLEAR') },
   { left: p('PAN_FERR'), right: p('PAN_IONO_U24') },
   { left: p('PAN_IONO'), right: p('PAN_IONO_U') },
-  { left: e('CL'), right: e('PROT_U_24') },
+  { left: e('CL'), right: p('PAN_PROT24') },
   { left: e('CA_ION'), right: e('PROT_U_AZ') },
   { left: p('PAN_LIP'), right: p('PAN_MALB24') },
   { left: p('PAN_HEP'), right: p('PAN_MALB_AZ') },

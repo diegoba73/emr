@@ -228,6 +228,86 @@ class TestTalonPedidoClinicoApi(TestCase):
         self.assertNotIn("Hemoglobina Panel", listado)
         self.assertIn("Glucosa", listado)
 
+    def test_talon_orden_presentacion_hemo_glu_hep_cpk_orina(self):
+        from laboratorio.models import PanelExamen
+        from laboratorio.talon_pedido_pdf import _examenes_solicitud
+
+        tm_orina = TipoMuestra.objects.create(
+            codigo=f"OR{self.te.codigo[-4:]}", nombre="Orina", activo=True
+        )
+        te_glu, _ = TipoExamen.objects.update_or_create(
+            codigo="GLU",
+            defaults={
+                "nombre": "Glucemia",
+                "tipo_muestra_requerida": self.tm,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_cpk, _ = TipoExamen.objects.update_or_create(
+            codigo="CPK",
+            defaults={
+                "nombre": "CPK",
+                "tipo_muestra_requerida": self.tm,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_got, _ = TipoExamen.objects.update_or_create(
+            codigo="GOT",
+            defaults={
+                "nombre": "GOT (AST)",
+                "tipo_muestra_requerida": self.tm,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_ph = TipoExamen.objects.create(
+            codigo=f"PH{self.te.codigo[-4:]}",
+            nombre="pH orina",
+            tipo_muestra_requerida=tm_orina,
+            precio=1,
+            activo=True,
+        )
+        panel_hemo, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_HEMO",
+            defaults={"nombre": "Hemograma", "activo": True},
+        )
+        te_wbc = TipoExamen.objects.create(
+            codigo=f"WBC{self.te.codigo[-4:]}",
+            nombre="Leucocitos Hemo",
+            tipo_muestra_requerida=self.tm,
+            precio=1,
+            activo=True,
+        )
+        panel_hemo.tipos_examen.set([te_wbc])
+        panel_hep, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_HEP",
+            defaults={"nombre": "Hepatograma", "activo": True},
+        )
+        panel_hep.tipos_examen.set([te_got])
+        panel_ori, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_ORI",
+            defaults={"nombre": "Orina completa", "activo": True},
+        )
+        panel_ori.tipos_examen.set([te_ph])
+
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="PENDIENTE",
+        )
+        sol.paneles.add(panel_ori, panel_hep, panel_hemo)
+        sol.tipos_examen.add(te_cpk, te_glu, te_got, te_wbc, te_ph)
+
+        listado = _examenes_solicitud(sol)
+        self.assertEqual(
+            listado,
+            ["Hemograma", "Glucemia", "Hepatograma", "CPK", "Orina completa"],
+        )
+        self.assertNotIn("GOT (AST)", listado)
+
     def test_talon_pdf_medico_403(self):
         self.client.force_authenticate(self.med)
         r = self.client.get(f"/api/lab/solicitudes/{self.sol.pk}/talon-pdf/")

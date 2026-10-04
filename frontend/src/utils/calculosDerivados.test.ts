@@ -1,6 +1,8 @@
 import {
   RESULTADO_NO_CALCULABLE,
   calcClearanceCreatinina,
+  calcExcrecionMgDlA24h,
+  calcExcrecionPorLitroA24h,
   calcLdlFriedewald,
   calcularDerivados,
 } from './calculosDerivados';
@@ -60,5 +62,30 @@ describe('calculosDerivados Corte A', () => {
     expect(
       calcularDerivados({ CREATI: 0, CREA_U: 100, DIUR: 1500 }).CLEAR_CREA?.informe
     ).toBe(RESULTADO_NO_CALCULABLE);
+  });
+
+  it('orina 24 hs: proteinuria / ionograma / microalbúmina', () => {
+    expect(calcExcrecionMgDlA24h(80, 1500)).toBe(1200);
+    expect(calcExcrecionPorLitroA24h(100, 1500)).toBe(150);
+    const out = calcularDerivados({
+      PROT_U_EQ: 80,
+      NA_U: 100,
+      K_U: 40,
+      CL_U: 90,
+      MICROALB: 20,
+      DIUR: 1500,
+    });
+    expect(out.PROT_U_24?.numerico).toBe(1200);
+    expect(out.NA_U24?.numerico).toBe(150);
+    expect(out.K_U24?.numerico).toBe(60);
+    expect(out.CL_U24?.numerico).toBe(135);
+    expect(out.MICROALB_24?.numerico).toBe(30);
+  });
+
+  it('orina 24 hs sin diuresis marca no calculable', () => {
+    const out = calcularDerivados({ PROT_U_EQ: 80, NA_U: 100, MICROALB: 25 });
+    expect(out.PROT_U_24?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(out.NA_U24?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(out.MICROALB_24?.informe).toBe(RESULTADO_NO_CALCULABLE);
   });
 });

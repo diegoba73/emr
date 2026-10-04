@@ -19,7 +19,7 @@ CODIGOS_SIN_RESENA: frozenset[str] = frozenset({
     "PAN_IONO", "CL", "CA_ION", "PAN_LIP", "PAN_HEP", "PROT_T", "ALB",
     "PAN_COAG", "INR", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
     "CPK", "CPK_MB", "TROP_I", "MIOG", "TROP_US", "PROBNP", "DDIM",
-    "PAN_ORI", "PAN_CLEAR", "PAN_IONO_U24", "PAN_IONO_U", "PROT_U_24",
+    "PAN_ORI", "PAN_CLEAR", "PAN_IONO_U24", "PAN_IONO_U", "PAN_PROT24",
     "PROT_U_AZ", "PAN_MALB24", "PAN_MALB_AZ", "PAN_EAB_ART", "PAN_EAB_VEN",
     "LACT",
 })

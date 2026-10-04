@@ -36,9 +36,37 @@ CODIGOS_EXAMEN_ORINA: frozenset[str] = frozenset(c for c, _ in CAMPOS_EXAMEN_ORI
 
 LABELS_EXAMEN_ORINA: dict[str, str] = {c: label for c, label in CAMPOS_EXAMEN_ORINA}
 
+# Tira + sedimento cualitativos (no color/aspecto/densidad/pH/conclusión).
+VALOR_NO_CONTIENE = "NO CONTIENE"
+CODIGOS_DEFAULT_NO_CONTIENE: frozenset[str] = frozenset(
+    {
+        "ORI_GLU",
+        "ORI_BIL",
+        "ORI_NIT",
+        "ORI_CET",
+        "ORI_LEU",
+        "ORI_HEM",
+        "ORI_CEL",
+        "ORI_PIO",
+        "ORI_MUC",
+        "ORI_CRIS",
+    }
+)
+
+
+def valor_inicial_resultado(tipo_examen) -> str:
+    """Valor por defecto al crear ResultadoExamen (tira/sedimento → NO CONTIENE)."""
+    codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
+    if codigo in CODIGOS_DEFAULT_NO_CONTIENE:
+        return VALOR_NO_CONTIENE
+    return ""
+
 
 def examen_orina_vacio() -> dict[str, str]:
-    return {codigo: "" for codigo, _ in CAMPOS_EXAMEN_ORINA}
+    out: dict[str, str] = {}
+    for codigo, _ in CAMPOS_EXAMEN_ORINA:
+        out[codigo] = VALOR_NO_CONTIENE if codigo in CODIGOS_DEFAULT_NO_CONTIENE else ""
+    return out
 
 
 def normalizar_examen_orina(raw: Any) -> dict[str, str]:
@@ -55,6 +83,7 @@ def normalizar_examen_orina(raw: Any) -> dict[str, str]:
 
 
 def examen_orina_tiene_datos(data: dict[str, str] | None) -> bool:
+    """True si hay valores guardados (antes de rellenar defaults de UI)."""
     if not data:
         return False
     return any(str(v or "").strip() for v in data.values())

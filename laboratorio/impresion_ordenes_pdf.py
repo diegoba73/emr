@@ -2,10 +2,11 @@
 Impresión desde la bandeja de órdenes LIMS (no muta estado).
 
 - Listado de órdenes del día (A4 apaisado).
-- Pedidos en formato papel institucional (clínico / microbiología) con cruz
-  en cada examen solicitado. Un pedido por orden clínica y uno por paciente
-  para microbiología (todos sus cultivos de la selección en el mismo pedido);
-  2 pedidos por hoja A4 apaisada.
+- Pedidos en formato papel institucional:
+  - clínico: lista solo los paneles/exámenes solicitados + Observaciones + Firma/Fecha;
+  - microbiología: formulario de cultivos con cruz en los pedidos (incluye Obs./Firma).
+  Un pedido por orden clínica y uno por paciente para microbiología
+  (todos sus cultivos de la selección en el mismo pedido); 2 pedidos por hoja A4 apaisada.
 """
 from __future__ import annotations
 
@@ -92,7 +93,7 @@ FORM_CLINICO_DER: list[tuple[str, str | None, str | None]] = [
     ("Clearance de creatinina", "panel", "PAN_CLEAR"),
     ("Ionograma urinario 24hs", "panel", "PAN_IONO_U24"),
     ("Ionograma urinario al azar", "panel", "PAN_IONO_U"),
-    ("Proteinuria 24hs", "examen", "PROT_U_24"),
+    ("Proteinuria 24hs", "panel", "PAN_PROT24"),
     ("Proteinuria al azar", "examen", "PROT_U_AZ"),
     ("Microalbuminuria 24hs", "panel", "PAN_MALB24"),
     ("Microalbuminuria al azar", "panel", "PAN_MALB_AZ"),
@@ -142,6 +143,7 @@ FORM_MICRO_DER: list[tuple[str, frozenset[str]]] = [
     ("Exudado de fauces", frozenset()),
     ("Exudado vaginal", frozenset({"VAGINAL", "SGB"})),
     ("Coprocultivo", frozenset({"COPROCULTIVO"})),
+    ("Cultivo Hisopado Anal", frozenset({"HISOPADO_ANAL"})),
     ("Coproparasitológico", frozenset()),
     ("Antibiograma", frozenset()),
     ("Test Rápido HIV", frozenset()),
@@ -189,6 +191,8 @@ class PedidoClinicoPapel:
     datos: DatosPedidoPapel
     marcados: set[str] = field(default_factory=set)
     otros: list[str] = field(default_factory=list)
+    # Nombres de paneles/exámenes sueltos solicitados (para el cuerpo del PDF).
+    solicitados: list[str] = field(default_factory=list)
     solicitud_id: int | None = None
     resena_examenes: list[tuple[str, str]] = field(default_factory=list)
 
@@ -335,6 +339,8 @@ def _nombre_item(obj) -> str:
 def construir_pedido_clinico(
     sol: SolicitudExamen, *, componentes_basicos: set[str] | None = None
 ) -> PedidoClinicoPapel:
+    from laboratorio.talon_pedido_pdf import _examenes_solicitud
+
     datos = _datos_cabecera(sol, medico_externo=sol.medico_externo_nombre or "")
     datos.diagnostico = _diagnostico_consulta(sol.consulta_hc)
     datos.fecha = _fecha_corta(sol.fecha_solicitud)
@@ -368,6 +374,7 @@ def construir_pedido_clinico(
         datos=datos,
         marcados=marcados,
         otros=otros,
+        solicitados=_examenes_solicitud(sol),
         solicitud_id=sol.pk,
         resena_examenes=examenes_que_requieren_resena(sol, componentes_basicos=componentes_basicos),
     )
@@ -748,6 +755,7 @@ def _pie_firma(c: rl_canvas.Canvas, top_mm: float, medico: str, fecha: str) -> N
 
 
 def _dibujar_pedido_clinico(c: rl_canvas.Canvas, ped: PedidoClinicoPapel) -> None:
+    """Lista solo lo solicitado; reserva Observaciones + Firma/Fecha abajo."""
     d = ped.datos
     _encabezado(c, None, d.numero)
     col2 = MARGEN_X + 92 * mm
@@ -757,39 +765,61 @@ def _dibujar_pedido_clinico(c: rl_canvas.Canvas, ped: PedidoClinicoPapel) -> Non
     _campo(c, col2, 45, "N°Afiliado:", d.afiliado, DERECHA_X)
     _campo(c, MARGEN_X, 51, "Diagnóstico:", d.diagnostico, DERECHA_X)
 
-    top = 58.0
-    row_h = 6.85
-    size = 11.0
-    box_w = 8.5 * mm
-    box_izq = MARGEN_X + 78 * mm
-    izq = [(lbl, bool(cod and cod in ped.marcados), "") for lbl, _, cod in FORM_CLINICO_IZQ]
-    otros_txt = ", ".join(ped.otros)
-    ancho_otro = box_izq - MARGEN_X - c.stringWidth("- Otro:", FONT, size) - 2.5 * mm
-    otro_en_fila = bool(otros_txt) and c.stringWidth(otros_txt, FONT_B, size - 1.5) <= ancho_otro
-    izq.append(("Otro:", bool(ped.otros), otros_txt if otro_en_fila else ""))
-    der = [(lbl, bool(cod and cod in ped.marcados), "") for lbl, _, cod in FORM_CLINICO_DER]
-    _columna_items(
-        c, filas=izq, label_x=MARGEN_X, box_x=box_izq, box_w=box_w,
-        top_mm=top, row_h_mm=row_h, size=size,
-    )
-    _columna_items(
-        c, filas=der, label_x=col2, box_x=DERECHA_X - box_w, box_w=box_w,
-        top_mm=top, row_h_mm=row_h, size=size,
-    )
+    # Zonas fijas (mm desde arriba): lista → observaciones → firma.
+    firma_top = 268.0
+    obs_top = firma_top - 42.0
+    titulo_top = 58.0
+    lista_top = 66.0
 
-    fin = top + row_h * max(len(izq), len(der))
-    lineas_extra = [fin + 8.5, fin + 15.5]
-    if otros_txt and not otro_en_fila:
+    c.setFillColor(COLOR_TEXTO)
+    c.setFont(FONT_B, 11.5)
+    c.drawString(MARGEN_X, _y(titulo_top), "Exámenes solicitados:")
+
+    items = list(ped.solicitados)
+    if not items:
+        c.setFont(FONT, 10.5)
+        c.setFillColor(COLOR_DATO)
+        c.drawString(MARGEN_X, _y(lista_top), "— Sin exámenes —")
+        c.setFillColor(COLOR_TEXTO)
+    else:
+        max_h = max(obs_top - lista_top - 4.0, 24.0)
+        rows_per_col = (len(items) + 1) // 2
+        row_h = min(7.2, max(4.0, max_h / max(rows_per_col, 1)))
+        if row_h >= 6.2:
+            size = 11.0
+        elif row_h >= 5.0:
+            size = 10.0
+        else:
+            size = 9.0
+        col_w = (DERECHA_X - MARGEN_X) / 2 - 2 * mm
+        row_h_pt = row_h * mm
+        for i, nombre in enumerate(items):
+            col = 0 if i < rows_per_col else 1
+            row = i if col == 0 else i - rows_per_col
+            x = MARGEN_X if col == 0 else col2
+            top = _y(lista_top + row * row_h)
+            base = top - row_h_pt + row_h_pt * 0.27
+            c.setFillColor(COLOR_TEXTO)
+            c.setFont(FONT, size)
+            etiqueta = f"- {_ajustar_texto(c, nombre, FONT, size, col_w)}"
+            c.drawString(x, base, etiqueta)
+
+    c.setFillColor(COLOR_TEXTO)
+    c.setFont(FONT, 11.5)
+    c.drawString(MARGEN_X, _y(obs_top), "Observaciones:")
+    lineas_obs = [obs_top + 7 + i * 6.5 for i in range(4)]
+    if d.observaciones:
         c.setFillColor(COLOR_DATO)
         c.setFont(FONT_B, 10)
-        lineas = _partir_lineas(c, otros_txt, FONT_B, 10, DERECHA_X - MARGEN_X - 2 * mm)
-        for y_mm, txt in zip(lineas_extra, lineas):
-            c.drawString(MARGEN_X + 1 * mm, _y(y_mm) + 1.2 * mm, txt)
+        for i, txt in enumerate(
+            _partir_lineas(c, d.observaciones, FONT_B, 10, DERECHA_X - MARGEN_X)[:4]
+        ):
+            c.drawString(MARGEN_X, _y(lineas_obs[i]) + 1.2 * mm, txt)
         c.setFillColor(COLOR_TEXTO)
-    for y_mm in lineas_extra:
+    for y_mm in lineas_obs:
         _linea_punteada(c, MARGEN_X, DERECHA_X, _y(y_mm))
 
-    _pie_firma(c, fin + 36, d.medico, d.fecha)
+    _pie_firma(c, firma_top, d.medico, d.fecha)
 
 
 def _dibujar_pedido_micro(c: rl_canvas.Canvas, ped: PedidoMicroPapel) -> None:
@@ -1123,6 +1153,29 @@ def _estudios_texto_micro(est: EstudioMicrobiologia) -> str:
     return " · ".join(p for p in partes if p) or "—"
 
 
+def _origen_extraccion_listado(obj: SolicitudExamen | EstudioMicrobiologia) -> str:
+    """Lugar / procedencia de extracción para la columna Origen del listado."""
+    if isinstance(obj, SolicitudExamen):
+        from laboratorio.models_catalog import Muestra
+        from laboratorio.services_etiqueta_muestra import (
+            resolver_lugar_etiqueta_desde_solicitud,
+        )
+
+        for lugar in (
+            Muestra.objects.filter(solicitud_id=obj.pk)
+            .exclude(lugar_extraccion__isnull=True)
+            .exclude(lugar_extraccion="")
+            .values_list("lugar_extraccion", flat=True)[:1]
+        ):
+            if (lugar or "").strip():
+                return lugar.strip()
+        return resolver_lugar_etiqueta_desde_solicitud(obj) or "—"
+
+    from laboratorio.services_etiqueta_microbiologia import resolver_lugar_etiqueta_estudio
+
+    return (resolver_lugar_etiqueta_estudio(obj) or "").strip() or "—"
+
+
 def generar_listado_ordenes_dia_pdf_bytes(
     items: list[ItemImpresion], fecha_label: str = ""
 ) -> tuple[bytes, int]:
@@ -1147,8 +1200,8 @@ def generar_listado_ordenes_dia_pdf_bytes(
         return Paragraph(t, style)
 
     header = [
-        P("#", st_h), P("Pedido", st_h), P("Tipo", st_h), P("Paciente", st_h),
-        P("DNI", st_h), P("Obra social", st_h), P("Médico", st_h),
+        P("Pedido", st_h), P("Paciente", st_h),
+        P("DNI", st_h), P("Obra social", st_h), P("Origen", st_h), P("Médico", st_h),
         P("Estudios solicitados", st_h),
     ]
     rows = [header]
@@ -1158,19 +1211,21 @@ def generar_listado_ordenes_dia_pdf_bytes(
         afil = (getattr(obj.paciente, "numero_afiliado", None) or "").strip()
         if afil:
             os_txt = f"{os_txt} · {afil}" if os_txt else afil
+        origen = _origen_extraccion_listado(obj)
         if isinstance(obj, SolicitudExamen):
-            tipo = "Clínico"
             medico = _fmt_medico(obj.medico_interno, obj.medico_externo_nombre or "")
             estudios = _estudios_texto_lab(obj)
         else:
-            tipo = "Microbiología"
             medico = _fmt_medico(obj.medico_interno, obj.medico_externo_nombre or "")
             estudios = _estudios_texto_micro(obj)
+        # Índice del día como ayuda visual delante del número (sin columna aparte).
+        pedido_txt = f"{idx} · {obj.numero or f'#{obj.pk}'}"
         rows.append([
-            P(str(idx)), P(obj.numero or f"#{obj.pk}", st_cb), P(tipo), P(nombre, st_cb),
-            P(dni), P(os_txt or "—"), P(medico), P(estudios),
+            P(pedido_txt, st_cb), P(nombre, st_cb),
+            P(dni), P(os_txt or "—"), P(origen), P(medico), P(estudios),
         ])
-    widths = [8, 26, 20, 46, 20, 34, 38, 85]
+    # Sin columna "#"; el índice va en Pedido. Origen antes de Médico (~277 mm).
+    widths = [34, 48, 20, 34, 32, 36, 73]
     table = Table(rows, colWidths=[w * mm for w in widths], repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F3A6E")),

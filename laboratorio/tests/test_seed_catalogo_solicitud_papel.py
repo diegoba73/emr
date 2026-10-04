@@ -89,8 +89,29 @@ class TestSeedCatalogoSolicitudPapel:
         pan_az = PanelExamen.objects.get(codigo="PAN_IONO_U")
         pan_24 = PanelExamen.objects.get(codigo="PAN_IONO_U24")
         ids_az = set(pan_az.tipos_examen.values_list("codigo", flat=True))
-        ids_24 = set(pan_24.tipos_examen.values_list("codigo", flat=True))
-        assert ids_az == ids_24 == {"NA_U", "K_U", "CL_U"}
+        assert ids_az == {"NA_U", "K_U", "CL_U"}
+        assert [te.codigo for te in ordenar_queryset_panel(pan_24)] == [
+            "NA_U", "K_U", "CL_U", "DIUR", "NA_U24", "K_U24", "CL_U24",
+        ]
+        assert ids_az.issubset(
+            set(pan_24.tipos_examen.values_list("codigo", flat=True))
+        )
+        for codigo in ("NA_U24", "K_U24", "CL_U24"):
+            assert TipoExamen.objects.get(codigo=codigo).modo_entrada == "CALCULADO"
+
+    def test_paneles_orina_24h_calculados(self):
+        call_command("seed_catalogo_solicitud_papel")
+        prot = PanelExamen.objects.get(codigo="PAN_PROT24")
+        malb = PanelExamen.objects.get(codigo="PAN_MALB24")
+        assert [te.codigo for te in ordenar_queryset_panel(prot)] == [
+            "PROT_U_EQ", "DIUR", "PROT_U_24",
+        ]
+        assert [te.codigo for te in ordenar_queryset_panel(malb)] == [
+            "MICROALB", "DIUR", "MICROALB_24",
+        ]
+        assert TipoExamen.objects.get(codigo="PROT_U_24").modo_entrada == "CALCULADO"
+        assert TipoExamen.objects.get(codigo="MICROALB_24").modo_entrada == "CALCULADO"
+        assert "PROT_U_24" not in EXAMENES_SUELTOS_PDF
 
     def test_legacy_hemo_desactivado(self):
         from laboratorio.models import TipoMuestra

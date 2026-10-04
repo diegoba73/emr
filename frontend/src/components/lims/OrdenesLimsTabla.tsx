@@ -36,6 +36,11 @@ export interface OrdenesLimsTablaProps {
   onObraSocialSaved?: () => void;
   /** Oculta columnas técnicas (IQC, tubos, recepción) para secretaría. */
   modoEntrega?: boolean;
+  /**
+   * Prefijo visual 1, 2, 3… según el orden del listado del día
+   * (antes del número de pedido; no agrega columna).
+   */
+  mostrarIndiceDia?: boolean;
 }
 
 const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
@@ -49,6 +54,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
   puedeObraSocial = false,
   onObraSocialSaved,
   modoEntrega = false,
+  mostrarIndiceDia = false,
 }) => {
   const [obraSocialRow, setObraSocialRow] = useState<PendientePedidoRow | null>(null);
 
@@ -86,7 +92,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
             </TableCell>
           </TableRow>
         ) : (
-          rows.map((r) => {
+          rows.map((r, idx) => {
             const fechaMostrar =
               columnaFecha === 'toma'
                 ? r.fecha_toma_muestra || null
@@ -100,6 +106,16 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
               <TableRow key={r.key} hover>
                 <TableCell>
                   <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                    {mostrarIndiceDia ? (
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontVariantNumeric: 'tabular-nums', minWidth: '1.5ch' }}
+                      >
+                        {idx + 1}
+                      </Typography>
+                    ) : null}
                     <Typography component="span" variant="body2" fontWeight={600}>
                       {r.numero || r.id}
                     </Typography>

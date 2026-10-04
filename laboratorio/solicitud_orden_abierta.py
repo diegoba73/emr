@@ -392,6 +392,7 @@ def agregar_examenes_a_solicitud(
         )
     }
     from laboratorio.derivacion_service import defaults_derivacion_para_tipo
+    from laboratorio.examen_orina_micro import valor_inicial_resultado
 
     for tid in sorted(tipos_nuevos - existentes):
         te = tipos_map.get(tid)
@@ -399,7 +400,7 @@ def agregar_examenes_a_solicitud(
         ResultadoExamen.objects.create(
             solicitud=sol,
             tipo_examen_id=tid,
-            valor_obtenido="",
+            valor_obtenido=valor_inicial_resultado(te) if te else "",
             es_patologico=False,
             **kwargs,
         )

@@ -1,9 +1,9 @@
 /**
- * Orden de grupos en el informe PDF (paneles y exámenes sueltos).
- * Por defecto sigue el formulario papel; las orinas van al final
- * (orina completa última dentro de ese bloque).
+ * Orden de grupos en el informe PDF / carga de resultados LIMS.
+ * Por defecto sigue ORDEN_PRESENTACION_PEDIDO (talón y UI); las orinas van
+ * al final (orina completa última dentro de ese bloque).
+ * El layout del formulario papel (`SOLICITUD_ANALISIS_PAPEL_ROWS`) es independiente.
  */
-import { SOLICITUD_ANALISIS_PAPEL_ROWS } from '../modules/laboratorio/solicitudAnalisisPapelLayout';
 import type { GrupoResultadosOrden } from './limsResultadosPanel';
 
 export const PANEL_HEMOGRAMA = 'PAN_HEMO';
@@ -16,20 +16,60 @@ export const PANELES_ORINA = new Set([
   'PAN_MALB_AZ',
   'PAN_MALB24',
   'PAN_CLEAR',
+  'PAN_PROT24',
 ]);
 
-const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_24', 'PROT_U_AZ']);
+const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_AZ']);
 const MUESTRAS_ORINA = new Set(['ORINA', 'ORINA_24_H']);
 
-/** Orden fila a fila (izq → der) del formulario papel. */
-export const ORDEN_FORMULARIO_PAPEL: string[] = SOLICITUD_ANALISIS_PAPEL_ROWS.flatMap((row) => {
-  const codes: string[] = [];
-  if (row.left) codes.push(row.left.codigo);
-  if (row.right) codes.push(row.right.codigo);
-  return codes;
-});
+/**
+ * Orden de presentación clínica (talón / resultados / informe).
+ * Debe coincidir con `ORDEN_PRESENTACION_PEDIDO` en
+ * `laboratorio/catalogo_solicitud_papel.py`.
+ */
+export const ORDEN_PRESENTACION_PEDIDO: string[] = [
+  'PAN_HEMO',
+  'GLU',
+  'UREA',
+  'CREATI',
+  'AU',
+  'CA',
+  'MG',
+  'P',
+  'PROT_T',
+  'ALB',
+  'FERR',
+  'UIBC',
+  'GOT',
+  'GPT',
+  'FAL',
+  'BIL_T',
+  'BIL_D',
+  'BIL_I',
+  'COL_TOT',
+  'HDL',
+  'TG',
+  'LDL',
+  'VLDL',
+  'PCR_US',
+  'AMIL',
+  'LIP',
+  'GGT',
+  'LDH',
+  'PAN_HEP',
+  'PAN_LIP',
+  'PAN_IONO',
+  'CPK',
+  'CPK_MB',
+  'TROP_I',
+  'TROP_US',
+  'MIOG',
+];
 
-const ORDEN_PAPEL_RANK = new Map(ORDEN_FORMULARIO_PAPEL.map((c, i) => [c, i]));
+/** @deprecated Usar ORDEN_PRESENTACION_PEDIDO. */
+export const ORDEN_FORMULARIO_PAPEL = ORDEN_PRESENTACION_PEDIDO;
+
+const ORDEN_PRESENTACION_RANK = new Map(ORDEN_PRESENTACION_PEDIDO.map((c, i) => [c, i]));
 
 export function grupoKeyPanel(panelId: number): string {
   return `panel-${panelId}`;
@@ -81,26 +121,26 @@ export function esPerfilGrupo(grupo: GrupoResultadosOrden): boolean {
 }
 
 /**
- * Clave numérica comparable: 0…N papel, luego fuera-de-papel, luego orinas
+ * Clave numérica comparable: 0…N presentación, luego fuera-de-lista, luego orinas
  * (orina completa con el rank más alto del bloque orina).
  */
 export function prioridadGrupoDefault(grupo: GrupoResultadosOrden): number {
   const codigo = codigoGrupo(grupo);
-  const papelLen = ORDEN_FORMULARIO_PAPEL.length;
+  const presentacionLen = ORDEN_PRESENTACION_PEDIDO.length;
 
   if (esGrupoOrina(grupo)) {
-    const baseOrina = papelLen + 1000;
+    const baseOrina = presentacionLen + 1000;
     if (codigo === PANEL_ORINA_COMPLETA) {
       return baseOrina + 10_000;
     }
-    return baseOrina + (ORDEN_PAPEL_RANK.get(codigo) ?? 5_000);
+    return baseOrina + (ORDEN_PRESENTACION_RANK.get(codigo) ?? 5_000);
   }
 
-  if (codigo && ORDEN_PAPEL_RANK.has(codigo)) {
-    return ORDEN_PAPEL_RANK.get(codigo)!;
+  if (codigo && ORDEN_PRESENTACION_RANK.has(codigo)) {
+    return ORDEN_PRESENTACION_RANK.get(codigo)!;
   }
 
-  const base = papelLen + 100;
+  const base = presentacionLen + 100;
   if (grupo.codigo === PANEL_HEMOGRAMA) {
     return base;
   }

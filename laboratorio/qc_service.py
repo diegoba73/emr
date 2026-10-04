@@ -68,11 +68,38 @@ def _exam_ids_solicitud(solicitud) -> set[int]:
     return exam_ids
 
 
-def _ventana_hoy():
-    hoy = timezone.localdate()
-    start = timezone.make_aware(datetime.combine(hoy, time.min))
+def _hora_inicio_dia_operativo() -> int:
+    """Hora local (0–23) en que empieza el día operativo IQC. Default 8."""
+    try:
+        h = int(getattr(settings, "IQC_DIA_OPERATIVO_HORA", 8) or 8)
+    except (TypeError, ValueError):
+        h = 8
+    return h if 0 <= h <= 23 else 8
+
+
+def _ventana_hoy(ahora=None):
+    """
+    Ventana del día operativo IQC: [corte, corte+24h) en TZ local.
+
+    Corte default 08:00. Antes de esa hora sigue valiendo el control de la
+    rutina anterior (p. ej. guardia a la 01:00 usa el IQC desde ayer 08:00).
+    """
+    ahora_local = timezone.localtime(ahora or timezone.now())
+    hora_corte = _hora_inicio_dia_operativo()
+    corte = time(hora_corte, 0, 0)
+    if ahora_local.time() < corte:
+        inicio_date = ahora_local.date() - timedelta(days=1)
+    else:
+        inicio_date = ahora_local.date()
+    start = timezone.make_aware(datetime.combine(inicio_date, corte))
     end = start + timedelta(days=1)
     return start, end
+
+
+def fecha_dia_operativo_iqc(ahora=None):
+    """Fecha civil del inicio del día operativo vigente (para etiquetas del tablero)."""
+    start, _ = _ventana_hoy(ahora)
+    return timezone.localtime(start).date()
 
 
 def _producto_multiparam_para_examen(examen: TipoExamen) -> ProductoControl | None:

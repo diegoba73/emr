@@ -1,5 +1,5 @@
 /**
- * Parámetros clínicos derivados (perfil lipídico, bilirrubina, índices hemo, férrico, clearance).
+ * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
@@ -25,6 +25,11 @@ export const CODIGOS_CALCULADOS = new Set([
   'SAT_FE',
   'TRANS',
   'CLEAR_CREA',
+  'PROT_U_24',
+  'NA_U24',
+  'K_U24',
+  'CL_U24',
+  'MICROALB_24',
 ]);
 
 export const FORMULA_LEUCO_CODIGOS = new Set([
@@ -95,6 +100,22 @@ export function calcClearanceCreatinina(
 ): number | null {
   if (creati <= 0) return null;
   return roundHalfUp((creaU * diur) / (creati * MINUTOS_24H), 1);
+}
+
+/** mg/24 hs = concentración (mg/dL) × diuresis (mL) / 100. */
+export function calcExcrecionMgDlA24h(concMgDl: number, diurMl: number): number | null {
+  if (diurMl <= 0) return null;
+  return roundHalfUp((concMgDl * diurMl) / 100, 0);
+}
+
+/** Unidad/24 hs = concentración (por L) × diuresis (mL) / 1000. */
+export function calcExcrecionPorLitroA24h(
+  concPorL: number,
+  diurMl: number,
+  places = 0
+): number | null {
+  if (diurMl <= 0) return null;
+  return roundHalfUp((concPorL * diurMl) / 1000, places);
 }
 
 export function calcAbsolutoFormula(pct: number, leucos: number): number | null {
@@ -185,8 +206,50 @@ export function calcularDerivados(
     } else {
       out.CLEAR_CREA = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
     }
-  } else if (creati != null || creaU != null || diur != null) {
+  } else if (creati != null || creaU != null) {
     out.CLEAR_CREA = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  const protEq = valores.PROT_U_EQ;
+  if (protEq != null && diur != null) {
+    const prot24 = calcExcrecionMgDlA24h(protEq, diur);
+    if (prot24 != null) {
+      out.PROT_U_24 = { numerico: prot24, informe: fmt(prot24, 0) };
+    } else {
+      out.PROT_U_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+  } else if (protEq != null) {
+    out.PROT_U_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  for (const [medido, calculado] of [
+    ['NA_U', 'NA_U24'],
+    ['K_U', 'K_U24'],
+    ['CL_U', 'CL_U24'],
+  ] as const) {
+    const conc = valores[medido];
+    if (conc != null && diur != null) {
+      const exc = calcExcrecionPorLitroA24h(conc, diur, 0);
+      if (exc != null) {
+        out[calculado] = { numerico: exc, informe: fmt(exc, 0) };
+      } else {
+        out[calculado] = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+      }
+    } else if (conc != null) {
+      out[calculado] = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+  }
+
+  const microalb = valores.MICROALB;
+  if (microalb != null && diur != null) {
+    const malb24 = calcExcrecionPorLitroA24h(microalb, diur, 1);
+    if (malb24 != null) {
+      out.MICROALB_24 = { numerico: malb24, informe: fmt(malb24, 1) };
+    } else {
+      out.MICROALB_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+  } else if (microalb != null) {
+    out.MICROALB_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
   return out;

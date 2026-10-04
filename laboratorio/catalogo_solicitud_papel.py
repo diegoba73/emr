@@ -121,11 +121,18 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "ELP_B2", "nombre": "Beta 2 globulina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "ELP_GAM", "nombre": "Gamma globulina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "ELP_CONC", "nombre": "Conclusiones (proteinograma)", "muestra": "SUERO", "tipo_resultado": "TEXTO"},
-    # —— Clearance / microalbuminuria ——
+    # —— Clearance / microalbuminuria / proteinuria 24 hs ——
     {"codigo": "CREA_U", "nombre": "Creatininuria", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
     {"codigo": "DIUR", "nombre": "Diuresis", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
     {"codigo": "CLEAR_CREA", "nombre": "Clearance de creatinina", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
     {"codigo": "MICROALB", "nombre": "Microalbuminuria", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
+    {"codigo": "MICROALB_24", "nombre": "Microalbuminuria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
+    # Ionograma urinario 24 hs (calculados desde concentración × diuresis)
+    {"codigo": "NA_U24", "nombre": "Sodio urinario 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Na u 24h"},
+    {"codigo": "K_U24", "nombre": "Potasio urinario 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "K u 24h"},
+    {"codigo": "CL_U24", "nombre": "Cloro urinario 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Cl u 24h"},
+    # Proteinuria: concentración del equipo (mg/dL) → PROT_U_24 calculado (mg/24 hs)
+    {"codigo": "PROT_U_EQ", "nombre": "Proteinuria (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
     # —— Exámenes sueltos del formulario (no panel) ——
     {"codigo": "HBA1C", "nombre": "Hemoglobina glicosilada (HbA1c)", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO"},
     {"codigo": "GLU", "nombre": "Glucemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
@@ -256,7 +263,7 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_IONO_U24",
         "nombre": "Ionograma urinario 24 hs",
-        "componentes": ["NA_U", "K_U", "CL_U"],
+        "componentes": ["NA_U", "K_U", "CL_U", "DIUR", "NA_U24", "K_U24", "CL_U24"],
     },
     {
         "codigo": "PAN_ELP",
@@ -271,12 +278,17 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_MALB24",
         "nombre": "Microalbuminuria 24 hs",
-        "componentes": ["MICROALB", "DIUR"],
+        "componentes": ["MICROALB", "DIUR", "MICROALB_24"],
     },
     {
         "codigo": "PAN_MALB_AZ",
         "nombre": "Microalbuminuria al azar",
         "componentes": ["MICROALB", "CREA_U"],
+    },
+    {
+        "codigo": "PAN_PROT24",
+        "nombre": "Proteinuria 24 hs",
+        "componentes": ["PROT_U_EQ", "DIUR", "PROT_U_24"],
     },
     {
         "codigo": "PAN_EAB_ART",
@@ -295,13 +307,14 @@ EXAMENES_SUELTOS_PDF: list[str] = [
     "HBA1C", "GLU", "UREA", "CREATI", "AU", "CA", "MG", "P", "CL", "CA_ION",
     "PROT_T", "ALB", "INR", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
     "CPK", "CPK_MB", "TROP_I", "TROP_US", "MIOG", "PROBNP", "DDIM",
-    "PROT_U_24", "PROT_U_AZ", "LPA", "PSA", "TSH", "T3", "T4", "T4L",
+    "PROT_U_AZ", "LPA", "PSA", "TSH", "T3", "T4", "T4L",
     "B12", "VITD", "LACT",
     "HBVAGS", "HCVG", "HIVAC", "HCGB", "SANOC", "ASTO", "GRUPO",
 ]
 
 # Orden de lectura del formulario «Solicitud de análisis» (fila a fila, izq → der).
 # Debe coincidir con frontend `SOLICITUD_ANALISIS_PAPEL_ROWS`.
+# NO usar para talón / carga de resultados: ver ORDEN_PRESENTACION_PEDIDO.
 ORDEN_FORMULARIO_PAPEL: list[str] = [
     "PAN_HEMO", "CPK",
     "HBA1C", "CPK_MB",
@@ -314,7 +327,7 @@ ORDEN_FORMULARIO_PAPEL: list[str] = [
     "P", "PAN_CLEAR",
     "PAN_FERR", "PAN_IONO_U24",
     "PAN_IONO", "PAN_IONO_U",
-    "CL", "PROT_U_24",
+    "CL", "PAN_PROT24",
     "CA_ION", "PROT_U_AZ",
     "PAN_LIP", "PAN_MALB24",
     "PAN_HEP", "PAN_MALB_AZ",
@@ -335,4 +348,48 @@ ORDEN_FORMULARIO_PAPEL: list[str] = [
     "SANOC",
     "ASTO",
     "GRUPO",
+]
+
+# Orden de presentación: talón PDF, carga de resultados e informe.
+# Paneles = un ítem; componentes del panel no se duplican como sueltos.
+# Orinas van al final (PAN_ORI última) vía lógica en orden_grupos_informe / talón.
+# Debe coincidir con frontend `ORDEN_PRESENTACION_PEDIDO` en limsOrdenInforme.ts.
+ORDEN_PRESENTACION_PEDIDO: list[str] = [
+    "PAN_HEMO",
+    # Química CM260 sueltos (CPK y orinas fuera de este bloque)
+    "GLU",
+    "UREA",
+    "CREATI",
+    "AU",
+    "CA",
+    "MG",
+    "P",
+    "PROT_T",
+    "ALB",
+    "FERR",
+    "UIBC",
+    "GOT",
+    "GPT",
+    "FAL",
+    "BIL_T",
+    "BIL_D",
+    "BIL_I",
+    "COL_TOT",
+    "HDL",
+    "TG",
+    "LDL",
+    "VLDL",
+    "PCR_US",
+    "AMIL",
+    "LIP",
+    "GGT",
+    "LDH",
+    "PAN_HEP",
+    "PAN_LIP",
+    "PAN_IONO",
+    "CPK",
+    "CPK_MB",
+    "TROP_I",
+    "TROP_US",
+    "MIOG",
 ]

@@ -368,6 +368,7 @@ const OrdenesLims: React.FC = () => {
                 : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
             }
             columnaFecha="toma"
+            mostrarIndiceDia
             onVer={onVer}
             puedeObraSocial={puedeObraSocial}
             onObraSocialSaved={load}

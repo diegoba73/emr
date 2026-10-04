@@ -112,13 +112,17 @@ class TestOrdenGruposInforme(TestCase):
             solicitud=self.sol, tipo_examen=self.te_ph, valor_obtenido="6"
         )
 
-    def test_orden_defecto_sigue_formulario_papel(self):
+    def test_orden_defecto_sigue_presentacion_pedido(self):
         resultados = list(self.sol.resultados.select_related("tipo_examen").all())
         grupos = ordenar_grupos_por_defecto(construir_grupos_informe(self.sol, resultados))
         keys = [g.key for g in grupos]
-        # Hemograma primero; orina completa al final (bloque orina)
+        # Hemograma → Ionograma → orina completa al final
         self.assertEqual(keys[0], grupo_key_panel(self.panel_hemo.pk))
         self.assertEqual(keys[-1], grupo_key_panel(self.panel_orina.pk))
+        self.assertLess(
+            keys.index(grupo_key_panel(self.panel_hemo.pk)),
+            keys.index(grupo_key_panel(self.panel_iono.pk)),
+        )
         self.assertLess(
             keys.index(grupo_key_panel(self.panel_iono.pk)),
             keys.index(grupo_key_panel(self.panel_orina.pk)),
@@ -177,7 +181,7 @@ class TestOrdenGruposInforme(TestCase):
         # Hemograma no está mezclado después de orinas
         self.assertLess(keys.index(grupo_key_panel(self.panel_hemo.pk)), keys.index(grupo_key_panel(panel_iono_u.pk)))
 
-    def test_orden_papel_glucemia_antes_que_cpk(self):
+    def test_orden_presentacion_glucemia_antes_que_cpk(self):
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,
             origen_solicitud="AMBULATORIO_CEHTA",
@@ -192,6 +196,71 @@ class TestOrdenGruposInforme(TestCase):
             (g.resultados[0].tipo_examen.codigo if g.resultados else None) for g in grupos
         ]
         self.assertEqual(codigos, ["GLU", "CPK"])
+
+    def test_orden_presentacion_hemo_quimica_hep_cpk_orina(self):
+        te_urea, _ = TipoExamen.objects.update_or_create(
+            codigo="UREA",
+            defaults={
+                "nombre": "Uremia",
+                "tipo_muestra_requerida": self.tm_sangre,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_na, _ = TipoExamen.objects.update_or_create(
+            codigo="NA",
+            defaults={
+                "nombre": "Sodio",
+                "tipo_muestra_requerida": self.tm_sangre,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        panel_hep, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_HEP",
+            defaults={"nombre": "Hepatograma", "activo": True},
+        )
+        panel_hep.tipos_examen.set([self.te_got, self.te_gpt])
+        panel_iono, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_IONO",
+            defaults={"nombre": "Ionograma plasmático", "activo": True},
+        )
+        panel_iono.tipos_examen.set([te_na])
+
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        sol.paneles.add(self.panel_hemo, panel_hep, panel_iono, self.panel_orina)
+        sol.tipos_examen.add(self.te_glu, te_urea, self.te_cpk)
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=self.te_wbc, valor_obtenido="5")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=self.te_glu, valor_obtenido="90")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=te_urea, valor_obtenido="30")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=self.te_got, valor_obtenido="20")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=self.te_gpt, valor_obtenido="25")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=te_na, valor_obtenido="140")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=self.te_cpk, valor_obtenido="10")
+        ResultadoExamen.objects.create(solicitud=sol, tipo_examen=self.te_ph, valor_obtenido="6")
+
+        resultados = list(
+            sol.resultados.select_related("tipo_examen", "tipo_examen__tipo_muestra_requerida")
+        )
+        grupos = ordenar_grupos_por_defecto(construir_grupos_informe(sol, resultados))
+        codes = [
+            g.panel_codigo or (g.resultados[0].tipo_examen.codigo if g.resultados else None)
+            for g in grupos
+        ]
+        # Hemograma → química suelta → Hepatograma → Ionograma → CPK → orina última
+        self.assertEqual(codes[0], "PAN_HEMO")
+        self.assertEqual(codes[-1], "PAN_ORI")
+        self.assertLess(codes.index("GLU"), codes.index("UREA"))
+        self.assertLess(codes.index("UREA"), codes.index("PAN_HEP"))
+        self.assertLess(codes.index("PAN_HEP"), codes.index("PAN_IONO"))
+        self.assertLess(codes.index("PAN_IONO"), codes.index("CPK"))
+        self.assertLess(codes.index("CPK"), codes.index("PAN_ORI"))
+        self.assertNotIn("GOT", codes)
+        self.assertNotIn("GPT", codes)
 
     def test_infiere_perfil_hepatograma_sin_panel_pedido(self):
         sol = SolicitudExamen.objects.create(

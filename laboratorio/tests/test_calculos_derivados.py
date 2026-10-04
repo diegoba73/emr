@@ -10,6 +10,8 @@ from unittest import TestCase
 from laboratorio.calculos_derivados import (
     RESULTADO_NO_CALCULABLE,
     calc_clearance_creatinina,
+    calc_excrecion_mg_dl_a_24h,
+    calc_excrecion_por_litro_a_24h,
     calc_ldl_friedewald,
     calcular_derivados,
 )
@@ -130,3 +132,47 @@ class TestCalculosDerivados(TestCase):
     def test_sin_inputs_clearance_no_emite(self):
         out = calcular_derivados({"COL_TOT": Decimal("200"), "HDL": Decimal("50")})
         self.assertNotIn("CLEAR_CREA", out)
+
+    def test_proteinuria_24h_formula(self):
+        # 80 mg/dL × 1500 mL / 100 = 1200 mg/24 hs
+        self.assertEqual(
+            calc_excrecion_mg_dl_a_24h(Decimal("80"), Decimal("1500")),
+            Decimal("1200"),
+        )
+        out = calcular_derivados(
+            {"PROT_U_EQ": Decimal("80"), "DIUR": Decimal("1500")}
+        )
+        self.assertEqual(out["PROT_U_24"][0], Decimal("1200"))
+        self.assertEqual(out["PROT_U_24"][1], "1200")
+
+    def test_ionograma_y_microalb_24h(self):
+        # 100 mmol/L × 1500 / 1000 = 150 mmol/24 hs
+        self.assertEqual(
+            calc_excrecion_por_litro_a_24h(Decimal("100"), Decimal("1500")),
+            Decimal("150"),
+        )
+        out = calcular_derivados(
+            {
+                "NA_U": Decimal("100"),
+                "K_U": Decimal("40"),
+                "CL_U": Decimal("90"),
+                "MICROALB": Decimal("20"),
+                "DIUR": Decimal("1500"),
+            }
+        )
+        self.assertEqual(out["NA_U24"][1], "150")
+        self.assertEqual(out["K_U24"][1], "60")
+        self.assertEqual(out["CL_U24"][1], "135")
+        # 20 × 1500 / 1000 = 30.0
+        self.assertEqual(out["MICROALB_24"][0], Decimal("30.0"))
+
+    def test_orina_24h_sin_diuresis_no_calculable(self):
+        out = calcular_derivados({"PROT_U_EQ": Decimal("80"), "NA_U": Decimal("100")})
+        self.assertEqual(out["PROT_U_24"][1], RESULTADO_NO_CALCULABLE)
+        self.assertEqual(out["NA_U24"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_diur_sola_no_emite_clearance_ni_orina24(self):
+        out = calcular_derivados({"DIUR": Decimal("1500")})
+        self.assertNotIn("CLEAR_CREA", out)
+        self.assertNotIn("PROT_U_24", out)
+        self.assertNotIn("NA_U24", out)

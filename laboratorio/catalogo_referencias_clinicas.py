@@ -481,6 +481,32 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         ref="< 30 mg/L",
         rmax="30",
     ),
+    "MICROALB_24": _r(
+        metodo="Calculado (conc. × diuresis / 1000)",
+        unidad="mg/24 hs",
+        ref="< 30 mg/24 hs",
+        rmax="30",
+    ),
+    "NA_U24": _r(
+        metodo="Calculado (conc. × diuresis / 1000)",
+        unidad="mmol/24 hs",
+        ref="Según diuresis",
+    ),
+    "K_U24": _r(
+        metodo="Calculado (conc. × diuresis / 1000)",
+        unidad="mmol/24 hs",
+        ref="Según diuresis",
+    ),
+    "CL_U24": _r(
+        metodo="Calculado (conc. × diuresis / 1000)",
+        unidad="mmol/24 hs",
+        ref="Según diuresis",
+    ),
+    "PROT_U_EQ": _r(
+        metodo="Colorimétrico (Pirocatecol)",
+        unidad="mg/dL",
+        ref="Según proteinuria 24 hs",
+    ),
     # —— Exámenes sueltos ——
     "HBA1C": _r(
         metodo="Cromatografía de intercambio iónico / HPLC",
@@ -648,7 +674,7 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmax="0.5",
     ),
     "PROT_U_24": _r(
-        metodo="Colorimétrico (Pirocatecol)",
+        metodo="Calculado (conc. × diuresis / 100)",
         unidad="mg/24 hs",
         ref="< 150 mg/24 hs",
         rmax="150",

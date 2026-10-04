@@ -1239,6 +1239,8 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         tipos_examen_creados = set()
         from laboratorio.derivacion_service import defaults_derivacion_para_tipo
 
+        from laboratorio.examen_orina_micro import valor_inicial_resultado
+
         for tipo_examen_id in examenes_ids:
             try:
                 tipo_examen = TipoExamen.objects.select_related(
@@ -1247,7 +1249,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                 ResultadoExamen.objects.create(
                     solicitud=solicitud,
                     tipo_examen=tipo_examen,
-                    valor_obtenido='',
+                    valor_obtenido=valor_inicial_resultado(tipo_examen),
                     es_patologico=False,
                     **defaults_derivacion_para_tipo(tipo_examen),
                 )
@@ -1268,7 +1270,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                         ResultadoExamen.objects.create(
                             solicitud=solicitud,
                             tipo_examen=te,
-                            valor_obtenido='',
+                            valor_obtenido=valor_inicial_resultado(te),
                             es_patologico=False,
                             **defaults_derivacion_para_tipo(te),
                         )

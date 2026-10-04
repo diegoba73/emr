@@ -1,9 +1,11 @@
 """Gate IQC Fase 1: corrida ACEPTADA hoy en equipo default; bloqueo en carga y validar."""
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -12,7 +14,9 @@ from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, Tip
 from laboratorio.models_qc import CorridaQC, EquipoAnalizador, LoteControl, MaterialControl
 from laboratorio.qc_service import (
     QcGateError,
+    _ventana_hoy,
     estado_iqc_solicitud,
+    fecha_dia_operativo_iqc,
     get_equipo_iqc_default,
     validar_qc_para_cierre,
     verificar_iqc_para_solicitud,
@@ -369,3 +373,110 @@ class TestIqcGateApi(TestCase):
             estado=CorridaQC.Estado.ACEPTADA,
         )
         validar_qc_para_cierre(fake)
+
+
+TZ_AR = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+@override_settings(IQC_DIA_OPERATIVO_HORA=8)
+class TestQcVentanaDiaOperativo(TestCase):
+    """Día operativo IQC 08:00→08:00 (madrugada hereda rutina anterior)."""
+
+    def setUp(self):
+        self.muestra = TipoMuestra.objects.create(codigo="SANGRE_V8", nombre="Sangre V8")
+        self.examen = TipoExamen.objects.create(
+            codigo="GLU_V8",
+            nombre="Glucosa V8",
+            tipo_muestra_requerida=self.muestra,
+            tipo_resultado="NUMERICO",
+        )
+        self.equipo = EquipoAnalizador.objects.create(
+            codigo="CM260",
+            nombre="CM260 V8",
+            marca_modelo="CM260",
+            activo=True,
+        )
+        self.examen.equipo_analizador = self.equipo
+        self.examen.save(update_fields=["equipo_analizador"])
+        self.mat = MaterialControl.objects.create(
+            nombre="Ctrl GLU V8 S1",
+            nivel=MaterialControl.Nivel.N1,
+            tipo_examen=self.examen,
+            equipo=self.equipo,
+            media_target=Decimal("100"),
+            de_target=Decimal("5"),
+            activo=True,
+        )
+        self.lote = LoteControl.objects.create(
+            material=self.mat,
+            codigo_lote="L-V8",
+            vencimiento=timezone.localdate() + timedelta(days=30),
+        )
+        self.solicitud = _FakeSolicitud([self.examen.id])
+
+    def _aware(self, y, m, d, hh, mm=0):
+        return datetime(y, m, d, hh, mm, tzinfo=TZ_AR)
+
+    def _assert_local(self, dt, y, m, d, hh, mm=0):
+        local = timezone.localtime(dt)
+        self.assertEqual(
+            (local.year, local.month, local.day, local.hour, local.minute),
+            (y, m, d, hh, mm),
+        )
+
+    def test_ventana_antes_de_08_empieza_ayer(self):
+        ahora = self._aware(2026, 10, 7, 1, 0)  # martes 01:00
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 6, 8, 0)
+            self._assert_local(end, 2026, 10, 7, 8, 0)
+            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 6).date())
+
+    def test_ventana_despues_de_08_empieza_hoy(self):
+        ahora = self._aware(2026, 10, 7, 9, 0)  # martes 09:00
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 7, 8, 0)
+            self._assert_local(end, 2026, 10, 8, 8, 0)
+            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 7).date())
+
+    def test_madrugada_acepta_corrida_rutina_anterior(self):
+        # Lunes 10:00 rutina ACEPTADA; martes 01:00 guardia → OK
+        corrida_fecha = self._aware(2026, 10, 6, 10, 0)
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=corrida_fecha,
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 7, 1, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            validar_qc_para_cierre(self.solicitud)
+
+    def test_madrugada_sin_corrida_previa_bloquea(self):
+        ahora = self._aware(2026, 10, 7, 1, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            with self.assertRaises(QcGateError):
+                validar_qc_para_cierre(self.solicitud)
+
+    def test_manana_ya_no_acepta_solo_corrida_de_ayer(self):
+        # Lunes 10:00 ACEPTADA; martes 09:00 → ya no alcanza (día operativo nuevo)
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 6, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 7, 9, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            with self.assertRaises(QcGateError) as ctx:
+                validar_qc_para_cierre(self.solicitud)
+            self.assertIn("Sin corrida", str(ctx.exception))
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 7, 8, 30),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        with patch("django.utils.timezone.now", return_value=ahora):
+            validar_qc_para_cierre(self.solicitud)

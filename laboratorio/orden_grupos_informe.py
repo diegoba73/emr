@@ -2,7 +2,8 @@
 Orden de grupos (paneles y exámenes sueltos) en el informe PDF y la UI LIMS.
 
 Reglas por defecto:
-- Orden del formulario papel «Solicitud de análisis» (fila a fila, izq → der).
+- Orden de presentación clínica (`ORDEN_PRESENTACION_PEDIDO`): Hemograma →
+  química CM260 suelta → Hepatograma → Lipídico → Ionograma → cardíacos → resto.
 - Determinaciones de orina (ionograma urinario, clearance, microalbuminuria,
   proteinurias, orina completa, etc.) van al **final** del informe.
 - Dentro del bloque orina, **orina completa (PAN_ORI)** va siempre al final.
@@ -14,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, TypeVar
 
-from laboratorio.catalogo_solicitud_papel import ORDEN_FORMULARIO_PAPEL, PANELES
+from laboratorio.catalogo_solicitud_papel import ORDEN_PRESENTACION_PEDIDO, PANELES
 from laboratorio.panel_componentes_orden import ordenar_resultados_por_panel
 
 T = TypeVar("T")
@@ -31,14 +32,17 @@ PANELES_ORINA = frozenset(
         "PAN_MALB_AZ",
         "PAN_MALB24",
         "PAN_CLEAR",
+        "PAN_PROT24",
     }
 )
-CODIGOS_ORINA_SUELTOS = frozenset({"PROT_U_24", "PROT_U_AZ"})
+CODIGOS_ORINA_SUELTOS = frozenset({"PROT_U_AZ"})
 MUESTRAS_ORINA = frozenset({"ORINA", "ORINA_24_H"})
 
-ORDEN_PAPEL_RANK: dict[str, int] = {
-    codigo: idx for idx, codigo in enumerate(ORDEN_FORMULARIO_PAPEL)
+ORDEN_PRESENTACION_RANK: dict[str, int] = {
+    codigo: idx for idx, codigo in enumerate(ORDEN_PRESENTACION_PEDIDO)
 }
+# Compat: tests / imports antiguos.
+ORDEN_PAPEL_RANK = ORDEN_PRESENTACION_RANK
 
 
 def grupo_key_panel(panel_id: int) -> str:
@@ -117,7 +121,7 @@ def es_grupo_orina(grupo: GrupoInformeSpec) -> bool:
 
 
 def prioridad_grupo_default(grupo: GrupoInformeSpec) -> tuple:
-    """Clave de orden: papel → resto → bloque orina (orina completa al final)."""
+    """Clave de orden: presentación → resto → bloque orina (orina completa al final)."""
     codigo = _codigo_grupo(grupo)
 
     if es_grupo_orina(grupo):
@@ -125,13 +129,13 @@ def prioridad_grupo_default(grupo: GrupoInformeSpec) -> tuple:
         if codigo == PANEL_ORINA_COMPLETA:
             sub = 10_000
         else:
-            sub = ORDEN_PAPEL_RANK.get(codigo, 5_000)
+            sub = ORDEN_PRESENTACION_RANK.get(codigo, 5_000)
         return (2, sub, grupo.titulo, grupo.key)
 
-    if codigo and codigo in ORDEN_PAPEL_RANK:
-        return (0, ORDEN_PAPEL_RANK[codigo], grupo.titulo, grupo.key)
+    if codigo and codigo in ORDEN_PRESENTACION_RANK:
+        return (0, ORDEN_PRESENTACION_RANK[codigo], grupo.titulo, grupo.key)
 
-    # Fuera del formulario (no orina): hemograma / paneles / sueltos.
+    # Fuera de la lista canónica (no orina): paneles / sueltos por nombre.
     if grupo.panel_codigo == PANEL_HEMOGRAMA:
         bucket = 0
     elif grupo.panel_codigo:

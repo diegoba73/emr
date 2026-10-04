@@ -1,4 +1,9 @@
-import { estudioAdmiteExamenOrina, normalizarExamenOrina } from './limsExamenOrinaMicro';
+import {
+  VALOR_NO_CONTIENE,
+  estudioAdmiteExamenOrina,
+  examenOrinaVacio,
+  normalizarExamenOrina,
+} from './limsExamenOrinaMicro';
 
 describe('limsExamenOrinaMicro', () => {
   it('normaliza y descarta claves desconocidas', () => {
@@ -11,6 +16,16 @@ describe('limsExamenOrinaMicro', () => {
   it('incluye glucosa en tira reactiva', () => {
     const data = normalizarExamenOrina({ ORI_GLU: '++' });
     expect(data.ORI_GLU).toBe('++');
+  });
+
+  it('vacío prellena NO CONTIENE en tira y sedimento cualitativos', () => {
+    const vacio = examenOrinaVacio();
+    expect(vacio.ORI_GLU).toBe(VALOR_NO_CONTIENE);
+    expect(vacio.ORI_LEU).toBe(VALOR_NO_CONTIENE);
+    expect(vacio.ORI_CRIS).toBe(VALOR_NO_CONTIENE);
+    expect(vacio.ORI_COLOR).toBe('');
+    expect(vacio.ORI_PH).toBe('');
+    expect(vacio.ORI_CONC).toBe('');
   });
 
   it('admite urocultivo por flag o tipo_estudio', () => {

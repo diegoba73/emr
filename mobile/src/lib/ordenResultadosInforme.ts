@@ -13,16 +13,17 @@ const PANELES_ORINA = new Set([
   'PAN_MALB_AZ',
   'PAN_MALB24',
   'PAN_CLEAR',
+  'PAN_PROT24',
 ]);
 
-const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_24', 'PROT_U_AZ']);
+const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_AZ']);
 const MUESTRAS_ORINA = new Set(['ORINA', 'ORINA_24_H']);
 
 /** Fila a fila (izq → der) del formulario papel «Solicitud de análisis». */
 export const ORDEN_FORMULARIO_PAPEL: string[] = [
   'PAN_HEMO', 'CPK', 'HBA1C', 'CPK_MB', 'GLU', 'TROP_I', 'UREA', 'MIOG', 'CREATI', 'TROP_US',
   'AU', 'PROBNP', 'CA', 'DDIM', 'MG', 'PAN_ORI', 'P', 'PAN_CLEAR', 'PAN_FERR', 'PAN_IONO_U24',
-  'PAN_IONO', 'PAN_IONO_U', 'CL', 'PROT_U_24', 'CA_ION', 'PROT_U_AZ', 'PAN_LIP', 'PAN_MALB24',
+  'PAN_IONO', 'PAN_IONO_U', 'CL', 'PAN_PROT24', 'CA_ION', 'PROT_U_AZ', 'PAN_LIP', 'PAN_MALB24',
   'PAN_HEP', 'PAN_MALB_AZ', 'PROT_T', 'PAN_ELP', 'ALB', 'LPA', 'PAN_COAG', 'PSA', 'INR', 'TSH',
   'VSG', 'T3', 'PCR_US', 'T4', 'AMIL', 'T4L', 'LIP', 'B12', 'GGT', 'VITD', 'LDH', 'PAN_EAB_ART',
   'HBVAGS', 'PAN_EAB_VEN', 'HCVG', 'LACT', 'HIVAC', 'HCGB', 'SANOC', 'ASTO', 'GRUPO',
@@ -83,6 +84,21 @@ const PERFILES_POR_CODIGO: ReadonlyArray<{
       'ORI_NIT', 'ORI_CET', 'ORI_CEL', 'ORI_LEU', 'ORI_HEM', 'ORI_PIO',
       'ORI_MUC', 'ORI_CRIS', 'ORI_CONC',
     ],
+  },
+  {
+    codigo: 'PAN_IONO_U24',
+    nombre: 'Ionograma urinario 24 hs',
+    examenes: ['NA_U', 'K_U', 'CL_U', 'DIUR', 'NA_U24', 'K_U24', 'CL_U24'],
+  },
+  {
+    codigo: 'PAN_MALB24',
+    nombre: 'Microalbuminuria 24 hs',
+    examenes: ['MICROALB', 'DIUR', 'MICROALB_24'],
+  },
+  {
+    codigo: 'PAN_PROT24',
+    nombre: 'Proteinuria 24 hs',
+    examenes: ['PROT_U_EQ', 'DIUR', 'PROT_U_24'],
   },
 ];
 

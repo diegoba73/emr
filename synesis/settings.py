@@ -310,6 +310,14 @@ MEDGEMMA_TIMEOUT_SECONDS = int(os.getenv('MEDGEMMA_TIMEOUT_SECONDS', '30'))
 
 # IQC Fase 1: equipo analizador por defecto (corridas sin equipo no cuentan para el gate).
 IQC_EQUIPO_DEFAULT_CODIGO = os.getenv('IQC_EQUIPO_DEFAULT_CODIGO', 'CM260').strip() or 'CM260'
+# Día operativo IQC: corte local (hora 0–23). Ventana [corte, corte+24h).
+# Antes del corte sigue valiendo el control de la rutina anterior (guardia madrugada).
+try:
+    IQC_DIA_OPERATIVO_HORA = int(os.getenv('IQC_DIA_OPERATIVO_HORA', '8') or '8')
+except ValueError:
+    IQC_DIA_OPERATIVO_HORA = 8
+if not 0 <= IQC_DIA_OPERATIVO_HORA <= 23:
+    IQC_DIA_OPERATIVO_HORA = 8
 
 # Impresora de etiquetas LIMS (3nStar LDT114 / ZPL / 40×23 mm). Deshabilitada por defecto.
 # Host/port NUNCA desde el cliente; sin auto-retry en el transporte.
