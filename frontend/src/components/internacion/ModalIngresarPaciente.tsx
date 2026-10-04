@@ -15,8 +15,13 @@ import { Cama, Paciente, Medico, DiagnosticoCIE10, TipoDieta } from '../../types
 import { buscarDiagnosticosCIE10 } from '../../services/apiService';
 import { createInternacion, getTiposDieta } from '../../services/internacion';
 import { apiService } from '../../services/api';
+import { useData } from '../../contexts/DataContext';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import {
+  getCurrentMedicoId,
+  shouldLockMedicoField,
+} from '../../utils/turnoPermissions';
 
 interface ModalIngresarPacienteProps {
   open: boolean;
@@ -37,6 +42,8 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
   onSuccess,
   prefill,
 }) => {
+  const { currentUser } = useData();
+  const lockMedico = shouldLockMedicoField(currentUser);
   const [selectedPaciente, setSelectedPaciente] = useState<Paciente | null>(null);
   const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
   const [selectedDiagnostico, setSelectedDiagnostico] = useState<DiagnosticoCIE10 | null>(null);
@@ -171,7 +178,7 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
 
   // Búsqueda de médicos en el servidor
   useEffect(() => {
-    if (!open) return;
+    if (!open || lockMedico) return;
 
     if (medicoInputReason.current !== 'input') {
       medicoInputReason.current = 'input';
@@ -208,7 +215,7 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [medicoInputValue, open]);
+  }, [medicoInputValue, open, lockMedico]);
 
   // Búsqueda de diagnósticos CIE-10 en el servidor
   useEffect(() => {
@@ -264,6 +271,33 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
     const esp = option.especialidad?.nombre || '';
     return `${name}${esp ? ` - ${esp}` : ''}`.trim() || `Médico ${option.id}`;
   };
+
+  // Médico logueado: autocompletar (y fijar) el campo médico al ingresar.
+  useEffect(() => {
+    if (!open || !lockMedico) return;
+    const mid = getCurrentMedicoId(currentUser);
+    if (!mid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const m = await apiService.getMedico(mid);
+        if (cancelled) return;
+        setSelectedMedico(m);
+        medicoInputReason.current = 'selection';
+        setMedicoInputValue(getMedicoLabel(m));
+        setMedicoOptions((prev) =>
+          prev.some((x) => x.id === m.id) ? prev : [...prev, m]
+        );
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // getMedicoLabel es estable por render; no hace falta en deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lockMedico, currentUser]);
 
   const getDiagnosticoLabel = (option: DiagnosticoCIE10) => {
     return `${option.codigo} - ${option.descripcion}`;
@@ -401,7 +435,9 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
               getOptionLabel={getMedicoLabel}
               value={selectedMedico ?? null}
               inputValue={medicoInputValue}
+              disabled={lockMedico}
               onChange={(event, newValue) => {
+                if (lockMedico) return;
                 setSelectedMedico(newValue);
                 medicoInputReason.current = 'selection';
                 if (newValue) {
@@ -411,6 +447,7 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
                 }
               }}
               onInputChange={(_, newInputValue, reason) => {
+                if (lockMedico) return;
                 if (reason === 'input') {
                   medicoInputReason.current = 'input';
                   setMedicoInputValue(newInputValue);
@@ -427,7 +464,16 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
                 <TextField 
                   {...params} 
                   label="Médico" 
-                  placeholder="Escriba al menos 2 caracteres para buscar (opcional)"
+                  placeholder={
+                    lockMedico
+                      ? 'Se asigna a tu usuario médico'
+                      : 'Escriba al menos 2 caracteres para buscar (opcional)'
+                  }
+                  helperText={
+                    lockMedico
+                      ? 'Médico logueado (autocompletado).'
+                      : undefined
+                  }
                 />
               )}
               renderOption={(props, option) => (

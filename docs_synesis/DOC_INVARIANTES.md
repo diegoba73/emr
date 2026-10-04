@@ -51,6 +51,7 @@ Cada invariante debe poder verificarse por tests, reglas de modelo o política d
 | O2 | Número de protocolo único. | **[IMPLEMENTADO]** |
 | O3 | Al crear orden LIMS, existen filas `ResultadoExamen` por tipo solicitado. | **[IMPLEMENTADO]** |
 | O4 | Orden `FINALIZADO` cierra el flujo normal de carga; no hay action pública `cancelar` de `SolicitudExamen`. Cerrar no borra filas `ResultadoExamen`. Reapertura clínica solo vía `POST …/desvalidar/` (bioquímico/admin, con motivo auditado) → `LISTO_PARA_VALIDAR`. **[HISTÓRICO]** “cancelar orden → `CANCELADO`”. | **[IMPLEMENTADO]** |
+| O5 | No expandir paneles por componentes compartidos: `asegurar_resultados_paneles_derivados` solo completa componentes faltantes si el panel está **explícitamente** en la orden. Creatininemia ≠ clearance; ionograma orina al azar ≠ 24 hs; microalbuminuria al azar ≠ 24 hs. Fuente: `laboratorio/hemograma_resultados.py`. | **[IMPLEMENTADO]** |
 | O5 | Orden EMR (`solicitudes`) y orden LIMS nativa son trazables por separado. | **[DEUDA]** sin FK única |
 | O6 | Como máximo **una** `SolicitudExamen` no `FINALIZADO` por paciente y `fecha_programada_toma` (día de extracción). Hoy ≠ mañana. Tras finalizar se admite otra el mismo día. PENDIENTE sin etiquetas del mismo día se fusiona; con etiquetas/en curso se rechaza el alta. | **[IMPLEMENTADO]** |
 

@@ -1074,6 +1074,12 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    # Segunda orden el mismo día: solo ensayos ya informados de un INFORMADO_PARCIAL.
+    repeticion_control = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
     
     class Meta:
         model = SolicitudExamen
@@ -1089,6 +1095,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             'fecha_programada_toma',
             'fecha_entrega_prometida',
             'observaciones',
+            'repeticion_control',
         ]
         read_only_fields = ['id']
         extra_kwargs = {
@@ -1166,14 +1173,17 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         )
         from laboratorio.solicitud_orden_abierta import (
             MENSAJE_ORDEN_ACTIVA_MISMO_DIA,
+            RepeticionControlError,
             _resolver_tipo_examen_ids,
             agregar_examenes_a_solicitud,
+            assert_repeticion_control_valida,
             buscar_orden_abierta,
             paciente_tiene_orden_activa_mismo_dia,
         )
 
         examenes_ids = validated_data.pop('examenes_ids', [])
         paneles_ids = validated_data.pop('paneles_ids', [])
+        repeticion_control = bool(validated_data.pop('repeticion_control', False))
         origen_explicito = validated_data.pop('origen_solicitud', None)
         paciente = validated_data.get('paciente')
         consulta_hc = validated_data.get('consulta_hc')
@@ -1203,26 +1213,44 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                     }
                 )
 
-        abierta = buscar_orden_abierta(paciente.pk, fecha_programada_toma=fecha_toma)
-        if abierta is not None:
+        # Repetición/control: 2ª orden el mismo día (no merge a PENDIENTE).
+        if repeticion_control:
             try:
-                solicitud = agregar_examenes_a_solicitud(
-                    abierta,
+                origen_parcial = assert_repeticion_control_valida(
+                    paciente_id=paciente.pk,
+                    fecha_programada_toma=fecha_toma,
                     examenes_ids=examenes_ids,
                     paneles_ids=paneles_ids,
-                    user=user,
                 )
-            except RestriccionFrecuenciaError as exc:
+            except RepeticionControlError as exc:
                 raise serializers.ValidationError(str(exc)) from exc
-            solicitud._orden_merged = True
-            return solicitud
+            obs = (validated_data.get('observaciones') or '').strip()
+            ref = origen_parcial.numero or f'#{origen_parcial.pk}'
+            prefijo = f'Repetición/control de orden {ref}.'
+            validated_data['observaciones'] = f'{prefijo} {obs}'.strip() if obs else prefijo
+            # Sigue create normal más abajo (sin chequeo de orden activa).
+        else:
+            abierta = buscar_orden_abierta(paciente.pk, fecha_programada_toma=fecha_toma)
+            if abierta is not None:
+                try:
+                    solicitud = agregar_examenes_a_solicitud(
+                        abierta,
+                        examenes_ids=examenes_ids,
+                        paneles_ids=paneles_ids,
+                        user=user,
+                    )
+                except RestriccionFrecuenciaError as exc:
+                    raise serializers.ValidationError(str(exc)) from exc
+                solicitud._orden_merged = True
+                return solicitud
 
-        # Una sola orden no finalizada por paciente y día de extracción.
-        # Hoy + mañana OK; tras FINALIZADO se puede pedir otra el mismo día.
-        if fecha_toma is not None and paciente_tiene_orden_activa_mismo_dia(
-            paciente.pk, fecha_programada_toma=fecha_toma
-        ):
-            raise serializers.ValidationError(MENSAJE_ORDEN_ACTIVA_MISMO_DIA)
+            # Una sola orden no finalizada por paciente y día de extracción.
+            # Hoy + mañana OK; tras FINALIZADO se puede pedir otra el mismo día.
+            # Excepción: repeticion_control (rama de arriba).
+            if fecha_toma is not None and paciente_tiene_orden_activa_mismo_dia(
+                paciente.pk, fecha_programada_toma=fecha_toma
+            ):
+                raise serializers.ValidationError(MENSAJE_ORDEN_ACTIVA_MISMO_DIA)
 
         tipos_resueltos, _ = _resolver_tipo_examen_ids(examenes_ids, paneles_ids)
         try:

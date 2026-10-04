@@ -11,6 +11,8 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -26,6 +28,14 @@ import {
   isSecretariaEntregaLab,
 } from '../utils/limsAccess';
 import { ESTADOS_ORDEN_LIMS, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import {
+  buildDiasLaboratorio,
+  diasVisiblesParaIncluir,
+  formatFechaLocal,
+  labelDiaOrden,
+  parseFechaLocal,
+  startOfLocalDay,
+} from '../utils/limsOrdenesFecha';
 import { withNavBack } from '../utils/navBack';
 import {
   estadosMicroDesdeFiltroLab,
@@ -35,6 +45,17 @@ import {
   type PendientePedidoRow,
 } from '../utils/limsPendientesUnificados';
 import { isPacienteRole } from '../utils/navLabels';
+
+const DIAS_PESTANAS_INICIAL = 7;
+
+function fechaLocalIso(iso?: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return formatFechaLocal(startOfLocalDay(new Date(iso)));
+  } catch {
+    return null;
+  }
+}
 
 const Solicitudes: React.FC = () => {
   const navigate = useNavigate();
@@ -46,6 +67,8 @@ const Solicitudes: React.FC = () => {
   const [filtroTipo, setFiltroTipo] = useState<'TODOS' | 'LAB_CLINICO' | 'MICROBIOLOGIA'>('TODOS');
   const [busqueda, setBusqueda] = useState('');
   const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
+  const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
 
   const allowed = canAccessAnalisisClinicoLab(currentUser);
   const puedeVerMicro = canAccessMicrobiologiaLectura(currentUser);
@@ -53,6 +76,10 @@ const Solicitudes: React.FC = () => {
   const modoEntrega = isSecretariaEntregaLab(currentUser);
   const initialLoadDone = useRef(false);
   const loadGen = useRef(0);
+
+  const fechaApi = formatFechaLocal(diaSeleccionado);
+  const buscarLibre = busquedaDebounced.trim().length > 0;
+  const diasTabs = useMemo(() => buildDiasLaboratorio(diasPestanas), [diasPestanas]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setBusquedaDebounced(busqueda), 400);
@@ -70,7 +97,11 @@ const Solicitudes: React.FC = () => {
 
     const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
     if (filtroEstado) labParams.estado = filtroEstado;
-    if (busquedaDebounced.trim()) labParams.search = busquedaDebounced.trim();
+    if (buscarLibre) {
+      labParams.search = busquedaDebounced.trim();
+    } else {
+      labParams.fecha = fechaApi;
+    }
 
     const microSearch = busquedaDebounced.trim();
     const microEstados = estadosMicroDesdeFiltroLab(filtroEstado);
@@ -136,15 +167,27 @@ const Solicitudes: React.FC = () => {
 
     if (gen !== loadGen.current) return;
 
+    const microFiltrados = buscarLibre
+      ? micros
+      : micros.filter((e) => fechaLocalIso(e.fecha_inicio || e.created_at) === fechaApi);
+
     setRows(
       sortPedidosPorNumero([
         ...labs.map(mapLabToPendiente),
-        ...micros.map(mapMicroToPendiente),
+        ...microFiltrados.map(mapMicroToPendiente),
       ])
     );
     if (labError) setError(labError);
     else if (microError) setError(microError);
-  }, [allowed, puedeVerMicro, filtroEstado, filtroTipo, busquedaDebounced]);
+  }, [
+    allowed,
+    puedeVerMicro,
+    filtroEstado,
+    filtroTipo,
+    busquedaDebounced,
+    buscarLibre,
+    fechaApi,
+  ]);
 
   useEffect(() => {
     load();
@@ -177,6 +220,17 @@ const Solicitudes: React.FC = () => {
     return { counts, lab, micro };
   }, [rows]);
 
+  const handleCambioDia = (iso: string) => {
+    setDiaSeleccionado(parseFechaLocal(iso));
+  };
+
+  const handleFechaManual = (iso: string) => {
+    if (!iso) return;
+    const d = parseFechaLocal(iso);
+    setDiaSeleccionado(d);
+    setDiasPestanas((n) => diasVisiblesParaIncluir(d, n));
+  };
+
   if (!allowed) {
     return (
       <Box sx={{ p: 3 }}>
@@ -187,10 +241,12 @@ const Solicitudes: React.FC = () => {
 
   const pageTitle = esPaciente ? 'Mis análisis clínico' : 'Análisis de laboratorio';
   const pageDescription = esPaciente
-    ? 'Pedidos de laboratorio realizados desde consultas y sus resultados.'
+    ? 'Pedidos de laboratorio realizados desde consultas y sus resultados, separados por día de solicitud.'
     : modoEntrega
-      ? 'Informes de laboratorio validados para enviar o descargar en PDF.'
-      : 'Todas las órdenes de Lab. Clínico y Microbiología, de la última solicitada a la primera.';
+      ? `Informes de laboratorio validados para enviar o descargar en PDF · ${labelDiaOrden(diaSeleccionado)}.`
+      : buscarLibre
+        ? 'Búsqueda en todos los días (ignora el filtro por fecha).'
+        : `Lab. Clínico y Microbiología solicitados el ${labelDiaOrden(diaSeleccionado)}.`;
 
   const handleVer = (row: PendientePedidoRow) => {
     if (row.tipo === 'MICROBIOLOGIA') {
@@ -221,6 +277,53 @@ const Solicitudes: React.FC = () => {
         </Alert>
       )}
 
+      <Paper sx={{ mb: 2 }}>
+        <Box
+          sx={{
+            px: 2,
+            pt: 1.5,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+          }}
+        >
+          <Typography variant="subtitle2">Día de solicitud</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+            <TextField
+              type="date"
+              size="small"
+              label="Ir a fecha"
+              value={fechaApi}
+              onChange={(e) => handleFechaManual(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              disabled={buscarLibre}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={buscarLibre}
+              onClick={() => setDiasPestanas((n) => n + 7)}
+            >
+              Ver más días
+            </Button>
+          </Box>
+        </Box>
+        <Tabs
+          value={fechaApi}
+          onChange={(_, v) => handleCambioDia(String(v))}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ px: 1 }}
+        >
+          {diasTabs.map((d) => {
+            const key = formatFechaLocal(d);
+            return <Tab key={key} value={key} label={labelDiaOrden(d)} disabled={buscarLibre} />;
+          })}
+        </Tabs>
+      </Paper>
+
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
           <TextField
@@ -230,6 +333,7 @@ const Solicitudes: React.FC = () => {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             sx={{ minWidth: 240 }}
+            helperText={buscarLibre ? 'Ignora filtro por día' : undefined}
           />
           {puedeVerMicro && (
             <FormControl size="small" sx={{ minWidth: 180 }}>
@@ -303,10 +407,15 @@ const Solicitudes: React.FC = () => {
         <Paper sx={{ p: 1 }}>
           <OrdenesLimsTabla
             rows={rows}
-            emptyMessage="No hay órdenes de laboratorio."
+            emptyMessage={
+              buscarLibre
+                ? 'No hay órdenes que coincidan con la búsqueda.'
+                : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
+            }
             onVer={handleVer}
             accionLabel={modoEntrega ? 'Informe' : 'Ver detalle'}
             modoEntrega={modoEntrega}
+            mostrarIndiceDia
           />
         </Paper>
       )}

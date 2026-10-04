@@ -28,3 +28,26 @@ El router reenvía **público `:8080` → `192.168.1.253:80`**.
 Por eso el compose del EMR debe publicar nginx como **`80:80`**, no `8080:80`.
 
 Demo marketing (aislado): público **8081** — ver `docs/demo-stack.md`. No usar el volumen ni el compose clínicos.
+
+## Compatibilidad con órdenes y exámenes ya existentes
+
+En producción **ya hay pacientes con órdenes y resultados** (en curso, informados, validados). Todo cambio de LIMS/EMR debe pensarse contra esa base viva, no solo contra catálogo “limpio”.
+
+### Obligatoriedad
+
+1. **No romper órdenes abiertas ni cerradas** por un cambio de catálogo, validación, tubos, estados o payload de carga.
+2. Preferir cambios **aditivos / retrocompatibles**: default seguro, flags, exenciones por código/`modo_entrada`, migraciones que no invaliden FK ni dejen resultados huérfanos.
+3. Seeds/sync/reparar deben poder correrse en prod **sin invalidar** `ResultadoExamen` / `Muestra` / paneles ya pedidos.
+4. Si un cambio puede alterar comportamiento de órdenes ya creadas (p. ej. exigir muestra donde antes no, quitar tubo, renombrar código, endurecer validación), el asistente **no lo aplica en silencio**:
+   - **avisar antes** (impacto + órdenes/exámenes afectados + mitigación);
+   - **esperar decisión explícita** del usuario (hacer / no hacer / hacer solo para órdenes nuevas).
+
+### Ejemplos de riesgo alto (pedir OK)
+
+- `requiere_muestra`, `tipo_muestra_requerida`, `tipo_contenedor`, `modo_entrada`
+- Validaciones nuevas en `cargar-resultados` / validar / cierre de orden
+- Remapeo de tubos u orina 24 h que cambie material efectivo
+- Renombrar/desactivar códigos de examen o componentes de panel
+- Migraciones que toquen FKs de `ResultadoExamen` / `Muestra` / catálogo usado por órdenes vivas
+
+Procedimiento del asistente: `DOC_PROTOCOLO_TRABAJO_ASISTENTE.md` §6.6.

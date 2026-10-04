@@ -390,6 +390,8 @@ export interface CreateSolicitudExamenLimsPayload {
   observaciones?: string;
   /** YYYY-MM-DD — obligatorio. Día de la extracción. */
   fecha_programada_toma: string;
+  /** 2ª orden mismo día: solo ensayos ya informados de un INFORMADO_PARCIAL. */
+  repeticion_control?: boolean;
 }
 
 export async function createSolicitudExamenLims(
@@ -425,6 +427,40 @@ export async function getOrdenAbiertaPaciente(
     },
   });
   return data ?? null;
+}
+
+export type RepeticionControlCandidato = {
+  id: number;
+  codigo: string;
+  nombre: string;
+  valor_obtenido: string;
+};
+
+export type RepeticionControlResponse = {
+  disponible: boolean;
+  orden_origen: {
+    id: number;
+    numero: string | null;
+    estado: string;
+    fecha_programada_toma?: string | null;
+  } | null;
+  examenes: RepeticionControlCandidato[];
+};
+
+export async function getRepeticionControlCandidatos(
+  pacienteId: number,
+  fechaProgramadaToma: string
+): Promise<RepeticionControlResponse> {
+  const { data } = await apiClient.get<RepeticionControlResponse>(
+    `${LAB}/solicitudes/repeticion-control/`,
+    {
+      params: {
+        paciente_id: pacienteId,
+        fecha_programada_toma: fechaProgramadaToma,
+      },
+    }
+  );
+  return data;
 }
 
 export type RestriccionEnsayoLims = {

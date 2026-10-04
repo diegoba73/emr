@@ -1173,6 +1173,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                       orden={selectedAnalisis}
                       observaciones={selectedAnalisis.observaciones}
                       modo="clinico"
+                      estadoOrden={selectedAnalisis.estado}
                     />
                   ) : (
                     <Alert severity="info">

@@ -126,6 +126,23 @@ MENSAJE_ORDEN_ACTIVA_MISMO_DIA = (
     'programalo para otro día.'
 )
 
+MENSAJE_REPETICION_SIN_PARCIAL = (
+    'No hay una orden en informe parcial ese día para pedir repetición/control.'
+)
+
+MENSAJE_REPETICION_SOLO_INFORMADOS = (
+    'En repetición/control solo se pueden pedir ensayos que ya tienen '
+    'resultado informado en la orden parcial.'
+)
+
+MENSAJE_REPETICION_SIN_PANELES = (
+    'La repetición/control no admite paneles: elegí solo ensayos informados.'
+)
+
+MENSAJE_REPETICION_SIN_EXAMENES = (
+    'Indicá al menos un ensayo informado para la repetición/control.'
+)
+
 # Compat: mensaje histórico de internación (mismo criterio, texto legado).
 MENSAJE_LAB_INTERNACION_SIN_FINALIZAR = MENSAJE_ORDEN_ACTIVA_MISMO_DIA
 
@@ -257,6 +274,114 @@ def buscar_orden_abierta(
     return None
 
 
+def buscar_orden_informado_parcial_mismo_dia(
+    paciente_id: int, *, fecha_programada_toma
+) -> SolicitudExamen | None:
+    """Orden INFORMADO_PARCIAL del paciente para ese día de extracción (si hay)."""
+    if fecha_programada_toma is None:
+        return None
+    return (
+        SolicitudExamen.objects.filter(
+            paciente_id=paciente_id,
+            estado="INFORMADO_PARCIAL",
+            fecha_programada_toma=fecha_programada_toma,
+        )
+        .prefetch_related("resultados__tipo_examen")
+        .order_by("-fecha_solicitud", "-id")
+        .first()
+    )
+
+
+def _resultado_informado(resultado: ResultadoExamen) -> bool:
+    return bool((resultado.valor_obtenido or "").strip())
+
+
+def ensayos_informados_en_orden(solicitud: SolicitudExamen) -> list[ResultadoExamen]:
+    """Resultados con valor cargado (candidatos a repetición/control)."""
+    rows = list(
+        solicitud.resultados.select_related("tipo_examen").order_by(
+            "tipo_examen__nombre", "id"
+        )
+    )
+    return [r for r in rows if _resultado_informado(r)]
+
+
+def ids_ensayos_informados_en_orden(solicitud: SolicitudExamen) -> set[int]:
+    return {r.tipo_examen_id for r in ensayos_informados_en_orden(solicitud)}
+
+
+class RepeticionControlError(ValueError):
+    """Pedido de repetición/control inválido."""
+
+
+def assert_repeticion_control_valida(
+    *,
+    paciente_id: int,
+    fecha_programada_toma,
+    examenes_ids: Iterable[int] | None,
+    paneles_ids: Iterable[int] | None,
+) -> SolicitudExamen:
+    """
+    Valida alta de orden de repetición/control.
+
+    Solo si hay INFORMADO_PARCIAL ese día y los ensayos pedidos son subconjunto
+    de los que ya tienen valor en esa orden. No admite paneles.
+    """
+    origen = buscar_orden_informado_parcial_mismo_dia(
+        paciente_id, fecha_programada_toma=fecha_programada_toma
+    )
+    if origen is None:
+        raise RepeticionControlError(MENSAJE_REPETICION_SIN_PARCIAL)
+
+    panel_ids = {int(x) for x in (paneles_ids or []) if x is not None}
+    if panel_ids:
+        raise RepeticionControlError(MENSAJE_REPETICION_SIN_PANELES)
+
+    exam_ids = {int(x) for x in (examenes_ids or []) if x is not None}
+    if not exam_ids:
+        raise RepeticionControlError(MENSAJE_REPETICION_SIN_EXAMENES)
+
+    permitidos = ids_ensayos_informados_en_orden(origen)
+    if not exam_ids <= permitidos:
+        raise RepeticionControlError(MENSAJE_REPETICION_SOLO_INFORMADOS)
+
+    return origen
+
+
+def payload_repeticion_control_candidatos(
+    paciente_id: int, *, fecha_programada_toma
+) -> dict:
+    """Respuesta para GET candidatos UI."""
+    origen = buscar_orden_informado_parcial_mismo_dia(
+        paciente_id, fecha_programada_toma=fecha_programada_toma
+    )
+    if origen is None:
+        return {"disponible": False, "orden_origen": None, "examenes": []}
+    examenes = []
+    for r in ensayos_informados_en_orden(origen):
+        te = r.tipo_examen
+        examenes.append(
+            {
+                "id": te.id,
+                "codigo": te.codigo,
+                "nombre": te.nombre,
+                "valor_obtenido": (r.valor_obtenido or "").strip(),
+            }
+        )
+    if not examenes:
+        return {"disponible": False, "orden_origen": None, "examenes": []}
+    return {
+        "disponible": True,
+        "orden_origen": {
+            "id": origen.id,
+            "numero": origen.numero,
+            "estado": origen.estado,
+            "fecha_programada_toma": origen.fecha_programada_toma,
+        },
+        "examenes": examenes,
+    }
+
+
 def _resolver_tipo_examen_ids(
     examenes_ids: Iterable[int],
     paneles_ids: Iterable[int],
@@ -284,19 +409,41 @@ def _resolver_tipo_examen_ids(
 
 
 def _assert_examenes_con_tubo_configurado(tipos_ids: set[int]) -> None:
-    """Rechaza exámenes sin tipo_contenedor (no se puede generar tubo)."""
+    """
+    Rechaza exámenes físicos sin tipo_contenedor.
+
+    Calculados / FiO2 (sin tubo físico) no bloquean: no generan muestra.
+    """
     if not tipos_ids:
         return
-    sin_tubo = list(
-        TipoExamen.objects.filter(pk__in=tipos_ids)
-        .filter(tipo_contenedor__isnull=True)
-        .values_list("codigo", flat=True)[:8]
-    )
+    from laboratorio.tubos_orden import examen_sin_tubo_fisico
+
+    sin_tubo: list[str] = []
+    for te in TipoExamen.objects.filter(pk__in=tipos_ids).only(
+        "codigo", "modo_entrada", "tipo_contenedor_id"
+    ):
+        if examen_sin_tubo_fisico(te):
+            continue
+        if te.tipo_contenedor_id is None:
+            sin_tubo.append(te.codigo or str(te.pk))
+        if len(sin_tubo) >= 8:
+            break
     if sin_tubo:
         raise TuboNuevoRequeridoError(
             "No se pueden agregar exámenes sin tipo de tubo configurado "
             f"({', '.join(sin_tubo)})."
         )
+
+
+def _usuario_puede_crear_tubo_pendiente(user) -> bool:
+    """Solo lab / bioquímico / admin crean muestras PENDIENTE_TOMA al agregar."""
+    if user is None:
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    from usuarios.roles import ROLES_LIMS_WRITE
+
+    return (getattr(user, "rol", "") or "") in ROLES_LIMS_WRITE
 
 
 def _crear_tubos_faltantes_tras_agregar(
@@ -307,6 +454,8 @@ def _crear_tubos_faltantes_tras_agregar(
     """
     Tras sumar tipos/paneles: crea Muestra PENDIENTE_TOMA por cada tubo faltante
     (otro contenedor/muestra o capacidad excedida). Devuelve cantidad creada.
+
+    Si hace falta tubo nuevo, solo lab/bioquímico/admin pueden continuar.
     """
     from laboratorio.muestra_estado import crear_muestra
     from laboratorio.tubos_orden import TubosOrdenError, expandir_items_crear_muestras
@@ -326,6 +475,13 @@ def _crear_tubos_faltantes_tras_agregar(
         raise TuboNuevoRequeridoError(
             f"No se pueden generar los tubos para los exámenes agregados: {exc}"
         ) from exc
+
+    if faltantes and not _usuario_puede_crear_tubo_pendiente(user):
+        raise TuboNuevoRequeridoError(
+            "Este examen requiere una muestra nueva pendiente de toma. "
+            "Solo laboratorio, bioquímico o administración pueden agregarlo "
+            "a una orden que ya tiene tubos."
+        )
 
     creados = 0
     for item in faltantes:

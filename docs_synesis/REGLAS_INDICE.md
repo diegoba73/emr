@@ -61,7 +61,8 @@ Archivos existentes en `docs_synesis/reglas/` (no inventar dominios):
 7. **Riesgos / deuda** (`DOC_RIESGOS_DEUDA_TECNICA.md`): alerta, no regla.
 
 Ante conflicto código ↔ doc: **no decidir en silencio**; reportar.  
-PHI, mezclar bases locales o tocar la otra app del servidor: `reglas/entorno-local.md` y `reglas/produccion-servidor.md`.
+PHI, mezclar bases locales o tocar la otra app del servidor: `reglas/entorno-local.md` y `reglas/produccion-servidor.md`.  
+Cambios que puedan romper **órdenes/exámenes ya existentes en prod**: `reglas/produccion-servidor.md` (compatibilidad) + protocolo §6.6 — **avisar y pedir OK** antes de aplicar.
 
 ## Política anti-duplicación
 
@@ -76,5 +77,6 @@ PHI, mezclar bases locales o tocar la otra app del servidor: `reglas/entorno-loc
 Procedimiento en `DOC_PROTOCOLO_TRABAJO_ASISTENTE.md` (no repetir aquí):
 
 - «checkpoint» / «volver» / «último checkpoint» → §5.7
+- Cambio LIMS/catálogo/tubos/validación con riesgo sobre órdenes vivas → §6.6 + `reglas/produccion-servidor.md`
 
 Arranque local (cómo, no la política): `docs/dev-start.md`.

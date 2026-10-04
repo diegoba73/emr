@@ -291,6 +291,20 @@ def sincronizar_estado_tras_carga(
         )
         return solicitud.estado
 
+    # Borramos el último valor informado → deja de ser informe parcial.
+    if (
+        solicitud.estado == "INFORMADO_PARCIAL"
+        and not solicitud_tiene_algun_resultado(solicitud)
+    ):
+        apply_solicitud_estado_transition(
+            solicitud,
+            "EN_PROCESO",
+            actor=actor,
+            accion="reabrir_carga",
+            view=view,
+        )
+        return solicitud.estado
+
     if informar_parcial:
         if not solicitud_tiene_algun_resultado(solicitud):
             raise SolicitudCierreError(

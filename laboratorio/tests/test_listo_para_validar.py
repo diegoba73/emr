@@ -96,19 +96,18 @@ class ListoParaValidarFsmTests(TestCase):
         sol.refresh_from_db()
         self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
 
-        # Borrar un valor vía update directo + sync al guardar de nuevo (payload sin valor
-        # no persiste vacío en ítems vacíos). Forzamos vacío en DB y re-sync vía carga
-        # de un solo campo manteniendo el otro vacío: actualizamos rb a vacío en ORM
-        # y luego cargamos solo ra (incompleto permanece).
-        ResultadoExamen.objects.filter(pk=rb.pk).update(valor_obtenido="")
+        # Vaciar un valor ya cargado lo deja no informado y reabre a EN_PROCESO.
         r2 = self.client.post(
             f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
-            {"resultados": [{"id": ra.pk, "valor": "1.1"}]},
+            {"resultados": [{"id": rb.pk, "valor": "", "valor_numerico": None}]},
             format="json",
         )
-        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
         sol.refresh_from_db()
         self.assertEqual(sol.estado, "EN_PROCESO")
+        rb.refresh_from_db()
+        self.assertEqual((rb.valor_obtenido or "").strip(), "")
+        self.assertIsNone(rb.valor_numerico)
 
     def test_informar_parcial_no_finaliza(self):
         sol = self._solicitud(self.te_a, self.te_b)
@@ -186,3 +185,29 @@ class ListoParaValidarFsmTests(TestCase):
         )
         sol.refresh_from_db()
         self.assertEqual(sol.estado, "FINALIZADO")
+
+    def test_limpiar_unico_valor_parcial_vuelve_en_proceso(self):
+        sol = self._solicitud(self.te_a, self.te_b)
+        ra = sol.resultados.get(tipo_examen=self.te_a)
+        self.client.force_authenticate(user=self.user_lab)
+        self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "informar_parcial": True,
+                "resultados": [{"id": ra.pk, "valor": "9"}],
+            },
+            format="json",
+        )
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "INFORMADO_PARCIAL")
+
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": ra.pk, "valor": ""}]},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "EN_PROCESO")
+        ra.refresh_from_db()
+        self.assertEqual((ra.valor_obtenido or "").strip(), "")

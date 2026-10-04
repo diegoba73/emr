@@ -126,6 +126,11 @@ export function validateCargaResultadosMuestra(
     const te = catalog.get(r.tipo_examen);
     const codigo = r.tipo_examen_codigo ?? te?.codigo;
 
+    // Borrar un valor ya informado no exige tubo (el BE no revalida muestra al limpiar).
+    if (draftRowClearsServerValue(r, safe, te, codigo)) {
+      continue;
+    }
+
     if (
       te?.requiere_muestra &&
       row.muestra_id == null &&
@@ -172,6 +177,24 @@ export function draftRowHasValue(
   return !!(row.valor.trim() || row.valor_numerico.trim());
 }
 
+/** True si el resultado ya tenía valor persistido (informado). */
+export function resultadoTieneValorGuardado(
+  r: Pick<ResultadoExamenLims, 'valor_obtenido' | 'valor_numerico'>
+): boolean {
+  if ((r.valor_obtenido || '').trim()) return true;
+  return r.valor_numerico != null && String(r.valor_numerico).trim() !== '';
+}
+
+/** True si el borrador vacía un valor que ya estaba guardado. */
+export function draftRowClearsServerValue(
+  r: Pick<ResultadoExamenLims, 'valor_obtenido' | 'valor_numerico'>,
+  row: DraftCargaRow,
+  te?: LimsTipoExamen | null,
+  codigo?: string | null
+): boolean {
+  return resultadoTieneValorGuardado(r) && !draftRowHasValue(row, te, codigo);
+}
+
 export function validateCargaResultadosValores(
   resultados: ResultadoExamenLims[],
   draft: Record<number, DraftCargaRow>,
@@ -191,7 +214,10 @@ export function validateCargaResultadosValores(
       if (raw && !convertTicketEntry(te, raw, codigo)) {
         return `${nombre}: valor de ticket inválido. Ingresá solo dígitos, sin punto decimal.`;
       }
+      // Ticket vacío = limpiar valor informado (si había).
+      continue;
     } else if (!safe.valor.trim() && !safe.valor_numerico.trim()) {
+      if (resultadoTieneValorGuardado(r)) continue;
       return `${nombre}: ingresá un valor.`;
     }
   }
@@ -224,6 +250,18 @@ export function buildCargarResultadoPayload(
     return item;
   }
 
+  // Ticket vacío o valor vacío: marcar no informado (el BE limpia al recibir valor "").
+  if (ticketEntry && !ticketRaw) {
+    const item: CargarResultadoPayload = {
+      id: resultadoId,
+      valor: '',
+      valor_sysmex: '',
+      valor_numerico: null,
+    };
+    if (row.muestra_id != null) item.muestra_id = row.muestra_id;
+    return item;
+  }
+
   let valor = row.valor.trim();
   const vnStr = row.valor_numerico.trim();
   // Compat: si solo quedó numérico en draft (p. ej. autofill VCM), usarlo como valor.
@@ -236,7 +274,9 @@ export function buildCargarResultadoPayload(
 
   // Derivar número para flags/tendencias: draft explícito, o Valor si es parseable.
   const vnFromDraft = parseValorNumerico(vnStr);
-  if (esResultadoNoCalculable(valor)) {
+  if (!valor) {
+    item.valor_numerico = null;
+  } else if (esResultadoNoCalculable(valor)) {
     item.valor_numerico = null;
   } else if (vnFromDraft !== undefined && typeof vnFromDraft === 'number') {
     item.valor_numerico = vnFromDraft;

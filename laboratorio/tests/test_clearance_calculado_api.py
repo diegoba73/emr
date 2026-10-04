@@ -112,3 +112,71 @@ def test_clear_crea_calculado_no_exige_muestra_aunque_flag_activo(clearance):
     assert response.status_code == 200, response.data
     rows["CLEAR_CREA"].refresh_from_db()
     assert rows["CLEAR_CREA"].valor_obtenido == RESULTADO_NO_CALCULABLE
+
+
+@pytest.mark.django_db
+def test_agregar_panel_clear_a_orden_con_suero_crea_bidon_pendiente(db):
+    """
+    Orden con solo suero/EDTA: agregar PAN_CLEAR no falla por CLEAR_CREA sin tubo;
+    crea bidón PENDIENTE_TOMA (lab puede seguir).
+    """
+    from django.utils import timezone
+    from rest_framework import status
+
+    from laboratorio.models_catalog import Muestra
+    from laboratorio.tubos_catalogo import BIDON_ORINA_24H
+
+    call_command("seed_catalogo_solicitud_papel", stdout=StringIO())
+    paciente = Paciente.objects.create(
+        dni="PRUEBA-CLEAR-ADD", nombre="Add", apellido="Clear"
+    )
+    actor = User.objects.create_user(
+        username="lab-clear-add", password="pass12345", rol="laboratorio", is_staff=True
+    )
+    client = APIClient()
+    client.force_authenticate(actor)
+
+    creati = TipoExamen.objects.get(codigo="CREATI")
+    r = client.post(
+        "/api/lab/solicitudes/",
+        {
+            "paciente_id": paciente.id,
+            "examenes_ids": [creati.id],
+            "origen_solicitud": "AMBULATORIO_CEHTA",
+            "fecha_programada_toma": timezone.localdate().isoformat(),
+        },
+        format="json",
+        HTTP_HOST="localhost",
+    )
+    assert r.status_code == status.HTTP_201_CREATED, r.data
+    sol_id = r.data["id"]
+    r_tom = client.post(
+        f"/api/lab/solicitudes/{sol_id}/tomar-muestra/",
+        {},
+        format="json",
+        HTTP_HOST="localhost",
+    )
+    assert r_tom.status_code == status.HTTP_200_OK, r_tom.data
+    n_antes = Muestra.objects.filter(solicitud_id=sol_id).count()
+
+    panel = PanelExamen.objects.get(codigo="PAN_CLEAR")
+    r_add = client.post(
+        f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
+        {"paneles_ids": [panel.id]},
+        format="json",
+        HTTP_HOST="localhost",
+    )
+    assert r_add.status_code == status.HTTP_200_OK, r_add.data
+    codigos = set(
+        ResultadoExamen.objects.filter(solicitud_id=sol_id).values_list(
+            "tipo_examen__codigo", flat=True
+        )
+    )
+    assert {"CREATI", "CREA_U", "DIUR", "CLEAR_CREA"} <= codigos
+    assert Muestra.objects.filter(solicitud_id=sol_id).count() >= n_antes + 1
+    assert Muestra.objects.filter(
+        solicitud_id=sol_id,
+        estado="PENDIENTE_TOMA",
+        tipo_contenedor__codigo=BIDON_ORINA_24H,
+    ).exists()
+

@@ -33,6 +33,21 @@ export function esOrigenAmbulatorioExterno(
   return codigo === 'EXTERNO_CEHTA' || codigo === 'EXTERNO_ICPL';
 }
 
+/**
+ * Origen LIMS sugerido según el sector de la cama (alineado a backend
+ * ``origen_solicitud._sector_es_uco/_uce``).
+ */
+export function origenLimsDesdeSectorInternacion(
+  sectorNombre: string | null | undefined
+): OrigenSolicitudLims | null {
+  const n = (sectorNombre || '').toUpperCase();
+  if (!n.trim()) return null;
+  if (n.includes('UCE')) return 'INTERNACION_UCE';
+  if (n.includes('UCO')) return 'INTERNACION_UCO';
+  // Internación en sector genérico → misma convención que el backend.
+  return 'INTERNACION_UCE';
+}
+
 export interface OrigenProcedenciaCell {
   titulo: string;
   detalle?: string;

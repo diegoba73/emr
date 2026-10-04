@@ -1,6 +1,10 @@
 """
 Asegura filas ResultadoExamen faltantes cuando el catálogo del panel crece
 (p. ej. HCM / VLDL / BIL_I agregados a órdenes ya abiertas).
+
+Solo actúa si el panel está **explícitamente** en la orden. Nunca completa un
+panel porque un componente suelto coincida (CREATI ≠ clearance; ionograma al
+azar ≠ 24 hs; microalbuminuria al azar ≠ 24 hs).
 """
 from __future__ import annotations
 
@@ -11,15 +15,21 @@ from laboratorio.panel_componentes_orden import PANEL_COMPONENTES_BY_CODIGO
 _ESTADOS_ABIERTOS = frozenset(
     {"PENDIENTE", "EN_PROCESO", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"}
 )
+
+# Paneles cuyo catálogo puede crecer: se reponen componentes faltantes
+# únicamente si la orden ya tiene ese panel vinculado.
 _PANELES_ASEGURAR = frozenset(
     {
         "PAN_HEMO",
         "PAN_LIP",
         "PAN_HEP",
+        "PAN_FERR",
         "PAN_CLEAR",
         "PAN_PROT24",
+        "PAN_IONO_U",
         "PAN_IONO_U24",
         "PAN_MALB24",
+        "PAN_MALB_AZ",
     }
 )
 
@@ -29,11 +39,14 @@ def _asegurar_codigos_panel(solicitud: SolicitudExamen, panel_codigo: str) -> in
     if not codigos_panel:
         return 0
 
-    tiene_panel = False
     try:
         tiene_panel = solicitud.paneles.filter(codigo=panel_codigo).exists()
     except Exception:
         tiene_panel = False
+
+    # Sin panel explícito: no expandir por componentes compartidos.
+    if not tiene_panel:
+        return 0
 
     existentes = {
         (getattr(te, "codigo", None) or "").strip().upper()
@@ -41,9 +54,6 @@ def _asegurar_codigos_panel(solicitud: SolicitudExamen, panel_codigo: str) -> in
             id__in=solicitud.resultados.values_list("tipo_examen_id", flat=True)
         )
     }
-    if not tiene_panel:
-        if not (existentes & set(codigos_panel)):
-            return 0
 
     faltan = [c for c in codigos_panel if c and c not in existentes]
     if not faltan:
@@ -80,7 +90,7 @@ def asegurar_resultados_panel_hemograma(solicitud: SolicitudExamen) -> int:
 
 
 def asegurar_resultados_paneles_derivados(solicitud: SolicitudExamen) -> int:
-    """Asegura componentes de hemograma, perfil lipidico y hepatograma."""
+    """Asegura componentes faltantes solo de paneles ya pedidos en la orden."""
     if getattr(solicitud, "estado", None) not in _ESTADOS_ABIERTOS:
         return 0
     total = 0

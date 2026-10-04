@@ -1,6 +1,7 @@
 import {
   applyAutofillVcmChcm,
   buildCargarResultadoPayload,
+  draftRowClearsServerValue,
   filterMuestrasProcesables,
   muestrasCompatiblesParaTipo,
   suggestMuestraIdForResultado,
@@ -294,5 +295,24 @@ describe('limsCargaMuestra', () => {
     const payloadLdl = buildCargarResultadoPayload(4, next[4], catalog.get(4), 'LDL');
     expect(payloadLdl.valor).toBe(RESULTADO_NO_CALCULABLE);
     expect(payloadLdl.valor_numerico).toBeNull();
+  });
+
+  it('detecta borrado de valor ya informado y arma payload vacío', () => {
+    const r = {
+      ...resultado(1, 10),
+      valor_obtenido: '12.5',
+      valor_numerico: 12.5,
+    } as ResultadoExamenLims;
+    const empty: DraftCargaRow = {
+      valor: '',
+      valor_sysmex: '',
+      valor_numerico: '',
+      unidad: '',
+      muestra_id: null,
+    };
+    expect(draftRowClearsServerValue(r, empty)).toBe(true);
+    const payload = buildCargarResultadoPayload(1, empty);
+    expect(payload.valor).toBe('');
+    expect(payload.valor_numerico).toBeNull();
   });
 });

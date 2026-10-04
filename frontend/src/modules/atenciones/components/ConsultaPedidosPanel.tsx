@@ -720,6 +720,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                 {sol.resultados.length > 0 ? (
                   <ResultadosOrdenLista
                     modo="clinico"
+                    estadoOrden={sol.estado}
                     orden={{
                       tipos_examen: sol.tipos_examen,
                       paneles_resumen: (sol.paneles_resumen ?? []).map((p) => ({

@@ -4,6 +4,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -11,6 +12,8 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
+  FormControlLabel,
+  FormGroup,
   InputLabel,
   MenuItem,
   Select,
@@ -33,9 +36,11 @@ import {
   agregarExamenesSolicitudLims,
   createSolicitudExamenLims,
   getOrdenAbiertaPaciente,
+  getRepeticionControlCandidatos,
   getRestriccionesEnsayosPaciente,
   getTiposExamenMap,
   listPanelesLims,
+  type RepeticionControlResponse,
   type RestriccionesEnsayosLims,
 } from '../../services/limsApi';
 import {
@@ -109,6 +114,8 @@ export interface NuevaOrdenLimsDialogProps {
   /** Si se setea, agrega exámenes a esa orden abierta en lugar de crear una nueva. */
   agregarAOrdenId?: number | null;
   agregarAOrdenNumero?: string | null;
+  /** Origen clínico preseleccionado (p. ej. INTERNACION_UCO desde revista). */
+  origenInicial?: OrigenSolicitudLims | null;
 }
 
 const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
@@ -125,6 +132,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   onAddDraftMicro,
   agregarAOrdenId = null,
   agregarAOrdenNumero = null,
+  origenInicial = null,
 }) => {
   const dialogTheme = useClinicalDrawerDialogTheme();
   const soloLab = Boolean(agregarAOrdenId);
@@ -137,6 +145,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     numero: string | null;
   } | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<'draft' | 'create' | null>(null);
+  const [repeticionMode, setRepeticionMode] = useState(false);
+  const [repeticionInfo, setRepeticionInfo] = useState<RepeticionControlResponse | null>(null);
+  const [selectedRepeticionIds, setSelectedRepeticionIds] = useState<Set<number>>(() => new Set());
   const [restriccionesEnsayos, setRestriccionesEnsayos] = useState<RestriccionesEnsayosLims>({});
   const { currentUser } = useData();
   const omiteRestriccionesEnsayos = puedeOmitirRestriccionFrecuenciaEnsayos(currentUser?.rol);
@@ -202,15 +213,71 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     setMicroItems([]);
     setTab('lab');
     setError('');
-    setOrigenManual('AMBULATORIO_ICPL');
+    setOrigenManual(origenInicial || 'AMBULATORIO_ICPL');
     setMedicoExterno('');
     setMedicoExternoMode(false);
     setMedicoInterno(null);
     setMedicoQuery('');
     setMedicoOptions([]);
     setRestriccionesEnsayos({});
+    setRepeticionMode(false);
+    setRepeticionInfo(null);
+    setSelectedRepeticionIds(new Set());
     resetSelection();
-  }, [open, pacienteInicial, resetSelection]);
+  }, [open, pacienteInicial, origenInicial, resetSelection]);
+
+  // Candidatos a repetición/control (orden INFORMADO_PARCIAL mismo día).
+  useEffect(() => {
+    if (!open || draftMode || agregarAOrdenId) {
+      setRepeticionInfo(null);
+      return;
+    }
+    const pid = paciente?.id ?? pacienteInicial?.id ?? null;
+    if (!pid || !fechaProgramadaToma) {
+      setRepeticionInfo(null);
+      return;
+    }
+    let cancelled = false;
+    getRepeticionControlCandidatos(pid, fechaProgramadaToma)
+      .then((data) => {
+        if (cancelled) return;
+        setRepeticionInfo(data);
+        if (!data.disponible) {
+          setRepeticionMode(false);
+          setSelectedRepeticionIds(new Set());
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRepeticionInfo(null);
+          setRepeticionMode(false);
+          setSelectedRepeticionIds(new Set());
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, draftMode, agregarAOrdenId, paciente?.id, pacienteInicial?.id, fechaProgramadaToma]);
+
+  const toggleRepeticionExamen = (examenId: number) => {
+    setSelectedRepeticionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(examenId)) next.delete(examenId);
+      else next.add(examenId);
+      return next;
+    });
+  };
+
+  const enterRepeticionMode = (enabled: boolean) => {
+    setRepeticionMode(enabled);
+    setSelectedRepeticionIds(new Set());
+    if (enabled) {
+      resetSelection();
+      setMicroItems([]);
+      setTab('lab');
+      setError('');
+    }
+  };
 
   // Si solo llega pacienteId (agregar a orden), cargar ficha para mostrar obra social.
   useEffect(() => {
@@ -328,8 +395,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   }, [pacienteQuery, open, pacienteInicial, draftMode]);
 
   useEffect(() => {
-    if (!open || !lockMedico) return;
-    const mid = getCurrentMedicoId(currentUser);
+    if (!open) return;
+    const mid = lockMedico ? getCurrentMedicoId(currentUser) : medicoId ?? undefined;
     if (!mid) return;
     let cancelled = false;
     (async () => {
@@ -337,7 +404,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         const m = await apiService.getMedico(mid);
         if (!cancelled) {
           setMedicoInterno(m);
-          setMedicoQuery(`${m.apellido || ''} ${m.nombre || ''}`.trim());
+          setMedicoQuery(
+            `Dr. ${[m.apellido, m.nombre].filter(Boolean).join(', ')}`.trim()
+          );
         }
       } catch {
         /* ignore */
@@ -346,7 +415,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, lockMedico, currentUser]);
+  }, [open, lockMedico, currentUser, medicoId]);
 
   useEffect(() => {
     if (!open || lockMedico || draftMode || consultaHcId || usarMedicoExterno) return;
@@ -424,6 +493,43 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       setError('Indicá el médico solicitante externo.');
       return;
     }
+
+    if (repeticionMode) {
+      const examenes_ids = Array.from(selectedRepeticionIds);
+      if (examenes_ids.length === 0) {
+        setError('Seleccioná al menos un ensayo ya informado para repetir.');
+        return;
+      }
+      setSaving(true);
+      try {
+        const orden = await createSolicitudExamenLims({
+          paciente_id: paciente.id,
+          medico_id: usarMedicoExterno
+            ? undefined
+            : medicoId ?? medicoInterno?.id ?? undefined,
+          consulta_hc_id: consultaHcId,
+          origen_solicitud: consultaHcId ? undefined : origenManual,
+          medico_externo_nombre: usarMedicoExterno
+            ? medicoExterno.trim()
+            : undefined,
+          examenes_ids,
+          observaciones: observaciones.trim() || undefined,
+          fecha_programada_toma: fechaProgramadaToma,
+          repeticion_control: true,
+        });
+        toast.success(
+          `Orden de repetición/control ${orden.numero || `#${orden.id}`} creada.`
+        );
+        onCreated?.(orden.id);
+        onClose();
+      } catch (e) {
+        setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     const { paneles_ids, examenes_ids } = getSelectionArrays();
     const hasLab = examenes_ids.length > 0 || paneles_ids.length > 0;
     const hasMicro = microItems.length > 0;
@@ -500,11 +606,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
 
   const handleSubmit = async () => {
     setError('');
-    const hasLab = hasSelection;
-    const hasMicro = !soloLab && microItems.length > 0;
 
     if (agregarAOrdenId) {
-      if (!hasLab) {
+      if (!hasSelection) {
         setError('Seleccioná al menos un análisis o panel.');
         return;
       }
@@ -532,6 +636,22 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       setError('Indicá el día de la extracción.');
       return;
     }
+
+    if (repeticionMode) {
+      if (selectedRepeticionIds.size === 0) {
+        setError('Seleccioná al menos un ensayo ya informado para repetir.');
+        return;
+      }
+      if (draftMode) {
+        setError('La repetición/control se crea como orden real (no como borrador de consulta).');
+        return;
+      }
+      await executeCreate();
+      return;
+    }
+
+    const hasLab = hasSelection;
+    const hasMicro = !soloLab && microItems.length > 0;
 
     if (!hasLab && !hasMicro) {
       setError('Seleccioná análisis de Lab. Clínico y/o cultivos de Microbiología.');
@@ -594,7 +714,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
             ? 'Solicitar análisis de laboratorio'
             : agregarAOrdenId
               ? `Agregar exámenes a ${agregarAOrdenNumero || `orden #${agregarAOrdenId}`}`
-              : 'Nueva orden de laboratorio'}
+              : repeticionMode
+                ? 'Repetición / control (mismo día)'
+                : 'Nueva orden de laboratorio'}
         </DialogTitle>
         <DialogContent dividers sx={scrollableClinicalDialogContentSx}>
           <Stack spacing={2} sx={{ mt: 0.5 }}>
@@ -700,6 +822,31 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                 </Button>
               </Stack>
             )}
+
+            {!draftMode &&
+              !agregarAOrdenId &&
+              repeticionInfo?.disponible &&
+              repeticionInfo.orden_origen && (
+                <Alert
+                  severity={repeticionMode ? 'warning' : 'info'}
+                  sx={{ py: 0.5 }}
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => enterRepeticionMode(!repeticionMode)}
+                    >
+                      {repeticionMode ? 'Pedido normal' : 'Repetición / control'}
+                    </Button>
+                  }
+                >
+                  Hay una orden en informe parcial (
+                  {repeticionInfo.orden_origen.numero ||
+                    `#${repeticionInfo.orden_origen.id}`}
+                  ). Podés pedir una 2ª orden el mismo día solo con ensayos ya
+                  informados (ej. control de troponina).
+                </Alert>
+              )}
 
             {consultaHcId && (
               <Alert severity="info" sx={{ py: 0.5 }}>
@@ -831,7 +978,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               </>
             )}
 
-            {!soloLab && (
+            {!soloLab && !repeticionMode && (
               <Tabs
                 value={tab}
                 onChange={(_, v: PedidoTab) => setTab(v)}
@@ -849,7 +996,50 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               </Tabs>
             )}
 
-            {catalogLoading ? (
+            {repeticionMode ? (
+              <Stack spacing={1.5}>
+                <Typography variant="body2" color="text.secondary">
+                  Marcá solo los ensayos ya informados que querés repetir o controlar.
+                  Se crea una orden nueva (no se agregan a la parcial).
+                </Typography>
+                <FormGroup>
+                  {(repeticionInfo?.examenes ?? []).map((ex) => (
+                    <FormControlLabel
+                      key={ex.id}
+                      control={
+                        <Checkbox
+                          checked={selectedRepeticionIds.has(ex.id)}
+                          onChange={() => toggleRepeticionExamen(ex.id)}
+                          disabled={saving}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">
+                            {ex.codigo ? `${ex.codigo} — ` : ''}
+                            {ex.nombre}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Valor informado: {ex.valor_obtenido || '—'}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  ))}
+                </FormGroup>
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  minRows={2}
+                  label="Observaciones (opcional)"
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  disabled={saving}
+                  helperText="Se antepone automáticamente la referencia a la orden parcial."
+                />
+              </Stack>
+            ) : catalogLoading ? (
               <Box display="flex" justifyContent="center" py={4}>
                 <CircularProgress size={32} />
               </Box>
@@ -897,8 +1087,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
             onClick={handleSubmit}
             disabled={
               saving ||
-              catalogLoading ||
-              (!draftMode && !agregarAOrdenId && !pacienteInicial && !paciente)
+              (!repeticionMode && catalogLoading) ||
+              (!draftMode && !agregarAOrdenId && !pacienteInicial && !paciente) ||
+              (repeticionMode && selectedRepeticionIds.size === 0)
             }
           >
             {saving ? (
@@ -907,6 +1098,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               'Agregar a la consulta'
             ) : agregarAOrdenId ? (
               'Agregar exámenes'
+            ) : repeticionMode ? (
+              'Crear repetición / control'
             ) : (
               'Crear pedido'
             )}

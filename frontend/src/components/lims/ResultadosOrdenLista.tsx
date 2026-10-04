@@ -33,6 +33,8 @@ export interface ResultadosOrdenListaProps {
    * `clinico`: compacto para ficha médica (valor+unidad juntos).
    */
   modo?: 'laboratorio' | 'clinico';
+  /** Estado de la orden; en modo clínico define si vacío/no-calculable = «En proceso». */
+  estadoOrden?: string | null;
 }
 
 function valorConAbsolutoFormula(
@@ -57,22 +59,27 @@ function ResultadoRow({
   r,
   modo,
   resultados,
+  ordenFinalizada,
 }: {
   r: ResultadoExamenLims;
   modo: 'laboratorio' | 'clinico';
   resultados: ResultadoExamenLims[];
+  ordenFinalizada: boolean;
 }) {
-  const valor = valorConAbsolutoFormula(r, resultados);
-  const unidad = esResultadoNoCalculable(valor) ? '' : (r.unidad ?? '').trim();
+  const valorRaw = valorConAbsolutoFormula(r, resultados);
   const clinico = modo === 'clinico';
+  const ocultarValorClinico =
+    clinico && !ordenFinalizada && (!valorRaw || esResultadoNoCalculable(valorRaw));
+  const valor = ocultarValorClinico ? '' : valorRaw;
+  const unidad = !valor || esResultadoNoCalculable(valor) ? '' : (r.unidad ?? '').trim();
 
   return (
     <TableRow
       key={r.id}
       sx={
-        r.es_critico
+        !ocultarValorClinico && r.es_critico
           ? { bgcolor: 'error.light', '& .MuiTableCell-root': { color: 'error.contrastText' } }
-          : r.es_patologico
+          : !ocultarValorClinico && r.es_patologico
             ? { bgcolor: 'warning.light' }
             : undefined
       }
@@ -106,14 +113,20 @@ function ResultadoRow({
       <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
         {clinico ? (
           <Typography variant="caption" color="text.secondary">
-            {r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}
+            {ocultarValorClinico
+              ? '—'
+              : r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}
           </Typography>
         ) : (
           <ResultadoRangoInfo resultado={r} />
         )}
       </TableCell>
       <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
-        <ResultadoEstadoBadge resultado={r} />
+        <ResultadoEstadoBadge
+          resultado={r}
+          modo={modo}
+          ordenFinalizada={ordenFinalizada}
+        />
       </TableCell>
     </TableRow>
   );
@@ -124,6 +137,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   orden,
   observaciones,
   modo = 'laboratorio',
+  estadoOrden = null,
 }) => {
   const grupos = useMemo(
     () => (orden ? groupResultadosPorPanel(orden, resultados) : [{ key: 'all', titulo: '', resultados }]),
@@ -132,6 +146,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   const obs = (observaciones || '').trim();
   const tieneHemograma = grupos.some((g) => g.codigo === PANEL_HEMOGRAMA);
   const clinico = modo === 'clinico';
+  const ordenFinalizada = (estadoOrden || '').toUpperCase() === 'FINALIZADO';
 
   if (resultados.length === 0) {
     return (
@@ -200,6 +215,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
                       r={r}
                       modo={modo}
                       resultados={resultados}
+                      ordenFinalizada={ordenFinalizada}
                     />
                   ))}
                 </TableBody>

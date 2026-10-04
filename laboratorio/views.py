@@ -455,6 +455,48 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             }
         )
 
+    @action(detail=False, methods=['get'], url_path='repeticion-control')
+    def repeticion_control(self, request):
+        """
+        Candidatos a orden de repetición/control el mismo día.
+
+        Solo si hay INFORMADO_PARCIAL ese día: lista ensayos con valor informado.
+        """
+        from django.utils.dateparse import parse_date
+
+        from laboratorio.solicitud_orden_abierta import payload_repeticion_control_candidatos
+
+        raw = request.query_params.get('paciente_id')
+        if not raw:
+            return Response(
+                {'detail': 'paciente_id es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            paciente_id = int(raw)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'paciente_id inválido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        fecha_raw = request.query_params.get('fecha_programada_toma')
+        if not fecha_raw:
+            return Response(
+                {'detail': 'fecha_programada_toma es obligatoria (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        fecha_toma = parse_date(fecha_raw)
+        if fecha_toma is None:
+            return Response(
+                {'detail': 'fecha_programada_toma inválida (use YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            payload_repeticion_control_candidatos(
+                paciente_id, fecha_programada_toma=fecha_toma
+            )
+        )
+
     @action(detail=False, methods=['get'], url_path='restricciones-ensayos')
     def restricciones_ensayos(self, request):
         """Ensayos bloqueados por frecuencia (obra social) para un paciente."""

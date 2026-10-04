@@ -252,6 +252,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria', 'enfermeria')
         if action == 'restricciones_ensayos':
             return role in (*ROLES_LIMS_WRITE, 'medico')
+        if action == 'repeticion_control':
+            return role in (*ROLES_LIMS_WRITE, 'medico')
         if action == 'marcar_derivacion':
             return role in ROLES_LIMS_WRITE
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):

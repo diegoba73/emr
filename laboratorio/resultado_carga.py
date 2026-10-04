@@ -55,6 +55,24 @@ def payload_item_tiene_valor(item: dict) -> bool:
     return vn is not None and vn != ""
 
 
+def payload_item_limpia_valor(item: dict) -> bool:
+    """
+    True si el ítem pide borrar un valor ya cargado.
+
+    Solo cuenta cuando ``valor`` / ``valor_obtenido`` (o ticket) vienen
+    explícitamente vacíos; omitir la clave no toca el resultado.
+    """
+    if payload_item_tiene_valor(item):
+        return False
+    if "valor_sysmex" in item and not str(item.get("valor_sysmex") or "").strip():
+        return True
+    if "valor" in item:
+        return not str(item.get("valor") or "").strip()
+    if "valor_obtenido" in item:
+        return not str(item.get("valor_obtenido") or "").strip()
+    return False
+
+
 def _validation_message(exc: ValidationError) -> str:
     if hasattr(exc, "message_dict"):
         first = next(iter(exc.message_dict.values()))
@@ -86,9 +104,16 @@ def cargar_resultados_solicitud(
     if not resultados_data:
         raise CargaResultadosError("Se requiere una lista de resultados.")
 
-    items_con_valor = [i for i in resultados_data if payload_item_tiene_valor(i)]
-    if not items_con_valor:
-        raise CargaResultadosError("Indique al menos un resultado con valor para guardar.")
+    items_a_persistir = [
+        i
+        for i in resultados_data
+        if payload_item_tiene_valor(i) or payload_item_limpia_valor(i)
+    ]
+    if not items_a_persistir:
+        raise CargaResultadosError(
+            "Indique al menos un resultado con valor para guardar, "
+            "o deje en blanco un valor ya cargado para marcarlo como no informado."
+        )
 
     with transaction.atomic():
         solicitud = SolicitudExamen.objects.select_for_update().get(pk=solicitud_id)
@@ -134,7 +159,7 @@ def cargar_resultados_solicitud(
             solicitud.orden_grupos_informe = orden_validado
             solicitud.save(update_fields=["orden_grupos_informe"])
 
-        for resultado_item in items_con_valor:
+        for resultado_item in items_a_persistir:
             resultado_id = resultado_item.get("id")
             if not resultado_id:
                 continue
@@ -190,17 +215,22 @@ def cargar_resultados_solicitud(
                     if muestra.estado in ("RECIBIDA", "CONSERVADA"):
                         muestra_iniciar_proceso_id = muestra.pk
 
-            try:
-                assert_tipo_examen_muestra_carga(
-                    tipo_examen=resultado.tipo_examen,
-                    resultado_muestra=resultado.muestra,
-                    muestra_id_en_payload="muestra_id" in resultado_item,
-                    raw_muestra_id=resultado_item.get("muestra_id"),
-                )
-            except ValueError as exc:
-                raise CargaResultadosError(str(exc)) from exc
+            limpiando = payload_item_limpia_valor(resultado_item)
+            if not limpiando:
+                try:
+                    assert_tipo_examen_muestra_carga(
+                        tipo_examen=resultado.tipo_examen,
+                        resultado_muestra=resultado.muestra,
+                        muestra_id_en_payload="muestra_id" in resultado_item,
+                        raw_muestra_id=resultado_item.get("muestra_id"),
+                    )
+                except ValueError as exc:
+                    raise CargaResultadosError(str(exc)) from exc
 
             try:
+                if limpiando and "valor_numerico" not in resultado_item:
+                    # Borrar texto/ticket también anula el número estructurado.
+                    resultado_item = {**resultado_item, "valor_numerico": None}
                 audit_estructurado = aplicar_carga_estructurada(
                     resultado,
                     resultado.tipo_examen,
@@ -209,6 +239,8 @@ def cargar_resultados_solicitud(
                 audit_estructurado["valor_presente"] = bool(
                     (resultado.valor_obtenido or "").strip()
                 )
+                if limpiando:
+                    audit_estructurado["valor_limpiado"] = True
             except ValidationError as exc:
                 raise CargaResultadosError(_validation_message(exc)) from exc
 
@@ -323,5 +355,6 @@ __all__ = [
     "CargaResultadosError",
     "ESTADOS_CARGABLES",
     "cargar_resultados_solicitud",
+    "payload_item_limpia_valor",
     "payload_item_tiene_valor",
 ]

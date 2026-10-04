@@ -2,6 +2,7 @@ import {
   esOrigenAmbulatorioExterno,
   formatOrigenProcedenciaCell,
   labelOrigenSolicitudLims,
+  origenLimsDesdeSectorInternacion,
   sugerirLugarExtraccionDesdeOrigen,
 } from './limsOrigenSolicitud';
 
@@ -34,6 +35,16 @@ describe('limsOrigenSolicitud', () => {
     expect(esOrigenAmbulatorioExterno('EXTERNO_CEHTA')).toBe(true);
     expect(esOrigenAmbulatorioExterno('EXTERNO_ICPL')).toBe(true);
     expect(esOrigenAmbulatorioExterno('AMBULATORIO_CEHTA')).toBe(false);
+  });
+
+  it('origenLimsDesdeSectorInternacion mapea UCO/UCE', () => {
+    expect(origenLimsDesdeSectorInternacion('UCO')).toBe('INTERNACION_UCO');
+    expect(origenLimsDesdeSectorInternacion('Unidad Coronaria UCO')).toBe(
+      'INTERNACION_UCO'
+    );
+    expect(origenLimsDesdeSectorInternacion('UCE')).toBe('INTERNACION_UCE');
+    expect(origenLimsDesdeSectorInternacion('')).toBeNull();
+    expect(origenLimsDesdeSectorInternacion(null)).toBeNull();
   });
 
   it('formatOrigenProcedenciaCell muestra receta externa', () => {

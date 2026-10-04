@@ -47,6 +47,7 @@ import {
   applyAutofillVcmChcm,
   buildCargarResultadoPayload,
   buildValoresBorradorConclusion,
+  draftRowClearsServerValue,
   draftRowHasValue,
   draftSysmexTicketFromResultado,
   filterMuestrasProcesables,
@@ -291,13 +292,12 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         };
         const prevRow = prev[r.id];
         if (prevRow) {
-          if (prevRow.valor_sysmex.trim()) built.valor_sysmex = prevRow.valor_sysmex;
-          if (prevRow.valor.trim() || prevRow.valor_numerico.trim()) {
-            // Texto y número pertenecen al mismo borrador. Si el operador
-            // descartó el número al editar, no restaurarlo al cargar el catálogo.
-            built.valor = prevRow.valor;
-            built.valor_numerico = prevRow.valor_numerico;
-          }
+          // Conservar el borrador en memoria aunque esté vacío: si el operador
+          // borró un valor ya informado, no restaurarlo desde el servidor al
+          // refrescar catálogo/muestras (si no, "limpiar + guardar" no funciona).
+          built.valor_sysmex = prevRow.valor_sysmex;
+          built.valor = prevRow.valor;
+          built.valor_numerico = prevRow.valor_numerico;
           if (prevRow.unidad.trim()) built.unidad = prevRow.unidad;
           if (prevRow.muestra_id != null) built.muestra_id = prevRow.muestra_id;
         }
@@ -440,11 +440,16 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     const filasAGuardar = resultados.filter((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const row = draft[r.id] || emptyDraft();
-      return draftRowHasValue(row, te, r.tipo_examen_codigo);
+      return (
+        draftRowHasValue(row, te, r.tipo_examen_codigo) ||
+        draftRowClearsServerValue(r, row, te, r.tipo_examen_codigo)
+      );
     });
 
     if (!filasAGuardar.length) {
-      toast.error('Ingresá al menos un valor para guardar.');
+      toast.error(
+        'Ingresá al menos un valor para guardar, o borrá un valor ya cargado para marcarlo como no informado.'
+      );
       return;
     }
 

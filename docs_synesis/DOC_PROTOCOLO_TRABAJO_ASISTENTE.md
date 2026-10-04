@@ -383,6 +383,20 @@ Pedir arquitectura + auditoría obligatoria si se toca:
 - Migraciones en apps con datos clínicos
 - Roles en `usuarios/models.py`
 
+### 6.6 Producción con órdenes vivas (compatibilidad)
+
+SoT: `reglas/produccion-servidor.md` → **Compatibilidad con órdenes y exámenes ya existentes**.
+
+Antes de implementar (y otra vez antes de sugerir deploy), el asistente debe preguntarse: *¿esto puede romper o cambiar el comportamiento de una orden/examen que ya existe en prod?*
+
+Si hay **posibilidad real** (validación más estricta, catálogo, tubos, estados, migraciones, seeds):
+
+1. **Parar y avisar** en el chat: qué rompería, sobre qué entidades (órdenes abiertas, resultados cargados, tubos impresos, etc.).
+2. Proponer alternativa retrocompatible si existe.
+3. **No aplicar** el cambio riesgoso hasta que el usuario diga explícitamente si se hace, no se hace, o solo aplica a órdenes nuevas.
+
+No alcanza con “funciona en local con orden de prueba”.
+
 ---
 
 ## 7. Criterios de go / no-go
@@ -540,6 +554,7 @@ Copiar al cerrar una sesión o al pedir revisión al asistente.
 
 | Versión | Fecha | Cambio |
 |---------|-------|--------|
+| 1.3 | 2026-10-04 | §6.6 compatibilidad con órdenes/exámenes ya existentes en prod (avisar y pedir OK) |
 | 1.2 | 2026-09-13 | Retiro del export Gemini Gem (`_GEM_CONTEXT/`, disparador «actualiza gem») |
 | 1.1 | 2026-09-12 | Índice rector `REGLAS_INDICE.md`; checkpoints alineados al script |
 | 1.0 | 2026-06-21 | Creación inicial |

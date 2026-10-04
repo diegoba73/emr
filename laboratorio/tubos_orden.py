@@ -37,13 +37,17 @@ from laboratorio.tubos_catalogo import (
 )
 
 
-def _examen_sin_tubo_fisico(ex) -> bool:
+def examen_sin_tubo_fisico(ex) -> bool:
     """FiO2 / CALCULADO: figuran en panel pero no generan ni exigen tubo."""
     codigo = (getattr(ex, "codigo", None) or "").strip().upper()
     if codigo in EXAMENES_SIN_CONTENEDOR or codigo in EXAMENES_CALCULADOS_SIN_TUBO:
         return True
     modo = getattr(ex, "modo_entrada", None) or ""
     return modo == "CALCULADO"
+
+
+# Compat interno (imports previos).
+_examen_sin_tubo_fisico = examen_sin_tubo_fisico
 
 
 MAX_EXAMENES_POR_TUBO = 10

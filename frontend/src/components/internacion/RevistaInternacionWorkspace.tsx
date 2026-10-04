@@ -43,6 +43,7 @@ import type {
   RevistaEvolucionItem,
 } from '../../services/internacion';
 import type { Paciente } from '../../types';
+import type { OrigenSolicitudLims } from '../../types/lims';
 import type { TipoEstudioComplementario } from '../../types/estudios';
 import { formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
 
@@ -67,6 +68,8 @@ interface RevistaInternacionWorkspaceProps {
   ensuringAtencion: boolean;
   paciente: Paciente | null;
   medicoId: number | null;
+  /** Origen LIMS sugerido según sector de la cama (UCO/UCE). */
+  origenLimsInicial?: OrigenSolicitudLims | null;
   onEnsureAtencion: () => Promise<number | null>;
   onRefresh: () => void;
   onIniciarInterconsulta?: () => void;
@@ -124,6 +127,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
   ensuringAtencion,
   paciente,
   medicoId,
+  origenLimsInicial = null,
   onEnsureAtencion,
   onRefresh,
   onIniciarInterconsulta,
@@ -149,13 +153,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
   const effectiveAtencionId = atencionHoyId ?? localAtencionId;
   const historia = useMemo(() => buildHistoria(contexto), [contexto]);
   const hoyExtraccion = formatFechaLocal(startOfLocalDay());
-  /** Solo colisiona con otra orden activa del mismo día de extracción (hoy). */
-  const labActivaHoy =
-    contexto?.laboratorio.find((l) => {
-      if (l.estado === 'FINALIZADO') return false;
-      if (l.fecha_programada_toma) return l.fecha_programada_toma === hoyExtraccion;
-      return Boolean(l.es_de_hoy);
-    }) ?? null;
+  /** Informativo: orden activa programada para otro día (no bloquea pedir hoy). */
   const labProgramadaOtroDia =
     contexto?.laboratorio.find(
       (l) =>
@@ -302,15 +300,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
             </Alert>
           )}
           <Stack spacing={1.5} sx={{ mb: 2 }}>
-            {labActivaHoy && (
-              <Alert severity="warning">
-                Hay un análisis de hoy en proceso
-                {labActivaHoy.numero ? ` (${labActivaHoy.numero})` : ''}. Para el mismo día de
-                extracción no se puede crear otra orden: agregá exámenes a la existente o
-                programá la extracción para otro día.
-              </Alert>
-            )}
-            {!labActivaHoy && labProgramadaOtroDia && (
+            {labProgramadaOtroDia && (
               <Alert severity="info">
                 Hay una orden programada para otro día
                 {labProgramadaOtroDia.numero ? ` (${labProgramadaOtroDia.numero})` : ''}
@@ -480,6 +470,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                       {lab.resultados.length > 0 ? (
                         <ResultadosOrdenLista
                           modo="clinico"
+                          estadoOrden={lab.estado}
                           orden={{
                             tipos_examen: lab.tipos_examen,
                             paneles_resumen: (lab.paneles_resumen ?? []).map((p) => ({
@@ -590,6 +581,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
           onClose={() => setPedidoPanel(null)}
           pacienteInicial={paciente}
           medicoId={medicoId}
+          origenInicial={origenLimsInicial}
           onCreated={() => {
             setPedidoPanel(null);
             onRefresh();

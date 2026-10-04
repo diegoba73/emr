@@ -672,3 +672,196 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertTrue(
             ResultadoExamen.objects.filter(solicitud_id=sol_id, tipo_examen=self.crea).exists()
         )
+
+
+class TestRepeticionControl(TestCase):
+    """2ª orden mismo día solo con ensayos informados de INFORMADO_PARCIAL."""
+
+    def setUp(self):
+        self.suf = uuid.uuid4().hex[:8]
+        self.lab = User.objects.create_user(
+            username=f"lab_rc_{self.suf}",
+            password="pass12345",
+            rol="laboratorio",
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.lab)
+        self.pac = Paciente.objects.create(
+            nombre="Rita",
+            apellido="Control",
+            dni=f"6{self.suf[:7]}",
+            fecha_nacimiento="1988-01-01",
+        )
+        self.tm = TipoMuestra.objects.create(
+            codigo=f"RC{self.suf[:4]}",
+            nombre=f"Sangre RC {self.suf}",
+        )
+        self.trop = TipoExamen.objects.create(
+            codigo=f"TRP{self.suf[:4]}",
+            nombre="Troponina RC",
+            tipo_muestra_requerida=self.tm,
+            tipo_resultado="NUMERICO",
+        )
+        self.crea = TipoExamen.objects.create(
+            codigo=f"CRC{self.suf[:4]}",
+            nombre="Creatinina RC",
+            tipo_muestra_requerida=self.tm,
+            tipo_resultado="NUMERICO",
+        )
+        self.urea = TipoExamen.objects.create(
+            codigo=f"URC{self.suf[:4]}",
+            nombre="Urea RC",
+            tipo_muestra_requerida=self.tm,
+            tipo_resultado="NUMERICO",
+        )
+        self.panel = PanelExamen.objects.create(
+            codigo=f"PRC{self.suf[:4]}",
+            nombre="Panel RC",
+            activo=True,
+        )
+        self.panel.tipos_examen.add(self.crea)
+        self.hoy = timezone.localdate()
+
+    def _create_parcial_con_trop_informada(self) -> SolicitudExamen:
+        sol = SolicitudExamen.objects.create(
+            paciente=self.pac,
+            estado="INFORMADO_PARCIAL",
+            origen_solicitud="AMBULATORIO_CEHTA",
+            fecha_programada_toma=self.hoy,
+        )
+        ResultadoExamen.objects.create(
+            solicitud=sol,
+            tipo_examen=self.trop,
+            valor_obtenido="0.04",
+        )
+        ResultadoExamen.objects.create(
+            solicitud=sol,
+            tipo_examen=self.crea,
+            valor_obtenido="",
+        )
+        return sol
+
+    def test_endpoint_candidatos_lista_solo_informados(self):
+        origen = self._create_parcial_con_trop_informada()
+        r = self.client.get(
+            "/api/lab/solicitudes/repeticion-control/",
+            {
+                "paciente_id": self.pac.id,
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertTrue(r.data["disponible"])
+        self.assertEqual(r.data["orden_origen"]["id"], origen.id)
+        ids = {ex["id"] for ex in r.data["examenes"]}
+        self.assertEqual(ids, {self.trop.id})
+        self.assertEqual(r.data["examenes"][0]["valor_obtenido"], "0.04")
+
+    def test_endpoint_sin_parcial_no_disponible(self):
+        r = self.client.get(
+            "/api/lab/solicitudes/repeticion-control/",
+            {
+                "paciente_id": self.pac.id,
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertFalse(r.data["disponible"])
+        self.assertEqual(r.data["examenes"], [])
+
+    def test_create_repeticion_ok_misma_fecha(self):
+        origen = self._create_parcial_con_trop_informada()
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.trop.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "repeticion_control": True,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertNotEqual(r.data["id"], origen.id)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
+        nueva = SolicitudExamen.objects.get(pk=r.data["id"])
+        self.assertIn("Repetición/control", nueva.observaciones or "")
+        self.assertTrue(
+            ResultadoExamen.objects.filter(
+                solicitud=nueva, tipo_examen=self.trop
+            ).exists()
+        )
+
+    def test_create_sin_flag_sigue_bloqueado(self):
+        self._create_parcial_con_trop_informada()
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.trop.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        detail = r.data if isinstance(r.data, str) else str(r.data)
+        self.assertIn("pendiente o en proceso", detail)
+
+    def test_create_rechaza_ensayo_no_informado(self):
+        self._create_parcial_con_trop_informada()
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.crea.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "repeticion_control": True,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+
+    def test_create_rechaza_paneles(self):
+        self._create_parcial_con_trop_informada()
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.trop.id],
+                "paneles_ids": [self.panel.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "repeticion_control": True,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+
+    def test_create_rechaza_ensayo_ajeno(self):
+        from laboratorio.solicitud_orden_abierta import MENSAJE_ORDEN_ACTIVA_MISMO_DIA
+
+        self._create_parcial_con_trop_informada()
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "examenes_ids": [self.urea.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "repeticion_control": True,
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertNotIn(MENSAJE_ORDEN_ACTIVA_MISMO_DIA, str(r.data))

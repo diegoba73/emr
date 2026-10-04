@@ -34,9 +34,16 @@ import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
 import { canDarAltaInternacion, canOperateInternacionClinica, canWriteHcMedico, canWriteHcEnfermeria, canWriteHcKinesiologia, getDefaultInternacionModalTab } from '../../utils/permissions';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import { origenLimsDesdeSectorInternacion } from '../../utils/limsOrigenSolicitud';
 import AtencionDetailDrawer from '../../modules/atenciones/components/AtencionDetailDrawer';
 import RevistaInternacionWorkspace from './RevistaInternacionWorkspace';
 import FormulariosHcInternacion from './FormulariosHcInternacion';
+
+const sectorNombreCama = (cama: Cama | null): string => {
+  if (!cama) return '';
+  if (typeof cama.sector === 'object' && cama.sector?.nombre) return cama.sector.nombre;
+  return cama.sector_nombre || '';
+};
 
 interface ModalGestionarPacienteProps {
   open: boolean;
@@ -1099,6 +1106,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                 ensuringAtencion={loading}
                 paciente={pacienteSeleccionado}
                 medicoId={internacion?.medico ?? editedData.medico ?? null}
+                origenLimsInicial={origenLimsDesdeSectorInternacion(sectorNombreCama(cama))}
                 onEnsureAtencion={ensureRevistaAtencion}
                 onRefresh={() => {
                   if (internacionIdActual) {

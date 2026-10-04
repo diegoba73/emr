@@ -213,6 +213,7 @@ const SolicitudLabDetalle: React.FC = () => {
                 orden={orden}
                 observaciones={orden.observaciones}
                 modo="clinico"
+                estadoOrden={orden.estado}
               />
             )}
           </Paper>
