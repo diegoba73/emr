@@ -176,10 +176,14 @@ class InformeMovilDetalle(APIView):
     def get(self, request, pk):
         sol = self._get(request, pk)
         resumen = InformeMovilSerializer(sol, context={'request': request}).data
-        out = {'informe': resumen}
+        # Resultados en pantalla para todos los roles con acceso al informe
+        # (médico/paciente ven parcial sin PDF; PDF solo FINALIZADO).
+        out = {
+            'informe': resumen,
+            'orden': SolicitudExamenSerializer(sol, context={'request': request}).data,
+        }
         rol = _rol(request.user)
         if rol in ROLES_MOVIL_VALIDAR or rol in ('laboratorio',):
-            out['orden'] = SolicitudExamenSerializer(sol, context={'request': request}).data
             try:
                 out['analisis'] = analizar_solicitud_optimizado(sol)
             except Exception:

@@ -37,8 +37,8 @@ export default function InformesList() {
     <Page>
       <Title>Informes</Title>
       <Body>
-        Solo aparecen informes validados o parciales. El PDF de un informe parcial lo indica
-        claramente en el encabezado.
+        Solo aparecen informes validados o parciales. En parciales ves los valores en pantalla; el
+        PDF se habilita cuando el informe está validado.
       </Body>
       <Card>
         <Field

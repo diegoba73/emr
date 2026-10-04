@@ -78,6 +78,20 @@ def test_secretaria_lista_parcial_pero_no_descarga_pdf():
     assert pdf.status_code == 403
 
 
+def test_medico_ve_resultados_en_parcial_sin_pdf():
+    c, _ = _login('medico', 'med-inf')
+    p = Paciente.objects.create(nombre='Pac', apellido='Med', dni='INF-MED')
+    sol = _orden(p, 'INFORMADO_PARCIAL')
+    det = c.get(f'/api/movil/informes/{sol.id}/')
+    assert det.status_code == 200, det.data
+    assert det.data['informe']['es_parcial'] is True
+    assert det.data['informe']['puede_descargar_pdf'] is False
+    assert 'orden' in det.data
+    assert len(det.data['orden'].get('resultados') or []) >= 1
+    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/?as_base64=1')
+    assert pdf.status_code == 403
+
+
 def test_paciente_descarga_pdf_propio_y_no_ajeno():
     c, user = _login('paciente', 'pac-pdf')
     p = Paciente.objects.create(user=user, nombre='Ana', apellido='Propia', dni='INF-PDF-1')
@@ -88,6 +102,8 @@ def test_paciente_descarga_pdf_propio_y_no_ajeno():
     det = c.get(f'/api/movil/informes/{propia.id}/')
     assert det.status_code == 200, det.data
     assert det.data['informe']['puede_descargar_pdf'] is True
+    assert 'orden' in det.data
+    assert len(det.data['orden'].get('resultados') or []) >= 1
 
     pdf = c.get(f'/api/movil/informes/{propia.id}/pdf/?as_base64=1')
     assert pdf.status_code == 200, pdf.data

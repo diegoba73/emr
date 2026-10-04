@@ -23,7 +23,8 @@ type Detalle = {
 };
 
 export default function InformeDetalle() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { user } = useSession();
   const [data, setData] = useState<Detalle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,8 +116,8 @@ export default function InformeDetalle() {
             INFORME PARCIAL
           </Text>
           <Body>
-            Algunos resultados aún están pendientes. El PDF descargado también lo indica de forma
-            destacada.
+            Algunos resultados aún están pendientes. Podés ver lo informado en pantalla; el PDF se
+            habilita cuando el informe esté validado.
           </Body>
         </Card>
       )}
@@ -130,14 +131,52 @@ export default function InformeDetalle() {
           disabled={busy}
           onPress={() =>
             void run(async () => {
-              const { esParcial } = await downloadInformePdf(inf.id);
-              if (esParcial) {
-                Alert.alert('Informe parcial', 'El PDF indica claramente que es un informe parcial.');
-              }
+              await downloadInformePdf(inf.id);
             }, 'PDF listo para compartir o guardar.')
           }
         />
       )}
+
+      <Card>
+        <Text style={{ fontWeight: '800', fontSize: 18, color: colors.ink }}>Resultados</Text>
+        {!resultados.length && <Body>Sin resultados cargados.</Body>}
+        {gruposResultados.map((grupo) => (
+          <View key={grupo.key} style={{ gap: 6, marginTop: 8 }}>
+            {(grupo.codigo || grupo.resultados.length > 1) && (
+              <Text style={{ fontWeight: '800', fontSize: 15, color: colors.ink }}>
+                {grupo.titulo}
+              </Text>
+            )}
+            {grupo.resultados.map((r) => (
+              <View
+                key={r.id}
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                  paddingTop: 10,
+                  gap: 2,
+                }}
+              >
+                <Text style={{ fontWeight: '700', color: colors.ink }}>
+                  {r.tipo_examen_nombre || r.tipo_examen_codigo || `Examen ${r.tipo_examen}`}
+                </Text>
+                <Body>
+                  Valor: {r.valor_obtenido ?? r.valor_numerico ?? '—'}
+                  {r.unidad ? ` ${r.unidad}` : ''}
+                </Body>
+                <Body>
+                  Referencia: {r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}
+                </Body>
+                {(r.es_patologico || r.es_critico) && (
+                  <Text style={{ color: colors.danger, fontWeight: '700' }}>
+                    {r.es_critico ? 'Crítico' : 'Fuera de rango'}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        ))}
+      </Card>
 
       {esBio && (
         <>
@@ -231,47 +270,6 @@ export default function InformeDetalle() {
               }
             />
           )}
-
-          <Card>
-            <Text style={{ fontWeight: '800', fontSize: 18, color: colors.ink }}>Resultados</Text>
-            {!resultados.length && <Body>Sin resultados cargados.</Body>}
-            {gruposResultados.map((grupo) => (
-              <View key={grupo.key} style={{ gap: 6, marginTop: 8 }}>
-                {(grupo.codigo || grupo.resultados.length > 1) && (
-                  <Text style={{ fontWeight: '800', fontSize: 15, color: colors.ink }}>
-                    {grupo.titulo}
-                  </Text>
-                )}
-                {grupo.resultados.map((r) => (
-                  <View
-                    key={r.id}
-                    style={{
-                      borderTopWidth: 1,
-                      borderTopColor: colors.border,
-                      paddingTop: 10,
-                      gap: 2,
-                    }}
-                  >
-                    <Text style={{ fontWeight: '700', color: colors.ink }}>
-                      {r.tipo_examen_nombre || r.tipo_examen_codigo || `Examen ${r.tipo_examen}`}
-                    </Text>
-                    <Body>
-                      Valor: {r.valor_obtenido ?? r.valor_numerico ?? '—'}
-                      {r.unidad ? ` ${r.unidad}` : ''}
-                    </Body>
-                    <Body>
-                      Referencia: {r.rango_referencia_snapshot || r.tipo_examen_rango_referencia || '—'}
-                    </Body>
-                    {(r.es_patologico || r.es_critico) && (
-                      <Text style={{ color: colors.danger, fontWeight: '700' }}>
-                        {r.es_critico ? 'Crítico' : 'Fuera de rango'}
-                      </Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            ))}
-          </Card>
 
           {Boolean(data.historial?.analitos?.length) && (
             <Card>
