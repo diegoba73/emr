@@ -27,6 +27,7 @@ from laboratorio.models_qc import (
 from laboratorio.qc_service import (
     _ultima_corrida_producto,
     _ventana_hoy,
+    fecha_corte_dia_operativo_iqc,
     fecha_dia_operativo_iqc,
     materiales_iqc_canonicos,
 )
@@ -175,9 +176,11 @@ def _calibracion_hoy(equipo: EquipoAnalizador, *, fecha) -> Calibracion | None:
 
 def tablero_iqc_hoy() -> dict[str, Any]:
     start, end = _ventana_hoy()
-    # Fecha del inicio del día operativo (08:00→08:00), no medianoche civil.
+    # Fecha del inicio de la ventana IQC (en finde = viernes vigente).
     hoy = fecha_dia_operativo_iqc()
-    dia_aviso = es_dia_aviso_control_valores(fecha=hoy)
+    # Aviso lun/vie usa el corte 08:00 sin extensión finde (sáb/dom no avisan).
+    fecha_aviso = fecha_corte_dia_operativo_iqc()
+    dia_aviso = es_dia_aviso_control_valores(fecha=fecha_aviso)
     try:
         exam_ids_hoy = _exam_ids_abiertos()
     except Exception:
@@ -188,7 +191,9 @@ def tablero_iqc_hoy() -> dict[str, Any]:
 
     for eq in equipos:
         try:
-            cards.append(_card_equipo(eq, exam_ids_hoy, start, end, hoy))
+            cards.append(
+                _card_equipo(eq, exam_ids_hoy, start, end, hoy, fecha_aviso=fecha_aviso)
+            )
         except Exception:
             logger.exception("tablero_iqc_hoy: equipo %s", eq.codigo)
             cards.append(
@@ -228,8 +233,10 @@ def tablero_iqc_hoy() -> dict[str, Any]:
     }
 
 
-def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
+def _card_equipo(eq, exam_ids_hoy, start, end, hoy, *, fecha_aviso=None) -> dict[str, Any]:
     ensayos_hoy = _ensayos_de_equipo(eq, exam_ids_hoy)
+    if fecha_aviso is None:
+        fecha_aviso = hoy
     cal = _calibracion_hoy(eq, fecha=hoy)
     cal_pack = (
         {"id": cal.id, "fecha": str(cal.fecha), "observaciones": cal.observaciones or ""}
@@ -287,7 +294,7 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
             aviso_fila = _aviso_valores_s1_s2(
                 p1 if n1 else {"con_valores": True},
                 p2 if n2 else {"con_valores": True},
-                fecha=hoy,
+                fecha=fecha_aviso,
                 codigo_equipo=eq.codigo,
             )
             filas.append(
@@ -315,7 +322,7 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
         aviso_eq = any(f.get("aviso_valores") for f in relevantes) if relevantes else False
         msg_eq = None
         if aviso_eq:
-            dia = _nombre_dia(hoy)
+            dia = _nombre_dia(fecha_aviso)
             msg_eq = (
                 f"Hoy es {dia}: falta cargar control con valores en uno o más ensayos. "
                 "El OK rápido sigue disponible para salir del apuro."
@@ -363,7 +370,9 @@ def _card_equipo(eq, exam_ids_hoy, start, end, hoy) -> dict[str, Any]:
     if producto:
         estado_eq, resumen_eq = _rollup(p1["estado"], p2["estado"])
         tiene = True
-        aviso = _aviso_valores_s1_s2(p1, p2, fecha=hoy, codigo_equipo=eq.codigo)
+        aviso = _aviso_valores_s1_s2(
+            p1, p2, fecha=fecha_aviso, codigo_equipo=eq.codigo
+        )
     else:
         estado_eq, resumen_eq = "sin_trabajo", "Sin producto de control"
         tiene = False

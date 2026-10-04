@@ -26,10 +26,11 @@ from laboratorio.tests.test_qc_gate import _FakeSolicitud
 
 User = get_user_model()
 
-# 2026-09-07 = lunes, 2026-09-08 = martes, 2026-09-11 = viernes
+# 2026-09-07 = lunes, 2026-09-08 = martes, 2026-09-11 = viernes, 12 = sábado
 LUNES = date(2026, 9, 7)
 MARTES = date(2026, 9, 8)
 VIERNES = date(2026, 9, 11)
+SABADO = date(2026, 9, 12)
 
 
 class TestEquiposCanonico(TestCase):
@@ -45,6 +46,15 @@ class TestEquiposCanonico(TestCase):
 
 def _aware(d: date, t: time | None = None):
     return timezone.make_aware(datetime.combine(d, t or time(10, 0)))
+
+
+def _patch_dia(d: date, t: time | None = None):
+    """Fija now/localdate al día operativo de prueba (evita flakiness por fin de semana real)."""
+    ahora = _aware(d, t)
+    return (
+        patch("django.utils.timezone.now", return_value=ahora),
+        patch("django.utils.timezone.localdate", return_value=d),
+    )
 
 
 class TestMaterialesCanonicosGate(TestCase):
@@ -231,7 +241,8 @@ class TestTableroHoy(TestCase):
 
     def test_aviso_valores_lunes_sin_puntos(self):
         self._corridas_ok_rapido(LUNES)
-        with patch("django.utils.timezone.localdate", return_value=LUNES):
+        p_now, p_date = _patch_dia(LUNES)
+        with p_now, p_date:
             data = tablero_iqc_hoy()
             card = next(e for e in data["equipos"] if e["codigo"] == "CM260")
         self.assertTrue(data["dia_aviso_control_valores"])
@@ -245,7 +256,8 @@ class TestTableroHoy(TestCase):
         self._corridas_ok_rapido(LUNES)
         for c in CorridaQC.objects.filter(lote_producto=self.lote):
             PuntoQC.objects.create(corrida=c, tipo_examen=self.glu, valor=Decimal("100"))
-        with patch("django.utils.timezone.localdate", return_value=LUNES):
+        p_now, p_date = _patch_dia(LUNES)
+        with p_now, p_date:
             card = next(e for e in tablero_iqc_hoy()["equipos"] if e["codigo"] == "CM260")
         self.assertFalse(card["aviso_valores"])
         self.assertTrue(card["s1"]["con_valores"])
@@ -253,7 +265,8 @@ class TestTableroHoy(TestCase):
 
     def test_sin_aviso_valores_martes(self):
         self._corridas_ok_rapido(MARTES)
-        with patch("django.utils.timezone.localdate", return_value=MARTES):
+        p_now, p_date = _patch_dia(MARTES)
+        with p_now, p_date:
             data = tablero_iqc_hoy()
             card = next(e for e in data["equipos"] if e["codigo"] == "CM260")
         self.assertFalse(data["dia_aviso_control_valores"])
@@ -262,7 +275,8 @@ class TestTableroHoy(TestCase):
 
     def test_aviso_valores_viernes_endpoint(self):
         self._corridas_ok_rapido(VIERNES)
-        with patch("django.utils.timezone.localdate", return_value=VIERNES):
+        p_now, p_date = _patch_dia(VIERNES)
+        with p_now, p_date:
             resp = self.client.get("/api/lab/qc/tablero-hoy/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.assertTrue(resp.data["dia_aviso_control_valores"])
@@ -270,6 +284,18 @@ class TestTableroHoy(TestCase):
         self.assertTrue(card["aviso_valores"])
         self.assertEqual(card["politica_valores"], "LUN_VIE")
         self.assertIn("OK rápido", card["aviso_valores_mensaje"])
+
+    def test_sabado_sin_aviso_valores_aunque_ventana_es_viernes(self):
+        """El sábado hereda el control del viernes pero no dispara aviso lun/vie."""
+        self._corridas_ok_rapido(VIERNES)
+        p_now, p_date = _patch_dia(SABADO)
+        with p_now, p_date:
+            data = tablero_iqc_hoy()
+            card = next(e for e in data["equipos"] if e["codigo"] == "CM260")
+        self.assertEqual(data["fecha"], VIERNES.isoformat())
+        self.assertFalse(data["dia_aviso_control_valores"])
+        self.assertFalse(card["aviso_valores"])
+        self.assertEqual(card["estado"], "liberado")
 
     def test_vidas_finecare_edan_sin_aviso_lun_vie(self):
         muestra = TipoMuestra.objects.get(codigo="SANGRE_TAB")
@@ -320,7 +346,8 @@ class TestTableroHoy(TestCase):
             codigo_lote="ED1",
             vencimiento=timezone.localdate() + timedelta(days=30),
         )
-        with patch("django.utils.timezone.localdate", return_value=LUNES):
+        p_now, p_date = _patch_dia(LUNES)
+        with p_now, p_date:
             data = tablero_iqc_hoy()
         self.assertTrue(data["dia_aviso_control_valores"])
         for codigo in ("VIDAS_KUBE", "FINECARE", "EDAN_I15"):

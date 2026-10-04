@@ -16,6 +16,7 @@ from laboratorio.qc_service import (
     QcGateError,
     _ventana_hoy,
     estado_iqc_solicitud,
+    fecha_corte_dia_operativo_iqc,
     fecha_dia_operativo_iqc,
     get_equipo_iqc_default,
     validar_qc_para_cierre,
@@ -480,3 +481,85 @@ class TestQcVentanaDiaOperativo(TestCase):
         )
         with patch("django.utils.timezone.now", return_value=ahora):
             validar_qc_para_cierre(self.solicitud)
+
+    def test_ventana_sabado_extiende_viernes_a_lunes(self):
+        # 2026-10-09 = viernes, 10 = sáb, 11 = dom, 12 = lun
+        ahora = self._aware(2026, 10, 10, 15, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 9, 8, 0)
+            self._assert_local(end, 2026, 10, 12, 8, 0)
+            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 9).date())
+            self.assertEqual(fecha_corte_dia_operativo_iqc(), datetime(2026, 10, 10).date())
+
+    def test_ventana_domingo_extiende_viernes_a_lunes(self):
+        ahora = self._aware(2026, 10, 11, 12, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 9, 8, 0)
+            self._assert_local(end, 2026, 10, 12, 8, 0)
+            self.assertEqual(fecha_corte_dia_operativo_iqc(), datetime(2026, 10, 11).date())
+
+    def test_viernes_aceptada_cubre_sabado_y_domingo(self):
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 9, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        for ahora in (
+            self._aware(2026, 10, 10, 11, 0),  # sábado
+            self._aware(2026, 10, 11, 16, 0),  # domingo
+        ):
+            with patch("django.utils.timezone.now", return_value=ahora):
+                validar_qc_para_cierre(self.solicitud)
+
+    def test_viernes_aceptada_cubre_lunes_antes_de_08(self):
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 9, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 12, 7, 59)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 9, 8, 0)
+            self._assert_local(end, 2026, 10, 12, 8, 0)
+            validar_qc_para_cierre(self.solicitud)
+
+    def test_lunes_desde_08_exige_control_nuevo(self):
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 9, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 12, 8, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 12, 8, 0)
+            self._assert_local(end, 2026, 10, 13, 8, 0)
+            with self.assertRaises(QcGateError) as ctx:
+                validar_qc_para_cierre(self.solicitud)
+            self.assertIn("Sin corrida", str(ctx.exception))
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 12, 8, 15),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        with patch("django.utils.timezone.now", return_value=ahora):
+            validar_qc_para_cierre(self.solicitud)
+
+    def test_martes_no_hereda_control_del_viernes(self):
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 9, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 13, 9, 0)  # martes
+        with patch("django.utils.timezone.now", return_value=ahora):
+            with self.assertRaises(QcGateError):
+                validar_qc_para_cierre(self.solicitud)

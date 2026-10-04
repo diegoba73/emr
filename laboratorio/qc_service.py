@@ -77,29 +77,54 @@ def _hora_inicio_dia_operativo() -> int:
     return h if 0 <= h <= 23 else 8
 
 
-def _ventana_hoy(ahora=None):
+def _fecha_corte_dia_operativo(ahora=None):
     """
-    Ventana del día operativo IQC: [corte, corte+24h) en TZ local.
+    Fecha civil del día operativo según corte 08:00, sin extensión de fin de semana.
 
-    Corte default 08:00. Antes de esa hora sigue valiendo el control de la
-    rutina anterior (p. ej. guardia a la 01:00 usa el IQC desde ayer 08:00).
+    Antes del corte sigue el día operativo anterior (p. ej. martes 01:00 → lunes).
     """
     ahora_local = timezone.localtime(ahora or timezone.now())
     hora_corte = _hora_inicio_dia_operativo()
     corte = time(hora_corte, 0, 0)
     if ahora_local.time() < corte:
-        inicio_date = ahora_local.date() - timedelta(days=1)
-    else:
-        inicio_date = ahora_local.date()
+        return ahora_local.date() - timedelta(days=1)
+    return ahora_local.date()
+
+
+def _ventana_hoy(ahora=None):
+    """
+    Ventana del día operativo IQC en TZ local.
+
+    Corte default 08:00. Lun–vie: [corte, corte+24h).
+    Sábado/domingo (y lunes antes del corte): el control del viernes sigue
+    vigente → ventana [viernes 08:00, lunes 08:00).
+    """
+    inicio_date = _fecha_corte_dia_operativo(ahora)
+    hora_corte = _hora_inicio_dia_operativo()
+    corte = time(hora_corte, 0, 0)
+    # Sábado=5, domingo=6 → rebobinar al viernes y extender hasta el lunes.
+    if inicio_date.weekday() >= 5:
+        inicio_date = inicio_date - timedelta(days=inicio_date.weekday() - 4)
+        start = timezone.make_aware(datetime.combine(inicio_date, corte))
+        end = start + timedelta(days=3)
+        return start, end
     start = timezone.make_aware(datetime.combine(inicio_date, corte))
     end = start + timedelta(days=1)
     return start, end
 
 
 def fecha_dia_operativo_iqc(ahora=None):
-    """Fecha civil del inicio del día operativo vigente (para etiquetas del tablero)."""
+    """Fecha civil del inicio de la ventana IQC vigente (etiquetas del tablero).
+
+    En fin de semana es el viernes cuyo control sigue vigente.
+    """
     start, _ = _ventana_hoy(ahora)
     return timezone.localtime(start).date()
+
+
+def fecha_corte_dia_operativo_iqc(ahora=None):
+    """Fecha del día operativo por corte 08:00, sin extensión de fin de semana."""
+    return _fecha_corte_dia_operativo(ahora)
 
 
 def _producto_multiparam_para_examen(examen: TipoExamen) -> ProductoControl | None:
