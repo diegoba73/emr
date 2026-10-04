@@ -116,8 +116,8 @@ export default function InformeDetalle() {
             INFORME PARCIAL
           </Text>
           <Body>
-            Algunos resultados aún están pendientes. Podés ver lo informado en pantalla; el PDF se
-            habilita cuando el informe esté validado.
+            Algunos resultados aún están pendientes. El PDF se habilita recién cuando el informe
+            esté validado (FINALIZADO).
           </Body>
         </Card>
       )}

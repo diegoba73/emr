@@ -1,12 +1,7 @@
-import { api } from './api';
-import { EncodingType, File, Paths } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-
-type PdfPayload = {
-  filename: string;
-  base64: string;
-  es_parcial?: boolean;
-};
+import { ApiError } from './client';
+import { getApiBase, getToken } from './api';
 
 function safeFilename(name: string | undefined, id: number): string {
   const raw = (name || `informe-${id}.pdf`).replace(/[/\\?%*:|"<>]/g, '_');
@@ -18,25 +13,73 @@ function isShareCanceled(error: unknown): boolean {
   return /cancel|dismiss|abort|user did not share|sharing.*fail/i.test(msg);
 }
 
-/** Descarga el PDF del informe y abre el diálogo de compartir/guardar. */
-export async function downloadInformePdf(id: number): Promise<{ esParcial: boolean }> {
-  const data = await api<PdfPayload>(`/informes/${id}/pdf/?as_base64=1`, 'GET', undefined, {
-    timeoutMs: 90000,
-  });
-  if (!data?.base64 || typeof data.base64 !== 'string') {
-    throw new Error('El servidor no devolvió el PDF del informe.');
+function messageFromHttp(status: number, bodyText: string): string {
+  try {
+    const data = JSON.parse(bodyText) as { detail?: unknown; error?: unknown };
+    if (typeof data.detail === 'string' && data.detail.trim()) return data.detail.trim();
+    if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+  } catch {
+    /* cuerpo no JSON */
   }
-  const filename = safeFilename(data.filename, id);
+  if (status === 401) return 'La sesión venció. Iniciá sesión nuevamente.';
+  if (status === 403) {
+    return 'El PDF solo está disponible cuando el informe está validado (FINALIZADO).';
+  }
+  if (status === 404) return 'Informe no encontrado.';
+  return 'No se pudo descargar el PDF del informe.';
+}
+
+/** Descarga el PDF binario del informe y abre el diálogo de compartir/guardar. */
+export async function downloadInformePdf(id: number): Promise<void> {
+  const base = getApiBase().replace(/\/$/, '');
+  if (!base.startsWith('https://') && !base.startsWith('http://')) {
+    throw new ApiError('La conexión segura de la app todavía no está configurada.', 0);
+  }
+  const token = getToken();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
+  let response: Response;
+  try {
+    response = await fetch(`${base}/informes/${id}/pdf/`, {
+      method: 'GET',
+      redirect: 'error',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/pdf',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  } catch {
+    throw new ApiError('No se pudo conectar. Verificá tu conexión e intentá nuevamente.', 0);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw new ApiError(messageFromHttp(response.status, bodyText), response.status);
+  }
+
+  const buffer = await response.arrayBuffer();
+  if (!buffer.byteLength) {
+    throw new Error('El servidor devolvió un PDF vacío.');
+  }
+  const bytes = new Uint8Array(buffer);
+  // Content-Disposition: attachment; filename="informe-lims-solicitud-123.pdf"
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = /filename="?([^"]+)"?/i.exec(disposition);
+  const filename = safeFilename(match?.[1], id);
+
   let file: File;
   try {
     file = new File(Paths.cache, filename);
-    file.create({ overwrite: true });
-    // Escribir bytes binarios desde base64 (API nueva de expo-file-system).
-    file.write(data.base64, { encoding: EncodingType.Base64 });
+    file.create({ overwrite: true, intermediates: true });
+    file.write(bytes);
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'error de almacenamiento';
     throw new Error(`No se pudo guardar el PDF en el dispositivo (${detail}).`);
   }
+
   if (!(await Sharing.isAvailableAsync())) {
     throw new Error(
       'Este dispositivo no permite compartir el PDF. El archivo quedó en la caché de la app.'
@@ -45,11 +88,10 @@ export async function downloadInformePdf(id: number): Promise<{ esParcial: boole
   try {
     await Sharing.shareAsync(file.uri, {
       mimeType: 'application/pdf',
-      dialogTitle: data.es_parcial ? 'Informe parcial (PDF)' : 'Informe de laboratorio (PDF)',
+      dialogTitle: 'Informe de laboratorio (PDF)',
       UTI: 'com.adobe.pdf',
     });
   } catch (error) {
-    // En Android, cerrar el sheet sin compartir suele rechazar la Promise.
     if (!isShareCanceled(error)) {
       throw new Error(
         error instanceof Error
@@ -58,5 +100,4 @@ export async function downloadInformePdf(id: number): Promise<{ esParcial: boole
       );
     }
   }
-  return { esParcial: Boolean(data.es_parcial) };
 }

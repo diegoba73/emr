@@ -37,8 +37,8 @@ export default function InformesList() {
     <Page>
       <Title>Informes</Title>
       <Body>
-        Solo aparecen informes validados o parciales. En parciales ves los valores en pantalla; el
-        PDF se habilita cuando el informe está validado.
+        Médico y paciente solo ven informes validados (con PDF). Bioquímico y laboratorio también
+        ven la bandeja en proceso para validar.
       </Body>
       <Card>
         <Field

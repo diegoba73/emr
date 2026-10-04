@@ -24,15 +24,18 @@ ROLES_MOVIL_VALIDAR = frozenset({'bioquimico'})
 
 ROLES_MOVIL_PEDIR_LAB = frozenset({'medico'})
 
-# PDF solo tras validación; el listado sí incluye informe parcial (solo pantalla).
+# Clínica (médico/paciente/secretaría): ver y PDF solo con informe validado.
 ESTADOS_INFORME_PDF = frozenset({'FINALIZADO'})
-ESTADOS_INFORME_LISTADO = frozenset({'FINALIZADO', 'INFORMADO_PARCIAL'})
+ESTADOS_INFORME_CLINICO = frozenset({'FINALIZADO'})
+# Operación lab/bio: bandeja de trabajo (resultados en pantalla; PDF igual solo FINALIZADO).
 ESTADOS_BIOQUIMICO_TRABAJO = frozenset({
     'EN_PROCESO',
     'INFORMADO_PARCIAL',
     'LISTO_PARA_VALIDAR',
     'FINALIZADO',
 })
+# Compat: listados que aún referencian el nombre histórico.
+ESTADOS_INFORME_LISTADO = ESTADOS_INFORME_CLINICO
 
 # Chips de contexto en la app → origen_solicitud LIMS
 CONTEXTO_A_ORIGEN = {

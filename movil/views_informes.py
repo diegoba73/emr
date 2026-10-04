@@ -35,7 +35,7 @@ from usuarios.roles import normalize_rol
 from .authentication import AutenticacionMovil, RolMovil
 from .roles import (
     ESTADOS_BIOQUIMICO_TRABAJO,
-    ESTADOS_INFORME_LISTADO,
+    ESTADOS_INFORME_CLINICO,
     ROLES_MOVIL_INFORMES,
     ROLES_MOVIL_VALIDAR,
 )
@@ -63,11 +63,13 @@ def _queryset_informes(user):
         paciente = ensure_paciente_linked_to_user(user)
         if not paciente:
             return qs.none()
-        qs = qs.filter(paciente=paciente, estado__in=ESTADOS_INFORME_LISTADO)
-    elif rol in ROLES_MOVIL_VALIDAR:
+        qs = qs.filter(paciente=paciente, estado__in=ESTADOS_INFORME_CLINICO)
+    elif rol in ROLES_MOVIL_VALIDAR or rol == 'laboratorio':
+        # Lab/bio ven la bandeja de trabajo; PDF se habilita solo en FINALIZADO.
         qs = qs.filter(estado__in=ESTADOS_BIOQUIMICO_TRABAJO)
     else:
-        qs = qs.filter(estado__in=ESTADOS_INFORME_LISTADO)
+        # Médico / secretaría: solo validados.
+        qs = qs.filter(estado__in=ESTADOS_INFORME_CLINICO)
     return qs.order_by('numero')
 
 
@@ -176,14 +178,12 @@ class InformeMovilDetalle(APIView):
     def get(self, request, pk):
         sol = self._get(request, pk)
         resumen = InformeMovilSerializer(sol, context={'request': request}).data
-        # Resultados en pantalla para todos los roles con acceso al informe
-        # (médico/paciente ven parcial sin PDF; PDF solo FINALIZADO).
         out = {
             'informe': resumen,
             'orden': SolicitudExamenSerializer(sol, context={'request': request}).data,
         }
         rol = _rol(request.user)
-        if rol in ROLES_MOVIL_VALIDAR or rol in ('laboratorio',):
+        if rol in ROLES_MOVIL_VALIDAR or rol == 'laboratorio':
             try:
                 out['analisis'] = analizar_solicitud_optimizado(sol)
             except Exception:
@@ -203,16 +203,17 @@ class InformeMovilPdf(APIView):
 
     def get(self, request, pk):
         _assert_rol_informes(request.user)
-        # Paciente puede auto-vincularse en listado; hay que hacerlo también aquí
-        # antes de evaluar user.paciente en la regla de descarga.
-        if _rol(request.user) == 'paciente':
-            ensure_paciente_linked_to_user(request.user)
+        # Misma visibilidad que el detalle (evita 404 opaco / IDs fuera de bandeja).
         try:
-            sol = SolicitudExamen.objects.select_related('paciente').get(pk=pk)
+            sol = _queryset_informes(request.user).select_related('paciente').get(pk=pk)
         except SolicitudExamen.DoesNotExist as exc:
             raise NotFound('Informe no encontrado.') from exc
+        if not usuario_puede_ver_solicitud_lims(request.user, sol):
+            raise NotFound('Informe no encontrado.')
         if not usuario_puede_descargar_informe_lims(request.user, sol):
-            raise PermissionDenied('El informe no está disponible para descarga.')
+            raise PermissionDenied(
+                'El PDF solo está disponible cuando el informe está validado (FINALIZADO).'
+            )
         role = normalize_rol(request.user)
         if request.user.is_superuser:
             role = 'admin'
@@ -231,11 +232,13 @@ class InformeMovilPdf(APIView):
             return Response({
                 'filename': nombre,
                 'content_type': 'application/pdf',
-                'es_parcial': sol.estado == 'INFORMADO_PARCIAL',
+                'es_parcial': False,
                 'base64': base64.b64encode(pdf_bytes).decode('ascii'),
             })
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        # Evitar buffers cortos en proxies al devolver el binario.
+        response['Content-Length'] = str(len(pdf_bytes))
         return response
 
 

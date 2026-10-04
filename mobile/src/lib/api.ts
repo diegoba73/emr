@@ -2,10 +2,12 @@ import { ClientOptions, createClient } from './client';
 let token: string | null = null;
 let unauthorized = () => {};
 export const setToken = (value: string | null) => { token = value; };
+export const getToken = () => token;
 export const onUnauthorized = (handler: () => void) => { unauthorized = handler; };
 let base = '';
 let revision = 0;
 export const setInstitution = (url: string) => { revision++; token = null; base = url; };
+export const getApiBase = () => base;
 export async function api<T>(
   path: string,
   method = 'GET',

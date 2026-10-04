@@ -50,46 +50,53 @@ def _orden(paciente, estado='FINALIZADO'):
     return sol
 
 
-def test_paciente_ve_solo_sus_informes_finalizados_o_parciales():
+def test_paciente_ve_solo_sus_informes_finalizados():
     c, user = _login('paciente', 'pac-inf')
     p = Paciente.objects.create(user=user, nombre='Ana', apellido='Propia', dni='INF-1')
     otro = Paciente.objects.create(nombre='Otro', apellido='Ajeno', dni='INF-2')
     propia = _orden(p, 'FINALIZADO')
-    parcial = _orden(p, 'INFORMADO_PARCIAL')
+    _orden(p, 'INFORMADO_PARCIAL')
     _orden(otro, 'FINALIZADO')
     r = c.get('/api/movil/informes/')
     assert r.status_code == 200, r.data
     ids = {row['id'] for row in r.data['results']}
-    assert ids == {propia.id, parcial.id}
+    assert ids == {propia.id}
     assert all(row['paciente_nombre'].upper().startswith('PROPIA') for row in r.data['results'])
 
 
-def test_secretaria_lista_parcial_pero_no_descarga_pdf():
+def test_secretaria_no_lista_parcial():
     c, _ = _login('secretaria', 'sec-inf')
     p = Paciente.objects.create(nombre='Pac', apellido='Sec', dni='INF-3')
     sol = _orden(p, 'INFORMADO_PARCIAL')
     listed = c.get('/api/movil/informes/')
     assert listed.status_code == 200
-    assert sol.id in {row['id'] for row in listed.data['results']}
-    row = next(r for r in listed.data['results'] if r['id'] == sol.id)
-    assert row.get('es_parcial') is True
-    assert row.get('puede_descargar_pdf') is False
-    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/?as_base64=1')
-    assert pdf.status_code == 403
+    assert sol.id not in {row['id'] for row in listed.data['results']}
+    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/')
+    assert pdf.status_code == 404
 
 
-def test_medico_ve_resultados_en_parcial_sin_pdf():
+def test_medico_no_ve_parcial():
     c, _ = _login('medico', 'med-inf')
     p = Paciente.objects.create(nombre='Pac', apellido='Med', dni='INF-MED')
     sol = _orden(p, 'INFORMADO_PARCIAL')
     det = c.get(f'/api/movil/informes/{sol.id}/')
+    assert det.status_code == 404
+    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/')
+    assert pdf.status_code == 404
+
+
+def test_bioquimico_descarga_pdf_finalizado_binario():
+    c, _ = _login('bioquimico', 'bio-pdf')
+    p = Paciente.objects.create(nombre='Bio', apellido='Pdf', dni='INF-BIO-PDF')
+    sol = _orden(p, 'FINALIZADO')
+    det = c.get(f'/api/movil/informes/{sol.id}/')
     assert det.status_code == 200, det.data
-    assert det.data['informe']['es_parcial'] is True
-    assert det.data['informe']['puede_descargar_pdf'] is False
-    assert 'orden' in det.data
+    assert det.data['informe']['puede_descargar_pdf'] is True
     assert len(det.data['orden'].get('resultados') or []) >= 1
-    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/?as_base64=1')
-    assert pdf.status_code == 403
+    pdf = c.get(f'/api/movil/informes/{sol.id}/pdf/')
+    assert pdf.status_code == 200, getattr(pdf, 'data', pdf.content[:200])
+    assert pdf['Content-Type'] == 'application/pdf'
+    assert pdf.content.startswith(b'%PDF')
 
 
 def test_paciente_descarga_pdf_propio_y_no_ajeno():
@@ -112,8 +119,8 @@ def test_paciente_descarga_pdf_propio_y_no_ajeno():
     raw = base64.b64decode(pdf.data['base64'])
     assert raw.startswith(b'%PDF')
 
-    deny = c.get(f'/api/movil/informes/{ajena.id}/pdf/?as_base64=1')
-    assert deny.status_code == 403
+    deny = c.get(f'/api/movil/informes/{ajena.id}/pdf/')
+    assert deny.status_code == 404
 
 
 def test_bioquimico_puede_ver_listo_para_validar():
