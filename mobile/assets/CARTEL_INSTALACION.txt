@@ -1,0 +1,18 @@
+SYNESIS — Instituto de Cardiología Pueblo de Luis & CEHTA
+========================================================
+
+Descargá la app en tu Android
+
+1. Escaneá el código QR (o abrí el enlace abajo).
+2. Permití «Instalar apps desconocidas» si el teléfono lo pide.
+3. Abrí SYNESIS.
+4. Código de clínica: ICPL
+5. Ingresá con el usuario que te dio la clínica.
+
+Enlace de descarga (mismo que el QR):
+https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk
+
+Archivo QR para imprimir:
+mobile/assets/qr-instalacion-synesis-movil.png
+
+Nota: solo Android. iPhone pendiente (App Store / TestFlight).

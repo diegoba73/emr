@@ -20,7 +20,8 @@ function request(url) {
  });
 }
 const profiles=JSON.parse(await readFile(new URL('../eas.json',import.meta.url),'utf8'));
-const clinics=JSON.parse(profiles.build.preview.env.EXPO_PUBLIC_CLINICS_JSON);
+// Pacientes: perfil production (misma URL pública que preview clínico).
+const clinics=JSON.parse(profiles.build.production.env.EXPO_PUBLIC_CLINICS_JSON);
 let failed=false;
 for(const clinic of clinics){
  try{
