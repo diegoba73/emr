@@ -55,6 +55,19 @@ describe('Login', () => {
     expect(screen.getByRole('button', { name: /ingresar/i })).toBeInTheDocument();
   });
 
+  it('muestra el acceso a la app móvil con QR', () => {
+    renderWithProviders(<Login />);
+
+    expect(screen.getByText(/aplicación móvil/i)).toBeInTheDocument();
+    expect(
+      screen.getByAltText(/código qr para instalar synesis móvil/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /descargar para android/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('synesis-movil.apk')
+    );
+  });
+
   it('debe mostrar mensajes de validación cuando se envía el formulario vacío', async () => {
     renderWithProviders(<Login />);
 

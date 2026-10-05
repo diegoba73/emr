@@ -11,12 +11,14 @@ import {
   InputAdornment,
   IconButton,
   Link as MuiLink,
+  Divider,
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   Login as LoginIcon,
   MedicalServices,
+  PhoneAndroid,
 } from '@mui/icons-material';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -31,6 +33,11 @@ import ThemeModeToggle from '../components/ThemeModeToggle';
 import { authPageGradient } from '../theme/buildAppTheme';
 import { consumeDemoPrefillUsername } from '../demo/demoStorage';
 
+/** Descarga pública del APK (Android). Sobrescribible por env en builds. */
+const MOVIL_APK_URL =
+  process.env.REACT_APP_MOVIL_APK_URL ||
+  'https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk';
+
 // Esquema de validación con Yup
 const loginSchema = yup.object({
   username: yup
@@ -44,6 +51,8 @@ const loginSchema = yup.object({
 });
 
 type LoginFormData = yup.InferType<typeof loginSchema>;
+
+const isDemoMode = process.env.REACT_APP_DEMO_MODE === 'true';
 
 const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -105,7 +114,7 @@ const Login: React.FC = () => {
           }}
         >
           {/* Identidad genérica en el despliegue demo. */}
-          {process.env.REACT_APP_DEMO_MODE === 'true' ? (
+          {isDemoMode ? (
             <Box sx={{ mb: 3 }}><Logo demo size={150} /></Box>
           ) : (
           <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -202,6 +211,76 @@ const Login: React.FC = () => {
               </MuiLink>
             </Box>
           </Box>
+
+          {!isDemoMode && (
+            <>
+              <Divider sx={{ width: '100%', my: 3 }} />
+              <Box
+                sx={{
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: 'center',
+                  gap: 2,
+                  textAlign: { xs: 'center', sm: 'left' },
+                }}
+              >
+                <Box
+                  component="a"
+                  href={MOVIL_APK_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Descargar aplicación móvil SYNESIS para Android"
+                  sx={{
+                    flexShrink: 0,
+                    p: 1,
+                    borderRadius: 2,
+                    bgcolor: 'common.white',
+                    border: 1,
+                    borderColor: 'divider',
+                    lineHeight: 0,
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={`${process.env.PUBLIC_URL || ''}/qr-synesis-movil.png`}
+                    alt="Código QR para instalar SYNESIS móvil"
+                    sx={{ width: 120, height: 120, display: 'block' }}
+                  />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={700}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      justifyContent: { xs: 'center', sm: 'flex-start' },
+                    }}
+                  >
+                    <PhoneAndroid fontSize="small" color="primary" />
+                    Aplicación móvil
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Escaneá el código QR con tu teléfono Android para descargar e instalar
+                    SYNESIS. Luego abrí la app, ingresá el código de clínica{' '}
+                    <strong>ICPL</strong> o <strong>CEHTA</strong> y utilizá las mismas
+                    credenciales de acceso.
+                  </Typography>
+                  <MuiLink
+                    href={MOVIL_APK_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="body2"
+                    sx={{ display: 'inline-block', mt: 1 }}
+                  >
+                    Descargar para Android
+                  </MuiLink>
+                </Box>
+              </Box>
+            </>
+          )}
         </Paper>
       </Container>
     </Box>
