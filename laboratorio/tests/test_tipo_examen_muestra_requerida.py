@@ -347,6 +347,36 @@ class TestTipoExamenMuestraRequerida(APITestCase):
                 raw_muestra_id=m.pk,
             )
 
+    def test_suero_acepta_plasma_heparina_legacy(self):
+        """Química migró a SUERO; tubo heparina ya tomado sigue siendo válido."""
+        from laboratorio.resultado_muestra_validacion import assert_tipo_examen_muestra_carga
+
+        tm_suero, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO", defaults={"nombre": "Suero", "activo": True}
+        )
+        tm_hep, _ = TipoMuestra.objects.get_or_create(
+            codigo="PLASMA_HEPARINA",
+            defaults={"nombre": "Plasma heparina (legacy)", "activo": False},
+        )
+        te, _ = TipoExamen.objects.update_or_create(
+            codigo="CL",
+            defaults={
+                "nombre": "Cloro",
+                "tipo_muestra_requerida": tm_suero,
+                "requiere_muestra": True,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        sol, _res = self._solicitud_con_tipo(te)
+        m = self._muestra_recibida(sol, tipo_muestra=tm_hep)
+        assert_tipo_examen_muestra_carga(
+            tipo_examen=te,
+            resultado_muestra=m,
+            muestra_id_en_payload=True,
+            raw_muestra_id=m.pk,
+        )
+
     def test_resultado_validado_no_cambia_muestra_aunque_tipo_requiera(self):
         from django.utils import timezone
 

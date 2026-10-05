@@ -78,6 +78,10 @@ MSG_TIPO_MUESTRA_INCORRECTO = (
 )
 
 
+# Química/hormonas migraron HEPARINA→SUERO; tubos ya tomados pueden seguir en plasma heparina.
+_LEGACY_HEPARINA_PARA_SUERO = frozenset({"PLASMA_HEPARINA", "SANGRE_HEPARINA"})
+
+
 def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> bool:
     """
     True si el material físico de la muestra satisface el catálogo del examen.
@@ -85,6 +89,9 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
     Duales de orina (NA_U/CREA_U/…) pueden ir a frasco (ORINA) o a bidón
     (ORINA_24_H) según el contexto de la orden; el FK del catálogo no siempre
     refleja el tubo efectivo.
+
+    Tras migrar química a SUERO, un tubo HEPARINA/PLASMA_HEPARINA ya asociado
+    sigue siendo aceptable para exámenes que exigen SUERO (órdenes vivas).
     """
     tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
     if tipo_req_id is None:
@@ -92,15 +99,20 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
     if muestra.tipo_muestra_id == tipo_req_id:
         return True
 
-    from laboratorio.tubos_catalogo import MUESTRA_ORINA, MUESTRA_ORINA_24H, _ORINA_DUAL
+    from laboratorio.tubos_catalogo import MUESTRA_ORINA, MUESTRA_ORINA_24H, SUERO, _ORINA_DUAL
+
+    req = getattr(getattr(tipo_examen, "tipo_muestra_requerida", None), "codigo", None) or ""
+    got = getattr(getattr(muestra, "tipo_muestra", None), "codigo", None) or ""
+    req_u = req.strip().upper()
+    got_u = got.strip().upper()
+    if req_u == SUERO and got_u in _LEGACY_HEPARINA_PARA_SUERO:
+        return True
 
     codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
     if codigo not in _ORINA_DUAL:
         return False
-    req = getattr(getattr(tipo_examen, "tipo_muestra_requerida", None), "codigo", None) or ""
-    got = getattr(getattr(muestra, "tipo_muestra", None), "codigo", None) or ""
     pair = {MUESTRA_ORINA, MUESTRA_ORINA_24H}
-    return req in pair and got in pair
+    return req_u in pair and got_u in pair
 
 from laboratorio.muestra_estado import aplicar_recibir
 

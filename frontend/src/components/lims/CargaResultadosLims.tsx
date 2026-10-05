@@ -52,7 +52,6 @@ import {
   draftSysmexTicketFromResultado,
   filterMuestrasProcesables,
   getTipoExamenCatalog,
-  muestraTipoCompatibleConExamen,
   normalizeDraftRow,
   suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
@@ -301,18 +300,14 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           built.valor_numerico = prevRow.valor_numerico;
           if (prevRow.unidad.trim()) built.unidad = prevRow.unidad;
           if (prevRow.muestra_id != null) {
-            const prevMuestra = muestrasProcesables.find((m) => m.id === prevRow.muestra_id);
-            if (
-              prevMuestra &&
-              muestraTipoCompatibleConExamen(
-                prevMuestra,
-                te?.tipo_muestra_requerida,
-                r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo,
-                codigo
-              )
-            ) {
-              built.muestra_id = prevRow.muestra_id;
-            }
+            // Re-sugerir: puede upgradear heparina legacy → SUERO canónico.
+            const resolved = suggestMuestraIdForResultado(
+              r,
+              muestrasProcesables,
+              tiposExamenMap,
+              prevRow.muestra_id
+            );
+            if (resolved != null) built.muestra_id = resolved;
           }
         }
         next[r.id] = built;
@@ -1091,6 +1086,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         totalResultados={progreso.conValor}
         resultadosFingerprint={analisisFingerprint}
       />
+      {progreso.conValor > 0 ? (
+        <SugerirInterpretacionPanel ordenId={orden.id} estadoOrden={orden.estado} />
+      ) : null}
     </Box>
   );
 };

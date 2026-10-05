@@ -258,11 +258,36 @@ describe('limsCargaMuestra', () => {
     expect(
       validateCargaResultadosMuestra(
         [res],
-        { 1: draftRow(10) },
+        { 1: draftRow(11) },
         cat,
         proc
       )
     ).toBeNull();
+  });
+
+  it('con contenedor HEPARINA legacy aún encuentra tubo SUERO', () => {
+    const proc = [
+      { ...muestra(10, 1, 'EN_PROCESO'), tipo_muestra_codigo: 'SUERO', tipo_contenedor: 100 },
+      { ...muestra(11, 2, 'EN_PROCESO'), tipo_muestra_codigo: 'PLASMA_HEPARINA', tipo_contenedor: 50 },
+    ] as MuestraTransaccional[];
+    const cat = new Map([
+      [
+        10,
+        {
+          ...tipoExamen(10, true, 1),
+          codigo: 'CL',
+          tipo_muestra_codigo: 'SUERO',
+          tipo_contenedor: 50, // catálogo desfasado
+        },
+      ],
+    ]);
+    const res = {
+      ...resultado(1, 10),
+      tipo_examen_codigo: 'CL',
+      tipo_examen_muestra_codigo: 'SUERO',
+      muestra_id: 11,
+    };
+    expect(suggestMuestraIdForResultado(res, proc, cat, 11)).toBe(10);
   });
 
   it('con Suero+EDTA sugiere el tubo del tipo del examen', () => {

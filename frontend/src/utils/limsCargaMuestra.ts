@@ -57,6 +57,9 @@ export const CODIGOS_ORINA_DUAL = new Set(['NA_U', 'K_U', 'CL_U', 'CREA_U', 'MIC
 
 const ORINA_COMPAT = new Set(['ORINA', 'ORINA_24_H']);
 
+/** Química migró HEPARINA→SUERO; tubos vivos pueden seguir en plasma/sangre heparina. */
+const LEGACY_HEPARINA_PARA_SUERO = new Set(['PLASMA_HEPARINA', 'SANGRE_HEPARINA']);
+
 export function muestraTipoCompatibleConExamen(
   muestra: MuestraTransaccional,
   tipoMuestraRequeridaId?: number | null,
@@ -69,6 +72,7 @@ export function muestraTipoCompatibleConExamen(
   const req = (tipoMuestraCodigo || '').trim().toUpperCase();
   const got = (muestra.tipo_muestra_codigo || '').trim().toUpperCase();
   if (req && got && req === got) return true;
+  if (req === 'SUERO' && LEGACY_HEPARINA_PARA_SUERO.has(got)) return true;
   const exam = (codigoExamen || '').trim().toUpperCase();
   if (exam && CODIGOS_ORINA_DUAL.has(exam) && ORINA_COMPAT.has(req) && ORINA_COMPAT.has(got)) {
     return true;
@@ -85,19 +89,26 @@ export function muestrasCompatiblesParaTipo(
   tipoMuestraCodigo?: string | null,
   codigoExamen?: string | null
 ): MuestraTransaccional[] {
+  const hasMaterialFilter = tipoMuestraRequeridaId != null || Boolean((tipoMuestraCodigo || '').trim());
+  const byMaterial = (pool: MuestraTransaccional[]) =>
+    pool.filter((m) =>
+      muestraTipoCompatibleConExamen(m, tipoMuestraRequeridaId, tipoMuestraCodigo, codigoExamen)
+    );
+
   let pool = procesables;
   if (tipoContenedorId != null) {
     const byCont = pool.filter((m) => m.tipo_contenedor === tipoContenedorId);
     if (byCont.length > 0) pool = byCont;
   }
 
-  const hasMaterialFilter = tipoMuestraRequeridaId != null || Boolean((tipoMuestraCodigo || '').trim());
   if (hasMaterialFilter) {
-    const byMat = pool.filter((m) =>
-      muestraTipoCompatibleConExamen(m, tipoMuestraRequeridaId, tipoMuestraCodigo, codigoExamen)
-    );
+    const byMat = byMaterial(pool);
     if (byMat.length > 0) return byMat;
-    // Contenedor matcheó pero material no (p. ej. dual 24h / EAB art vs ven).
+    // Contenedor legacy (p. ej. HEPARINA) sin material canónico: probar todos los tubos.
+    if (pool !== procesables) {
+      const fallback = byMaterial(procesables);
+      if (fallback.length > 0) return fallback;
+    }
     return [];
   }
   return pool;
@@ -508,16 +519,20 @@ export function suggestMuestraIdForResultado(
 
   const tipoMuestraCodigo = r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo;
   const tipoMuestraRequerida = te?.tipo_muestra_requerida;
+  const current =
+    currentMuestraId != null ? procesables.find((m) => m.id === currentMuestraId) : undefined;
+  const currentOk =
+    current != null &&
+    muestraTipoCompatibleConExamen(current, tipoMuestraRequerida, tipoMuestraCodigo, codigo);
+  const reqMat = (tipoMuestraCodigo || '').trim().toUpperCase();
+  const currentEsLegacyHepParaSuero =
+    currentOk &&
+    reqMat === 'SUERO' &&
+    LEGACY_HEPARINA_PARA_SUERO.has((current?.tipo_muestra_codigo || '').trim().toUpperCase());
 
-  // Mantener tubo solo si sigue siendo compatible (p. ej. química legacy en heparina → suero).
-  if (currentMuestraId != null) {
-    const current = procesables.find((m) => m.id === currentMuestraId);
-    if (
-      current &&
-      muestraTipoCompatibleConExamen(current, tipoMuestraRequerida, tipoMuestraCodigo, codigo)
-    ) {
-      return currentMuestraId;
-    }
+  // Mantener tubo compatible, salvo heparina legacy cuando hay SUERO canónico.
+  if (currentOk && !currentEsLegacyHepParaSuero) {
+    return currentMuestraId;
   }
 
   const opciones = muestrasCompatiblesParaTipo(
@@ -527,14 +542,27 @@ export function suggestMuestraIdForResultado(
     tipoMuestraCodigo,
     codigo
   );
-  if (opciones.length === 1) return opciones[0].id;
-  if (opciones.length > 1) {
+  // SUERO canónico: buscar en todos los tubos (el contenedor del catálogo puede
+  // seguir en HEPARINA en órdenes/catálogos legacy).
+  const canonicas =
+    reqMat === 'SUERO'
+      ? procesables.filter(
+          (m) =>
+            (m.tipo_muestra_codigo || '').trim().toUpperCase() === 'SUERO' &&
+            muestraTipoCompatibleConExamen(m, tipoMuestraRequerida, tipoMuestraCodigo, codigo)
+        )
+      : [];
+  const poolPreferido = canonicas.length > 0 ? canonicas : opciones;
+  if (poolPreferido.length === 1) return poolPreferido[0].id;
+  if (poolPreferido.length > 1) {
     // Solo autoelegir entre varios si el filtro redujo el universo (evita EDTA en CPK_MB).
     const filtroActivo =
       Boolean(te?.tipo_contenedor || te?.tipo_muestra_requerida) ||
-      opciones.length < procesables.length;
-    if (filtroActivo) return opciones[0].id;
+      poolPreferido.length < procesables.length;
+    if (filtroActivo) return poolPreferido[0].id;
   }
+  // Legacy heparina sigue siendo válido si no hay SUERO canónico en la orden.
+  if (currentOk) return currentMuestraId;
   // Un solo tubo procesable → asociarlo (catálogo tarde o sin tipo en examen).
   if (procesables.length === 1) return procesables[0].id;
   return null;
