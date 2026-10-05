@@ -501,17 +501,30 @@ export function suggestMuestraIdForResultado(
   catalog: Map<number, LimsTipoExamen>,
   currentMuestraId: number | null
 ): number | null {
-  if (currentMuestraId != null) return currentMuestraId;
   if (procesables.length === 0) return null;
   const te = catalog.get(r.tipo_examen);
   const codigo = r.tipo_examen_codigo ?? te?.codigo;
   if (esExamenCalculadoSinMuestraObligatoria(te, codigo)) return null;
 
+  const tipoMuestraCodigo = r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo;
+  const tipoMuestraRequerida = te?.tipo_muestra_requerida;
+
+  // Mantener tubo solo si sigue siendo compatible (p. ej. química legacy en heparina → suero).
+  if (currentMuestraId != null) {
+    const current = procesables.find((m) => m.id === currentMuestraId);
+    if (
+      current &&
+      muestraTipoCompatibleConExamen(current, tipoMuestraRequerida, tipoMuestraCodigo, codigo)
+    ) {
+      return currentMuestraId;
+    }
+  }
+
   const opciones = muestrasCompatiblesParaTipo(
     procesables,
-    te?.tipo_muestra_requerida,
+    tipoMuestraRequerida,
     te?.tipo_contenedor,
-    r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo,
+    tipoMuestraCodigo,
     codigo
   );
   if (opciones.length === 1) return opciones[0].id;

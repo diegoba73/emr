@@ -52,6 +52,7 @@ import {
   draftSysmexTicketFromResultado,
   filterMuestrasProcesables,
   getTipoExamenCatalog,
+  muestraTipoCompatibleConExamen,
   normalizeDraftRow,
   suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
@@ -299,7 +300,20 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           built.valor = prevRow.valor;
           built.valor_numerico = prevRow.valor_numerico;
           if (prevRow.unidad.trim()) built.unidad = prevRow.unidad;
-          if (prevRow.muestra_id != null) built.muestra_id = prevRow.muestra_id;
+          if (prevRow.muestra_id != null) {
+            const prevMuestra = muestrasProcesables.find((m) => m.id === prevRow.muestra_id);
+            if (
+              prevMuestra &&
+              muestraTipoCompatibleConExamen(
+                prevMuestra,
+                te?.tipo_muestra_requerida,
+                r.tipo_examen_muestra_codigo ?? te?.tipo_muestra_codigo,
+                codigo
+              )
+            ) {
+              built.muestra_id = prevRow.muestra_id;
+            }
+          }
         }
         next[r.id] = built;
         const c = (codigo || '').toUpperCase();
@@ -453,20 +467,19 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       return;
     }
 
-    // Re-asociar tubo al guardar: con Suero+EDTA recibidos el borrador a veces
-    // queda sin muestra_id si el catálogo llegó tarde o hay varios tubos.
+    // Re-asociar tubo al guardar: catálogo tardío, varios tubos, o vínculos legacy
+    // (p. ej. química en heparina cuando el catálogo ya exige suero).
     const draftSave: Record<number, DraftCargaRow> = { ...draft };
     for (const r of filasAGuardar) {
       const prev = normalizeDraftRow(draftSave[r.id] || emptyDraft());
-      if (prev.muestra_id != null) continue;
-      const suggested = suggestMuestraIdForResultado(
+      const resolved = suggestMuestraIdForResultado(
         r,
         muestrasProcesables,
         tiposExamenMap,
-        null
+        prev.muestra_id ?? r.muestra_id ?? null
       );
-      if (suggested != null) {
-        draftSave[r.id] = { ...prev, muestra_id: suggested };
+      if (resolved !== prev.muestra_id) {
+        draftSave[r.id] = { ...prev, muestra_id: resolved };
       }
     }
     setDraft(draftSave);

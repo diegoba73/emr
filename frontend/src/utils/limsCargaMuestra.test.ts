@@ -230,6 +230,41 @@ describe('limsCargaMuestra', () => {
     ).toBeNull();
   });
 
+  it('reemplaza muestra legacy heparina por suero para química', () => {
+    const proc = [
+      { ...muestra(10, 1, 'EN_PROCESO'), tipo_muestra_codigo: 'SUERO', tipo_contenedor: 100 },
+      { ...muestra(11, 2, 'EN_PROCESO'), tipo_muestra_codigo: 'PLASMA_HEPARINA', tipo_contenedor: 50 },
+    ] as MuestraTransaccional[];
+    const cat = new Map([
+      [
+        10,
+        {
+          ...tipoExamen(10, true, 1),
+          codigo: 'CL',
+          nombre: 'Cloro',
+          tipo_muestra_codigo: 'SUERO',
+          tipo_contenedor: 100,
+        },
+      ],
+    ]);
+    const res = {
+      ...resultado(1, 10),
+      tipo_examen_codigo: 'CL',
+      tipo_examen_nombre: 'Cloro',
+      tipo_examen_muestra_codigo: 'SUERO',
+      muestra_id: 11,
+    };
+    expect(suggestMuestraIdForResultado(res, proc, cat, 11)).toBe(10);
+    expect(
+      validateCargaResultadosMuestra(
+        [res],
+        { 1: draftRow(10) },
+        cat,
+        proc
+      )
+    ).toBeNull();
+  });
+
   it('con Suero+EDTA sugiere el tubo del tipo del examen', () => {
     const proc = [
       { ...muestra(10, 1, 'RECIBIDA'), tipo_muestra_codigo: 'SUERO', tipo_contenedor: 100 },
