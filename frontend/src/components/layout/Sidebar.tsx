@@ -32,6 +32,8 @@ import {
   Analytics as QcIcon,
   DeviceHub as InstrumentosIcon,
   Insights as BiIcon,
+  BarChart as AnalyticsIcon,
+  FilterAlt as FilterAltIcon,
   Timeline as PortalTimelineIcon,
   MeetingRoom as MeetingRoomIcon,
 } from '@mui/icons-material';
@@ -66,6 +68,7 @@ import {
   canAccessLimsOrdenes,
   canAccessLimsModule,
   canAccessMicrobiologia,
+  canAccessFiltrosAvanzados,
   canOperateLims,
 } from '../../utils/limsAccess';
 import { canAccessTurnosAgenda } from '../../utils/turnoPermissions';
@@ -108,6 +111,12 @@ const navItems: NavItem[] = [
   },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
   { text: 'Indicadores', icon: <BiIcon />, path: '/bi', canAccess: canAccessBiDashboard },
+  {
+    text: 'Filtros avanzados',
+    icon: <FilterAltIcon />,
+    path: '/laboratorio/filtros-avanzados',
+    canAccess: canAccessFiltrosAvanzados,
+  },
 ];
 
 const portalItems: NavItem[] = [
@@ -133,6 +142,7 @@ const labItems: NavItem[] = [
   { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
   { text: 'Inventario', icon: <InventarioIcon />, path: '/laboratorio/inventario', canAccess: canAccessLimsModule },
   { text: 'Control calidad', icon: <QcIcon />, path: '/laboratorio/qc', canAccess: canAccessLimsModule },
+  { text: 'Analítica resultados', icon: <AnalyticsIcon />, path: '/laboratorio/analytics', canAccess: canAccessLimsModule },
   { text: 'Analizadores', icon: <InstrumentosIcon />, path: '/laboratorio/instrumentos', canAccess: canAccessLimsModule },
 ];
 

@@ -298,6 +298,115 @@ export async function postSugerirConclusionHemograma(
   return data;
 }
 
+export interface SugerirInterpretacionResponse {
+  texto: string;
+  fuente: 'reglas' | 'medgemma' | string;
+  marcado_sugerencia?: boolean;
+  modelo?: string;
+  vacio?: boolean;
+  total_analizados?: number;
+  total_cambios_significativos?: number;
+}
+
+/** Sugerencia de interpretación de la orden (reglas y/o MedGemma). No persiste en HC. */
+export async function postSugerirInterpretacion(
+  id: number,
+  options?: { prefer_medgemma?: boolean }
+): Promise<SugerirInterpretacionResponse> {
+  const body: { prefer_medgemma?: boolean } = {};
+  if (options?.prefer_medgemma !== undefined) {
+    body.prefer_medgemma = options.prefer_medgemma;
+  }
+  const { data } = await apiClient.post<SugerirInterpretacionResponse>(
+    `${LAB}/solicitudes/${id}/sugerir-interpretacion/`,
+    body
+  );
+  return data;
+}
+
+export interface AnalyticsAnalitoRow {
+  codigo: string;
+  nombre: string;
+  n: number;
+  n_labwin: number;
+  n_nativo: number;
+  pct_fuera_rango: number;
+  pct_critico: number;
+  n_numericos: number;
+  mediana: string | null;
+  p25: string | null;
+  p75: string | null;
+  histograma?: { desde: string; hasta: string; n: number }[];
+}
+
+export interface AnalyticsAnalitosResponse {
+  desde: string | null;
+  hasta: string;
+  codigo_filtro: string | null;
+  total_resultados: number;
+  analitos: AnalyticsAnalitoRow[];
+  marcado_agregado?: boolean;
+  sin_phi?: boolean;
+}
+
+/** Agregados poblacionales por analito (sin PHI). Default hasta=2026-09-29. */
+export async function getAnalyticsAnalitos(params?: {
+  desde?: string;
+  hasta?: string;
+  codigo?: string;
+  histograma?: boolean;
+}): Promise<AnalyticsAnalitosResponse> {
+  const { data } = await apiClient.get<AnalyticsAnalitosResponse>(`${LAB}/analytics/analitos/`, {
+    params: {
+      desde: params?.desde,
+      hasta: params?.hasta,
+      codigo: params?.codigo,
+      histograma: params?.histograma === false ? 'false' : undefined,
+    },
+  });
+  return data;
+}
+
+export type FiltrosAvanzadosModo = 'all' | 'any';
+
+export interface FiltrosAvanzadosPreview {
+  modo: FiltrosAvanzadosModo | string;
+  codigos: string[];
+  obligatorios?: string[];
+  examenes: { codigo: string; nombre: string; obligatorio?: boolean }[];
+  desde: string | null;
+  hasta: string | null;
+  pacientes: number;
+  marcado_estudio?: boolean;
+}
+
+export interface FiltrosAvanzadosBody {
+  codigos: string[];
+  modo: FiltrosAvanzadosModo;
+  obligatorios?: string[];
+  desde?: string;
+  hasta?: string;
+}
+
+export async function postFiltrosAvanzadosPreview(
+  body: FiltrosAvanzadosBody
+): Promise<FiltrosAvanzadosPreview> {
+  const { data } = await apiClient.post<FiltrosAvanzadosPreview>(
+    `${LAB}/filtros-avanzados/preview/`,
+    body
+  );
+  return data;
+}
+
+export async function downloadFiltrosAvanzadosExcel(body: FiltrosAvanzadosBody): Promise<void> {
+  const { data } = await apiClient.post(`${LAB}/filtros-avanzados/excel/`, body, {
+    responseType: 'blob',
+  });
+  const blob = data instanceof Blob ? data : new Blob([data]);
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  await triggerBlobDownload(blob, `filtros_avanzados_${stamp}.xlsx`);
+}
+
 /** Catálogo tipos examen indexado por id (carga de resultados B2-C). */
 export async function getTiposExamenMap(): Promise<Map<number, LimsTipoExamen>> {
   const list = await listTiposExamenLims({ activo: true });

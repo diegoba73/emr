@@ -53,6 +53,8 @@ import MicrobiologiaEstudioDetalle from './pages/laboratorio/MicrobiologiaEstudi
 import MicrobiologiaCatalogos from './pages/laboratorio/MicrobiologiaCatalogos';
 import InventarioPage from './pages/laboratorio/inventario/InventarioPage';
 import QcHubPage from './pages/laboratorio/qc/QcHubPage';
+import AnalyticsAnalitosPage from './pages/laboratorio/AnalyticsAnalitosPage';
+import FiltrosAvanzadosPage from './pages/laboratorio/FiltrosAvanzadosPage';
 import InstrumentosPage from './pages/laboratorio/InstrumentosPage';
 import PatientDashboard from './components/patient360/PatientDashboard';
 import AuditEventsPage from './pages/AuditEventsPage';
@@ -88,6 +90,7 @@ import {
   canAccessLimsCatalogos,
   canAccessLimsPendientes,
   canAccessLimsOrdenes,
+  canAccessFiltrosAvanzados,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
   canOpenDetalleOrdenLab,
@@ -765,6 +768,32 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsModule}
               >
                 <QcHubPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/analytics"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <AnalyticsAnalitosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/filtros-avanzados"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessFiltrosAvanzados}
+              >
+                <FiltrosAvanzadosPage />
               </ProtectedRoute>
             }
           />

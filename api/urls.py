@@ -13,6 +13,11 @@ from laboratorio.views import (
     TipoMuestraViewSet,
     PanelExamenViewSet,
 )
+from laboratorio.views_analytics import AnalitosAnalyticsView
+from laboratorio.views_filtros_avanzados import (
+    FiltrosAvanzadosExcelView,
+    FiltrosAvanzadosPreviewView,
+)
 from laboratorio.views_impresion_ordenes import (
     ListadoOrdenesDiaPdfView,
     PedidosPapelPdfView,
@@ -387,6 +392,21 @@ urlpatterns = [
     path('lab/qc/precheck-batch/', IqcPrecheckView.as_view(), name='lab-qc-precheck-batch'),
     path('lab/qc/tablero-hoy/', TableroIqcHoyView.as_view(), name='lab-qc-tablero-hoy'),
     path('lab/qc/levey-jennings/', LeveyJenningsExamenView.as_view(), name='lab-qc-levey-jennings'),
+    path(
+        'lab/analytics/analitos/',
+        AnalitosAnalyticsView.as_view(),
+        name='lab-analytics-analitos',
+    ),
+    path(
+        'lab/filtros-avanzados/preview/',
+        FiltrosAvanzadosPreviewView.as_view(),
+        name='lab-filtros-avanzados-preview',
+    ),
+    path(
+        'lab/filtros-avanzados/excel/',
+        FiltrosAvanzadosExcelView.as_view(),
+        name='lab-filtros-avanzados-excel',
+    ),
     path(
         'lab/ordenes/listado-dia-pdf/',
         ListadoOrdenesDiaPdfView.as_view(),

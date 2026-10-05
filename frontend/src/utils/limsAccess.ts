@@ -77,6 +77,17 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
 }
 
 /**
+ * Filtros avanzados / listados de estudio (cohorte por exámenes + Excel).
+ * Lab/bioquímico/admin y médico.
+ */
+export function canAccessFiltrosAvanzados(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  return r === 'admin' || r === 'medico' || isOperadorLimsRole(r);
+}
+
+/**
  * Puede abrir el detalle de una orden (módulo LIMS o portal clínico /solicitudes).
  * No habilita el listado operativo ni mutaciones de laboratorio.
  */

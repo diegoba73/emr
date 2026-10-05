@@ -18,15 +18,15 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from laboratorio.labwin_csv import format_protocolo_labwin, load_labwin_csv, parse_valor_numerico
+from laboratorio.labwin_csv import load_labwin_csv, parse_valor_numerico
 from laboratorio.labwin_firebird import (
     FB_PACKED_PANELS,
     _cell,
     _is_active,
-    parse_fb_date,
     resolve_simple_abrev,
 )
 from laboratorio.labwin_firebird_scale import interpret_result_fld, load_results_catalog
+from laboratorio.labwin_firebird_scope import DEFAULT_SCALE_UNTIL, build_firebird_protocol_scope
 from laboratorio.management.commands.import_labwin_csv import _audit_labwin_batch, _set_digest
 from laboratorio.models import ResultadoExamen, SolicitudExamen
 from laboratorio.resultados_clinicos import calcular_es_critico, calcular_es_patologico
@@ -62,13 +62,19 @@ class ScaleFix:
 class Command(BaseCommand):
     help = (
         "Corrige escala decimal LabWin Firebird en ResultadoExamen ya persistidos. "
-        "Dry-run por defecto; --apply para escribir."
+        "Dry-run por defecto; --apply para escribir. "
+        "Por defecto solo protocolos con FECHA_FLD <= --until (2026-09-29)."
     )
 
     def add_arguments(self, parser):
         parser.add_argument("datos_dir", type=str)
         parser.add_argument("--wide-csv", default="data/icpl/todo_labwin.csv")
         parser.add_argument("--since", default="2026-08-12")
+        parser.add_argument(
+            "--until",
+            default=DEFAULT_SCALE_UNTIL.isoformat(),
+            help="Techo inclusivo de fecha LabWin (FECHA_FLD). Default 2026-09-29.",
+        )
         parser.add_argument(
             "--only-r2-delta",
             action="store_true",
@@ -101,6 +107,7 @@ class Command(BaseCommand):
 
         only_r2 = not options["all_firebird_overlap"]
         since = date.fromisoformat(options["since"])
+        until = date.fromisoformat(options["until"])
         wide_path = Path(options["wide_csv"]).expanduser().resolve()
         wide_protos: set[str] = set()
         if wide_path.exists():
@@ -120,24 +127,18 @@ class Command(BaseCommand):
                     continue
                 deters.setdefault(num, []).append((abrev, res))
 
-        target_protos: dict[str, str] = {}
-        with (datos_dir / "PACIENTES.csv").open(encoding="utf-8-sig", newline="") as fh:
-            for row in csv.DictReader(fh):
-                if not _is_active(row):
-                    continue
-                num = _cell(row, "NUMERO_FLD")
-                fecha = parse_fb_date(_cell(row, "FECHA_FLD"))
-                if not num or not fecha:
-                    continue
-                lw = format_protocolo_labwin(fecha, num)
-                if not lw:
-                    continue
-                if only_r2:
-                    if fecha <= since or lw in wide_protos:
-                        continue
-                target_protos[lw] = num
-
+        scope = build_firebird_protocol_scope(
+            datos_dir / "PACIENTES.csv",
+            until=until,
+            since=since,
+            only_r2_delta=only_r2,
+            wide_protocols=wide_protos,
+        )
+        target_protos = scope.target_protos
         counts: Counter[str] = Counter()
+        counts["skipped_after_until"] = scope.skipped_after_until
+        counts["skipped_r2_filter"] = scope.skipped_r2_filter
+        counts["until"] = int(until.strftime("%Y%m%d"))
         fixes: list[ScaleFix] = []
 
         sols = (
@@ -217,6 +218,7 @@ class Command(BaseCommand):
         self.stdout.write("== rectify_labwin_firebird_scale ==")
         self.stdout.write(f"  modo: {'APPLY' if options['apply'] else 'DRY-RUN'}")
         self.stdout.write(f"  alcance: {'r2-delta' if only_r2 else 'all-overlap'}")
+        self.stdout.write(f"  until: {until.isoformat()}")
         for key in sorted(counts):
             self.stdout.write(f"  {key}: {counts[key]}")
 
@@ -238,6 +240,7 @@ class Command(BaseCommand):
                 "rectify_labwin_firebird_scale",
                 str(datos_dir),
                 options["since"],
+                options["until"],
                 "r2" if only_r2 else "all",
             ]
         )
@@ -250,6 +253,7 @@ class Command(BaseCommand):
                 "source": "rectify_firebird_scale",
                 "fixable_planned": len(fixes),
                 "include_finalized": bool(options["include_finalized"]),
+                "until": until.isoformat(),
             },
         )
 

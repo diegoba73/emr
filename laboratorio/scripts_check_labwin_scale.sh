@@ -50,5 +50,7 @@ print("catalog", len(cat))
 PY
 fi
 
-echo "DONE — para auditar PG local (solo conteos):"
-echo "  python3 manage.py audit_labwin_firebird_scale \"$DATOS\" --only-r2-delta"
+echo "DONE — para auditar PG local (solo conteos, hasta 2026-09-29):"
+echo "  python3 manage.py audit_labwin_firebird_scale \"$DATOS\" --until 2026-09-29 --only-r2-delta"
+echo "  python3 manage.py rectify_labwin_firebird_scale \"$DATOS\" --until 2026-09-29  # dry-run"
+echo "Ver docs_synesis/DOC_LABWIN_ESCALA_DECIMAL.md — --apply solo con OK explícito."
