@@ -1086,9 +1086,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         totalResultados={progreso.conValor}
         resultadosFingerprint={analisisFingerprint}
       />
-      {progreso.conValor > 0 ? (
-        <SugerirInterpretacionPanel ordenId={orden.id} estadoOrden={orden.estado} />
-      ) : null}
     </Box>
   );
 };
