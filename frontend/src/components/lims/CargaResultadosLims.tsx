@@ -354,9 +354,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   }, [orden.id, orden.estado]);
 
   const iqcBloqueaCarga = Boolean(iqcPrecheck?.aplicable && !iqcPrecheck.ok);
-  const iqcSinConfiguracion = Boolean(
-    iqcPrecheck && (!iqcPrecheck.aplicable || iqcPrecheck.sin_configuracion)
-  );
+  const iqcSinConfiguracion = Boolean(iqcPrecheck?.sin_configuracion);
 
   const editable =
     permitirEdicion &&

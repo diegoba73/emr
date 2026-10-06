@@ -368,7 +368,7 @@ const OrdenLimsDetalle: React.FC = () => {
           correspondiente (Control de calidad) antes de cargar o liberar.
         </Alert>
       )}
-      {iqcPrecheck && (!iqcPrecheck.aplicable || iqcPrecheck.sin_configuracion) && (
+      {iqcPrecheck?.sin_configuracion && (
         <Alert severity="info" sx={{ mb: 2 }}>
           IQC no configurado para los ensayos de esta orden. Esto no significa control
           satisfactorio: hay que asociar materiales/productos de control cuando corresponda.

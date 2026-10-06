@@ -14,8 +14,11 @@ export async function attachIqcStatusToRows(rows: PendientePedidoRow[]): Promise
       if (r.tipo !== 'LAB_CLINICO') return { ...r, iqcStatus: 'na' as const };
       const p = byId.get(r.id);
       if (!p) return { ...r, iqcStatus: 'na' as const };
-      if (!p.aplicable || p.sin_configuracion) {
+      if (p.sin_configuracion) {
         return { ...r, iqcStatus: 'sin_config' as const };
+      }
+      if (!p.aplicable) {
+        return { ...r, iqcStatus: 'na' as const };
       }
       return { ...r, iqcStatus: p.ok ? ('ok' as const) : ('falta' as const) };
     });

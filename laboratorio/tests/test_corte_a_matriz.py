@@ -124,3 +124,21 @@ class TestIqcSinConfiguracion(TestCase):
         self.assertFalse(st["aplicable"])
         self.assertTrue(st.get("sin_configuracion"))
         self.assertEqual(st.get("motivo_no_aplicable"), "sin_materiales_ni_productos")
+
+    def test_sin_equipo_no_avisa_iqc(self):
+        suf = uuid.uuid4().hex[:6]
+        tm = TipoMuestra.objects.create(codigo=f"TR{suf}", nombre="Sangre", activo=True)
+        te = TipoExamen.objects.create(
+            codigo=f"R{suf}"[:12],
+            nombre="Test rápido",
+            tipo_muestra_requerida=tm,
+            tipo_resultado="TEXTO",
+            equipo_analizador=None,
+            activo=True,
+            precio=1,
+        )
+        st = estado_iqc_solicitud(_FakeSolicitud([te.id]))
+        self.assertTrue(st["ok"])
+        self.assertFalse(st["aplicable"])
+        self.assertFalse(st.get("sin_configuracion"))
+        self.assertEqual(st.get("motivo_no_aplicable"), "sin_equipo")

@@ -312,11 +312,16 @@ def estado_iqc_solicitud(solicitud, *, equipo: EquipoAnalizador | None = None) -
     materiales = materiales_iqc_canonicos(exam_ids_material)
 
     if not productos_por_key and not materiales:
+        # Test rápido / manual: ningún ensayo tiene analizador. No hay IQC que exigir
+        # ni que avisar. Si hay equipo y faltan materiales, sí es configuración pendiente.
+        hay_equipo = any(getattr(ex, "equipo_analizador_id", None) for ex in examenes)
         return {
             "ok": True,
             "aplicable": False,
-            "sin_configuracion": True,
-            "motivo_no_aplicable": "sin_materiales_ni_productos",
+            "sin_configuracion": hay_equipo,
+            "motivo_no_aplicable": (
+                "sin_materiales_ni_productos" if hay_equipo else "sin_equipo"
+            ),
             "equipo": (
                 {"id": default_eq.id, "codigo": default_eq.codigo, "nombre": default_eq.nombre}
                 if default_eq
