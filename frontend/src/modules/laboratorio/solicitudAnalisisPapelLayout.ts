@@ -51,11 +51,22 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: e('HBVAGS'), right: p('PAN_EAB_VEN') },
   { left: e('HCVG'), right: e('LACT') },
   { left: e('HIVAC'), right: null },
-  { left: e('HCGB'), right: null },
-  { left: e('SANOC'), right: null },
-  { left: e('ASTO'), right: p('PAN_ENA') },
+  { left: e('VDRL'), right: null },
   { left: e('GRUPO'), right: null },
 ];
+
+/** Siguen en el catálogo (órdenes ya pedidas) pero no se ofrecen en una solicitud nueva. */
+export const EXAMENES_FUERA_DE_SOLICITUD = new Set([
+  'HCGB',
+  'SANOC',
+  'ASTO',
+  'ENA',
+  'ENA_RO52',
+  'ENA_RO60',
+  'ENA_SSB',
+  'ENA_RNP',
+  'ENA_SM',
+]);
 
 export interface CatalogMaps {
   panelesByCodigo: Map<string, { id: number; nombre: string }>;

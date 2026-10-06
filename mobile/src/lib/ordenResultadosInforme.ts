@@ -25,7 +25,7 @@ export const ORDEN_FORMULARIO_PAPEL: string[] = [
   'PAN_IONO', 'PAN_IONO_U', 'CL', 'PAN_PROT24', 'CA_ION', 'PROT_U_AZ', 'PAN_LIP', 'PAN_MALB24',
   'PAN_HEP', 'PAN_MALB_AZ', 'PROT_T', 'PAN_ELP', 'ALB', 'LPA', 'PAN_COAG', 'PSA', 'INR', 'TSH',
   'VSG', 'T3', 'PCR_US', 'T4', 'AMIL', 'T4L', 'LIP', 'B12', 'GGT', 'VITD', 'LDH', 'PAN_EAB_ART',
-  'HBVAGS', 'PAN_EAB_VEN', 'HCVG', 'LACT', 'HIVAC', 'HCGB', 'SANOC', 'ASTO', 'GRUPO',
+  'HBVAGS', 'PAN_EAB_VEN', 'HCVG', 'LACT', 'HIVAC', 'VDRL', 'GRUPO',
 ];
 
 /** Orden de presentación clínica (informe / resultados), alineado al web. */

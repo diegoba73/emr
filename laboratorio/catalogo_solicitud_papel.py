@@ -187,6 +187,7 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "HBVAGS", "nombre": "Test rápido HBsAg (Hepatitis B)", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "HBsAg"},
     {"codigo": "HCVG", "nombre": "Test rápido Hepatitis C", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "HCV"},
     {"codigo": "HIVAC", "nombre": "Test rápido HIV", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "HIV"},
+    {"codigo": "VDRL", "nombre": "VDRL", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "VDRL"},
     {"codigo": "HCGB", "nombre": "Gonadotrofina coriónica (β-HCG / embarazo)", "muestra": "SUERO", "tipo_resultado": "CUALITATIVO", "abreviatura": "βHCG"},
     {"codigo": "SANOC", "nombre": "Sangre oculta en materia fecal", "muestra": "MATERIA_FECAL", "tipo_resultado": "CUALITATIVO", "abreviatura": "SOMF"},
     {"codigo": "ASTO", "nombre": "ASTO (Antiestreptolisina O)", "muestra": "SUERO", "tipo_resultado": "NUMERICO", "abreviatura": "ASTO"},
@@ -388,7 +389,7 @@ EXAMENES_SUELTOS_PDF: list[str] = [
     "CPK", "CPK_MB", "TROP_I", "TROP_US", "MIOG", "PROBNP", "DDIM",
     "PROT_U_AZ", "LPA", "PSA", "TSH", "T3", "T4", "T4L",
     "B12", "VITD", "LACT",
-    "HBVAGS", "HCVG", "HIVAC", "HCGB", "SANOC", "ASTO", "GRUPO",
+    "HBVAGS", "HCVG", "HIVAC", "VDRL", "GRUPO",
 ]
 
 # Orden de lectura del formulario «Solicitud de análisis» (fila a fila, izq → der).
@@ -423,9 +424,7 @@ ORDEN_FORMULARIO_PAPEL: list[str] = [
     "HBVAGS", "PAN_EAB_VEN",
     "HCVG", "LACT",
     "HIVAC",
-    "HCGB",
-    "SANOC",
-    "ASTO", "PAN_ENA",
+    "VDRL",
     "GRUPO",
 ]
 

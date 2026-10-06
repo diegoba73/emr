@@ -13,6 +13,7 @@ import type { LimsPanelExamen, LimsTipoExamen } from '../../types/lims';
 import {
   buildCatalogMaps,
   countPapelSelection,
+  EXAMENES_FUERA_DE_SOLICITUD,
   papelCodigosSet,
   resolvePapelItemId,
   resolvePapelItemLabel,
@@ -128,6 +129,7 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
       (e) =>
         e.activo !== false &&
         !papelCodes.has(e.codigo) &&
+        !EXAMENES_FUERA_DE_SOLICITUD.has(e.codigo) &&
         !selectedExamenesIds.has(e.id)
     );
   }, [examenes, papelCodes, selectedExamenesIds]);

@@ -35,9 +35,7 @@ describe('solicitudAnalisisPapelLayout — ítems nuevos', () => {
       'HBVAGS',
       'HCVG',
       'HIVAC',
-      'HCGB',
-      'SANOC',
-      'ASTO',
+      'VDRL',
       'GRUPO',
     ]) {
       expect(codes.has(c)).toBe(true);
@@ -48,5 +46,10 @@ describe('solicitudAnalisisPapelLayout — ítems nuevos', () => {
     expect(flat.indexOf('CL')).toBeGreaterThan(flat.indexOf('PAN_IONO'));
     expect(flat.indexOf('INR')).toBeGreaterThan(flat.indexOf('PAN_COAG'));
     expect(flat.indexOf('HBVAGS')).toBeGreaterThan(flat.indexOf('LDH'));
+    expect(flat.indexOf('VDRL')).toBe(flat.indexOf('HIVAC') + 1);
+    expect(codes.has('HCGB')).toBe(false);
+    expect(codes.has('SANOC')).toBe(false);
+    expect(codes.has('ASTO')).toBe(false);
+    expect(codes.has('PAN_ENA')).toBe(false);
   });
 });

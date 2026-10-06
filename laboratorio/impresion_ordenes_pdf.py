@@ -75,9 +75,7 @@ FORM_CLINICO_IZQ: list[tuple[str, str | None, str | None]] = [
     ("Test rápido HBsAg (Hepatitis B)", "examen", "HBVAGS"),
     ("Test rápido Hepatitis C", "examen", "HCVG"),
     ("Test rápido HIV", "examen", "HIVAC"),
-    ("Gonadotrofina coriónica (β-HCG)", "examen", "HCGB"),
-    ("Sangre oculta en materia fecal", "examen", "SANOC"),
-    ("ASTO (Antiestreptolisina O)", "examen", "ASTO"),
+    ("VDRL", "examen", "VDRL"),
     ("Grupo sanguíneo", "examen", "GRUPO"),
     ("Perfil Férrico", "panel", "PAN_FERR"),
 ]

@@ -874,6 +874,7 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
     "HBVAGS": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
     "HCVG": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
     "HIVAC": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
+    "VDRL": _r(metodo="Floculación (VDRL)", ref="No reactivo"),
     "HCGB": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
     "SANOC": _r(metodo="Inmunocromatografía (test rápido)", ref="Negativo"),
     "ASTO": _r(
