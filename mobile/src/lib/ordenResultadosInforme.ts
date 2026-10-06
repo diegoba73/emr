@@ -12,7 +12,6 @@ const PANELES_ORINA = new Set([
   'PAN_IONO_U24',
   'PAN_MALB_AZ',
   'PAN_MALB24',
-  'PAN_CLEAR',
   'PAN_PROT24',
 ]);
 
@@ -29,7 +28,15 @@ export const ORDEN_FORMULARIO_PAPEL: string[] = [
   'HBVAGS', 'PAN_EAB_VEN', 'HCVG', 'LACT', 'HIVAC', 'HCGB', 'SANOC', 'ASTO', 'GRUPO',
 ];
 
-const ORDEN_PAPEL_RANK = new Map(ORDEN_FORMULARIO_PAPEL.map((c, i) => [c, i]));
+/** Orden de presentación clínica (informe / resultados), alineado al web. */
+const ORDEN_PRESENTACION_PEDIDO: string[] = [
+  'PAN_HEMO', 'GLU', 'UREA', 'CREATI', 'PAN_CLEAR', 'AU', 'CA', 'MG', 'P', 'PROT_T', 'ALB',
+  'FERR', 'UIBC', 'GOT', 'GPT', 'FAL', 'BIL_T', 'BIL_D', 'BIL_I', 'COL_TOT', 'HDL', 'TG',
+  'LDL', 'VLDL', 'PCR_US', 'AMIL', 'LIP', 'GGT', 'LDH', 'PAN_HEP', 'PAN_LIP', 'PAN_IONO',
+  'CPK', 'CPK_MB', 'TROP_I', 'TROP_US', 'MIOG', 'PAN_ENA',
+];
+
+const ORDEN_PAPEL_RANK = new Map(ORDEN_PRESENTACION_PEDIDO.map((c, i) => [c, i]));
 
 const PERFILES_POR_CODIGO: ReadonlyArray<{
   codigo: string;
@@ -96,9 +103,24 @@ const PERFILES_POR_CODIGO: ReadonlyArray<{
     examenes: ['MICROALB', 'DIUR', 'MICROALB_24'],
   },
   {
+    codigo: 'PAN_MALB_AZ',
+    nombre: 'Microalbuminuria al azar',
+    examenes: ['MICROALB', 'CREA_U', 'RAC'],
+  },
+  {
     codigo: 'PAN_PROT24',
     nombre: 'Proteinuria 24 hs',
     examenes: ['PROT_U_EQ', 'DIUR', 'PROT_U_24'],
+  },
+  {
+    codigo: 'PAN_CLEAR',
+    nombre: 'Clearance de creatinina',
+    examenes: ['CREATI', 'CREA_U', 'DIUR', 'CLEAR_CREA'],
+  },
+  {
+    codigo: 'PAN_ENA',
+    nombre: 'ENA - Antígenos nucleares extraíbles Ac.IgG',
+    examenes: ['ENA_RO52', 'ENA_RO60', 'ENA_SSB', 'ENA_RNP', 'ENA_SM'],
   },
 ];
 
@@ -156,16 +178,16 @@ function codigoGrupo(grupo: GrupoResultadosMovil): string {
 
 function prioridadGrupoDefault(grupo: GrupoResultadosMovil): number {
   const codigo = codigoGrupo(grupo);
-  const papelLen = ORDEN_FORMULARIO_PAPEL.length;
+  const presentacionLen = ORDEN_PRESENTACION_PEDIDO.length;
   if (esGrupoOrina(grupo)) {
-    const baseOrina = papelLen + 1000;
+    const baseOrina = presentacionLen + 1000;
     if (codigo === PANEL_ORINA_COMPLETA) return baseOrina + 10_000;
     return baseOrina + (ORDEN_PAPEL_RANK.get(codigo) ?? 5_000);
   }
   if (codigo && ORDEN_PAPEL_RANK.has(codigo)) {
     return ORDEN_PAPEL_RANK.get(codigo)!;
   }
-  const base = papelLen + 100;
+  const base = presentacionLen + 100;
   if (grupo.codigo === 'PAN_HEMO') return base;
   if (grupo.key.startsWith('panel-') || grupo.key.startsWith('inferido-') || grupo.resultados.length > 1) {
     return base + 100;
@@ -174,12 +196,21 @@ function prioridadGrupoDefault(grupo: GrupoResultadosMovil): number {
 }
 
 function ordenarGruposPorDefecto(grupos: GrupoResultadosMovil[]): GrupoResultadosMovil[] {
-  return [...grupos].sort(
-    (a, b) =>
-      prioridadGrupoDefault(a) - prioridadGrupoDefault(b) ||
-      a.titulo.localeCompare(b.titulo, 'es') ||
-      a.key.localeCompare(b.key)
+  return forzarOrinaCompletaUltima(
+    [...grupos].sort(
+      (a, b) =>
+        prioridadGrupoDefault(a) - prioridadGrupoDefault(b) ||
+        a.titulo.localeCompare(b.titulo, 'es') ||
+        a.key.localeCompare(b.key)
+    )
   );
+}
+
+function forzarOrinaCompletaUltima(grupos: GrupoResultadosMovil[]): GrupoResultadosMovil[] {
+  const ori = grupos.filter((g) => (g.codigo || '').toUpperCase() === PANEL_ORINA_COMPLETA);
+  if (!ori.length) return grupos;
+  const resto = grupos.filter((g) => (g.codigo || '').toUpperCase() !== PANEL_ORINA_COMPLETA);
+  return [...resto, ...ori];
 }
 
 function applyOrdenGrupos(
@@ -199,7 +230,7 @@ function applyOrdenGrupos(
   }
   const rest = grupos.filter((g) => !seen.has(g.key));
   if (rest.length) ordered.push(...ordenarGruposPorDefecto(rest));
-  return ordered;
+  return forzarOrinaCompletaUltima(ordered);
 }
 
 export function groupResultadosInformeMovil(

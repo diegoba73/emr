@@ -40,9 +40,31 @@ CODIGOS_CALCULADOS = (
     | CODIGOS_ORINA_24H_CALCULADOS
     | CODIGOS_RAC_CALCULADOS
 )
-# Pedido suelto del calculado → asegurar insumos medidos (p. ej. RAC solo).
+# Pedido suelto del calculado → asegurar insumos medidos.
+# Misma relación en informe: el calculado no se informa sin sus medidos en la orden.
 INSUMOS_POR_CODIGO_CALCULADO: dict[str, tuple[str, ...]] = {
+    # Clearance (mg/dL suero/orina + diuresis)
+    "CLEAR_CREA": ("CREATI", "CREA_U", "DIUR"),
+    # RAC (mg/g)
     "RAC": ("MICROALB", "CREA_U"),
+    # Orinas 24 hs
+    "MICROALB_24": ("MICROALB", "DIUR"),
+    "PROT_U_24": ("PROT_U_EQ", "DIUR"),
+    "NA_U24": ("NA_U", "DIUR"),
+    "K_U24": ("K_U", "DIUR"),
+    "CL_U24": ("CL_U", "DIUR"),
+    # Perfil lipídico
+    "LDL": ("COL_TOT", "HDL", "TG"),
+    "VLDL": ("TG",),
+    "COL_NO_LDL": ("COL_TOT", "HDL"),
+    "COL_RESID": ("COL_TOT", "HDL", "TG"),
+    "RATIO_CT_HDL": ("COL_TOT", "HDL"),
+    # Hepatograma
+    "BIL_I": ("BIL_T", "BIL_D"),
+    # Perfil férrico
+    "CF": ("FERR", "UIBC"),
+    "SAT_FE": ("FERR", "UIBC"),
+    "TRANS": ("FERR", "UIBC"),
 }
 FORMULA_LEUCO_CODIGOS = frozenset(
     {"NEUT_CAY", "NEUT_SEG", "EOS", "BAS", "LINF", "MONO"}

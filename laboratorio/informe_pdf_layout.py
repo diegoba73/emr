@@ -559,13 +559,19 @@ def _styles() -> dict[str, ParagraphStyle]:
     }
 
 
-def _celda_examen(res: ResultadoExamen, styles: dict[str, ParagraphStyle]) -> list[Any]:
+def _celda_examen(
+    res: ResultadoExamen,
+    styles: dict[str, ParagraphStyle],
+    *,
+    omitir_metodo: bool = False,
+) -> list[Any]:
     nombre = _escape((res.tipo_examen.nombre or "").upper())
     parts: list[Any] = [Paragraph(nombre, styles["exam_title"])]
 
-    metodo = _metodo_texto(res)
-    if metodo:
-        parts.append(Paragraph(f"Método: {_escape(metodo)}", styles["exam_meta"]))
+    if not omitir_metodo:
+        metodo = _metodo_texto(res)
+        if metodo:
+            parts.append(Paragraph(f"Método: {_escape(metodo)}", styles["exam_meta"]))
 
     return parts
 
@@ -600,11 +606,12 @@ def _fila_resultado(
     styles: dict[str, ParagraphStyle],
     *,
     valores_por_codigo: dict[str, Any] | None = None,
+    omitir_metodo: bool = False,
 ) -> Table:
     valor, unidad = _valor_y_unidad(res, valores_por_codigo=valores_por_codigo)
     ref = _referencia_texto(res) or "—"
 
-    left_parts = _celda_examen(res, styles)
+    left_parts = _celda_examen(res, styles, omitir_metodo=omitir_metodo)
     left = Table(
         [[p] for p in left_parts],
         colWidths=[COL_EXAMEN - 0.15 * cm],
@@ -703,7 +710,18 @@ def _bloque_panel(
             mat_txt = " · ".join(materiales)
             flow.append(Paragraph(f"Material: {_escape(mat_txt)}", styles["panel_meta"]))
 
+        metodos: list[str] = []
+        for res in grupo.resultados:
+            metodo = _metodo_texto(res)
+            if metodo and metodo not in metodos:
+                metodos.append(metodo)
+        metodo_panel = metodos[0] if len(metodos) == 1 else None
+        if metodo_panel:
+            flow.append(Paragraph(f"Método: {_escape(metodo_panel)}", styles["panel_meta"]))
+
         flow.append(Spacer(1, 0.08 * cm))
+    else:
+        metodo_panel = None
 
     if mostrar_encabezado_columnas:
         flow.append(_tabla_encabezado_columnas(styles))
@@ -713,7 +731,14 @@ def _bloque_panel(
         vals = _valores_por_codigo(grupo.resultados)
 
     for res in grupo.resultados:
-        flow.append(_fila_resultado(res, styles, valores_por_codigo=vals))
+        flow.append(
+            _fila_resultado(
+                res,
+                styles,
+                valores_por_codigo=vals,
+                omitir_metodo=bool(metodo_panel),
+            )
+        )
 
     if es_perfil:
         flow.append(Spacer(1, 0.25 * cm))

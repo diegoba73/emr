@@ -142,6 +142,10 @@ export async function listSolicitudesExamen(params?: {
   fecha_programada_toma?: string;
   /** hoy = extracciones de hoy o vencidas; programadas = futuras. */
   vista_extraccion?: 'hoy' | 'programadas';
+  /** Sin día: órdenes abiertas (no PENDIENTE / FINALIZADO). */
+  cola?: 'trabajo';
+  /** Restringe a protocolos LAB-{anio}-… */
+  anio?: number;
 }): Promise<SolicitudExamenLims[]> {
   return getPaginatedAll<SolicitudExamenLims>(
     `${LAB}/solicitudes/`,

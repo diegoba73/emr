@@ -172,6 +172,34 @@ class TestSeedCatalogoSolicitudPapel:
         assert [te.codigo for te in ordenar_queryset_panel(pan_ven)] == [
             "FIO2", "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
         ]
+
+    def test_panel_ena_componentes_y_legacy_desactivado(self):
+        from laboratorio.models import TipoMuestra
+
+        muestra, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO",
+            defaults={"nombre": "Suero", "activo": True},
+        )
+        TipoExamen.objects.create(
+            codigo="ENA",
+            nombre="ENA Ac.(SSA-SSB-RNP-Sm)",
+            tipo_muestra_requerida=muestra,
+            activo=True,
+        )
+        call_command("seed_catalogo_solicitud_papel")
+        assert not TipoExamen.objects.get(codigo="ENA").activo
+        pan = PanelExamen.objects.get(codigo="PAN_ENA")
+        assert [te.codigo for te in ordenar_queryset_panel(pan)] == [
+            "ENA_RO52",
+            "ENA_RO60",
+            "ENA_SSB",
+            "ENA_RNP",
+            "ENA_SM",
+        ]
+        for codigo in ("ENA_RO52", "ENA_RO60", "ENA_SSB", "ENA_RNP", "ENA_SM"):
+            te = TipoExamen.objects.get(codigo=codigo)
+            assert te.tipo_resultado == "TEXTO"
+            assert te.metodo == "LIA - inmunoensayo lineal"
         assert pan_art.tipos_examen.filter(codigo="FIO2").exists()
         assert pan_ven.tipos_examen.filter(codigo="FIO2").exists()
         fio2 = TipoExamen.objects.get(codigo="FIO2")

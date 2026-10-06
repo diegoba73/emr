@@ -207,3 +207,21 @@ class TestCalculosDerivados(TestCase):
         )
         self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB"]), ["CREA_U"])
         self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB", "CREA_U"]), [])
+
+    def test_insumos_de_clearance_y_orina24(self):
+        self.assertEqual(
+            set(codigos_insumos_de_calculados(["CLEAR_CREA"])),
+            {"CREATI", "CREA_U", "DIUR"},
+        )
+        self.assertEqual(
+            set(codigos_insumos_de_calculados(["MICROALB_24"])),
+            {"MICROALB", "DIUR"},
+        )
+        self.assertEqual(
+            set(codigos_insumos_de_calculados(["PROT_U_24", "NA_U24"])),
+            {"PROT_U_EQ", "DIUR", "NA_U"},
+        )
+        self.assertEqual(
+            set(codigos_insumos_de_calculados(["LDL", "BIL_I", "CF"])),
+            {"COL_TOT", "HDL", "TG", "BIL_T", "BIL_D", "FERR", "UIBC"},
+        )

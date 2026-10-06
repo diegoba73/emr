@@ -173,11 +173,13 @@ class TestOrdenGruposInforme(TestCase):
         codes = [g.panel_codigo for g in grupos]
 
         self.assertEqual(keys[0], grupo_key_panel(self.panel_hemo.pk))
-        # Todo el bloque orina al final; orina completa última
+        # Clearance (mixto) no va al bloque orina; orina completa última
         self.assertEqual(codes[-1], PANEL_ORINA_COMPLETA)
-        orina_codes = [c for c in codes if c in {"PAN_IONO_U", "PAN_CLEAR", "PAN_ORI"}]
+        self.assertIn("PAN_CLEAR", codes)
+        self.assertLess(codes.index("PAN_CLEAR"), codes.index(PANEL_ORINA_COMPLETA))
+        orina_codes = [c for c in codes if c in {"PAN_IONO_U", "PAN_ORI"}]
         self.assertEqual(orina_codes[-1], "PAN_ORI")
-        self.assertEqual(len(orina_codes), 3)
+        self.assertEqual(len(orina_codes), 2)
         # Hemograma no está mezclado después de orinas
         self.assertLess(keys.index(grupo_key_panel(self.panel_hemo.pk)), keys.index(grupo_key_panel(panel_iono_u.pk)))
 
@@ -292,4 +294,89 @@ class TestOrdenGruposInforme(TestCase):
             grupo_key_panel(self.panel_hemo.pk),
         ]
         ordered = aplicar_orden_grupos(specs, custom)
-        self.assertEqual([g.key for g in ordered], custom)
+        # Orina completa siempre última aunque el custom la ponga primero.
+        self.assertEqual(
+            [g.key for g in ordered],
+            [
+                grupo_key_panel(self.panel_iono.pk),
+                grupo_key_panel(self.panel_hemo.pk),
+                grupo_key_panel(self.panel_orina.pk),
+            ],
+        )
+
+    def test_clearance_incluye_creati_y_va_antes_de_orina(self):
+        """Al informar clearance, CREATI va en el mismo bloque; no al final con orina."""
+        tm_suero, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO", defaults={"nombre": "Suero", "activo": True}
+        )
+        te_creati, _ = TipoExamen.objects.update_or_create(
+            codigo="CREATI",
+            defaults={
+                "nombre": "Creatininemia",
+                "tipo_muestra_requerida": tm_suero,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_crea_u, _ = TipoExamen.objects.update_or_create(
+            codigo="CREA_U",
+            defaults={
+                "nombre": "Creatininuria",
+                "tipo_muestra_requerida": self.tm_orina,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_diur, _ = TipoExamen.objects.update_or_create(
+            codigo="DIUR",
+            defaults={
+                "nombre": "Diuresis",
+                "tipo_muestra_requerida": self.tm_orina,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_clear, _ = TipoExamen.objects.update_or_create(
+            codigo="CLEAR_CREA",
+            defaults={
+                "nombre": "Clearance",
+                "tipo_muestra_requerida": self.tm_orina,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        panel_clear, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_CLEAR",
+            defaults={"nombre": "Clearance de creatinina", "activo": True},
+        )
+        panel_clear.tipos_examen.set([te_creati, te_crea_u, te_diur, te_clear])
+
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        sol.paneles.add(panel_clear, self.panel_orina)
+        for te, val in (
+            (te_creati, "1.0"),
+            (te_crea_u, "100"),
+            (te_diur, "1500"),
+            (te_clear, "104.2"),
+            (self.te_ph, "6"),
+        ):
+            ResultadoExamen.objects.create(solicitud=sol, tipo_examen=te, valor_obtenido=val)
+
+        resultados = list(
+            sol.resultados.select_related("tipo_examen", "tipo_examen__tipo_muestra_requerida")
+        )
+        grupos = ordenar_grupos_por_defecto(construir_grupos_informe(sol, resultados))
+        codes = [g.panel_codigo for g in grupos]
+        self.assertEqual(codes[-1], "PAN_ORI")
+
+        clear_g = next(g for g in grupos if g.panel_codigo == "PAN_CLEAR")
+        clear_codigos = {r.tipo_examen.codigo for r in clear_g.resultados}
+        self.assertEqual(clear_codigos, {"CREATI", "CREA_U", "DIUR", "CLEAR_CREA"})
+        self.assertLess(
+            grupos.index(clear_g),
+            grupos.index(next(g for g in grupos if g.panel_codigo == "PAN_ORI")),
+        )

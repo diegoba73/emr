@@ -623,6 +623,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         - numero: Búsqueda exacta para código de barras
         - fecha: Filtro por fecha de solicitud (creación)
         - fecha_muestra: Órdenes con muestra tomada ese día (excluye PENDIENTE)
+        - cola=trabajo: EN_PROCESO / INFORMADO_PARCIAL / LISTO_PARA_VALIDAR (sin día)
         """
         listado = getattr(self, 'action', None) == 'list'
         if listado:
@@ -662,6 +663,22 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         numero = self.request.query_params.get('numero')
         if numero:
             queryset = queryset.filter(numero=numero)
+
+        # Cola de trabajo: abiertas (no PENDIENTE ni FINALIZADO), sin filtrar por día.
+        cola = (self.request.query_params.get('cola') or '').strip().lower()
+        if cola in ('trabajo', 'pendientes_carga', 'pendientes'):
+            queryset = queryset.filter(
+                estado__in=('EN_PROCESO', 'INFORMADO_PARCIAL', 'LISTO_PARA_VALIDAR')
+            )
+
+        anio = (self.request.query_params.get('anio') or '').strip()
+        if anio:
+            try:
+                y = int(anio)
+                if 2000 <= y <= 2100:
+                    queryset = queryset.filter(numero__istartswith=f'LAB-{y}-')
+            except ValueError:
+                pass
 
         fecha_muestra = self.request.query_params.get('fecha_muestra')
         if fecha_muestra:

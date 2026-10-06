@@ -54,6 +54,8 @@ export const listEstudiosMicrobiologia = (params?: {
   esperando_recepcion?: boolean;
   fecha_programada_toma?: string;
   vista_extraccion?: 'hoy' | 'programadas';
+  cola?: 'trabajo';
+  anio?: number;
 }) => {
   const q: Record<string, string | number | undefined> = { page_size: 100 };
   if (params?.search) q.search = params.search;
@@ -62,6 +64,8 @@ export const listEstudiosMicrobiologia = (params?: {
   if (params?.esperando_recepcion) q.esperando_recepcion = '1';
   if (params?.fecha_programada_toma) q.fecha_programada_toma = params.fecha_programada_toma;
   if (params?.vista_extraccion) q.vista_extraccion = params.vista_extraccion;
+  if (params?.cola) q.cola = params.cola;
+  if (params?.anio != null) q.anio = params.anio;
   return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages: 20 });
 };
 export const getEstudioMicrobiologia = (id: number) =>

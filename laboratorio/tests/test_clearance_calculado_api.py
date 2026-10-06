@@ -180,3 +180,25 @@ def test_agregar_panel_clear_a_orden_con_suero_crea_bidon_pendiente(db):
         tipo_contenedor__codigo=BIDON_ORINA_24H,
     ).exists()
 
+
+@pytest.mark.django_db
+def test_agregar_clear_crea_suelto_trae_insumos(db):
+    """Pedir solo CLEAR_CREA debe traer CREATI + CREA_U + DIUR."""
+    from laboratorio.solicitud_orden_abierta import agregar_examenes_a_solicitud
+
+    call_command("seed_catalogo_solicitud_papel", stdout=StringIO())
+    paciente = Paciente.objects.create(
+        dni="PRUEBA-CLR2", nombre="Prueba", apellido="Clear2"
+    )
+    actor = User.objects.create_user(username="prueba-clr2", rol="bioquimico")
+    sol = SolicitudExamen.objects.create(
+        paciente=paciente,
+        estado="PENDIENTE",
+        origen_solicitud="AMBULATORIO_CEHTA",
+    )
+    clear = TipoExamen.objects.get(codigo="CLEAR_CREA")
+    agregar_examenes_a_solicitud(sol, examenes_ids=[clear.pk], user=actor)
+    sol.refresh_from_db()
+    codigos = set(sol.resultados.values_list("tipo_examen__codigo", flat=True))
+    assert {"CLEAR_CREA", "CREATI", "CREA_U", "DIUR"} <= codigos
+

@@ -4,8 +4,11 @@ Orden de grupos (paneles y exámenes sueltos) en el informe PDF y la UI LIMS.
 Reglas por defecto:
 - Orden de presentación clínica (`ORDEN_PRESENTACION_PEDIDO`): Hemograma →
   química CM260 suelta → Hepatograma → Lipídico → Ionograma → cardíacos → resto.
-- Determinaciones de orina (ionograma urinario, clearance, microalbuminuria,
-  proteinurias, orina completa, etc.) van al **final** del informe.
+- Determinaciones de orina (ionograma urinario, microalbuminuria, proteinurias,
+  orina completa, etc.) van al **final** del informe.
+- **Clearance (`PAN_CLEAR`)** no es bloque orina puro: incluye creatininemia (suero)
+  y se ordena con la presentación (junto a CREATI), para que al informar el
+  clearance figuren juntos CREATI + CREA_U + DIUR + CLEAR_CREA.
 - Dentro del bloque orina, **orina completa (PAN_ORI)** va siempre al final.
 - Perfiles/paneles agrupan sus componentes; si no hay panel pedido, se infiere
   por códigos del catálogo cuando hay suficientes analitos.
@@ -24,6 +27,7 @@ PANEL_HEMOGRAMA = "PAN_HEMO"
 PANEL_ORINA_COMPLETA = "PAN_ORI"
 
 # Perfiles/paneles de orina (bloque final del informe).
+# PAN_CLEAR queda fuera: es perfil mixto (suero + orina) y se ordena con química.
 PANELES_ORINA = frozenset(
     {
         "PAN_ORI",
@@ -31,7 +35,6 @@ PANELES_ORINA = frozenset(
         "PAN_IONO_U24",
         "PAN_MALB_AZ",
         "PAN_MALB24",
-        "PAN_CLEAR",
         "PAN_PROT24",
     }
 )
@@ -186,6 +189,7 @@ def construir_grupos_informe(solicitud, resultados: Iterable) -> list[GrupoInfor
     codigos_panel_usados: set[str] = set()
 
     for panel in paneles:
+        codigo_panel = str(panel.codigo or "").strip().upper()
         ids_panel = {te.id for te in panel.tipos_examen.all()}
         rows = ordenar_resultados_por_panel(
             panel.codigo,
@@ -193,8 +197,8 @@ def construir_grupos_informe(solicitud, resultados: Iterable) -> list[GrupoInfor
         )
         for r in rows:
             asignados.add(r.id)
-        if panel.codigo:
-            codigos_panel_usados.add(str(panel.codigo).strip().upper())
+        if codigo_panel:
+            codigos_panel_usados.add(codigo_panel)
         if rows:
             grupos.append(
                 GrupoInformeSpec(
@@ -224,7 +228,7 @@ def construir_grupos_informe(solicitud, resultados: Iterable) -> list[GrupoInfor
 
 
 def ordenar_grupos_por_defecto(grupos: list[GrupoInformeSpec]) -> list[GrupoInformeSpec]:
-    return sorted(grupos, key=prioridad_grupo_default)
+    return _forzar_orina_completa_ultima(sorted(grupos, key=prioridad_grupo_default))
 
 
 def aplicar_orden_grupos(
@@ -245,7 +249,16 @@ def aplicar_orden_grupos(
     rest = [g for g in grupos if g.key not in seen]
     if rest:
         ordered.extend(ordenar_grupos_por_defecto(rest))
-    return ordered
+    return _forzar_orina_completa_ultima(ordered)
+
+
+def _forzar_orina_completa_ultima(grupos: list[GrupoInformeSpec]) -> list[GrupoInformeSpec]:
+    """PAN_ORI siempre al final, aunque el orden custom lo haya movido."""
+    ori = [g for g in grupos if (g.panel_codigo or "").strip().upper() == PANEL_ORINA_COMPLETA]
+    if not ori:
+        return grupos
+    resto = [g for g in grupos if (g.panel_codigo or "").strip().upper() != PANEL_ORINA_COMPLETA]
+    return resto + ori
 
 
 def claves_grupos_validas(solicitud, resultados: Iterable) -> set[str]:

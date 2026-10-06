@@ -389,8 +389,10 @@ def _resolver_tipo_examen_ids(
     """Devuelve (ids_analitos, ids_paneles_validos).
 
     Si se pide un calculado suelto (p. ej. RAC), incluye sus insumos medidos.
+    Si se pide un examen legacy (p. ej. ENA), lo reemplaza por su panel.
     """
     from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
+    from laboratorio.catalogo_solicitud_papel import LEGACY_EXAMEN_A_PANEL
 
     exam_ids = {int(x) for x in (examenes_ids or []) if x is not None}
     panel_ids = {int(x) for x in (paneles_ids or []) if x is not None}
@@ -411,10 +413,32 @@ def _resolver_tipo_examen_ids(
         for te in ordenar_queryset_panel(panel):
             tipos.add(te.id)
 
-    if tipos and INSUMOS_POR_CODIGO_CALCULADO:
-        codigos = {
-            (c or "").strip().upper(): tid
+    if tipos:
+        por_id = {
+            tid: (c or "").strip().upper()
             for tid, c in TipoExamen.objects.filter(pk__in=tipos).values_list("id", "codigo")
+        }
+        # Legacy ENA → panel PAN_ENA (y quita el código único de la resolución).
+        legacy_a_panel = {
+            codigo: LEGACY_EXAMEN_A_PANEL[codigo]
+            for codigo in por_id.values()
+            if codigo in LEGACY_EXAMEN_A_PANEL
+        }
+        for codigo_legacy, panel_codigo in legacy_a_panel.items():
+            try:
+                panel = PanelExamen.objects.get(codigo=panel_codigo, activo=True)
+            except PanelExamen.DoesNotExist:
+                continue
+            paneles_ok.add(panel.pk)
+            for te in ordenar_queryset_panel(panel):
+                tipos.add(te.id)
+            for tid, codigo in list(por_id.items()):
+                if codigo == codigo_legacy:
+                    tipos.discard(tid)
+
+        codigos = set(por_id.values()) | {
+            (c or "").strip().upper()
+            for c in TipoExamen.objects.filter(pk__in=tipos).values_list("codigo", flat=True)
         }
         insumos_faltan: set[str] = set()
         for codigo in codigos:

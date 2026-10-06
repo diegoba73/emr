@@ -883,6 +883,12 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmax="200",
     ),
     "GRUPO": _r(metodo="Aglutinación en tubo / gel", ref="A, B, AB u O; Rh +/-"),
+    # —— ENA (LIA): un resultado por antígeno ——
+    "ENA_RO52": _r(metodo="LIA - inmunoensayo lineal", ref="Negativo"),
+    "ENA_RO60": _r(metodo="LIA - inmunoensayo lineal", ref="Negativo"),
+    "ENA_SSB": _r(metodo="LIA - inmunoensayo lineal", ref="Negativo"),
+    "ENA_RNP": _r(metodo="LIA - inmunoensayo lineal", ref="Negativo"),
+    "ENA_SM": _r(metodo="LIA - inmunoensayo lineal", ref="Negativo"),
 }
 
 # Códigos legacy del seed demo (referencias alineadas al catálogo nuevo)
@@ -896,4 +902,5 @@ REFERENCIAS_LEGACY: dict[str, ReferenciaClinicaDef] = {
     ),
     "EAB_ART": _r(metodo=_M_EAB, ref="Ver componentes del EAB arterial"),
     "EAB_VEN": _r(metodo=_M_EAB, ref="Ver componentes del EAB venoso"),
+    "ENA": _r(metodo="LIA - inmunoensayo lineal", ref="Ver componentes del panel ENA"),
 }

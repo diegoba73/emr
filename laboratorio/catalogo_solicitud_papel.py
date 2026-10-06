@@ -208,10 +208,51 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "HCO3_VEN", "nombre": "Bicarbonato (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "HCO3"},
     {"codigo": "BE_VEN", "nombre": "Exceso de base (venoso)", "muestra": "SANGRE_HEPARINA_VEN", "tipo_resultado": "NUMERICO", "abreviatura": "BE"},
     {"codigo": "LACT", "nombre": "Ácido láctico / Lactato", "muestra": "SANGRE_HEPARINA", "tipo_resultado": "NUMERICO"},
+    # —— ENA (panel PAN_ENA): un resultado por antígeno ——
+    {
+        "codigo": "ENA_RO52",
+        "nombre": "SSA/Ro52 (TRIM21) Ac.",
+        "muestra": "SUERO",
+        "tipo_resultado": "TEXTO",
+        "abreviatura": "Ro52",
+    },
+    {
+        "codigo": "ENA_RO60",
+        "nombre": "SSA/Ro60 Ac.",
+        "muestra": "SUERO",
+        "tipo_resultado": "TEXTO",
+        "abreviatura": "Ro60",
+    },
+    {
+        "codigo": "ENA_SSB",
+        "nombre": "SSB/La Ac.",
+        "muestra": "SUERO",
+        "tipo_resultado": "TEXTO",
+        "abreviatura": "SSB",
+    },
+    {
+        "codigo": "ENA_RNP",
+        "nombre": "RNP Ac.",
+        "muestra": "SUERO",
+        "tipo_resultado": "TEXTO",
+        "abreviatura": "RNP",
+    },
+    {
+        "codigo": "ENA_SM",
+        "nombre": "Sm Ac.",
+        "muestra": "SUERO",
+        "tipo_resultado": "TEXTO",
+        "abreviatura": "Sm",
+    },
 ]
 
 # Códigos legacy del seed demo que se reemplazan por panel + componentes
-LEGACY_CODIGOS_DESACTIVAR = frozenset({"HEMO", "COL", "HEM", "COA", "EAB_ART", "EAB_VEN"})
+LEGACY_CODIGOS_DESACTIVAR = frozenset({"HEMO", "COL", "HEM", "COA", "EAB_ART", "EAB_VEN", "ENA"})
+
+# Pedido legacy ENA (un solo código) → panel con un resultado por antígeno
+LEGACY_EXAMEN_A_PANEL: dict[str, str] = {
+    "ENA": "PAN_ENA",
+}
 
 # Componentes EAB (jeringas art/ven). FIO2 es compartido entre ambos paneles.
 COMPONENTES_EAB_ART: list[str] = [
@@ -219,6 +260,14 @@ COMPONENTES_EAB_ART: list[str] = [
 ]
 COMPONENTES_EAB_VEN: list[str] = [
     "FIO2", "PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN",
+]
+
+COMPONENTES_ENA: list[str] = [
+    "ENA_RO52",
+    "ENA_RO60",
+    "ENA_SSB",
+    "ENA_RNP",
+    "ENA_SM",
 ]
 
 # ---------------------------------------------------------------------------
@@ -325,6 +374,11 @@ PANELES: list[PanelDef] = [
         "nombre": "EAB venoso",
         "componentes": list(COMPONENTES_EAB_VEN),
     },
+    {
+        "codigo": "PAN_ENA",
+        "nombre": "ENA - Antígenos nucleares extraíbles Ac.IgG",
+        "componentes": list(COMPONENTES_ENA),
+    },
 ]
 
 # Exámenes sueltos solicitables (aparecen en el papel fuera de paneles)
@@ -371,7 +425,7 @@ ORDEN_FORMULARIO_PAPEL: list[str] = [
     "HIVAC",
     "HCGB",
     "SANOC",
-    "ASTO",
+    "ASTO", "PAN_ENA",
     "GRUPO",
 ]
 
@@ -385,6 +439,8 @@ ORDEN_PRESENTACION_PEDIDO: list[str] = [
     "GLU",
     "UREA",
     "CREATI",
+    # Clearance (mixto suero+orina): junto a creatininemia en informe/carga
+    "PAN_CLEAR",
     "AU",
     "CA",
     "MG",
@@ -417,4 +473,5 @@ ORDEN_PRESENTACION_PEDIDO: list[str] = [
     "TROP_I",
     "TROP_US",
     "MIOG",
+    "PAN_ENA",
 ]

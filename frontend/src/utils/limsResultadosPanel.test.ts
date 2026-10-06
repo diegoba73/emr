@@ -73,4 +73,74 @@ describe('groupResultadosPorPanel', () => {
     );
     expect(grupos.map((g) => g.key)).toEqual(['resultado-3', 'panel-11', 'panel-10']);
   });
+
+  it('clearance incluye CREATI y queda antes de orina completa', () => {
+    const ordenClear: Pick<SolicitudExamenLims, 'paneles_resumen' | 'tipos_examen'> = {
+      paneles_resumen: [
+        {
+          id: 20,
+          codigo: 'PAN_CLEAR',
+          nombre: 'Clearance de creatinina',
+          tipos_examen_ids: [101, 102, 103, 104],
+        },
+        {
+          id: 21,
+          codigo: 'PAN_ORI',
+          nombre: 'Orina completa',
+          tipos_examen_ids: [201],
+        },
+      ],
+      tipos_examen: [],
+    };
+    const resultados: ResultadoExamenLims[] = [
+      {
+        ...res(1, 101),
+        tipo_examen_codigo: 'CREATI',
+        tipo_examen_nombre: 'Creatininemia',
+        tipo_examen_muestra_codigo: 'SUERO',
+      },
+      {
+        ...res(2, 102),
+        tipo_examen_codigo: 'CREA_U',
+        tipo_examen_nombre: 'Creatininuria',
+        tipo_examen_muestra_codigo: 'ORINA',
+      },
+      {
+        ...res(3, 103),
+        tipo_examen_codigo: 'DIUR',
+        tipo_examen_nombre: 'Diuresis',
+        tipo_examen_muestra_codigo: 'ORINA_24_H',
+      },
+      {
+        ...res(4, 104),
+        tipo_examen_codigo: 'CLEAR_CREA',
+        tipo_examen_nombre: 'Clearance',
+        tipo_examen_muestra_codigo: 'ORINA_24_H',
+      },
+      {
+        ...res(5, 201),
+        tipo_examen_codigo: 'ORI_PH',
+        tipo_examen_nombre: 'pH',
+        tipo_examen_muestra_codigo: 'ORINA',
+      },
+    ];
+    const grupos = groupResultadosPorPanel(
+      {
+        ...ordenClear,
+        orden_grupos_informe: ['panel-21', 'panel-20'],
+      },
+      resultados
+    );
+    expect(grupos[grupos.length - 1].codigo).toBe('PAN_ORI');
+    const clear = grupos.find((g) => g.codigo === 'PAN_CLEAR');
+    expect(clear?.resultados.map((r) => r.tipo_examen_codigo)).toEqual([
+      'CREATI',
+      'CREA_U',
+      'DIUR',
+      'CLEAR_CREA',
+    ]);
+    expect(grupos.indexOf(clear!)).toBeLessThan(
+      grupos.indexOf(grupos.find((g) => g.codigo === 'PAN_ORI')!)
+    );
+  });
 });

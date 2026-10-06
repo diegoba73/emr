@@ -40,12 +40,14 @@ import OrdenesLimsTabla from '../../components/lims/OrdenesLimsTabla';
 import { ESTADOS_ORDEN_LIMS } from '../../utils/limsEstadosOrden';
 import { withNavBack } from '../../utils/navBack';
 import {
+  estadosMicroDesdeFiltroLab,
   mapLabToPendiente,
   mapMicroToPendiente,
   sortPedidosPorNumero,
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
 import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
+import { interpretarBusquedaOrden } from '../../utils/limsBusquedaOrden';
 
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
@@ -54,6 +56,7 @@ const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
 const ESTADOS_BANDEJA_LIMITADA = ['FINALIZADO'] as const;
 
 const DIAS_PESTANAS_INICIAL = 7;
+const COLA_TAB = '__cola__';
 
 const MICRO_EN_BANDEJA = new Set([
   'RECIBIDO',
@@ -66,6 +69,16 @@ const MICRO_EN_BANDEJA = new Set([
   'INFORMADO',
 ]);
 
+const MICRO_COLA = new Set([
+  'RECIBIDO',
+  'SEMBRADO',
+  'LECTURA_PRELIMINAR',
+  'IDENTIFICACION',
+  'ANTIBIOGRAMA',
+  'LISTO_PARA_VALIDAR',
+  'VALIDADO',
+]);
+
 function fechaLocalIso(iso?: string | null): string | null {
   if (!iso) return null;
   try {
@@ -75,15 +88,41 @@ function fechaLocalIso(iso?: string | null): string | null {
   }
 }
 
+async function cargarMicrosConEstados(
+  base: Parameters<typeof listEstudiosMicrobiologia>[0],
+  microEstadosFiltro: string[] | null
+): Promise<Awaited<ReturnType<typeof listEstudiosMicrobiologia>>> {
+  if (microEstadosFiltro && microEstadosFiltro.length > 1) {
+    const batches = await Promise.all(
+      microEstadosFiltro.map((est) => listEstudiosMicrobiologia({ ...base, estado: est }))
+    );
+    const seen = new Set<number>();
+    const out: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
+    for (const batch of batches) {
+      for (const e of batch) {
+        if (!seen.has(e.id)) {
+          seen.add(e.id);
+          out.push(e);
+        }
+      }
+    }
+    return out;
+  }
+  return listEstudiosMicrobiologia(
+    microEstadosFiltro?.length === 1 ? { ...base, estado: microEstadosFiltro[0] } : base
+  );
+}
+
 const OrdenesLims: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useData();
   const [rows, setRows] = useState<PendientePedidoRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [numeroFiltro, setNumeroFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
   const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
+  const [modoCola, setModoCola] = useState(false);
   const [imprimiendoListado, setImprimiendoListado] = useState(false);
   const [dialogPedidosOpen, setDialogPedidosOpen] = useState(false);
 
@@ -91,81 +130,192 @@ const OrdenesLims: React.FC = () => {
   const vistaLimitada = isLimsOperativaLimitada(currentUser);
   const puedeObraSocial = canOperateLims(currentUser);
   const estadosBandeja = vistaLimitada ? ESTADOS_BANDEJA_LIMITADA : ESTADOS_BANDEJA;
+  const colaDisponible = !vistaLimitada;
 
   const [estadoFiltro, setEstadoFiltro] = useState<string>(() =>
     vistaLimitada ? 'FINALIZADO' : ''
   );
 
   const fechaApi = formatFechaLocal(diaSeleccionado);
-  const buscarPorNumero = numeroFiltro.trim().length > 0;
+  const qBusqueda = busquedaDebounced.trim();
+  const interp = useMemo(() => interpretarBusquedaOrden(qBusqueda), [qBusqueda]);
+  const busquedaPorProtocolo = interp.tipo === 'exacto' || interp.tipo === 'secuencia_anio';
+  /** En pendientes, texto/DNI va al API (puede incluir finalizadas). */
+  const buscarTextoEnCola =
+    colaDisponible && modoCola && interp.tipo === 'texto' && !vistaLimitada;
 
   const diasTabs = useMemo(() => buildDiasLaboratorio(diasPestanas), [diasPestanas]);
+  const tabValue = modoCola && colaDisponible ? COLA_TAB : fechaApi;
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setBusquedaDebounced(busqueda), 350);
+    return () => window.clearTimeout(t);
+  }, [busqueda]);
 
   const load = useCallback(async () => {
     if (!allowed) return;
     setLoading(true);
     try {
-      const num = numeroFiltro.trim();
-      const labs = await listSolicitudesExamen(
-        buscarPorNumero
-          ? { numero: num }
-          : {
-              estado: estadoFiltro || undefined,
-              fecha_muestra: fechaApi,
-            }
-      );
+      let labs: Awaited<ReturnType<typeof listSolicitudesExamen>>;
       let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
-      try {
-        micros = await listEstudiosMicrobiologia(
-          buscarPorNumero ? { search: num } : {}
+
+      // Nº de protocolo: exacto (2026-00030) o secuencia del año (30).
+      if (interp.tipo === 'exacto') {
+        labs = await listSolicitudesExamen({ numero: interp.numero });
+        try {
+          micros = await listEstudiosMicrobiologia({ search: interp.numero });
+        } catch {
+          micros = [];
+        }
+        const microRows = micros
+          .filter((e) => (e.numero || '').toUpperCase() === interp.numero.toUpperCase())
+          .map(mapMicroToPendiente);
+        setRows(
+          await attachIqcStatusToRows(
+            sortPedidosPorNumero([...labs.map(mapLabToPendiente), ...microRows])
+          )
         );
+        return;
+      }
+
+      if (interp.tipo === 'secuencia_anio') {
+        const labParams: Parameters<typeof listSolicitudesExamen>[0] = {
+          anio: interp.anio,
+          search: interp.secuencia,
+        };
+        const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {
+          anio: interp.anio,
+          search: interp.secuencia,
+        };
+        if (estadoFiltro) {
+          labParams.estado = estadoFiltro;
+        }
+        labs = await listSolicitudesExamen(labParams);
+        try {
+          const microEstados = estadoFiltro ? estadosMicroDesdeFiltroLab(estadoFiltro) : null;
+          micros = await cargarMicrosConEstados(microParams, microEstados);
+        } catch {
+          micros = [];
+        }
+        let microRows = micros.map(mapMicroToPendiente);
+        if (estadoFiltro) {
+          const allowedMicro = estadosMicroDesdeFiltroLab(estadoFiltro);
+          if (allowedMicro) {
+            microRows = microRows.filter((r) => allowedMicro.includes(r.estado));
+          }
+        }
+        setRows(
+          await attachIqcStatusToRows(
+            sortPedidosPorNumero([...labs.map(mapLabToPendiente), ...microRows])
+          )
+        );
+        return;
+      }
+
+      if (colaDisponible && modoCola) {
+        const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
+        const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {};
+        let microEstadosFiltro: string[] | null = null;
+
+        if (buscarTextoEnCola) {
+          labParams.search = interp.q;
+          microParams.search = interp.q;
+        }
+        if (estadoFiltro) {
+          labParams.estado = estadoFiltro;
+          microEstadosFiltro = estadosMicroDesdeFiltroLab(estadoFiltro);
+        } else if (!buscarTextoEnCola) {
+          labParams.cola = 'trabajo';
+          microParams.cola = 'trabajo';
+        }
+
+        labs = await listSolicitudesExamen(labParams);
+        try {
+          micros = await cargarMicrosConEstados(microParams, microEstadosFiltro);
+        } catch {
+          micros = [];
+        }
+
+        let microRows = micros.map(mapMicroToPendiente);
+        if (microEstadosFiltro) {
+          microRows = microRows.filter((r) => microEstadosFiltro!.includes(r.estado));
+        } else if (!buscarTextoEnCola) {
+          microRows = microRows.filter((r) => MICRO_COLA.has(r.estado));
+        }
+
+        setRows(
+          await attachIqcStatusToRows(
+            sortPedidosPorNumero([...labs.map(mapLabToPendiente), ...microRows])
+          )
+        );
+        return;
+      }
+
+      // Vista por día.
+      labs = await listSolicitudesExamen({
+        estado: estadoFiltro || undefined,
+        fecha_muestra: fechaApi,
+      });
+      try {
+        micros = await listEstudiosMicrobiologia({});
       } catch {
         micros = [];
       }
-      let merged: PendientePedidoRow[];
-      if (buscarPorNumero) {
-        const microRows = micros
-          .filter((e) => (e.numero || '').toUpperCase() === num.toUpperCase())
-          .map(mapMicroToPendiente);
-        merged = [...labs.map(mapLabToPendiente), ...microRows];
-      } else {
-        let microRows = micros
-          .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
-          .filter((e) => fechaLocalIso(e.fecha_inicio || e.created_at) === fechaApi)
-          .map(mapMicroToPendiente);
-        if (vistaLimitada) {
+      let microRows = micros
+        .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
+        .filter((e) => fechaLocalIso(e.fecha_inicio || e.created_at) === fechaApi)
+        .map(mapMicroToPendiente);
+      if (vistaLimitada) {
+        microRows = microRows.filter((r) => r.estado === 'INFORMADO');
+      } else if (estadoFiltro) {
+        if (estadoFiltro === 'FINALIZADO') {
           microRows = microRows.filter((r) => r.estado === 'INFORMADO');
-        } else if (estadoFiltro) {
-          if (estadoFiltro === 'FINALIZADO') {
-            microRows = microRows.filter((r) => r.estado === 'INFORMADO');
-          } else {
-            microRows = [];
-          }
+        } else {
+          const allowedMicro = estadosMicroDesdeFiltroLab(estadoFiltro);
+          microRows = allowedMicro
+            ? microRows.filter((r) => allowedMicro.includes(r.estado))
+            : [];
         }
-        merged = [...labs.map(mapLabToPendiente), ...microRows];
       }
-      setRows(await attachIqcStatusToRows(sortPedidosPorNumero(merged)));
+      setRows(
+        await attachIqcStatusToRows(
+          sortPedidosPorNumero([...labs.map(mapLabToPendiente), ...microRows])
+        )
+      );
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {
       setLoading(false);
     }
-  }, [allowed, estadoFiltro, numeroFiltro, buscarPorNumero, fechaApi, vistaLimitada]);
+  }, [
+    allowed,
+    buscarTextoEnCola,
+    colaDisponible,
+    estadoFiltro,
+    fechaApi,
+    interp,
+    modoCola,
+    vistaLimitada,
+  ]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const filtradas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    if (!q) return rows;
+    // Búsqueda por protocolo o en pendientes ya resolvió en API.
+    if (busquedaPorProtocolo || (modoCola && colaDisponible)) return rows;
+    if (interp.tipo !== 'texto') return rows;
+    const q = interp.q.toLowerCase();
     return rows.filter((r) => {
       const n = (r.numero || '').toLowerCase();
       const pn = (r.paciente_nombre || '').toLowerCase();
       const pd = (r.paciente_dni || '').toLowerCase();
       return n.includes(q) || pn.includes(q) || pd.includes(q);
     });
-  }, [rows, busqueda]);
+  }, [rows, interp, busquedaPorProtocolo, modoCola, colaDisponible]);
+
+  const etiquetaVista = modoCola && colaDisponible ? 'Pendientes' : labelDiaOrden(diaSeleccionado);
 
   const imprimirListado = async () => {
     if (!filtradas.length) return;
@@ -173,7 +323,7 @@ const OrdenesLims: React.FC = () => {
     try {
       const blob = await getListadoOrdenesDiaPdfBlob(
         filtradas.map((r) => ({ tipo: r.tipo, id: r.id })),
-        fechaApi
+        modoCola && colaDisponible ? formatFechaLocal(startOfLocalDay()) : fechaApi
       );
       await printPdfBlob(blob);
     } catch (e) {
@@ -183,13 +333,19 @@ const OrdenesLims: React.FC = () => {
     }
   };
 
-  const handleCambioDia = (iso: string) => {
-    setDiaSeleccionado(parseFechaLocal(iso));
+  const handleTabChange = (_: React.SyntheticEvent, v: string) => {
+    if (v === COLA_TAB) {
+      setModoCola(true);
+      return;
+    }
+    setModoCola(false);
+    setDiaSeleccionado(parseFechaLocal(v));
   };
 
   const handleFechaManual = (iso: string) => {
     if (!iso) return;
     const d = parseFechaLocal(iso);
+    setModoCola(false);
     setDiaSeleccionado(d);
     setDiasPestanas((n) => diasVisiblesParaIncluir(d, n));
   };
@@ -224,17 +380,25 @@ const OrdenesLims: React.FC = () => {
             Órdenes LIMS
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {buscarPorNumero
-              ? 'Búsqueda por número LAB-… (lab clínico y microbiología).'
-              : vistaLimitada
-                ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
-                : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
-            {!buscarPorNumero && (
-              <Button size="small" sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }} onClick={() => navigate('/laboratorio/pendientes')}>
+            {busquedaPorProtocolo
+              ? interp.tipo === 'exacto'
+                ? `Búsqueda exacta ${interp.numero}.`
+                : `Nº ${interp.secuencia} en el año ${interp.anio}.`
+              : modoCola && colaDisponible
+                ? 'Pendientes: pedidos no finalizados (todos los días). Buscar / estado permiten ubicar también finalizadas. Extracción y etiquetas en '
+                : vistaLimitada
+                  ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
+                  : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
+            {!busquedaPorProtocolo && (
+              <Button
+                size="small"
+                sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }}
+                onClick={() => navigate('/laboratorio/pendientes')}
+              >
                 Pendientes
               </Button>
             )}
-            {!buscarPorNumero && '.'}
+            {!busquedaPorProtocolo && '.'}
           </Typography>
         </Box>
       </Stack>
@@ -251,7 +415,9 @@ const OrdenesLims: React.FC = () => {
             gap: 1,
           }}
         >
-          <Typography variant="subtitle2">Día de toma / recepción</Typography>
+          <Typography variant="subtitle2">
+            {modoCola && colaDisponible ? 'Pendientes' : 'Día de toma / recepción'}
+          </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <TextField
               type="date"
@@ -260,28 +426,25 @@ const OrdenesLims: React.FC = () => {
               value={fechaApi}
               onChange={(e) => handleFechaManual(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              disabled={buscarPorNumero}
             />
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={buscarPorNumero}
-              onClick={() => setDiasPestanas((n) => n + 7)}
-            >
+            <Button size="small" variant="outlined" onClick={() => setDiasPestanas((n) => n + 7)}>
               Ver más días
             </Button>
           </Box>
         </Box>
         <Tabs
-          value={fechaApi}
-          onChange={(_, v) => handleCambioDia(String(v))}
+          value={tabValue}
+          onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
           sx={{ px: 1 }}
         >
+          {colaDisponible && (
+            <Tab value={COLA_TAB} label="PENDIENTES" sx={{ fontWeight: 700 }} />
+          )}
           {diasTabs.map((d) => {
             const key = formatFechaLocal(d);
-            return <Tab key={key} value={key} label={labelDiaOrden(d)} disabled={buscarPorNumero} />;
+            return <Tab key={key} value={key} label={labelDiaOrden(d)} />;
           })}
         </Tabs>
       </Paper>
@@ -293,7 +456,8 @@ const OrdenesLims: React.FC = () => {
             label="Buscar (nº, paciente, DNI)"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            sx={{ minWidth: 220 }}
+            sx={{ minWidth: 260, flex: '1 1 220px' }}
+            helperText="30 = año actual · 2026-00030 = exacto"
           />
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>Estado</InputLabel>
@@ -303,7 +467,11 @@ const OrdenesLims: React.FC = () => {
               onChange={(e) => setEstadoFiltro(e.target.value as string)}
               disabled={vistaLimitada}
             >
-              {!vistaLimitada && <MenuItem value="">Todos (con muestra)</MenuItem>}
+              {!vistaLimitada && (
+                <MenuItem value="">
+                  {modoCola ? 'No finalizadas' : 'Todos (con muestra)'}
+                </MenuItem>
+              )}
               {estadosBandeja.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
@@ -311,20 +479,10 @@ const OrdenesLims: React.FC = () => {
               ))}
             </Select>
           </FormControl>
-          <TextField
-            size="small"
-            label="Número exacto LAB-…"
-            value={numeroFiltro}
-            onChange={(e) => setNumeroFiltro(e.target.value)}
-            sx={{ width: 180 }}
-            helperText={buscarPorNumero ? 'Ignora filtro por día' : undefined}
-          />
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
-          {!buscarPorNumero && (
-            <Chip size="small" label={`${filtradas.length} pedido(s)`} variant="outlined" />
-          )}
+          <Chip size="small" label={`${filtradas.length} pedido(s)`} variant="outlined" />
           {puedeObraSocial && (
             <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
               <Button
@@ -351,7 +509,7 @@ const OrdenesLims: React.FC = () => {
         open={dialogPedidosOpen}
         onClose={() => setDialogPedidosOpen(false)}
         rows={filtradas}
-        diaLabel={labelDiaOrden(diaSeleccionado)}
+        diaLabel={etiquetaVista}
       />
 
       {loading ? (
@@ -363,12 +521,14 @@ const OrdenesLims: React.FC = () => {
           <OrdenesLimsTabla
             rows={filtradas}
             emptyMessage={
-              buscarPorNumero
+              busquedaPorProtocolo
                 ? 'Sin pedidos con ese número.'
-                : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
+                : modoCola && colaDisponible
+                  ? 'Sin pedidos pendientes.'
+                  : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
             }
             columnaFecha="toma"
-            mostrarIndiceDia
+            mostrarIndiceDia={!modoCola || !colaDisponible}
             onVer={onVer}
             puedeObraSocial={puedeObraSocial}
             onObraSocialSaved={load}

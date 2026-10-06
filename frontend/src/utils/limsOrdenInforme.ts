@@ -15,7 +15,6 @@ export const PANELES_ORINA = new Set([
   'PAN_IONO_U24',
   'PAN_MALB_AZ',
   'PAN_MALB24',
-  'PAN_CLEAR',
   'PAN_PROT24',
 ]);
 
@@ -32,6 +31,7 @@ export const ORDEN_PRESENTACION_PEDIDO: string[] = [
   'GLU',
   'UREA',
   'CREATI',
+  'PAN_CLEAR',
   'AU',
   'CA',
   'MG',
@@ -64,6 +64,7 @@ export const ORDEN_PRESENTACION_PEDIDO: string[] = [
   'TROP_I',
   'TROP_US',
   'MIOG',
+  'PAN_ENA',
 ];
 
 /** @deprecated Usar ORDEN_PRESENTACION_PEDIDO. */
@@ -155,12 +156,21 @@ export function prioridadGrupoDefault(grupo: GrupoResultadosOrden): number {
 }
 
 export function ordenarGruposPorDefecto(grupos: GrupoResultadosOrden[]): GrupoResultadosOrden[] {
-  return [...grupos].sort(
-    (a, b) =>
-      prioridadGrupoDefault(a) - prioridadGrupoDefault(b) ||
-      a.titulo.localeCompare(b.titulo, 'es') ||
-      a.key.localeCompare(b.key)
+  return forzarOrinaCompletaUltima(
+    [...grupos].sort(
+      (a, b) =>
+        prioridadGrupoDefault(a) - prioridadGrupoDefault(b) ||
+        a.titulo.localeCompare(b.titulo, 'es') ||
+        a.key.localeCompare(b.key)
+    )
   );
+}
+
+function forzarOrinaCompletaUltima(grupos: GrupoResultadosOrden[]): GrupoResultadosOrden[] {
+  const ori = grupos.filter((g) => (g.codigo || '').toUpperCase() === PANEL_ORINA_COMPLETA);
+  if (!ori.length) return grupos;
+  const resto = grupos.filter((g) => (g.codigo || '').toUpperCase() !== PANEL_ORINA_COMPLETA);
+  return [...resto, ...ori];
 }
 
 export function buildOrdenGruposKeys(grupos: GrupoResultadosOrden[]): string[] {
@@ -188,7 +198,7 @@ export function applyOrdenGrupos(
   if (rest.length) {
     ordered.push(...ordenarGruposPorDefecto(rest));
   }
-  return ordered;
+  return forzarOrinaCompletaUltima(ordered);
 }
 
 export function reorderOrdenGrupos(

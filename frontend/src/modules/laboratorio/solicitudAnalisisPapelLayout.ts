@@ -53,7 +53,7 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: e('HIVAC'), right: null },
   { left: e('HCGB'), right: null },
   { left: e('SANOC'), right: null },
-  { left: e('ASTO'), right: null },
+  { left: e('ASTO'), right: p('PAN_ENA') },
   { left: e('GRUPO'), right: null },
 ];
 

@@ -284,6 +284,30 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         estado = self.request.query_params.get("estado")
         if estado:
             qs = qs.filter(estado=estado)
+
+        cola = (self.request.query_params.get("cola") or "").strip().lower()
+        if cola in ("trabajo", "pendientes_carga", "pendientes"):
+            qs = qs.filter(
+                estado__in=(
+                    "RECIBIDO",
+                    "SEMBRADO",
+                    "LECTURA_PRELIMINAR",
+                    "IDENTIFICACION",
+                    "ANTIBIOGRAMA",
+                    "LISTO_PARA_VALIDAR",
+                    "VALIDADO",
+                )
+            )
+
+        anio = (self.request.query_params.get("anio") or "").strip()
+        if anio:
+            try:
+                y = int(anio)
+                if 2000 <= y <= 2100:
+                    qs = qs.filter(numero__istartswith=f"LAB-{y}-")
+            except ValueError:
+                pass
+
         sin_etiquetas = self.request.query_params.get("sin_etiquetas")
         if sin_etiquetas in ("1", "true", "True"):
             qs = qs.filter(estado="PENDIENTE", etiquetas_impresas_at__isnull=True)

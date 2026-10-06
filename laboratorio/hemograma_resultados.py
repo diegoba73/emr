@@ -30,6 +30,7 @@ _PANELES_ASEGURAR = frozenset(
         "PAN_IONO_U24",
         "PAN_MALB24",
         "PAN_MALB_AZ",
+        "PAN_ENA",
     }
 )
 
@@ -125,11 +126,32 @@ def _asegurar_insumos_calculados(solicitud: SolicitudExamen) -> int:
     return creados
 
 
+def _asegurar_legacy_ena(solicitud: SolicitudExamen) -> int:
+    """Si la orden tiene ENA único (legacy), completa PAN_ENA + componentes."""
+    from laboratorio.catalogo_solicitud_papel import LEGACY_EXAMEN_A_PANEL
+    from laboratorio.models import PanelExamen
+
+    panel_codigo = LEGACY_EXAMEN_A_PANEL.get("ENA")
+    if not panel_codigo:
+        return 0
+    tiene_ena = solicitud.resultados.filter(tipo_examen__codigo="ENA").exists()
+    if not tiene_ena:
+        return 0
+    try:
+        panel = PanelExamen.objects.get(codigo=panel_codigo, activo=True)
+    except PanelExamen.DoesNotExist:
+        return 0
+    if not solicitud.paneles.filter(pk=panel.pk).exists():
+        solicitud.paneles.add(panel)
+    return _asegurar_codigos_panel(solicitud, panel_codigo)
+
+
 def asegurar_resultados_paneles_derivados(solicitud: SolicitudExamen) -> int:
     """Asegura componentes faltantes de paneles pedidos y de insumos de calculados."""
     if getattr(solicitud, "estado", None) not in _ESTADOS_ABIERTOS:
         return 0
     total = 0
+    total += _asegurar_legacy_ena(solicitud)
     for codigo in _PANELES_ASEGURAR:
         total += _asegurar_codigos_panel(solicitud, codigo)
     total += _asegurar_insumos_calculados(solicitud)

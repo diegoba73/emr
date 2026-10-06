@@ -68,6 +68,11 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     examenes: ['FERR', 'UIBC', 'FERRIT', 'CF', 'SAT_FE', 'TRANS'],
   },
   {
+    codigo: 'PAN_CLEAR',
+    nombre: 'Clearance de creatinina',
+    examenes: ['CREATI', 'CREA_U', 'DIUR', 'CLEAR_CREA'],
+  },
+  {
     codigo: 'PAN_ORI',
     nombre: 'Orina completa',
     examenes: [
@@ -95,6 +100,11 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     codigo: 'PAN_PROT24',
     nombre: 'Proteinuria 24 hs',
     examenes: ['PROT_U_EQ', 'DIUR', 'PROT_U_24'],
+  },
+  {
+    codigo: 'PAN_ENA',
+    nombre: 'ENA - Antígenos nucleares extraíbles Ac.IgG',
+    examenes: ['ENA_RO52', 'ENA_RO60', 'ENA_SSB', 'ENA_RNP', 'ENA_SM'],
   },
 ];
 
