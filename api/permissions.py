@@ -288,6 +288,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'sugerir_conclusion_hemograma':
             return role in ROLES_LIMS_WRITE
+        if action == 'sugerir_interpretacion':
+            return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'orden_informe':
             return role in ROLES_LIMS_WRITE
         if action == 'estado_obra_social':
@@ -360,6 +362,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
 
         if action == 'sugerir_conclusion_hemograma':
             return role in ROLES_LIMS_WRITE
+
+        if action == 'sugerir_interpretacion':
+            return usuario_puede_ver_resultados_lims(request.user, obj)
 
         if action == 'orden_informe':
             return role in ROLES_LIMS_WRITE

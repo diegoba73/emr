@@ -61,8 +61,9 @@ def test_na_u_suelto_no_trae_ionograma_24hs():
 @pytest.mark.django_db
 def test_microalbuminuria_azar_no_trae_24hs():
     sol = _sol_con_codigos("MICROALB", "CREA_U", paneles=("PAN_MALB_AZ",))
-    assert asegurar_resultados_paneles_derivados(sol) == 0
-    assert _codigos(sol) == {"MICROALB", "CREA_U"}
+    # Catálogo creció: reponer RAC faltante del panel al azar.
+    assert asegurar_resultados_paneles_derivados(sol) == 1
+    assert _codigos(sol) == {"MICROALB", "CREA_U", "RAC"}
     assert "MICROALB_24" not in _codigos(sol)
     assert "DIUR" not in _codigos(sol)
     # CREA_U tampoco debe arrastrar clearance
@@ -74,6 +75,17 @@ def test_microalb_suelta_no_trae_malb24():
     sol = _sol_con_codigos("MICROALB")
     assert asegurar_resultados_paneles_derivados(sol) == 0
     assert _codigos(sol) == {"MICROALB"}
+
+
+@pytest.mark.django_db
+def test_rac_suelto_trae_microalb_y_crea_u():
+    """RAC sin panel debe completar insumos; no debe arrastrar MICROALB_24."""
+    sol = _sol_con_codigos("RAC")
+    assert asegurar_resultados_paneles_derivados(sol) == 2
+    assert _codigos(sol) == {"RAC", "MICROALB", "CREA_U"}
+    assert "MICROALB_24" not in _codigos(sol)
+    assert "DIUR" not in _codigos(sol)
+    assert "CLEAR_CREA" not in _codigos(sol)
 
 
 @pytest.mark.django_db

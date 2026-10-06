@@ -90,20 +90,7 @@ def _build_prompt(analitos: list[dict[str, Any]], borrador_reglas: str) -> str:
     return "\n".join(lines)
 
 
-def _call_ollama(prompt: str) -> str | None:
-    base = (getattr(settings, "MEDGEMMA_BASE_URL", None) or "").rstrip("/")
-    model = getattr(settings, "MEDGEMMA_MODEL", "medgemma-1.5") or "medgemma-1.5"
-    timeout = int(getattr(settings, "MEDGEMMA_TIMEOUT_SECONDS", 30) or 30)
-    if not base:
-        return None
-
-    url = f"{base}/api/generate"
-    body = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.2},
-    }
+def _post_ollama_json(url: str, body: dict[str, Any], timeout: int) -> dict[str, Any] | None:
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -113,16 +100,58 @@ def _call_ollama(prompt: str) -> str | None:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-        logger.info("MedGemma/Ollama no disponible: %s", exc)
+            return json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        logger.info("MedGemma/Ollama no disponible (%s): %s", url, exc)
         return None
 
-    texto = (raw.get("response") or "").strip()
-    if not texto:
+
+def _extract_ollama_text(raw: dict[str, Any] | None) -> str | None:
+    if not raw:
         return None
-    # Primera línea / sin comillas decorativas (hemograma); informes pueden ser multilínea
+    # /api/chat
+    msg = raw.get("message")
+    if isinstance(msg, dict):
+        texto = (msg.get("content") or "").strip()
+        if texto:
+            return texto
+    # /api/generate
+    texto = (raw.get("response") or "").strip()
     return texto or None
+
+
+def _call_ollama(prompt: str) -> str | None:
+    """
+    Llama a Ollama. Preferimos /api/chat (MedGemma/Gemma3); fallback a /api/generate.
+    """
+    base = (getattr(settings, "MEDGEMMA_BASE_URL", None) or "").rstrip("/")
+    model = getattr(settings, "MEDGEMMA_MODEL", "medgemma:4b") or "medgemma:4b"
+    timeout = int(getattr(settings, "MEDGEMMA_TIMEOUT_SECONDS", 90) or 90)
+    if not base:
+        return None
+
+    options = {"temperature": 0.2}
+    chat_body = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "options": options,
+    }
+    texto = _extract_ollama_text(
+        _post_ollama_json(f"{base}/api/chat", chat_body, timeout)
+    )
+    if texto:
+        return texto
+
+    gen_body = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": options,
+    }
+    return _extract_ollama_text(
+        _post_ollama_json(f"{base}/api/generate", gen_body, timeout)
+    )
 
 
 def intentar_generar_texto_medgemma(prompt: str, *, multilinea: bool = False) -> dict[str, Any] | None:
@@ -148,7 +177,7 @@ def intentar_generar_texto_medgemma(prompt: str, *, multilinea: bool = False) ->
         "texto": texto,
         "fuente": "medgemma",
         "marcado_sugerencia": True,
-        "modelo": getattr(settings, "MEDGEMMA_MODEL", "medgemma-1.5"),
+        "modelo": getattr(settings, "MEDGEMMA_MODEL", "medgemma:4b"),
         "vacio": False,
     }
 

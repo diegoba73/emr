@@ -1308,6 +1308,23 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             except TipoExamen.DoesNotExist:
                 logger.warning("TipoExamen de panel inexistente")
 
+        # Calculados sueltos (p. ej. RAC): crear insumos medidos resueltos.
+        for tipo_examen_id in tipos_resueltos - tipos_examen_creados:
+            try:
+                tipo_examen = TipoExamen.objects.select_related(
+                    "laboratorio_derivacion"
+                ).get(id=tipo_examen_id)
+                ResultadoExamen.objects.create(
+                    solicitud=solicitud,
+                    tipo_examen=tipo_examen,
+                    valor_obtenido=valor_inicial_resultado(tipo_examen),
+                    es_patologico=False,
+                    **defaults_derivacion_para_tipo(tipo_examen),
+                )
+                tipos_examen_creados.add(tipo_examen_id)
+            except TipoExamen.DoesNotExist:
+                logger.warning(f"TipoExamen con ID {tipo_examen_id} no existe")
+
         if tipos_examen_creados:
             solicitud.tipos_examen.set(list(tipos_examen_creados))
 

@@ -116,6 +116,16 @@ class TestSeedCatalogoSolicitudPapel:
         assert TipoExamen.objects.get(codigo="MICROALB_24").modo_entrada == "CALCULADO"
         assert "PROT_U_24" not in EXAMENES_SUELTOS_PDF
 
+    def test_panel_malb_azar_incluye_rac_calculado(self):
+        call_command("seed_catalogo_solicitud_papel")
+        malb_az = PanelExamen.objects.get(codigo="PAN_MALB_AZ")
+        assert [te.codigo for te in ordenar_queryset_panel(malb_az)] == [
+            "MICROALB", "CREA_U", "RAC",
+        ]
+        rac = TipoExamen.objects.get(codigo="RAC")
+        assert rac.modo_entrada == "CALCULADO"
+        assert rac.requiere_muestra is False
+
     def test_legacy_hemo_desactivado(self):
         from laboratorio.models import TipoMuestra
 

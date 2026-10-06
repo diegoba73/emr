@@ -38,6 +38,7 @@ def test_tubo_orina_24h_bidon():
     # Medidos / contexto 24h → bidón; CALCULADO no genera tubo propio.
     assert tubo_codigo_para_examen("PROT_U_24") is None
     assert tubo_codigo_para_examen("CLEAR_CREA") is None
+    assert tubo_codigo_para_examen("RAC") is None
     assert tubo_codigo_para_examen("DIUR") == "BIDON_ORINA_24H"
     assert tubo_codigo_para_examen("CA24", "ORINA_24_H") == "BIDON_ORINA_24H"
     assert tubo_codigo_para_examen("AAO", "ORINA_REPRESENTATIVA_DE_24_H") == "BIDON_ORINA_24H"

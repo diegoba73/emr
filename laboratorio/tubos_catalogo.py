@@ -102,6 +102,7 @@ EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
         "K_U24",
         "CL_U24",
         "MICROALB_24",
+        "RAC",
     }
 )
 

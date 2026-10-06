@@ -7,6 +7,7 @@ import type { LimsTipoExamen, SolicitudExamenLims } from '../../types/lims';
 
 jest.mock('../../services/limsApi');
 jest.mock('./AnalisisLongitudinalPanel', () => () => null);
+jest.mock('./SugerirInterpretacionPanel', () => () => null);
 jest.mock('./useHistorialAnalitos', () => ({
   useHistorialAnalitos: () => ({
     previosPorTipo: new Map(),

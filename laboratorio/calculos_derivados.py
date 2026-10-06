@@ -7,11 +7,12 @@ Hemograma — VCM, HCM, CHCM (y absolutos de formula leucocitaria).
 Perfil ferrico — se cargan FERR, UIBC (, FERRIT); CF, SAT_FE y TRANS se calculan.
 Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA se calcula.
 Orinas 24 hs — concentración + DIUR → excreción (PROT_U_24, NA/K/CL_U24, MICROALB_24).
+RAC — se cargan MICROALB + CREA_U; RAC (mg/g) = (MICROALB / CREA_U) × 100.
 """
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any
+from typing import Any, Iterable
 
 from laboratorio.entrada_resultados import quantize_valor_numerico
 
@@ -30,13 +31,19 @@ CODIGOS_CLEARANCE_CALCULADOS = frozenset({"CLEAR_CREA"})
 CODIGOS_ORINA_24H_CALCULADOS = frozenset(
     {"PROT_U_24", "NA_U24", "K_U24", "CL_U24", "MICROALB_24"}
 )
+CODIGOS_RAC_CALCULADOS = frozenset({"RAC"})
 CODIGOS_CALCULADOS = (
     CODIGOS_LIPIDO_CALCULADOS
     | CODIGOS_HEPAT_CALCULADOS
     | CODIGOS_FERRICO_CALCULADOS
     | CODIGOS_CLEARANCE_CALCULADOS
     | CODIGOS_ORINA_24H_CALCULADOS
+    | CODIGOS_RAC_CALCULADOS
 )
+# Pedido suelto del calculado → asegurar insumos medidos (p. ej. RAC solo).
+INSUMOS_POR_CODIGO_CALCULADO: dict[str, tuple[str, ...]] = {
+    "RAC": ("MICROALB", "CREA_U"),
+}
 FORMULA_LEUCO_CODIGOS = frozenset(
     {"NEUT_CAY", "NEUT_SEG", "EOS", "BAS", "LINF", "MONO"}
 )
@@ -160,6 +167,13 @@ def calc_excrecion_por_litro_a_24h(
     if diur_ml <= 0:
         return None
     return _q((conc_por_l * diur_ml) / Decimal(1000), places)
+
+
+def calc_rac(microalb_mg_l: Decimal, crea_u_mg_dl: Decimal) -> Decimal | None:
+    """RAC (mg/g) = (microalbuminuria mg/L ÷ creatinuria mg/dL) × 100."""
+    if crea_u_mg_dl <= 0:
+        return None
+    return _q((microalb_mg_l / crea_u_mg_dl) * Decimal(100), 1)
 
 
 def format_absoluto_mm3(n: int) -> str:
@@ -287,11 +301,37 @@ def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[De
     elif microalb is not None:
         out["MICROALB_24"] = (None, RESULTADO_NO_CALCULABLE)
 
+    # RAC usa MICROALB + CREA_U (crea_u ya leído arriba para clearance).
+    if microalb is not None and crea_u is not None:
+        rac = calc_rac(microalb, crea_u)
+        if rac is not None:
+            out["RAC"] = (quantize_valor_numerico(rac), _fmt(rac, 1))
+        else:
+            out["RAC"] = (None, RESULTADO_NO_CALCULABLE)
+    elif microalb is not None or crea_u is not None:
+        # aplicar_* solo escribe si la orden tiene fila RAC.
+        out["RAC"] = (None, RESULTADO_NO_CALCULABLE)
+
     return out
 
 
 def es_codigo_calculado(codigo: str | None) -> bool:
     return (codigo or "").strip().upper() in CODIGOS_CALCULADOS
+
+
+def codigos_insumos_de_calculados(codigos: Iterable[str]) -> list[str]:
+    """Insumos medidos faltantes en ``codigos`` requeridos por calculados presentes."""
+    presentes = {(c or "").strip().upper() for c in codigos if c}
+    faltan: list[str] = []
+    vistos: set[str] = set()
+    for calc in presentes:
+        for insumo in INSUMOS_POR_CODIGO_CALCULADO.get(calc, ()):
+            code = (insumo or "").strip().upper()
+            if not code or code in presentes or code in vistos:
+                continue
+            vistos.add(code)
+            faltan.append(code)
+    return faltan
 
 
 def aplicar_calculos_derivados_solicitud(

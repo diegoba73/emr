@@ -80,6 +80,24 @@ services:
       - backend
     restart: unless-stopped
 
+  # Ollama local opcional (profile medgemma). No usar en prod.
+  # docker compose --profile medgemma up -d ollama
+  # Luego: docker exec emr_ollama ollama pull medgemma:4b
+  # .env: MEDGEMMA_BASE_URL=http://ollama:11434
+  ollama:
+    profiles: ["medgemma"]
+    image: ollama/ollama:latest
+    container_name: emr_ollama
+    labels:
+      com.emr.service: ollama
+      com.emr.description: MedGemma/Ollama local :11434
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   frontend_node_modules:
+  ollama_data:

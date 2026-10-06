@@ -4,6 +4,7 @@ import {
   calcExcrecionMgDlA24h,
   calcExcrecionPorLitroA24h,
   calcLdlFriedewald,
+  calcRac,
   calcularDerivados,
 } from './calculosDerivados';
 
@@ -87,5 +88,19 @@ describe('calculosDerivados Corte A', () => {
     expect(out.PROT_U_24?.informe).toBe(RESULTADO_NO_CALCULABLE);
     expect(out.NA_U24?.informe).toBe(RESULTADO_NO_CALCULABLE);
     expect(out.MICROALB_24?.informe).toBe(RESULTADO_NO_CALCULABLE);
+  });
+
+  it('RAC = (MICROALB / CREA_U) × 100', () => {
+    expect(calcRac(30, 100)).toBe(30);
+    const out = calcularDerivados({ MICROALB: 30, CREA_U: 100 });
+    expect(out.RAC?.numerico).toBe(30);
+    expect(out.RAC?.informe).toBe('30');
+  });
+
+  it('RAC incompleto o creatinuria cero no calculable', () => {
+    expect(calcularDerivados({ MICROALB: 30 }).RAC?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(calcularDerivados({ MICROALB: 30, CREA_U: 0 }).RAC?.informe).toBe(
+      RESULTADO_NO_CALCULABLE
+    );
   });
 });

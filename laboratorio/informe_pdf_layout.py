@@ -40,6 +40,7 @@ from laboratorio.orden_grupos_informe import (
     construir_grupos_informe,
 )
 from laboratorio.procedencia_display import resolver_procedencia_solicitud
+from laboratorio.proteinograma import PANEL_ELP
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
 HEADER_HEIGHT = 4.2 * cm
@@ -781,7 +782,14 @@ def construir_story_icpl(
         needs_suelto_header = True
         for grupo in grupos:
             es_perfil = bool(grupo.panel_codigo)
-            if es_perfil:
+            if es_perfil and grupo.panel_codigo == PANEL_ELP:
+                from laboratorio.proteinograma_pdf import bloque_proteinograma
+
+                story.extend(
+                    bloque_proteinograma(grupo, styles, valores_por_codigo=vals_global)
+                )
+                needs_suelto_header = True
+            elif es_perfil:
                 story.extend(
                     _bloque_panel(grupo, styles, valores_por_codigo=vals_global)
                 )

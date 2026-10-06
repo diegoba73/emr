@@ -206,6 +206,73 @@ export function draftRowClearsServerValue(
   return resultadoTieneValorGuardado(r) && !draftRowHasValue(row, te, codigo);
 }
 
+/**
+ * True si el valor del borrador difiere del persistido (o es un alta nueva).
+ * Evita reenviar filas intactas (p. ej. CREA_U de clearance al guardar proteinograma).
+ */
+export function draftValoresEquivalentes(a: string, b: string): boolean {
+  const left = (a || '').trim();
+  const right = (b || '').trim();
+  if (left === right) return true;
+  const na = Number(left.replace(',', '.'));
+  const nb = Number(right.replace(',', '.'));
+  return Number.isFinite(na) && Number.isFinite(nb) && na === nb;
+}
+
+export function draftRowValueChangedFromServer(
+  r: Pick<ResultadoExamenLims, 'valor_obtenido' | 'valor_numerico' | 'tipo_examen_codigo'>,
+  row: DraftCargaRow,
+  te?: LimsTipoExamen | null,
+  codigo?: string | null
+): boolean {
+  const safe = normalizeDraftRow(row);
+  const c = te?.codigo ?? codigo ?? r.tipo_examen_codigo;
+  if (usesTicketEntry(te, c)) {
+    const serverTicket = draftSysmexTicketFromResultado(
+      r as ResultadoExamenLims,
+      te,
+      c
+    );
+    return safe.valor_sysmex.trim() !== serverTicket.trim();
+  }
+  const serverValor =
+    (r.valor_obtenido || '').trim() ||
+    (r.valor_numerico != null && String(r.valor_numerico).trim() !== ''
+      ? String(r.valor_numerico).trim()
+      : '');
+  const draftValor = safe.valor.trim() || safe.valor_numerico.trim();
+  return !draftValoresEquivalentes(draftValor, serverValor);
+}
+
+/** Filas a persistir: valor nuevo/cambiado o borrado explícito. */
+export function resultadoDebeGuardarse(
+  r: ResultadoExamenLims,
+  row: DraftCargaRow,
+  te?: LimsTipoExamen | null
+): boolean {
+  const codigo = r.tipo_examen_codigo ?? te?.codigo;
+  if (draftRowClearsServerValue(r, row, te, codigo)) return true;
+  if (!draftRowHasValue(row, te, codigo)) return false;
+  return draftRowValueChangedFromServer(r, row, te, codigo);
+}
+
+/**
+ * No reenviar un resultado ya informado si sigue sin tubo y no se está borrando.
+ * Evita que CREA_U/etc. de otro panel bloqueen un guardado parcial.
+ */
+export function resultadoPuedeOmitirseSinMuestra(
+  r: ResultadoExamenLims,
+  row: DraftCargaRow,
+  te?: LimsTipoExamen | null
+): boolean {
+  const codigo = r.tipo_examen_codigo ?? te?.codigo;
+  if (esExamenCalculadoSinMuestraObligatoria(te, codigo)) return false;
+  if (!te?.requiere_muestra) return false;
+  if (normalizeDraftRow(row).muestra_id != null) return false;
+  if (draftRowClearsServerValue(r, row, te, codigo)) return false;
+  return resultadoTieneValorGuardado(r);
+}
+
 export function validateCargaResultadosValores(
   resultados: ResultadoExamenLims[],
   draft: Record<number, DraftCargaRow>,

@@ -50,12 +50,15 @@ import {
   draftRowClearsServerValue,
   draftRowHasValue,
   draftSysmexTicketFromResultado,
+  draftValorClinicoNumerico,
   filterMuestrasProcesables,
   getTipoExamenCatalog,
   normalizeDraftRow,
   suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
   validateCargaResultadosValores,
+  resultadoDebeGuardarse,
+  resultadoPuedeOmitirseSinMuestra,
   type DraftCargaRow,
 } from '../../utils/limsCargaMuestra';
 import { countResultadosConValor } from '../../utils/limsOrdenResultados';
@@ -75,6 +78,12 @@ import {
   esResultadoNoCalculable,
 } from '../../utils/calculosDerivados';
 import { getSysmexUnidad } from '../../utils/sysmexHemograma';
+import {
+  CODIGO_PROT_T,
+  esCodigoElpFraccion,
+  formatPctElp,
+  porcentajeFraccionElp,
+} from '../../utils/proteinograma';
 
 export interface CargaResultadosLimsProps {
   orden: SolicitudExamenLims;
@@ -449,10 +458,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     const filasAGuardar = resultados.filter((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const row = draft[r.id] || emptyDraft();
-      return (
-        draftRowHasValue(row, te, r.tipo_examen_codigo) ||
-        draftRowClearsServerValue(r, row, te, r.tipo_examen_codigo)
-      );
+      return resultadoDebeGuardarse(r, row, te);
     });
 
     if (!filasAGuardar.length) {
@@ -479,7 +485,21 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     }
     setDraft(draftSave);
 
-    const payload = filasAGuardar.map((r) => {
+    // No reenviar resultados ya informados que siguen sin tubo (bloqueaban otros paneles).
+    const filasPayload = filasAGuardar.filter((r) => {
+      const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
+      const row = normalizeDraftRow(draftSave[r.id] || emptyDraft());
+      return !resultadoPuedeOmitirseSinMuestra(r, row, te);
+    });
+
+    if (!filasPayload.length) {
+      toast.error(
+        'Ingresá al menos un valor para guardar, o asociá la muestra requerida en los exámenes pendientes.'
+      );
+      return;
+    }
+
+    const payload = filasPayload.map((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       return buildCargarResultadoPayload(
         r.id,
@@ -494,7 +514,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       draftSave,
       tiposExamenMap,
       muestras,
-      filasAGuardar.map((r) => r.id)
+      filasPayload.map((r) => r.id)
     );
     if (errMuestra) {
       toast.error(errMuestra);
@@ -503,9 +523,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
 
     const errValores = validateCargaResultadosValores(
       resultados,
-      draft,
+      draftSave,
       tiposExamenMap,
-      filasAGuardar.map((r) => r.id)
+      filasPayload.map((r) => r.id)
     );
     if (errValores) {
       toast.error(errValores);
@@ -585,6 +605,18 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             const abs = calcAbsolutoFormula(pct, leucoN);
             if (abs != null) valorDisplayExtra = ` · ${formatAbsolutoMm3(abs)}`;
           }
+        }
+      } else if (esCodigoElpFraccion(codigoUpper)) {
+        const protRow = resultados.find((x) => {
+          const c = (x.tipo_examen_codigo || tiposExamenMap.get(x.tipo_examen)?.codigo || '').toUpperCase();
+          return c === CODIGO_PROT_T;
+        });
+        if (protRow) {
+          const fracN = draftValorClinicoNumerico(r, draft, tiposExamenMap);
+          const protN = draftValorClinicoNumerico(protRow, draft, tiposExamenMap);
+          const pct = porcentajeFraccionElp(fracN, protN);
+          const label = formatPctElp(pct);
+          if (label) valorDisplayExtra = ` · ${label}`;
         }
       }
 
@@ -691,15 +723,23 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             </>
           ) : (
             <TableCell>
-              <TextField
-                size="small"
-                fullWidth
-                value={row.valor}
-                onChange={(ev) => setRow(r.id, { valor: ev.target.value, valor_numerico: '' })}
-                onKeyDown={handleEnterNext(valorFocusKey)}
-                placeholder="Ej. 120 o Positivo · Enter → siguiente"
-                inputProps={{ 'data-carga-focus': valorFocusKey }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  value={row.valor}
+                  onChange={(ev) => setRow(r.id, { valor: ev.target.value, valor_numerico: '' })}
+                  onKeyDown={handleEnterNext(valorFocusKey)}
+                  placeholder="Ej. 120 o Positivo · Enter → siguiente"
+                  inputProps={{ 'data-carga-focus': valorFocusKey }}
+                  sx={{ flex: '1 1 120px', minWidth: 100 }}
+                />
+                {valorDisplayExtra ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                    {valorDisplayExtra.replace(/^ · /, '')}
+                  </Typography>
+                ) : null}
+              </Box>
             </TableCell>
           )}
           <TableCell sx={{ whiteSpace: 'nowrap' }}>

@@ -111,3 +111,84 @@ class TestInformePdfLayout(TestCase):
             2 / 3,
             places=2,
         )
+
+
+@pytest.mark.django_db
+class TestInformePdfProteinograma(TestCase):
+    def setUp(self):
+        tag = uuid.uuid4().hex[:6]
+        self.tm = TipoMuestra.objects.create(codigo=f"SU{tag}", nombre="Suero", activo=True)
+        self.panel = PanelExamen.objects.create(
+            codigo="PAN_ELP", nombre="Proteinograma electroforético", activo=True
+        )
+        defs = [
+            ("PROT_T", "Proteínas totales", "6.3 - 7.9 g/dL", "g/dL", "6.2"),
+            ("ELP_ALB", "Albúmina", "3.57 - 5.48 g/dL", "g/dL", "3.71"),
+            ("ELP_A1", "Alfa 1", "0.19 - 0.41 g/dL", "g/dL", "0.28"),
+            ("ELP_A2", "Alfa 2", "0.45 - 0.98 g/dL", "g/dL", "0.62"),
+            ("ELP_B1", "Beta 1", "0.30 - 0.59 g/dL", "g/dL", "0.55"),
+            ("ELP_B2", "Beta 2", "0.20 - 0.55 g/dL", "g/dL", "0.33"),
+            ("ELP_GAM", "Gamma", "0.71 - 1.56 g/dL", "g/dL", "0.71"),
+            ("ELP_AG", "Relación A/G", "", "", "1.48"),
+            ("ELP_CONC", "Conclusiones", "", "", "Proteinograma sin alteraciones significativas"),
+        ]
+        self.paciente = Paciente.objects.create(dni=f"E{tag}", nombre="Pedro", apellido="Elp")
+        self.sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        self.sol.paneles.add(self.panel)
+        for codigo, nombre, ref, unidad, valor in defs:
+            te = TipoExamen.objects.create(
+                codigo=codigo,
+                nombre=nombre,
+                tipo_muestra_requerida=self.tm,
+                rango_referencia_texto=ref,
+                unidad_default=unidad,
+                metodo="Electroforesis capilar",
+                precio=1,
+                activo=True,
+            )
+            self.panel.tipos_examen.add(te)
+            self.sol.tipos_examen.add(te)
+            ResultadoExamen.objects.create(
+                solicitud=self.sol,
+                tipo_examen=te,
+                valor_obtenido=valor,
+                unidad=unidad or "",
+            )
+
+    def test_pdf_proteinograma_genera_y_agrupa(self):
+        resultados = list(
+            self.sol.resultados.select_related("tipo_examen", "tipo_examen__tipo_muestra_requerida")
+        )
+        grupos = agrupar_resultados_por_panel(self.sol, resultados)
+        self.assertTrue(any(g.panel_codigo == "PAN_ELP" for g in grupos))
+        pdf = generar_pdf_icpl_bytes(self.sol, resultados)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 2000)
+
+    def test_bloque_proteinograma_incluye_estructura(self):
+        from laboratorio.informe_pdf_layout import GrupoResultadosPdf, _styles
+        from laboratorio.proteinograma_pdf import bloque_proteinograma
+
+        resultados = list(
+            self.sol.resultados.select_related("tipo_examen", "tipo_examen__tipo_muestra_requerida")
+        )
+        grupo = GrupoResultadosPdf(
+            key="panel-PAN_ELP",
+            titulo="Proteinograma electroforético",
+            resultados=resultados,
+            panel_codigo="PAN_ELP",
+        )
+        flow = bloque_proteinograma(grupo, _styles())
+        self.assertTrue(flow)
+        self.assertGreaterEqual(len(flow), 1)
+        # Sin curva sintética: solo KeepTogether con título/meta/tabla/obs.
+        from reportlab.graphics.shapes import Drawing
+
+        for item in flow:
+            inner = getattr(item, "_content", None) or getattr(item, "content", None) or []
+            self.assertFalse(any(isinstance(x, Drawing) for x in inner))
+

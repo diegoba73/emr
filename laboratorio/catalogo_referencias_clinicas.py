@@ -55,7 +55,7 @@ _M_ISE = "Electrodo selectivo de iones (ISE)"
 _M_COAG = "Coagulometría óptica"
 _M_INMUNO = "Inmunoturbidimetría"
 _M_QUIM = "Quimioluminiscencia"
-_M_ELP = "Electroforesis en gel de agarosa"
+_M_ELP = "Electroforesis capilar"
 _M_ORI_TIRA = "Tira reactiva"
 _M_ORI_MICRO = "Microscopía"
 _M_ORI_REFR = "Refractometría"
@@ -411,48 +411,53 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         rmin="110",
         rmax="250",
     ),
-    # —— Proteinograma ——
+    # —— Proteinograma (carga en g/dL; % se calcula en informe) ——
     "ELP_ALB": _r(
         metodo=_M_ELP,
-        unidad="%",
-        ref="55 - 65 %",
-        rmin="55",
-        rmax="65",
+        unidad="g/dL",
+        ref="3.57 - 5.48 g/dL",
+        rmin="3.57",
+        rmax="5.48",
     ),
     "ELP_A1": _r(
         metodo=_M_ELP,
-        unidad="%",
-        ref="2 - 5 %",
-        rmin="2",
-        rmax="5",
+        unidad="g/dL",
+        ref="0.19 - 0.41 g/dL",
+        rmin="0.19",
+        rmax="0.41",
     ),
     "ELP_A2": _r(
         metodo=_M_ELP,
-        unidad="%",
-        ref="7 - 13 %",
-        rmin="7",
-        rmax="13",
+        unidad="g/dL",
+        ref="0.45 - 0.98 g/dL",
+        rmin="0.45",
+        rmax="0.98",
     ),
     "ELP_B1": _r(
         metodo=_M_ELP,
-        unidad="%",
-        ref="4 - 8 %",
-        rmin="4",
-        rmax="8",
+        unidad="g/dL",
+        ref="0.30 - 0.59 g/dL",
+        rmin="0.30",
+        rmax="0.59",
     ),
     "ELP_B2": _r(
         metodo=_M_ELP,
-        unidad="%",
-        ref="3 - 7 %",
-        rmin="3",
-        rmax="7",
+        unidad="g/dL",
+        ref="0.20 - 0.55 g/dL",
+        rmin="0.20",
+        rmax="0.55",
     ),
     "ELP_GAM": _r(
         metodo=_M_ELP,
-        unidad="%",
-        ref="11 - 22 %",
-        rmin="11",
-        rmax="22",
+        unidad="g/dL",
+        ref="0.71 - 1.56 g/dL",
+        rmin="0.71",
+        rmax="1.56",
+    ),
+    "ELP_AG": _r(
+        metodo=_M_ELP,
+        unidad="",
+        ref="",
     ),
     "ELP_CONC": _r(metodo=_M_ELP, ref="Según patrón electroforético"),
     # —— Clearance / microalbuminuria ——
@@ -485,6 +490,12 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         metodo="Calculado (conc. × diuresis / 1000)",
         unidad="mg/24 hs",
         ref="< 30 mg/24 hs",
+        rmax="30",
+    ),
+    "RAC": _r(
+        metodo="Calculado (MICROALB / CREA_U × 100)",
+        unidad="mg/g",
+        ref="< 30 mg/g",
         rmax="30",
     ),
     "NA_U24": _r(
@@ -578,9 +589,9 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
     "PROT_T": _r(
         metodo="Colorimétrico (Biuret)",
         unidad="g/dL",
-        ref="6.0 - 8.0 g/dL",
-        rmin="6.0",
-        rmax="8.0",
+        ref="6.3 - 7.9 g/dL",
+        rmin="6.3",
+        rmax="7.9",
     ),
     "ALB": _r(
         metodo="Colorimétrico (Verde de bromocresol)",

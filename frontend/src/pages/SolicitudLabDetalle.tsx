@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import OrdenLimsResumenPanel from '../components/lims/OrdenLimsResumenPanel';
 import ResultadosOrdenLista from '../components/lims/ResultadosOrdenLista';
 import EnviarInformeOrdenDialog from '../components/lims/EnviarInformeOrdenDialog';
+import SugerirInterpretacionPanel from '../components/lims/SugerirInterpretacionPanel';
 import { useData } from '../contexts/DataContext';
 import { downloadInformeLimsPdf, getSolicitudExamen } from '../services/limsApi';
 import type { SolicitudExamenLims } from '../types/lims';
@@ -193,6 +194,10 @@ const SolicitudLabDetalle: React.FC = () => {
           <Box sx={{ mb: 2 }}>
             <OrdenLimsResumenPanel orden={orden} />
           </Box>
+
+          {puedeVerResultados && resultados.length > 0 ? (
+            <SugerirInterpretacionPanel ordenId={orden.id} estadoOrden={orden.estado} />
+          ) : null}
 
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>

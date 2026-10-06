@@ -89,11 +89,48 @@ def asegurar_resultados_panel_hemograma(solicitud: SolicitudExamen) -> int:
     return _asegurar_codigos_panel(solicitud, PANEL_HEMOGRAMA)
 
 
+def _asegurar_insumos_calculados(solicitud: SolicitudExamen) -> int:
+    """Si hay un calculado suelto (p. ej. RAC), crea filas de sus medidos."""
+    from laboratorio.calculos_derivados import codigos_insumos_de_calculados
+    from laboratorio.examen_orina_micro import valor_inicial_resultado
+
+    existentes = {
+        (getattr(te, "codigo", None) or "").strip().upper()
+        for te in TipoExamen.objects.filter(
+            id__in=solicitud.resultados.values_list("tipo_examen_id", flat=True)
+        )
+    }
+    faltan = codigos_insumos_de_calculados(existentes)
+    if not faltan:
+        return 0
+
+    tipos = {
+        te.codigo: te
+        for te in TipoExamen.objects.filter(codigo__in=faltan, activo=True)
+    }
+    creados = 0
+    for codigo in faltan:
+        te = tipos.get(codigo)
+        if te is None:
+            continue
+        _, was_created = ResultadoExamen.objects.get_or_create(
+            solicitud=solicitud,
+            tipo_examen=te,
+            defaults={"valor_obtenido": valor_inicial_resultado(te)},
+        )
+        if was_created:
+            creados += 1
+            if not solicitud.tipos_examen.filter(pk=te.pk).exists():
+                solicitud.tipos_examen.add(te)
+    return creados
+
+
 def asegurar_resultados_paneles_derivados(solicitud: SolicitudExamen) -> int:
-    """Asegura componentes faltantes solo de paneles ya pedidos en la orden."""
+    """Asegura componentes faltantes de paneles pedidos y de insumos de calculados."""
     if getattr(solicitud, "estado", None) not in _ESTADOS_ABIERTOS:
         return 0
     total = 0
     for codigo in _PANELES_ASEGURAR:
         total += _asegurar_codigos_panel(solicitud, codigo)
+    total += _asegurar_insumos_calculados(solicitud)
     return total

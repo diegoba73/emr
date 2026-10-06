@@ -386,7 +386,12 @@ def _resolver_tipo_examen_ids(
     examenes_ids: Iterable[int],
     paneles_ids: Iterable[int],
 ) -> tuple[set[int], set[int]]:
-    """Devuelve (ids_analitos, ids_paneles_validos)."""
+    """Devuelve (ids_analitos, ids_paneles_validos).
+
+    Si se pide un calculado suelto (p. ej. RAC), incluye sus insumos medidos.
+    """
+    from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
+
     exam_ids = {int(x) for x in (examenes_ids or []) if x is not None}
     panel_ids = {int(x) for x in (paneles_ids or []) if x is not None}
     tipos: set[int] = set()
@@ -405,6 +410,24 @@ def _resolver_tipo_examen_ids(
         paneles_ok.add(pid)
         for te in ordenar_queryset_panel(panel):
             tipos.add(te.id)
+
+    if tipos and INSUMOS_POR_CODIGO_CALCULADO:
+        codigos = {
+            (c or "").strip().upper(): tid
+            for tid, c in TipoExamen.objects.filter(pk__in=tipos).values_list("id", "codigo")
+        }
+        insumos_faltan: set[str] = set()
+        for codigo in codigos:
+            for insumo in INSUMOS_POR_CODIGO_CALCULADO.get(codigo, ()):
+                code = (insumo or "").strip().upper()
+                if code and code not in codigos:
+                    insumos_faltan.add(code)
+        if insumos_faltan:
+            tipos.update(
+                TipoExamen.objects.filter(codigo__in=insumos_faltan, activo=True).values_list(
+                    "id", flat=True
+                )
+            )
     return tipos, paneles_ok
 
 

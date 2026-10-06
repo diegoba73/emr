@@ -4,6 +4,8 @@ import {
   draftRowClearsServerValue,
   filterMuestrasProcesables,
   muestrasCompatiblesParaTipo,
+  resultadoDebeGuardarse,
+  resultadoPuedeOmitirseSinMuestra,
   suggestMuestraIdForResultado,
   validateCargaResultadosMuestra,
   type DraftCargaRow,
@@ -374,5 +376,45 @@ describe('limsCargaMuestra', () => {
     const payload = buildCargarResultadoPayload(1, empty);
     expect(payload.valor).toBe('');
     expect(payload.valor_numerico).toBeNull();
+  });
+
+  it('no reenvía filas intactas (p. ej. CREA_U al guardar otro panel)', () => {
+    const r = {
+      ...resultado(1, 10),
+      tipo_examen_codigo: 'CREA_U',
+      tipo_examen_nombre: 'Creatininuria',
+      valor_obtenido: '80',
+      valor_numerico: 80,
+      muestra_id: null,
+    } as ResultadoExamenLims;
+    const same: DraftCargaRow = {
+      valor: '80',
+      valor_sysmex: '',
+      valor_numerico: '80',
+      unidad: 'mg/dL',
+      muestra_id: null,
+    };
+    expect(resultadoDebeGuardarse(r, same)).toBe(false);
+    const changed = { ...same, valor: '90', valor_numerico: '' };
+    expect(resultadoDebeGuardarse(r, changed)).toBe(true);
+  });
+
+  it('omite resultado ya informado sin tubo para no bloquear otros paneles', () => {
+    const te = { ...tipoExamen(10, true, 1), codigo: 'CREA_U' };
+    const r = {
+      ...resultado(1, 10),
+      tipo_examen_codigo: 'CREA_U',
+      valor_obtenido: '80',
+      valor_numerico: 80,
+    } as ResultadoExamenLims;
+    const row: DraftCargaRow = {
+      valor: '80',
+      valor_sysmex: '',
+      valor_numerico: '80.0',
+      unidad: '',
+      muestra_id: null,
+    };
+    expect(resultadoPuedeOmitirseSinMuestra(r, row, te)).toBe(true);
+    expect(resultadoDebeGuardarse(r, row, te)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs).
+ * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs, RAC).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
@@ -30,6 +30,7 @@ export const CODIGOS_CALCULADOS = new Set([
   'K_U24',
   'CL_U24',
   'MICROALB_24',
+  'RAC',
 ]);
 
 export const FORMULA_LEUCO_CODIGOS = new Set([
@@ -116,6 +117,12 @@ export function calcExcrecionPorLitroA24h(
 ): number | null {
   if (diurMl <= 0) return null;
   return roundHalfUp((concPorL * diurMl) / 1000, places);
+}
+
+/** RAC (mg/g) = (microalbuminuria mg/L ÷ creatinuria mg/dL) × 100. */
+export function calcRac(microalbMgL: number, creaUMgDl: number): number | null {
+  if (creaUMgDl <= 0) return null;
+  return roundHalfUp((microalbMgL / creaUMgDl) * 100, 1);
 }
 
 export function calcAbsolutoFormula(pct: number, leucos: number): number | null {
@@ -250,6 +257,17 @@ export function calcularDerivados(
     }
   } else if (microalb != null) {
     out.MICROALB_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  if (microalb != null && creaU != null) {
+    const rac = calcRac(microalb, creaU);
+    if (rac != null) {
+      out.RAC = { numerico: rac, informe: fmt(rac, 1) };
+    } else {
+      out.RAC = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+  } else if (microalb != null || creaU != null) {
+    out.RAC = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
   return out;

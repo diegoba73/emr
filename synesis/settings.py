@@ -302,11 +302,12 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'laboratorio@localhost')
 # Ej: https://emr.midominio.com
 PUBLIC_API_BASE_URL = os.getenv('PUBLIC_API_BASE_URL', '').strip().rstrip('/')
 
-# MedGemma / Ollama: sugerencias de conclusión de hemograma (asistente, no autoritativo).
+# MedGemma / Ollama: sugerencias locales (asistente, no autoritativo).
+# Prod: dejar MEDGEMMA_ENABLED=false (sin Ollama en el server). Ver docs/medgemma-ollama.md.
 MEDGEMMA_ENABLED = os.getenv('MEDGEMMA_ENABLED', 'false').lower() in ('1', 'true', 'yes')
 MEDGEMMA_BASE_URL = os.getenv('MEDGEMMA_BASE_URL', 'http://localhost:11434').strip().rstrip('/')
-MEDGEMMA_MODEL = os.getenv('MEDGEMMA_MODEL', 'medgemma-1.5').strip() or 'medgemma-1.5'
-MEDGEMMA_TIMEOUT_SECONDS = int(os.getenv('MEDGEMMA_TIMEOUT_SECONDS', '30'))
+MEDGEMMA_MODEL = os.getenv('MEDGEMMA_MODEL', 'medgemma:4b').strip() or 'medgemma:4b'
+MEDGEMMA_TIMEOUT_SECONDS = int(os.getenv('MEDGEMMA_TIMEOUT_SECONDS', '90'))
 
 # IQC Fase 1: equipo analizador por defecto (corridas sin equipo no cuentan para el gate).
 IQC_EQUIPO_DEFAULT_CODIGO = os.getenv('IQC_EQUIPO_DEFAULT_CODIGO', 'CM260').strip() or 'CM260'

@@ -57,6 +57,11 @@ DB_PORT=5432
 
 Prohibiciones y restores: `docs_synesis/reglas/entorno-local.md`.
 
+### MedGemma / Ollama (opcional, solo local)
+
+Sugerencias de laboratorio con modelo `medgemma:4b`. En producción no se usa.  
+Guía: [`docs/medgemma-ollama.md`](medgemma-ollama.md).
+
 ## Comandos útiles
 
 ```bash

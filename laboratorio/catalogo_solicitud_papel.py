@@ -120,6 +120,13 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "ELP_B1", "nombre": "Beta 1 globulina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "ELP_B2", "nombre": "Beta 2 globulina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "ELP_GAM", "nombre": "Gamma globulina", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    {
+        "codigo": "ELP_AG",
+        "nombre": "Relación albúmina/globulina",
+        "muestra": "SUERO",
+        "tipo_resultado": "NUMERICO",
+        "abreviatura": "A/G",
+    },
     {"codigo": "ELP_CONC", "nombre": "Conclusiones (proteinograma)", "muestra": "SUERO", "tipo_resultado": "TEXTO"},
     # —— Clearance / microalbuminuria / proteinuria 24 hs ——
     {"codigo": "CREA_U", "nombre": "Creatininuria", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
@@ -127,6 +134,14 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "CLEAR_CREA", "nombre": "Clearance de creatinina", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
     {"codigo": "MICROALB", "nombre": "Microalbuminuria", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
     {"codigo": "MICROALB_24", "nombre": "Microalbuminuria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
+    # RAC (mg/g) = (MICROALB mg/L ÷ CREA_U mg/dL) × 100
+    {
+        "codigo": "RAC",
+        "nombre": "RAC - Relación albúmina/creatinina",
+        "muestra": "ORINA",
+        "tipo_resultado": "NUMERICO",
+        "abreviatura": "RAC",
+    },
     # Ionograma urinario 24 hs (calculados desde concentración × diuresis)
     {"codigo": "NA_U24", "nombre": "Sodio urinario 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Na u 24h"},
     {"codigo": "K_U24", "nombre": "Potasio urinario 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "K u 24h"},
@@ -268,7 +283,17 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_ELP",
         "nombre": "Proteinograma electroforético",
-        "componentes": ["ELP_ALB", "ELP_A1", "ELP_A2", "ELP_B1", "ELP_B2", "ELP_GAM", "ELP_CONC"],
+        "componentes": [
+            "PROT_T",
+            "ELP_ALB",
+            "ELP_A1",
+            "ELP_A2",
+            "ELP_B1",
+            "ELP_B2",
+            "ELP_GAM",
+            "ELP_AG",
+            "ELP_CONC",
+        ],
     },
     {
         "codigo": "PAN_CLEAR",
@@ -283,7 +308,7 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_MALB_AZ",
         "nombre": "Microalbuminuria al azar",
-        "componentes": ["MICROALB", "CREA_U"],
+        "componentes": ["MICROALB", "CREA_U", "RAC"],
     },
     {
         "codigo": "PAN_PROT24",

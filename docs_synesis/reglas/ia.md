@@ -1,36 +1,51 @@
-# Reglas — Inteligencia artificial (Fase C0)
+# Reglas — Inteligencia artificial
 
-**Versión:** C0 — 18 de mayo de 2026  
-**Estado del producto:** **[OBJETIVO]** — No hay motor IA productivo cableado en el repo. Existen **campos preparatorios** en `historias_clinicas` (comentarios “para IA”).
+**Versión:** C1 — octubre 2026  
+**Estado del producto:** **[IMPLEMENTADO]** (capa de sugerencia) — cliente MedGemma/Ollama opcional + fallback a reglas. Campos preparatorios en HC siguen inertes.
 
 ---
 
 ## Propósito
 
-Cuando se incorpore IA, debe actuar como **asistente documental y de sugerencia**, nunca como autoridad clínica ni analítica.
+La IA actúa como **asistente documental y de sugerencia**, nunca como autoridad clínica ni analítica.
 
 ---
 
-## Reglas **[RECTOR]** (obligatorias en cualquier implementación futura)
+## Entornos
+
+| Entorno | MedGemma / Ollama | Comportamiento |
+|---------|-------------------|----------------|
+| Local (dev) | Opcional: `MEDGEMMA_ENABLED=true` + Ollama + `medgemma:4b` | Sugerencias con `fuente=medgemma` si responde; si no, reglas |
+| Producción (`emr.sytes.net`) | **No soportado** — no instalar Ollama | `MEDGEMMA_ENABLED=false`; siempre motor de reglas |
+
+How-to local: `docs/medgemma-ollama.md`.
+
+---
+
+## Reglas **[RECTOR]** (obligatorias)
 
 | # | Regla |
 |---|--------|
 | 1 | **IA no valida** resultados de laboratorio ni estados `VALIDADO` / informes finales. |
 | 2 | **IA no emite** informes finales ni firma digital clínica. |
 | 3 | **IA no reemplaza** criterio profesional (médico, bioquímico, microbiólogo). |
-| 4 | Toda salida de IA debe estar **marcada como sugerencia** (UI + persistencia). |
-| 5 | Toda **aceptación o rechazo** de sugerencia registra **usuario humano**, timestamp y contexto. |
+| 4 | Toda salida de IA debe estar **marcada como sugerencia** (UI + respuesta API). |
+| 5 | Toda **aceptación o rechazo** de sugerencia registra **usuario humano**, timestamp y contexto (cuando exista flujo de accept). |
 | 6 | IA solo opera sobre **datos ya trazables** en el EMR/LIMS (misma cadena que humanos). |
 | 7 | **No usar IA** para eludir permisos ni roles (`laboratorio`, `paciente`, etc.). |
-| 8 | **No enviar PHI** a servicios externos sin política explícita (DPIA, contrato, minimización, región). |
+| 8 | **No enviar PHI** a servicios externos. Payload mínimo (códigos, valores, rangos); Ollama solo en red local. |
 
 ---
 
-## Alcance permitido **[OBJETIVO]**
+## Alcance cableado **[IMPLEMENTADO]**
 
-- Borradores de texto clínico (anamnesis, resumen) bajo supervisión.
-- Extracción de entidades con revisión humana.
-- Alertas no bloqueantes (ej. posible interacción medicamentosa) como **hint**, no orden.
+- Conclusión de hemograma (`POST …/sugerir-conclusion-hemograma/`).
+- Reseñas de pedidos / impresión.
+- Borrador de informe de estudios complementarios.
+- Interpretación de orden (`POST …/sugerir-interpretacion/`) — no persiste en HC.
+- Resumen opcional de **agregados** de analítica poblacional (nunca filas de paciente).
+
+Fallback: plantillas/heurísticas con `fuente=reglas` si MedGemma está off o no responde.
 
 ---
 
@@ -40,15 +55,16 @@ Cuando se incorpore IA, debe actuar como **asistente documental y de sugerencia*
 - Auto-validación de `ResultadoExamen` o `InformeMicrobiologico`.
 - Decisiones de transición de estado sin actor humano autorizado.
 - Entrenamiento con datos de producción sin anonimización y gobernanza.
+- Ollama / MedGemma en el host de producción EMR.
 
 ---
 
-## Auditoría esperada **[OBJETIVO]**
+## Auditoría
 
-| Evento |
-|--------|
-| `IA_SUGGESTION_CREATED` (entidad, modelo, versión prompt) |
-| `IA_SUGGESTION_ACCEPTED` / `REJECTED` (usuario, diff aplicado o motivo rechazo) |
+| Evento | Estado |
+|--------|--------|
+| `IA_SUGGESTION_CREATED` (entidad, modelo/fuente, sin texto PHI en logs) | **[IMPLEMENTADO]** en flujos de sugerencia |
+| `IA_SUGGESTION_ACCEPTED` / `REJECTED` | **[OBJETIVO]** cuando exista accept/reject en HC |
 
 Sin almacenar prompts con PHI en logs de aplicación.
 
@@ -56,18 +72,10 @@ Sin almacenar prompts con PHI en logs de aplicación.
 
 ## Relación con modelos HC
 
-Campos en `Consulta`, `Diagnostico`, `Tratamiento`, etc. documentados como “para IA” — **[OBJETIVO]** permanecen inertes hasta pipeline definido.
+Campos en `Consulta`, `Diagnostico`, `Tratamiento`, etc. documentados como “para IA” — **[OBJETIVO]** permanecen inertes hasta pipeline de aceptación.
 
 ---
 
 ## Invariantes
 
 Ver `DOC_INVARIANTES.md` (IA1–IA4).
-
----
-
-## Pendientes antes de cualquier feature IA
-
-1. Política de datos y proveedor (documento legal, no solo técnico).
-2. Feature flag por entorno.
-3. Tests: IA no puede llamar `validar` ni transiciones de estado terminales.

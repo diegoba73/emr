@@ -87,6 +87,11 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     examenes: ['MICROALB', 'DIUR', 'MICROALB_24'],
   },
   {
+    codigo: 'PAN_MALB_AZ',
+    nombre: 'Microalbuminuria al azar',
+    examenes: ['MICROALB', 'CREA_U', 'RAC'],
+  },
+  {
     codigo: 'PAN_PROT24',
     nombre: 'Proteinuria 24 hs',
     examenes: ['PROT_U_EQ', 'DIUR', 'PROT_U_24'],

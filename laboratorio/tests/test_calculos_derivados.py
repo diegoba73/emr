@@ -13,6 +13,8 @@ from laboratorio.calculos_derivados import (
     calc_excrecion_mg_dl_a_24h,
     calc_excrecion_por_litro_a_24h,
     calc_ldl_friedewald,
+    calc_rac,
+    codigos_insumos_de_calculados,
     calcular_derivados,
 )
 
@@ -176,3 +178,32 @@ class TestCalculosDerivados(TestCase):
         self.assertNotIn("CLEAR_CREA", out)
         self.assertNotIn("PROT_U_24", out)
         self.assertNotIn("NA_U24", out)
+        self.assertNotIn("RAC", out)
+
+    def test_rac_formula(self):
+        # (30 mg/L ÷ 100 mg/dL) × 100 = 30.0 mg/g
+        self.assertEqual(calc_rac(Decimal("30"), Decimal("100")), Decimal("30.0"))
+        out = calcular_derivados(
+            {"MICROALB": Decimal("30"), "CREA_U": Decimal("100")}
+        )
+        self.assertEqual(out["RAC"][0], Decimal("30.0"))
+        self.assertEqual(out["RAC"][1], "30")
+
+    def test_rac_crea_u_cero_no_calculable(self):
+        out = calcular_derivados(
+            {"MICROALB": Decimal("30"), "CREA_U": Decimal("0")}
+        )
+        self.assertIsNone(out["RAC"][0])
+        self.assertEqual(out["RAC"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_rac_incompleto_no_calculable(self):
+        out = calcular_derivados({"MICROALB": Decimal("30")})
+        self.assertEqual(out["RAC"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_insumos_de_rac(self):
+        self.assertEqual(
+            codigos_insumos_de_calculados(["RAC"]),
+            ["MICROALB", "CREA_U"],
+        )
+        self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB"]), ["CREA_U"])
+        self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB", "CREA_U"]), [])

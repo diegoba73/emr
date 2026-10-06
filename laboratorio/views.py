@@ -1082,6 +1082,51 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         )
         return Response(data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'], url_path='sugerir-interpretacion')
+    def sugerir_interpretacion(self, request, pk=None):
+        """
+        Sugerencia de interpretación de la orden (reglas y/o MedGemma).
+
+        No persiste en HC. Requiere poder ver resultados clínicos de la orden.
+        """
+        from laboratorio.sugerir_interpretacion import (
+            sugerir_interpretacion_orden as generar_interpretacion,
+        )
+
+        solicitud = self.get_object()
+        from api.permissions import usuario_puede_ver_resultados_lims
+
+        if not usuario_puede_ver_resultados_lims(request.user, solicitud):
+            return Response(
+                {'detail': 'No tenés permiso para ver la interpretación de esta orden.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if solicitud.estado == 'PENDIENTE':
+            return Response(
+                {'error': 'La orden aún no tiene muestra tomada.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        prefer_ia = str(request.data.get('prefer_medgemma', 'true')).lower() in (
+            '1', 'true', 'yes',
+        )
+        data = generar_interpretacion(solicitud, prefer_medgemma=prefer_ia)
+        log_event(
+            action='IA_SUGGESTION_CREATED',
+            actor=request.user,
+            entity=solicitud,
+            module='laboratorio',
+            metadata={
+                'view': 'SolicitudExamenViewSet.sugerir_interpretacion',
+                'fuente': data.get('fuente'),
+                'marcado_sugerencia': True,
+                'modelo': data.get('modelo'),
+                'texto_len': len(data.get('texto') or ''),
+                'total_analizados': data.get('total_analizados'),
+            },
+        )
+        return Response(data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['get'], url_path='tubos-preview')
     def tubos_preview(self, request, pk=None):
         """Lista de tubos físicos a generar según los exámenes de la orden."""
