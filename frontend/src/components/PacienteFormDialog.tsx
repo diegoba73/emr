@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -20,6 +20,7 @@ import PacienteDemographicsForm, {
   emptyPacienteFormValues,
   type PacienteDemographicsFormValues,
 } from './PacienteDemographicsForm';
+import PacienteAfiliacionesEditor from './PacienteAfiliacionesEditor';
 
 function pacienteToFormValues(p: Paciente): PacienteDemographicsFormValues {
   const fecha = p.fecha_nacimiento;
@@ -107,6 +108,10 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
     return () => { cancelled = true; };
   }, [open, mode, paciente]);
 
+  const handlePrincipalChange = useCallback((obra_social: string, numero_afiliado: string) => {
+    setValues((prev) => ({ ...prev, obra_social, numero_afiliado }));
+  }, []);
+
   const handleSave = async () => {
     if (!detailsReady || loadingDetails) return;
     setError('');
@@ -159,11 +164,25 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
           </Typography>
         )}
         {loadingDetails && <CircularProgress aria-label="Cargando ficha" size={24} />}
-        {detailsReady && <PacienteDemographicsForm
-          values={values}
-          onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))}
-          requireBirthDate={mode === 'create'}
-        />}
+        {detailsReady && (
+          <>
+            <PacienteDemographicsForm
+              values={values}
+              onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))}
+              requireBirthDate={mode === 'create'}
+              hideObraSocial={mode === 'edit'}
+            />
+            {mode === 'edit' && paciente && (
+              <PacienteAfiliacionesEditor
+                pacienteId={paciente.id}
+                obraSocialForm={values.obra_social}
+                numeroAfiliadoForm={values.numero_afiliado}
+                onPrincipalChange={handlePrincipalChange}
+                disabled={saving}
+              />
+            )}
+          </>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>

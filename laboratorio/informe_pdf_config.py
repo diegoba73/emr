@@ -52,8 +52,9 @@ INFORME_TYPO = {
     "exam_meta": 6,
     "result_value": 9,
     "result_unit": 8,
-    "header_label": 7.5,
-    "header_value": 8,
+    # Datos del paciente en el encabezado (+2 pt respecto al layout previo).
+    "header_label": 9.5,
+    "header_value": 10,
     "table_header": 7,
     "color_meta": "#4A4A4A",
     "color_rule": "#333333",

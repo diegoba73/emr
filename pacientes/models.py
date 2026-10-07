@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 
-from pacientes.texto import aplicar_mayusculas_paciente
+from pacientes.texto import aplicar_mayusculas_paciente, normalizar_texto_paciente
 
 
 class Paciente(models.Model):
@@ -131,3 +131,54 @@ class Paciente(models.Model):
         return today.year - fecha_nac.year - (
             (today.month, today.day) < (fecha_nac.month, fecha_nac.day)
         )
+
+
+class PacienteAfiliacion(models.Model):
+    """Afiliación a obra social de un paciente (fase 1: texto libre).
+
+    ``Paciente.obra_social`` / ``numero_afiliado`` siguen siendo el espejo de la
+    afiliación principal para compatibilidad (SEROS, serializers livianos, PDF
+    de órdenes sin snapshot).
+    """
+
+    paciente = models.ForeignKey(
+        Paciente,
+        on_delete=models.CASCADE,
+        related_name="afiliaciones",
+        verbose_name="Paciente",
+    )
+    obra_social = models.CharField(max_length=100, verbose_name="Obra Social")
+    numero_afiliado = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name="Número de Afiliado",
+    )
+    es_principal = models.BooleanField(default=False, verbose_name="Principal")
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+    creado_en = models.DateTimeField(auto_now_add=True, verbose_name="Creado en")
+    actualizado_en = models.DateTimeField(auto_now=True, verbose_name="Actualizado en")
+
+    class Meta:
+        verbose_name = "Afiliación de paciente"
+        verbose_name_plural = "Afiliaciones de paciente"
+        ordering = ["-es_principal", "obra_social", "id"]
+        indexes = [
+            models.Index(fields=["paciente", "activo"], name="pac_afil_pac_act_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["paciente"],
+                condition=models.Q(es_principal=True, activo=True),
+                name="pac_afil_una_principal_activa",
+            ),
+        ]
+
+    def __str__(self):
+        marca = " *" if self.es_principal else ""
+        return f"{self.obra_social} ({self.numero_afiliado or 's/n'}){marca}"
+
+    def save(self, *args, **kwargs):
+        self.obra_social = normalizar_texto_paciente(self.obra_social) or ""
+        self.numero_afiliado = normalizar_texto_paciente(self.numero_afiliado) or ""
+        super().save(*args, **kwargs)

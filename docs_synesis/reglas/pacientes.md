@@ -53,6 +53,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
 | Soft delete / desactivación (`activo=False`) / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
+| Multi-afiliación OS (`PacienteAfiliacion`) + snapshot en órdenes nuevas (`obra_social_orden`). Órdenes viejas: fallback a ficha. Catálogo formal / reglas / pagos: fase posterior. | **[IMPLEMENTADO]** fase 1 |
 
 ---
 

@@ -220,11 +220,11 @@ describe('canAccessAtenciones / canOperateAtenciones (QA-ROLE-01)', () => {
     expect(canAccessAtenciones(null)).toBe(false);
   });
 
-  it('operación solo admin/staff y médico', () => {
+  it('operación admin/staff, médico y secretaría', () => {
     expect(canOperateAtenciones(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canOperateAtenciones(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canOperateAtenciones(user({ rol: 'ENFERMERIA' }))).toBe(false);
     expect(canOperateAtenciones(user({ rol: 'PACIENTE' }))).toBe(false);
-    expect(canOperateAtenciones(user({ rol: 'SECRETARIA' }))).toBe(false);
     expect(canOperateAtenciones(user({ is_staff: true, rol: 'ENFERMERIA' }))).toBe(true);
     expect(canOperateAtenciones(user({ is_superuser: true, rol: 'PACIENTE' }))).toBe(true);
   });
@@ -324,9 +324,10 @@ describe('canAccessInternacion', () => {
 });
 
 describe('canAccessGuardia', () => {
-  it('permite médico completo y enfermería; bloquea solo ambulatorio', () => {
+  it('permite médico completo, enfermería y secretaría; bloquea solo ambulatorio', () => {
     expect(canAccessGuardia(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canAccessGuardia(user({ rol: 'ENFERMERIA' }))).toBe(true);
+    expect(canAccessGuardia(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(
       canAccessGuardia(
         user({

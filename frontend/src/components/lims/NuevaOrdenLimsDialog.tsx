@@ -57,6 +57,9 @@ import type {
   TipoMuestraMicrobiologia,
 } from '../../types/lims';
 import { formatPacienteLabel, formatPacienteObraSocial } from '../../utils/pacienteFormat';
+import ObraSocialPedidoFields, {
+  type ObraSocialPedidoValue,
+} from './ObraSocialPedidoFields';
 import { ORIGEN_SOLICITUD_LIMS_OPTIONS, esOrigenAmbulatorioExterno } from '../../utils/limsOrigenSolicitud';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
@@ -172,6 +175,11 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const [pacienteQuery, setPacienteQuery] = useState('');
   const [pacienteOptions, setPacienteOptions] = useState<Paciente[]>([]);
   const [searchingPaciente, setSearchingPaciente] = useState(false);
+  const [obraSocialPedido, setObraSocialPedido] = useState<ObraSocialPedidoValue>({
+    afiliacionId: null,
+    obra_social: '',
+    numero_afiliado: '',
+  });
   const [origenManual, setOrigenManual] = useState<OrigenSolicitudLims>('AMBULATORIO_ICPL');
   const [medicoExterno, setMedicoExterno] = useState('');
   const [medicoExternoMode, setMedicoExternoMode] = useState(false);
@@ -449,6 +457,18 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     return { paneles_ids, examenes_ids, paneles_labels, examenes_labels };
   };
 
+  const pacienteVisible = paciente ?? pacienteInicial;
+
+  const osPayload = () => {
+    const os = obraSocialPedido.obra_social.trim();
+    if (!os && obraSocialPedido.afiliacionId == null) return {};
+    return {
+      obra_social: os || undefined,
+      numero_afiliado: obraSocialPedido.numero_afiliado.trim() || undefined,
+      afiliacion_id: obraSocialPedido.afiliacionId ?? undefined,
+    };
+  };
+
   const executeDraft = () => {
     if (!fechaProgramadaToma) {
       setError('Indicá el día de la extracción.');
@@ -516,6 +536,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           observaciones: observaciones.trim() || undefined,
           fecha_programada_toma: fechaProgramadaToma,
           repeticion_control: true,
+          ...osPayload(),
         });
         toast.success(
           `Orden de repetición/control ${orden.numero || `#${orden.id}`} creada.`
@@ -556,6 +577,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           paneles_ids,
           observaciones: observaciones.trim() || undefined,
           fecha_programada_toma: fechaProgramadaToma,
+          ...osPayload(),
         });
         labId = orden.id;
         if (orden.merged) {
@@ -585,6 +607,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
             tipo_cultivo_id: i.tipo_cultivo_id,
             tipo_muestra_micro_id: i.tipo_muestra_micro_id,
           })),
+          ...osPayload(),
         });
         toast.success(
           estudios.length === 1
@@ -688,8 +711,6 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   };
 
   const showPacientePicker = !draftMode && !pacienteInicial && !agregarAOrdenId;
-  const pacienteVisible = paciente ?? pacienteInicial;
-  const obraSocialLabel = formatPacienteObraSocial(pacienteVisible);
 
   return (
     <ThemeProvider theme={dialogTheme}>
@@ -772,13 +793,24 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               </Alert>
             )}
 
-            {pacienteVisible && (
+            {pacienteVisible && !agregarAOrdenId && (
+              <ObraSocialPedidoFields
+                paciente={pacienteVisible}
+                value={obraSocialPedido}
+                onChange={setObraSocialPedido}
+                disabled={saving}
+              />
+            )}
+
+            {pacienteVisible && agregarAOrdenId && (
               <Alert
-                severity={obraSocialLabel ? 'info' : 'warning'}
+                severity={formatPacienteObraSocial(pacienteVisible) ? 'info' : 'warning'}
                 sx={{ py: 0.5 }}
               >
                 Obra social:{' '}
-                <strong>{obraSocialLabel || 'Sin obra social cargada'}</strong>
+                <strong>
+                  {formatPacienteObraSocial(pacienteVisible) || 'Sin obra social cargada'}
+                </strong>
               </Alert>
             )}
 

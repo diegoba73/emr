@@ -222,10 +222,13 @@ class TestAtencionPermissionsList:
         cerrar_url = reverse('atenciones-cerrar', args=[atencion_medico_a.id])
         assert client.post(cerrar_url, {}, format='json').status_code == status.HTTP_403_FORBIDDEN
 
-    def test_secretaria_bloqueada(self, client, atencion_medico_a):
+    def test_secretaria_lectura_global(self, client, atencion_medico_a, atencion_medico_b):
         client.force_authenticate(user=_user('secretaria'))
         response = client.get(reverse('atenciones-list'))
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
+        ids = {row['id'] for row in response.data['results']}
+        assert atencion_medico_a.id in ids
+        assert atencion_medico_b.id in ids
 
     def test_enfermeria_lectura_global(self, client, atencion_medico_a, atencion_medico_b):
         client.force_authenticate(user=_user('enfermeria'))
@@ -305,14 +308,26 @@ class TestAtencionPermissionsMutations:
         response = client.patch(url, {'observaciones_generales': 'x'}, format='json')
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_secretaria_no_puede_post(self, client, atencion_medico_a):
+    def test_secretaria_puede_iniciar_guardia(self, client, medico_a, paciente):
         client.force_authenticate(user=_user('secretaria'))
+        _, med = medico_a
         response = client.post(
-            reverse('atenciones-list'),
-            {'turno': atencion_medico_a.turno_id},
+            reverse('atenciones-iniciar-guardia'),
+            {
+                'paciente_id': paciente.id,
+                'medico_id': med.id,
+                'motivo_consulta': 'Triage secretaría',
+            },
             format='json',
         )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['contexto_atencion'] == 'GUARDIA'
+
+    def test_secretaria_puede_cerrar(self, client, atencion_medico_a):
+        client.force_authenticate(user=_user('secretaria'))
+        url = reverse('atenciones-cerrar', args=[atencion_medico_a.id])
+        response = client.post(url, {}, format='json')
+        assert response.status_code == status.HTTP_200_OK
 
     def test_medico_no_ve_ni_opera_ajena(
         self, client, medico_a, atencion_medico_b

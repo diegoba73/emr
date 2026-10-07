@@ -116,6 +116,8 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     estado_obra_social_display = serializers.SerializerMethodField()
     requiere_autorizacion_obra_social = serializers.SerializerMethodField()
     obra_social_permite_validar = serializers.SerializerMethodField()
+    obra_social_efectiva = serializers.SerializerMethodField()
+    afiliado_efectivo = serializers.SerializerMethodField()
     admite_examen_orina = serializers.SerializerMethodField()
 
     class Meta:
@@ -157,6 +159,10 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "estado_obra_social_display",
             "requiere_autorizacion_obra_social",
             "obra_social_permite_validar",
+            "obra_social_orden",
+            "afiliado_orden",
+            "obra_social_efectiva",
+            "afiliado_efectivo",
             "observaciones",
             "fecha_programada_toma",
             "examen_orina",
@@ -171,7 +177,6 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
-
     def get_admite_examen_orina(self, obj):
         from laboratorio.examen_orina_micro import estudio_admite_examen_orina
 
@@ -316,6 +321,16 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         from laboratorio.obra_social import obra_social_permite_liberar
 
         return obra_social_permite_liberar(obj)
+
+    def get_obra_social_efectiva(self, obj):
+        from laboratorio.obra_social import obra_social_efectiva
+
+        return obra_social_efectiva(obj)[0]
+
+    def get_afiliado_efectivo(self, obj):
+        from laboratorio.obra_social import obra_social_efectiva
+
+        return obra_social_efectiva(obj)[1]
 
 
 class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
@@ -470,12 +485,16 @@ class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
     fecha_programada_toma = serializers.DateField(required=True)
     items = EstudioMicroItemSerializer(many=True)
+    obra_social = serializers.CharField(required=False, allow_blank=True, default="")
+    numero_afiliado = serializers.CharField(required=False, allow_blank=True, default="")
+    afiliacion_id = serializers.IntegerField(required=False, allow_null=True, default=None)
 
     def validate(self, attrs):
-        from pacientes.models import Paciente
+        from pacientes.models import Paciente, PacienteAfiliacion
         from medicos.models import Medico
         from historias_clinicas.models import Consulta
         from laboratorio.origen_solicitud import normalizar_origen_solicitud
+        from pacientes.afiliaciones import normalizar_snapshot_os, upsert_afiliacion
 
         if not attrs.get("fecha_programada_toma"):
             raise serializers.ValidationError(
@@ -538,12 +557,43 @@ class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
             attrs.get("origen_solicitud") or ""
         ).strip()
 
+        snap_os, snap_afil = "", ""
+        afiliacion_id = attrs.get("afiliacion_id")
+        if afiliacion_id is not None:
+            try:
+                afil = PacienteAfiliacion.objects.get(
+                    pk=afiliacion_id, paciente_id=paciente.pk, activo=True
+                )
+            except PacienteAfiliacion.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"afiliacion_id": "Afiliación inexistente para este paciente."}
+                ) from exc
+            snap_os, snap_afil = afil.obra_social, afil.numero_afiliado or ""
+            upsert_afiliacion(
+                paciente,
+                obra_social=snap_os,
+                numero_afiliado=snap_afil,
+                marcar_principal=True,
+            )
+        else:
+            snap_os, snap_afil = normalizar_snapshot_os(
+                attrs.get("obra_social"), attrs.get("numero_afiliado")
+            )
+            if snap_os:
+                upsert_afiliacion(
+                    paciente,
+                    obra_social=snap_os,
+                    numero_afiliado=snap_afil,
+                    marcar_principal=True,
+                )
+
         attrs["_paciente"] = paciente
         attrs["_medico"] = medico
         attrs["_consulta_hc"] = consulta
         attrs["_origen_solicitud"] = origen
+        attrs["_obra_social_orden"] = snap_os
+        attrs["_afiliado_orden"] = snap_afil
         return attrs
-
 
 class EstudioMicroImprimirEtiquetasSerializer(serializers.Serializer):
     estudio_ids = serializers.ListField(
@@ -554,13 +604,33 @@ class EstudioMicroImprimirEtiquetasSerializer(serializers.Serializer):
 
 
 class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
-    """PATCH: campos no sensibles. ``estado`` se ignora; transiciones vía acciones."""
+    """PATCH de datos del pedido/estudio. ``estado`` se ignora; transiciones vía acciones.
+
+    Editable mientras el estudio no esté cerrado (VALIDADO / INFORMADO / CANCELADO).
+    """
 
     examen_orina = serializers.JSONField(required=False)
+    paciente_id = serializers.IntegerField(required=False, write_only=True)
+    medico_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+    medico_externo_nombre = serializers.CharField(required=False, allow_blank=True)
+    tipo_cultivo_id = serializers.IntegerField(required=False, write_only=True)
+    tipo_muestra_micro_id = serializers.IntegerField(required=False, write_only=True)
+    origen_solicitud = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = EstudioMicrobiologia
-        fields = ("tipo_estudio", "observaciones", "examen_orina", "fecha_programada_toma")
+        fields = (
+            "tipo_estudio",
+            "observaciones",
+            "examen_orina",
+            "fecha_programada_toma",
+            "paciente_id",
+            "medico_id",
+            "medico_externo_nombre",
+            "tipo_cultivo_id",
+            "tipo_muestra_micro_id",
+            "origen_solicitud",
+        )
 
     def validate_fecha_programada_toma(self, value):
         if value is None:
@@ -568,6 +638,14 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        from pacientes.models import Paciente
+        from medicos.models import Medico
+        from laboratorio.models_microbiologia import (
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
+        from laboratorio.origen_solicitud import normalizar_origen_solicitud
+
         if "fecha_programada_toma" in attrs and self.instance is not None:
             if getattr(self.instance, "estado", None) != "PENDIENTE":
                 raise serializers.ValidationError(
@@ -577,6 +655,57 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
                         )
                     }
                 )
+
+        if "paciente_id" in attrs:
+            try:
+                attrs["_paciente"] = Paciente.objects.get(pk=attrs["paciente_id"])
+            except Paciente.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"paciente_id": "Paciente inexistente."}
+                ) from exc
+
+        if "medico_id" in attrs:
+            mid = attrs.get("medico_id")
+            if mid is None:
+                attrs["_medico"] = None
+            else:
+                try:
+                    attrs["_medico"] = Medico.objects.get(pk=mid)
+                except Medico.DoesNotExist as exc:
+                    raise serializers.ValidationError(
+                        {"medico_id": "Médico inexistente."}
+                    ) from exc
+
+        if "tipo_cultivo_id" in attrs:
+            try:
+                attrs["_tipo_cultivo"] = TipoCultivoMicrobiologia.objects.get(
+                    pk=attrs["tipo_cultivo_id"], activo=True
+                )
+            except TipoCultivoMicrobiologia.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"tipo_cultivo_id": "Tipo de cultivo inexistente o inactivo."}
+                ) from exc
+
+        if "tipo_muestra_micro_id" in attrs:
+            try:
+                attrs["_tipo_muestra_micro"] = TipoMuestraMicrobiologia.objects.get(
+                    pk=attrs["tipo_muestra_micro_id"], activo=True
+                )
+            except TipoMuestraMicrobiologia.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"tipo_muestra_micro_id": "Tipo de muestra inexistente o inactivo."}
+                ) from exc
+
+        if "origen_solicitud" in attrs:
+            origen = (attrs.get("origen_solicitud") or "").strip()
+            attrs["origen_solicitud"] = normalizar_origen_solicitud(origen) or origen
+
+        # Si hay médico interno, limpiar externo (y viceversa si se manda externo sin medico_id).
+        if "_medico" in attrs and attrs["_medico"] is not None:
+            attrs["medico_externo_nombre"] = ""
+        elif "medico_externo_nombre" in attrs and (attrs.get("medico_externo_nombre") or "").strip():
+            attrs["_medico"] = None
+
         return attrs
 
     def validate_examen_orina(self, value):
@@ -597,6 +726,44 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
         if not isinstance(value, dict):
             raise serializers.ValidationError("examen_orina debe ser un objeto.")
         return normalizar_examen_orina(value)
+
+    def update(self, instance, validated_data):
+        paciente = validated_data.pop("_paciente", None)
+        medico = validated_data.pop("_medico", serializers.empty)
+        cultivo = validated_data.pop("_tipo_cultivo", None)
+        muestra_micro = validated_data.pop("_tipo_muestra_micro", None)
+        validated_data.pop("paciente_id", None)
+        validated_data.pop("medico_id", None)
+        validated_data.pop("tipo_cultivo_id", None)
+        validated_data.pop("tipo_muestra_micro_id", None)
+
+        if paciente is not None:
+            instance.paciente = paciente
+        if medico is not serializers.empty:
+            instance.medico_interno = medico
+        if "medico_externo_nombre" in validated_data:
+            instance.medico_externo_nombre = (
+                validated_data.pop("medico_externo_nombre") or ""
+            ).strip()
+        if cultivo is not None:
+            instance.tipo_cultivo = cultivo
+            instance.tipo_estudio = cultivo.codigo
+            validated_data.pop("tipo_estudio", None)
+        if muestra_micro is not None:
+            instance.tipo_muestra_micro = muestra_micro
+        if "origen_solicitud" in validated_data:
+            instance.origen_solicitud = validated_data.pop("origen_solicitud") or ""
+        if "observaciones" in validated_data:
+            instance.observaciones = validated_data.pop("observaciones") or ""
+        if "fecha_programada_toma" in validated_data:
+            instance.fecha_programada_toma = validated_data.pop("fecha_programada_toma")
+        if "examen_orina" in validated_data:
+            instance.examen_orina = validated_data.pop("examen_orina")
+        if "tipo_estudio" in validated_data and cultivo is None:
+            instance.tipo_estudio = validated_data.pop("tipo_estudio") or instance.tipo_estudio
+
+        instance.save()
+        return instance
 
 
 class EstudioCancelarSerializer(serializers.Serializer):

@@ -13,7 +13,7 @@ Reglas de negocio aplicadas:
 """
 import logging
 
-from django.db.models import Case, IntegerField, Q, When
+from django.db.models import Case, IntegerField, Prefetch, Q, When
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -21,8 +21,13 @@ from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Paciente
-from .serializers import PacienteLightSerializer, PacienteSerializer
+from .models import Paciente, PacienteAfiliacion
+from .serializers import (
+    PacienteAfiliacionSerializer,
+    PacienteLightSerializer,
+    PacienteSerializer,
+)
+from .afiliaciones import sync_paciente_desde_principal
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +70,14 @@ def _user_tiene_lectura_global(user) -> bool:
     return rol in _ROLES_LECTURA_GLOBAL
 
 
+_AFILIACIONES_ACTIVAS = Prefetch(
+    "afiliaciones",
+    queryset=PacienteAfiliacion.objects.filter(activo=True).order_by(
+        "-es_principal", "obra_social", "id"
+    ),
+)
+
+
 class PacienteViewSet(viewsets.ModelViewSet):
     """CRUD de pacientes con filtros estrictos por rol.
 
@@ -77,7 +90,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
     queryset = Paciente.objects.select_related(
         "user", "creado_por", "modificado_por"
-    ).all()
+    ).prefetch_related(_AFILIACIONES_ACTIVAS).all()
     serializer_class = PacienteSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -90,7 +103,123 @@ class PacienteViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ("list", "buscar"):
             return PacienteLightSerializer
+        if self.action in (
+            "afiliaciones",
+            "crear_afiliacion",
+            "actualizar_afiliacion",
+            "eliminar_afiliacion",
+        ):
+            return PacienteAfiliacionSerializer
         return PacienteSerializer
+
+    def _deny_si_no_puede_gestionar_afiliaciones(self) -> None:
+        """Alta LIMS + editores demográficos pueden gestionar afiliaciones."""
+        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return
+        rol = _user_rol(user)
+        if rol in _ROLES_ALTA_PACIENTE:
+            return
+        raise PermissionDenied("No tiene permiso para gestionar afiliaciones.")
+
+    def _afiliacion_del_paciente(self, paciente_pk: int, afiliacion_pk: int) -> PacienteAfiliacion:
+        try:
+            return PacienteAfiliacion.objects.get(pk=afiliacion_pk, paciente_id=paciente_pk)
+        except PacienteAfiliacion.DoesNotExist as exc:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Afiliación no encontrada.") from exc
+
+    @action(detail=True, methods=["get"], url_path="afiliaciones")
+    def afiliaciones(self, request, pk=None):
+        paciente = self.get_object()
+        qs = paciente.afiliaciones.filter(activo=True).order_by("-es_principal", "obra_social", "id")
+        return Response(PacienteAfiliacionSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="afiliaciones/crear")
+    def crear_afiliacion(self, request, pk=None):
+        # Lab/bio pueden gestionar OS (como el alta de paciente); no aplica solo-lectura LIMS.
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_afiliaciones()
+        paciente = self.get_object()
+        ser = PacienteAfiliacionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        es_principal = bool(ser.validated_data.get("es_principal", False))
+        has_principal = paciente.afiliaciones.filter(activo=True, es_principal=True).exists()
+        if not has_principal:
+            es_principal = True
+        if es_principal:
+            PacienteAfiliacion.objects.filter(
+                paciente_id=paciente.pk, es_principal=True, activo=True
+            ).update(es_principal=False)
+        afil = PacienteAfiliacion(
+            paciente=paciente,
+            obra_social=ser.validated_data["obra_social"],
+            numero_afiliado=ser.validated_data.get("numero_afiliado") or "",
+            es_principal=es_principal,
+            activo=True,
+        )
+        afil.save()
+        if afil.es_principal:
+            sync_paciente_desde_principal(paciente)
+        return Response(PacienteAfiliacionSerializer(afil).data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path=r"afiliaciones/(?P<afiliacion_id>[0-9]+)",
+    )
+    def actualizar_afiliacion(self, request, pk=None, afiliacion_id=None):
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_afiliaciones()
+        paciente = self.get_object()
+        afil = self._afiliacion_del_paciente(paciente.pk, int(afiliacion_id))
+        ser = PacienteAfiliacionSerializer(afil, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        for field in ("obra_social", "numero_afiliado", "es_principal", "activo"):
+            if field in ser.validated_data:
+                setattr(afil, field, ser.validated_data[field])
+        if not afil.activo:
+            afil.es_principal = False
+        if afil.es_principal and afil.activo:
+            PacienteAfiliacion.objects.filter(
+                paciente_id=paciente.pk, es_principal=True, activo=True
+            ).exclude(pk=afil.pk).update(es_principal=False)
+        afil.save()
+        # Si desactivamos/desmarcamos la única principal, promover otra o limpiar.
+        if not paciente.afiliaciones.filter(activo=True, es_principal=True).exists():
+            otra = paciente.afiliaciones.filter(activo=True).order_by("id").first()
+            if otra is not None:
+                PacienteAfiliacion.objects.filter(
+                    paciente_id=paciente.pk, es_principal=True, activo=True
+                ).exclude(pk=otra.pk).update(es_principal=False)
+                otra.es_principal = True
+                otra.save(update_fields=["es_principal", "actualizado_en"])
+        sync_paciente_desde_principal(paciente)
+        return Response(PacienteAfiliacionSerializer(afil).data)
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"afiliaciones/(?P<afiliacion_id>[0-9]+)/eliminar",
+    )
+    def eliminar_afiliacion(self, request, pk=None, afiliacion_id=None):
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_afiliaciones()
+        paciente = self.get_object()
+        afil = self._afiliacion_del_paciente(paciente.pk, int(afiliacion_id))
+        afil.activo = False
+        afil.es_principal = False
+        afil.save(update_fields=["activo", "es_principal", "actualizado_en"])
+        otra = paciente.afiliaciones.filter(activo=True).order_by("id").first()
+        if otra is not None:
+            PacienteAfiliacion.objects.filter(
+                paciente_id=paciente.pk, es_principal=True, activo=True
+            ).exclude(pk=otra.pk).update(es_principal=False)
+            otra.es_principal = True
+            otra.save(update_fields=["es_principal", "actualizado_en"])
+        sync_paciente_desde_principal(paciente)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -99,7 +228,17 @@ class PacienteViewSet(viewsets.ModelViewSet):
         # Los roles con lectura global no requieren vínculos clínicos.
         # El acceso por perfil vinculado se conserva para cuentas legacy.
         _detalle_lectura = frozenset(
-            {"retrieve", "timeline", "portal_resumen", "partial_update", "update"}
+            {
+                "retrieve",
+                "timeline",
+                "portal_resumen",
+                "partial_update",
+                "update",
+                "afiliaciones",
+                "crear_afiliacion",
+                "actualizar_afiliacion",
+                "eliminar_afiliacion",
+            }
         )
 
         if _user_tiene_lectura_global(user):

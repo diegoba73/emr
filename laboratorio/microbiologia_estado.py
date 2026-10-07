@@ -140,6 +140,8 @@ def crear_estudio(
     consulta_hc=None,
     origen_solicitud: str = "",
     fecha_programada_toma=None,
+    obra_social_orden: str = "",
+    afiliado_orden: str = "",
 ) -> EstudioMicrobiologia:
     """Crea un estudio microbiológico en estado PENDIENTE.
 
@@ -197,6 +199,8 @@ def crear_estudio(
             tipo_estudio=codigo,
             observaciones=observaciones or "",
             fecha_programada_toma=fecha_programada_toma,
+            obra_social_orden=(obra_social_orden or "").strip(),
+            afiliado_orden=(afiliado_orden or "").strip(),
             estado="PENDIENTE",
         )
         estudio.save()
@@ -229,6 +233,8 @@ def crear_estudio_desde_pedido(
     consulta_hc=None,
     muestra_existente=None,
     fecha_programada_toma=None,
+    obra_social_orden: str = "",
+    afiliado_orden: str = "",
 ) -> EstudioMicrobiologia:
     """
     Alta de estudio de microbiología: paciente + médico + cultivo + muestra micro.
@@ -266,6 +272,8 @@ def crear_estudio_desde_pedido(
             consulta_hc=consulta_hc,
             origen_solicitud=origen_solicitud,
             fecha_programada_toma=fecha_programada_toma,
+            obra_social_orden=obra_social_orden,
+            afiliado_orden=afiliado_orden,
         )
 
     try:
@@ -306,6 +314,8 @@ def crear_estudio_desde_pedido(
         consulta_hc=consulta_hc,
         origen_solicitud=origen,
         fecha_programada_toma=fecha_programada_toma,
+        obra_social_orden=obra_social_orden,
+        afiliado_orden=afiliado_orden,
     )
 
 
@@ -321,6 +331,8 @@ def crear_estudios_batch(
     origen_solicitud: str = "",
     consulta_hc=None,
     fecha_programada_toma=None,
+    obra_social_orden: str = "",
+    afiliado_orden: str = "",
 ) -> list[EstudioMicrobiologia]:
     """Crea N estudios (uno por ítem cultivo+muestra) en una transacción."""
     if not items:
@@ -340,6 +352,8 @@ def crear_estudios_batch(
                 origen_solicitud=origen_solicitud,
                 consulta_hc=consulta_hc,
                 fecha_programada_toma=fecha_programada_toma,
+                obra_social_orden=obra_social_orden,
+                afiliado_orden=afiliado_orden,
             )
             creados.append(estudio)
         return creados
@@ -1566,16 +1580,22 @@ def actualizar_informe_borrador(
     observaciones: str | None = None,
     version: int | None = None,
 ) -> InformeMicrobiologia:
-    """PATCH solo en BORRADOR."""
+    """PATCH de texto/observaciones mientras el informe no esté VALIDADO/ANULADO.
+
+    Editable en BORRADOR y EMITIDO (hasta validar). El estudio debe seguir operable.
+    """
     with transaction.atomic():
         informe = (
             InformeMicrobiologia.objects.select_for_update(of=("self",))
             .select_related("estudio", "estudio__solicitud", "estudio__muestra")
             .get(pk=informe_id)
         )
-        if informe.estado != "BORRADOR":
-            raise MicrobiologiaAccionError("Solo se puede editar un informe en BORRADOR.")
+        if informe.estado not in ("BORRADOR", "EMITIDO"):
+            raise MicrobiologiaAccionError(
+                "Solo se puede editar un informe en BORRADOR o EMITIDO (antes de validar)."
+            )
         assert_estudio_micro_operable(informe.estudio)
+        prev_inf = informe.estado
         before = safe_model_snapshot(informe)
         if texto is not None:
             informe.texto = texto
@@ -1587,10 +1607,10 @@ def actualizar_informe_borrador(
         informe.refresh_from_db()
         meta = _base_informe_metadata(
             informe,
-            accion="actualizar_informe_borrador",
+            accion="actualizar_informe",
             view=view,
             actor=actor,
-            estado_anterior="BORRADOR",
+            estado_anterior=prev_inf,
             estado_nuevo=informe.estado,
         )
         log_update(
@@ -1832,4 +1852,91 @@ def aplicar_marcar_estudio_informado(
             estado_nuevo=estudio.estado,
         )
         _audit_estudio_update(estudio, before=before, actor=actor, metadata=meta)
+        return estudio
+
+
+def aplicar_desvalidar_estudio_micro(
+    estudio_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+    motivo: str = "",
+) -> EstudioMicrobiologia:
+    """
+    Reabre un estudio VALIDADO/INFORMADO → LISTO_PARA_VALIDAR (espejo de desvalidar clínica).
+
+    El informe FINAL VALIDADO vuelve a EMITIDO; se limpian sellos de validación.
+    No borra texto clínico ni resultados técnicos. Motivo obligatorio (auditoría).
+    """
+    motivo_limpio = (motivo or "").strip()
+    if len(motivo_limpio) < 5:
+        raise MicrobiologiaAccionError(
+            "Indicá un motivo de la reapertura (mínimo 5 caracteres)."
+        )
+    with transaction.atomic():
+        estudio = (
+            EstudioMicrobiologia.objects.select_for_update(of=("self",))
+            .select_related("solicitud", "muestra")
+            .get(pk=estudio_id)
+        )
+        if estudio.estado not in ("VALIDADO", "INFORMADO"):
+            raise MicrobiologiaAccionError(
+                "Solo se pueden reabrir estudios ya validados (VALIDADO o INFORMADO)."
+            )
+
+        informes_finales = list(
+            InformeMicrobiologia.objects.select_for_update(of=("self",)).filter(
+                estudio_id=estudio.pk,
+                tipo="FINAL",
+                estado="VALIDADO",
+            )
+        )
+        if not informes_finales:
+            raise MicrobiologiaAccionError(
+                "No hay informe final VALIDADO para reabrir en este estudio."
+            )
+
+        for informe in informes_finales:
+            prev_inf = informe.estado
+            before_inf = safe_model_snapshot(informe)
+            informe.estado = "EMITIDO"
+            informe.validado_por = None
+            informe.fecha_validacion = None
+            informe.save(
+                update_fields=["estado", "validado_por", "fecha_validacion"]
+            )
+            informe.refresh_from_db()
+            meta_inf = _base_informe_metadata(
+                informe,
+                accion="desvalidar_informe",
+                view=view,
+                actor=actor,
+                estado_anterior=prev_inf,
+                estado_nuevo=informe.estado,
+            )
+            meta_inf["motivo"] = motivo_limpio[:500]
+            log_update(
+                actor=actor,
+                entity=informe,
+                before=before_inf,
+                module="laboratorio",
+                metadata=meta_inf,
+            )
+
+        prev_es = estudio.estado
+        before_es = safe_model_snapshot(estudio)
+        estudio.estado = "LISTO_PARA_VALIDAR"
+        estudio.fecha_cierre = None
+        estudio.save(update_fields=["estado", "fecha_cierre"])
+        estudio.refresh_from_db()
+        meta_es = _base_estudio_metadata(
+            estudio,
+            accion="desvalidar",
+            view=view,
+            actor=actor,
+            estado_anterior=prev_es,
+            estado_nuevo=estudio.estado,
+        )
+        meta_es["motivo"] = motivo_limpio[:500]
+        _audit_estudio_update(estudio, before=before_es, actor=actor, metadata=meta_es)
         return estudio

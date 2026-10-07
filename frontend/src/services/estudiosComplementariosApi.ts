@@ -18,7 +18,7 @@ export interface ListEstudiosParams {
   paciente?: number;
   paciente_id?: number;
   estado?: string;
-  modalidad?: string;
+  practica?: string;
   search?: string;
   page?: number;
 }

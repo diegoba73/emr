@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from catalogos.models import EstudioDiagnostico
 from pacientes.models import Paciente
+from estudios.practicas_cehta import PRACTICA_CHOICES
 
 
 class TimestampedModel(models.Model):
@@ -19,6 +20,9 @@ class TimestampedModel(models.Model):
 
 
 class TipoEstudioComplementario(TimestampedModel):
+    """``practica`` reemplaza el antiguo campo ``modalidad`` (códigos legacy + CEHTA)."""
+
+    # Alias de compatibilidad para tests/imports antiguos.
     class Modalidad(models.TextChoices):
         IMAGEN_RX = 'IMAGEN_RX', 'Imagen — Rayos X'
         IMAGEN_TC = 'IMAGEN_TC', 'Imagen — Tomografía'
@@ -27,10 +31,12 @@ class TipoEstudioComplementario(TimestampedModel):
         PDF_INFORME_EXTERNO = 'PDF_INFORME_EXTERNO', 'PDF / informe externo'
         OTRO = 'OTRO', 'Otro'
 
+    Practica = Modalidad  # nombre canónico en docs; choices reales = PRACTICA_CHOICES
+
     codigo = models.CharField(max_length=50, blank=True, null=True, unique=True)
     nombre = models.CharField(max_length=255)
     descripcion = models.TextField(blank=True)
-    modalidad = models.CharField(max_length=40, choices=Modalidad.choices)
+    practica = models.CharField(max_length=80, choices=PRACTICA_CHOICES)
     requiere_informe = models.BooleanField(default=True)
     activo = models.BooleanField(default=True)
 
@@ -77,9 +83,9 @@ class EstudioComplementario(TimestampedModel):
         blank=True,
         related_name='estudios_complementarios',
     )
-    modalidad = models.CharField(
-        max_length=40,
-        choices=TipoEstudioComplementario.Modalidad.choices,
+    practica = models.CharField(
+        max_length=80,
+        choices=PRACTICA_CHOICES,
     )
     estado = models.CharField(
         max_length=20,

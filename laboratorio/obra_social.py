@@ -2,8 +2,28 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import status
 from rest_framework.response import Response
+
+
+def obra_social_efectiva(obj: Any) -> tuple[str, str]:
+    """OS y afiliado a mostrar: snapshot de la orden si hay, si no ficha paciente.
+
+    Compatible con órdenes históricas sin ``obra_social_orden``.
+    """
+    snap_os = (getattr(obj, "obra_social_orden", None) or "").strip()
+    snap_afil = (getattr(obj, "afiliado_orden", None) or "").strip()
+    if snap_os:
+        return snap_os, snap_afil
+    paciente = getattr(obj, "paciente", None)
+    if paciente is None:
+        return "", ""
+    return (
+        (getattr(paciente, "obra_social", None) or "").strip(),
+        (getattr(paciente, "numero_afiliado", None) or "").strip(),
+    )
 
 ESTADO_OBRA_SOCIAL_CHOICES = [
     ("AUTORIZADO", "Autorizado"),

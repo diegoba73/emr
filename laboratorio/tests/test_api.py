@@ -688,7 +688,8 @@ class TestLimsAuthorization(APITestCase):
             assert response.status_code == 200
             assert response.data['resultados_visibles'] is True
 
-    def test_secretaria_y_enfermeria_no_leen_catalogo_lims(self):
+    def test_secretaria_y_enfermeria_leen_catalogo_lims(self):
+        """Catálogo de tipos: necesario para pedidos clínicos (p. ej. Guardia secretaría)."""
         sec = User.objects.create_user(
             username='sec_cat',
             email='sec-cat@test.com',
@@ -702,9 +703,9 @@ class TestLimsAuthorization(APITestCase):
             rol='enfermeria',
         )
         self.client.force_authenticate(user=sec)
-        assert self.client.get('/api/lab/muestras/').status_code == status.HTTP_403_FORBIDDEN
+        assert self.client.get('/api/lab/muestras/').status_code == status.HTTP_200_OK
         self.client.force_authenticate(user=enf)
-        assert self.client.get('/api/lab/examenes/').status_code == status.HTTP_403_FORBIDDEN
+        assert self.client.get('/api/lab/examenes/').status_code == status.HTTP_200_OK
 
     def test_alias_laboratorio_misma_proteccion(self):
         self.client.force_authenticate(user=self.user_lab)

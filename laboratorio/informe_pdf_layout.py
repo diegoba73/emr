@@ -19,6 +19,7 @@ from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
     KeepTogether,
+    PageBreak,
     PageTemplate,
     Paragraph,
     Spacer,
@@ -43,16 +44,20 @@ from laboratorio.procedencia_display import resolver_procedencia_solicitud
 from laboratorio.proteinograma import PANEL_ELP
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
-HEADER_HEIGHT = 4.2 * cm
-# Reserva vertical del pie (bloque de firmas + dirección/contacto).
-FOOTER_HEIGHT = 5.8 * cm
-CONTENT_TOP_PAD = 0.2 * cm
-# Bloque único: imagen completa de ambas firmas (ancho útil de página).
-FIRMAS_BLOQUE_H = 4.0 * cm
-FIRMAS_BLOQUE_BOTTOM = 1.60 * cm
-# Fallback tipográfico (solo si falta el PNG del bloque).
-FIRMA_NOMBRE_Y = 2.35 * cm
-FIRMA_MP_Y = 2.05 * cm
+# Título/logo + separación + caja de datos del paciente (tipografía +2 pt).
+HEADER_HEIGHT = 5.05 * cm
+CONTENT_TOP_PAD = 0.25 * cm
+# Separación visual entre subtítulo institucional y caja de paciente.
+HEADER_PACIENTE_GAP = 0.38 * cm
+# Bloque de firmas (altura máx. del PNG) — se dibuja en CADA página.
+# 5.0 cm = +25 % sobre 4.0 cm (acumulado +56 % vs 3.2 cm).
+FIRMAS_BLOQUE_H = 5.0 * cm
+# Espacio razonable entre última fila de esa hoja y las firmas (anti-fraude).
+FIRMAS_GAP_ANTES = 0.45 * cm
+# Pie de dirección/contacto bajo las firmas.
+ADDRESS_ZONE_H = 1.70 * cm
+# Reserva mínima bajo el frame de contenido: gap + firmas + dirección.
+FOOTER_HEIGHT = FIRMAS_GAP_ANTES + FIRMAS_BLOQUE_H + ADDRESS_ZONE_H
 PIE_LINEA_Y = 1.50 * cm
 PIE_DIR_Y = 1.18 * cm
 PIE_CONTACTO_Y = 0.88 * cm
@@ -65,6 +70,9 @@ COL_UNIDAD = 2.0 * cm
 COL_REFERENCIA = 6.2 * cm
 COL_TOTAL = COL_EXAMEN + COL_RESULTADO + COL_UNIDAD + COL_REFERENCIA
 
+# En el informe PDF, Pro-BNP va solo en una hoja (no aplica a UI / carga).
+CODIGO_PROBNP_HOJA_PROPIA = "PROBNP"
+
 
 @dataclass
 class GrupoResultadosPdf:
@@ -72,6 +80,17 @@ class GrupoResultadosPdf:
     titulo: str
     resultados: list[ResultadoExamen] = field(default_factory=list)
     panel_codigo: str | None = None
+
+
+def _grupo_es_solo_probnp(grupo: GrupoResultadosPdf) -> bool:
+    """True si el bloque es únicamente Pro-BNP (código PROBNP)."""
+    if not grupo.resultados:
+        return False
+    codigos = {
+        (getattr(r.tipo_examen, "codigo", None) or "").strip().upper()
+        for r in grupo.resultados
+    }
+    return codigos == {CODIGO_PROBNP_HOJA_PROPIA}
 
 
 def _escape(text: str) -> str:
@@ -96,6 +115,24 @@ def _firma_image_reader(path: str) -> ImageReader | None:
         return ImageReader(path)
     except Exception:
         return None
+
+
+def _firmas_bloque_dims(usable_width: float) -> tuple[float, float, ImageReader | None, str | None]:
+    """Devuelve (ancho, alto, reader, path) del PNG de firmas, o fallback vacío."""
+    bloque_path = _asset_path(INFORME_LAB_CONFIG.get("firmas_bloque"))
+    if not bloque_path:
+        return 0.0, 0.0, None, None
+    reader = _firma_image_reader(bloque_path)
+    if reader is None:
+        return 0.0, 0.0, None, None
+    try:
+        iw, ih = reader.getSize()
+    except Exception:
+        iw, ih = 572, 217
+    if iw <= 0 or ih <= 0:
+        return 0.0, 0.0, None, None
+    scale = min(usable_width / float(iw), FIRMAS_BLOQUE_H / float(ih))
+    return float(iw) * scale, float(ih) * scale, reader, bloque_path
 
 
 def formatear_fecha_larga(dt: datetime | date) -> str:
@@ -266,11 +303,11 @@ def _nombre_validador(resultados: list[ResultadoExamen]) -> tuple[str | None, da
 class _InformeIcplDoc(BaseDocTemplate):
     def __init__(self, buffer, ctx: dict[str, Any], **kwargs):
         self.ctx = ctx
+        # Y del cursor tras el último flowable de cada página (coords canvas).
+        self._y_bajo_contenido: dict[int, float] = {}
         super().__init__(buffer, **kwargs)
-        # topMargin ya reserva HEADER_HEIGHT + CONTENT_TOP_PAD (vía self.height).
-        # bottomMargin es el margen de página; el pie de firmas se reserva alzando
-        # el Frame con FOOTER_HEIGHT (una sola vez). No restar HEADER otra vez:
-        # eso dejaba un hueco enorme entre la caja de datos y el cuerpo.
+        # Reserva FOOTER_HEIGHT para firmas+dirección en hojas llenas; en hojas
+        # cortas las firmas “flotan” justo bajo el último examen (misma distancia).
         frame = Frame(
             self.leftMargin,
             self.bottomMargin + FOOTER_HEIGHT,
@@ -287,12 +324,62 @@ class _InformeIcplDoc(BaseDocTemplate):
                 PageTemplate(
                     id="All",
                     frames=[frame],
-                    # onPageEnd: encabezado/pie DESPUÉS del cuerpo. Con onPage el
-                    # story tapaba firmas y dirección (efecto “borrado”).
                     onPageEnd=self._on_page,
                 )
             ]
         )
+
+    def afterFlowable(self, flowable):
+        """Registra hasta dónde bajó el contenido en la página actual."""
+        if isinstance(flowable, PageBreak):
+            return
+        fr = getattr(self, "frame", None)
+        if fr is None:
+            return
+        try:
+            self._y_bajo_contenido[int(self.page)] = float(fr._y)
+        except Exception:
+            return
+
+    def _dibujar_firmas_bajo_contenido(self, canvas, doc, y_bajo_contenido: float) -> None:
+        """Firmas en cada hoja, a FIRMAS_GAP_ANTES bajo la última fila de esa hoja."""
+        cfg = INFORME_LAB_CONFIG
+        w, _h = A4
+        usable_w = w - doc.leftMargin - doc.rightMargin
+        dw, dh, reader, _path = _firmas_bloque_dims(usable_w)
+        min_firma_bottom = PIE_LINEA_Y + 0.22 * cm
+
+        if reader is not None and dw > 0 and dh > 0:
+            # fr._y ya está debajo del último flowable; sumamos el gap pedido.
+            firma_bottom = y_bajo_contenido - FIRMAS_GAP_ANTES - dh
+            if firma_bottom < min_firma_bottom:
+                firma_bottom = min_firma_bottom
+            x = doc.leftMargin + (usable_w - dw) / 2.0
+            try:
+                canvas.drawImage(
+                    reader,
+                    x,
+                    firma_bottom,
+                    width=dw,
+                    height=dh,
+                    mask="auto",
+                )
+                return
+            except Exception:
+                pass
+
+        # Fallback tipográfico.
+        firmas = cfg.get("firmas") or []
+        if not firmas:
+            return
+        slot_w = usable_w / max(len(firmas), 1)
+        y_nombre = max(y_bajo_contenido - FIRMAS_GAP_ANTES - 0.55 * cm, min_firma_bottom + 0.55 * cm)
+        for i, firma in enumerate(firmas):
+            cx = doc.leftMargin + slot_w * i + slot_w / 2
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(colors.black)
+            canvas.drawCentredString(cx, y_nombre, firma.get("nombre", ""))
+            canvas.drawCentredString(cx, y_nombre - 0.32 * cm, f"M.P. {firma.get('mp', '')}")
 
     def _on_page(self, canvas, doc):
         ctx = self.ctx
@@ -301,11 +388,15 @@ class _InformeIcplDoc(BaseDocTemplate):
         w, h = A4
         canvas.saveState()
 
-        # Limpiar zonas de encabezado/pie por si el cuerpo derramó flowables.
+        frame_bottom = doc.bottomMargin + FOOTER_HEIGHT
+        y_bajo = self._y_bajo_contenido.get(int(doc.page), frame_bottom)
+
+        # Limpiar encabezado y banda inferior (dirección + zona de firmas en hoja llena).
+        # Las firmas flotantes (hoja corta) quedan por encima de frame_bottom y no se borran.
         canvas.setFillColor(colors.white)
         canvas.setStrokeColor(colors.white)
         canvas.rect(0, h - HEADER_HEIGHT - 0.15 * cm, w, HEADER_HEIGHT + 0.15 * cm, fill=1, stroke=0)
-        canvas.rect(0, 0, w, doc.bottomMargin + FOOTER_HEIGHT, fill=1, stroke=0)
+        canvas.rect(0, 0, w, frame_bottom, fill=1, stroke=0)
         canvas.setFillColor(colors.black)
         canvas.setStrokeColor(colors.black)
 
@@ -333,8 +424,9 @@ class _InformeIcplDoc(BaseDocTemplate):
         canvas.drawCentredString(w / 2, h - 1.65 * cm, subtitulo.upper())
         canvas.setFillColor(colors.black)
 
-        box_top = h - 2.05 * cm
-        box_bottom = h - HEADER_HEIGHT + 0.25 * cm
+        # Separación clara entre bloque institucional (logo/título) y datos del paciente.
+        box_top = h - 1.95 * cm - HEADER_PACIENTE_GAP
+        box_bottom = h - HEADER_HEIGHT + 0.22 * cm
         box_h = box_top - box_bottom
         canvas.setFillColor(colors.HexColor(typo["color_panel_bg"]))
         canvas.rect(doc.leftMargin, box_bottom, w - doc.leftMargin - doc.rightMargin, box_h, fill=1, stroke=0)
@@ -343,8 +435,9 @@ class _InformeIcplDoc(BaseDocTemplate):
         canvas.rect(doc.leftMargin, box_bottom, w - doc.leftMargin - doc.rightMargin, box_h, fill=0, stroke=1)
 
         mid_x = w / 2 + 0.15 * cm
-        y = box_top - 0.45 * cm
-        label_w = 2.8 * cm
+        y = box_top - 0.48 * cm
+        label_w = 3.1 * cm
+        row_step = 0.44 * cm
 
         def row(label: str, value: str, x: float, yy: float, bold_value: bool = False):
             canvas.setFont("Helvetica", typo["header_label"])
@@ -352,86 +445,25 @@ class _InformeIcplDoc(BaseDocTemplate):
             canvas.drawString(x, yy, label)
             canvas.setFillColor(colors.black)
             canvas.setFont("Helvetica-Bold" if bold_value else "Helvetica", typo["header_value"])
-            canvas.drawString(x + label_w, yy, value[:42])
+            canvas.drawString(x + label_w, yy, value[:40])
 
         row("Protocolo Nº", ctx["protocolo"], doc.leftMargin + 0.25 * cm, y, bold_value=True)
         row("Paciente", ctx["paciente"], mid_x, y, bold_value=True)
-        y -= 0.38 * cm
+        y -= row_step
         row("Solicitante", ctx["solicitado_por"], doc.leftMargin + 0.25 * cm, y)
         row("Historia clínica", ctx["historia_clinica"], mid_x, y)
-        y -= 0.38 * cm
+        y -= row_step
         row("Fecha informe", ctx["fecha"], doc.leftMargin + 0.25 * cm, y)
         row("Documento", ctx["documento"], mid_x, y)
-        y -= 0.38 * cm
+        y -= row_step
         row("Derivante", ctx["derivante"], doc.leftMargin + 0.25 * cm, y)
         row("Edad / F. nac.", ctx["fecha_nac"], mid_x, y)
 
         canvas.setLineWidth(0.8)
         canvas.line(doc.leftMargin, box_bottom - 0.08 * cm, w - doc.rightMargin, box_bottom - 0.08 * cm)
 
-        # Bloque de firmas: una sola imagen (ambas firmas + nombres), sin reprocesar.
-        bloque_path = _asset_path(cfg.get("firmas_bloque"))
-        drew_bloque = False
-        if bloque_path:
-            try:
-                reader = _firma_image_reader(bloque_path)
-                if reader is not None:
-                    usable_w = w - doc.leftMargin - doc.rightMargin
-                    # Centrar el PNG escalado dentro del box (sin recortar el trazo).
-                    try:
-                        iw, ih = reader.getSize()
-                    except Exception:
-                        iw, ih = 572, 217
-                    if iw > 0 and ih > 0:
-                        scale = min(usable_w / float(iw), FIRMAS_BLOQUE_H / float(ih))
-                        dw = float(iw) * scale
-                        dh = float(ih) * scale
-                        x = doc.leftMargin + (usable_w - dw) / 2.0
-                        y = FIRMAS_BLOQUE_BOTTOM + (FIRMAS_BLOQUE_H - dh) / 2.0
-                        canvas.drawImage(
-                            reader,
-                            x,
-                            y,
-                            width=dw,
-                            height=dh,
-                            mask="auto",
-                        )
-                        drew_bloque = True
-            except Exception:
-                drew_bloque = False
-
-        if not drew_bloque:
-            # Fallback: texto tipográfico (o mitades individuales si existen).
-            firmas = cfg.get("firmas") or []
-            slot_w = (w - doc.leftMargin - doc.rightMargin) / max(len(firmas), 1)
-            for i, firma in enumerate(firmas):
-                cx = doc.leftMargin + slot_w * i + slot_w / 2
-                img_path = _asset_path(firma.get("imagen"))
-                drew_img = False
-                if img_path:
-                    try:
-                        reader = _firma_image_reader(img_path)
-                        if reader is not None:
-                            canvas.drawImage(
-                                reader,
-                                cx,
-                                FIRMAS_BLOQUE_BOTTOM + FIRMAS_BLOQUE_H / 2,
-                                width=slot_w * 0.9,
-                                height=FIRMAS_BLOQUE_H,
-                                preserveAspectRatio=True,
-                                anchor="c",
-                                mask="auto",
-                            )
-                            drew_img = True
-                    except Exception:
-                        drew_img = False
-                if not drew_img:
-                    canvas.setFont("Helvetica", 8)
-                    canvas.setFillColor(colors.black)
-                    canvas.drawCentredString(cx, FIRMA_NOMBRE_Y, firma.get("nombre", ""))
-                    canvas.drawCentredString(
-                        cx, FIRMA_MP_Y, f"M.P. {firma.get('mp', '')}"
-                    )
+        # Firmas en todas las hojas, pegadas al último contenido de esa hoja.
+        self._dibujar_firmas_bajo_contenido(canvas, doc, y_bajo)
 
         canvas.setStrokeColor(colors.HexColor(typo["color_rule"]))
         canvas.setLineWidth(0.4)
@@ -516,6 +548,24 @@ def _styles() -> dict[str, ParagraphStyle]:
             fontSize=typo["table_header"],
             leading=typo["table_header"] + 2,
             textColor=meta_color,
+            alignment=TA_LEFT,
+        ),
+        # Misma alineación que los valores (derecha) para centrarlos visualmente en la columna.
+        "table_header_resultado": ParagraphStyle(
+            "TableHeaderResultado",
+            fontName="Helvetica-Bold",
+            fontSize=typo["table_header"],
+            leading=typo["table_header"] + 2,
+            textColor=meta_color,
+            alignment=TA_RIGHT,
+        ),
+        "table_header_unidad": ParagraphStyle(
+            "TableHeaderUnidad",
+            fontName="Helvetica-Bold",
+            fontSize=typo["table_header"],
+            leading=typo["table_header"] + 2,
+            textColor=meta_color,
+            alignment=TA_RIGHT,
         ),
         "validation_block": ParagraphStyle(
             "ValidationBlock",
@@ -581,8 +631,8 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
         [
             [
                 Paragraph("EXAMEN", styles["table_header"]),
-                Paragraph("RESULTADO", styles["table_header"]),
-                Paragraph("UNIDAD", styles["table_header"]),
+                Paragraph("RESULTADO", styles["table_header_resultado"]),
+                Paragraph("UNIDAD", styles["table_header_unidad"]),
                 Paragraph("REFERENCIA", styles["table_header"]),
             ]
         ],
@@ -595,6 +645,7 @@ def _tabla_encabezado_columnas(styles: dict[str, ParagraphStyle]) -> Table:
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
                 ("ALIGN", (1, 0), (2, 0), "RIGHT"),
+                ("RIGHTPADDING", (1, 0), (2, 0), 6),
             ]
         )
     )
@@ -646,7 +697,7 @@ def _fila_resultado(
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
                 ("LEFTPADDING", (0, 0), (0, 0), 2),
-                ("RIGHTPADDING", (1, 0), (2, 0), 2),
+                ("RIGHTPADDING", (1, 0), (2, 0), 6),
                 ("ALIGN", (1, 0), (2, 0), "RIGHT"),
             ]
         )
@@ -805,7 +856,14 @@ def construir_story_icpl(
         # Encabezado de columnas una sola vez al inicio de una racha de sueltos
         # (los perfiles ya lo incluyen en su bloque).
         needs_suelto_header = True
-        for grupo in grupos:
+        hubo_bloque_resultado = False
+        for idx, grupo in enumerate(grupos):
+            es_probnp = _grupo_es_solo_probnp(grupo)
+            # Pro-BNP: hoja propia respecto de otros exámenes (no de la validación final).
+            if es_probnp and hubo_bloque_resultado:
+                story.append(PageBreak())
+                needs_suelto_header = True
+
             es_perfil = bool(grupo.panel_codigo)
             if es_perfil and grupo.panel_codigo == PANEL_ELP:
                 from laboratorio.proteinograma_pdf import bloque_proteinograma
@@ -829,6 +887,8 @@ def construir_story_icpl(
                     )
                 )
                 needs_suelto_header = False
+            hubo_bloque_resultado = True
+
             if obs and grupo.panel_codigo == PANEL_HEMOGRAMA and not conclusion_hemo_insertada:
                 story.append(Spacer(1, 0.2 * cm))
                 story.append(
@@ -838,6 +898,13 @@ def construir_story_icpl(
                     Paragraph(_escape(obs).replace("\n", "<br/>"), styles["observaciones"])
                 )
                 conclusion_hemo_insertada = True
+                needs_suelto_header = True
+
+            # Si hay más exámenes después de Pro-BNP, cerrar su hoja.
+            # Validación / observaciones finales quedan en la última hoja de exámenes
+            # (no generar una página solo con el pie de validación).
+            if es_probnp and idx < len(grupos) - 1:
+                story.append(PageBreak())
                 needs_suelto_header = True
 
     if estudios_micro:

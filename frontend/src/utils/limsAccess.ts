@@ -309,6 +309,13 @@ export function canMarcarMicroEstudioInformado(
   return canOperateMicrobiologia(user) && estadoEstudio === 'VALIDADO';
 }
 
+/** Reabrir (desvalidar) estudio micro: bioquímico/admin en VALIDADO o INFORMADO. */
+export function estudioMicroPuedeDesvalidar(estado: string | null | undefined): boolean {
+  if (!estado) return false;
+  const e = String(estado).toUpperCase();
+  return e === 'VALIDADO' || e === 'INFORMADO';
+}
+
 /** Catálogos LIMS generales (tipos de muestra): escritura admin y operadores. */
 export function canEditLimsCatalogos(user: User | null): boolean {
   return canOperateLims(user);

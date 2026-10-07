@@ -6,7 +6,7 @@ import { apiClient } from '../../services/apiClient';
 interface EstudioRow {
   id: number;
   estado: string;
-  modalidad?: string;
+  practica?: string;
   tipo_estudio_nombre?: string;
   fecha_solicitud?: string;
 }
@@ -67,7 +67,7 @@ const PortalDocumentos: React.FC = () => {
         {estudios.map((e) => (
           <ListItem key={e.id} secondaryAction={<Chip size="small" label={e.estado} />}>
             <ListItemText
-              primary={e.tipo_estudio_nombre || e.modalidad || `Estudio #${e.id}`}
+              primary={e.tipo_estudio_nombre || e.practica || `Estudio #${e.id}`}
               secondary={
                 e.fecha_solicitud
                   ? new Date(e.fecha_solicitud).toLocaleDateString('es-AR')

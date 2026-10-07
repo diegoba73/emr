@@ -88,7 +88,10 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   useEffect(() => {
     const d: Record<number, string> = {};
     for (const inf of informes) {
-      if (inf.estado === 'BORRADOR') d[inf.id] = inf.texto || '';
+      // Editable hasta validar (BORRADOR y EMITIDO).
+      if (inf.estado === 'BORRADOR' || inf.estado === 'EMITIDO') {
+        d[inf.id] = inf.texto || '';
+      }
     }
     setDrafts(d);
   }, [informes]);
@@ -297,7 +300,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
                     <InformeMicrobiologiaEstadoBadge estado={inf.estado} tipo={inf.tipo} />
                   </TableCell>
                   <TableCell sx={{ maxWidth: 280 }}>
-                    {inf.estado === 'BORRADOR' && canOperate ? (
+                    {(inf.estado === 'BORRADOR' || inf.estado === 'EMITIDO') && canOperate ? (
                       <TextField
                         fullWidth
                         multiline
@@ -327,9 +330,14 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
                       </>
                     )}
                     {canOperate && inf.estado === 'EMITIDO' && (
-                      <Button size="small" color="error" onClick={() => anular(inf.id)}>
-                        Anular
-                      </Button>
+                      <>
+                        <Button size="small" onClick={() => guardarBorrador(inf)}>
+                          Guardar
+                        </Button>
+                        <Button size="small" color="error" onClick={() => anular(inf.id)}>
+                          Anular
+                        </Button>
+                      </>
                     )}
                     {canValidar && inf.tipo === 'FINAL' && inf.estado === 'EMITIDO' && (
                       <Tooltip

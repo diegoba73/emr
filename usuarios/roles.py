@@ -46,6 +46,8 @@ ROLES_LIMS_CATALOG_READ = frozenset({
     'admin',
     *ROLES_LIMS_OPERADOR,
     'medico',
+    'secretaria',
+    'enfermeria',
 })
 
 # Secretaría/enfermería: lectura de órdenes LIMS en todos los estados.

@@ -295,7 +295,7 @@ export interface RevistaLabItem {
 export interface RevistaEstudioItem {
   id: number;
   estado: string;
-  modalidad: string;
+  practica: string;
   tipo_nombre: string | null;
   fecha_solicitud: string | null;
   fecha_realizacion: string | null;

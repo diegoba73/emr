@@ -250,7 +250,7 @@ def test_download_pdf_rechaza_informe_de_otro_estudio(
     otro = EstudioComplementario.objects.create(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         estado=EstudioComplementario.Estado.SOLICITADO,
     )
     r = client.get(f'{BASE}{otro.id}/informes/{iid}/download-pdf/')

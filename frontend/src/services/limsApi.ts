@@ -505,6 +505,10 @@ export interface CreateSolicitudExamenLimsPayload {
   fecha_programada_toma: string;
   /** 2ª orden mismo día: solo ensayos ya informados de un INFORMADO_PARCIAL. */
   repeticion_control?: boolean;
+  /** Snapshot OS del pedido (y upsert afiliación paciente). */
+  obra_social?: string;
+  numero_afiliado?: string;
+  afiliacion_id?: number | null;
 }
 
 export async function createSolicitudExamenLims(

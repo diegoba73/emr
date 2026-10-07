@@ -12,13 +12,13 @@ BASE = '/api/estudios-complementarios/'
 
 
 @pytest.mark.django_db
-def test_construir_informe_reglas_incluye_modalidad(estudio_solicitado):
+def test_construir_informe_reglas_incluye_practica(estudio_solicitado):
     estudio_solicitado.descripcion_clinica = 'Tos y fiebre'
     estudio_solicitado.save(update_fields=['descripcion_clinica'])
     data = construir_informe_estudio_reglas(estudio_solicitado, notas_medico='Sin infiltrados')
     assert data['fuente'] == 'reglas'
     assert data['marcado_sugerencia'] is True
-    assert 'Rayos X' in data['texto'] or 'IMAGEN_RX' in data['texto'] or 'Modalidad' in data['texto']
+    assert 'Rayos X' in data['texto'] or 'IMAGEN_RX' in data['texto'] or 'Práctica' in data['texto'] or 'Modalidad' in data['texto']
     assert 'Tos y fiebre' in data['texto']
     assert 'Sin infiltrados' in data['texto']
     assert 'sugerencia asistida' in data['texto'].lower()

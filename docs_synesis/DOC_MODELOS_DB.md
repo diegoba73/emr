@@ -44,7 +44,8 @@
 - `user` OneToOne SET_NULL → User, `related_name='paciente'`
 - Identificación: `nombre`, `apellido`, `dni` **unique**, `fecha_nacimiento`, `sexo` (M/F/O)
 - Contacto: `telefono`, `email`, `direccion`
-- Obra social: `obra_social`, `numero_afiliado`
+- Obra social: `obra_social`, `numero_afiliado` (espejo de la afiliación **principal**; compat SEROS / serializers livianos)
+- Multi-afiliación: `PacienteAfiliacion` (N por paciente; `obra_social`, `numero_afiliado`, `es_principal`, `activo`) — fase 1 texto libre; catálogo formal pendiente
 - Clínico: `observaciones`, `antecedentes_*`
 - `fecha_registro`, `ultima_actualizacion`
 - FK User nullable `creado_por`, `modificado_por` (`related_name` `pacientes_creados` / `pacientes_modificados`) — operador staff; distinto de `user` portal
@@ -161,7 +162,7 @@
 
 ### TipoEstudioComplementario
 
-- Catálogo EMR: `modalidad` (IMAGEN_RX, IMAGEN_TC, IMAGEN_RM, IMAGEN_US, PDF_INFORME_EXTERNO, OTRO); `requiere_informe`, `activo`
+- Catálogo EMR: `practica` (ex-`modalidad`: códigos legacy IMAGEN_* / PDF / OTRO **más** slugs CEHTA); `requiere_informe`, `activo`. Sync: `manage.py sync_cehta_excel`.
 
 ### EstudioComplementario
 
@@ -236,6 +237,8 @@
 
 - `numero` unique nullable (generado LAB-…); FK Paciente CASCADE; FK Medico interno null; medico externo texto
 - M2M tipos_examen, paneles; `estado` choices **[VIGENTE]:** `PENDIENTE`, `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`, `FINALIZADO` (terminal). **[HISTÓRICO]** no hay `TOMA_MUESTRA` / `VALIDADO` / `ENTREGADO` / `CANCELADO` en este modelo.
+- `estado_obra_social`: autorización administrativa del pedido (AUTORIZADO / DEBE_ORDEN / …)
+- Snapshot OS del pedido (solo adelante): `obra_social_orden`, `afiliado_orden` (vacío en órdenes históricas → lectura vía ficha paciente / helper `obra_social_efectiva`)
 - `clean` de orden: coherencia `consulta_hc`/paciente. No agregar `ResultadoExamen` nuevo a solicitud `FINALIZADO` (`ResultadoExamen.clean`). El docstring del modelo aún menciona “cancelada” en sentido histórico; el código compara `FINALIZADO`.
 
 ### ResultadoExamen

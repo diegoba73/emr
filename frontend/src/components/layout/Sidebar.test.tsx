@@ -39,7 +39,7 @@ describe('Sidebar Atenciones Clínicas (/atenciones)', () => {
     expect(screen.getByText('Atenciones Clínicas')).toBeInTheDocument();
   });
 
-  it('no muestra Atenciones Clínicas para secretaría', () => {
+  it('no muestra Atenciones Clínicas para secretaría, pero sí Guardia', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'SECRETARIA' }) });
     render(
       <MemoryRouter>
@@ -47,6 +47,7 @@ describe('Sidebar Atenciones Clínicas (/atenciones)', () => {
       </MemoryRouter>
     );
     expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
+    expect(screen.getByText('Guardia')).toBeInTheDocument();
   });
 
   it('muestra Atenciones Clínicas para enfermería (lectura)', () => {
@@ -223,7 +224,7 @@ describe('orden del menú principal', () => {
   it('muestra el orden institucional para administrador', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'ADMIN' }) });
     render(<MemoryRouter><SidebarContent /></MemoryRouter>);
-    const labels = ['Inicio', 'Pacientes', 'Turnos', 'Guardia', 'Internación',
+    const labels = ['Inicio', 'Pacientes', 'Médicos', 'Profesionales', 'Turnos', 'Guardia', 'Internación',
       'Laboratorio', 'Atenciones Clínicas', 'Estudios complementarios', 'Archivos'];
     const nodes = labels.map((label) => screen.getByText(label));
     for (let i = 1; i < nodes.length; i++) {

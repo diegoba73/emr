@@ -71,7 +71,7 @@ def test_asignar_turno_estudio_rechaza_sala_ocupada(
     otro = EstudioComplementario.objects.create(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         estado=EstudioComplementario.Estado.SOLICITADO,
         creado_por=admin_user,
     )

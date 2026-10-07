@@ -24,6 +24,7 @@ export interface EstudioMicroPedidoRecepcionPanelProps {
   onConfirmarRecepcion: () => void;
   onCancelar: () => void;
   onObraSocial?: () => void;
+  onEditarOrden?: () => void;
 }
 
 /**
@@ -42,6 +43,7 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
   onConfirmarRecepcion,
   onCancelar,
   onObraSocial,
+  onEditarOrden,
 }) => {
   const tieneEtiqueta = Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
 
@@ -71,6 +73,11 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           Acciones del pedido
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+          {canOperate && onEditarOrden && (
+            <Button variant="outlined" onClick={onEditarOrden}>
+              Editar orden
+            </Button>
+          )}
           {canOperate && onObraSocial && (
             <Button variant="outlined" onClick={onObraSocial}>
               Obra social

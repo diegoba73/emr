@@ -32,7 +32,7 @@ import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import {
   ESTADO_CHIP_COLOR,
   ESTADO_LABELS,
-  MODALIDAD_OPTIONS,
+  PRACTICA_OPTIONS,
   ORIGEN_OPTIONS,
 } from '../modules/estudios/constants';
 import {
@@ -49,7 +49,7 @@ import type {
   CreateEstudioComplementarioPayload,
   EstudioComplementario,
   EstudioEstado,
-  EstudioModalidad,
+  EstudioPractica,
 } from '../types/estudios';
 import { Paciente } from '../types';
 import { formatPacienteLabel, formatPacienteNombre } from '../utils/pacienteFormat';
@@ -61,14 +61,14 @@ const EstudiosComplementarios: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<string>('');
-  const [filtroModalidad, setFiltroModalidad] = useState<string>('');
+  const [filtroPractica, setFiltroPractica] = useState<string>('');
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
   const [busquedaPacienteDebounced, setBusquedaPacienteDebounced] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<CreateEstudioComplementarioPayload>({
     paciente_id: 0,
-    modalidad: 'IMAGEN_RX',
+    practica: 'IMAGEN_RX',
     origen: 'INTERNO',
     descripcion_clinica: '',
     centro_realizador: '',
@@ -89,7 +89,7 @@ const EstudiosComplementarios: React.FC = () => {
     try {
       const params: Record<string, string | number> = {};
       if (filtroEstado) params.estado = filtroEstado;
-      if (filtroModalidad) params.modalidad = filtroModalidad;
+      if (filtroPractica) params.practica = filtroPractica;
       if (busquedaPacienteDebounced.trim()) params.search = busquedaPacienteDebounced.trim();
       const data = await listEstudiosComplementarios(params);
       setEstudios(data);
@@ -100,7 +100,7 @@ const EstudiosComplementarios: React.FC = () => {
       initialLoadDone.current = true;
       setLoading(false);
     }
-  }, [filtroEstado, filtroModalidad, busquedaPacienteDebounced]);
+  }, [filtroEstado, filtroPractica, busquedaPacienteDebounced]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -151,7 +151,7 @@ const EstudiosComplementarios: React.FC = () => {
       rol === 'paciente' && currentUser?.paciente?.id ? currentUser.paciente.id : 0;
     setForm({
       paciente_id: defaultPacienteId,
-      modalidad: 'IMAGEN_RX',
+      practica: 'IMAGEN_RX',
       origen: 'INTERNO',
       descripcion_clinica: '',
       centro_realizador: '',
@@ -242,14 +242,14 @@ const EstudiosComplementarios: React.FC = () => {
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Modalidad</InputLabel>
+            <InputLabel>Práctica</InputLabel>
             <Select
-              label="Modalidad"
-              value={filtroModalidad}
-              onChange={(e) => setFiltroModalidad(e.target.value)}
+              label="Práctica"
+              value={filtroPractica}
+              onChange={(e) => setFiltroPractica(e.target.value)}
             >
               <MenuItem value="">Todas</MenuItem>
-              {MODALIDAD_OPTIONS.map((m) => (
+              {PRACTICA_OPTIONS.map((m) => (
                 <MenuItem key={m.value} value={m.value}>
                   {m.label}
                 </MenuItem>
@@ -280,7 +280,7 @@ const EstudiosComplementarios: React.FC = () => {
               <TableRow>
                 <TableCell>ID</TableCell>
                 {rol !== 'paciente' && <TableCell>Paciente</TableCell>}
-                <TableCell>Tipo / modalidad</TableCell>
+                <TableCell>Tipo / práctica</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell>Turno</TableCell>
                 <TableCell>F. solicitud</TableCell>
@@ -308,8 +308,8 @@ const EstudiosComplementarios: React.FC = () => {
                   <TableCell>
                     {row.tipo_estudio_nombre || '—'}
                     <Typography variant="caption" display="block" color="text.secondary">
-                      {MODALIDAD_OPTIONS.find((m) => m.value === row.modalidad)?.label ||
-                        row.modalidad}
+                      {PRACTICA_OPTIONS.find((m) => m.value === row.practica)?.label ||
+                        row.practica}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -406,18 +406,18 @@ const EstudiosComplementarios: React.FC = () => {
               />
             )}
             <FormControl fullWidth>
-              <InputLabel>Modalidad *</InputLabel>
+              <InputLabel>Práctica *</InputLabel>
               <Select
-                label="Modalidad *"
-                value={form.modalidad}
+                label="Práctica *"
+                value={form.practica}
                 onChange={(e) =>
                   setForm((f) => ({
                     ...f,
-                    modalidad: e.target.value as EstudioModalidad,
+                    practica: e.target.value as EstudioPractica,
                   }))
                 }
               >
-                {MODALIDAD_OPTIONS.map((m) => (
+                {PRACTICA_OPTIONS.map((m) => (
                   <MenuItem key={m.value} value={m.value}>
                     {m.label}
                   </MenuItem>

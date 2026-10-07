@@ -167,7 +167,7 @@ export function isMedicoSoloAmbulatorio(user: User | null | undefined): boolean 
 
 /**
  * Módulo /atenciones (QA-ROLE-01): admin/staff, médico, enfermería (lectura), paciente (lectura propia).
- * Secretaría, laboratorio y sin rol: bloqueados.
+ * Secretaría, laboratorio y sin rol: bloqueados (secretaría opera Guardia por separado).
  */
 export function canAccessAtenciones(user: User | null | undefined): boolean {
   if (!user) return false;
@@ -176,18 +176,27 @@ export function canAccessAtenciones(user: User | null | undefined): boolean {
   return rol === 'medico' || rol === 'enfermeria' || rol === 'paciente';
 }
 
-/** Guardia: mismos roles que atenciones, excepto médico solo ambulatorio. */
+/**
+ * Guardia: médico (no solo ambulatorio), enfermería (lectura), secretaría (operación)
+ * y admin/staff. Secretaría no abre el módulo /atenciones genérico.
+ */
 export function canAccessGuardia(user: User | null | undefined): boolean {
-  if (!canAccessAtenciones(user)) return false;
+  if (!user) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
-  return true;
+  if (isStaffOrAdmin(user)) return true;
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria';
 }
 
-/** Mutaciones clínicas en atenciones: admin/staff y médico (objeto validado en backend). */
+/**
+ * Mutaciones clínicas en atenciones/guardia: admin/staff, médico y secretaría
+ * (objeto y alcance validados en backend).
+ */
 export function canOperateAtenciones(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
-  return normalizeRol(user) === 'medico';
+  const rol = normalizeRol(user);
+  return rol === 'medico' || rol === 'secretaria';
 }
 
 /** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico (sin secretaría/enfermería/LIMS). */

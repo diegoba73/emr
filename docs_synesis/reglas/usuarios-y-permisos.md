@@ -19,7 +19,7 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 |-----|-------------------|
 | `admin` | Administración, validación LIMS (`validar`), override IQC de cierre |
 | `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
-| `secretaria` | Agenda, pacientes, gestión turnos; lectura de estudios, archivos y resultados LIMS; envío de informe en `FINALIZADO` |
+| `secretaria` | Agenda, pacientes, gestión turnos; **Guardia** (iniciar/continuar/cerrar, pedidos lab/micro/estudios como médico); lectura de estudios, archivos y resultados LIMS; envío de informe en `FINALIZADO` |
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
 | `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO` |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
@@ -43,7 +43,8 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 
 | Capacidad | Roles típicos |
 |-----------|----------------|
-| Leer catálogo LIMS | admin, laboratorio, bioquímico, medico (`ROLES_LIMS_CATALOG_READ`) |
+| Leer catálogo LIMS | admin, laboratorio, bioquímico, medico, secretaria, enfermeria (`ROLES_LIMS_CATALOG_READ`) |
+| Crear pedidos LIMS / micro / estudios (p. ej. desde Guardia) | admin, laboratorio, bioquímico, medico, **secretaria** |
 | Crear/cargar resultados / QC / quitar ensayos | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`) |
 | Agregar ensayos a orden | `ROLES_LIMS_WRITE` + médico |
 | Editar cabecera de orden LIMS (`PATCH` paciente/médico/origen/fechas/obs.) | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`); **bloqueado** si `FINALIZADO` |
@@ -53,6 +54,7 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Override IQC al cerrar | admin / superuser + motivo |
 | Alta de pacientes | admin, secretaría, médico, laboratorio, bioquímico (`_ROLES_ALTA_PACIENTE`); sin PATCH demográfico para lab/bio |
 | Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
+| Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
 | Gestionar turnos (crear/modificar) | secretaria, admin/staff; médico y paciente solo propios; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
 

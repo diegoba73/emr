@@ -207,6 +207,10 @@ export interface SolicitudExamenLims {
   estado: EstadoSolicitudLims;
   estado_obra_social?: string | null;
   estado_obra_social_display?: string | null;
+  obra_social_orden?: string | null;
+  afiliado_orden?: string | null;
+  obra_social_efectiva?: string | null;
+  afiliado_efectivo?: string | null;
   /** Ambulatorio: hay que autorizar obra social antes de validar. */
   requiere_autorizacion_obra_social?: boolean;
   /** False si es ambulatoria y aún no está Autorizado. */
@@ -467,6 +471,10 @@ export interface EstudioMicrobiologia {
   estado: EstadoEstudioMicrobiologia;
   estado_obra_social?: string | null;
   estado_obra_social_display?: string | null;
+  obra_social_orden?: string | null;
+  afiliado_orden?: string | null;
+  obra_social_efectiva?: string | null;
+  afiliado_efectivo?: string | null;
   requiere_autorizacion_obra_social?: boolean;
   obra_social_permite_validar?: boolean;
   observaciones?: string;

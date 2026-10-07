@@ -11,20 +11,18 @@ export type EstudioEstado =
 
 export type InformeEstado = 'BORRADOR' | 'EMITIDO' | 'VALIDADO' | 'ANULADO';
 
-export type EstudioModalidad =
-  | 'IMAGEN_RX'
-  | 'IMAGEN_TC'
-  | 'IMAGEN_RM'
-  | 'IMAGEN_US'
-  | 'PDF_INFORME_EXTERNO'
-  | 'OTRO';
+/** Códigos legacy (IMAGEN_*) o slugs CEHTA (p.ej. ECOGRAFIA_RENAL). */
+export type EstudioPractica = string;
+
+/** @deprecated Use EstudioPractica */
+export type EstudioModalidad = EstudioPractica;
 
 export interface TipoEstudioComplementario {
   id: number;
   codigo?: string | null;
   nombre: string;
   descripcion?: string;
-  modalidad: EstudioModalidad;
+  practica: EstudioPractica;
   requiere_informe?: boolean;
   activo?: boolean;
 }
@@ -36,7 +34,7 @@ export interface EstudioComplementario {
   tipo_estudio?: number | null;
   tipo_estudio_nombre?: string | null;
   estudio_diagnostico?: number | null;
-  modalidad: EstudioModalidad;
+  practica: EstudioPractica;
   estado: EstudioEstado;
   medico_solicitante?: number | null;
   realizado_por?: number | null;
@@ -96,7 +94,7 @@ export interface InformeEstudioComplementario {
 /** POST create — incluye paciente; sin estado (lo fija el backend). */
 export interface CreateEstudioComplementarioPayload {
   paciente_id: number;
-  modalidad: EstudioModalidad;
+  practica: EstudioPractica;
   tipo_estudio?: number | null;
   estudio_diagnostico?: number | null;
   origen?: string;
@@ -115,7 +113,7 @@ export interface CreateEstudioComplementarioPayload {
  * Sin paciente_id, paciente, estado ni campos de auditoría/archivos/informes.
  */
 export interface UpdateEstudioComplementarioPayload {
-  modalidad?: EstudioModalidad;
+  practica?: EstudioPractica;
   tipo_estudio?: number | null;
   estudio_diagnostico?: number | null;
   medico_solicitante?: number | null;
@@ -139,7 +137,7 @@ export interface AgendarTurnoEstudioDesdeAgendaPayload {
   fecha_hora_fin: string;
   estudio_id?: number | null;
   tipo_estudio?: number | null;
-  modalidad?: EstudioModalidad;
+  practica?: EstudioPractica;
   origen?: string;
   descripcion_clinica?: string;
   medico_id?: number | null;

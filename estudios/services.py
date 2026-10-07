@@ -176,7 +176,7 @@ def _motivo_turno_desde_estudio(estudio: EstudioComplementario) -> str:
     if estudio.tipo_estudio_id and estudio.tipo_estudio:
         nombre = estudio.tipo_estudio.nombre
     if not nombre:
-        nombre = estudio.get_modalidad_display()
+        nombre = estudio.get_practica_display()
     return f'Estudio: {nombre}'[:255]
 
 
@@ -260,13 +260,13 @@ def asignar_turno_estudio(
     return estudio
 
 
-def _resolver_modalidad_estudio(*, tipo_estudio=None, modalidad=None) -> str:
+def _resolver_practica_estudio(*, tipo_estudio=None, practica=None) -> str:
     if tipo_estudio is not None:
-        return tipo_estudio.modalidad
-    if modalidad:
-        return modalidad
+        return tipo_estudio.practica
+    if practica:
+        return practica
     raise ValidationError(
-        {'tipo_estudio': 'Indique el tipo de estudio o la modalidad.'}
+        {'tipo_estudio': 'Indique el tipo de estudio o la práctica.'}
     )
 
 
@@ -280,7 +280,7 @@ def agendar_turno_estudio_desde_agenda(
     fecha_hora_fin,
     estudio=None,
     tipo_estudio=None,
-    modalidad=None,
+    practica=None,
     origen=None,
     descripcion_clinica='',
     medico=None,
@@ -303,9 +303,9 @@ def agendar_turno_estudio_desde_agenda(
             medico=medico,
         )
 
-    modalidad_resuelta = _resolver_modalidad_estudio(
+    practica_resuelta = _resolver_practica_estudio(
         tipo_estudio=tipo_estudio,
-        modalidad=modalidad,
+        practica=practica,
     )
     if origen is None:
         origen = EstudioComplementario.Origen.EXTERNO
@@ -314,7 +314,7 @@ def agendar_turno_estudio_desde_agenda(
         {
             'paciente': paciente,
             'tipo_estudio': tipo_estudio,
-            'modalidad': modalidad_resuelta,
+            'practica': practica_resuelta,
             'origen': origen,
             'descripcion_clinica': descripcion_clinica or '',
         },

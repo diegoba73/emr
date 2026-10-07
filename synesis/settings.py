@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     'usuarios',  # Habilitado
     'pacientes',
     'medicos',
+    'profesionales',
     'turnos',
     'movil',
     'historias_clinicas',

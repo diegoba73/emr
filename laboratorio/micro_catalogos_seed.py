@@ -2,8 +2,8 @@
 
 TIPOS_CULTIVO_MICRO_SEED = [
     ("HEMOCULTIVO", "Hemocultivo", 10),
-    ("CATETER", "Cultivo de catéter", 20),
-    ("PUNTA_CATETER", "Cultivo de punta de catéter", 30),
+    ("CATETER", "Cultivo de punta de catéter", 20),
+    ("PUNTA_CATETER", "Retrocultivo", 30),
     ("UROCULTIVO", "Urocultivo", 40),
     ("COPROCULTIVO", "Coprocultivo", 50),
     ("LCR", "Cultivo de líquido cefalorraquídeo — LCR", 60),

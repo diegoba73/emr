@@ -14,6 +14,7 @@ from .models import (
     InformeEstudioComplementario,
     TipoEstudioComplementario,
 )
+from .practicas_cehta import PRACTICA_CHOICES
 
 
 class TipoEstudioComplementarioSerializer(serializers.ModelSerializer):
@@ -24,7 +25,7 @@ class TipoEstudioComplementarioSerializer(serializers.ModelSerializer):
             'codigo',
             'nombre',
             'descripcion',
-            'modalidad',
+            'practica',
             'requiere_informe',
             'activo',
         )
@@ -61,7 +62,7 @@ class EstudioComplementarioListSerializer(serializers.ModelSerializer):
             'tipo_estudio',
             'tipo_estudio_nombre',
             'estudio_diagnostico',
-            'modalidad',
+            'practica',
             'estado',
             'fecha_solicitud',
             'fecha_realizacion',
@@ -120,7 +121,7 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
             'tipo_estudio',
             'tipo_estudio_nombre',
             'estudio_diagnostico',
-            'modalidad',
+            'practica',
             'estado',
             'medico_solicitante',
             'realizado_por',
@@ -189,7 +190,7 @@ class EstudioComplementarioDetailSerializer(serializers.ModelSerializer):
                 )
         estudio = EstudioComplementario(
             paciente=paciente or (inst.paciente if inst else None),
-            modalidad=attrs.get('modalidad', getattr(inst, 'modalidad', '')),
+            practica=attrs.get('practica', getattr(inst, 'practica', '')),
             atencion=attrs.get('atencion', getattr(inst, 'atencion', None)),
             consulta_hc=attrs.get('consulta_hc', getattr(inst, 'consulta_hc', None)),
             solicitud_emr=attrs.get('solicitud_emr', getattr(inst, 'solicitud_emr', None)),
@@ -417,8 +418,8 @@ class AgendarTurnoEstudioDesdeAgendaSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
-    modalidad = serializers.ChoiceField(
-        choices=TipoEstudioComplementario.Modalidad.choices,
+    practica = serializers.ChoiceField(
+        choices=PRACTICA_CHOICES,
         required=False,
         allow_blank=True,
     )
@@ -438,9 +439,9 @@ class AgendarTurnoEstudioDesdeAgendaSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs.get('estudio'):
             return attrs
-        if not attrs.get('tipo_estudio') and not attrs.get('modalidad'):
+        if not attrs.get('tipo_estudio') and not attrs.get('practica'):
             raise serializers.ValidationError(
-                'Indique tipo_estudio o modalidad para registrar el estudio.'
+                'Indique tipo_estudio o practica para registrar el estudio.'
             )
         return attrs
 

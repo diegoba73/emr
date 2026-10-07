@@ -52,7 +52,7 @@ def recurso(db):
 def tipo_estudio(db):
     return TipoEstudioComplementario.objects.create(
         nombre='RX Tórax',
-        modalidad=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
+        practica=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
     )
 
 
@@ -62,7 +62,7 @@ def estudio_solicitado(paciente, tipo_estudio, medico):
     return EstudioComplementario.objects.create(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         estado=EstudioComplementario.Estado.SOLICITADO,
         medico_solicitante=medico,
         creado_por=admin,
@@ -92,7 +92,7 @@ class TestRolesEstudioComplementario:
         payload = {
             'paciente_id': paciente.id,
             'tipo_estudio': tipo_estudio.id,
-            'modalidad': tipo_estudio.modalidad,
+            'practica': tipo_estudio.practica,
             'origen': 'INTERNO',
             'descripcion_clinica': 'Control',
         }

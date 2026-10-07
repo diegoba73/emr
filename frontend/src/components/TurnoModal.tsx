@@ -56,7 +56,7 @@ import { pacienteLabelFromList } from '../utils/estudioAgendaFormat';
 import {
   buildEstudioTipoCatalogOptions,
   isEstudioTipoCatalogFallbackId,
-  resolveEstudioModalidadFromTipoId,
+  resolveEstudioPracticaFromTipoId,
 } from '../utils/estudioTipoCatalog';
 import type { Recurso } from '../types';
 
@@ -498,7 +498,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
 
         if (errors.length > 0) {
           setEstudioFormError(
-            `No se pudieron cargar: ${errors.join(' y ')}. ${errors.includes('tipos de estudio') ? 'Se muestran modalidades genéricas.' : ''}`.trim()
+            `No se pudieron cargar: ${errors.join(' y ')}. ${errors.includes('tipos de estudio') ? 'Se muestran prácticas genéricas.' : ''}`.trim()
           );
         }
       } finally {
@@ -700,7 +700,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         if (
           !lockEstudioSelection &&
           isEstudioTipoCatalogFallbackId(tipoEstudioId) &&
-          !resolveEstudioModalidadFromTipoId(tipoEstudioId, tiposEstudio)
+          !resolveEstudioPracticaFromTipoId(tipoEstudioId, tiposEstudio)
         ) {
           setEstudioFormError('Seleccione un tipo de estudio válido.');
           return;
@@ -724,7 +724,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             paciente_id: pacienteId,
             ...(isEstudioTipoCatalogFallbackId(tipoEstudioId)
               ? {
-                  modalidad: resolveEstudioModalidadFromTipoId(tipoEstudioId, tiposEstudio)!,
+                  practica: resolveEstudioPracticaFromTipoId(tipoEstudioId, tiposEstudio)!,
                 }
               : { tipo_estudio: Number(tipoEstudioId) }),
             origen: estudioOrigen,

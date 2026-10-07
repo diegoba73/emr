@@ -15,6 +15,7 @@ from laboratorio.microbiologia_estado import (
     MicrobiologiaAccionError,
     actualizar_informe_borrador,
     aplicar_completar_antibiograma,
+    aplicar_desvalidar_estudio_micro,
     aplicar_emitir_informe,
     aplicar_marcar_estudio_informado,
     aplicar_validar_informe_final,
@@ -1013,3 +1014,56 @@ class TestInformeMicrobiologiaModel:
         aplicar_validar_informe_final(inf.pk, actor=None, view="t")
         with pytest.raises(MicrobiologiaAccionError):
             actualizar_informe_borrador(inf.pk, actor=None, view="t", texto="hack")
+
+    def test_editar_informe_emitido_antes_de_validar(self, base_data):
+        ctx = _estudio_con_lectura_sin_aislados(base_data)
+        EstudioMicrobiologia.objects.filter(pk=ctx["estudio"].pk).update(estado="ANTIBIOGRAMA")
+        inf = crear_informe_borrador(
+            estudio_id=ctx["estudio"].pk,
+            tipo="FINAL",
+            texto="x",
+            observaciones="",
+            reemplaza_a_id=None,
+            actor=None,
+            view="t",
+        )
+        aplicar_emitir_informe(inf.pk, actor=None, view="t", texto="Emitido.")
+        actualizar_informe_borrador(inf.pk, actor=None, view="t", texto="Texto corregido pre-validación.")
+        inf.refresh_from_db()
+        assert inf.estado == "EMITIDO"
+        assert inf.texto == "Texto corregido pre-validación."
+
+    def test_desvalidar_estudio_reabre_para_corregir(self, base_data):
+        ctx = _estudio_con_lectura_sin_aislados(base_data)
+        EstudioMicrobiologia.objects.filter(pk=ctx["estudio"].pk).update(estado="ANTIBIOGRAMA")
+        inf = crear_informe_borrador(
+            estudio_id=ctx["estudio"].pk,
+            tipo="FINAL",
+            texto="x",
+            observaciones="",
+            reemplaza_a_id=None,
+            actor=None,
+            view="t",
+        )
+        aplicar_emitir_informe(inf.pk, actor=None, view="t", texto="Informe final.")
+        aplicar_validar_informe_final(inf.pk, actor=None, view="t")
+        aplicar_desvalidar_estudio_micro(
+            ctx["estudio"].pk,
+            actor=None,
+            view="t",
+            motivo="Corrección de tipografía en informe",
+        )
+        ctx["estudio"].refresh_from_db()
+        inf.refresh_from_db()
+        assert ctx["estudio"].estado == "LISTO_PARA_VALIDAR"
+        assert ctx["estudio"].fecha_cierre is None
+        assert inf.estado == "EMITIDO"
+        assert inf.validado_por_id is None
+        assert inf.fecha_validacion is None
+        # Tras desvalidar se puede editar y volver a validar.
+        actualizar_informe_borrador(inf.pk, actor=None, view="t", texto="Informe corregido.")
+        aplicar_validar_informe_final(inf.pk, actor=None, view="t")
+        ctx["estudio"].refresh_from_db()
+        inf.refresh_from_db()
+        assert ctx["estudio"].estado == "VALIDADO"
+        assert inf.estado == "VALIDADO"

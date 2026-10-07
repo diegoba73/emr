@@ -31,7 +31,7 @@ import {
   listTiposEstudioComplementario,
 } from '../../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../../estudios/apiErrors';
-import { ESTADO_LABELS, MODALIDAD_OPTIONS } from '../../estudios/constants';
+import { ESTADO_LABELS, PRACTICA_OPTIONS } from '../../estudios/constants';
 import type { ConsultaDetalle } from '../../../types';
 import type { EstudioComplementario, TipoEstudioComplementario } from '../../../types/estudios';
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
@@ -71,10 +71,10 @@ function buildEstudioCatalogOptions(catalog: TipoEstudioComplementario[]): TipoE
   if (catalog.length > 0) {
     return catalog.filter((t) => t.activo !== false);
   }
-  return MODALIDAD_OPTIONS.map((m, index) => ({
+  return PRACTICA_OPTIONS.map((m, index) => ({
     id: -(index + 1),
     nombre: m.label,
-    modalidad: m.value,
+    practica: m.value,
     activo: true,
   }));
 }
@@ -94,7 +94,7 @@ function filterCatalogOptions<T extends { nombre: string; codigo?: string | null
 
 function formatEstudioTipoLabel(t: TipoEstudioComplementario): string {
   const codigo = t.codigo ? `${t.codigo} — ` : '';
-  const modLabel = MODALIDAD_OPTIONS.find((m) => m.value === t.modalidad)?.label;
+  const modLabel = PRACTICA_OPTIONS.find((m) => m.value === t.practica)?.label;
   return modLabel ? `${codigo}${t.nombre} (${modLabel})` : `${codigo}${t.nombre}`;
 }
 
@@ -289,7 +289,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         {
           id: newDraftId(),
           tipo_estudio_id: selectedTipoEstudio.id > 0 ? selectedTipoEstudio.id : undefined,
-          modalidad: selectedTipoEstudio.modalidad,
+          practica: selectedTipoEstudio.practica,
           tipo_label: formatEstudioTipoLabel(selectedTipoEstudio),
           descripcion_clinica: estudioDesc.trim() || undefined,
         },
@@ -425,7 +425,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                   <TextField
                     {...params}
                     label="Buscar tipo de estudio *"
-                    placeholder="Nombre, código o modalidad"
+                    placeholder="Nombre, código o práctica"
                   />
                 )}
               />
@@ -867,7 +867,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                 <TableRow key={est.id} hover>
                   <TableCell>
                     <Typography variant="body2" fontWeight={500}>
-                      {est.tipo_estudio_nombre || est.modalidad}
+                      {est.tipo_estudio_nombre || est.practica}
                     </Typography>
                     {est.descripcion_clinica && (
                       <Typography variant="caption" color="text.secondary">
@@ -929,8 +929,8 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>
                         {est.tipo_estudio_nombre ||
-                          MODALIDAD_OPTIONS.find((m) => m.value === est.modalidad)?.label ||
-                          est.modalidad}
+                          PRACTICA_OPTIONS.find((m) => m.value === est.practica)?.label ||
+                          est.practica}
                       </Typography>
                       {est.fecha_solicitud && (
                         <Typography variant="caption" color="text.secondary" display="block">

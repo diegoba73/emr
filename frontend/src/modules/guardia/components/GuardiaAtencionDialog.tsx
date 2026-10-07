@@ -26,8 +26,9 @@ import {
 } from '../../atenciones/consultaPedidosDraft';
 import { apiService } from '../../../services/api';
 import { imprimirPedidosPapel } from '../../../services/limsApi';
-import { Paciente } from '../../../types';
+import type { Medico, Paciente } from '../../../types';
 import { formatPacienteLabel } from '../../../utils/pacienteFormat';
+import { normalizeRol } from '../../../utils/permissions';
 
 export type GuardiaDialogMode = 'create' | 'edit' | 'view';
 
@@ -59,12 +60,23 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   const [pacienteInputValue, setPacienteInputValue] = useState('');
   const [searchingPacientes, setSearchingPacientes] = useState(false);
   const pacienteInputReason = useRef<'input' | 'selection' | 'clear'>('input');
+  const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
+  const [medicoOptions, setMedicoOptions] = useState<Medico[]>([]);
+  const [medicoInputValue, setMedicoInputValue] = useState('');
+  const [searchingMedicos, setSearchingMedicos] = useState(false);
+  const medicoInputReason = useRef<'input' | 'selection' | 'clear'>('input');
   const [motivoConsulta, setMotivoConsulta] = useState('');
   const [consultaHcId, setConsultaHcId] = useState<number | null>(null);
   const [preparingHc, setPreparingHc] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const canEditPedidos = !isReadOnly;
+  const medicoFromUser =
+    currentUser?.medico && typeof currentUser.medico === 'object'
+      ? (currentUser.medico as Medico)
+      : null;
+  const medicoFromUserId = medicoFromUser?.id ?? null;
+  const needsMedicoPicker = !medicoFromUserId && normalizeRol(currentUser) !== 'medico';
 
   useEffect(() => {
     if (!open) return;
@@ -74,6 +86,15 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       setPacienteInputValue('');
       setMotivoConsulta('');
       setConsultaHcId(null);
+      if (medicoFromUserId && medicoFromUser) {
+        setSelectedMedico(medicoFromUser);
+        setMedicoInputValue(
+          `Dr. ${[medicoFromUser.apellido, medicoFromUser.nombre].filter(Boolean).join(', ')}`
+        );
+      } else {
+        setSelectedMedico(null);
+        setMedicoInputValue('');
+      }
       return;
     }
     if (!atencion) return;
@@ -81,7 +102,17 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     setPacienteInputValue(atencion.paciente ? formatPacienteLabel(atencion.paciente) : '');
     setMotivoConsulta(atencion.observaciones_generales ?? '');
     setConsultaHcId(atencion.consulta_hc_id ?? null);
-  }, [open, isCreate, atencion]);
+    const med = atencion.medico_principal;
+    if (med && typeof med === 'object') {
+      setSelectedMedico(med);
+      setMedicoInputValue(`Dr. ${[med.apellido, med.nombre].filter(Boolean).join(', ')}`);
+    } else if (medicoFromUserId && medicoFromUser) {
+      setSelectedMedico(medicoFromUser);
+      setMedicoInputValue(
+        `Dr. ${[medicoFromUser.apellido, medicoFromUser.nombre].filter(Boolean).join(', ')}`
+      );
+    }
+  }, [open, isCreate, atencion, medicoFromUserId, medicoFromUser]);
 
   useEffect(() => {
     if (!open || isCreate || !atencionId || consultaHcId) return;
@@ -131,7 +162,33 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     return () => clearTimeout(timeoutId);
   }, [pacienteInputValue, open, isReadOnly]);
 
+  useEffect(() => {
+    if (!open || isReadOnly || !needsMedicoPicker || !isCreate) return;
+    if (medicoInputReason.current !== 'input') {
+      medicoInputReason.current = 'input';
+      return;
+    }
+    const query = medicoInputValue.trim();
+    if (query.length < 2) {
+      setMedicoOptions([]);
+      return;
+    }
+    const timeoutId = setTimeout(async () => {
+      setSearchingMedicos(true);
+      try {
+        const results = await apiService.buscarMedicos(query);
+        setMedicoOptions(results);
+      } catch {
+        setMedicoOptions([]);
+      } finally {
+        setSearchingMedicos(false);
+      }
+    }, 250);
+    return () => clearTimeout(timeoutId);
+  }, [medicoInputValue, open, isReadOnly, needsMedicoPicker, isCreate]);
+
   const resolveMedicoId = (): number | undefined => {
+    if (selectedMedico?.id) return selectedMedico.id;
     const fromUser =
       currentUser?.medico?.id ??
       (typeof currentUser?.medico === 'number' ? currentUser.medico : undefined);
@@ -141,7 +198,11 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   const persistAtencion = async (): Promise<number> => {
     const medicoId = resolveMedicoId();
     if (!medicoId) {
-      throw new Error('Tu usuario no tiene un médico asociado.');
+      throw new Error(
+        needsMedicoPicker
+          ? 'Seleccioná el médico de guardia.'
+          : 'Tu usuario no tiene un médico asociado.'
+      );
     }
 
     let targetAtencionId = atencionId ?? null;
@@ -310,6 +371,50 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
               )}
             />
 
+            {needsMedicoPicker && (
+              <Autocomplete
+                options={medicoOptions}
+                loading={searchingMedicos}
+                disabled={!isCreate || isReadOnly}
+                getOptionLabel={(m) =>
+                  `Dr. ${[m.apellido, m.nombre].filter(Boolean).join(', ')}${
+                    m.matricula ? ` — MP ${m.matricula}` : ''
+                  }`
+                }
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                value={selectedMedico}
+                inputValue={medicoInputValue}
+                onChange={(_, value) => {
+                  setSelectedMedico(value);
+                  medicoInputReason.current = 'selection';
+                  setMedicoInputValue(
+                    value
+                      ? `Dr. ${[value.apellido, value.nombre].filter(Boolean).join(', ')}`
+                      : ''
+                  );
+                }}
+                onInputChange={(_, newValue, reason) => {
+                  if (reason === 'input') {
+                    medicoInputReason.current = 'input';
+                    setMedicoInputValue(newValue);
+                  } else if (reason === 'clear') {
+                    medicoInputReason.current = 'clear';
+                    setMedicoInputValue('');
+                    setSelectedMedico(null);
+                  }
+                }}
+                filterOptions={(x) => x}
+                noOptionsText={
+                  medicoInputValue.trim().length < 2
+                    ? 'Escribí al menos 2 caracteres (apellido o matrícula)'
+                    : 'Sin coincidencias'
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Médico de guardia *" required={isCreate} />
+                )}
+              />
+            )}
+
             <TextField
               label="Motivo de consulta / triage"
               multiline
@@ -359,7 +464,10 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
               variant="outlined"
               color="inherit"
               onClick={handleCerrarAtencion}
-              disabled={saving || (isCreate && !selectedPaciente)}
+              disabled={
+                saving ||
+                (isCreate && (!selectedPaciente || (needsMedicoPicker && !selectedMedico)))
+              }
             >
               Cerrar atención
             </Button>
@@ -367,7 +475,10 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
               variant="contained"
               color="error"
               onClick={handleGuardar}
-              disabled={saving || (isCreate && !selectedPaciente)}
+              disabled={
+                saving ||
+                (isCreate && (!selectedPaciente || (needsMedicoPicker && !selectedMedico)))
+              }
             >
               {saving ? <CircularProgress size={22} color="inherit" /> : 'Guardar atención'}
             </Button>

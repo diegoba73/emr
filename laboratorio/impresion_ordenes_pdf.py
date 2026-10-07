@@ -123,7 +123,8 @@ FORM_MICRO_IZQ: list[tuple[str, frozenset[str]]] = [
     ("Cultivo Líquido pericárdico", frozenset({"LIQUIDO_PERICARDICO"})),
     ("Cultivo Líquido Mediastinal", frozenset()),
     ("Cultivo de líquido cefalorraquídeo", frozenset({"LCR"})),
-    ("Cultivo de catéter", frozenset({"CATETER", "PUNTA_CATETER"})),
+    ("Cultivo de punta de catéter", frozenset({"CATETER"})),
+    ("Retrocultivo", frozenset({"PUNTA_CATETER"})),
     ("Cultivo líquido pleural", frozenset({"LIQUIDO_PLEURAL"})),
     ("Cultivo de Líquido ascítico o peritoneal", frozenset({"LIQUIDO_PERITONEAL"})),
     ("Cultivo Líquido articular o sinovial", frozenset({"LIQUIDO_SINOVIAL"})),
@@ -316,11 +317,14 @@ def _datos_cabecera(obj, *, medico_externo: str = "") -> DatosPedidoPapel:
     paciente = getattr(obj, "paciente", None)
     nombre, dni = _fmt_paciente(paciente)
     medico = _fmt_medico(getattr(obj, "medico_interno", None), medico_externo)
+    from laboratorio.obra_social import obra_social_efectiva
+
+    os_txt, afil_txt = obra_social_efectiva(obj)
     return DatosPedidoPapel(
         paciente=nombre if nombre != "—" else "",
         dni=dni if dni != "—" else "",
-        obra_social=(getattr(paciente, "obra_social", None) or "").strip(),
-        afiliado=(getattr(paciente, "numero_afiliado", None) or "").strip(),
+        obra_social=os_txt,
+        afiliado=afil_txt,
         medico=medico if medico != "—" else "",
         numero=(getattr(obj, "numero", None) or "").strip(),
         observaciones=(getattr(obj, "observaciones", None) or "").strip(),
@@ -1203,10 +1207,11 @@ def generar_listado_ordenes_dia_pdf_bytes(
         P("Estudios solicitados", st_h),
     ]
     rows = [header]
+    from laboratorio.obra_social import obra_social_efectiva
+
     for idx, obj in enumerate(objs, start=1):
         nombre, dni = _fmt_paciente(obj.paciente)
-        os_txt = (getattr(obj.paciente, "obra_social", None) or "").strip()
-        afil = (getattr(obj.paciente, "numero_afiliado", None) or "").strip()
+        os_txt, afil = obra_social_efectiva(obj)
         if afil:
             os_txt = f"{os_txt} · {afil}" if os_txt else afil
         origen = _origen_extraccion_listado(obj)

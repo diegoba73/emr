@@ -98,11 +98,12 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 |-----|---------------|----------------------|
 | admin/staff/superuser | Sí (global) | Sí |
 | médico | Propias (`medico_principal`) | Propias |
+| secretaría | Sí (global) | Sí (p. ej. Guardia + `iniciar-guardia` con `medico_id`) |
 | enfermería | Sí (global, solo lectura) | No |
 | paciente | Propias | No |
-| secretaría, laboratorio, sin rol | No | No |
+| laboratorio, sin rol | No | No |
 
-**Frontend:** `canAccessAtenciones`, `canOperateAtenciones` en `permissions.ts`; guard en `/atenciones`; sidebar «Consultas» alineado; botón editar oculto sin `canOperateAtenciones`; `AtencionDetailDrawer` usa `canOperate` / `canOperateAtenciones` (no `rol !== PACIENTE`).
+**Frontend:** `canAccessAtenciones`, `canAccessGuardia`, `canOperateAtenciones` en `permissions.ts`; guard en `/atenciones` y `/guardia`; sidebar «Guardia» visible para secretaría (sin «Atenciones Clínicas»); botón editar oculto sin `canOperateAtenciones`; `AtencionDetailDrawer` usa `canOperate` / `canOperateAtenciones` (no `rol !== PACIENTE`).
 
 ## Pantallas críticas y flujos de usuario
 

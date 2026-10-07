@@ -5,13 +5,38 @@ paciente. No mueve campos hacia ``User`` ni hacia ``UserProfile``.
 """
 from rest_framework import serializers
 
-from .models import Paciente
+from .models import Paciente, PacienteAfiliacion
 from .texto import normalizar_texto_paciente
+from .afiliaciones import sync_principal_desde_paciente_fields
 
 
 def _normalize_name(value):
     """Normaliza un nombre/apellido: ``strip`` + mayúsculas. Tolera ``None``."""
     return normalizar_texto_paciente(value)
+
+
+class PacienteAfiliacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PacienteAfiliacion
+        fields = [
+            "id",
+            "obra_social",
+            "numero_afiliado",
+            "es_principal",
+            "activo",
+            "creado_en",
+            "actualizado_en",
+        ]
+        read_only_fields = ["id", "creado_en", "actualizado_en"]
+
+    def validate_obra_social(self, value):
+        text = normalizar_texto_paciente(value) or ""
+        if not text:
+            raise serializers.ValidationError("La obra social es obligatoria.")
+        return text
+
+    def validate_numero_afiliado(self, value):
+        return normalizar_texto_paciente(value) or ""
 
 
 class PacienteLightSerializer(serializers.ModelSerializer):
@@ -23,6 +48,7 @@ class PacienteLightSerializer(serializers.ModelSerializer):
 
     nombre_completo = serializers.ReadOnlyField()
     edad = serializers.ReadOnlyField()
+    afiliaciones = PacienteAfiliacionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Paciente
@@ -40,6 +66,7 @@ class PacienteLightSerializer(serializers.ModelSerializer):
             "direccion",
             "obra_social",
             "numero_afiliado",
+            "afiliaciones",
         ]
         read_only_fields = fields
 
@@ -58,6 +85,7 @@ class PacienteSerializer(serializers.ModelSerializer):
     edad = serializers.ReadOnlyField(help_text="Edad calculada automáticamente")
     creado_por = serializers.SerializerMethodField()
     modificado_por = serializers.SerializerMethodField()
+    afiliaciones = PacienteAfiliacionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Paciente
@@ -77,6 +105,7 @@ class PacienteSerializer(serializers.ModelSerializer):
             "direccion",
             "obra_social",
             "numero_afiliado",
+            "afiliaciones",
             "familiar_nombre",
             "familiar_telefono",
             "observaciones",
@@ -94,6 +123,7 @@ class PacienteSerializer(serializers.ModelSerializer):
             "nombre_completo",
             "creado_por",
             "modificado_por",
+            "afiliaciones",
         ]
 
     def get_creado_por(self, obj):
@@ -154,3 +184,14 @@ class PacienteSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        sync_principal_desde_paciente_fields(instance)
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        if "obra_social" in validated_data or "numero_afiliado" in validated_data:
+            sync_principal_desde_paciente_fields(instance)
+        return instance

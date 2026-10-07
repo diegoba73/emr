@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Paciente
+from .models import Paciente, PacienteAfiliacion
 
 
 @admin.register(Paciente)
@@ -22,6 +22,7 @@ class PacienteAdmin(admin.ModelAdmin):
         "creado_por",
         "modificado_por",
     )
+    inlines = []
 
     fieldsets = (
         (
@@ -75,3 +76,19 @@ class PacienteAdmin(admin.ModelAdmin):
         actions = super().get_actions(request)
         actions.pop("delete_selected", None)
         return actions
+
+
+class PacienteAfiliacionInline(admin.TabularInline):
+    model = PacienteAfiliacion
+    extra = 0
+    fields = ("obra_social", "numero_afiliado", "es_principal", "activo")
+
+
+PacienteAdmin.inlines = [PacienteAfiliacionInline]
+
+
+@admin.register(PacienteAfiliacion)
+class PacienteAfiliacionAdmin(admin.ModelAdmin):
+    list_display = ("paciente", "obra_social", "numero_afiliado", "es_principal", "activo")
+    list_filter = ("es_principal", "activo")
+    search_fields = ("obra_social", "numero_afiliado", "paciente__dni", "paciente__apellido")

@@ -583,6 +583,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     estado_obra_social_display = serializers.SerializerMethodField()
     requiere_autorizacion_obra_social = serializers.SerializerMethodField()
     obra_social_permite_validar = serializers.SerializerMethodField()
+    obra_social_efectiva = serializers.SerializerMethodField()
+    afiliado_efectivo = serializers.SerializerMethodField()
     
     class Meta:
         model = SolicitudExamen
@@ -614,6 +616,10 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'estado_obra_social_display',
             'requiere_autorizacion_obra_social',
             'obra_social_permite_validar',
+            'obra_social_orden',
+            'afiliado_orden',
+            'obra_social_efectiva',
+            'afiliado_efectivo',
             'fecha_solicitud',
             'fecha_programada_toma',
             'fecha_toma_muestra',
@@ -644,6 +650,10 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'estado_obra_social_display',
             'requiere_autorizacion_obra_social',
             'obra_social_permite_validar',
+            'obra_social_orden',
+            'afiliado_orden',
+            'obra_social_efectiva',
+            'afiliado_efectivo',
             'paciente_nombre',
             'paciente_dni',
             'paciente_email',
@@ -903,6 +913,16 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
 
         return obra_social_permite_liberar(obj)
 
+    def get_obra_social_efectiva(self, obj):
+        from laboratorio.obra_social import obra_social_efectiva
+
+        return obra_social_efectiva(obj)[0]
+
+    def get_afiliado_efectivo(self, obj):
+        from laboratorio.obra_social import obra_social_efectiva
+
+        return obra_social_efectiva(obj)[1]
+
 
 class _SolicitudExamenSafeListSerializer(serializers.ListSerializer):
     """Una fila inválida no debe tumbar el listado completo (500 en /solicitudes)."""
@@ -949,7 +969,8 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
     pedido_adicional = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
     estado_obra_social_display = serializers.SerializerMethodField()
-
+    obra_social_efectiva = serializers.SerializerMethodField()
+    afiliado_efectivo = serializers.SerializerMethodField()
     class Meta:
         model = SolicitudExamen
         list_serializer_class = _SolicitudExamenSafeListSerializer
@@ -969,6 +990,10 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
             "estado",
             "estado_obra_social",
             "estado_obra_social_display",
+            "obra_social_orden",
+            "afiliado_orden",
+            "obra_social_efectiva",
+            "afiliado_efectivo",
             "fecha_solicitud",
             "fecha_programada_toma",
             "fecha_toma_muestra",
@@ -994,6 +1019,8 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
     get_pedido_adicional = SolicitudExamenSerializer.get_pedido_adicional
     get_tubos_pendientes_extraccion = SolicitudExamenSerializer.get_tubos_pendientes_extraccion
     get_estado_obra_social_display = SolicitudExamenSerializer.get_estado_obra_social_display
+    get_obra_social_efectiva = SolicitudExamenSerializer.get_obra_social_efectiva
+    get_afiliado_efectivo = SolicitudExamenSerializer.get_afiliado_efectivo
 
     def get_fecha_toma_muestra(self, obj):
         fechas = [
@@ -1080,6 +1107,28 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         required=False,
         default=False,
     )
+    # Snapshot OS del pedido (opcional; vacío → fallback ficha paciente en lectura).
+    obra_social = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Obra social a registrar en esta orden (y upsert en afiliaciones del paciente).",
+    )
+    numero_afiliado = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="N° de afiliado a registrar en esta orden.",
+    )
+    afiliacion_id = serializers.IntegerField(
+        write_only=True,
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Afiliación existente del paciente (opcional; prioridad sobre texto).",
+    )
     
     class Meta:
         model = SolicitudExamen
@@ -1096,6 +1145,9 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             'fecha_entrega_prometida',
             'observaciones',
             'repeticion_control',
+            'obra_social',
+            'numero_afiliado',
+            'afiliacion_id',
         ]
         read_only_fields = ['id']
         extra_kwargs = {
@@ -1185,6 +1237,10 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         paneles_ids = validated_data.pop('paneles_ids', [])
         repeticion_control = bool(validated_data.pop('repeticion_control', False))
         origen_explicito = validated_data.pop('origen_solicitud', None)
+        obra_social_in = validated_data.pop('obra_social', None)
+        numero_afiliado_in = validated_data.pop('numero_afiliado', None)
+        afiliacion_id = validated_data.pop('afiliacion_id', None)
+        # Campos write_only no están del modelo; se aplican al snapshot más abajo.
         paciente = validated_data.get('paciente')
         consulta_hc = validated_data.get('consulta_hc')
         fecha_toma = validated_data.get('fecha_programada_toma')
@@ -1257,6 +1313,45 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             assert_puede_agregar_ensayos(user, paciente.pk, tipos_resueltos)
         except RestriccionFrecuenciaError as exc:
             raise serializers.ValidationError(str(exc)) from exc
+
+        from pacientes.afiliaciones import (
+            normalizar_snapshot_os,
+            upsert_afiliacion,
+        )
+        from pacientes.models import PacienteAfiliacion
+
+        snap_os, snap_afil = "", ""
+        if afiliacion_id is not None:
+            try:
+                afil = PacienteAfiliacion.objects.get(
+                    pk=afiliacion_id, paciente_id=paciente.pk, activo=True
+                )
+            except PacienteAfiliacion.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"afiliacion_id": "Afiliación inexistente para este paciente."}
+                ) from exc
+            snap_os, snap_afil = afil.obra_social, afil.numero_afiliado or ""
+            upsert_afiliacion(
+                paciente,
+                obra_social=snap_os,
+                numero_afiliado=snap_afil,
+                marcar_principal=True,
+            )
+        elif obra_social_in is not None or numero_afiliado_in is not None:
+            snap_os, snap_afil = normalizar_snapshot_os(
+                obra_social_in, numero_afiliado_in
+            )
+            if snap_os:
+                upsert_afiliacion(
+                    paciente,
+                    obra_social=snap_os,
+                    numero_afiliado=snap_afil,
+                    marcar_principal=True,
+                )
+
+        if snap_os:
+            validated_data["obra_social_orden"] = snap_os
+            validated_data["afiliado_orden"] = snap_afil
 
         solicitud = SolicitudExamen.objects.create(**validated_data)
         solicitud._orden_merged = False

@@ -439,6 +439,21 @@ class SolicitudExamen(models.Model):
         verbose_name="Estado obra social",
         help_text="Situación de cobertura: autorizado, debe orden, falta autorización o debe abonar.",
     )
+    # Snapshot de OS al crear el pedido (nullable: órdenes previas usan ficha paciente).
+    obra_social_orden = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Obra social (orden)",
+        help_text="OS registrada al crear el pedido. Vacío → fallback a la ficha del paciente.",
+    )
+    afiliado_orden = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name="N° afiliado (orden)",
+        help_text="Afiliado registrado al crear el pedido. Vacío → fallback a la ficha del paciente.",
+    )
 
     # Fechas
     fecha_solicitud = models.DateTimeField(

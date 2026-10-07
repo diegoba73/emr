@@ -197,12 +197,12 @@ class EvolucionInternacionTestCase(APITestCase):
         ambulatoria.tipos_examen.add(tipo_examen)
         tipo_est = TipoEstudioComplementario.objects.create(
             nombre=f'RX torax {suffix}',
-            modalidad=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
+            practica=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
         )
         EstudioComplementario.objects.create(
             paciente=self.paciente,
             tipo_estudio=tipo_est,
-            modalidad=tipo_est.modalidad,
+            practica=tipo_est.practica,
             estado=EstudioComplementario.Estado.SOLICITADO,
             medico_solicitante=self.medico,
         )

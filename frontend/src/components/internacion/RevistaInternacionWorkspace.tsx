@@ -35,7 +35,7 @@ import {
   listTiposEstudioComplementario,
 } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../../modules/estudios/apiErrors';
-import { MODALIDAD_OPTIONS } from '../../modules/estudios/constants';
+import { PRACTICA_OPTIONS } from '../../modules/estudios/constants';
 import type {
   RevistaEstudioItem,
   RevistaInternacionContexto,
@@ -219,7 +219,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
     try {
       await createEstudioComplementario({
         paciente_id: paciente.id,
-        modalidad: selectedTipoEstudio.modalidad,
+        practica: selectedTipoEstudio.practica,
         tipo_estudio: selectedTipoEstudio.id > 0 ? selectedTipoEstudio.id : null,
         descripcion_clinica: estudioDesc.trim() || undefined,
         medico_solicitante: medicoId,
@@ -518,7 +518,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                       {formatFecha(ev.fecha)}
                     </Typography>
                     <Typography variant="body2">
-                      {est.tipo_nombre || est.modalidad}
+                      {est.tipo_nombre || est.practica}
                     </Typography>
                     <Chip size="small" label={est.estado} />
                     <Button
@@ -607,7 +607,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                 value={selectedTipoEstudio}
                 onChange={(_e, value) => setSelectedTipoEstudio(value)}
                 getOptionLabel={(t) => {
-                  const mod = MODALIDAD_OPTIONS.find((m) => m.value === t.modalidad)?.label;
+                  const mod = PRACTICA_OPTIONS.find((m) => m.value === t.practica)?.label;
                   return mod ? `${t.nombre} (${mod})` : t.nombre;
                 }}
                 isOptionEqualToValue={(a, b) => a.id === b.id}

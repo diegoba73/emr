@@ -9,6 +9,7 @@ export interface EstudioMicroResumenTabProps {
   canOperateTecnico: boolean;
   canMarcarInformado: boolean;
   canEditarObraSocial?: boolean;
+  canEditarOrden?: boolean;
   /** Impresión / reimpresión ZPL (post-recepción incluido; mismo diálogo que pendientes). */
   onReimprimirEtiquetas?: () => void;
   /** Talón A4 — no muta estado ni etiquetas_impresas_at. */
@@ -18,6 +19,7 @@ export interface EstudioMicroResumenTabProps {
   onCancelar: () => void;
   onMarcarInformado: () => void;
   onObraSocial?: () => void;
+  onEditarOrden?: () => void;
 }
 
 const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
@@ -25,6 +27,7 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   canOperateTecnico,
   canMarcarInformado,
   canEditarObraSocial = false,
+  canEditarOrden = false,
   onReimprimirEtiquetas,
   onImprimirTalon,
   downloadingTalon,
@@ -32,6 +35,7 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   onCancelar,
   onMarcarInformado,
   onObraSocial,
+  onEditarOrden,
 }) => {
   const e = estudio.estado;
   const tieneEtiqueta = Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
@@ -90,9 +94,15 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       {(canOperateTecnico ||
         canMarcarInformado ||
         canEditarObraSocial ||
+        canEditarOrden ||
         puedeImprimirEtiqueta ||
         puedeImprimirTalon) && (
         <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {canEditarOrden && onEditarOrden && (
+            <Button variant="outlined" onClick={onEditarOrden}>
+              Editar orden
+            </Button>
+          )}
           {canEditarObraSocial && onObraSocial && (
             <Button variant="outlined" onClick={onObraSocial}>
               Obra social

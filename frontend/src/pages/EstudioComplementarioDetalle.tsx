@@ -45,7 +45,7 @@ import {
   ARCHIVO_ROL_OPTIONS,
   ESTADO_CHIP_COLOR,
   ESTADO_LABELS,
-  MODALIDAD_OPTIONS,
+  PRACTICA_OPTIONS,
 } from '../modules/estudios/constants';
 import {
   canAccessEstudiosModule,
@@ -349,8 +349,8 @@ const EstudioComplementarioDetalle: React.FC = () => {
               Paciente: {pacienteLabel || `#${estudio.paciente_id}`}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Modalidad:{' '}
-              {MODALIDAD_OPTIONS.find((m) => m.value === estudio.modalidad)?.label || estudio.modalidad}
+              Práctica:{' '}
+              {PRACTICA_OPTIONS.find((m) => m.value === estudio.practica)?.label || estudio.practica}
               {estudio.tipo_estudio_nombre ? ` · ${estudio.tipo_estudio_nombre}` : ''}
             </Typography>
             {estudio.realizado_por_nombre && (

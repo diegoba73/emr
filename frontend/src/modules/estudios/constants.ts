@@ -1,6 +1,6 @@
-import type { EstudioEstado, EstudioModalidad } from '../../types/estudios';
+import type { EstudioEstado, EstudioPractica } from '../../types/estudios';
 
-export const MODALIDAD_OPTIONS: { value: EstudioModalidad; label: string }[] = [
+export const PRACTICA_OPTIONS: { value: EstudioPractica; label: string }[] = [
   { value: 'IMAGEN_RX', label: 'Rayos X' },
   { value: 'IMAGEN_TC', label: 'Tomografía' },
   { value: 'IMAGEN_RM', label: 'Resonancia' },
@@ -8,6 +8,9 @@ export const MODALIDAD_OPTIONS: { value: EstudioModalidad; label: string }[] = [
   { value: 'PDF_INFORME_EXTERNO', label: 'PDF / informe externo' },
   { value: 'OTRO', label: 'Otro' },
 ];
+
+/** @deprecated Use PRACTICA_OPTIONS */
+export const MODALIDAD_OPTIONS = PRACTICA_OPTIONS;
 
 export const ESTADO_LABELS: Record<EstudioEstado, string> = {
   SOLICITADO: 'Solicitado',

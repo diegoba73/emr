@@ -8,7 +8,7 @@ import {
 import { createEstudiosMicrobiologiaBatch } from '../../services/limsMicroApi';
 import { createEstudioComplementario } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../estudios/apiErrors';
-import type { EstudioModalidad } from '../../types/estudios';
+import type { EstudioPractica } from '../../types/estudios';
 
 export interface DraftSolicitudLab {
   id: string;
@@ -39,7 +39,7 @@ export interface DraftPedidoMicro {
 export interface DraftEstudioComplementario {
   id: string;
   tipo_estudio_id?: number;
-  modalidad: EstudioModalidad;
+  practica: EstudioPractica;
   tipo_label: string;
   descripcion_clinica?: string;
 }
@@ -293,7 +293,7 @@ export async function flushConsultaPedidosDrafts(
     try {
       await createEstudioComplementario({
         paciente_id: pacienteId,
-        modalidad: est.modalidad,
+        practica: est.practica,
         tipo_estudio: est.tipo_estudio_id,
         consulta_hc: consultaHcId,
         medico_solicitante: medicoId ?? undefined,

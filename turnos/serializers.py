@@ -286,7 +286,7 @@ class TurnoSerializer(serializers.ModelSerializer):
         return {
             'id': ec.id,
             'estado': ec.estado,
-            'modalidad': ec.modalidad,
+            'practica': ec.practica,
             'tipo_estudio_nombre': tipo_nombre,
             'medico_solicitante_id': med_sol_id,
         }

@@ -7,6 +7,7 @@ import type { EstudioMicrobiologia } from '../../types/lims';
 import { readNavBackState } from '../../utils/navBack';
 import {
   cancelarEstudioMicrobiologia,
+  desvalidarEstudioMicrobiologia,
   getEstudioMicrobiologia,
   iniciarEstudioMicrobiologia,
   listAisladosMicrobiologicos,
@@ -33,12 +34,14 @@ import {
   canOperateMicrobiologia,
   canOperateMicroEstudioTecnico,
   canValidarInformeMicro,
+  estudioMicroPuedeDesvalidar,
   isMicroEstudioCerrado,
   isSecretariaEntregaLab,
 } from '../../utils/limsAccess';
 import EstudioMicroPedidoRecepcionPanel from '../../components/lims/micro/EstudioMicroPedidoRecepcionPanel';
 import ImprimirPedidoMicroDialog from '../../components/lims/micro/ImprimirPedidoMicroDialog';
 import EstudioMicroResumenTab from '../../components/lims/micro/EstudioMicroResumenTab';
+import EditarEstudioMicroDialog from '../../components/lims/micro/EditarEstudioMicroDialog';
 import SiembrasLecturasPanel from '../../components/lims/micro/SiembrasLecturasPanel';
 import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIdentificacionPanel';
 import AntibiogramaPanel from '../../components/lims/micro/AntibiogramaPanel';
@@ -67,6 +70,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
   const [openImprimirEtiqueta, setOpenImprimirEtiqueta] = useState(false);
   const [openObraSocial, setOpenObraSocial] = useState(false);
+  const [openEditarOrden, setOpenEditarOrden] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
   const [bundle, setBundle] = useState({
@@ -361,6 +365,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onConfirmarRecepcion={() => void onConfirmarRecepcion()}
           onCancelar={onCancelar}
           onObraSocial={canOp ? () => setOpenObraSocial(true) : undefined}
+          onEditarOrden={canOp ? () => setOpenEditarOrden(true) : undefined}
         />
         <ImprimirPedidoMicroDialog
           open={openImprimirEtiqueta}
@@ -382,6 +387,17 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
             onSave={async (estado) => {
               const fresh = await patchEstadoObraSocialEstudio(estudio.id, estado);
               setEstudio(fresh);
+            }}
+          />
+        )}
+        {estudio && (
+          <EditarEstudioMicroDialog
+            open={openEditarOrden}
+            estudio={estudio}
+            onClose={() => setOpenEditarOrden(false)}
+            onSaved={(fresh) => {
+              setEstudio(fresh);
+              void loadAll();
             }}
           />
         )}
@@ -410,7 +426,47 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       </Tabs>
 
       {estudioCerrado && (
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            canVal && estudioMicroPuedeDesvalidar(estudio.estado) ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  openMotivoDialog({
+                    title: 'Reabrir estudio para corregir',
+                    label: 'Motivo de la reapertura (mín. 5 caracteres)',
+                    confirmLabel: 'Reabrir',
+                    onConfirm: async (motivo) => {
+                      if (motivo.trim().length < 5) {
+                        toast.error('Indicá un motivo de la reapertura (mínimo 5 caracteres).');
+                        throw new Error('motivo_corto');
+                      }
+                      try {
+                        const fresh = await desvalidarEstudioMicrobiologia(estudioId, motivo);
+                        setEstudio(fresh);
+                        toast.success(
+                          'Estudio reabierto. Corregí lo necesario y volvé a validar el informe.'
+                        );
+                        await loadAll();
+                        setTab('informes');
+                      } catch (e) {
+                        toast.error(
+                          getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarEstudioMicro)
+                        );
+                        throw e;
+                      }
+                    },
+                  });
+                }}
+              >
+                Reabrir para corregir
+              </Button>
+            ) : undefined
+          }
+        >
           El estudio microbiológico está cerrado. Las operaciones técnicas están bloqueadas.
         </Alert>
       )}
@@ -445,7 +501,9 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
             void runEstudio(() => marcarEstudioMicrobiologiaInformado(estudioId))
           }
           canEditarObraSocial={canOp}
+          canEditarOrden={canOpEstudio}
           onObraSocial={() => setOpenObraSocial(true)}
+          onEditarOrden={() => setOpenEditarOrden(true)}
           onReimprimirEtiquetas={canOp ? onReimprimir : undefined}
           onImprimirTalon={canOp ? () => void onImprimirTalon() : undefined}
           downloadingTalon={downloadingTalon}
@@ -524,6 +582,15 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         onSave={async (estado) => {
           const fresh = await patchEstadoObraSocialEstudio(estudio.id, estado);
           setEstudio(fresh);
+        }}
+      />
+      <EditarEstudioMicroDialog
+        open={openEditarOrden}
+        estudio={estudio}
+        onClose={() => setOpenEditarOrden(false)}
+        onSaved={(fresh) => {
+          setEstudio(fresh);
+          void loadAll();
         }}
       />
     </Box>

@@ -24,7 +24,7 @@ def get_normalized_role(user):
 class LimsCatalogReadPermission(permissions.BasePermission):
     """
     Lectura de catálogos LIMS (tipos de muestra, exámenes, paneles).
-    Roles: admin, laboratorio, médico (+ superuser).
+    Roles: admin, laboratorio, médico, secretaría, enfermería (+ superuser).
     Sin acceso: anónimo y paciente. Los ViewSets son ReadOnly; métodos no seguros se niegan.
     """
     _roles_read = ROLES_LIMS_CATALOG_READ
@@ -243,17 +243,17 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'list':
             return role in _LIMS_SOLICITUD_READ_ROLES
         if action == 'create':
-            return role in (*ROLES_LIMS_WRITE, 'medico')
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'agregar_examenes':
-            return role in (*ROLES_LIMS_WRITE, 'medico')
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'quitar_examenes':
             return role in ROLES_LIMS_WRITE
         if action == 'orden_abierta':
             return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria', 'enfermeria')
         if action == 'restricciones_ensayos':
-            return role in (*ROLES_LIMS_WRITE, 'medico')
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'repeticion_control':
-            return role in (*ROLES_LIMS_WRITE, 'medico')
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'marcar_derivacion':
             return role in ROLES_LIMS_WRITE
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):
@@ -273,7 +273,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action in ('finalizar', 'validar', 'desvalidar'):
             return role in ROLES_LIMS_VALIDAR
         if action == 'tubos_preview':
-            return role in (*ROLES_LIMS_WRITE, 'medico')
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'etiqueta':
             return role in ROLES_LIMS_WRITE
         if action == 'etiquetas_muestras':
@@ -326,7 +326,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'agregar_examenes':
             if role in ROLES_LIMS_WRITE:
                 return True
-            if role == 'medico':
+            if role in ('medico', 'secretaria'):
                 return usuario_puede_ver_solicitud_lims(request.user, obj)
             return False
 
@@ -575,7 +575,7 @@ def filter_atencion_queryset_for_user(user, queryset):
     if _atencion_is_staff_or_admin(user):
         return queryset
     role = get_normalized_role(user)
-    if role == 'enfermeria':
+    if role in ('enfermeria', 'secretaria'):
         return queryset
     medico = _atencion_user_medico(user)
     if medico is not None:
@@ -592,9 +592,10 @@ class AtencionPermission(permissions.BasePermission):
 
     - admin/staff/superuser: operación completa (destroy bloqueado en view).
     - médico: lectura/escritura solo en atenciones donde es médico principal.
+    - secretaría: lectura/escritura global (guardia: iniciar, pedidos, cerrar).
     - enfermería: solo lectura global (coordinación asistencial; sin mutación clínica).
     - paciente: solo lectura de propias atenciones.
-    - secretaría, laboratorio, sin rol, anónimo: denegado.
+    - laboratorio, sin rol, anónimo: denegado.
     """
 
     def has_permission(self, request, view):
@@ -605,7 +606,7 @@ class AtencionPermission(permissions.BasePermission):
             return True
 
         role = get_normalized_role(user)
-        if not role or role in ('secretaria', *ROLES_LIMS_OPERADOR):
+        if not role or role in ROLES_LIMS_OPERADOR:
             return False
 
         action = getattr(view, 'action', None)
@@ -616,6 +617,12 @@ class AtencionPermission(permissions.BasePermission):
             return action in _ATENCION_READ_ACTIONS
         if role == 'paciente':
             return action in _ATENCION_READ_ACTIONS
+        if role == 'secretaria':
+            return action in (
+                _ATENCION_READ_ACTIONS
+                | _ATENCION_WRITE_ACTIONS
+                | _ATENCION_CLINICAL_ACTIONS
+            )
         if role == 'medico':
             from medicos.ambito import user_medico_es_solo_ambulatorio
             if action == 'iniciar_guardia' and user_medico_es_solo_ambulatorio(user):
@@ -642,6 +649,13 @@ class AtencionPermission(permissions.BasePermission):
 
         if role == 'enfermeria':
             return action in _ATENCION_READ_ACTIONS
+
+        if role == 'secretaria':
+            return action in (
+                _ATENCION_READ_ACTIONS
+                | _ATENCION_WRITE_ACTIONS
+                | _ATENCION_CLINICAL_ACTIONS
+            )
 
         if role == 'paciente':
             if action not in _ATENCION_READ_ACTIONS:
@@ -1006,7 +1020,15 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         if role == "secretaria":
             if type(view).__name__ != "EstudioMicrobiologiaViewSet":
                 return False
-            return action in ("list", "retrieve", "informe_pdf", "enviar_informe")
+            # Pedido clínico (guardia/mostrador) + entrega de informe validado.
+            return action in (
+                "list",
+                "retrieve",
+                "create",
+                "batch",
+                "informe_pdf",
+                "enviar_informe",
+            )
         if action in ("list", "retrieve", "por_codigo"):
             return True
         # Pedido clínico: médico solo puede crear estudios (no siembras/lecturas/etc.).
@@ -1019,6 +1041,9 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             return False
         if action in ("update", "partial_update"):
             return role in ROLES_LIMS_WRITE
+        if action == "desvalidar":
+            # Misma barra que validar informe: solo bioquímico / admin.
+            return role in ROLES_LIMS_VALIDAR
         if action in (
             "iniciar",
             "cancelar",

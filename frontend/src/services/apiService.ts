@@ -509,6 +509,41 @@ export const deleteMedico = async (id: number): Promise<void> => {
   }
 };
 
+export const getProfesionales = async (): Promise<import('../types').Profesional[]> => {
+  const response = await api.get('/profesionales/', { params: { page_size: 500 } });
+  if (response.data.results) {
+    let all = [...response.data.results];
+    let nextUrl = response.data.next;
+    while (nextUrl) {
+      const relativeUrl = normalizeUrl(nextUrl);
+      const nextResponse = await api.get(relativeUrl);
+      all = [...all, ...nextResponse.data.results];
+      nextUrl = nextResponse.data.next;
+    }
+    return all;
+  }
+  return response.data;
+};
+
+export const createProfesional = async (
+  data: Partial<import('../types').Profesional> & { especialidad_id?: number }
+): Promise<import('../types').Profesional> => {
+  const response = await api.post('/profesionales/', data);
+  return response.data;
+};
+
+export const updateProfesional = async (
+  id: number,
+  data: Partial<import('../types').Profesional> & { especialidad_id?: number }
+): Promise<import('../types').Profesional> => {
+  const response = await api.patch(`/profesionales/${id}/`, data);
+  return response.data;
+};
+
+export const deleteProfesional = async (id: number): Promise<void> => {
+  await api.delete(`/profesionales/${id}/`);
+};
+
 // Diagnósticos CIE-10 - CRUD (médicos y admin) - SIEMPRE obtener TODOS
 export const getDiagnosticosCIE10 = async (): Promise<DiagnosticoCIE10[]> => {
   try {

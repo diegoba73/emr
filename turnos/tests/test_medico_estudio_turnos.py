@@ -82,7 +82,7 @@ class TestMedicoEsDuenoTurnoUnit(TestCase):
         )
         cls.tipo = TipoEstudioComplementario.objects.create(
             nombre='Eco abdominal',
-            modalidad=TipoEstudioComplementario.Modalidad.IMAGEN_US,
+            practica=TipoEstudioComplementario.Modalidad.IMAGEN_US,
         )
         cls.sala = _sala('unit')
         cls.consultorio = _consultorio('unit')
@@ -103,7 +103,7 @@ class TestMedicoEsDuenoTurnoUnit(TestCase):
         estudio = EstudioComplementario.objects.create(
             paciente=self.paciente,
             tipo_estudio=self.tipo,
-            modalidad=self.tipo.modalidad,
+            practica=self.tipo.practica,
             estado=EstudioComplementario.Estado.SOLICITADO,
             medico_solicitante=self.medico,
         )
@@ -130,7 +130,7 @@ class TestMedicoEsDuenoTurnoUnit(TestCase):
         estudio = EstudioComplementario.objects.create(
             paciente=self.paciente,
             tipo_estudio=self.tipo,
-            modalidad=self.tipo.modalidad,
+            practica=self.tipo.practica,
             estado=EstudioComplementario.Estado.SOLICITADO,
             medico_solicitante=None,
         )
@@ -161,7 +161,7 @@ class TestMedicoEstudioTurnoApi(APITestCase):
         )
         cls.tipo = TipoEstudioComplementario.objects.create(
             nombre='RX Tórax API',
-            modalidad=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
+            practica=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
         )
         cls.sala = _sala('api')
         cls.consultorio = _consultorio('api')
@@ -183,7 +183,7 @@ class TestMedicoEstudioTurnoApi(APITestCase):
         cls.estudio = EstudioComplementario.objects.create(
             paciente=cls.paciente,
             tipo_estudio=cls.tipo,
-            modalidad=cls.tipo.modalidad,
+            practica=cls.tipo.practica,
             estado=EstudioComplementario.Estado.SOLICITADO,
             medico_solicitante=cls.medico,
         )
@@ -291,12 +291,12 @@ class TestSecretariaEstudiosSoloLectura(APITestCase):
         )
         cls.tipo = TipoEstudioComplementario.objects.create(
             nombre='TAC',
-            modalidad=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
+            practica=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
         )
         cls.estudio = EstudioComplementario.objects.create(
             paciente=cls.paciente,
             tipo_estudio=cls.tipo,
-            modalidad=cls.tipo.modalidad,
+            practica=cls.tipo.practica,
             estado=EstudioComplementario.Estado.SOLICITADO,
             medico_solicitante=cls.medico,
         )
@@ -327,7 +327,7 @@ class TestSecretariaEstudiosSoloLectura(APITestCase):
             {
                 'paciente_id': self.paciente.id,
                 'tipo_estudio': self.tipo.id,
-                'modalidad': self.tipo.modalidad,
+                'practica': self.tipo.practica,
                 'origen': 'INTERNO',
             },
             format='json',

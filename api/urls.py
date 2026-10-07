@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from pacientes.views import PacienteViewSet
 from medicos.views import MedicoViewSet, EspecialidadViewSet
+from profesionales.views import ProfesionalViewSet
 from catalogos.views import CentroFisicoViewSet, TipoAtencionViewSet
 from turnos.views import TurnoViewSet, RecursoViewSet, AtencionViewSet, EvolucionInternacionViewSet
 from historias_clinicas.views import HistoriaClinicaViewSet, ConsultaViewSet
@@ -82,6 +83,7 @@ from .views_bi import BiKpisView
 router = DefaultRouter()
 router.register(r'pacientes', PacienteViewSet, basename='pacientes')
 router.register(r'medicos', MedicoViewSet, basename='medicos')
+router.register(r'profesionales', ProfesionalViewSet, basename='profesionales')
 router.register(r'especialidades', EspecialidadViewSet, basename='especialidades')
 router.register(r'centros-fisicos', CentroFisicoViewSet, basename='centros-fisicos')
 router.register(r'tipos-atencion', TipoAtencionViewSet, basename='tipos-atencion')

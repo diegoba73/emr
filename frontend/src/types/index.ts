@@ -68,6 +68,16 @@ export interface UpdateCurrentUserPayload {
 }
 
 // Pacientes
+export interface PacienteAfiliacion {
+  id: number;
+  obra_social: string;
+  numero_afiliado?: string;
+  es_principal: boolean;
+  activo: boolean;
+  creado_en?: string;
+  actualizado_en?: string;
+}
+
 export interface Paciente extends BaseModel {
   nombre: string;
   apellido: string;
@@ -82,6 +92,8 @@ export interface Paciente extends BaseModel {
   familiar_telefono?: string;
   obra_social?: string;
   numero_afiliado?: string;
+  /** Afiliaciones activas (multi-OS). La principal se refleja en obra_social/numero_afiliado. */
+  afiliaciones?: PacienteAfiliacion[];
   observaciones?: string;
   antecedentes_personales?: string;
   antecedentes_familiares?: string;
@@ -105,6 +117,18 @@ export interface Medico extends BaseModel {
   telefono?: string;
   email?: string;
   activo: boolean;
+  nombre_completo?: string;
+}
+
+/** Directorio de profesionales no médicos (nutrición, kinesiología, etc.). */
+export interface Profesional extends BaseModel {
+  nombre: string;
+  apellido: string;
+  matricula: string;
+  especialidad?: Especialidad | null;
+  especialidad_nombre?: string | null;
+  telefono?: string;
+  email?: string;
   nombre_completo?: string;
 }
 
@@ -512,7 +536,7 @@ export interface Turno extends BaseModel {
   estudio_complementario?: {
     id: number;
     estado: string;
-    modalidad?: string;
+    practica?: string;
     tipo_estudio_nombre?: string | null;
     medico_solicitante_id?: number | null;
   } | null;
@@ -558,7 +582,7 @@ export interface ConsultaArchivoResumen {
 
 export interface ConsultaEstudioResumen {
   id: number;
-  modalidad: string;
+  practica: string;
   estado: string;
   tipo_estudio_nombre?: string | null;
   fecha_solicitud?: string | null;

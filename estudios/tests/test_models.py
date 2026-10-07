@@ -14,7 +14,7 @@ def test_crear_estudio_valido(paciente, tipo_estudio, admin_user):
     e = EstudioComplementario.objects.create(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         creado_por=admin_user,
     )
     assert e.estado == EstudioComplementario.Estado.SOLICITADO
@@ -46,7 +46,7 @@ def test_atencion_otro_paciente_rechazada(paciente, otro_paciente, tipo_estudio,
     e = EstudioComplementario(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         atencion=atencion,
     )
     with pytest.raises(ValidationError):
@@ -69,7 +69,7 @@ def test_consulta_otro_paciente_rechazada(paciente, otro_paciente, tipo_estudio,
     e = EstudioComplementario(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         consulta_hc=consulta,
     )
     with pytest.raises(ValidationError):
@@ -89,7 +89,7 @@ def test_solicitud_otro_paciente_rechazada(paciente, otro_paciente, tipo_estudio
     e = EstudioComplementario(
         paciente=paciente,
         tipo_estudio=tipo_estudio,
-        modalidad=tipo_estudio.modalidad,
+        practica=tipo_estudio.practica,
         solicitud_emr=sol,
     )
     with pytest.raises(ValidationError):

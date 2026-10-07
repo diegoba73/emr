@@ -6,9 +6,13 @@ import uuid
 import pytest
 from django.test import TestCase
 
+from reportlab.platypus import PageBreak
+
 from laboratorio.informe_pdf_layout import (
     agrupar_resultados_por_panel,
+    construir_story_icpl,
     generar_pdf_icpl_bytes,
+    _grupo_es_solo_probnp,
     _metodo_texto,
     _referencia_texto,
     _valor_y_unidad,
@@ -191,4 +195,101 @@ class TestInformePdfProteinograma(TestCase):
         for item in flow:
             inner = getattr(item, "_content", None) or getattr(item, "content", None) or []
             self.assertFalse(any(isinstance(x, Drawing) for x in inner))
+
+
+@pytest.mark.django_db
+class TestInformePdfProbnpHojaPropia(TestCase):
+    """Pro-BNP debe ir solo en una hoja del PDF (no en UI)."""
+
+    def setUp(self):
+        tag = uuid.uuid4().hex[:6]
+        self.tm = TipoMuestra.objects.create(codigo=f"S{tag}", nombre="Suero", activo=True)
+        self.te_glu = TipoExamen.objects.create(
+            codigo=f"GLU{tag}",
+            nombre="Glucemia",
+            tipo_muestra_requerida=self.tm,
+            unidad_default="mg/dl",
+            precio=1,
+            activo=True,
+        )
+        self.te_probnp, _ = TipoExamen.objects.get_or_create(
+            codigo="PROBNP",
+            defaults={
+                "nombre": "Pro-BNP",
+                "tipo_muestra_requerida": self.tm,
+                "unidad_default": "pg/mL",
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        self.paciente = Paciente.objects.create(dni=f"P{tag}", nombre="Juan", apellido="Bnp")
+        self.sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        self.sol.tipos_examen.add(self.te_glu, self.te_probnp)
+        self.r_glu = ResultadoExamen.objects.create(
+            solicitud=self.sol, tipo_examen=self.te_glu, valor_obtenido="90", unidad="mg/dl"
+        )
+        self.r_probnp = ResultadoExamen.objects.create(
+            solicitud=self.sol, tipo_examen=self.te_probnp, valor_obtenido="80", unidad="pg/mL"
+        )
+
+    def test_grupo_es_solo_probnp(self):
+        from laboratorio.informe_pdf_layout import GrupoResultadosPdf
+
+        g = GrupoResultadosPdf(
+            key=f"resultado-{self.r_probnp.id}",
+            titulo="Pro-BNP",
+            resultados=[self.r_probnp],
+        )
+        self.assertTrue(_grupo_es_solo_probnp(g))
+        g2 = GrupoResultadosPdf(
+            key=f"resultado-{self.r_glu.id}",
+            titulo="Glucemia",
+            resultados=[self.r_glu],
+        )
+        self.assertFalse(_grupo_es_solo_probnp(g2))
+
+    def test_story_aisla_probnp_con_page_breaks(self):
+        resultados = list(
+            self.sol.resultados.select_related("tipo_examen", "tipo_examen__tipo_muestra_requerida")
+        )
+        grupos = agrupar_resultados_por_panel(self.sol, resultados)
+        self.assertTrue(any(_grupo_es_solo_probnp(g) for g in grupos))
+
+        story = construir_story_icpl(self.sol, resultados)
+        breaks = [i for i, x in enumerate(story) if isinstance(x, PageBreak)]
+        # Con GLU + PROBNP: un PageBreak entre ambos; la validación no abre otra hoja.
+        self.assertEqual(len(breaks), 1)
+
+        pdf = generar_pdf_icpl_bytes(self.sol, resultados)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 800)
+
+    def test_validacion_no_queda_en_hoja_sola_tras_probnp(self):
+        """FINALIZADO: el pie de validación sigue en la hoja de Pro-BNP, sin PageBreak extra."""
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        User = get_user_model()
+        bio = User.objects.create_user(username=f"bio_{uuid.uuid4().hex[:6]}", password="x")
+        self.sol.estado = "FINALIZADO"
+        self.sol.save(update_fields=["estado"])
+        self.r_probnp.validado_por = bio
+        self.r_probnp.fecha_validacion = timezone.now()
+        self.r_probnp.save(update_fields=["validado_por", "fecha_validacion"])
+
+        resultados = list(
+            self.sol.resultados.select_related(
+                "tipo_examen", "tipo_examen__tipo_muestra_requerida", "validado_por"
+            )
+        )
+        story = construir_story_icpl(self.sol, resultados)
+        breaks = [i for i, x in enumerate(story) if isinstance(x, PageBreak)]
+        self.assertEqual(len(breaks), 1)
+        self.assertFalse(isinstance(story[-1], PageBreak))
+        # Tras el único PageBreak no debe haber otro salto antes del cierre.
+        self.assertFalse(any(isinstance(x, PageBreak) for x in story[breaks[0] + 1 :]))
 

@@ -23,14 +23,16 @@ class EstudioComplementarioPermission(permissions.BasePermission):
                 return True
             return usuario_puede_ver_estudios_agenda(request.user)
         action = getattr(view, 'action', None)
+        rol = str(getattr(request.user, 'rol', '') or '').lower()
         if action in ('asignar_turno', 'agendar_turno'):
             return usuario_puede_asignar_turno_estudio(request.user)
         if action == 'enviar_informe':
-            return usuario_puede_escribir_estudio(request.user) or str(getattr(request.user, 'rol', '') or '').lower() == 'secretaria'
+            return usuario_puede_escribir_estudio(request.user) or rol == 'secretaria'
         if action == 'entregar':
-            return usuario_puede_escribir_estudio(request.user) or (
-                str(getattr(request.user, 'rol', '') or '').lower() == 'secretaria'
-            )
+            return usuario_puede_escribir_estudio(request.user) or rol == 'secretaria'
+        # Secretaría puede solicitar (create) desde guardia/mostrador; no opera el estudio.
+        if action == 'create' or (action is None and request.method == 'POST'):
+            return usuario_puede_escribir_estudio(request.user) or rol == 'secretaria'
         return usuario_puede_escribir_estudio(request.user)
 
     def has_object_permission(self, request, view, obj):
@@ -65,6 +67,7 @@ class EstudioComplementarioPermission(permissions.BasePermission):
             )
         if obj.es_terminal:
             return False
+        # PATCH genérico: solo quien opera el estudio (no secretaría).
         return usuario_puede_ver_estudio_clinico(request.user, obj) and usuario_puede_escribir_estudio(
             request.user
         )
@@ -72,4 +75,8 @@ class EstudioComplementarioPermission(permissions.BasePermission):
 
 class EstudioComplementarioCreatePermission(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and usuario_puede_escribir_estudio(request.user)
+        if not request.user.is_authenticated:
+            return False
+        if usuario_puede_escribir_estudio(request.user):
+            return True
+        return str(getattr(request.user, 'rol', '') or '').lower() == 'secretaria'

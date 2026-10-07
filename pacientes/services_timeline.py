@@ -230,12 +230,12 @@ def build_paciente_timeline(paciente_id: int, user=None) -> list[dict[str, Any]]
     try:
         from estudios.models import EstudioComplementario
         for e in EstudioComplementario.objects.filter(paciente_id=paciente_id).only(
-            'id', 'estado', 'fecha_solicitud', 'modalidad'
+            'id', 'estado', 'fecha_solicitud', 'practica'
         ):
             events.append({
                 'id': f'estudio-comp-{e.id}',
                 'type': 'estudio',
-                'title': f'Estudio complementario ({e.modalidad or "IMG"})',
+                'title': f'Estudio complementario ({e.practica or "IMG"})',
                 'subtitle': e.estado,
                 'date': _iso(getattr(e, 'fecha_solicitud', None) or getattr(e, 'created_at', None)),
                 'navigate_to': f'/estudios-complementarios/{e.id}',

@@ -65,7 +65,7 @@ class TipoEstudioComplementarioViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nombre', 'codigo', 'descripcion']
-    ordering_fields = ['nombre', 'modalidad']
+    ordering_fields = ['nombre', 'practica']
     ordering = ['nombre']
 
 
@@ -83,7 +83,7 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, EstudioComplementarioPermission]
     authentication_classes = [JWTAuthentication, SessionAuthentication]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['paciente', 'estado', 'modalidad', 'atencion', 'consulta_hc']
+    filterset_fields = ['paciente', 'estado', 'practica', 'atencion', 'consulta_hc']
     search_fields = [
         'paciente__nombre',
         'paciente__apellido',

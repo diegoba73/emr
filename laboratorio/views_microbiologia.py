@@ -38,6 +38,7 @@ from laboratorio.microbiologia_estado import (
     aplicar_descartar_aislado,
     aplicar_emitir_informe,
     aplicar_iniciar_estudio,
+    aplicar_desvalidar_estudio_micro,
     aplicar_marcar_estudio_informado,
     aplicar_validar_informe_final,
     crear_aislado,
@@ -394,6 +395,8 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 origen_solicitud=vd.get("_origen_solicitud") or "",
                 consulta_hc=vd.get("_consulta_hc"),
                 fecha_programada_toma=vd.get("fecha_programada_toma"),
+                obra_social_orden=vd.get("_obra_social_orden") or "",
+                afiliado_orden=vd.get("_afiliado_orden") or "",
             )
         except MicrobiologiaAccionError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -706,6 +709,31 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 int(pk),
                 actor=request.user,
                 view="EstudioMicrobiologiaViewSet.marcar_informado",
+            )
+        except EstudioMicrobiologia.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            EstudioMicrobiologiaSerializer(estudio, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="desvalidar")
+    def desvalidar(self, request, pk=None):
+        """
+        Reabre un estudio VALIDADO/INFORMADO → LISTO_PARA_VALIDAR (bioquímico/admin).
+        Exige motivo (≥5 chars). El informe FINAL vuelve a EMITIDO.
+        """
+        motivo = ""
+        if hasattr(request, "data") and request.data is not None:
+            motivo = str(request.data.get("motivo", "") or "")
+        try:
+            estudio = aplicar_desvalidar_estudio_micro(
+                int(pk),
+                actor=request.user,
+                view="EstudioMicrobiologiaViewSet.desvalidar",
+                motivo=motivo,
             )
         except EstudioMicrobiologia.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)

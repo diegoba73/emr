@@ -275,7 +275,7 @@ class ArchivoConsultaResumenSerializer(serializers.Serializer):
 
 class EstudioConsultaResumenSerializer(serializers.Serializer):
     id = serializers.IntegerField()
-    modalidad = serializers.CharField()
+    practica = serializers.CharField()
     estado = serializers.CharField()
     tipo_estudio_nombre = serializers.CharField(allow_null=True)
     fecha_solicitud = serializers.DateTimeField(allow_null=True)
@@ -376,7 +376,7 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
         for est in estudios:
             data.append({
                 'id': est.id,
-                'modalidad': est.modalidad,
+                'practica': est.practica,
                 'estado': est.estado,
                 'tipo_estudio_nombre': est.tipo_estudio.nombre if est.tipo_estudio else None,
                 'fecha_solicitud': est.fecha_solicitud,

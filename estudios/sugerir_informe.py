@@ -10,10 +10,9 @@ from datetime import date
 from typing import Any
 
 from estudios.models import EstudioComplementario, TipoEstudioComplementario
+from estudios.practicas_cehta import PRACTICA_LABELS
 
-_MODALIDAD_LABEL = dict(TipoEstudioComplementario.Modalidad.choices)
-
-_TECNICA_POR_MODALIDAD = {
+_TECNICA_POR_PRACTICA = {
     TipoEstudioComplementario.Modalidad.IMAGEN_RX: (
         'Radiografía. Técnica y proyecciones a completar según protocolo local.'
     ),
@@ -47,21 +46,21 @@ def _contexto_estudio(estudio: EstudioComplementario) -> dict[str, Any]:
     tipo_nombre = ''
     if estudio.tipo_estudio_id:
         tipo_nombre = estudio.tipo_estudio.nombre or ''
-    modalidad_label = _MODALIDAD_LABEL.get(estudio.modalidad, estudio.modalidad)
+    practica_label = PRACTICA_LABELS.get(estudio.practica, estudio.practica)
     paciente = estudio.paciente
     edad = _edad_anos(paciente)
     sexo = (getattr(paciente, 'sexo', None) or '').strip() or None
     return {
-        'modalidad': estudio.modalidad,
-        'modalidad_label': modalidad_label,
+        'practica': estudio.practica,
+        'practica_label': practica_label,
         'tipo_estudio': tipo_nombre,
         'descripcion_clinica': (estudio.descripcion_clinica or '').strip(),
         'centro': (estudio.centro_realizador or '').strip(),
         'edad': edad,
         'sexo': sexo,
-        'tecnica_hint': _TECNICA_POR_MODALIDAD.get(
-            estudio.modalidad,
-            _TECNICA_POR_MODALIDAD[TipoEstudioComplementario.Modalidad.OTRO],
+        'tecnica_hint': _TECNICA_POR_PRACTICA.get(
+            estudio.practica,
+            _TECNICA_POR_PRACTICA[TipoEstudioComplementario.Modalidad.OTRO],
         ),
     }
 
@@ -84,7 +83,7 @@ def construir_informe_estudio_reglas(
     lineas = [
         'INFORME DE ESTUDIO COMPLEMENTARIO (borrador sugerido — revisar)',
         '',
-        f'Modalidad: {ctx["modalidad_label"]}',
+        f'Práctica: {ctx["practica_label"]}',
     ]
     if ctx['tipo_estudio']:
         lineas.append(f'Estudio: {ctx["tipo_estudio"]}')
@@ -121,7 +120,7 @@ def construir_informe_estudio_reglas(
         'marcado_sugerencia': True,
         'vacio': False,
         'detalle': {
-            'modalidad': ctx['modalidad'],
+            'practica': ctx['practica'],
             'con_notas_medico': bool(notas),
         },
     }
@@ -137,7 +136,7 @@ def _build_prompt_informe(estudio: EstudioComplementario, *, notas_medico: str, 
         'No menciones nombre, DNI ni datos identificatorios del paciente.',
         'No firmes el informe ni lo presentes como validado.',
         '',
-        f'Modalidad: {ctx["modalidad_label"]}',
+        f'Práctica: {ctx["practica_label"]}',
     ]
     if ctx['tipo_estudio']:
         lines.append(f'Tipo de estudio: {ctx["tipo_estudio"]}')
@@ -184,7 +183,7 @@ def sugerir_informe_estudio(
         med = {
             **med,
             'detalle': {
-                'modalidad': estudio.modalidad,
+                'practica': estudio.practica,
                 'con_notas_medico': bool((notas_medico or '').strip()),
             },
         }

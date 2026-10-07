@@ -125,6 +125,9 @@ export const createEstudiosMicrobiologiaBatch = (body: {
   observaciones?: string;
   fecha_programada_toma: string;
   items: Array<{ tipo_cultivo_id: number; tipo_muestra_micro_id: number }>;
+  obra_social?: string;
+  numero_afiliado?: string;
+  afiliacion_id?: number | null;
 }) =>
   apiClient
     .post<EstudioMicrobiologia[]>(`${MICRO}/estudios/batch/`, body)
@@ -208,6 +211,13 @@ export const updateEstudioMicrobiologia = (
     tipo_estudio?: string;
     observaciones?: string;
     examen_orina?: Record<string, string>;
+    fecha_programada_toma?: string;
+    paciente_id?: number;
+    medico_id?: number | null;
+    medico_externo_nombre?: string;
+    tipo_cultivo_id?: number;
+    tipo_muestra_micro_id?: number;
+    origen_solicitud?: string;
   }
 ) => apiClient.patch<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`, body).then((r) => r.data);
 export const iniciarEstudioMicrobiologia = (id: number) =>
@@ -216,6 +226,10 @@ export const cancelarEstudioMicrobiologia = (id: number, motivo: string) =>
   apiClient.post<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/cancelar/`, { motivo }).then((r) => r.data);
 export const marcarEstudioMicrobiologiaInformado = (id: number) =>
   apiClient.post<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/marcar-informado/`, {}).then((r) => r.data);
+export const desvalidarEstudioMicrobiologia = (id: number, motivo: string) =>
+  apiClient
+    .post<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/desvalidar/`, { motivo })
+    .then((r) => r.data);
 
 // --- Siembras ---
 export const listSiembrasMicrobiologia = (params?: { estudio_id?: number }) =>

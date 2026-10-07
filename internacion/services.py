@@ -249,7 +249,7 @@ class InternacionClinicalService:
             estudios.append({
                 'id': est.pk,
                 'estado': est.estado,
-                'modalidad': est.modalidad,
+                'practica': est.practica,
                 'tipo_nombre': tipo.nombre if tipo else None,
                 'fecha_solicitud': fecha_sol.isoformat() if fecha_sol else None,
                 'fecha_realizacion': est.fecha_realizacion.isoformat() if est.fecha_realizacion else None,

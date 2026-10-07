@@ -22,6 +22,7 @@ import Register from './pages/Register';
 import DemoLanding from './pages/DemoLanding';
 import DemoTourHost from './demo/DemoTourHost';
 import Medicos from './pages/Medicos';
+import Profesionales from './pages/Profesionales';
 import GestionUsuarios from './pages/GestionUsuarios';
 import Perfil from './pages/Perfil';
 import Recursos from './pages/Recursos';
@@ -450,6 +451,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessMedicos}
               >
                 <Medicos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profesionales"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessMedicos}
+              >
+                <Profesionales />
               </ProtectedRoute>
             }
           />

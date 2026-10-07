@@ -91,6 +91,7 @@ const navItems: NavItem[] = [
   { text: 'Inicio', icon: <HomeIcon />, path: '/dashboard', canAccess: (u) => !isPacienteRole(u), resolveLabel: () => getHomeNavLabel() },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', canAccess: canAccessPacientes },
   { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', canAccess: canAccessMedicos },
+  { text: 'Profesionales', icon: <PeopleIcon />, path: '/profesionales', canAccess: canAccessMedicos },
   { text: 'Horarios de atención', icon: <CalendarIcon />, path: '/horarios-medicos', canAccess: canManageHorarios },
   { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
   { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessGuardia },
