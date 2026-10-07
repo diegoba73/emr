@@ -791,14 +791,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     ]
   );
 
-  if (resultados.length === 0) {
-    return (
-      <Typography color="text.secondary" sx={{ py: 2 }}>
-        Esta orden no tiene resultados generados (tipos/paneles vacíos al crear).
-      </Typography>
-    );
-  }
-
   const fechaExtraccionLabel = useMemo(() => {
     if (orden.fecha_toma_muestra) {
       try {
@@ -826,6 +818,14 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   }, [orden.fecha_toma_muestra, orden.fecha_programada_toma, muestras]);
 
   const diagnosticoLabel = (orden.diagnostico || '').trim() || '—';
+
+  if (resultados.length === 0) {
+    return (
+      <Typography color="text.secondary" sx={{ py: 2 }}>
+        Esta orden no tiene resultados generados (tipos/paneles vacíos al crear).
+      </Typography>
+    );
+  }
 
   return (
     <Box>
