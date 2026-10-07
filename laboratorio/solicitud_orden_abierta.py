@@ -114,7 +114,7 @@ def orden_permite_intentar_agregar_examenes(solicitud: SolicitudExamen) -> bool:
 def orden_permite_quitar_examenes(solicitud: SolicitudExamen) -> bool:
     """PENDIENTE o en curso: se puede intentar quitar (el backend valida resultados)."""
     estado = getattr(solicitud, "estado", None)
-    if estado == "FINALIZADO":
+    if estado in ("FINALIZADO", "CANCELADO"):
         return False
     return estado == "PENDIENTE" or estado in ESTADOS_ORDEN_EN_CURSO
 
@@ -165,7 +165,7 @@ def paciente_tiene_orden_activa_mismo_dia(
     qs = SolicitudExamen.objects.filter(
         paciente_id=paciente_id,
         fecha_programada_toma=fecha_programada_toma,
-    ).exclude(estado="FINALIZADO")
+    ).exclude(estado__in=("FINALIZADO", "CANCELADO"))
     if exclude_solicitud_id is not None:
         qs = qs.exclude(pk=exclude_solicitud_id)
     return qs.exists()
@@ -186,13 +186,13 @@ def paciente_tiene_analisis_internacion_sin_finalizar(
             paciente_id=paciente_id,
             origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
             fecha_programada_toma=fecha_programada_toma,
-        ).exclude(estado="FINALIZADO")
+        ).exclude(estado__in=("FINALIZADO", "CANCELADO"))
         return qs.exists()
 
     qs = SolicitudExamen.objects.filter(
         paciente_id=paciente_id,
         origen_solicitud__in=(INTERNACION_UCO, INTERNACION_UCE),
-    ).exclude(estado="FINALIZADO")
+    ).exclude(estado__in=("FINALIZADO", "CANCELADO"))
     return qs.exists()
 
 

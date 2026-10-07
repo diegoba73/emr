@@ -4,6 +4,10 @@ import {
   Autocomplete,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   InputLabel,
   MenuItem,
@@ -31,6 +35,10 @@ import {
   completarAntibiograma,
   createAntibiograma,
   createResultadoAntibiotico,
+  deleteAntibiograma,
+  deleteResultadoAntibiotico,
+  updateAntibiograma,
+  updateResultadoAntibiotico,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { AntibiogramaEstadoBadge, InterpretacionAntibioticoBadge } from './MicroBadges';
@@ -93,6 +101,18 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
   const [metodoRes, setMetodoRes] = useState('');
   const [estandar, setEstandar] = useState('');
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
+  const [editAb, setEditAb] = useState<Antibiograma | null>(null);
+  const [editAbForm, setEditAbForm] = useState({ metodo: '', observaciones: '' });
+  const [editRes, setEditRes] = useState<ResultadoAntibiotico | null>(null);
+  const [editResForm, setEditResForm] = useState({
+    interpretacion: 'S',
+    mic: '',
+    halo_mm: '',
+    metodo: '',
+    estandar_version: '',
+    observaciones: '',
+  });
+  const [editSaving, setEditSaving] = useState(false);
 
   const microById = useMemo(() => {
     const map = new Map<number, Microorganismo>();
@@ -208,6 +228,98 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
         }
       },
     });
+  };
+
+  const eliminarAb = async (ab: Antibiograma) => {
+    const nRes = resultados.filter((r) => r.antibiograma === ab.id).length;
+    const msg =
+      nRes > 0
+        ? `¿Eliminar antibiograma #${ab.id}? También se eliminarán ${nRes} resultado(s). Esta acción no se puede deshacer.`
+        : `¿Eliminar antibiograma #${ab.id}? Esta acción no se puede deshacer.`;
+    if (!window.confirm(msg)) return;
+    try {
+      await deleteAntibiograma(ab.id);
+      toast.success('Antibiograma eliminado');
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsEliminarRegistroMicro));
+    }
+  };
+
+  const eliminarResultado = async (r: ResultadoAntibiotico) => {
+    if (
+      !window.confirm(
+        `¿Eliminar resultado #${r.id}? Esta acción no se puede deshacer.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteResultadoAntibiotico(r.id);
+      toast.success('Resultado eliminado');
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsEliminarRegistroMicro));
+    }
+  };
+
+  const openEditarAb = (ab: Antibiograma) => {
+    setEditAb(ab);
+    setEditAbForm({ metodo: ab.metodo || '', observaciones: ab.observaciones || '' });
+  };
+
+  const guardarAb = async () => {
+    if (!editAb) return;
+    setEditSaving(true);
+    try {
+      await updateAntibiograma(editAb.id, {
+        metodo: editAbForm.metodo,
+        observaciones: editAbForm.observaciones,
+      });
+      toast.success('Antibiograma actualizado');
+      setEditAb(null);
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarAntibiograma));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const openEditarRes = (r: ResultadoAntibiotico) => {
+    setEditRes(r);
+    setEditResForm({
+      interpretacion: r.interpretacion || 'S',
+      mic: r.mic || '',
+      halo_mm: r.halo_mm != null && r.halo_mm !== '' ? String(r.halo_mm) : '',
+      metodo: r.metodo || '',
+      estandar_version: r.estandar_version || '',
+      observaciones: r.observaciones || '',
+    });
+  };
+
+  const guardarRes = async () => {
+    if (!editRes) return;
+    setEditSaving(true);
+    try {
+      await updateResultadoAntibiotico(editRes.id, {
+        interpretacion: editResForm.interpretacion,
+        mic: editResForm.mic,
+        halo_mm: editResForm.halo_mm || null,
+        metodo: editResForm.metodo,
+        estandar_version: editResForm.estandar_version,
+        observaciones: editResForm.observaciones,
+      });
+      toast.success('Resultado actualizado');
+      setEditRes(null);
+      onRefresh();
+    } catch (e) {
+      toast.error(
+        getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultadoAntibiograma)
+      );
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   return (
@@ -361,16 +473,24 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                     <AntibiogramaEstadoBadge estado={ab.estado} />
                   </TableCell>
                   <TableCell>{ab.metodo || '—'}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     {canOperate && ab.estado !== 'COMPLETO' && ab.estado !== 'CANCELADO' && (
                       <>
+                        <Button size="small" onClick={() => openEditarAb(ab)}>
+                          Editar
+                        </Button>
                         <Button size="small" onClick={() => completar(ab.id)}>
                           Completar
                         </Button>
-                        <Button size="small" color="error" onClick={() => cancelar(ab.id)}>
+                        <Button size="small" color="warning" onClick={() => cancelar(ab.id)}>
                           Cancelar
                         </Button>
                       </>
+                    )}
+                    {canOperate && (
+                      <Button size="small" color="error" onClick={() => eliminarAb(ab)}>
+                        Eliminar
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>
@@ -392,13 +512,15 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
               <TableCell>Halo</TableCell>
               <TableCell>MIC</TableCell>
               <TableCell>Método</TableCell>
+              <TableCell>Estándar</TableCell>
               <TableCell>Interp.</TableCell>
+              {canOperate && <TableCell />}
             </TableRow>
           </TableHead>
           <TableBody>
             {resultados.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={canOperate ? 8 : 7}>
                   <Typography color="text.secondary">Sin resultados.</Typography>
                 </TableCell>
               </TableRow>
@@ -420,6 +542,25 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                     <TableCell>
                       <InterpretacionAntibioticoBadge interpretacion={r.interpretacion} />
                     </TableCell>
+                    {canOperate && (
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Button
+                          size="small"
+                          onClick={() => openEditarRes(r)}
+                          disabled={
+                            antibiogramas.find((a) => a.id === r.antibiograma)?.estado ===
+                              'COMPLETO' ||
+                            antibiogramas.find((a) => a.id === r.antibiograma)?.estado ===
+                              'CANCELADO'
+                          }
+                        >
+                          Editar
+                        </Button>
+                        <Button size="small" color="error" onClick={() => eliminarResultado(r)}>
+                          Eliminar
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })
@@ -427,6 +568,102 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog open={Boolean(editAb)} onClose={() => setEditAb(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Editar antibiograma #{editAb?.id}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <TextField
+              size="small"
+              label="Método"
+              value={editAbForm.metodo}
+              onChange={(e) => setEditAbForm((f) => ({ ...f, metodo: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Observaciones"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editAbForm.observaciones}
+              onChange={(e) => setEditAbForm((f) => ({ ...f, observaciones: e.target.value }))}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditAb(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={guardarAb} disabled={editSaving}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(editRes)} onClose={() => setEditRes(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Editar resultado #{editRes?.id}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Interpretación</InputLabel>
+              <Select
+                label="Interpretación"
+                value={editResForm.interpretacion}
+                onChange={(e) =>
+                  setEditResForm((f) => ({ ...f, interpretacion: e.target.value }))
+                }
+              >
+                {INTERPRETACIONES.map((i) => (
+                  <MenuItem key={i} value={i}>
+                    {i}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="MIC/CIM"
+              value={editResForm.mic}
+              onChange={(e) => setEditResForm((f) => ({ ...f, mic: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Halo (mm)"
+              value={editResForm.halo_mm}
+              onChange={(e) => setEditResForm((f) => ({ ...f, halo_mm: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Método"
+              value={editResForm.metodo}
+              onChange={(e) => setEditResForm((f) => ({ ...f, metodo: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Estándar/versión"
+              value={editResForm.estandar_version}
+              onChange={(e) =>
+                setEditResForm((f) => ({ ...f, estandar_version: e.target.value }))
+              }
+            />
+            <TextField
+              size="small"
+              label="Observaciones"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editResForm.observaciones}
+              onChange={(e) =>
+                setEditResForm((f) => ({ ...f, observaciones: e.target.value }))
+              }
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditRes(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={guardarRes} disabled={editSaving}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <MotivoDialog {...dialogProps} />
     </Box>

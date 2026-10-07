@@ -539,7 +539,7 @@ def _sincronizar_orden_tras_tubo_terminal(
     from laboratorio.solicitud_cierre import sincronizar_estado_tras_carga
 
     sol = getattr(muestra, "solicitud", None)
-    if sol is None or sol.estado == "FINALIZADO":
+    if sol is None or sol.estado in ("FINALIZADO", "CANCELADO"):
         return
     sincronizar_estado_tras_carga(sol, actor=actor, view=view)
 

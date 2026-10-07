@@ -122,8 +122,10 @@ export const CLINICAL_ACTION_ERRORS = {
   camaActualizar: 'No se pudo actualizar la cama. Revisá los datos ingresados o intentá nuevamente.',
   limsDescartarAislado: 'No se pudo descartar el aislado. Intentá nuevamente.',
   limsAnularInforme: 'No se pudo anular el informe. Intentá nuevamente.',
+  limsEliminarRegistroMicro: 'No se pudo eliminar el registro. Intentá nuevamente.',
   limsCancelarAntibiograma: 'No se pudo cancelar el antibiograma. Intentá nuevamente.',
   limsCancelarEstudioMicro: 'No se pudo cancelar el estudio. Intentá nuevamente.',
+  limsCancelarOrden: 'No se pudo cancelar la orden. Intentá nuevamente.',
 
   limsCargarEstudio: 'No se pudo cargar el estudio. Intentá nuevamente.',
   limsGuardarSiembra: 'No se pudo registrar la siembra. Intentá nuevamente.',

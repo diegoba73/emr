@@ -355,6 +355,7 @@ class SolicitudExamen(models.Model):
         ('INFORMADO_PARCIAL', 'Informe parcial'),
         ('LISTO_PARA_VALIDAR', 'Listo para validar'),
         ('FINALIZADO', 'Finalizado'),
+        ('CANCELADO', 'Cancelado'),
     ]
 
     # Identificador único generado automáticamente
@@ -518,6 +519,25 @@ class SolicitudExamen(models.Model):
         blank=True,
         verbose_name="Orden de grupos en informe",
         help_text="Lista de claves panel-{id} o resultado-{id} para el orden en el PDF.",
+    )
+
+    cancelado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='solicitudes_examen_canceladas',
+        verbose_name="Cancelado por",
+    )
+    fecha_cancelacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha de cancelación",
+    )
+    motivo_cancelacion = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Motivo de cancelación",
     )
 
     class Meta:
@@ -741,9 +761,9 @@ class ResultadoExamen(models.Model):
         Validación: Un resultado no puede cargarse si la solicitud está cancelada.
         Si hay muestra: misma solicitud, mismo paciente, no estados terminales inválidos.
         """
-        if self.solicitud.estado == 'FINALIZADO' and not self.pk:
+        if self.solicitud.estado in ('FINALIZADO', 'CANCELADO') and not self.pk:
             raise ValidationError({
-                'solicitud': 'No se pueden agregar resultados a una solicitud finalizada.'
+                'solicitud': 'No se pueden agregar resultados a una solicitud finalizada o cancelada.'
             })
         if self.pk:
             prev = (

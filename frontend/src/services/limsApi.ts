@@ -476,6 +476,18 @@ export async function postDesvalidarSolicitud(
   return data;
 }
 
+/** Cancela una orden abierta (operadores LIMS). Exige motivo. */
+export async function postCancelarSolicitud(
+  id: number,
+  motivo: string
+): Promise<SolicitudExamenLims> {
+  const { data } = await apiClient.post<SolicitudExamenLims>(
+    `${LAB}/solicitudes/${id}/cancelar/`,
+    { motivo }
+  );
+  return data;
+}
+
 /** @deprecated Usar postValidarSolicitud */
 export async function postFinalizarOrden(
   id: number,

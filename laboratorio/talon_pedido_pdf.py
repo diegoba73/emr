@@ -232,6 +232,7 @@ class TalonHalfData:
     examenes: list[str]
     codigo_barra: str
     tubo_label: str = ""
+    fecha_extraccion: str = ""
 
 
 def _draw_footer(c: canvas.Canvas) -> None:
@@ -315,6 +316,7 @@ def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
             _campo("DNI", data.dni)
             _campo("Lugar", data.lugar)
             _campo("Médico", data.medico)
+            _campo("F. extracción", data.fecha_extraccion or "—")
             _campo("Código", data.codigo_barra or "(sin código aún)")
             y -= line * 0.25
 
@@ -368,8 +370,8 @@ def _codigo_barra_orden(muestras: list[Muestra]) -> str:
     return _trunc(joined, 90)
 
 
-def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
-    """Un talón por orden (todos los paneles/exámenes; 1 PDF page-set, no por tubo)."""
+def construir_talon_solicitud(solicitud: SolicitudExamen) -> TalonHalfData:
+    """Arma los datos del talón clínico (sin renderizar PDF)."""
     sol = (
         SolicitudExamen.objects.select_related(
             "paciente",
@@ -385,6 +387,8 @@ def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
         )
         .get(pk=solicitud.pk)
     )
+    from laboratorio.orden_cabecera import fecha_extraccion_display
+
     pac_nombre, dni = _fmt_paciente(sol.paciente)
     medico = _fmt_medico(sol.medico_interno)
     examenes = _examenes_solicitud(sol) or ["—"]
@@ -397,7 +401,7 @@ def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
     elif n_tubos > 1:
         tubo_label = f"{n_tubos} tubos"
 
-    talon = TalonHalfData(
+    return TalonHalfData(
         titulo="Pedido clínico — talón por orden",
         numero_pedido=sol.numero or str(sol.pk),
         paciente_nombre=pac_nombre,
@@ -407,8 +411,13 @@ def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
         examenes=examenes,
         codigo_barra=_codigo_barra_orden(muestras),
         tubo_label=tubo_label or ("Sin tubos generados aún" if not muestras else ""),
+        fecha_extraccion=fecha_extraccion_display(sol),
     )
-    return _render_talones_pdf([talon])
+
+
+def generar_talon_solicitud_pdf_bytes(solicitud: SolicitudExamen) -> bytes:
+    """Un talón por orden (todos los paneles/exámenes; 1 PDF page-set, no por tubo)."""
+    return _render_talones_pdf([construir_talon_solicitud(solicitud)])
 
 
 def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> bytes:
@@ -423,8 +432,13 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
             "consulta_hc__turno__recurso",
         ).get(pk=estudio.pk)
     )
+    from laboratorio.orden_cabecera import formatear_fecha_extraccion
+
     pac_nombre, dni = _fmt_paciente(est.paciente)
     codigo = (est.codigo_barra or est.numero or "").strip()
+    fecha_ext = formatear_fecha_extraccion(
+        getattr(est, "fecha_inicio", None) or getattr(est, "created_at", None)
+    )
     talon = TalonHalfData(
         titulo="Pedido microbiología — talón por orden",
         numero_pedido=est.numero or str(est.pk),
@@ -435,6 +449,7 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
         examenes=_examenes_micro(est),
         codigo_barra=codigo,
         tubo_label="Cultivo",
+        fecha_extraccion=fecha_ext or "—",
     )
     return _render_talones_pdf([talon])
 

@@ -476,5 +476,75 @@ def desvalidar_solicitud_manual(
         )
 
 
+def cancelar_solicitud_manual(
+    solicitud: SolicitudExamen,
+    *,
+    actor: AbstractUser | None,
+    view: str,
+    motivo: str = "",
+) -> None:
+    """
+    Cancela una orden abierta → CANCELADO. Motivo obligatorio (≥5 chars).
+
+    No borra ResultadoExamen. Cancela tubos no terminales de la orden.
+    No cancela desde FINALIZADO (usar desvalidar si hace falta reabrir).
+    """
+    from laboratorio.muestra_estado import aplicar_cancelar
+
+    motivo_limpio = (motivo or "").strip()
+    if len(motivo_limpio) < 5:
+        raise SolicitudCierreError(
+            "Indicá un motivo de cancelación (mínimo 5 caracteres)."
+        )
+    if solicitud.estado == "CANCELADO":
+        raise SolicitudCierreError("La orden ya está cancelada.")
+    if solicitud.estado == "FINALIZADO":
+        raise SolicitudEstadoTransitionError(
+            "No se puede cancelar una orden finalizada. "
+            "Si hace falta corregir, desvalidá primero."
+        )
+
+    apply_solicitud_estado_transition(
+        solicitud,
+        "CANCELADO",
+        actor=actor,
+        accion="cancelar",
+        view=view,
+        extra_metadata={
+            "motivo": motivo_limpio[:500],
+            "motivo_cancelacion_presente": True,
+        },
+    )
+
+    solicitud.fecha_cancelacion = timezone.now()
+    solicitud.motivo_cancelacion = motivo_limpio
+    if actor is not None and getattr(actor, "is_authenticated", False):
+        solicitud.cancelado_por = actor
+    else:
+        solicitud.cancelado_por = None
+    solicitud.save(
+        update_fields=["fecha_cancelacion", "motivo_cancelacion", "cancelado_por"]
+    )
+    solicitud.refresh_from_db()
+
+    terminales_muestra = frozenset({"DESCARTADA", "CANCELADA", "RECHAZADA"})
+    muestra_ids = list(
+        Muestra.objects.filter(solicitud_id=solicitud.pk)
+        .exclude(estado__in=terminales_muestra)
+        .values_list("pk", flat=True)
+    )
+    for mid in muestra_ids:
+        try:
+            aplicar_cancelar(
+                mid,
+                actor=actor,
+                view=view,
+                motivo=f"Orden cancelada: {motivo_limpio[:200]}",
+            )
+        except MuestraAccionError:
+            # Tubo ya terminal o no cancelable: no aborta la cancelación de orden.
+            continue
+
+
 def solicitud_permite_cargar_resultados(solicitud: SolicitudExamen) -> bool:
     return solicitud.estado in ESTADOS_SOLICITUD_EDITABLES

@@ -18,11 +18,13 @@ CODIGOS_SIN_RESENA: frozenset[str] = frozenset({
     "PAN_HEMO", "GLU", "UREA", "CREATI", "AU", "CA", "MG", "P", "FERR",
     "PAN_IONO", "CL", "CA_ION", "PAN_LIP", "PAN_HEP", "PROT_T", "ALB",
     "PAN_COAG", "INR", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
-    "CPK", "CPK_MB", "TROP_I", "MIOG", "TROP_US", "PROBNP", "DDIM",
+    "CPK", "CPK_MB", "TROP_I", "MIOG", "TROP_US", "PROBNP",
     "PAN_ORI", "PAN_CLEAR", "PAN_IONO_U24", "PAN_IONO_U", "PAN_PROT24",
     "PROT_U_AZ", "PAN_MALB24", "PAN_MALB_AZ", "PAN_EAB_ART", "PAN_EAB_VEN",
     "LACT",
 })
+# Nota: DDIM (Dímero D) NO está en el listado básico: la obra social suele
+# exigir justificación clínica; genera reseña al imprimir pedidos papel.
 
 # (clave de grupo, finalidad) por código. Exámenes del mismo grupo se redactan juntos.
 _FINALIDAD: dict[str, tuple[str, str]] = {
@@ -37,6 +39,7 @@ _FINALIDAD: dict[str, tuple[str, str]] = {
     "T4L": ("tiroides", "evaluar la función tiroidea"),
     "B12": ("b12", "descartar déficit de vitamina B12"),
     "VITD": ("vitd", "evaluar los niveles de vitamina D"),
+    "DDIM": ("tromboembolismo", "descartar enfermedad tromboembólica"),
 }
 _FINALIDAD_DEFAULT = ("otros", "completar la evaluación diagnóstica")
 
@@ -48,6 +51,8 @@ _FINALIDAD_POR_DX: list[tuple[tuple[str, ...], str, str]] = [
      "glucemia", "evaluar el control metabólico de la diabetes"),
     (("anemia",), "hierro", "caracterizar la anemia y evaluar el metabolismo del hierro"),
     (("anemia",), "b12", "descartar déficit de vitamina B12 como causa de anemia"),
+    (("tvp", "trombosis", "tep", "tromboembolismo", "embolia", "trombo"),
+     "tromboembolismo", "descartar enfermedad tromboembólica"),
 ]
 
 MAX_ANTECEDENTES = 220

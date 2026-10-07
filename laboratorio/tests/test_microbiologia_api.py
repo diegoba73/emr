@@ -1175,16 +1175,27 @@ class TestIdentificacionAPI(TestCase):
         r = self._post_identificacion()
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_identificacion_no_admite_patch(self):
+    def test_identificacion_admite_patch(self):
         self.client.force_authenticate(self.lab)
         r = self._post_identificacion()
         iid = r.json()["id"]
-        r2 = self.client.patch(
-            f"/api/lab/microbiologia/identificaciones/{iid}/",
-            {"resultado": "otro"},
-            format="json",
+        with self.captureOnCommitCallbacks(execute=True):
+            r2 = self.client.patch(
+                f"/api/lab/microbiologia/identificaciones/{iid}/",
+                {"resultado": "otro", "metodo": "VITEK"},
+                format="json",
+            )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
+        self.assertEqual(r2.json()["resultado"], "otro")
+        self.assertEqual(r2.json()["metodo"], "VITEK")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                entity_type=IdentificacionMicroorganismo._meta.label,
+                entity_id=str(iid),
+                action="UPDATE",
+                metadata__accion="actualizar_identificacion",
+            ).exists()
         )
-        self.assertEqual(r2.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_alias_laboratorio_identificaciones(self):
         self.client.force_authenticate(self.lab)

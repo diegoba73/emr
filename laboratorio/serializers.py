@@ -568,9 +568,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     procedencia_tipo = serializers.SerializerMethodField()
     procedencia_display = serializers.SerializerMethodField()
     origen_solicitud_display = serializers.SerializerMethodField()
-    fecha_toma_muestra = serializers.DateTimeField(
-        read_only=True, required=False, allow_null=True
-    )
+    fecha_toma_muestra = serializers.SerializerMethodField()
+    diagnostico = serializers.SerializerMethodField()
     extraccion_completa = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
     orden_abierta = serializers.SerializerMethodField()
@@ -623,11 +622,15 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'fecha_solicitud',
             'fecha_programada_toma',
             'fecha_toma_muestra',
+            'diagnostico',
             'fecha_entrega_prometida',
             'observaciones',
             'fecha_informe_enviado',
             'informe_enviado_email',
             'informe_enviado_whatsapp',
+            'fecha_cancelacion',
+            'motivo_cancelacion',
+            'cancelado_por',
             'consulta_hc',
             'resultados',
             'orden_grupos_informe',
@@ -645,6 +648,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'id',
             'numero',
             'fecha_solicitud',
+            'fecha_toma_muestra',
+            'diagnostico',
             'estado',
             'estado_obra_social',
             'estado_obra_social_display',
@@ -654,6 +659,9 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'afiliado_orden',
             'obra_social_efectiva',
             'afiliado_efectivo',
+            'fecha_cancelacion',
+            'motivo_cancelacion',
+            'cancelado_por',
             'paciente_nombre',
             'paciente_dni',
             'paciente_email',
@@ -803,6 +811,23 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         if muestras is None:
             return []
         return list(muestras.all()) if hasattr(muestras, 'all') else list(muestras)
+
+    def get_fecha_toma_muestra(self, obj):
+        fechas = [
+            getattr(m, "fecha_toma", None)
+            for m in self._muestras_prefetched(obj)
+            if getattr(m, "fecha_toma", None)
+        ]
+        return max(fechas) if fechas else None
+
+    def get_diagnostico(self, obj):
+        from laboratorio.orden_cabecera import diagnostico_orden_display
+
+        try:
+            return diagnostico_orden_display(obj)
+        except Exception:
+            logger.exception("diagnostico solicitud=%s", getattr(obj, "pk", None))
+            return "—"
 
     def get_extraccion_completa(self, obj):
         terminales = {'RECHAZADA', 'DESCARTADA', 'CANCELADA'}

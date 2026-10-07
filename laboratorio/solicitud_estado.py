@@ -8,6 +8,7 @@ LISTO_PARA_VALIDAR → FINALIZADO (validar bioquímico)
 LISTO_PARA_VALIDAR → EN_PROCESO (reabrir si queda valor vacío)
 INFORMADO_PARCIAL → EN_PROCESO (si se borran todos los valores informados)
 FINALIZADO → LISTO_PARA_VALIDAR (desvalidar / reabrir para corrección)
+PENDIENTE | EN_PROCESO | INFORMADO_PARCIAL | LISTO_PARA_VALIDAR → CANCELADO (cancelar)
 """
 from __future__ import annotations
 
@@ -40,11 +41,15 @@ _ALLOWED_TRANSITIONS: frozenset[tuple[str, str, str]] = frozenset(
         ("finalizar", "LISTO_PARA_VALIDAR", "FINALIZADO"),
         ("finalizar_auto", "LISTO_PARA_VALIDAR", "FINALIZADO"),
         ("desvalidar", "FINALIZADO", "LISTO_PARA_VALIDAR"),
+        ("cancelar", "PENDIENTE", "CANCELADO"),
+        ("cancelar", "EN_PROCESO", "CANCELADO"),
+        ("cancelar", "INFORMADO_PARCIAL", "CANCELADO"),
+        ("cancelar", "LISTO_PARA_VALIDAR", "CANCELADO"),
     }
 )
 
-# Cierre clínico habitual; la salida es solo vía acción explícita ``desvalidar``.
-ESTADOS_SOLICITUD_TERMINALES = frozenset({"FINALIZADO"})
+# Cierre clínico: FINALIZADO (informe) o CANCELADO (aborto). Desvalidar solo desde FINALIZADO.
+ESTADOS_SOLICITUD_TERMINALES = frozenset({"FINALIZADO", "CANCELADO"})
 
 ESTADOS_SOLICITUD_EDITABLES = frozenset(
     {"EN_PROCESO", "INFORMADO_PARCIAL", "LISTO_PARA_VALIDAR"}

@@ -5,6 +5,7 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -107,6 +108,22 @@ class TestTalonPedidoClinicoApi(TestCase):
         self.assertNotIn(b"cortar", pdf)
         pages = pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages")
         self.assertEqual(pages, 1)
+
+    def test_talon_incluye_fecha_extraccion_en_datos(self):
+        from laboratorio.orden_cabecera import fecha_extraccion_display
+        from laboratorio.talon_pedido_pdf import (
+            construir_talon_solicitud,
+            generar_talon_solicitud_pdf_bytes,
+        )
+
+        self.sol.fecha_programada_toma = timezone.localdate()
+        self.sol.save(update_fields=["fecha_programada_toma"])
+        data = construir_talon_solicitud(self.sol)
+        esperado = fecha_extraccion_display(self.sol)
+        self.assertEqual(data.fecha_extraccion, esperado)
+        self.assertNotEqual(data.fecha_extraccion, "—")
+        pdf = generar_talon_solicitud_pdf_bytes(self.sol)
+        self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_talon_dos_muestras_una_pagina_por_orden(self):
         """Dos tubos → 1 página (un talón por orden, no por tubo)."""

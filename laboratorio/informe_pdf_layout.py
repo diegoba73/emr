@@ -45,7 +45,7 @@ from laboratorio.proteinograma import PANEL_ELP
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
 # Título/logo + separación + caja de datos del paciente (tipografía +2 pt).
-HEADER_HEIGHT = 5.05 * cm
+HEADER_HEIGHT = 5.5 * cm
 CONTENT_TOP_PAD = 0.25 * cm
 # Separación visual entre subtítulo institucional y caja de paciente.
 HEADER_PACIENTE_GAP = 0.38 * cm
@@ -456,8 +456,10 @@ class _InformeIcplDoc(BaseDocTemplate):
         row("Fecha informe", ctx["fecha"], doc.leftMargin + 0.25 * cm, y)
         row("Documento", ctx["documento"], mid_x, y)
         y -= row_step
-        row("Derivante", ctx["derivante"], doc.leftMargin + 0.25 * cm, y)
+        row("F. extracción", ctx.get("fecha_extraccion") or "—", doc.leftMargin + 0.25 * cm, y)
         row("Edad / F. nac.", ctx["fecha_nac"], mid_x, y)
+        y -= row_step
+        row("Derivante", ctx["derivante"], doc.leftMargin + 0.25 * cm, y)
 
         canvas.setLineWidth(0.8)
         canvas.line(doc.leftMargin, box_bottom - 0.08 * cm, w - doc.rightMargin, box_bottom - 0.08 * cm)
@@ -931,6 +933,8 @@ def construir_story_icpl(
 
 
 def preparar_contexto_encabezado(solicitud: SolicitudExamen) -> dict[str, Any]:
+    from laboratorio.orden_cabecera import fecha_extraccion_display
+
     paciente = solicitud.paciente
     procedencia = resolver_procedencia_solicitud(solicitud)
     solicitado, derivante = _derivante_y_solicitante(procedencia)
@@ -943,6 +947,7 @@ def preparar_contexto_encabezado(solicitud: SolicitudExamen) -> dict[str, Any]:
         "solicitado_por": solicitado,
         "derivante": derivante,
         "fecha": formatear_fecha_larga(solicitud.fecha_solicitud),
+        "fecha_extraccion": fecha_extraccion_display(solicitud),
         "paciente": formatear_paciente_apellido_nombre(paciente),
         "historia_clinica": hc or "—",
         "documento": str(getattr(paciente, "dni", "") or "—"),

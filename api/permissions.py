@@ -272,6 +272,8 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             return role in (*ROLES_LIMS_WRITE, 'secretaria')
         if action in ('finalizar', 'validar', 'desvalidar'):
             return role in ROLES_LIMS_VALIDAR
+        if action == 'cancelar':
+            return role in ROLES_LIMS_WRITE
         if action == 'tubos_preview':
             return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'etiqueta':
@@ -338,6 +340,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
 
         if action in ('finalizar', 'validar', 'desvalidar'):
             return role in ROLES_LIMS_VALIDAR
+
+        if action == 'cancelar':
+            return role in ROLES_LIMS_WRITE
 
         if action == 'tubos_preview':
             return usuario_puede_ver_solicitud_lims(request.user, obj)
@@ -995,8 +1000,8 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
     """
     Estudios microbiológicos, siembras y lecturas — LIMS Fase B3.1.
 
-    - admin / superuser: acceso total a list/retrieve/create/update y acciones.
-    - laboratorio / bioquímico: list/retrieve/create/update y acciones técnicas.
+    - admin / superuser: acceso total a list/retrieve/create/update/destroy y acciones.
+    - laboratorio / bioquímico: list/retrieve/create/update/destroy y acciones técnicas.
     - médico: list/retrieve; además puede **solicitar** estudios (create/batch)
       desde consulta/mostrador (pedido clínico). No opera el flujo técnico
       (iniciar, siembras, etiquetas, etc.).
@@ -1069,7 +1074,8 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             # Público con token; el método no exige auth.
             return True
         if action == "destroy":
-            return False
+            # Hard delete clínico (siembra/lectura/aislado/AB/resultado): operadores LIMS.
+            return role in ROLES_LIMS_WRITE
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -1079,6 +1085,9 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             return True
         role = get_normalized_role(request.user)
         action = getattr(view, "action", None)
+
+        if action == "destroy":
+            return role in ROLES_LIMS_WRITE
 
         if action == "informe_pdf":
             estudio = obj if hasattr(obj, "medico_interno_id") else getattr(obj, "estudio", None)
@@ -1119,7 +1128,7 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
     """
     Informes de microbiología (B3.4).
 
-    - bioquímico / admin: crear, completar (emitir), anular y validar; ven todo.
+    - bioquímico / admin: crear, completar (emitir), anular, validar y eliminar; ven todo.
     - laboratorio / médico / enfermería: solo list/retrieve de informes
       **VALIDADO**; no ven borradores ni emitidos pendientes.
     - secretaría: lectura de informes validados y PDF/envío sobre el estudio.
@@ -1142,12 +1151,11 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
             "emitir",
             "anular",
             "validar",
+            "destroy",
         ):
             return role in ROLES_LIMS_VALIDAR
         if action in ("list", "retrieve"):
             return role in self._read_roles
-        if action == "destroy":
-            return False
         return False
 
     def has_object_permission(self, request, view, obj):
@@ -1163,6 +1171,7 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
             "emitir",
             "anular",
             "validar",
+            "destroy",
         ):
             return role in ROLES_LIMS_VALIDAR
         if action in ("retrieve", "list"):

@@ -7,9 +7,9 @@ Reglas:
 - El estado del estudio NO se modifica por PATCH/PUT directo (campo read-only
   en el serializer); las transiciones ocurren sólo aquí.
 - Patrón de auditoría idéntico a ``muestra_estado``: ``transaction.atomic`` +
-  ``select_for_update`` + ``safe_model_snapshot`` + ``log_create``/``log_update``
-  con ``transaction.on_commit``.
-- B3.1 no incluye microorganismos, aislados, antibiograma ni informes.
+  ``select_for_update`` + ``safe_model_snapshot`` + ``log_create``/``log_update``/
+  ``log_delete`` con ``transaction.on_commit``.
+- Hard delete clínico en cascada (siembra→…→resultados, informes) vía ``eliminar_*``.
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ from typing import TYPE_CHECKING, Any
 from django.db import transaction
 from django.utils import timezone
 
-from auditoria.audit_service import log_create, log_update
+from auditoria.audit_service import log_create, log_delete, log_update
 from auditoria.context import get_request_id
-from auditoria.snapshot import safe_model_snapshot
+from auditoria.snapshot import safe_entity_repr, safe_model_snapshot
 
 from laboratorio.models_microbiologia import (
     AisladoMicrobiologico,
@@ -1024,6 +1024,103 @@ def crear_identificacion(
         return identificacion
 
 
+def actualizar_identificacion(
+    identificacion_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+    microorganismo_id: int | None = None,
+    metodo: str | None = None,
+    resultado: str | None = None,
+    confianza=None,
+    observaciones: str | None = None,
+) -> IdentificacionMicroorganismo:
+    """PATCH de identificación; sincroniza microorganismo del aislado si cambia."""
+    with transaction.atomic():
+        identificacion = (
+            IdentificacionMicroorganismo.objects.select_for_update(of=("self",))
+            .select_related("aislado", "aislado__estudio", "microorganismo")
+            .get(pk=identificacion_id)
+        )
+        aislado = (
+            AisladoMicrobiologico.objects.select_for_update(of=("self",))
+            .select_related("estudio")
+            .get(pk=identificacion.aislado_id)
+        )
+        assert_estudio_micro_operable(aislado.estudio)
+        if aislado.estado == "DESCARTADO":
+            raise MicrobiologiaAccionError(
+                "No se puede editar la identificación de un aislado descartado."
+            )
+
+        before = safe_model_snapshot(identificacion)
+        micro_changed = False
+        if microorganismo_id is not None:
+            try:
+                microorganismo = Microorganismo.objects.get(pk=microorganismo_id)
+            except Microorganismo.DoesNotExist as exc:
+                raise MicrobiologiaAccionError("El microorganismo no existe.") from exc
+            if not microorganismo.activo:
+                raise MicrobiologiaAccionError("El microorganismo debe estar activo.")
+            if identificacion.microorganismo_id != microorganismo.pk:
+                identificacion.microorganismo = microorganismo
+                micro_changed = True
+        if metodo is not None:
+            identificacion.metodo = metodo or ""
+        if resultado is not None:
+            identificacion.resultado = resultado or ""
+        if confianza is not None:
+            identificacion.confianza = confianza
+        if observaciones is not None:
+            identificacion.observaciones = observaciones or ""
+        identificacion.save()
+        identificacion.refresh_from_db()
+
+        if micro_changed:
+            before_aislado = safe_model_snapshot(aislado)
+            aislado.microorganismo = identificacion.microorganismo
+            if aislado.estado == "SOSPECHADO":
+                aislado.estado = "IDENTIFICADO"
+            aislado.save()
+            log_update(
+                actor=actor,
+                entity=aislado,
+                before=before_aislado,
+                module="laboratorio",
+                metadata={
+                    "accion": "sync_micro_desde_editar_identificacion",
+                    "aislado_id": aislado.pk,
+                    "identificacion_id": identificacion.pk,
+                    "microorganismo_id": identificacion.microorganismo_id,
+                    "estudio_id": aislado.estudio_id,
+                    "view": view,
+                },
+            )
+
+        rid = get_request_id()
+        meta: dict[str, Any] = {
+            "accion": "actualizar_identificacion",
+            "identificacion_id": identificacion.pk,
+            "aislado_id": aislado.pk,
+            "estudio_id": aislado.estudio_id,
+            "microorganismo_id": identificacion.microorganismo_id,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None)
+            if getattr(actor, "is_authenticated", False)
+            else None,
+        }
+        if rid:
+            meta["request_id"] = rid
+        log_update(
+            actor=actor,
+            entity=identificacion,
+            before=before,
+            module="laboratorio",
+            metadata=meta,
+        )
+        return identificacion
+
+
 # ---------------------------------------------------------------------------
 # B3.3 — Antibiograma microbiológico
 # ---------------------------------------------------------------------------
@@ -1940,3 +2037,380 @@ def aplicar_desvalidar_estudio_micro(
         meta_es["motivo"] = motivo_limpio[:500]
         _audit_estudio_update(estudio, before=before_es, actor=actor, metadata=meta_es)
         return estudio
+
+
+# ---------------------------------------------------------------------------
+# Hard delete en cascada (PROTECT-safe) — registros clínicos micro
+# ---------------------------------------------------------------------------
+
+
+def _audit_hard_delete(
+    *,
+    actor: "AbstractUser | None",
+    entity_type: str,
+    entity_id: int,
+    entity_repr: str,
+    metadata: dict[str, Any],
+) -> None:
+    log_delete(
+        actor=actor,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        entity_repr=entity_repr,
+        module="laboratorio",
+        metadata=metadata,
+    )
+
+
+def _cascade_delete_antibiogramas_qs(antibiograma_ids: list[int]) -> dict[str, int]:
+    """Borra resultados y luego antibiogramas. Retorna conteos."""
+    if not antibiograma_ids:
+        return {"resultados": 0, "antibiogramas": 0}
+    n_res, _ = ResultadoAntibiotico.objects.filter(antibiograma_id__in=antibiograma_ids).delete()
+    n_ab, _ = Antibiograma.objects.filter(pk__in=antibiograma_ids).delete()
+    return {"resultados": n_res, "antibiogramas": n_ab}
+
+
+def _cascade_delete_aislados_qs(aislado_ids: list[int]) -> dict[str, int]:
+    """Borra resultados→AB→identificaciones→aislados. Retorna conteos."""
+    if not aislado_ids:
+        return {
+            "resultados": 0,
+            "antibiogramas": 0,
+            "identificaciones": 0,
+            "aislados": 0,
+        }
+    ab_ids = list(
+        Antibiograma.objects.filter(aislado_id__in=aislado_ids).values_list("pk", flat=True)
+    )
+    counts = _cascade_delete_antibiogramas_qs(ab_ids)
+    n_id, _ = IdentificacionMicroorganismo.objects.filter(aislado_id__in=aislado_ids).delete()
+    n_ai, _ = AisladoMicrobiologico.objects.filter(pk__in=aislado_ids).delete()
+    counts["identificaciones"] = n_id
+    counts["aislados"] = n_ai
+    return counts
+
+
+def _cascade_delete_lecturas_qs(lectura_ids: list[int]) -> dict[str, int]:
+    if not lectura_ids:
+        return {
+            "resultados": 0,
+            "antibiogramas": 0,
+            "identificaciones": 0,
+            "aislados": 0,
+            "lecturas": 0,
+        }
+    aislado_ids = list(
+        AisladoMicrobiologico.objects.filter(lectura_origen_id__in=lectura_ids).values_list(
+            "pk", flat=True
+        )
+    )
+    counts = _cascade_delete_aislados_qs(aislado_ids)
+    n_lec, _ = LecturaCultivo.objects.filter(pk__in=lectura_ids).delete()
+    counts["lecturas"] = n_lec
+    return counts
+
+
+def eliminar_resultado_antibiotico(
+    resultado_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    with transaction.atomic():
+        resultado = (
+            ResultadoAntibiotico.objects.select_for_update(of=("self",))
+            .select_related(
+                "antibiograma",
+                "antibiograma__aislado",
+                "antibiograma__aislado__estudio",
+            )
+            .get(pk=resultado_id)
+        )
+        estudio = resultado.antibiograma.aislado.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = resultado.pk
+        etype = resultado._meta.label
+        erepr = safe_entity_repr(resultado)
+        before = safe_model_snapshot(resultado)
+        resultado.delete()
+        meta = {
+            "accion": "eliminar_resultado_antibiotico",
+            "resultado_id": pk,
+            "antibiograma_id": resultado.antibiograma_id,
+            "estudio_id": estudio.pk,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": {},
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": {}}
+
+
+def eliminar_antibiograma(
+    antibiograma_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    with transaction.atomic():
+        antibiograma = (
+            Antibiograma.objects.select_for_update(of=("self",))
+            .select_related("aislado", "aislado__estudio")
+            .get(pk=antibiograma_id)
+        )
+        estudio = antibiograma.aislado.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = antibiograma.pk
+        etype = antibiograma._meta.label
+        erepr = safe_entity_repr(antibiograma)
+        before = safe_model_snapshot(antibiograma)
+        counts = _cascade_delete_antibiogramas_qs([pk])
+        meta = {
+            "accion": "eliminar_antibiograma",
+            "antibiograma_id": pk,
+            "aislado_id": antibiograma.aislado_id,
+            "estudio_id": estudio.pk,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": counts,
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": counts}
+
+
+def eliminar_identificacion(
+    identificacion_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    with transaction.atomic():
+        identificacion = (
+            IdentificacionMicroorganismo.objects.select_for_update(of=("self",))
+            .select_related("aislado", "aislado__estudio")
+            .get(pk=identificacion_id)
+        )
+        estudio = identificacion.aislado.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = identificacion.pk
+        etype = identificacion._meta.label
+        erepr = safe_entity_repr(identificacion)
+        before = safe_model_snapshot(identificacion)
+        identificacion.delete()
+        meta = {
+            "accion": "eliminar_identificacion",
+            "identificacion_id": pk,
+            "aislado_id": identificacion.aislado_id,
+            "estudio_id": estudio.pk,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": {},
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": {}}
+
+
+def eliminar_aislado(
+    aislado_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    with transaction.atomic():
+        aislado = (
+            AisladoMicrobiologico.objects.select_for_update(of=("self",))
+            .select_related("estudio", "estudio__solicitud", "estudio__muestra")
+            .get(pk=aislado_id)
+        )
+        estudio = aislado.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = aislado.pk
+        etype = aislado._meta.label
+        erepr = safe_entity_repr(aislado)
+        before = safe_model_snapshot(aislado)
+        counts = _cascade_delete_aislados_qs([pk])
+        meta = {
+            "accion": "eliminar_aislado",
+            "aislado_id": pk,
+            "estudio_id": estudio.pk,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": counts,
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": counts}
+
+
+def eliminar_lectura(
+    lectura_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    with transaction.atomic():
+        lectura = (
+            LecturaCultivo.objects.select_for_update(of=("self",))
+            .select_related("estudio", "estudio__solicitud", "estudio__muestra", "siembra")
+            .get(pk=lectura_id)
+        )
+        estudio = lectura.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = lectura.pk
+        etype = lectura._meta.label
+        erepr = safe_entity_repr(lectura)
+        before = safe_model_snapshot(lectura)
+        counts = _cascade_delete_lecturas_qs([pk])
+        meta = {
+            "accion": "eliminar_lectura",
+            "lectura_id": pk,
+            "siembra_id": lectura.siembra_id,
+            "estudio_id": estudio.pk,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": counts,
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": counts}
+
+
+def eliminar_siembra(
+    siembra_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    with transaction.atomic():
+        siembra = (
+            SiembraMicrobiologia.objects.select_for_update(of=("self",))
+            .select_related("estudio", "estudio__solicitud", "estudio__muestra")
+            .get(pk=siembra_id)
+        )
+        estudio = siembra.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = siembra.pk
+        etype = siembra._meta.label
+        erepr = safe_entity_repr(siembra)
+        before = safe_model_snapshot(siembra)
+        lectura_ids = list(
+            LecturaCultivo.objects.filter(siembra_id=pk).values_list("pk", flat=True)
+        )
+        counts = _cascade_delete_lecturas_qs(lectura_ids)
+        n_si, _ = SiembraMicrobiologia.objects.filter(pk=pk).delete()
+        counts["siembras"] = n_si
+        meta = {
+            "accion": "eliminar_siembra",
+            "siembra_id": pk,
+            "estudio_id": estudio.pk,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": counts,
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": counts}
+
+
+def eliminar_informe(
+    informe_id: int,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+) -> dict[str, Any]:
+    """Hard delete de informe. Cualquier estado del informe; estudio debe estar operable."""
+    with transaction.atomic():
+        informe = (
+            InformeMicrobiologia.objects.select_for_update(of=("self",))
+            .select_related("estudio", "estudio__solicitud", "estudio__muestra")
+            .get(pk=informe_id)
+        )
+        estudio = informe.estudio
+        assert_estudio_micro_operable(estudio)
+        pk = informe.pk
+        etype = informe._meta.label
+        erepr = safe_entity_repr(informe)
+        before = safe_model_snapshot(informe)
+        # SET_NULL en reemplazos: limpia FK de hijos que apuntan a este informe.
+        InformeMicrobiologia.objects.filter(reemplaza_a_id=pk).update(reemplaza_a=None)
+        informe.delete()
+        meta = {
+            "accion": "eliminar_informe",
+            "informe_id": pk,
+            "estudio_id": estudio.pk,
+            "tipo": before.get("tipo") if isinstance(before, dict) else None,
+            "estado_informe": before.get("estado") if isinstance(before, dict) else None,
+            "view": view,
+            "actor_id": getattr(actor, "pk", None) if getattr(actor, "is_authenticated", False) else None,
+            "before": before,
+            "cascada": {},
+        }
+        rid = get_request_id()
+        if rid:
+            meta["request_id"] = rid
+        _audit_hard_delete(
+            actor=actor,
+            entity_type=etype,
+            entity_id=pk,
+            entity_repr=erepr,
+            metadata=meta,
+        )
+        return {"id": pk, "cascada": {}}

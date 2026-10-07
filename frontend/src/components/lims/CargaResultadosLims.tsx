@@ -799,8 +799,44 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     );
   }
 
+  const fechaExtraccionLabel = useMemo(() => {
+    if (orden.fecha_toma_muestra) {
+      try {
+        return new Date(orden.fecha_toma_muestra).toLocaleString();
+      } catch {
+        return orden.fecha_toma_muestra;
+      }
+    }
+    const fromMuestras = muestras
+      .map((m) => m.fecha_toma)
+      .filter((f): f is string => Boolean(f))
+      .sort()
+      .at(-1);
+    if (fromMuestras) {
+      try {
+        return new Date(fromMuestras).toLocaleString();
+      } catch {
+        return fromMuestras;
+      }
+    }
+    if (orden.fecha_programada_toma) {
+      return orden.fecha_programada_toma;
+    }
+    return '—';
+  }, [orden.fecha_toma_muestra, orden.fecha_programada_toma, muestras]);
+
+  const diagnosticoLabel = (orden.diagnostico || '').trim() || '—';
+
   return (
     <Box>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          <strong>Fecha de extracción:</strong> {fechaExtraccionLabel}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <strong>Diagnóstico:</strong> {diagnosticoLabel}
+        </Typography>
+      </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <Typography variant="subtitle2">Resultados anteriores del paciente</Typography>
         <Button size="small" disabled={loadingHistorial} onClick={actualizarHistorial}>

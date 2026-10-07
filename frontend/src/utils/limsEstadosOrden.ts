@@ -16,7 +16,7 @@ export function ordenPuedeQuitarExamenes(orden: Pick<SolicitudExamenLims, 'puede
   if (typeof orden.puede_quitar_examenes === 'boolean') {
     return orden.puede_quitar_examenes;
   }
-  return orden.estado !== 'FINALIZADO';
+  return orden.estado !== 'FINALIZADO' && orden.estado !== 'CANCELADO';
 }
 
 export const ESTADOS_ORDEN_LIMS: EstadoSolicitudLims[] = [
@@ -25,6 +25,7 @@ export const ESTADOS_ORDEN_LIMS: EstadoSolicitudLims[] = [
   'INFORMADO_PARCIAL',
   'LISTO_PARA_VALIDAR',
   'FINALIZADO',
+  'CANCELADO',
 ];
 
 export const ESTADO_ORDEN_LABEL: Record<EstadoSolicitudLims, string> = {
@@ -33,6 +34,7 @@ export const ESTADO_ORDEN_LABEL: Record<EstadoSolicitudLims, string> = {
   INFORMADO_PARCIAL: 'Informe parcial',
   LISTO_PARA_VALIDAR: 'Listo para validar',
   FINALIZADO: 'Finalizado',
+  CANCELADO: 'Cancelado',
 };
 
 export function labelEstadoOrdenLims(estado: EstadoSolicitudLims | string): string {
@@ -53,9 +55,16 @@ export function estadoOrdenColor(
       return 'warning';
     case 'FINALIZADO':
       return 'success';
+    case 'CANCELADO':
+      return 'error';
     default:
       return 'default';
   }
+}
+
+/** Operadores LIMS: cancelar orden abierta (no FINALIZADO / CANCELADO). */
+export function ordenPuedeCancelar(estado: EstadoSolicitudLims): boolean {
+  return estado !== 'FINALIZADO' && estado !== 'CANCELADO';
 }
 
 export function ordenPuedeCargarResultados(estado: EstadoSolicitudLims): boolean {
@@ -91,4 +100,12 @@ export function ordenPuedeEnviarInforme(estado: EstadoSolicitudLims): boolean {
 
 export function ordenEsFinalizada(estado: EstadoSolicitudLims): boolean {
   return estado === 'FINALIZADO';
+}
+
+export function ordenEsCancelada(estado: EstadoSolicitudLims): boolean {
+  return estado === 'CANCELADO';
+}
+
+export function ordenEsTerminal(estado: EstadoSolicitudLims): boolean {
+  return estado === 'FINALIZADO' || estado === 'CANCELADO';
 }

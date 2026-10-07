@@ -5,6 +5,10 @@ import {
   Box,
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -26,16 +30,29 @@ import type {
   IdentificacionMicroorganismo,
   LecturaCultivo,
   Microorganismo,
+  SignificanciaAislado,
 } from '../../../types/lims';
 import {
   createAisladoMicrobiologico,
   createIdentificacionMicroorganismo,
+  deleteAisladoMicrobiologico,
+  deleteIdentificacionMicroorganismo,
   descartarAisladoMicrobiologico,
+  updateAisladoMicrobiologico,
+  updateIdentificacionMicroorganismo,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
 import { todasLecturasSinDesarrollo } from '../../../utils/limsMicroCultivoNegativo';
 import { AisladoEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
+
+const SIGNIFICANCIAS: SignificanciaAislado[] = [
+  'NO_DEFINIDA',
+  'CONTAMINANTE',
+  'FLORA_HABITUAL',
+  'SIGNIFICATIVO',
+  'CRITICO',
+];
 
 export interface AisladosIdentificacionPanelProps {
   estudioId: number;
@@ -80,6 +97,19 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
   const [requiereAb, setRequiereAb] = useState(true);
   const [saving, setSaving] = useState(false);
   const { openMotivoDialog, dialogProps } = useMotivoDialog();
+
+  const [editAislado, setEditAislado] = useState<AisladoMicrobiologico | null>(null);
+  const [editAisladoForm, setEditAisladoForm] = useState({
+    descripcion: '',
+    cantidad: '',
+    significancia: 'NO_DEFINIDA' as SignificanciaAislado | string,
+    requiere_antibiograma: false,
+    observaciones: '',
+  });
+  const [editIdent, setEditIdent] = useState<IdentificacionMicroorganismo | null>(null);
+  const [editIdentMicro, setEditIdentMicro] = useState<Microorganismo | null>(null);
+  const [editIdentForm, setEditIdentForm] = useState({ metodo: '', resultado: '', observaciones: '' });
+  const [editSaving, setEditSaving] = useState(false);
 
   const microsActivos = useMemo(
     () => microorganismos.filter((m) => m.activo !== false),
@@ -183,6 +213,106 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
     });
   };
 
+  const eliminarAislado = async (a: AisladoMicrobiologico) => {
+    if (
+      !window.confirm(
+        `¿Eliminar aislado #${a.id}? También se eliminarán identificaciones, antibiogramas y resultados asociados. Esta acción no se puede deshacer.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteAisladoMicrobiologico(a.id);
+      toast.success('Aislado eliminado');
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsEliminarRegistroMicro));
+    }
+  };
+
+  const eliminarIdentificacion = async (ident: IdentificacionMicroorganismo) => {
+    if (
+      !window.confirm(
+        `¿Eliminar identificación #${ident.id}? Esta acción no se puede deshacer.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteIdentificacionMicroorganismo(ident.id);
+      toast.success('Identificación eliminada');
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsEliminarRegistroMicro));
+    }
+  };
+
+  const openEditarAislado = (a: AisladoMicrobiologico) => {
+    setEditAislado(a);
+    setEditAisladoForm({
+      descripcion: a.descripcion || '',
+      cantidad: a.cantidad || '',
+      significancia: a.significancia || 'NO_DEFINIDA',
+      requiere_antibiograma: Boolean(a.requiere_antibiograma),
+      observaciones: a.observaciones || '',
+    });
+  };
+
+  const guardarAislado = async () => {
+    if (!editAislado) return;
+    setEditSaving(true);
+    try {
+      await updateAisladoMicrobiologico(editAislado.id, {
+        descripcion: editAisladoForm.descripcion,
+        cantidad: editAisladoForm.cantidad,
+        significancia: editAisladoForm.significancia,
+        requiere_antibiograma: editAisladoForm.requiere_antibiograma,
+        observaciones: editAisladoForm.observaciones,
+      });
+      toast.success('Aislado actualizado');
+      setEditAislado(null);
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarAislado));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const openEditarIdent = (ident: IdentificacionMicroorganismo) => {
+    setEditIdent(ident);
+    setEditIdentMicro(microById.get(ident.microorganismo) || null);
+    setEditIdentForm({
+      metodo: ident.metodo || '',
+      resultado: ident.resultado || '',
+      observaciones: ident.observaciones || '',
+    });
+  };
+
+  const guardarIdent = async () => {
+    if (!editIdent) return;
+    if (!editIdentMicro) {
+      toast.error('Seleccione microorganismo');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await updateIdentificacionMicroorganismo(editIdent.id, {
+        microorganismo_id: editIdentMicro.id,
+        metodo: editIdentForm.metodo,
+        resultado: editIdentForm.resultado,
+        observaciones: editIdentForm.observaciones,
+      });
+      toast.success('Identificación actualizada');
+      setEditIdent(null);
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarIdentificacion));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   return (
     <Box>
       <Typography variant="subtitle1" gutterBottom>
@@ -219,7 +349,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               </Select>
             </FormControl>
 
-              <Autocomplete
+            <Autocomplete
               size="small"
               sx={{ minWidth: 280, flex: '1 1 240px' }}
               options={microsActivos}
@@ -317,9 +447,29 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
                     <TableCell>{ident?.metodo || '—'}</TableCell>
                     <TableCell>{a.significancia}</TableCell>
                     <TableCell>{a.requiere_antibiograma ? 'Sí' : 'No'}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {canOperate && a.estado !== 'DESCARTADO' && (
-                        <Button size="small" color="error" onClick={() => descartar(a.id)}>
+                        <Button size="small" onClick={() => openEditarAislado(a)}>
+                          Editar
+                        </Button>
+                      )}
+                      {canOperate && ident && a.estado !== 'DESCARTADO' && (
+                        <Button size="small" onClick={() => openEditarIdent(ident)}>
+                          Editar ID
+                        </Button>
+                      )}
+                      {canOperate && ident && (
+                        <Button size="small" color="error" onClick={() => eliminarIdentificacion(ident)}>
+                          Eliminar ID
+                        </Button>
+                      )}
+                      {canOperate && (
+                        <Button size="small" color="error" onClick={() => eliminarAislado(a)}>
+                          Eliminar
+                        </Button>
+                      )}
+                      {canOperate && a.estado !== 'DESCARTADO' && (
+                        <Button size="small" color="warning" onClick={() => descartar(a.id)}>
                           Descartar
                         </Button>
                       )}
@@ -331,6 +481,123 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog open={Boolean(editAislado)} onClose={() => setEditAislado(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Editar aislado #{editAislado?.id}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <TextField
+              size="small"
+              label="Descripción / hallazgo"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editAisladoForm.descripcion}
+              onChange={(e) => setEditAisladoForm((f) => ({ ...f, descripcion: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Cantidad"
+              value={editAisladoForm.cantidad}
+              onChange={(e) => setEditAisladoForm((f) => ({ ...f, cantidad: e.target.value }))}
+            />
+            <FormControl size="small" fullWidth>
+              <InputLabel>Significancia</InputLabel>
+              <Select
+                label="Significancia"
+                value={editAisladoForm.significancia}
+                onChange={(e) =>
+                  setEditAisladoForm((f) => ({ ...f, significancia: e.target.value }))
+                }
+              >
+                {SIGNIFICANCIAS.map((s) => (
+                  <MenuItem key={s} value={s}>
+                    {s}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={editAisladoForm.requiere_antibiograma}
+                  onChange={(e) =>
+                    setEditAisladoForm((f) => ({ ...f, requiere_antibiograma: e.target.checked }))
+                  }
+                />
+              }
+              label="Requiere antibiograma"
+            />
+            <TextField
+              size="small"
+              label="Observaciones"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editAisladoForm.observaciones}
+              onChange={(e) => setEditAisladoForm((f) => ({ ...f, observaciones: e.target.value }))}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditAislado(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={guardarAislado} disabled={editSaving}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(editIdent)} onClose={() => setEditIdent(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Editar identificación #{editIdent?.id}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <Autocomplete
+              size="small"
+              options={microsActivos}
+              value={editIdentMicro}
+              onChange={(_e, value) => setEditIdentMicro(value)}
+              getOptionLabel={(m) => labelMicroorganismo(m)}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              filterOptions={(options, state) =>
+                options.filter((m) => microMatchesQuery(m, state.inputValue))
+              }
+              renderInput={(params) => (
+                <TextField {...params} label="Microorganismo *" />
+              )}
+            />
+            <TextField
+              size="small"
+              label="Método"
+              value={editIdentForm.metodo}
+              onChange={(e) => setEditIdentForm((f) => ({ ...f, metodo: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Resultado"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editIdentForm.resultado}
+              onChange={(e) => setEditIdentForm((f) => ({ ...f, resultado: e.target.value }))}
+            />
+            <TextField
+              size="small"
+              label="Observaciones"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editIdentForm.observaciones}
+              onChange={(e) => setEditIdentForm((f) => ({ ...f, observaciones: e.target.value }))}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditIdent(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={guardarIdent} disabled={editSaving}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <MotivoDialog {...dialogProps} />
     </Box>

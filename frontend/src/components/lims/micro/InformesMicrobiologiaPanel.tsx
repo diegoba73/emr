@@ -26,6 +26,7 @@ import type {
 import {
   anularInformeMicrobiologia,
   createInformeMicrobiologia,
+  deleteInformeMicrobiologia,
   downloadInformeMicroPdf,
   emitirInformeMicrobiologia,
   listFrasesRapidasMicro,
@@ -198,6 +199,23 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
     });
   };
 
+  const eliminar = async (inf: InformeMicrobiologia) => {
+    if (
+      !window.confirm(
+        `¿Eliminar informe #${inf.id} (${inf.tipo}, ${inf.estado})? Esta acción no se puede deshacer.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteInformeMicrobiologia(inf.id);
+      toast.success('Informe eliminado');
+      onRefresh();
+    } catch (e) {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsEliminarRegistroMicro));
+    }
+  };
+
   const descargarPdf = async () => {
     setDownloading(true);
     try {
@@ -318,7 +336,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     {canOperate && inf.estado === 'BORRADOR' && (
                       <>
                         <Button size="small" onClick={() => guardarBorrador(inf)}>
@@ -334,7 +352,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
                         <Button size="small" onClick={() => guardarBorrador(inf)}>
                           Guardar
                         </Button>
-                        <Button size="small" color="error" onClick={() => anular(inf.id)}>
+                        <Button size="small" color="warning" onClick={() => anular(inf.id)}>
                           Anular
                         </Button>
                       </>
@@ -358,6 +376,11 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
                           </Button>
                         </span>
                       </Tooltip>
+                    )}
+                    {canOperate && (
+                      <Button size="small" color="error" onClick={() => eliminar(inf)}>
+                        Eliminar
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>

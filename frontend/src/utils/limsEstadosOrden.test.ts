@@ -2,8 +2,11 @@ import {
   ESTADOS_ORDEN_LIMS,
   estadoOrdenColor,
   labelEstadoOrdenLims,
+  ordenEsCancelada,
   ordenEsFinalizada,
+  ordenEsTerminal,
   ordenListaParaValidar,
+  ordenPuedeCancelar,
   ordenPuedeCargarResultados,
   ordenPuedeCorregirResultados,
   ordenPuedeDesvalidar,
@@ -46,5 +49,18 @@ describe('limsEstadosOrden — LISTO_PARA_VALIDAR', () => {
     expect(ordenPuedeEnviarInforme('FINALIZADO')).toBe(true);
     expect(ordenPuedeEnviarInforme('EN_PROCESO')).toBe(false);
     expect(ordenEsFinalizada('LISTO_PARA_VALIDAR')).toBe(false);
+  });
+
+  it('permite cancelar órdenes abiertas y trata CANCELADO como terminal', () => {
+    expect(ESTADOS_ORDEN_LIMS).toContain('CANCELADO');
+    expect(labelEstadoOrdenLims('CANCELADO')).toBe('Cancelado');
+    expect(ordenPuedeCancelar('PENDIENTE')).toBe(true);
+    expect(ordenPuedeCancelar('EN_PROCESO')).toBe(true);
+    expect(ordenPuedeCancelar('LISTO_PARA_VALIDAR')).toBe(true);
+    expect(ordenPuedeCancelar('FINALIZADO')).toBe(false);
+    expect(ordenPuedeCancelar('CANCELADO')).toBe(false);
+    expect(ordenEsCancelada('CANCELADO')).toBe(true);
+    expect(ordenEsTerminal('CANCELADO')).toBe(true);
+    expect(ordenPuedeCargarResultados('CANCELADO')).toBe(false);
   });
 });

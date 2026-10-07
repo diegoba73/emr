@@ -51,7 +51,7 @@ export function isLimsOperativaLimitada(user: User | null): boolean {
   return canAccessLimsOperativaLimitada(user) && !canAccessLimsModule(user);
 }
 
-/** Detalle de orden visible para roles restringidos solo en PENDIENTE/FINALIZADO. */
+/** Detalle de orden visible para roles restringidos: PENDIENTE / FINALIZADO / CANCELADO. */
 export function canAccessLimsOrdenDetalle(
   user: User | null,
   estado: string | null | undefined
@@ -59,7 +59,7 @@ export function canAccessLimsOrdenDetalle(
   if (!canAccessLimsAny(user)) return false;
   if (!isLimsOperativaLimitada(user)) return true;
   const e = String(estado || '').toUpperCase();
-  return e === 'PENDIENTE' || e === 'FINALIZADO';
+  return e === 'PENDIENTE' || e === 'FINALIZADO' || e === 'CANCELADO';
 }
 
 /** Consulta clínica de análisis (módulo Solicitudes / Análisis clínico). */

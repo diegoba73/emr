@@ -324,6 +324,23 @@ class TestImpresionOrdenes(TestCase):
         # Pedido solo en la 1ª hoja; los 2 de proBNP juntos en la 2ª.
         self.assertEqual(_paginas(pdf), 2)
 
+    def test_dimero_d_requiere_resena(self):
+        tm = self.glu.tipo_muestra_requerida
+        ddim = _examen("DDIM", "Dímero D", tm)
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente2, medico_interno=self.medico,
+            origen_solicitud="AMBULATORIO_CEHTA", estado="EN_PROCESO",
+        )
+        sol.tipos_examen.add(self.glu, ddim)
+        ped = construir_pedido_clinico(sol)
+        self.assertEqual([c for c, _ in ped.resena_examenes], ["DDIM"])
+        texto = construir_resena_reglas(ContextoResena(
+            sexo="F", edad=55, diagnostico="Sospecha de TVP",
+            examenes=list(ped.resena_examenes),
+        ))
+        self.assertIn("Dímero D", texto)
+        self.assertIn("tromboembólica", texto)
+
     def test_api_resenas_sugeridas_y_pdf_con_texto_revisado(self):
         self.client.force_authenticate(self.lab)
         items = self._items(("LAB_CLINICO", self.sol.pk), ("MICROBIOLOGIA", self.uro.pk))

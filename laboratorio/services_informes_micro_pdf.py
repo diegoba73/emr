@@ -137,11 +137,17 @@ def preparar_contexto_encabezado_micro(estudio: EstudioMicrobiologia) -> dict[st
         or timezone.now()
     )
     hc = str(estudio.consulta_hc_id) if estudio.consulta_hc_id else "—"
+    from laboratorio.orden_cabecera import formatear_fecha_extraccion
+
+    fecha_ext = formatear_fecha_extraccion(
+        estudio.fecha_inicio or getattr(estudio, "created_at", None)
+    )
     return {
         "protocolo": _protocolo(estudio),
         "solicitado_por": _medico_label(estudio),
         "derivante": "Microbiología",
         "fecha": formatear_fecha_larga(fecha_ref),
+        "fecha_extraccion": fecha_ext or "—",
         "paciente": formatear_paciente_apellido_nombre(paciente) if paciente else "—",
         "historia_clinica": hc,
         "documento": str(getattr(paciente, "dni", "") or "—") if paciente else "—",

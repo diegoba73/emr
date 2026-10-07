@@ -7,7 +7,8 @@ export type EstadoSolicitudLims =
   | 'EN_PROCESO'
   | 'INFORMADO_PARCIAL'
   | 'LISTO_PARA_VALIDAR'
-  | 'FINALIZADO';
+  | 'FINALIZADO'
+  | 'CANCELADO';
 
 export type OrigenSolicitudLims =
   | 'INTERNACION_UCO'
@@ -218,13 +219,18 @@ export interface SolicitudExamenLims {
   fecha_solicitud: string;
   /** YYYY-MM-DD — día previsto de extracción (el API lo envía siempre tras la migración). */
   fecha_programada_toma?: string;
-  /** Última fecha de toma física (anotación en listado). */
+  /** Última fecha de toma física (max de Muestra.fecha_toma). */
   fecha_toma_muestra?: string | null;
+  /** Diagnóstico clínico (internación/cama o consulta/ficha paciente). */
+  diagnostico?: string | null;
   fecha_entrega_prometida?: string | null;
   observaciones?: string;
   fecha_informe_enviado?: string | null;
   informe_enviado_email?: boolean;
   informe_enviado_whatsapp?: boolean;
+  fecha_cancelacion?: string | null;
+  motivo_cancelacion?: string;
+  cancelado_por?: number | null;
   resultados?: ResultadoExamenLims[];
   /** False cuando el API omite valores (orden aún no validada para el rol clínico). */
   resultados_visibles?: boolean;

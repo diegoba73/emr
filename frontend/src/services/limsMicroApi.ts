@@ -247,6 +247,8 @@ export const updateSiembraMicrobiologia = (
   id: number,
   body: Partial<Pick<SiembraMicrobiologia, 'condicion_incubacion' | 'temperatura_c' | 'atmosfera' | 'observaciones'>>
 ) => apiClient.patch<SiembraMicrobiologia>(`${MICRO}/siembras/${id}/`, body).then((r) => r.data);
+export const deleteSiembraMicrobiologia = (id: number) =>
+  apiClient.delete(`${MICRO}/siembras/${id}/`).then(() => undefined);
 
 // --- Lecturas ---
 export const listLecturasCultivo = (params?: { estudio_id?: number }) =>
@@ -277,6 +279,8 @@ export const updateLecturaCultivo = (
     >
   >
 ) => apiClient.patch<LecturaCultivo>(`${MICRO}/lecturas/${id}/`, body).then((r) => r.data);
+export const deleteLecturaCultivo = (id: number) =>
+  apiClient.delete(`${MICRO}/lecturas/${id}/`).then(() => undefined);
 
 // --- Microorganismos ---
 export const listMicroorganismos = (params?: { search?: string }) =>
@@ -307,6 +311,8 @@ export const updateAisladoMicrobiologico = (
 ) => apiClient.patch<AisladoMicrobiologico>(`${MICRO}/aislados/${id}/`, body).then((r) => r.data);
 export const descartarAisladoMicrobiologico = (id: number, motivo: string) =>
   apiClient.post<AisladoMicrobiologico>(`${MICRO}/aislados/${id}/descartar/`, { motivo }).then((r) => r.data);
+export const deleteAisladoMicrobiologico = (id: number) =>
+  apiClient.delete(`${MICRO}/aislados/${id}/`).then(() => undefined);
 
 // --- Identificaciones ---
 export const listIdentificacionesMicroorganismo = (params?: { estudio_id?: number }) =>
@@ -325,6 +331,21 @@ export const createIdentificacionMicroorganismo = (body: {
   fecha?: string | null;
   observaciones?: string;
 }) => apiClient.post<IdentificacionMicroorganismo>(`${MICRO}/identificaciones/`, body).then((r) => r.data);
+export const deleteIdentificacionMicroorganismo = (id: number) =>
+  apiClient.delete(`${MICRO}/identificaciones/${id}/`).then(() => undefined);
+export const updateIdentificacionMicroorganismo = (
+  id: number,
+  body: {
+    microorganismo_id?: number;
+    metodo?: string;
+    resultado?: string;
+    confianza?: number | string | null;
+    observaciones?: string;
+  }
+) =>
+  apiClient
+    .patch<IdentificacionMicroorganismo>(`${MICRO}/identificaciones/${id}/`, body)
+    .then((r) => r.data);
 
 // --- Antibióticos ---
 export const listAntibioticos = (params?: { search?: string }) =>
@@ -360,6 +381,8 @@ export const completarAntibiograma = (id: number) =>
   apiClient.post<Antibiograma>(`${MICRO}/antibiogramas/${id}/completar/`, {}).then((r) => r.data);
 export const cancelarAntibiograma = (id: number, motivo: string) =>
   apiClient.post<Antibiograma>(`${MICRO}/antibiogramas/${id}/cancelar/`, { motivo }).then((r) => r.data);
+export const deleteAntibiograma = (id: number) =>
+  apiClient.delete(`${MICRO}/antibiogramas/${id}/`).then(() => undefined);
 
 // --- Resultados antibiótico ---
 export const listResultadosAntibiotico = (params?: { estudio_id?: number }) =>
@@ -395,6 +418,8 @@ export const updateResultadoAntibiotico = (
     >
   >
 ) => apiClient.patch<ResultadoAntibiotico>(`${MICRO}/resultados-antibiotico/${id}/`, body).then((r) => r.data);
+export const deleteResultadoAntibiotico = (id: number) =>
+  apiClient.delete(`${MICRO}/resultados-antibiotico/${id}/`).then(() => undefined);
 
 // --- Informes ---
 export const listInformesMicrobiologia = (params?: { estudio_id?: number }) =>
@@ -416,6 +441,8 @@ export const validarInformeMicrobiologia = (id: number) =>
   apiClient.post<InformeMicrobiologia>(`${MICRO}/informes/${id}/validar/`, {}).then((r) => r.data);
 export const anularInformeMicrobiologia = (id: number, motivo: string) =>
   apiClient.post<InformeMicrobiologia>(`${MICRO}/informes/${id}/anular/`, { motivo }).then((r) => r.data);
+export const deleteInformeMicrobiologia = (id: number) =>
+  apiClient.delete(`${MICRO}/informes/${id}/`).then(() => undefined);
 
 export async function downloadInformeMicroPdf(estudioId: number): Promise<void> {
   const { data } = await apiClient.get(`${MICRO}/estudios/${estudioId}/informe-pdf/`, {

@@ -1034,6 +1034,16 @@ class IdentificacionMicroorganismoCreateSerializer(serializers.Serializer):
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class IdentificacionMicroorganismoPartialUpdateSerializer(serializers.Serializer):
+    microorganismo_id = serializers.IntegerField(required=False)
+    metodo = serializers.CharField(required=False, allow_blank=True)
+    resultado = serializers.CharField(required=False, allow_blank=True)
+    confianza = serializers.DecimalField(
+        required=False, allow_null=True, max_digits=5, decimal_places=2
+    )
+    observaciones = serializers.CharField(required=False, allow_blank=True)
+
+
 # ---------------------------------------------------------------------------
 # B3.3 — Antibiograma microbiológico
 # ---------------------------------------------------------------------------

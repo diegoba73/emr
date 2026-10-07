@@ -49,6 +49,7 @@ from .analisis_longitudinal import (
 from .orden_grupos_informe import claves_grupos_validas, validar_orden_grupos
 from .solicitud_cierre import (
     SolicitudCierreError,
+    cancelar_solicitud_manual,
     desvalidar_solicitud_manual,
     finalizar_solicitud_manual,
     sincronizar_estado_tras_carga,
@@ -895,6 +896,36 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             logger.error("Error desvalidando solicitud", exc_info=True)
             return Response(
                 {'error': 'Error al reabrir la solicitud para corrección.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=['post'], url_path='cancelar')
+    def cancelar(self, request, pk=None):
+        """Cancela una orden abierta (no FINALIZADO). Exige motivo. Operadores LIMS."""
+        motivo = ''
+        if hasattr(request, 'data') and request.data is not None:
+            motivo = str(request.data.get('motivo', '') or '')
+        try:
+            with transaction.atomic():
+                solicitud = SolicitudExamen.objects.select_for_update(of=('self',)).get(pk=pk)
+                cancelar_solicitud_manual(
+                    solicitud,
+                    actor=request.user,
+                    view='SolicitudExamenViewSet.cancelar',
+                    motivo=motivo,
+                )
+                serializer = self.get_serializer(solicitud)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except SolicitudEstadoTransitionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SolicitudCierreError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except SolicitudExamen.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            logger.error("Error cancelando solicitud", exc_info=True)
+            return Response(
+                {'error': 'Error al cancelar la orden.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

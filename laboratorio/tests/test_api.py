@@ -936,6 +936,7 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
                 'medico_id': self.medico.id,
                 'origen_solicitud': 'AMBULATORIO_CEHTA',
                 'examenes_ids': examenes_ids,
+                'fecha_programada_toma': timezone.localdate().isoformat(),
             },
             format='json',
         )
@@ -1195,10 +1196,60 @@ class TestSolicitudExamenEstadoAPI(APITestCase):
         ids_todos = [x['id'] for x in r_todos.data.get('results', r_todos.data)]
         assert sol.id in ids_todos
 
-    def test_acciones_cancelar_y_entregado_eliminadas(self):
+    def test_accion_marcar_entregado_eliminada(self):
         sol = self._crear_solicitud_api()
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json').status_code == 404
-        assert self.client.post(f'/api/lab/solicitudes/{sol.id}/marcar-entregado/', {}, format='json').status_code == 404
+        assert self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/marcar-entregado/', {}, format='json'
+        ).status_code == 404
+
+    def test_cancelar_orden_exige_motivo_y_cancela(self):
+        sol = self._crear_solicitud_api()
+        r_sin = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cancelar/', {}, format='json'
+        )
+        assert r_sin.status_code == status.HTTP_400_BAD_REQUEST
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post(
+                f'/api/lab/solicitudes/{sol.id}/cancelar/',
+                {'motivo': 'Paciente desistió del estudio'},
+                format='json',
+            )
+        assert r.status_code == status.HTTP_200_OK, r.data
+        assert r.data['estado'] == 'CANCELADO'
+        assert r.data.get('motivo_cancelacion')
+        sol.refresh_from_db()
+        assert sol.estado == 'CANCELADO'
+        assert sol.cancelado_por_id == self.user_lab.id
+        assert AuditEvent.objects.filter(
+            entity_type=SolicitudExamen._meta.label,
+            entity_id=str(sol.id),
+            module='laboratorio',
+            metadata__accion='cancelar',
+        ).exists()
+
+    def test_cancelar_orden_finalizada_bloqueado(self):
+        sol = self._crear_solicitud_api()
+        res = sol.resultados.get(tipo_examen=self.tipo_examen_a)
+        self.client.post(f'/api/lab/solicitudes/{sol.id}/tomar-muestra/', {}, format='json')
+        self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cargar-resultados/',
+            {'resultados': [{'id': res.id, 'valor': '1'}]},
+            format='json',
+        )
+        self.client.force_authenticate(user=self.user_admin)
+        assert self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/validar/', {}, format='json'
+        ).status_code == 200
+        self.client.force_authenticate(user=self.user_lab)
+        r = self.client.post(
+            f'/api/lab/solicitudes/{sol.id}/cancelar/',
+            {'motivo': 'Intento inválido de cancelar'},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        sol.refresh_from_db()
+        assert sol.estado == 'FINALIZADO'
 
     def test_cargar_finalizado_bloqueado(self):
         sol = self._crear_solicitud_api()

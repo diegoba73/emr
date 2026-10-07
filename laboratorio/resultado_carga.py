@@ -124,6 +124,10 @@ def cargar_resultados_solicitud(
             raise CargaResultadosError(
                 "La orden está validada y bloqueada. No se pueden modificar los resultados."
             )
+        if solicitud.estado == "CANCELADO":
+            raise CargaResultadosError(
+                "La orden está cancelada. No se pueden modificar los resultados."
+            )
         if solicitud.estado not in ESTADOS_CARGABLES:
             raise CargaResultadosError(
                 "Solo se pueden cargar resultados en órdenes "

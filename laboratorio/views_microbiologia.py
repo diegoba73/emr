@@ -46,11 +46,19 @@ from laboratorio.microbiologia_estado import (
     crear_estudio,
     crear_estudio_desde_pedido,
     crear_estudios_batch,
+    actualizar_identificacion,
     crear_identificacion,
     crear_informe_borrador,
     crear_lectura,
     crear_resultado_antibiotico,
     crear_siembra,
+    eliminar_aislado,
+    eliminar_antibiograma,
+    eliminar_identificacion,
+    eliminar_informe,
+    eliminar_lectura,
+    eliminar_resultado_antibiotico,
+    eliminar_siembra,
     imprimir_etiquetas_estudios,
 )
 from laboratorio.models_microbiologia import (
@@ -93,6 +101,7 @@ from laboratorio.serializers_microbiologia import (
     EstudioMicroImprimirEtiquetasSerializer,
     EstudioRecibirPorCodigoSerializer,
     IdentificacionMicroorganismoCreateSerializer,
+    IdentificacionMicroorganismoPartialUpdateSerializer,
     IdentificacionMicroorganismoSerializer,
     InformeAnularSerializer,
     InformeMicrobiologiaCreateSerializer,
@@ -925,7 +934,7 @@ class SiembraMicrobiologiaViewSet(viewsets.ModelViewSet):
     search_fields = ["estudio__numero", "medio__codigo"]
     ordering_fields = ["created_at", "fecha_siembra", "estado"]
     ordering = ["-created_at"]
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -993,6 +1002,18 @@ class SiembraMicrobiologiaViewSet(viewsets.ModelViewSet):
             },
         )
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            eliminar_siembra(
+                instance.pk,
+                actor=request.user,
+                view="SiembraMicrobiologiaViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class LecturaCultivoViewSet(viewsets.ModelViewSet):
     queryset = LecturaCultivo.objects.select_related(
@@ -1006,7 +1027,7 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
     search_fields = ["estudio__numero", "siembra__medio__codigo"]
     ordering_fields = ["created_at", "fecha_lectura"]
     ordering = ["-fecha_lectura"]
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -1076,6 +1097,18 @@ class LecturaCultivoViewSet(viewsets.ModelViewSet):
                 "view": "LecturaCultivoViewSet.partial_update",
             },
         )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            eliminar_lectura(
+                instance.pk,
+                actor=request.user,
+                view="LecturaCultivoViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------
@@ -1147,7 +1180,7 @@ class AisladoMicrobiologicoViewSet(viewsets.ModelViewSet):
     search_fields = ["estudio__numero", "microorganismo__codigo"]
     ordering_fields = ["created_at", "estado"]
     ordering = ["-created_at"]
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -1236,9 +1269,21 @@ class AisladoMicrobiologicoViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            eliminar_aislado(
+                instance.pk,
+                actor=request.user,
+                view="AisladoMicrobiologicoViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class IdentificacionMicroorganismoViewSet(viewsets.ModelViewSet):
-    """Identificaciones (B3.2). Append-only: sin PATCH/DELETE para preservar trazabilidad."""
+    """Identificaciones (B3.2). PATCH de datos + DELETE hard con auditoría."""
 
     queryset = IdentificacionMicroorganismo.objects.select_related(
         "aislado",
@@ -1252,11 +1297,13 @@ class IdentificacionMicroorganismoViewSet(viewsets.ModelViewSet):
     search_fields = ["aislado__estudio__numero", "microorganismo__codigo"]
     ordering_fields = ["fecha", "created_at"]
     ordering = ["-fecha"]
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
             return IdentificacionMicroorganismoCreateSerializer
+        if self.action in ("partial_update", "update"):
+            return IdentificacionMicroorganismoPartialUpdateSerializer
         return IdentificacionMicroorganismoSerializer
 
     def get_queryset(self):
@@ -1300,6 +1347,39 @@ class IdentificacionMicroorganismoViewSet(viewsets.ModelViewSet):
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         out = IdentificacionMicroorganismoSerializer(identificacion, context=self.get_serializer_context())
         return Response(out.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        ser = self.get_serializer(data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        vd = ser.validated_data
+        try:
+            identificacion = actualizar_identificacion(
+                instance.pk,
+                actor=request.user,
+                view="IdentificacionMicroorganismoViewSet.partial_update",
+                microorganismo_id=vd.get("microorganismo_id") if "microorganismo_id" in vd else None,
+                metodo=vd.get("metodo") if "metodo" in vd else None,
+                resultado=vd.get("resultado") if "resultado" in vd else None,
+                confianza=vd.get("confianza") if "confianza" in vd else None,
+                observaciones=vd.get("observaciones") if "observaciones" in vd else None,
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        out = IdentificacionMicroorganismoSerializer(identificacion, context=self.get_serializer_context())
+        return Response(out.data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            eliminar_identificacion(
+                instance.pk,
+                actor=request.user,
+                view="IdentificacionMicroorganismoViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------
@@ -1371,7 +1451,7 @@ class AntibiogramaViewSet(viewsets.ModelViewSet):
     search_fields = ["aislado__estudio__numero"]
     ordering_fields = ["created_at", "fecha_inicio", "estado"]
     ordering = ["-created_at"]
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -1472,6 +1552,18 @@ class AntibiogramaViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            eliminar_antibiograma(
+                instance.pk,
+                actor=request.user,
+                view="AntibiogramaViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
     """Resultados de antibiótico (B3.3). Carga/edición bloqueada si antibiograma COMPLETO/CANCELADO."""
@@ -1489,7 +1581,7 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
     search_fields = ["antibiograma__id", "antibiotico__codigo"]
     ordering_fields = ["created_at", "interpretacion"]
     ordering = ["-created_at"]
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -1569,6 +1661,18 @@ class ResultadoAntibioticoViewSet(viewsets.ModelViewSet):
         out = ResultadoAntibioticoSerializer(resultado, context=self.get_serializer_context())
         return Response(out.data, status=status.HTTP_200_OK)
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            eliminar_resultado_antibiotico(
+                instance.pk,
+                actor=request.user,
+                view="ResultadoAntibioticoViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
     """Informes preliminares y finales (B3.4). Autoría y validación: bioquímico/admin."""
@@ -1588,7 +1692,7 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
     search_fields = ["estudio__numero", "texto"]
     ordering_fields = ["created_at", "tipo", "estado"]
     ordering = ["-created_at"]
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -1664,10 +1768,16 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
         return Response(out.data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
-        return Response(
-            {"detail": "No se permite eliminar informes; use anular con motivo."},
-            status=status.HTTP_405_METHOD_NOT_ALLOWED,
-        )
+        instance = self.get_object()
+        try:
+            eliminar_informe(
+                instance.pk,
+                actor=request.user,
+                view="InformeMicrobiologiaViewSet.destroy",
+            )
+        except MicrobiologiaAccionError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], url_path="emitir")
     def emitir(self, request, pk=None):

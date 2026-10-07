@@ -27,6 +27,7 @@ import {
   getSolicitudExamen,
   listMuestrasPorSolicitud,
   patchEstadoObraSocialSolicitud,
+  postCancelarSolicitud,
   postDesvalidarSolicitud,
   postMarcarDerivacion,
   postValidarSolicitud,
@@ -49,11 +50,13 @@ import {
   labelEstadoOrdenLims,
   ordenListaParaValidar,
   ordenPuedeAgregarExamenes,
+  ordenPuedeCancelar,
   ordenPuedeCargarResultados,
   ordenPuedeDesvalidar,
   ordenPuedeEnviarInforme,
   ordenPuedeQuitarExamenes,
 } from '../../utils/limsEstadosOrden';
+import { MotivoDialog, useMotivoDialog } from '../../components/common/MotivoDialog';
 import { countResultadosConValor, ordenResultadosCompletos } from '../../utils/limsOrdenResultados';
 import CargaResultadosLims from '../../components/lims/CargaResultadosLims';
 import MuestrasOrdenPanel from '../../components/lims/MuestrasOrdenPanel';
@@ -92,6 +95,7 @@ const OrdenLimsDetalle: React.FC = () => {
   const [qcOverrideOpen, setQcOverrideOpen] = useState(false);
   const [qcOverrideMotivo, setQcOverrideMotivo] = useState('');
   const [pendingCriticos, setPendingCriticos] = useState(false);
+  const { openMotivoDialog, dialogProps: cancelarDialogProps } = useMotivoDialog();
 
   const allowed = canAccessLimsModule(currentUser);
   const canVerOrden = orden ? canAccessLimsOrdenDetalle(currentUser, orden.estado) : true;
@@ -294,11 +298,32 @@ const OrdenLimsDetalle: React.FC = () => {
   const enProceso = ordenPuedeCargarResultados(e);
   const informadoParcial = e === 'INFORMADO_PARCIAL';
   const finalizada = e === 'FINALIZADO';
+  const cancelada = e === 'CANCELADO';
   const listaParaValidar = ordenListaParaValidar(e, resultadosCompletos);
   const puedeEnviarInforme = ordenPuedeEnviarInforme(e) && progreso.conValor > 0;
   const informeEnviado = Boolean(orden.fecha_informe_enviado);
   const osPermiteValidar = ordenPuedeValidarObraSocial(orden);
-  const bloqueoObraSocial = !osPermiteValidar && e !== 'FINALIZADO';
+  const bloqueoObraSocial = !osPermiteValidar && e !== 'FINALIZADO' && !cancelada;
+
+  const handleCancelarOrden = () => {
+    openMotivoDialog({
+      title: 'Cancelar orden de laboratorio',
+      label: 'Motivo de cancelación',
+      confirmLabel: 'Cancelar orden',
+      onConfirm: async (motivo) => {
+        try {
+          const actualizada = await postCancelarSolicitud(orden.id, motivo);
+          setOrden(actualizada);
+          toast.success('Orden cancelada');
+          await refreshMuestras(orden.id, orden.numero);
+        } catch (err) {
+          const msg = getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsCancelarOrden);
+          toast.error(msg);
+          throw new Error(msg);
+        }
+      },
+    });
+  };
   const validadorInfo = (orden.resultados || []).find(
     (r) => r.validado_por_nombre || r.fecha_validacion
   );
@@ -385,12 +410,12 @@ const OrdenLimsDetalle: React.FC = () => {
               Imprimir etiquetas
             </Button>
           )}
-          {canOp && e !== 'FINALIZADO' && (
+          {canOp && e !== 'FINALIZADO' && e !== 'CANCELADO' && (
             <Button variant="outlined" onClick={() => setOpenEditarOrden(true)}>
               Editar orden
             </Button>
           )}
-          {canOp && (
+          {canOp && e !== 'CANCELADO' && (
             <Button variant="outlined" onClick={() => setOpenObraSocial(true)}>
               Obra social
             </Button>
@@ -456,6 +481,11 @@ const OrdenLimsDetalle: React.FC = () => {
               Reabrir para corregir
             </Button>
           )}
+          {canOp && ordenPuedeCancelar(e) && (
+            <Button color="error" variant="outlined" onClick={handleCancelarOrden}>
+              Cancelar orden
+            </Button>
+          )}
           {puedeEnviarInforme && finalizada && canEnviar && (
             <Button variant="contained" color="primary" onClick={() => setOpenEnviarInforme(true)}>
               Enviar informe
@@ -479,6 +509,15 @@ const OrdenLimsDetalle: React.FC = () => {
             Pendiente de recepción. <strong>Imprimir etiquetas</strong> genera los tubos con código de
             barras; confirmá el ingreso escaneando en <strong>Recepción</strong>.
           </Typography>
+        )}
+        {cancelada && (
+          <Alert severity="error" sx={{ mt: 1.5 }}>
+            Orden cancelada
+            {orden.motivo_cancelacion ? `: ${orden.motivo_cancelacion}` : '.'}
+            {orden.fecha_cancelacion
+              ? ` (${new Date(orden.fecha_cancelacion).toLocaleString()})`
+              : ''}
+          </Alert>
         )}
         {bloqueoObraSocial && (
           <Alert severity="warning" sx={{ mt: 1.5 }}>
@@ -783,6 +822,8 @@ const OrdenLimsDetalle: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <MotivoDialog {...cancelarDialogProps} />
     </Box>
   );
 };

@@ -81,6 +81,15 @@ class TestInformePdfLayout(TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 800)
 
+    def test_contexto_incluye_fecha_extraccion(self):
+        from laboratorio.informe_pdf_layout import preparar_contexto_encabezado
+
+        self.sol.fecha_programada_toma = self.sol.fecha_solicitud.date()
+        self.sol.save(update_fields=["fecha_programada_toma"])
+        ctx = preparar_contexto_encabezado(self.sol)
+        self.assertIn("fecha_extraccion", ctx)
+        self.assertNotEqual(ctx["fecha_extraccion"], "—")
+
     def test_firma_bloque_se_carga(self):
         from laboratorio.informe_pdf_config import LABORATORIO_STATIC
         from laboratorio.informe_pdf_layout import _firma_image_reader
