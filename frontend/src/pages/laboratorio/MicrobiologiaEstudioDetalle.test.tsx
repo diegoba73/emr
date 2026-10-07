@@ -39,19 +39,23 @@ jest.mock('../../contexts/DataContext', () => ({
   }),
 }));
 
-jest.mock('../../utils/limsAccess', () => ({
-  canAccessMicrobiologia: () => true,
-  canAccessMicrobiologiaLectura: () => true,
-  canOperateMicrobiologia: () => true,
-  canOperateInformeMicro: () => false,
-  canValidarInformeMicro: () => false,
-  canDownloadInformeMicroPdf: () => false,
-  canEnviarInformeMicro: () => false,
-  canOperateMicroEstudioTecnico: () => true,
-  canMarcarMicroEstudioInformado: () => false,
-  isMicroEstudioCerrado: () => false,
-  isSecretariaEntregaLab: () => false,
-}));
+jest.mock('../../utils/limsAccess', () => {
+  const actual = jest.requireActual('../../utils/limsAccess') as typeof import('../../utils/limsAccess');
+  return {
+    ...actual,
+    canAccessMicrobiologia: () => true,
+    canAccessMicrobiologiaLectura: () => true,
+    canOperateMicrobiologia: () => true,
+    canOperateInformeMicro: () => false,
+    canValidarInformeMicro: () => false,
+    canDownloadInformeMicroPdf: () => false,
+    canEnviarInformeMicro: () => false,
+    canOperateMicroEstudioTecnico: () => true,
+    canMarcarMicroEstudioInformado: () => false,
+    isMicroEstudioCerrado: () => false,
+    isSecretariaEntregaLab: () => false,
+  };
+});
 
 jest.mock('../../services/limsMicroApi', () => ({
   printTalonEstudioMicro: jest.fn(),
@@ -59,6 +63,7 @@ jest.mock('../../services/limsMicroApi', () => ({
 }));
 
 jest.mock('../../components/lims/micro/ImprimirPedidoMicroDialog', () => () => null);
+jest.mock('../../components/lims/micro/EditarEstudioMicroDialog', () => () => null);
 jest.mock('../../components/lims/micro/EstudioMicroPedidoRecepcionPanel', () => () => (
   <div>Pedido recepción</div>
 ));

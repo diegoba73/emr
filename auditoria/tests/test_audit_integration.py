@@ -27,12 +27,14 @@ def test_turno_create_and_update_generates_audit_events():
     med = Medico.objects.create(matricula="M-1", nombre="Ana", apellido="Doc")
     rec = Recurso.objects.create(nombre="Consultorio 1", ubicacion="CEHTA", tipo_recurso="CONSULTORIO", activo=True)
 
+    # Agenda ambulatoria: duración fija 20 min (medicos.agenda.DURACION).
+    inicio = timezone.now()
     payload = {
         "paciente_id": pac.id,
         "medico_id": med.id,
         "recurso_id": rec.id,
-        "fecha_hora_inicio": timezone.now().isoformat(),
-        "fecha_hora_fin": (timezone.now() + timedelta(minutes=30)).isoformat(),
+        "fecha_hora_inicio": inicio.isoformat(),
+        "fecha_hora_fin": (inicio + timedelta(minutes=20)).isoformat(),
         "estado": "RESERVADO",
         "motivo_reserva": "Control",
     }
