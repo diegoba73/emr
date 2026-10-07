@@ -22,12 +22,12 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { useData } from '../../contexts/DataContext';
 import {
   downloadFiltrosAvanzadosExcel,
-  formatDrfError,
   listTiposExamenLims,
   postFiltrosAvanzadosPreview,
   type FiltrosAvanzadosPreview,
 } from '../../services/limsApi';
 import type { LimsTipoExamen } from '../../types/lims';
+import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canAccessFiltrosAvanzados } from '../../utils/limsAccess';
 
 type ModoUi = 'all' | 'any';
@@ -106,7 +106,9 @@ const FiltrosAvanzadosPage: React.FC = () => {
       setPreview(data);
     } catch (e) {
       setPreview(null);
-      setError(formatDrfError(e));
+      setError(
+        getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.genericClinicalAction)
+      );
     } finally {
       setLoadingPreview(false);
     }
@@ -122,7 +124,9 @@ const FiltrosAvanzadosPage: React.FC = () => {
     try {
       await downloadFiltrosAvanzadosExcel(body);
     } catch (e) {
-      setError(formatDrfError(e));
+      setError(
+        getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.genericClinicalAction)
+      );
     } finally {
       setLoadingExcel(false);
     }
