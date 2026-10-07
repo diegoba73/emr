@@ -80,6 +80,9 @@ services:
       - "80:80"
     volumes:
       - ./deploy/nginx/nginx.prod.example.conf:/etc/nginx/conf.d/default.conf:ro
+      # APK móvil persistente (URL fija /synesis-movil.apk). No usar solo docker cp:
+      # al recrear el contenedor se pierde. Ver deploy/nginx/synesis-movil-apk.snippet.conf
+      - /srv/emr/public:/srv/emr/public:ro
     depends_on:
       backend:
         condition: service_healthy

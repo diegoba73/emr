@@ -49,24 +49,49 @@ Usar la clave de firma EAS existente. Descargar el APK del build (no emulador).
 
 ## 4. Publicar APK + QR (pacientes)
 
-En el server, una sola vez (nginx) y cada vez que haya APK nuevo:
+### Enlace y QR (ya fijos en el código)
 
-```bash
-# En el server — ver scripts/publish_movil_apk.sh y deploy/nginx/synesis-movil-apk.snippet.conf
-sudo mkdir -p /srv/emr/public
-# Copiar el APK descargado de EAS:
-sudo cp /ruta/al/app-release.apk /srv/emr/public/synesis-movil.apk
-sudo chmod 644 /srv/emr/public/synesis-movil.apk
+| Qué | Valor |
+|-----|--------|
+| URL | `https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk` |
+| Login web | constante `MOVIL_APK_URL` + imagen `frontend/public/qr-synesis-movil.png` |
+| QR imprimible | `mobile/assets/qr-instalacion-synesis-movil.png` |
+
+No regenerar el QR ni cambiar la URL al publicar una versión nueva de la app.
+
+### Por qué “se pierde” al regenerar
+
+Si el APK se copia **dentro** del contenedor (`docker cp …:/usr/share/nginx/html/…`), al recrear/redeployar nginx el archivo desaparece. El QR sigue apuntando a la misma URL, pero el servidor responde 404.
+
+**Solución:** el APK vive en el host en `/srv/emr/public/synesis-movil.apk` y nginx lo monta en solo lectura. Regenerar contenedores no lo borra.
+
+### Una sola vez en el server (persistencia)
+
+En el `docker-compose` real de prod (p. ej. `/srv/emr/app/docker-compose.server.yml`), servicio nginx:
+
+```yaml
+volumes:
+  - /srv/emr/public:/srv/emr/public:ro
 ```
 
-Incluir el snippet de nginx en el `server { ... }` que atiende `:8080` HTTPS y recargar nginx.
+Incluir el location de `deploy/nginx/synesis-movil-apk.snippet.conf` en el `server { … }` del dominio clínico y recrear nginx:
 
-URL fija: `https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk`  
-QR imprimible: `mobile/assets/qr-instalacion-synesis-movil.png` (apunta a esa URL).
+```bash
+sudo mkdir -p /srv/emr/public
+# … editar compose + conf nginx …
+docker compose -f docker-compose.server.yml up -d nginx   # o el compose real del host
+```
+
+### Cada vez que haya APK nuevo
+
+```bash
+# En el server — NO uses solo docker cp al html del contenedor
+bash scripts/publish_movil_apk.sh /ruta/al/app-release.apk
+curl -sSI 'https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk' | head -15
+# Esperado: HTTP 200 y Content-Type application/vnd.android.package-archive
+```
 
 Cartel sugerido: «Android → escanear → permitir instalar → abrir SYNESIS → código ICPL → su usuario».
-
-Al actualizar la app: reemplazar solo el archivo `.apk`; el QR impreso no cambia.
 
 ## 5. Prueba
 
