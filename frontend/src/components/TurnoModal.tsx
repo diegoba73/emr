@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
+  Autocomplete,
   Drawer,
   Box,
   TextField,
@@ -1287,26 +1288,24 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                     minSearchLength={2}
                     sx={{ mb: 2 }}
                   />
-                  <FormControl fullWidth sx={{ mb: 2 }} required disabled={tiposEstudio.length === 0}>
-                    <InputLabel>Tipo de estudio</InputLabel>
-                    <Select
-                      value={tipoEstudioId}
-                      label="Tipo de estudio"
-                      onChange={(e) => setTipoEstudioId(String(e.target.value))}
-                    >
-                      {tiposEstudio.length === 0 ? (
-                        <MenuItem disabled value="">
-                          Cargando tipos…
-                        </MenuItem>
-                      ) : (
-                        tiposEstudio.map((t) => (
-                          <MenuItem key={t.id} value={String(t.id)}>
-                            {t.nombre}
-                          </MenuItem>
-                        ))
-                      )}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={tiposEstudio}
+                    value={tiposEstudio.find((t) => String(t.id) === tipoEstudioId) || null}
+                    onChange={(_e, opt) => setTipoEstudioId(opt ? String(opt.id) : '')}
+                    getOptionLabel={(t) => t.nombre}
+                    isOptionEqualToValue={(a, b) => a.id === b.id}
+                    disabled={tiposEstudio.length === 0}
+                    sx={{ mb: 2 }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Tipo de estudio *"
+                        required
+                        placeholder="Buscar práctica…"
+                        helperText={tiposEstudio.length === 0 ? 'Cargando tipos…' : undefined}
+                      />
+                    )}
+                  />
                   <FormControl fullWidth sx={{ mb: 2 }}>
                     <InputLabel>Origen del pedido</InputLabel>
                     <Select

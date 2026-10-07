@@ -157,7 +157,7 @@ const labCatalogItems: NavItem[] = [
 
 const catalogItems: NavItem[] = [
   { text: 'CIE-10', icon: <CatalogIcon />, path: '/catalogos/diagnosticos', canAccess: canAccessCatalogosClinicos },
-  { text: 'Estudios', icon: <CatalogIcon />, path: '/catalogos/estudios', canAccess: canAccessCatalogosClinicos },
+  { text: 'Estudios / prácticas', icon: <CatalogIcon />, path: '/catalogos/estudios', canAccess: canAccessCatalogosClinicos },
   { text: 'Procedimientos', icon: <CatalogIcon />, path: '/catalogos/procedimientos', canAccess: canAccessCatalogosClinicos },
   { text: 'Medicamentos', icon: <CatalogIcon />, path: '/catalogos/medicamentos', canAccess: canAccessCatalogosClinicos },
   { text: 'Especialidades', icon: <CatalogIcon />, path: '/catalogos/especialidades', canAccess: canAccessCatalogosClinicos },

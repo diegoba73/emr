@@ -40,7 +40,7 @@ const EstudiosDiagnostico: React.FC = () => {
 
   return (
     <CatalogoBase<EstudioDiagnostico>
-      title="Estudios Diagnósticos"
+      title="Estudios diagnósticos / prácticas"
       items={items}
       loading={loading}
       onLoad={loadData}

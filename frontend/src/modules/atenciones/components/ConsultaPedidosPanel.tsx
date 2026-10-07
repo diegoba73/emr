@@ -31,9 +31,10 @@ import {
   listTiposEstudioComplementario,
 } from '../../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../../estudios/apiErrors';
-import { ESTADO_LABELS, PRACTICA_OPTIONS } from '../../estudios/constants';
+import { ESTADO_LABELS, labelPractica } from '../../estudios/constants';
 import type { ConsultaDetalle } from '../../../types';
 import type { EstudioComplementario, TipoEstudioComplementario } from '../../../types/estudios';
+import { buildEstudioTipoCatalogOptions } from '../../../utils/estudioTipoCatalog';
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
 import ResultadosOrdenLista from '../../../components/lims/ResultadosOrdenLista';
 import type { ResultadoExamenLims } from '../../../types/lims';
@@ -68,15 +69,7 @@ interface ConsultaPedidosPanelProps {
 }
 
 function buildEstudioCatalogOptions(catalog: TipoEstudioComplementario[]): TipoEstudioComplementario[] {
-  if (catalog.length > 0) {
-    return catalog.filter((t) => t.activo !== false);
-  }
-  return PRACTICA_OPTIONS.map((m, index) => ({
-    id: -(index + 1),
-    nombre: m.label,
-    practica: m.value,
-    activo: true,
-  }));
+  return buildEstudioTipoCatalogOptions(catalog);
 }
 
 function filterCatalogOptions<T extends { nombre: string; codigo?: string | null }>(
@@ -94,8 +87,12 @@ function filterCatalogOptions<T extends { nombre: string; codigo?: string | null
 
 function formatEstudioTipoLabel(t: TipoEstudioComplementario): string {
   const codigo = t.codigo ? `${t.codigo} — ` : '';
-  const modLabel = PRACTICA_OPTIONS.find((m) => m.value === t.practica)?.label;
-  return modLabel ? `${codigo}${t.nombre} (${modLabel})` : `${codigo}${t.nombre}`;
+  // Si practica ≈ nombre (CEHTA), no duplicar el label entre paréntesis.
+  const modLabel = labelPractica(t.practica);
+  if (modLabel && modLabel !== t.nombre && modLabel !== t.practica) {
+    return `${codigo}${t.nombre} (${modLabel})`;
+  }
+  return `${codigo}${t.nombre}`;
 }
 
 const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
@@ -928,9 +925,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                   <TableRow key={est.id} hover>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>
-                        {est.tipo_estudio_nombre ||
-                          PRACTICA_OPTIONS.find((m) => m.value === est.practica)?.label ||
-                          est.practica}
+                        {est.tipo_estudio_nombre || labelPractica(est.practica)}
                       </Typography>
                       {est.fecha_solicitud && (
                         <Typography variant="caption" color="text.secondary" display="block">

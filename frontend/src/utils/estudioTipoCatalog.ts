@@ -1,11 +1,13 @@
-import { PRACTICA_OPTIONS } from '../modules/estudios/constants';
+import { PRACTICA_OPTIONS, isLegacyPractica } from '../modules/estudios/constants';
 import type { EstudioPractica, TipoEstudioComplementario } from '../types/estudios';
 
-/** Catálogo API o, si está vacío, opciones por práctica (ids negativos = solo práctica al guardar). */
+/** Catálogo API (sin legacy) o, si está vacío, opciones CEHTA (ids negativos = solo práctica). */
 export function buildEstudioTipoCatalogOptions(
   catalog: TipoEstudioComplementario[]
 ): TipoEstudioComplementario[] {
-  const activos = catalog.filter((t) => t.activo !== false);
+  const activos = catalog.filter(
+    (t) => t.activo !== false && !isLegacyPractica(t.practica || t.codigo || '')
+  );
   if (activos.length > 0) return activos;
   return PRACTICA_OPTIONS.map((m, index) => ({
     id: -(index + 1),

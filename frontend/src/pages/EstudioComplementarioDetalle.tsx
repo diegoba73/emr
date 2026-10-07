@@ -45,7 +45,7 @@ import {
   ARCHIVO_ROL_OPTIONS,
   ESTADO_CHIP_COLOR,
   ESTADO_LABELS,
-  PRACTICA_OPTIONS,
+  labelPractica,
 } from '../modules/estudios/constants';
 import {
   canAccessEstudiosModule,
@@ -350,7 +350,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Práctica:{' '}
-              {PRACTICA_OPTIONS.find((m) => m.value === estudio.practica)?.label || estudio.practica}
+              {labelPractica(estudio.practica)}
               {estudio.tipo_estudio_nombre ? ` · ${estudio.tipo_estudio_nombre}` : ''}
             </Typography>
             {estudio.realizado_por_nombre && (

@@ -79,8 +79,24 @@ def _siguiente_version_informe(estudio_id: int) -> int:
     return (last or 0) + 1
 
 
+def _resolver_estudio_diagnostico(validated_data: dict) -> None:
+    """Si no viene FK al catálogo clínico, enlazar por nombre del tipo CEHTA."""
+    if validated_data.get('estudio_diagnostico'):
+        return
+    tipo = validated_data.get('tipo_estudio')
+    nombre = getattr(tipo, 'nombre', None) if tipo else None
+    if not nombre:
+        return
+    from catalogos.models import EstudioDiagnostico
+
+    cat = EstudioDiagnostico.objects.filter(nombre__iexact=nombre, activo=True).first()
+    if cat:
+        validated_data['estudio_diagnostico'] = cat
+
+
 @transaction.atomic
 def crear_estudio(validated_data: dict, *, user) -> EstudioComplementario:
+    _resolver_estudio_diagnostico(validated_data)
     estudio = EstudioComplementario(**validated_data)
     estudio.creado_por = user
     estudio.modificado_por = user

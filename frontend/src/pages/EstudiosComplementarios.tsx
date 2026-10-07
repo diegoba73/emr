@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -34,6 +35,8 @@ import {
   ESTADO_LABELS,
   PRACTICA_OPTIONS,
   ORIGEN_OPTIONS,
+  labelPractica,
+  practicaOptionsFromTipos,
 } from '../modules/estudios/constants';
 import {
   canAccessEstudiosModule,
@@ -43,6 +46,7 @@ import {
 import {
   createEstudioComplementario,
   listEstudiosComplementarios,
+  listTiposEstudioComplementario,
 } from '../services/estudiosComplementariosApi';
 import { turnosAgendarEstudioPath } from '../utils/agendarEstudioNavigation';
 import type {
@@ -50,6 +54,7 @@ import type {
   EstudioComplementario,
   EstudioEstado,
   EstudioPractica,
+  TipoEstudioComplementario,
 } from '../types/estudios';
 import { Paciente } from '../types';
 import { formatPacienteLabel, formatPacienteNombre } from '../utils/pacienteFormat';
@@ -58,6 +63,7 @@ const EstudiosComplementarios: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, pacientes, loadPacientes } = useData();
   const [estudios, setEstudios] = useState<EstudioComplementario[]>([]);
+  const [tipos, setTipos] = useState<TipoEstudioComplementario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<string>('');
@@ -68,12 +74,13 @@ const EstudiosComplementarios: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<CreateEstudioComplementarioPayload>({
     paciente_id: 0,
-    practica: 'IMAGEN_RX',
+    practica: '',
     origen: 'INTERNO',
     descripcion_clinica: '',
     centro_realizador: '',
   });
   const initialLoadDone = useRef(false);
+  const practicaOptions = practicaOptionsFromTipos(tipos);
 
   const writeAccess = canWriteEstudio(currentUser);
   const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
@@ -116,6 +123,13 @@ const EstudiosComplementarios: React.FC = () => {
 
   useEffect(() => {
     if (!canAccessEstudiosModule(currentUser)) return;
+    void listTiposEstudioComplementario()
+      .then(setTipos)
+      .catch(() => setTipos([]));
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!canAccessEstudiosModule(currentUser)) return;
     const refreshIfVisible = () => {
       if (document.visibilityState === 'visible') void load();
     };
@@ -149,9 +163,12 @@ const EstudiosComplementarios: React.FC = () => {
   const openCreate = () => {
     const defaultPacienteId =
       rol === 'paciente' && currentUser?.paciente?.id ? currentUser.paciente.id : 0;
+    const defaultPractica = practicaOptions[0]?.value || PRACTICA_OPTIONS[0]?.value || '';
+    const defaultTipo = tipos.find((t) => (t.practica || t.codigo) === defaultPractica);
     setForm({
       paciente_id: defaultPacienteId,
-      practica: 'IMAGEN_RX',
+      practica: defaultPractica,
+      tipo_estudio: defaultTipo?.id,
       origen: 'INTERNO',
       descripcion_clinica: '',
       centro_realizador: '',
@@ -162,6 +179,10 @@ const EstudiosComplementarios: React.FC = () => {
   const handleCreate = async () => {
     if (!form.paciente_id) {
       setError('Seleccione un paciente.');
+      return;
+    }
+    if (!form.practica && !form.tipo_estudio) {
+      setError('Seleccioná una práctica.');
       return;
     }
     setSaving(true);
@@ -241,21 +262,18 @@ const EstudiosComplementarios: React.FC = () => {
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Práctica</InputLabel>
-            <Select
-              label="Práctica"
-              value={filtroPractica}
-              onChange={(e) => setFiltroPractica(e.target.value)}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {PRACTICA_OPTIONS.map((m) => (
-                <MenuItem key={m.value} value={m.value}>
-                  {m.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            size="small"
+            sx={{ minWidth: 260 }}
+            options={practicaOptions}
+            value={practicaOptions.find((m) => m.value === filtroPractica) || null}
+            onChange={(_e, opt) => setFiltroPractica(opt?.value || '')}
+            getOptionLabel={(o) => o.label}
+            isOptionEqualToValue={(a, b) => a.value === b.value}
+            renderInput={(params) => (
+              <TextField {...params} label="Práctica" placeholder="Buscar práctica…" />
+            )}
+          />
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
@@ -308,8 +326,7 @@ const EstudiosComplementarios: React.FC = () => {
                   <TableCell>
                     {row.tipo_estudio_nombre || '—'}
                     <Typography variant="caption" display="block" color="text.secondary">
-                      {PRACTICA_OPTIONS.find((m) => m.value === row.practica)?.label ||
-                        row.practica}
+                      {labelPractica(row.practica, practicaOptions)}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -405,25 +422,29 @@ const EstudiosComplementarios: React.FC = () => {
                 fullWidth
               />
             )}
-            <FormControl fullWidth>
-              <InputLabel>Práctica *</InputLabel>
-              <Select
-                label="Práctica *"
-                value={form.practica}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    practica: e.target.value as EstudioPractica,
-                  }))
-                }
-              >
-                {PRACTICA_OPTIONS.map((m) => (
-                  <MenuItem key={m.value} value={m.value}>
-                    {m.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={practicaOptions}
+              value={practicaOptions.find((m) => m.value === form.practica) || null}
+              onChange={(_e, opt) => {
+                const practica = (opt?.value || '') as EstudioPractica;
+                const tipo = tipos.find((t) => (t.practica || t.codigo) === practica);
+                setForm((f) => ({
+                  ...f,
+                  practica,
+                  tipo_estudio: tipo?.id,
+                }));
+              }}
+              getOptionLabel={(o) => o.label}
+              isOptionEqualToValue={(a, b) => a.value === b.value}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Práctica *"
+                  required
+                  placeholder="Buscar práctica…"
+                />
+              )}
+            />
             <FormControl fullWidth>
               <InputLabel>Origen</InputLabel>
               <Select

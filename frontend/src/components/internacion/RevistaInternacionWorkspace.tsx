@@ -35,7 +35,7 @@ import {
   listTiposEstudioComplementario,
 } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../../modules/estudios/apiErrors';
-import { PRACTICA_OPTIONS } from '../../modules/estudios/constants';
+import { labelPractica } from '../../modules/estudios/constants';
 import type {
   RevistaEstudioItem,
   RevistaInternacionContexto,
@@ -45,6 +45,7 @@ import type {
 import type { Paciente } from '../../types';
 import type { OrigenSolicitudLims } from '../../types/lims';
 import type { TipoEstudioComplementario } from '../../types/estudios';
+import { buildEstudioTipoCatalogOptions } from '../../utils/estudioTipoCatalog';
 import { formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
 
 type PedidoPanel = 'lab' | 'estudios' | null;
@@ -204,7 +205,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
     setEstudioOpen(true);
     try {
       const catalog = await listTiposEstudioComplementario();
-      setTiposEstudio(catalog.filter((t) => t.activo !== false));
+      setTiposEstudio(buildEstudioTipoCatalogOptions(catalog));
     } catch (e) {
       setPedidoError(parseEstudiosApiError(e, 'No se pudo cargar el catálogo de estudios.'));
       setTiposEstudio([]);
@@ -607,8 +608,10 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                 value={selectedTipoEstudio}
                 onChange={(_e, value) => setSelectedTipoEstudio(value)}
                 getOptionLabel={(t) => {
-                  const mod = PRACTICA_OPTIONS.find((m) => m.value === t.practica)?.label;
-                  return mod ? `${t.nombre} (${mod})` : t.nombre;
+                  const mod = labelPractica(t.practica);
+                  return mod && mod !== t.nombre && mod !== t.practica
+                    ? `${t.nombre} (${mod})`
+                    : t.nombre;
                 }}
                 isOptionEqualToValue={(a, b) => a.id === b.id}
                 renderInput={(params) => (
