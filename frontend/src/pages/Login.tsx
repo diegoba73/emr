@@ -20,7 +20,7 @@ import {
   MedicalServices,
   PhoneAndroid,
 } from '@mui/icons-material';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -57,8 +57,17 @@ const isDemoMode = process.env.REACT_APP_DEMO_MODE === 'true';
 const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isLoading } = useData();
   const { mode } = useThemeMode();
+
+  const redirectAfterLogin = (() => {
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+    if (from && from.startsWith('/') && !from.startsWith('//') && from !== '/login') {
+      return from;
+    }
+    return null;
+  })();
 
   const {
     register,
@@ -77,7 +86,12 @@ const Login: React.FC = () => {
       await login({ username: data.username, password: data.password });
       toast.success('Inicio de sesión exitoso');
       const user = await authService.getCurrentUser();
-      navigate(isPacienteRole(user) ? '/portal' : '/dashboard', { replace: true });
+      if (isPacienteRole(user)) {
+        navigate('/portal', { replace: true });
+        return;
+      }
+      navigate(redirectAfterLogin || '/dashboard', { replace: true });
+
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.detail ||

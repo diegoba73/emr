@@ -44,10 +44,14 @@ import {
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { sugerirMuestraPorCultivo, validateCrearEstudioMicroPedido } from '../../utils/limsMicroUx';
-import { canAccessMicrobiologia, canOperateMicrobiologia } from '../../utils/limsAccess';
+import {
+  canAccessMicrobiologiaListado,
+  canCreatePedidoMicrobiologia,
+  canOperateMicrobiologia,
+} from '../../utils/limsAccess';
 import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
 
-const ESTADOS: EstadoEstudioMicrobiologia[] = [
+const ESTADOS_OPERADOR: EstadoEstudioMicrobiologia[] = [
   'PENDIENTE',
   'RECIBIDO',
   'SEMBRADO',
@@ -59,6 +63,9 @@ const ESTADOS: EstadoEstudioMicrobiologia[] = [
   'INFORMADO',
   'CANCELADO',
 ];
+
+/** Estados liberados al médico (equivalente clínico a FINALIZADO). */
+const ESTADOS_LECTURA_MEDICO: EstadoEstudioMicrobiologia[] = ['VALIDADO', 'INFORMADO'];
 
 const MicrobiologiaEstudios: React.FC = () => {
   const navigate = useNavigate();
@@ -88,8 +95,10 @@ const MicrobiologiaEstudios: React.FC = () => {
   const [observaciones, setObservaciones] = useState('');
   const [formError, setFormError] = useState('');
 
-  const allowed = canAccessMicrobiologia(currentUser);
+  const allowed = canAccessMicrobiologiaListado(currentUser);
   const canOp = canOperateMicrobiologia(currentUser);
+  const canCrearPedido = canCreatePedidoMicrobiologia(currentUser);
+  const estadosFiltro = canOp ? ESTADOS_OPERADOR : ESTADOS_LECTURA_MEDICO;
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -255,9 +264,19 @@ const MicrobiologiaEstudios: React.FC = () => {
         Estudios de microbiología
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Workbench técnico de cultivos (siembras, lecturas, antibiograma). Los pedidos también aparecen
-        en <strong>Órdenes LIMS</strong> y <strong>Pendientes</strong> con número{' '}
-        <strong>LAB-…</strong> y tipo Microbiología.
+        {canOp ? (
+          <>
+            Workbench técnico de cultivos (siembras, lecturas, antibiograma). Los pedidos también
+            aparecen en <strong>Órdenes LIMS</strong> y <strong>Pendientes</strong> con número{' '}
+            <strong>LAB-…</strong> y tipo Microbiología.
+          </>
+        ) : (
+          <>
+            Podés pedir un cultivo nuevo. El listado muestra solo informes liberados (
+            <strong>VALIDADO</strong> / <strong>INFORMADO</strong>); los pedidos en proceso no
+            aparecen acá ni se operan desde esta pantalla.
+          </>
+        )}
       </Typography>
 
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -271,8 +290,8 @@ const MicrobiologiaEstudios: React.FC = () => {
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Estado</InputLabel>
             <Select label="Estado" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
-              <MenuItem value="">Todos</MenuItem>
-              {ESTADOS.map((s) => (
+              <MenuItem value="">{canOp ? 'Todos' : 'Finalizados'}</MenuItem>
+              {estadosFiltro.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
                 </MenuItem>
@@ -282,14 +301,16 @@ const MicrobiologiaEstudios: React.FC = () => {
           <Button variant="outlined" onClick={load}>
             Actualizar
           </Button>
-          {canOp && (
+          {canCrearPedido && (
             <Button variant="contained" onClick={onOpenCreate}>
               Nuevo estudio
             </Button>
           )}
-          <Button variant="text" onClick={() => navigate('/laboratorio/microbiologia/catalogos')}>
-            Catálogos
-          </Button>
+          {canOp && (
+            <Button variant="text" onClick={() => navigate('/laboratorio/microbiologia/catalogos')}>
+              Catálogos
+            </Button>
+          )}
         </Box>
       </Paper>
 

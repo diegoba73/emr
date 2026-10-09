@@ -1,7 +1,7 @@
 import HorariosMedicos from './pages/HorariosMedicos';
 import { canManageHorarios } from './utils/permissions';
 import React, { useMemo } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box, Alert, CircularProgress } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -57,6 +57,7 @@ import QcHubPage from './pages/laboratorio/qc/QcHubPage';
 import AnalyticsAnalitosPage from './pages/laboratorio/AnalyticsAnalitosPage';
 import FiltrosAvanzadosPage from './pages/laboratorio/FiltrosAvanzadosPage';
 import InstrumentosPage from './pages/laboratorio/InstrumentosPage';
+import PrototipoPedidoMultiMaterialPage from './pages/laboratorio/PrototipoPedidoMultiMaterialPage';
 import PatientDashboard from './components/patient360/PatientDashboard';
 import AuditEventsPage from './pages/AuditEventsPage';
 import BiDashboard from './pages/BiDashboard';
@@ -94,6 +95,7 @@ import {
   canAccessFiltrosAvanzados,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
+  canAccessMicrobiologiaListado,
   canOpenDetalleOrdenLab,
   canOperateLims,
 } from './utils/limsAccess';
@@ -126,6 +128,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRole,
   canAccess,
 }) => {
+  const location = useLocation();
+
   // Mostrar loading mientras se verifica la autenticación
   if (isLoading) {
     return (
@@ -143,9 +147,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Redirigir a login si no está autenticado
+  // Redirigir a login si no está autenticado (conservar destino para volver después)
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
   
   if (canAccess && !canAccess(currentUser)) {
@@ -675,7 +679,7 @@ const AppContent: React.FC = () => {
                 currentUser={currentUser}
                 isAuthenticated={isAuthenticated}
                 isLoading={isLoading}
-                canAccess={canAccessMicrobiologia}
+                canAccess={canAccessMicrobiologiaListado}
               >
                 <MicrobiologiaEstudios />
               </ProtectedRoute>
@@ -821,6 +825,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsModule}
               >
                 <InstrumentosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/prototipo-pedido-multi-material"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessLimsModule}
+              >
+                <PrototipoPedidoMultiMaterialPage />
               </ProtectedRoute>
             }
           />

@@ -491,6 +491,61 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         r = self.client.get(f"/api/lab/microbiologia/estudios/{data['id']}/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
+    def test_listado_filtra_por_numero_exacto(self):
+        estudio = EstudioMicrobiologia.objects.create(
+            solicitud=self.sol,
+            muestra=self.muestra,
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            estado="RECIBIDO",
+            numero="LAB-2026-00130",
+        )
+        otro = EstudioMicrobiologia.objects.create(
+            solicitud=self.sol,
+            muestra=self.muestra,
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            estado="RECIBIDO",
+            numero="LAB-2026-00131",
+        )
+        self.client.force_authenticate(self.lab)
+        r = self.client.get("/api/lab/microbiologia/estudios/?numero=LAB-2026-00130")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        body = r.json()
+        ids = {item["id"] for item in (body if isinstance(body, list) else body.get("results", []))}
+        self.assertIn(estudio.pk, ids)
+        self.assertNotIn(otro.pk, ids)
+
+    def test_medico_listado_solo_estudios_liberados(self):
+        """Listado médico: solo VALIDADO/INFORMADO; retrieve de pendientes sigue OK."""
+        estudio = EstudioMicrobiologia.objects.create(
+            solicitud=self.sol,
+            muestra=self.muestra,
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            estado="PENDIENTE",
+        )
+        eid = estudio.pk
+        self.client.force_authenticate(self.med_user)
+        r_detail = self.client.get(f"/api/lab/microbiologia/estudios/{eid}/")
+        self.assertEqual(r_detail.status_code, status.HTTP_200_OK, r_detail.content)
+
+        r_list = self.client.get("/api/lab/microbiologia/estudios/")
+        self.assertEqual(r_list.status_code, status.HTTP_200_OK, r_list.content)
+        body = r_list.json()
+        ids = {item["id"] for item in (body if isinstance(body, list) else body.get("results", []))}
+        self.assertNotIn(eid, ids)
+
+        EstudioMicrobiologia.objects.filter(pk=eid).update(estado="VALIDADO")
+        r_ok = self.client.get("/api/lab/microbiologia/estudios/")
+        self.assertEqual(r_ok.status_code, status.HTTP_200_OK, r_ok.content)
+        body_ok = r_ok.json()
+        ids_ok = {
+            item["id"]
+            for item in (body_ok if isinstance(body_ok, list) else body_ok.get("results", []))
+        }
+        self.assertIn(eid, ids_ok)
+
     def test_iniciar_estudio_idempotente(self):
         data = self._crear_estudio()
         eid = data["id"]

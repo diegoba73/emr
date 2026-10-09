@@ -20,9 +20,12 @@ En `emr.sytes.net` conviven dos sistemas. Al trabajar con **EMR-LIMS**, usar sol
 | | EMR-LIMS | Otra aplicación |
 |---|---|---|
 | SSH | puerto **2223** | puerto **22** |
-| URL pública HTTP | `http://emr.sytes.net:8080` | puerto **80** público |
+| URL pública (canónica) | `https://emr.icpueblodeluis.com.ar:8080` | puerto **80** público |
+| Acceso legacy / NAT | `http://emr.sytes.net:8080` (router **`:8080` → host `:80`**) | — |
 | Docker nginx en la PC EMR | publicar como **`80:80`** | fuera de alcance |
 | Código | `/srv/emr/app` | fuera de alcance |
+
+**Enlaces de informe (WhatsApp / mail):** `PUBLIC_API_BASE_URL=https://emr.icpueblodeluis.com.ar:8080` en el `.env` de prod. No usar `emr.sytes.net` en esos mensajes.
 
 El router reenvía **público `:8080` → `192.168.1.253:80`**.  
 Por eso el compose del EMR debe publicar nginx como **`80:80`**, no `8080:80`.

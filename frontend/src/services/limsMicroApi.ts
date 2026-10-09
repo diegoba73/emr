@@ -49,7 +49,11 @@ export const updateMedioCultivo = (id: number, body: Partial<MedioCultivo>) =>
 // --- Estudios ---
 export const listEstudiosMicrobiologia = (params?: {
   search?: string;
+  /** Protocolo exacto (LAB-YYYY-NNNNN). */
+  numero?: string;
   estado?: string;
+  /** YYYY-MM-DD — día operativo (fecha_inicio o created_at). */
+  fecha?: string;
   sin_etiquetas?: boolean;
   esperando_recepcion?: boolean;
   fecha_programada_toma?: string;
@@ -59,14 +63,17 @@ export const listEstudiosMicrobiologia = (params?: {
 }) => {
   const q: Record<string, string | number | undefined> = { page_size: 100 };
   if (params?.search) q.search = params.search;
+  if (params?.numero) q.numero = params.numero;
   if (params?.estado) q.estado = params.estado;
+  if (params?.fecha) q.fecha = params.fecha;
   if (params?.sin_etiquetas) q.sin_etiquetas = '1';
   if (params?.esperando_recepcion) q.esperando_recepcion = '1';
   if (params?.fecha_programada_toma) q.fecha_programada_toma = params.fecha_programada_toma;
   if (params?.vista_extraccion) q.vista_extraccion = params.vista_extraccion;
   if (params?.cola) q.cola = params.cola;
   if (params?.anio != null) q.anio = params.anio;
-  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages: 20 });
+  const maxPages = params?.numero ? 1 : 20;
+  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages });
 };
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);

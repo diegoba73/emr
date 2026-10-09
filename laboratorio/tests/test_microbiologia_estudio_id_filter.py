@@ -293,13 +293,24 @@ class TestMicroEstudioIdFilter(TestCase):
                 self.assertEqual(_results_ids(r), {self.expected_by_path[path]})
 
     def test_medico_ve_estudio_ajeno_lectura_institucional(self):
-        """Médico ve estudios de otros, igual que las órdenes LIMS."""
+        """Médico ve estudios ajenos liberados (VALIDADO/INFORMADO), igual que lab clínico."""
+        EstudioMicrobiologia.objects.filter(pk=self.estudio_ajeno.pk).update(estado="VALIDADO")
         self.client.force_authenticate(self.med_user)
         r = self.client.get(
             f"/api/lab/microbiologia/estudios/?estudio_id={self.estudio_ajeno.pk}"
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
         self.assertEqual(_results_ids(r), {self.estudio_ajeno.pk})
+
+    def test_medico_listado_oculta_estudios_no_liberados(self):
+        """El listado de médico no incluye pedidos en proceso."""
+        self.assertEqual(self.estudio_ajeno.estado, "PENDIENTE")
+        self.client.force_authenticate(self.med_user)
+        r = self.client.get(
+            f"/api/lab/microbiologia/estudios/?estudio_id={self.estudio_ajeno.pk}"
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(_results_ids(r), set())
 
     def test_medico_estudio_ajeno_sin_recursos_hijos_lista_vacia(self):
         """Sin siembras/informes del estudio ajeno, el filtro no inventa filas."""
@@ -315,6 +326,7 @@ class TestMicroEstudioIdFilter(TestCase):
                 self.assertEqual(_results_ids(r), set())
 
     def test_medico_estudio_propio_filtra(self):
+        EstudioMicrobiologia.objects.filter(pk=self.estudio_a.pk).update(estado="VALIDADO")
         self.client.force_authenticate(self.med_user)
         for path in MICRO_LIST_ENDPOINTS:
             with self.subTest(path=path):

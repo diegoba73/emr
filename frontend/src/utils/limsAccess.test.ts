@@ -2,6 +2,8 @@ import {
   ESTADOS_MICRO_CERRADOS,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
+  canAccessMicrobiologiaListado,
+  canCreatePedidoMicrobiologia,
   canEditMicroCatalogos,
   canDownloadInformeClinicoPdf,
   canDownloadInformeLimsPdf,
@@ -101,8 +103,10 @@ describe('micro LIMS role matrix', () => {
     expect(canOperateMicroEstudioTecnico(labUser, 'SEMBRADO')).toBe(true);
   });
 
-  it('medico cannot access LIMS/micro (usa portal /solicitudes)', () => {
+  it('medico ve listado micro liberado, puede pedir, sin operar ni módulo LIMS completo', () => {
     expect(canAccessMicrobiologia(medUser)).toBe(false);
+    expect(canAccessMicrobiologiaListado(medUser)).toBe(true);
+    expect(canCreatePedidoMicrobiologia(medUser)).toBe(true);
     expect(canOperateMicrobiologia(medUser)).toBe(false);
     expect(canOperateMicroEstudioTecnico(medUser, 'SEMBRADO')).toBe(false);
   });
@@ -235,5 +239,18 @@ describe('canAccessMicrobiologiaLectura', () => {
 
   it('niega paciente', () => {
     expect(canAccessMicrobiologiaLectura(pacUser)).toBe(false);
+  });
+});
+
+describe('canAccessMicrobiologiaListado', () => {
+  it('operadores LIMS y médico; no secretaría/enfermería/paciente', () => {
+    expect(canAccessMicrobiologiaListado(labUser)).toBe(true);
+    expect(canAccessMicrobiologiaListado(bioUser)).toBe(true);
+    expect(canAccessMicrobiologiaListado(adminUser)).toBe(true);
+    expect(canAccessMicrobiologiaListado(medUser)).toBe(true);
+    expect(canAccessMicrobiologiaListado(secUser)).toBe(false);
+    expect(canAccessMicrobiologiaListado(enfUser)).toBe(false);
+    expect(canAccessMicrobiologiaListado(pacUser)).toBe(false);
+    expect(canAccessMicrobiologiaListado(null)).toBe(false);
   });
 });

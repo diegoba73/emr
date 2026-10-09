@@ -153,7 +153,7 @@ export async function listSolicitudesExamen(params?: {
       ...params,
       page_size: 100,
     },
-    { maxPages: 20 }
+    { maxPages: params?.numero ? 1 : 20 }
   );
 }
 

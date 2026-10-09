@@ -1002,9 +1002,10 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
 
     - admin / superuser: acceso total a list/retrieve/create/update/destroy y acciones.
     - laboratorio / bioquímico: list/retrieve/create/update/destroy y acciones técnicas.
-    - médico: list/retrieve; además puede **solicitar** estudios (create/batch)
-      desde consulta/mostrador (pedido clínico). No opera el flujo técnico
-      (iniciar, siembras, etiquetas, etc.).
+    - médico: list (solo VALIDADO/INFORMADO) / retrieve; además puede
+      **solicitar** estudios (create/batch) desde consulta/mostrador
+      (pedido clínico). No opera el flujo técnico (iniciar, siembras,
+      etiquetas, etc.).
     - secretaría: list/retrieve del estudio + envío/PDF con informe FINAL
       VALIDADO. Sin siembras, lecturas, aislados, antibiograma ni texto del
       informe.

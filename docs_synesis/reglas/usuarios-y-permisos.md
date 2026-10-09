@@ -50,6 +50,7 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Editar cabecera de orden LIMS (`PATCH` paciente/médico/origen/fechas/obs.) | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`); **bloqueado** si `FINALIZADO` |
 | Etiqueta ZPL 40×23 (preview `etiqueta-zpl` / `imprimir-etiqueta` / `confirmar`) | `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser; **no** médico |
 | Etiqueta ZPL micro (mismos actions bajo `microbiologia/estudios`) | Igual que lab clínico (`ROLES_LIMS_WRITE`); **no** médico |
+| Listado sidebar Microbiología (`/laboratorio/microbiologia/estudios`) | admin, laboratorio, bioquímico (todos los estados); **médico** ve solo `VALIDADO`/`INFORMADO` y puede **pedir** estudio; sin catálogos ni ops técnicas |
 | Validar orden LIMS | admin, bioquímico (`ROLES_LIMS_VALIDAR`) |
 | Override IQC al cerrar | admin / superuser + motivo |
 | Alta de pacientes | admin, secretaría, médico, laboratorio, bioquímico (`_ROLES_ALTA_PACIENTE`); sin PATCH demográfico para lab/bio |

@@ -47,7 +47,7 @@ import {
   type PendientePedidoRow,
 } from '../../utils/limsPendientesUnificados';
 import { attachIqcStatusToRows } from '../../utils/limsIqcPrecheck';
-import { interpretarBusquedaOrden } from '../../utils/limsBusquedaOrden';
+import { interpretarNumeroOrden } from '../../utils/limsBusquedaOrden';
 
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
@@ -79,15 +79,6 @@ const MICRO_COLA = new Set([
   'VALIDADO',
 ]);
 
-function fechaLocalIso(iso?: string | null): string | null {
-  if (!iso) return null;
-  try {
-    return formatFechaLocal(startOfLocalDay(new Date(iso)));
-  } catch {
-    return null;
-  }
-}
-
 async function cargarMicrosConEstados(
   base: Parameters<typeof listEstudiosMicrobiologia>[0],
   microEstadosFiltro: string[] | null
@@ -118,8 +109,10 @@ const OrdenesLims: React.FC = () => {
   const { currentUser } = useData();
   const [rows, setRows] = useState<PendientePedidoRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState('');
-  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  const [filtroNumero, setFiltroNumero] = useState('');
+  const [filtroNumeroDebounced, setFiltroNumeroDebounced] = useState('');
+  const [filtroPaciente, setFiltroPaciente] = useState('');
+  const [filtroPacienteDebounced, setFiltroPacienteDebounced] = useState('');
   const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
   const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
   const [modoCola, setModoCola] = useState(false);
@@ -137,20 +130,28 @@ const OrdenesLims: React.FC = () => {
   );
 
   const fechaApi = formatFechaLocal(diaSeleccionado);
-  const qBusqueda = busquedaDebounced.trim();
-  const interp = useMemo(() => interpretarBusquedaOrden(qBusqueda), [qBusqueda]);
-  const busquedaPorProtocolo = interp.tipo === 'exacto' || interp.tipo === 'secuencia_anio';
-  /** En pendientes, texto/DNI va al API (puede incluir finalizadas). */
-  const buscarTextoEnCola =
-    colaDisponible && modoCola && interp.tipo === 'texto' && !vistaLimitada;
+  const interpNumero = useMemo(
+    () => interpretarNumeroOrden(filtroNumeroDebounced),
+    [filtroNumeroDebounced]
+  );
+  const qPaciente = filtroPacienteDebounced.trim();
+  const busquedaPorProtocolo = interpNumero.tipo === 'exacto';
+  const busquedaPorPaciente = !busquedaPorProtocolo && qPaciente.length > 0;
+  /** Búsqueda global (nº o paciente): no acota al día / cola. */
+  const busquedaGlobal = busquedaPorProtocolo || busquedaPorPaciente;
 
   const diasTabs = useMemo(() => buildDiasLaboratorio(diasPestanas), [diasPestanas]);
   const tabValue = modoCola && colaDisponible ? COLA_TAB : fechaApi;
 
   useEffect(() => {
-    const t = window.setTimeout(() => setBusquedaDebounced(busqueda), 350);
+    const t = window.setTimeout(() => setFiltroNumeroDebounced(filtroNumero), 300);
     return () => window.clearTimeout(t);
-  }, [busqueda]);
+  }, [filtroNumero]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setFiltroPacienteDebounced(filtroPaciente), 350);
+    return () => window.clearTimeout(t);
+  }, [filtroPaciente]);
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -159,44 +160,43 @@ const OrdenesLims: React.FC = () => {
       let labs: Awaited<ReturnType<typeof listSolicitudesExamen>>;
       let micros: Awaited<ReturnType<typeof listEstudiosMicrobiologia>> = [];
 
-      // Nº de protocolo: exacto (2026-00030) o secuencia del año (30).
-      if (interp.tipo === 'exacto') {
-        labs = await listSolicitudesExamen({ numero: interp.numero });
-        try {
-          micros = await listEstudiosMicrobiologia({ search: interp.numero });
-        } catch {
-          micros = [];
-        }
-        const microRows = micros
-          .filter((e) => (e.numero || '').toUpperCase() === interp.numero.toUpperCase())
-          .map(mapMicroToPendiente);
+      // 1) Número de protocolo exacto (130 → LAB-año-00130, o 2025-00130).
+      if (interpNumero.tipo === 'exacto') {
+        const [labsRes, microsRes] = await Promise.all([
+          listSolicitudesExamen({ numero: interpNumero.numero }),
+          listEstudiosMicrobiologia({ numero: interpNumero.numero }).catch(() => []),
+        ]);
+        labs = labsRes;
+        micros = microsRes;
         setRows(
           await attachIqcStatusToRows(
-            sortPedidosPorNumero([...labs.map(mapLabToPendiente), ...microRows])
+            sortPedidosPorNumero([
+              ...labs.map(mapLabToPendiente),
+              ...micros.map(mapMicroToPendiente),
+            ])
           )
         );
         return;
       }
 
-      if (interp.tipo === 'secuencia_anio') {
-        const labParams: Parameters<typeof listSolicitudesExamen>[0] = {
-          anio: interp.anio,
-          search: interp.secuencia,
-        };
+      // 2) Paciente (nombre / DNI) — búsqueda API, sin acotar al día.
+      if (qPaciente) {
+        const labParams: Parameters<typeof listSolicitudesExamen>[0] = { search: qPaciente };
         const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {
-          anio: interp.anio,
-          search: interp.secuencia,
+          search: qPaciente,
         };
         if (estadoFiltro) {
           labParams.estado = estadoFiltro;
         }
-        labs = await listSolicitudesExamen(labParams);
-        try {
-          const microEstados = estadoFiltro ? estadosMicroDesdeFiltroLab(estadoFiltro) : null;
-          micros = await cargarMicrosConEstados(microParams, microEstados);
-        } catch {
-          micros = [];
-        }
+        const [labsRes, microsRes] = await Promise.all([
+          listSolicitudesExamen(labParams),
+          cargarMicrosConEstados(
+            microParams,
+            estadoFiltro ? estadosMicroDesdeFiltroLab(estadoFiltro) : null
+          ).catch(() => []),
+        ]);
+        labs = labsRes;
+        micros = microsRes;
         let microRows = micros.map(mapMicroToPendiente);
         if (estadoFiltro) {
           const allowedMicro = estadosMicroDesdeFiltroLab(estadoFiltro);
@@ -212,34 +212,31 @@ const OrdenesLims: React.FC = () => {
         return;
       }
 
+      // 3) Cola de pendientes.
       if (colaDisponible && modoCola) {
         const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
         const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {};
         let microEstadosFiltro: string[] | null = null;
 
-        if (buscarTextoEnCola) {
-          labParams.search = interp.q;
-          microParams.search = interp.q;
-        }
         if (estadoFiltro) {
           labParams.estado = estadoFiltro;
           microEstadosFiltro = estadosMicroDesdeFiltroLab(estadoFiltro);
-        } else if (!buscarTextoEnCola) {
+        } else {
           labParams.cola = 'trabajo';
           microParams.cola = 'trabajo';
         }
 
-        labs = await listSolicitudesExamen(labParams);
-        try {
-          micros = await cargarMicrosConEstados(microParams, microEstadosFiltro);
-        } catch {
-          micros = [];
-        }
+        const [labsRes, microsRes] = await Promise.all([
+          listSolicitudesExamen(labParams),
+          cargarMicrosConEstados(microParams, microEstadosFiltro).catch(() => []),
+        ]);
+        labs = labsRes;
+        micros = microsRes;
 
         let microRows = micros.map(mapMicroToPendiente);
         if (microEstadosFiltro) {
           microRows = microRows.filter((r) => microEstadosFiltro!.includes(r.estado));
-        } else if (!buscarTextoEnCola) {
+        } else {
           microRows = microRows.filter((r) => MICRO_COLA.has(r.estado));
         }
 
@@ -251,19 +248,18 @@ const OrdenesLims: React.FC = () => {
         return;
       }
 
-      // Vista por día.
-      labs = await listSolicitudesExamen({
-        estado: estadoFiltro || undefined,
-        fecha_muestra: fechaApi,
-      });
-      try {
-        micros = await listEstudiosMicrobiologia({});
-      } catch {
-        micros = [];
-      }
+      // 4) Vista por día (lab por fecha_muestra; micro por fecha en API).
+      const [labsRes, microsRes] = await Promise.all([
+        listSolicitudesExamen({
+          estado: estadoFiltro || undefined,
+          fecha_muestra: fechaApi,
+        }),
+        listEstudiosMicrobiologia({ fecha: fechaApi }).catch(() => []),
+      ]);
+      labs = labsRes;
+      micros = microsRes;
       let microRows = micros
         .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
-        .filter((e) => fechaLocalIso(e.fecha_inicio || e.created_at) === fechaApi)
         .map(mapMicroToPendiente);
       if (vistaLimitada) {
         microRows = microRows.filter((r) => r.estado === 'INFORMADO');
@@ -289,12 +285,12 @@ const OrdenesLims: React.FC = () => {
     }
   }, [
     allowed,
-    buscarTextoEnCola,
     colaDisponible,
     estadoFiltro,
     fechaApi,
-    interp,
+    interpNumero,
     modoCola,
+    qPaciente,
     vistaLimitada,
   ]);
 
@@ -302,18 +298,7 @@ const OrdenesLims: React.FC = () => {
     load();
   }, [load]);
 
-  const filtradas = useMemo(() => {
-    // Búsqueda por protocolo o en pendientes ya resolvió en API.
-    if (busquedaPorProtocolo || (modoCola && colaDisponible)) return rows;
-    if (interp.tipo !== 'texto') return rows;
-    const q = interp.q.toLowerCase();
-    return rows.filter((r) => {
-      const n = (r.numero || '').toLowerCase();
-      const pn = (r.paciente_nombre || '').toLowerCase();
-      const pd = (r.paciente_dni || '').toLowerCase();
-      return n.includes(q) || pn.includes(q) || pd.includes(q);
-    });
-  }, [rows, interp, busquedaPorProtocolo, modoCola, colaDisponible]);
+  const filtradas = rows;
 
   const etiquetaVista = modoCola && colaDisponible ? 'Pendientes' : labelDiaOrden(diaSeleccionado);
 
@@ -380,16 +365,16 @@ const OrdenesLims: React.FC = () => {
             Órdenes LIMS
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {busquedaPorProtocolo
-              ? interp.tipo === 'exacto'
-                ? `Búsqueda exacta ${interp.numero}.`
-                : `Nº ${interp.secuencia} en el año ${interp.anio}.`
-              : modoCola && colaDisponible
-                ? 'Pendientes: pedidos no finalizados (todos los días). Buscar / estado permiten ubicar también finalizadas. Extracción y etiquetas en '
-                : vistaLimitada
-                  ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
-                  : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
-            {!busquedaPorProtocolo && (
+            {busquedaPorProtocolo && interpNumero.tipo === 'exacto'
+              ? `Protocolo exacto ${interpNumero.numero}.`
+              : busquedaPorPaciente
+                ? `Búsqueda por paciente «${qPaciente}».`
+                : modoCola && colaDisponible
+                  ? 'Pendientes: pedidos no finalizados (todos los días). Extracción y etiquetas en '
+                  : vistaLimitada
+                    ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
+                    : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
+            {!busquedaGlobal && (
               <Button
                 size="small"
                 sx={{ p: 0, minWidth: 0, verticalAlign: 'baseline' }}
@@ -398,7 +383,7 @@ const OrdenesLims: React.FC = () => {
                 Pendientes
               </Button>
             )}
-            {!busquedaPorProtocolo && '.'}
+            {!busquedaGlobal && '.'}
           </Typography>
         </Box>
       </Stack>
@@ -453,11 +438,24 @@ const OrdenesLims: React.FC = () => {
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <TextField
             size="small"
-            label="Buscar (nº, paciente, DNI)"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            sx={{ minWidth: 260, flex: '1 1 220px' }}
-            helperText="30 = año actual · 2026-00030 = exacto"
+            label="Número"
+            value={filtroNumero}
+            onChange={(e) => setFiltroNumero(e.target.value)}
+            sx={{ width: 160 }}
+            placeholder="130"
+            helperText="130 = año actual · 2025-00130"
+            inputProps={{ inputMode: 'numeric', 'aria-label': 'Número de protocolo' }}
+          />
+          <TextField
+            size="small"
+            label="Paciente"
+            value={filtroPaciente}
+            onChange={(e) => setFiltroPaciente(e.target.value)}
+            sx={{ minWidth: 220, flex: '1 1 200px' }}
+            placeholder="Apellido o DNI"
+            helperText="Nombre o DNI"
+            disabled={busquedaPorProtocolo}
+            inputProps={{ 'aria-label': 'Buscar paciente' }}
           />
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>Estado</InputLabel>
@@ -523,9 +521,11 @@ const OrdenesLims: React.FC = () => {
             emptyMessage={
               busquedaPorProtocolo
                 ? 'Sin pedidos con ese número.'
-                : modoCola && colaDisponible
-                  ? 'Sin pedidos pendientes.'
-                  : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
+                : busquedaPorPaciente
+                  ? 'Sin pedidos para ese paciente.'
+                  : modoCola && colaDisponible
+                    ? 'Sin pedidos pendientes.'
+                    : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
             }
             columnaFecha="toma"
             mostrarIndiceDia={!modoCola || !colaDisponible}

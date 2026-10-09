@@ -68,6 +68,7 @@ import {
   canAccessLimsOrdenes,
   canAccessLimsModule,
   canAccessMicrobiologia,
+  canAccessMicrobiologiaListado,
   canAccessFiltrosAvanzados,
   canOperateLims,
 } from '../../utils/limsAccess';
@@ -140,7 +141,7 @@ const labItems: NavItem[] = [
   { text: 'Pendientes', icon: <PendientesIcon />, path: '/laboratorio/pendientes', canAccess: canAccessLimsPendientes },
   { text: 'Recepción muestras', icon: <RecepcionIcon />, path: '/laboratorio/muestras/recepcion', canAccess: canOperateLims },
   { text: 'Órdenes LIMS', icon: <ScienceIcon />, path: '/laboratorio/ordenes', canAccess: canAccessLimsOrdenes },
-  { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologia },
+  { text: 'Microbiología', icon: <BiotechIcon />, path: '/laboratorio/microbiologia/estudios', canAccess: canAccessMicrobiologiaListado },
   { text: 'Inventario', icon: <InventarioIcon />, path: '/laboratorio/inventario', canAccess: canAccessLimsModule },
   { text: 'Control calidad', icon: <QcIcon />, path: '/laboratorio/qc', canAccess: canAccessLimsModule },
   { text: 'Analítica resultados', icon: <AnalyticsIcon />, path: '/laboratorio/analytics', canAccess: canAccessLimsModule },

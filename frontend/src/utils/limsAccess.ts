@@ -187,16 +187,27 @@ export function canDownloadInformeLimsPdf(
   return String(estado).toUpperCase() === 'FINALIZADO';
 }
 
-/** Misma visibilidad que el módulo LIMS (admin, laboratorio, bioquímico). */
+/** Operación LIMS de microbiología (admin, laboratorio, bioquímico). */
 export function canAccessMicrobiologia(user: User | null): boolean {
   return canAccessLimsModule(user);
 }
 
 /**
+ * Listado «Microbiología» en sidebar/ruta de estudios:
+ * operadores LIMS (todos los estados) + médico (solo liberados; filtra el API).
+ * No habilita catálogos ni operaciones técnicas.
+ */
+export function canAccessMicrobiologiaListado(user: User | null): boolean {
+  if (!user) return false;
+  if (canAccessMicrobiologia(user)) return true;
+  return normalizeRol(user) === 'medico';
+}
+
+/**
  * Lectura de pedidos/estudios de microbiología:
  * - LIMS (operadores/admin): todos
- * - Médico: los propios / de pacientes vinculados (filtra el API)
- * No habilita el menú LIMS completo ni operaciones técnicas.
+ * - Médico / secretaría / enfermería: lectura clínica (detalle / portal)
+ * No habilita catálogos ni operaciones técnicas.
  */
 export function canAccessMicrobiologiaLectura(user: User | null): boolean {
   if (!user) return false;
@@ -213,6 +224,16 @@ export function canAccessMicrobiologiaLectura(user: User | null): boolean {
 
 export function canOperateMicrobiologia(user: User | null): boolean {
   return canOperateLims(user);
+}
+
+/**
+ * Pedido clínico de microbiología (alta de estudio por paciente+cultivo).
+ * Operadores LIMS y médico. No habilita siembras/lecturas/catálogos.
+ */
+export function canCreatePedidoMicrobiologia(user: User | null): boolean {
+  if (!user) return false;
+  if (canOperateMicrobiologia(user)) return true;
+  return normalizeRol(user) === 'medico';
 }
 
 /** Validar informe microbiológico final (bioquímico / admin). */

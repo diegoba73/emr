@@ -284,12 +284,21 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
+        role = ""
         if not user.is_superuser:
             role = get_normalized_role(user)
             if role in ROLES_LIMS_WRITE or role in ROLES_LIMS_OPERATIVA_LIMITADA or role == "medico":
                 pass
             else:
                 return qs.none()
+            # Médico en listado: solo liberados (equivalente clínico a FINALIZADO).
+            # Retrieve por id sigue permitido en otros estados (p. ej. pedido propio).
+            if role == "medico" and getattr(self, "action", None) == "list":
+                qs = qs.filter(estado__in=("VALIDADO", "INFORMADO"))
+
+        numero = (self.request.query_params.get("numero") or "").strip()
+        if numero:
+            qs = qs.filter(numero__iexact=numero)
 
         estado = self.request.query_params.get("estado")
         if estado:
@@ -317,6 +326,14 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     qs = qs.filter(numero__istartswith=f"LAB-{y}-")
             except ValueError:
                 pass
+
+        # Día operativo (bandeja): fecha_inicio si existe, si no created_at.
+        fecha = (self.request.query_params.get("fecha") or "").strip()
+        if fecha:
+            qs = qs.filter(
+                Q(fecha_inicio__date=fecha)
+                | Q(fecha_inicio__isnull=True, created_at__date=fecha)
+            )
 
         sin_etiquetas = self.request.query_params.get("sin_etiquetas")
         if sin_etiquetas in ("1", "true", "True"):
