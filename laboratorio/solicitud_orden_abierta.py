@@ -254,23 +254,49 @@ def orden_esta_abierta(solicitud: SolicitudExamen) -> bool:
 
 
 def buscar_orden_abierta(
-    paciente_id: int, *, fecha_programada_toma=None
+    paciente_id: int,
+    *,
+    fecha_programada_toma=None,
+    material_pedido: str | None = None,
 ) -> SolicitudExamen | None:
     """Última orden PENDIENTE del paciente aún editable (sin etiquetas).
 
     Si ``fecha_programada_toma`` se indica, solo considera órdenes de ese día
     de extracción (hoy y mañana no se fusionan entre sí).
+
+    Si ``material_pedido`` se indica, solo órdenes de ese material (persistido
+    o inferido en legacy).
     """
+    from laboratorio.material_pedido_orden import (
+        inferir_materiales_de_solicitud,
+        normalizar_material_pedido,
+    )
+
+    mat = normalizar_material_pedido(material_pedido) if material_pedido else ""
     qs = (
         SolicitudExamen.objects.filter(paciente_id=paciente_id, estado="PENDIENTE")
-        .prefetch_related("muestras")
+        .prefetch_related(
+            "muestras",
+            "tipos_examen__tipo_muestra_requerida",
+            "paneles__tipos_examen__tipo_muestra_requerida",
+        )
         .order_by("-fecha_solicitud", "-id")
     )
     if fecha_programada_toma is not None:
         qs = qs.filter(fecha_programada_toma=fecha_programada_toma)
     for sol in qs:
-        if orden_esta_abierta(sol):
-            return sol
+        if not orden_esta_abierta(sol):
+            continue
+        if mat:
+            sol_mat = normalizar_material_pedido(getattr(sol, "material_pedido", None))
+            if sol_mat:
+                if sol_mat != mat:
+                    continue
+            else:
+                inf = inferir_materiales_de_solicitud(sol)
+                if mat not in inf.materiales:
+                    continue
+        return sol
     return None
 
 
@@ -586,6 +612,19 @@ def agregar_examenes_a_solicitud(
             "(finalizada o cancelada). "
             "Creá una orden nueva para ese paciente."
         )
+
+    # Médico/secretaría: solo PENDIENTE sin etiquetas (misma muestra).
+    # Lab/bio/admin: pueden agregar también con etiquetas o en curso.
+    if user is not None and not getattr(user, "is_superuser", False):
+        from usuarios.roles import ROLES_LIMS_WRITE
+
+        rol = (getattr(user, "rol", None) or "").strip().lower()
+        if rol not in ROLES_LIMS_WRITE and not orden_esta_abierta(sol):
+            raise OrdenNoAbiertaError(
+                f"La orden {sol.numero or sol.pk} ya tiene etiquetas o está en proceso. "
+                "Un usuario médico solo puede agregar exámenes a una orden pendiente "
+                "sin etiquetas y del mismo material; el laboratorio puede agregarlas."
+            )
 
     tipos_nuevos, paneles_nuevos = _resolver_tipo_examen_ids(examenes_ids or [], paneles_ids or [])
 

@@ -3,10 +3,12 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from laboratorio.examen_orina_micro import (
     CODIGOS_DEFAULT_NO_CONTIENE,
+    VALOR_CONCLUSION_VACIA,
     VALOR_NO_CONTIENE,
     examen_orina_vacio,
 )
@@ -22,7 +24,7 @@ def test_examen_orina_vacio_prellena_no_contiene():
         assert vacio[codigo] == VALOR_NO_CONTIENE
     assert vacio["ORI_COLOR"] == ""
     assert vacio["ORI_PH"] == ""
-    assert vacio["ORI_CONC"] == ""
+    assert vacio["ORI_CONC"] == VALOR_CONCLUSION_VACIA
 
 
 @pytest.mark.django_db
@@ -41,6 +43,8 @@ def test_crear_orden_pan_ori_prellena_no_contiene():
             "paciente_id": paciente.pk,
             "origen_solicitud": "AMBULATORIO_CEHTA",
             "paneles_ids": [pan.pk],
+            "fecha_programada_toma": timezone.localdate().isoformat(),
+            "material_pedido": "ORINA",
         },
         format="json",
     )
@@ -55,4 +59,4 @@ def test_crear_orden_pan_ori_prellena_no_contiene():
     assert by_codigo["ORI_ASP"] == ""
     assert by_codigo["ORI_DENS"] == ""
     assert by_codigo["ORI_PH"] == ""
-    assert by_codigo["ORI_CONC"] == ""
+    assert by_codigo["ORI_CONC"] == VALOR_CONCLUSION_VACIA

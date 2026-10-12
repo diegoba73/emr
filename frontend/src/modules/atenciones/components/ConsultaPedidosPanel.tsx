@@ -23,7 +23,8 @@ import {
 } from '@mui/material';
 import { Add, Delete, OpenInNew } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { formatDrfError } from '../../../services/limsApi';
+import { downloadInformeLimsPdf, formatDrfError } from '../../../services/limsApi';
+import { downloadInformeMicroPdf } from '../../../services/limsMicroApi';
 import { withNavBack } from '../../../utils/navBack';
 import { getConsultaDetalle } from '../../../services/apiService';
 import {
@@ -38,8 +39,19 @@ import { buildEstudioTipoCatalogOptions } from '../../../utils/estudioTipoCatalo
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
 import ResultadosOrdenLista from '../../../components/lims/ResultadosOrdenLista';
 import type { ResultadoExamenLims } from '../../../types/lims';
-import { labelEstadoOrdenGeneral } from '../../../utils/limsEstadosOrden';
-import { labelEstadoMicroGeneral } from '../../../utils/limsEstadosMicro';
+import { estadoOrdenColor, labelEstadoOrdenGeneral } from '../../../utils/limsEstadosOrden';
+import {
+  estadoMicroGeneralColor,
+  labelEstadoMicroGeneral,
+} from '../../../utils/limsEstadosMicro';
+import type { EstadoSolicitudLims } from '../../../types/lims';
+import { useData } from '../../../contexts/DataContext';
+import {
+  canDownloadInformeClinicoPdf,
+  canDownloadInformeMicroPdf,
+} from '../../../utils/limsAccess';
+import { formatLimsPdfDownloadError } from '../../../utils/limsDownload';
+import toast from 'react-hot-toast';
 import {
   loadConsultaPedidosDraft,
   loadGuardiaPendingDraft,
@@ -64,6 +76,8 @@ interface ConsultaPedidosPanelProps {
   variant?: 'full' | 'compact';
   /** Borrador local para guardia walk-in (sin consulta HC aún). */
   usePendingDraft?: boolean;
+  /** Notifica cambios del borrador (p. ej. validación al guardar guardia). */
+  onDraftChange?: (draft: ConsultaPedidosDraft) => void;
   /** Mostrar bloque laboratorio (y microbiología). Default true. */
   showLab?: boolean;
   /** Mostrar bloque estudios complementarios. Default true. */
@@ -103,11 +117,13 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   canEdit,
   variant = 'full',
   usePendingDraft = false,
+  onDraftChange,
   showLab = true,
   showEstudios = true,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { currentUser } = useData();
   const backFromHere = () =>
     withNavBack(
       `${location.pathname}${location.search}`,
@@ -167,6 +183,10 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   useEffect(() => {
     setDraft(loadDraftFromStorage());
   }, [loadDraftFromStorage]);
+
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
 
   const load = useCallback(async () => {
     if (canEdit || usePendingDraft) {
@@ -709,18 +729,40 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
           <Stack spacing={2}>
             {solicitudesLab.map((sol) => (
               <Box key={sol.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
-                <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
                   <Typography variant="body2" fontWeight={600}>
                     {sol.numero || `Orden #${sol.id}`}
                   </Typography>
-                  <Chip label={labelEstadoOrdenGeneral(sol.estado)} size="small" />
+                  <Chip
+                    label={labelEstadoOrdenGeneral(sol.estado)}
+                    size="small"
+                    color={estadoOrdenColor(sol.estado as EstadoSolicitudLims)}
+                  />
                   {sol.material_pedido ? (
                     <Chip label={sol.material_pedido} size="small" variant="outlined" />
                   ) : null}
                   <Typography variant="caption" color="text.secondary">
                     {new Date(sol.fecha_solicitud).toLocaleString()}
                   </Typography>
+                  {canDownloadInformeClinicoPdf(currentUser, sol.estado) && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        void downloadInformeLimsPdf(sol.id).catch((err) =>
+                          toast.error(formatLimsPdfDownloadError(err))
+                        );
+                      }}
+                    >
+                      {sol.estado === 'INFORMADO_PARCIAL' ? 'PDF parcial' : 'PDF'}
+                    </Button>
+                  )}
                 </Stack>
+                {sol.estado === 'INFORMADO_PARCIAL' && (
+                  <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
+                    Informe parcial vigente
+                  </Alert>
+                )}
                 <Typography variant="caption" color="text.secondary" display="block" mb={1}>
                   {[...sol.tipos_examen_nombres, ...sol.paneles_nombres.map((p) => `Panel: ${p}`)].join(' · ') || '—'}
                 </Typography>
@@ -770,30 +812,59 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
             Microbiología
           </Typography>
           <Stack spacing={2}>
-            {estudiosMicro.map((est) => (
+            {estudiosMicro.map((est) => {
+              const microOpts = {
+                tieneInformePreliminar: est.tiene_informe_preliminar,
+                tieneInformeFinal: est.tiene_informe_final,
+              };
+              return (
               <Box key={est.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
                 <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
                   <Typography variant="body2" fontWeight={600}>
                     {est.numero || `Micro #${est.id}`}
                   </Typography>
                   <Chip
-                    label={labelEstadoMicroGeneral(est.estado, {
-                      tieneInformePreliminar: est.tiene_informe_preliminar,
-                      tieneInformeFinal: est.tiene_informe_final,
-                    })}
+                    label={labelEstadoMicroGeneral(est.estado, microOpts)}
                     size="small"
+                    color={estadoMicroGeneralColor(est.estado, microOpts)}
                   />
                   {est.material_pedido ? (
                     <Chip label={est.material_pedido} size="small" variant="outlined" />
                   ) : null}
+                  {canDownloadInformeMicroPdf(currentUser, est.estado, {
+                    tieneFinalValidado: Boolean(est.tiene_informe_final),
+                    tienePreliminarEmitido: Boolean(est.tiene_informe_preliminar),
+                  }) && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        void downloadInformeMicroPdf(est.id).catch((err) =>
+                          toast.error(formatLimsPdfDownloadError(err))
+                        );
+                      }}
+                    >
+                      {est.tiene_informe_final
+                        ? 'PDF'
+                        : est.tiene_informe_preliminar
+                          ? 'PDF preliminar'
+                          : 'PDF'}
+                    </Button>
+                  )}
                 </Stack>
+                {est.tiene_informe_preliminar && !est.tiene_informe_final && (
+                  <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
+                    Informe preliminar vigente
+                  </Alert>
+                )}
                 <Typography variant="caption" color="text.secondary" display="block">
                   {[est.tipo_cultivo_nombre, est.tipo_muestra_micro_nombre]
                     .filter(Boolean)
                     .join(' · ') || '—'}
                 </Typography>
               </Box>
-            ))}
+              );
+            })}
           </Stack>
         </Box>
       )}
@@ -806,30 +877,59 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                 Microbiología
               </Typography>
               <Stack spacing={2} mb={draftMicro.length ? 2 : 0}>
-                {estudiosMicro.map((est) => (
+                {estudiosMicro.map((est) => {
+                  const microOpts = {
+                    tieneInformePreliminar: est.tiene_informe_preliminar,
+                    tieneInformeFinal: est.tiene_informe_final,
+                  };
+                  return (
                   <Box key={est.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
                     <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
                       <Typography variant="body2" fontWeight={600}>
                         {est.numero || `Micro #${est.id}`}
                       </Typography>
                       <Chip
-                        label={labelEstadoMicroGeneral(est.estado, {
-                          tieneInformePreliminar: est.tiene_informe_preliminar,
-                          tieneInformeFinal: est.tiene_informe_final,
-                        })}
+                        label={labelEstadoMicroGeneral(est.estado, microOpts)}
                         size="small"
+                        color={estadoMicroGeneralColor(est.estado, microOpts)}
                       />
                       {est.material_pedido ? (
                         <Chip label={est.material_pedido} size="small" variant="outlined" />
                       ) : null}
+                      {canDownloadInformeMicroPdf(currentUser, est.estado, {
+                        tieneFinalValidado: Boolean(est.tiene_informe_final),
+                        tienePreliminarEmitido: Boolean(est.tiene_informe_preliminar),
+                      }) && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            void downloadInformeMicroPdf(est.id).catch((err) =>
+                              toast.error(formatLimsPdfDownloadError(err))
+                            );
+                          }}
+                        >
+                          {est.tiene_informe_final
+                            ? 'PDF'
+                            : est.tiene_informe_preliminar
+                              ? 'PDF preliminar'
+                              : 'PDF'}
+                        </Button>
+                      )}
                     </Stack>
+                    {est.tiene_informe_preliminar && !est.tiene_informe_final && (
+                      <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>
+                        Informe preliminar vigente
+                      </Alert>
+                    )}
                     <Typography variant="caption" color="text.secondary" display="block">
                       {[est.tipo_cultivo_nombre, est.tipo_muestra_micro_nombre]
                         .filter(Boolean)
                         .join(' · ') || '—'}
                     </Typography>
                   </Box>
-                ))}
+                  );
+                })}
               </Stack>
             </>
           )}

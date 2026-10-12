@@ -21,12 +21,17 @@ import type { User } from '../../types';
 import { listSolicitudesExamen } from '../../services/limsApi';
 import { listEstudiosMicrobiologia } from '../../services/limsMicroApi';
 import { Atencion, ArchivoMedico, InternacionCama, Paciente, PacienteTimelineEvent } from '../../types';
-import type { EstudioMicrobiologia, SolicitudExamenLims } from '../../types/lims';
+import type { EstudioMicrobiologia, EstadoSolicitudLims, SolicitudExamenLims } from '../../types/lims';
 import { getInternaciones } from '../../services/apiService';
 import PatientIntegratedView from '../PatientIntegratedView';
 import PacienteFormDialog from '../PacienteFormDialog';
 import { canUpdatePacienteDemographics } from '../../utils/permissions';
 import { pacienteFichaAnalisisPath, withNavBack } from '../../utils/navBack';
+import { estadoOrdenColor, labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import {
+  estadoEstudioMicroColor,
+  labelEstadoEstudioMicro,
+} from '../../utils/limsEstadosMicro';
 import SectionCard from './SectionCard';
 import InfoCard from './InfoCard';
 import Timeline, { TimelineItem, TimelineItemType } from './Timeline';
@@ -448,8 +453,12 @@ const PatientDashboard: React.FC = () => {
                     <Chip
                       key={`lab-${s.id}`}
                       size="small"
-                      label={s.numero ? `${s.numero} · ${s.estado}` : s.estado}
-                      variant="outlined"
+                      label={
+                        s.numero
+                          ? `${s.numero} · ${labelEstadoOrdenLims(s.estado)}`
+                          : labelEstadoOrdenLims(s.estado)
+                      }
+                      color={estadoOrdenColor(s.estado as EstadoSolicitudLims)}
                       onClick={() =>
                         navigate(
                           pathDetalleOrdenLab(currentUser, s.id),
@@ -462,13 +471,12 @@ const PatientDashboard: React.FC = () => {
                     <Chip
                       key={`micro-${e.id}`}
                       size="small"
-                      color="success"
                       label={
                         e.numero
-                          ? `Micro ${e.numero} · ${e.estado}`
-                          : `Micro · ${e.estado}`
+                          ? `Micro ${e.numero} · ${labelEstadoEstudioMicro(e.estado)}`
+                          : `Micro · ${labelEstadoEstudioMicro(e.estado)}`
                       }
-                      variant="outlined"
+                      color={estadoEstudioMicroColor(e.estado)}
                       onClick={() =>
                         navigate(
                           pathDetalleEstudioMicro(e.id),

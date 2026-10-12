@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Autocomplete,
   Alert,
@@ -42,6 +42,10 @@ import {
   updateIdentificacionMicroorganismo,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import {
+  handleLimsEnterNext,
+  LIMS_ENTER_FOCUS_ATTR,
+} from '../../../utils/limsEnterFocusNext';
 import { todasLecturasSinDesarrollo } from '../../../utils/limsMicroCultivoNegativo';
 import { AisladoEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
@@ -110,6 +114,18 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
   const [editIdentMicro, setEditIdentMicro] = useState<Microorganismo | null>(null);
   const [editIdentForm, setEditIdentForm] = useState({ metodo: '', resultado: '', observaciones: '' });
   const [editSaving, setEditSaving] = useState(false);
+  const registrarBtnRef = useRef<HTMLButtonElement>(null);
+  const editAisladoSaveBtnRef = useRef<HTMLButtonElement>(null);
+  const editIdentSaveBtnRef = useRef<HTMLButtonElement>(null);
+  const nuevoFocusOrder = useMemo(() => ['ais-hallazgo', 'ais-metodo'], []);
+  const editAisladoFocusOrder = useMemo(
+    () => ['edit-ais-desc', 'edit-ais-cant', 'edit-ais-obs'],
+    []
+  );
+  const editIdentFocusOrder = useMemo(
+    () => ['edit-ident-metodo', 'edit-ident-resultado', 'edit-ident-obs'],
+    []
+  );
 
   const microsActivos = useMemo(
     () => microorganismos.filter((m) => m.activo !== false),
@@ -375,6 +391,10 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               placeholder="Si el catálogo no cubre el hallazgo"
               value={hallazgoLibre}
               onChange={(e) => setHallazgoLibre(e.target.value)}
+              onKeyDown={handleLimsEnterNext(nuevoFocusOrder, 'ais-hallazgo', {
+                onAfterLast: () => registrarBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'ais-hallazgo' }}
               sx={{ minWidth: 220, flex: '1 1 200px' }}
             />
 
@@ -383,6 +403,10 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               label="Método (opc.)"
               value={metodo}
               onChange={(e) => setMetodo(e.target.value)}
+              onKeyDown={handleLimsEnterNext(nuevoFocusOrder, 'ais-metodo', {
+                onAfterLast: () => registrarBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'ais-metodo' }}
               sx={{ minWidth: 140 }}
             />
 
@@ -397,6 +421,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
             />
 
             <Button
+              ref={registrarBtnRef}
               variant="contained"
               onClick={registrar}
               disabled={saving || lecturas.length === 0}
@@ -494,12 +519,21 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               minRows={2}
               value={editAisladoForm.descripcion}
               onChange={(e) => setEditAisladoForm((f) => ({ ...f, descripcion: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editAisladoFocusOrder, 'edit-ais-desc', {
+                onAfterLast: () => editAisladoSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ais-desc' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
             <TextField
               size="small"
               label="Cantidad"
               value={editAisladoForm.cantidad}
               onChange={(e) => setEditAisladoForm((f) => ({ ...f, cantidad: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editAisladoFocusOrder, 'edit-ais-cant', {
+                onAfterLast: () => editAisladoSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ais-cant' }}
             />
             <FormControl size="small" fullWidth>
               <InputLabel>Significancia</InputLabel>
@@ -536,12 +570,22 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               minRows={2}
               value={editAisladoForm.observaciones}
               onChange={(e) => setEditAisladoForm((f) => ({ ...f, observaciones: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editAisladoFocusOrder, 'edit-ais-obs', {
+                onAfterLast: () => editAisladoSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ais-obs' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditAislado(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={guardarAislado} disabled={editSaving}>
+          <Button
+            ref={editAisladoSaveBtnRef}
+            variant="contained"
+            onClick={guardarAislado}
+            disabled={editSaving}
+          >
             Guardar
           </Button>
         </DialogActions>
@@ -570,6 +614,10 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               label="Método"
               value={editIdentForm.metodo}
               onChange={(e) => setEditIdentForm((f) => ({ ...f, metodo: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editIdentFocusOrder, 'edit-ident-metodo', {
+                onAfterLast: () => editIdentSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ident-metodo' }}
             />
             <TextField
               size="small"
@@ -579,6 +627,11 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               minRows={2}
               value={editIdentForm.resultado}
               onChange={(e) => setEditIdentForm((f) => ({ ...f, resultado: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editIdentFocusOrder, 'edit-ident-resultado', {
+                onAfterLast: () => editIdentSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ident-resultado' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
             <TextField
               size="small"
@@ -588,12 +641,22 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
               minRows={2}
               value={editIdentForm.observaciones}
               onChange={(e) => setEditIdentForm((f) => ({ ...f, observaciones: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editIdentFocusOrder, 'edit-ident-obs', {
+                onAfterLast: () => editIdentSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ident-obs' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditIdent(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={guardarIdent} disabled={editSaving}>
+          <Button
+            ref={editIdentSaveBtnRef}
+            variant="contained"
+            onClick={guardarIdent}
+            disabled={editSaving}
+          >
             Guardar
           </Button>
         </DialogActions>

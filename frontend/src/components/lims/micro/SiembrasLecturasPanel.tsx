@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -35,6 +35,10 @@ import {
   updateSiembraMicrobiologia,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import {
+  handleLimsEnterNext,
+  LIMS_ENTER_FOCUS_ATTR,
+} from '../../../utils/limsEnterFocusNext';
 import {
   RECUENTO_BACTERIANO_OPCIONES,
   todasLecturasSinDesarrollo,
@@ -90,6 +94,27 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
     horas_incubacion: '',
   });
   const [editSaving, setEditSaving] = useState(false);
+  const lecturaSaveBtnRef = useRef<HTMLButtonElement>(null);
+  const editSiembraSaveBtnRef = useRef<HTMLButtonElement>(null);
+  const editLecturaSaveBtnRef = useRef<HTMLButtonElement>(null);
+  const lecturaFocusOrder = useMemo(
+    () => ['lec-recuento', 'lec-horas', 'lec-colonias', 'lec-gram'],
+    []
+  );
+  const editSiembraFocusOrder = useMemo(
+    () => ['edit-siembra-cond', 'edit-siembra-temp', 'edit-siembra-atm', 'edit-siembra-obs'],
+    []
+  );
+  const editLecturaFocusOrder = useMemo(
+    () => [
+      'edit-lec-recuento',
+      'edit-lec-horas',
+      'edit-lec-colonias',
+      'edit-lec-gram',
+      'edit-lec-obs',
+    ],
+    []
+  );
 
   const cultivoNegativo = todasLecturasSinDesarrollo(lecturas);
 
@@ -371,7 +396,18 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                 setLecturaForm((f) => ({ ...f, recuento_bacteriano: value }))
               }
               renderInput={(params) => (
-                <TextField {...params} label="Recuento bacteriano" placeholder="UFC/ml" />
+                <TextField
+                  {...params}
+                  label="Recuento bacteriano"
+                  placeholder="UFC/ml"
+                  onKeyDown={handleLimsEnterNext(lecturaFocusOrder, 'lec-recuento', {
+                    onAfterLast: () => lecturaSaveBtnRef.current?.focus(),
+                  })}
+                  inputProps={{
+                    ...params.inputProps,
+                    [LIMS_ENTER_FOCUS_ATTR]: 'lec-recuento',
+                  }}
+                />
               )}
             />
             <TextField
@@ -379,6 +415,10 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               label="Horas incub."
               value={lecturaForm.horas_incubacion}
               onChange={(ev) => setLecturaForm((f) => ({ ...f, horas_incubacion: ev.target.value }))}
+              onKeyDown={handleLimsEnterNext(lecturaFocusOrder, 'lec-horas', {
+                onAfterLast: () => lecturaSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'lec-horas' }}
             />
             <FormControlLabel
               control={
@@ -404,6 +444,11 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
             value={lecturaForm.descripcion_colonias}
             onChange={(ev) => setLecturaForm((f) => ({ ...f, descripcion_colonias: ev.target.value }))}
             disabled={lecturaForm.crecimiento === 'SIN_DESARROLLO'}
+            onKeyDown={handleLimsEnterNext(lecturaFocusOrder, 'lec-colonias', {
+              onAfterLast: () => lecturaSaveBtnRef.current?.focus(),
+            })}
+            inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'lec-colonias' }}
+            helperText="Enter → siguiente"
           />
           <TextField
             fullWidth
@@ -413,8 +458,18 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
             value={lecturaForm.tincion_gram}
             onChange={(ev) => setLecturaForm((f) => ({ ...f, tincion_gram: ev.target.value }))}
             disabled={lecturaForm.crecimiento === 'SIN_DESARROLLO'}
+            onKeyDown={handleLimsEnterNext(lecturaFocusOrder, 'lec-gram', {
+              onAfterLast: () => lecturaSaveBtnRef.current?.focus(),
+            })}
+            inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'lec-gram' }}
+            helperText="Enter → siguiente"
           />
-          <Button sx={{ mt: 1 }} variant="contained" onClick={crearLectura}>
+          <Button
+            ref={lecturaSaveBtnRef}
+            sx={{ mt: 1 }}
+            variant="contained"
+            onClick={crearLectura}
+          >
             Registrar lectura
           </Button>
         </Paper>
@@ -476,18 +531,30 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               onChange={(e) =>
                 setEditSiembraForm((f) => ({ ...f, condicion_incubacion: e.target.value }))
               }
+              onKeyDown={handleLimsEnterNext(editSiembraFocusOrder, 'edit-siembra-cond', {
+                onAfterLast: () => editSiembraSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-siembra-cond' }}
             />
             <TextField
               size="small"
               label="Temperatura (°C)"
               value={editSiembraForm.temperatura_c}
               onChange={(e) => setEditSiembraForm((f) => ({ ...f, temperatura_c: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editSiembraFocusOrder, 'edit-siembra-temp', {
+                onAfterLast: () => editSiembraSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-siembra-temp' }}
             />
             <TextField
               size="small"
               label="Atmósfera"
               value={editSiembraForm.atmosfera}
               onChange={(e) => setEditSiembraForm((f) => ({ ...f, atmosfera: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editSiembraFocusOrder, 'edit-siembra-atm', {
+                onAfterLast: () => editSiembraSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-siembra-atm' }}
             />
             <TextField
               size="small"
@@ -497,12 +564,22 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               minRows={2}
               value={editSiembraForm.observaciones}
               onChange={(e) => setEditSiembraForm((f) => ({ ...f, observaciones: e.target.value }))}
+              onKeyDown={handleLimsEnterNext(editSiembraFocusOrder, 'edit-siembra-obs', {
+                onAfterLast: () => editSiembraSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-siembra-obs' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditSiembra(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={guardarSiembra} disabled={editSaving}>
+          <Button
+            ref={editSiembraSaveBtnRef}
+            variant="contained"
+            onClick={guardarSiembra}
+            disabled={editSaving}
+          >
             Guardar
           </Button>
         </DialogActions>
@@ -537,7 +614,17 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                 setEditLecturaForm((f) => ({ ...f, recuento_bacteriano: value }))
               }
               renderInput={(params) => (
-                <TextField {...params} label="Recuento bacteriano" />
+                <TextField
+                  {...params}
+                  label="Recuento bacteriano"
+                  onKeyDown={handleLimsEnterNext(editLecturaFocusOrder, 'edit-lec-recuento', {
+                    onAfterLast: () => editLecturaSaveBtnRef.current?.focus(),
+                  })}
+                  inputProps={{
+                    ...params.inputProps,
+                    [LIMS_ENTER_FOCUS_ATTR]: 'edit-lec-recuento',
+                  }}
+                />
               )}
             />
             <TextField
@@ -547,6 +634,10 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               onChange={(e) =>
                 setEditLecturaForm((f) => ({ ...f, horas_incubacion: e.target.value }))
               }
+              onKeyDown={handleLimsEnterNext(editLecturaFocusOrder, 'edit-lec-horas', {
+                onAfterLast: () => editLecturaSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-lec-horas' }}
             />
             <FormControlLabel
               control={
@@ -568,6 +659,10 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                 setEditLecturaForm((f) => ({ ...f, descripcion_colonias: e.target.value }))
               }
               disabled={editLecturaForm.crecimiento === 'SIN_DESARROLLO'}
+              onKeyDown={handleLimsEnterNext(editLecturaFocusOrder, 'edit-lec-colonias', {
+                onAfterLast: () => editLecturaSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-lec-colonias' }}
             />
             <TextField
               size="small"
@@ -578,6 +673,10 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                 setEditLecturaForm((f) => ({ ...f, tincion_gram: e.target.value }))
               }
               disabled={editLecturaForm.crecimiento === 'SIN_DESARROLLO'}
+              onKeyDown={handleLimsEnterNext(editLecturaFocusOrder, 'edit-lec-gram', {
+                onAfterLast: () => editLecturaSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-lec-gram' }}
             />
             <TextField
               size="small"
@@ -589,12 +688,22 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               onChange={(e) =>
                 setEditLecturaForm((f) => ({ ...f, observaciones: e.target.value }))
               }
+              onKeyDown={handleLimsEnterNext(editLecturaFocusOrder, 'edit-lec-obs', {
+                onAfterLast: () => editLecturaSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-lec-obs' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditLectura(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={guardarLectura} disabled={editSaving}>
+          <Button
+            ref={editLecturaSaveBtnRef}
+            variant="contained"
+            onClick={guardarLectura}
+            disabled={editSaving}
+          >
             Guardar
           </Button>
         </DialogActions>

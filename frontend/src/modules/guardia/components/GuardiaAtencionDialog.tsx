@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -20,9 +20,10 @@ import { useAtencionQuery } from '../../atenciones/hooks';
 import ConsultaPedidosPanel from '../../atenciones/components/ConsultaPedidosPanel';
 import {
   clearGuardiaPendingDraft,
-  countGuardiaPendingDraftItems,
+  countConsultaPedidosDraftItems,
   flushConsultaPedidosDrafts,
-  migrateGuardiaPendingDraftToConsulta,
+  loadGuardiaPendingDraft,
+  type ConsultaPedidosDraft,
 } from '../../atenciones/consultaPedidosDraft';
 import { apiService } from '../../../services/api';
 import { imprimirPedidosPapel } from '../../../services/limsApi';
@@ -30,6 +31,19 @@ import type { Medico, Paciente } from '../../../types';
 import { formatPacienteLabel } from '../../../utils/pacienteFormat';
 import { normalizeRol } from '../../../utils/permissions';
 import PacienteLabsAccesoPanel from '../../../components/lims/PacienteLabsAccesoPanel';
+
+const emptyPendingDraft = (): ConsultaPedidosDraft => ({
+  solicitudesLab: [],
+  solicitudesMicro: [],
+  estudios: [],
+});
+
+function resolveGuardiaPendingDraft(
+  live: ConsultaPedidosDraft
+): ConsultaPedidosDraft {
+  if (countConsultaPedidosDraftItems(live) > 0) return live;
+  return loadGuardiaPendingDraft();
+}
 
 export type GuardiaDialogMode = 'create' | 'edit' | 'view';
 
@@ -70,6 +84,11 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   const [consultaHcId, setConsultaHcId] = useState<number | null>(null);
   const [preparingHc, setPreparingHc] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<ConsultaPedidosDraft>(emptyPendingDraft);
+  const pendingDraftRef = useRef<ConsultaPedidosDraft>(emptyPendingDraft());
+  const [pendingPanelKey, setPendingPanelKey] = useState(0);
+  /** Atención ya creada en este alta si falló el flush de pedidos (evita duplicar). */
+  const [createdAtencionId, setCreatedAtencionId] = useState<number | null>(null);
 
   const canEditPedidos = !isReadOnly;
   const medicoFromUser =
@@ -79,26 +98,39 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   const medicoFromUserId = medicoFromUser?.id ?? null;
   const needsMedicoPicker = !medicoFromUserId && normalizeRol(currentUser) !== 'medico';
 
+  const handlePendingDraftChange = useCallback((draft: ConsultaPedidosDraft) => {
+    pendingDraftRef.current = draft;
+    setPendingDraft(draft);
+  }, []);
+
+  // Solo al abrir el diálogo en alta: no re-limpiar borrador/paciente si cambian deps.
   useEffect(() => {
-    if (!open) return;
-    if (isCreate) {
-      clearGuardiaPendingDraft();
-      setSelectedPaciente(null);
-      setPacienteInputValue('');
-      setMotivoConsulta('');
-      setConsultaHcId(null);
-      if (medicoFromUserId && medicoFromUser) {
-        setSelectedMedico(medicoFromUser);
-        setMedicoInputValue(
-          `Dr. ${[medicoFromUser.apellido, medicoFromUser.nombre].filter(Boolean).join(', ')}`
-        );
-      } else {
-        setSelectedMedico(null);
-        setMedicoInputValue('');
-      }
-      return;
+    if (!open || !isCreate) return;
+    clearGuardiaPendingDraft();
+    const empty = emptyPendingDraft();
+    pendingDraftRef.current = empty;
+    setPendingDraft(empty);
+    setPendingPanelKey((k) => k + 1);
+    setCreatedAtencionId(null);
+    setSelectedPaciente(null);
+    setPacienteInputValue('');
+    setMotivoConsulta('');
+    setConsultaHcId(null);
+    if (medicoFromUserId && medicoFromUser) {
+      setSelectedMedico(medicoFromUser);
+      setMedicoInputValue(
+        `Dr. ${[medicoFromUser.apellido, medicoFromUser.nombre].filter(Boolean).join(', ')}`
+      );
+    } else {
+      setSelectedMedico(null);
+      setMedicoInputValue('');
     }
-    if (!atencion) return;
+    // medicoFromUser se toma al abrir; no re-ejecutar si solo cambia la referencia del objeto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset de alta solo con open/isCreate
+  }, [open, isCreate]);
+
+  useEffect(() => {
+    if (!open || isCreate || !atencion) return;
     setSelectedPaciente(atencion.paciente ?? null);
     setPacienteInputValue(atencion.paciente ? formatPacienteLabel(atencion.paciente) : '');
     setMotivoConsulta(atencion.observaciones_generales ?? '');
@@ -206,24 +238,31 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       );
     }
 
-    let targetAtencionId = atencionId ?? null;
+    let targetAtencionId = atencionId ?? createdAtencionId ?? null;
     const pacienteId = selectedPaciente?.id ?? atencion?.paciente?.id;
 
     if (!pacienteId) {
       throw new Error('Seleccioná un paciente.');
     }
 
+    const draftToFlush = isCreate
+      ? resolveGuardiaPendingDraft(pendingDraftRef.current)
+      : undefined;
+
     if (isCreate) {
-      if (countGuardiaPendingDraftItems() === 0) {
+      if (countConsultaPedidosDraftItems(draftToFlush!) === 0) {
         throw new Error('Agregá al menos un pedido de laboratorio o estudio complementario.');
       }
-      const created = await apiService.iniciarAtencionGuardia({
-        paciente_id: pacienteId,
-        medico_id: medicoId,
-        motivo_consulta: motivoConsulta.trim(),
-        observaciones_generales: motivoConsulta.trim() || undefined,
-      });
-      targetAtencionId = created.id;
+      if (!targetAtencionId) {
+        const created = await apiService.iniciarAtencionGuardia({
+          paciente_id: pacienteId,
+          medico_id: medicoId,
+          motivo_consulta: motivoConsulta.trim(),
+          observaciones_generales: motivoConsulta.trim() || undefined,
+        });
+        targetAtencionId = created.id;
+        setCreatedAtencionId(created.id);
+      }
     } else if (motivoConsulta.trim() !== (atencion?.observaciones_generales ?? '')) {
       await apiService.updateAtencion(targetAtencionId!, {
         observaciones_generales: motivoConsulta.trim() || null,
@@ -233,17 +272,25 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     const hcId = await apiService.ensureConsultaHc(targetAtencionId!);
     setConsultaHcId(hcId);
 
+    // No migrar/limpiar borrador hasta que el flush LIMS/estudios confirme.
+    const { pedidosPapel } = await flushConsultaPedidosDrafts(
+      {
+        consultaHcId: hcId,
+        pacienteId,
+        medicoId,
+        origenSolicitud: 'GUARDIA',
+      },
+      draftToFlush
+    );
+
     if (isCreate) {
-      migrateGuardiaPendingDraftToConsulta(hcId);
+      clearGuardiaPendingDraft();
+      const empty = emptyPendingDraft();
+      pendingDraftRef.current = empty;
+      setPendingDraft(empty);
     }
 
-    await flushConsultaPedidosDrafts({
-      consultaHcId: hcId,
-      pacienteId,
-      medicoId,
-      origenSolicitud: 'GUARDIA',
-    }).then(async ({ pedidosPapel }) => {
-      if (pedidosPapel.length === 0) return;
+    if (pedidosPapel.length > 0) {
       try {
         await imprimirPedidosPapel(pedidosPapel);
       } catch {
@@ -251,7 +298,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
           'Pedidos guardados, pero no se pudo abrir la impresión del pedido para firmar.'
         );
       }
-    });
+    }
 
     // La atención queda ABIERTA: pedidos LIMS/estudios siguen su ciclo;
     // el cierre clínico es explícito (botón «Cerrar atención»).
@@ -266,11 +313,17 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       onSaved();
       onClose();
     } catch (err: unknown) {
-      const ax = err as { response?: { data?: { error?: string; detail?: string } } };
+      const ax = err as {
+        response?: { data?: { error?: string; detail?: string } };
+        code?: string;
+        message?: string;
+      };
+      const detail = ax.response?.data?.error || ax.response?.data?.detail;
+      const raw = detail || (err instanceof Error ? err.message : '') || ax.message || '';
       const message =
-        ax.response?.data?.error ||
-        ax.response?.data?.detail ||
-        (err instanceof Error ? err.message : 'No se pudo guardar la atención.');
+        !ax.response && /network error/i.test(raw)
+          ? 'No se pudo confirmar el pedido de laboratorio (error de red/CORS). La atención puede haber quedado creada: reintentá Guardar o abrila desde la lista.'
+          : raw || 'No se pudo guardar la atención.';
       toast.error(message);
     } finally {
       setSaving(false);
@@ -442,7 +495,13 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
             )}
 
             {showPedidosEditor && isCreate && (
-              <ConsultaPedidosPanel canEdit variant="compact" usePendingDraft />
+              <ConsultaPedidosPanel
+                key={pendingPanelKey}
+                canEdit
+                variant="compact"
+                usePendingDraft
+                onDraftChange={handlePendingDraftChange}
+              />
             )}
 
             {showPedidosEditor && !isCreate && consultaHcId && (
@@ -489,7 +548,10 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
               onClick={handleGuardar}
               disabled={
                 saving ||
-                (isCreate && (!selectedPaciente || (needsMedicoPicker && !selectedMedico)))
+                (isCreate &&
+                  (!selectedPaciente ||
+                    (needsMedicoPicker && !selectedMedico) ||
+                    countConsultaPedidosDraftItems(pendingDraft) === 0))
               }
             >
               {saving ? <CircularProgress size={22} color="inherit" /> : 'Guardar atención'}

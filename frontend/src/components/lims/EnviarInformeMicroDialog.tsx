@@ -25,6 +25,11 @@ export interface EnviarInformeMicroDialogProps {
   estudio: EstudioMicrobiologia;
   onClose: () => void;
   onSuccess?: () => void;
+  /**
+   * PRELIMINAR EMITIDO vigente (equivalente al parcial clínico).
+   * Si true, permite envío aunque el estudio aún no esté VALIDADO/INFORMADO.
+   */
+  preliminarEmitido?: boolean;
 }
 
 const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
@@ -32,6 +37,7 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
   estudio,
   onClose,
   onSuccess,
+  preliminarEmitido = false,
 }) => {
   const [emailPaciente, setEmailPaciente] = useState(true);
   const [whatsappPaciente, setWhatsappPaciente] = useState(true);
@@ -49,8 +55,10 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
   const tieneEmailMed = Boolean((estudio.medico_email || '').trim());
   const tieneTelMed = Boolean((estudio.medico_telefono || '').trim());
   const medicoLabel = estudio.medico_display || 'Médico solicitante';
-  const pendienteValidacion =
-    estudio.estado !== 'VALIDADO' && estudio.estado !== 'INFORMADO';
+  const estudioFinal =
+    estudio.estado === 'VALIDADO' || estudio.estado === 'INFORMADO';
+  const puedeEnviarAhora = estudioFinal || preliminarEmitido;
+  const envioPreliminar = preliminarEmitido && !estudioFinal;
 
   useEffect(() => {
     if (!open) return;
@@ -70,8 +78,10 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
   };
 
   const handleEnviar = async () => {
-    if (pendienteValidacion) {
-      toast.error('Solo se puede enviar el informe después de la validación del bioquímico.');
+    if (!puedeEnviarAhora) {
+      toast.error(
+        'Solo se puede enviar con un informe preliminar emitido o un final validado.'
+      );
       return;
     }
     if (!algunoSeleccionado) {
@@ -148,7 +158,11 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
       fullWidth
     >
       <DialogTitle>
-        {pasoWhatsapp ? 'Abrir WhatsApp' : 'Enviar informe de microbiología'}
+        {pasoWhatsapp
+          ? 'Abrir WhatsApp'
+          : envioPreliminar
+            ? 'Enviar informe preliminar'
+            : 'Enviar informe de microbiología'}
       </DialogTitle>
       <DialogContent>
         {pasoWhatsapp ? (
@@ -162,10 +176,15 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
               Estudio {estudio.numero || estudio.id} — {estudio.paciente_nombre || 'Paciente'}
               {medicoLabel ? ` · ${medicoLabel}` : ''}
             </Typography>
-            {pendienteValidacion && (
+            {envioPreliminar && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Se enviará el <strong>informe preliminar</strong> (PDF con leyenda). Cuando el
+                bioquímico valide el final, este avance deja de estar vigente.
+              </Alert>
+            )}
+            {!puedeEnviarAhora && (
               <Alert severity="error" sx={{ mb: 2 }}>
-                El estudio aún no está validado. Solo se puede enviar el informe final cuando el
-                bioquímico lo haya validado.
+                No hay informe enviable. Emití un preliminar o validá el informe final.
               </Alert>
             )}
             {!tieneEmailPac && !tieneTelPac && (
@@ -289,9 +308,13 @@ const EnviarInformeMicroDialog: React.FC<EnviarInformeMicroDialogProps> = ({
               variant="contained"
               color="primary"
               onClick={handleEnviar}
-              disabled={sending || !algunoSeleccionado || pendienteValidacion}
+              disabled={sending || !algunoSeleccionado || !puedeEnviarAhora}
             >
-              {sending ? 'Enviando…' : 'Enviar informe'}
+              {sending
+                ? 'Enviando…'
+                : envioPreliminar
+                  ? 'Enviar preliminar'
+                  : 'Enviar informe'}
             </Button>
           </>
         )}

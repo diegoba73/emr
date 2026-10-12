@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -19,6 +19,10 @@ import {
   type ExamenOrinaMicro,
   normalizarExamenOrina,
 } from '../../../utils/limsExamenOrinaMicro';
+import {
+  handleLimsEnterNext,
+  LIMS_ENTER_FOCUS_ATTR,
+} from '../../../utils/limsEnterFocusNext';
 
 export interface EstudioMicroExamenOrinaTabProps {
   estudio: EstudioMicrobiologia;
@@ -31,13 +35,22 @@ const EstudioMicroExamenOrinaTab: React.FC<EstudioMicroExamenOrinaTabProps> = ({
   canOperate,
   onSaved,
 }) => {
-  const [form, setForm] = useState<ExamenOrinaMicro>(() =>
+  const [form, setForm] = React.useState<ExamenOrinaMicro>(() =>
     normalizarExamenOrina(estudio.examen_orina)
   );
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [dirty, setDirty] = React.useState(false);
+  const saveBtnRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
+  const focusOrder = useMemo(
+    () => [
+      ...CAMPOS_TIRA_ORINA.map((c) => c.codigo),
+      ...CAMPOS_SEDIMENTO_ORINA.map((c) => c.codigo),
+    ],
+    []
+  );
+
+  React.useEffect(() => {
     setForm(normalizarExamenOrina(estudio.examen_orina));
     setDirty(false);
   }, [estudio.id, estudio.examen_orina, estudio.updated_at]);
@@ -86,6 +99,21 @@ const EstudioMicroExamenOrinaTab: React.FC<EstudioMicroExamenOrinaTabProps> = ({
             disabled={!canOperate || saving}
             multiline={fullWidth}
             minRows={fullWidth ? 2 : undefined}
+            onKeyDown={
+              canOperate
+                ? handleLimsEnterNext(focusOrder, c.codigo, {
+                    onAfterLast: () => saveBtnRef.current?.focus(),
+                  })
+                : undefined
+            }
+            inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: c.codigo }}
+            helperText={
+              canOperate
+                ? fullWidth
+                  ? 'Enter → siguiente · Shift+Enter → nueva línea'
+                  : 'Enter → siguiente'
+                : undefined
+            }
             sx={fullWidth ? { gridColumn: '1 / -1' } : undefined}
           />
         );
@@ -111,6 +139,7 @@ const EstudioMicroExamenOrinaTab: React.FC<EstudioMicroExamenOrinaTabProps> = ({
       {canOperate && (
         <Box display="flex" justifyContent="flex-end" gap={1}>
           <Button
+            ref={saveBtnRef}
             variant="contained"
             onClick={() => void handleSave()}
             disabled={saving || !dirty}

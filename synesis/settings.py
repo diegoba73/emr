@@ -163,6 +163,8 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    # POST /api/lab/pedidos-completos/ (y similares) desde el SPA
+    'idempotency-key',
 ]
 
 # CSRF Configuration for React frontend

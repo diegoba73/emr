@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, Paper, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Paper, Tab, Tabs, Typography } from '@mui/material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
@@ -51,7 +51,7 @@ import EnviarInformeMicroDialog from '../../components/lims/EnviarInformeMicroDi
 import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/MotivoDialog';
 import { ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
-import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
 import { estudioAdmiteExamenOrina } from '../../utils/limsExamenOrinaMicro';
 import { todasLecturasSinDesarrollo } from '../../utils/limsMicroCultivoNegativo';
 
@@ -304,7 +304,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           <Typography variant="h5">
             Estudio {estudio.numero || `#${estudio.id}`}
           </Typography>
-          <Chip label={labelEstadoOrdenLims(estudio.estado)} />
+          <EstudioMicrobiologiaEstadoBadge estado={estudio.estado} size="medium" />
           {puedeEnviar && (
             <Button variant="contained" onClick={() => setOpenEnviarInforme(true)}>
               Enviar informe
@@ -346,6 +346,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         <EnviarInformeMicroDialog
           open={openEnviarInforme}
           estudio={estudio}
+          preliminarEmitido={informeOpts.tienePreliminarEmitido}
           onClose={() => setOpenEnviarInforme(false)}
           onSuccess={() => {
             setOpenEnviarInforme(false);

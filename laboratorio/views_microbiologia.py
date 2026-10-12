@@ -252,7 +252,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
         "tipo_muestra_micro",
         "consulta_hc",
         "responsable",
-    ).prefetch_related("siembras", "lecturas")
+    ).prefetch_related("siembras", "lecturas", "informes")
     permission_classes = [LimsMicrobiologiaPermission]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [

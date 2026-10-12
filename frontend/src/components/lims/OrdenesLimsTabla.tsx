@@ -13,6 +13,10 @@ import {
 } from '@mui/material';
 import type { EstadoSolicitudLims } from '../../types/lims';
 import { estadoOrdenColor, labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import {
+  estadoEstudioMicroColor,
+  labelEstadoEstudioMicro,
+} from '../../utils/limsEstadosMicro';
 import { limsActionBtnSoftSx, limsActionBtnSx } from '../../utils/limsActionButtonSx';
 import type { PendientePedidoRow } from '../../utils/limsPendientesUnificados';
 import OrigenProcedenciaCellView from './OrigenProcedenciaCell';
@@ -156,8 +160,16 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                   <Stack spacing={0.5} alignItems="flex-start">
                     <Chip
                       size="small"
-                      label={labelEstadoOrdenLims(r.estado)}
-                      color={estadoOrdenColor(r.estado as EstadoSolicitudLims)}
+                      label={
+                        r.tipo === 'MICROBIOLOGIA'
+                          ? labelEstadoEstudioMicro(r.estado)
+                          : labelEstadoOrdenLims(r.estado)
+                      }
+                      color={
+                        r.tipo === 'MICROBIOLOGIA'
+                          ? estadoEstudioMicroColor(r.estado)
+                          : estadoOrdenColor(r.estado as EstadoSolicitudLims)
+                      }
                     />
                     {r.estado_obra_social ? (
                       <Chip

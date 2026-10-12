@@ -222,8 +222,24 @@ def build_etiqueta_muestra(
                 fecha_toma=fecha_eff,
                 tipo_operacional=tipo_operacional_imprimible(muestra),
             )
-        except CodigoBarraZplError as exc:
-            # Defensa: no generar ZPL con identidad alterada.
+            lines = label_lines.as_list()
+            rendered = render_zpl_40x23(label_lines, profile)
+            zpl = rendered.zpl
+            # Preview y ZPL deben coincidir carácter a carácter en ^FD.
+            for expected, lay in zip(lines, rendered.layouts, strict=True):
+                if expected != lay.text:
+                    raise EtiquetaMuestraError(
+                        "Inconsistencia entre líneas de preview y contenido ZPL."
+                    )
+                if f"^FD{lay.text}^FS" not in zpl:
+                    raise EtiquetaMuestraError(
+                        "Inconsistencia entre líneas de preview y contenido ZPL."
+                    )
+            if f"^PW{profile.width_dots}" not in zpl or f"^LL{profile.height_dots}" not in zpl:
+                raise EtiquetaMuestraError("ZPL generado fuera del perfil esperado.")
+            if not rendered.all_fit_width():
+                raise EtiquetaMuestraError("ZPL generado fuera del ancho útil del perfil.")
+        except (CodigoBarraZplError, EtiquetaMuestraError, ValueError) as exc:
             err = str(exc)
             if require_printable:
                 raise EtiquetaMuestraError(err) from exc
@@ -237,23 +253,6 @@ def build_etiqueta_muestra(
                 printable=False,
                 validation_errors=[*errors, err],
             )
-        lines = label_lines.as_list()
-        rendered = render_zpl_40x23(label_lines, profile)
-        zpl = rendered.zpl
-        # Preview y ZPL deben coincidir carácter a carácter en ^FD.
-        for expected, lay in zip(lines, rendered.layouts, strict=True):
-            if expected != lay.text:
-                raise EtiquetaMuestraError(
-                    "Inconsistencia entre líneas de preview y contenido ZPL."
-                )
-            if f"^FD{lay.text}^FS" not in zpl:
-                raise EtiquetaMuestraError(
-                    "Inconsistencia entre líneas de preview y contenido ZPL."
-                )
-        if f"^PW{profile.width_dots}" not in zpl or f"^LL{profile.height_dots}" not in zpl:
-            raise EtiquetaMuestraError("ZPL generado fuera del perfil esperado.")
-        if not rendered.all_fit_width():
-            raise EtiquetaMuestraError("ZPL generado fuera del ancho útil del perfil.")
 
     return EtiquetaMuestraPayload(
         muestra_id=muestra.pk,

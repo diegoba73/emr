@@ -119,6 +119,8 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     obra_social_efectiva = serializers.SerializerMethodField()
     afiliado_efectivo = serializers.SerializerMethodField()
     admite_examen_orina = serializers.SerializerMethodField()
+    tiene_informe_preliminar = serializers.SerializerMethodField()
+    tiene_informe_final = serializers.SerializerMethodField()
 
     class Meta:
         model = EstudioMicrobiologia
@@ -168,6 +170,8 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "material_pedido",
             "examen_orina",
             "admite_examen_orina",
+            "tiene_informe_preliminar",
+            "tiene_informe_final",
             "fecha_inicio",
             "fecha_cierre",
             "responsable",
@@ -178,10 +182,36 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
     def get_admite_examen_orina(self, obj):
         from laboratorio.examen_orina_micro import estudio_admite_examen_orina
 
         return estudio_admite_examen_orina(obj)
+
+    def _informes_flags(self, obj):
+        """(tiene_preliminar, tiene_final) — usa prefetch si está disponible."""
+        cache = getattr(obj, "_prefetched_objects_cache", None) or {}
+        if "informes" in cache:
+            informes = cache["informes"]
+        else:
+            informes = list(obj.informes.all().only("tipo", "estado"))
+        tiene_final = any(
+            (getattr(inf, "tipo", None) or "") == "FINAL"
+            and (getattr(inf, "estado", None) or "") in ("VALIDADO", "EMITIDO")
+            for inf in informes
+        )
+        tiene_prelim = any(
+            (getattr(inf, "tipo", None) or "") == "PRELIMINAR"
+            and (getattr(inf, "estado", None) or "") in ("VALIDADO", "EMITIDO")
+            for inf in informes
+        )
+        return tiene_prelim, tiene_final
+
+    def get_tiene_informe_preliminar(self, obj):
+        return self._informes_flags(obj)[0]
+
+    def get_tiene_informe_final(self, obj):
+        return self._informes_flags(obj)[1]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

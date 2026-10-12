@@ -75,8 +75,16 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
         listTiposMuestraLims({ activo: true }),
         listContenedoresLims(),
       ]);
-      setRows(m);
-      onMuestrasChange?.(m);
+      // Orden estable por código: las canceladas siguen visibles (explica saltos de numeración).
+      const sorted = [...m].sort((a, b) =>
+        String(a.codigo_barra || a.id).localeCompare(
+          String(b.codigo_barra || b.id),
+          undefined,
+          { numeric: true }
+        )
+      );
+      setRows(sorted);
+      onMuestrasChange?.(sorted);
       setTipos(t);
       setConts(c);
     } catch (e) {
@@ -132,9 +140,17 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Muestras</Typography>
+        <Box>
+          <Typography variant="h6">Muestras / tubos</Typography>
+          {rows.some((r) => r.estado === 'CANCELADA') ? (
+            <Typography variant="caption" color="text.secondary" display="block">
+              Se listan también las canceladas para conservar la secuencia de códigos.
+            </Typography>
+          ) : null}
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {rows.length > 0 && canOperate && (
+          {rows.some((r) => r.estado !== 'CANCELADA' && r.estado !== 'DESCARTADA') &&
+            canOperate && (
             <Button variant="outlined" size="small" onClick={handleImprimirEtiquetas}>
               Reimprimir etiquetas
             </Button>
@@ -148,8 +164,8 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
       </Box>
       {canOperate && ordenEstado === 'PENDIENTE' && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Usá <strong>Imprimir etiquetas</strong> para generar los tubos y códigos. La recepción se
-          confirma después en <strong>Recepción</strong> escaneando cada tubo.
+          Usá <strong>Imprimir etiquetas</strong> (arriba) para generar los tubos y códigos. La
+          recepción se confirma después en <strong>Recepción</strong> escaneando cada tubo.
         </Typography>
       )}
 
@@ -192,7 +208,14 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
                     })()
                   : '—';
                 return (
-                  <TableRow key={m.id}>
+                  <TableRow
+                    key={m.id}
+                    sx={
+                      m.estado === 'CANCELADA' || m.estado === 'DESCARTADA'
+                        ? { opacity: 0.75 }
+                        : undefined
+                    }
+                  >
                     <TableCell>{m.codigo_barra || '—'}</TableCell>
                     <TableCell>{contNombre}</TableCell>
                     <TableCell>{tipoNombre}</TableCell>

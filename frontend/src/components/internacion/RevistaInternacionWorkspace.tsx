@@ -26,17 +26,19 @@ import EvolucionInternacionForm from '../../modules/atenciones/components/forms/
 import {
   canAccessMicrobiologiaLectura,
   canDownloadInformeClinicoPdf,
+  canDownloadInformeMicroPdf,
   canOpenDetalleOrdenLab,
   pathDetalleEstudioMicro,
   pathDetalleOrdenLab,
 } from '../../utils/limsAccess';
 import { labelEstadoOrdenLims, estadoOrdenColor } from '../../utils/limsEstadosOrden';
 import {
-  estadoEstudioMicroColor,
-  labelEstadoEstudioMicro,
+  estadoMicroGeneralColor,
+  labelEstadoMicroGeneral,
 } from '../../utils/limsEstadosMicro';
 import { withNavBack } from '../../utils/navBack';
 import { downloadInformeLimsPdf } from '../../services/limsApi';
+import { downloadInformeMicroPdf } from '../../services/limsMicroApi';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import RevistaHcDiarioAccordions from './hc/RevistaHcDiarioAccordions';
 import NuevaOrdenLimsDialog from '../lims/NuevaOrdenLimsDialog';
@@ -541,6 +543,10 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
               const detalleMicro = [micro.cultivo_nombre, micro.muestra_nombre]
                 .filter(Boolean)
                 .join(' · ');
+              const microInformeOpts = {
+                tieneInformePreliminar: Boolean(micro.tiene_informe_preliminar),
+                tieneInformeFinal: Boolean(micro.tiene_informe_final),
+              };
               return (
                 <Box
                   key={ev.key}
@@ -556,8 +562,8 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                     </Typography>
                     <Chip
                       size="small"
-                      label={labelEstadoEstudioMicro(micro.estado)}
-                      color={estadoEstudioMicroColor(micro.estado)}
+                      label={labelEstadoMicroGeneral(micro.estado, microInformeOpts)}
+                      color={estadoMicroGeneralColor(micro.estado, microInformeOpts)}
                     />
                     <Button size="small" onClick={() => setEventoAbierto(abierto ? null : ev.key)}>
                       {abierto ? 'Ocultar' : 'Ver'}
@@ -575,9 +581,36 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                         Abrir en laboratorio
                       </Button>
                     )}
+                    {canDownloadInformeMicroPdf(currentUser, micro.estado, {
+                      tieneFinalValidado: microInformeOpts.tieneInformeFinal,
+                      tienePreliminarEmitido: microInformeOpts.tieneInformePreliminar,
+                    }) && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          void downloadInformeMicroPdf(micro.id).catch((err) =>
+                            toast.error(formatLimsPdfDownloadError(err))
+                          );
+                        }}
+                      >
+                        {microInformeOpts.tieneInformeFinal
+                          ? 'PDF informe'
+                          : microInformeOpts.tieneInformePreliminar
+                            ? 'PDF preliminar'
+                            : 'PDF informe'}
+                      </Button>
+                    )}
                   </Stack>
                   {abierto && (
                     <Box sx={{ mt: 1 }}>
+                      {microInformeOpts.tieneInformePreliminar &&
+                        !microInformeOpts.tieneInformeFinal && (
+                          <Alert severity="warning" sx={{ mb: 1 }}>
+                            Informe preliminar: hay avance disponible. Al validar el final, este
+                            preliminar deja de estar vigente.
+                          </Alert>
+                        )}
                       <Typography variant="body2" color="text.secondary">
                         {detalleMicro || 'Pedido de microbiología.'}
                       </Typography>

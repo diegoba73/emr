@@ -50,6 +50,7 @@ import {
   canOperateMicrobiologia,
 } from '../../utils/limsAccess';
 import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
+import { labelEstadoEstudioMicroTecnico } from '../../utils/limsEstadosMicro';
 
 const ESTADOS_OPERADOR: EstadoEstudioMicrobiologia[] = [
   'PENDIENTE',
@@ -293,7 +294,7 @@ const MicrobiologiaEstudios: React.FC = () => {
               <MenuItem value="">{canOp ? 'Todos' : 'Finalizados'}</MenuItem>
               {estadosFiltro.map((s) => (
                 <MenuItem key={s} value={s}>
-                  {s}
+                  {labelEstadoEstudioMicroTecnico(s)}
                 </MenuItem>
               ))}
             </Select>

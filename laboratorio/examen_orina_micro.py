@@ -38,6 +38,8 @@ LABELS_EXAMEN_ORINA: dict[str, str] = {c: label for c, label in CAMPOS_EXAMEN_OR
 
 # Tira + sedimento cualitativos (no color/aspecto/densidad/pH/conclusión).
 VALOR_NO_CONTIENE = "NO CONTIENE"
+VALOR_CONCLUSION_VACIA = "--"
+CODIGO_CONCLUSION_ORINA = "ORI_CONC"
 CODIGOS_DEFAULT_NO_CONTIENE: frozenset[str] = frozenset(
     {
         "ORI_GLU",
@@ -55,17 +57,24 @@ CODIGOS_DEFAULT_NO_CONTIENE: frozenset[str] = frozenset(
 
 
 def valor_inicial_resultado(tipo_examen) -> str:
-    """Valor por defecto al crear ResultadoExamen (tira/sedimento → NO CONTIENE)."""
+    """Valor por defecto al crear ResultadoExamen (tira/sedimento → NO CONTIENE; conclusión → --)."""
     codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
     if codigo in CODIGOS_DEFAULT_NO_CONTIENE:
         return VALOR_NO_CONTIENE
+    if codigo == CODIGO_CONCLUSION_ORINA:
+        return VALOR_CONCLUSION_VACIA
     return ""
 
 
 def examen_orina_vacio() -> dict[str, str]:
     out: dict[str, str] = {}
     for codigo, _ in CAMPOS_EXAMEN_ORINA:
-        out[codigo] = VALOR_NO_CONTIENE if codigo in CODIGOS_DEFAULT_NO_CONTIENE else ""
+        if codigo in CODIGOS_DEFAULT_NO_CONTIENE:
+            out[codigo] = VALOR_NO_CONTIENE
+        elif codigo == CODIGO_CONCLUSION_ORINA:
+            out[codigo] = VALOR_CONCLUSION_VACIA
+        else:
+            out[codigo] = ""
     return out
 
 

@@ -17,17 +17,13 @@ type ChipSize = 'small' | 'medium';
 export const EstudioMicrobiologiaEstadoBadge: React.FC<{
   estado: EstadoEstudioMicrobiologia | string;
   size?: ChipSize;
-}> = ({ estado, size = 'small' }) => {
-  const term = estado === 'CANCELADO';
-  return (
-    <Chip
-      size={size}
-      label={labelEstadoEstudioMicro(estado)}
-      color={estadoEstudioMicroColor(estado)}
-      variant={term ? 'outlined' : 'filled'}
-    />
-  );
-};
+}> = ({ estado, size = 'small' }) => (
+  <Chip
+    size={size}
+    label={labelEstadoEstudioMicro(estado)}
+    color={estadoEstudioMicroColor(estado)}
+  />
+);
 
 export const AisladoEstadoBadge: React.FC<{
   estado: EstadoAisladoMicrobiologico | string;

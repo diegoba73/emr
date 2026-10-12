@@ -598,13 +598,15 @@ export async function createSolicitudExamenLims(
 
 export async function getOrdenAbiertaPaciente(
   pacienteId: number,
-  fechaProgramadaToma?: string
+  fechaProgramadaToma?: string,
+  materialPedido?: string
 ): Promise<{
   id: number;
   numero: string | null;
   fecha_solicitud: string;
   fecha_programada_toma?: string;
   estado: string;
+  material_pedido?: string;
 } | null> {
   const { data } = await apiClient.get<{
     id: number;
@@ -612,10 +614,14 @@ export async function getOrdenAbiertaPaciente(
     fecha_solicitud: string;
     fecha_programada_toma?: string;
     estado: string;
+    material_pedido?: string;
   } | null>(`${LAB}/solicitudes/orden-abierta/`, {
     params: {
       paciente_id: pacienteId,
       fecha_programada_toma: fechaProgramadaToma,
+      ...(materialPedido
+        ? { material_pedido: materialPedido.toUpperCase() }
+        : {}),
     },
   });
   return data ?? null;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -41,8 +41,22 @@ import {
   updateResultadoAntibiotico,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import {
+  handleLimsEnterNext,
+  LIMS_ENTER_FOCUS_ATTR,
+} from '../../../utils/limsEnterFocusNext';
 import { AntibiogramaEstadoBadge, InterpretacionAntibioticoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
+
+const ADD_RES_FOCUS_ORDER = ['ab-mic', 'ab-halo', 'ab-metodo', 'ab-estandar'] as const;
+const EDIT_RES_FOCUS_ORDER = [
+  'edit-mic',
+  'edit-halo',
+  'edit-metodo',
+  'edit-estandar',
+  'edit-obs',
+] as const;
+const EDIT_AB_FOCUS_ORDER = ['edit-ab-metodo', 'edit-ab-obs'] as const;
 
 const INTERPRETACIONES = ['S', 'I', 'R', 'SDD', 'NO_APLICA'];
 
@@ -113,6 +127,9 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
     observaciones: '',
   });
   const [editSaving, setEditSaving] = useState(false);
+  const addResBtnRef = useRef<HTMLButtonElement>(null);
+  const editResSaveBtnRef = useRef<HTMLButtonElement>(null);
+  const editAbSaveBtnRef = useRef<HTMLButtonElement>(null);
 
   const microById = useMemo(() => {
     const map = new Map<number, Microorganismo>();
@@ -408,12 +425,25 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                   ))}
                 </Select>
               </FormControl>
-              <TextField size="small" label="MIC/CIM" value={mic} onChange={(e) => setMic(e.target.value)} />
+              <TextField
+                size="small"
+                label="MIC/CIM"
+                value={mic}
+                onChange={(e) => setMic(e.target.value)}
+                onKeyDown={handleLimsEnterNext([...ADD_RES_FOCUS_ORDER], 'ab-mic', {
+                  onAfterLast: () => addResBtnRef.current?.focus(),
+                })}
+                inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'ab-mic' }}
+              />
               <TextField
                 size="small"
                 label="Halo (mm)"
                 value={halo}
                 onChange={(e) => setHalo(e.target.value)}
+                onKeyDown={handleLimsEnterNext([...ADD_RES_FOCUS_ORDER], 'ab-halo', {
+                  onAfterLast: () => addResBtnRef.current?.focus(),
+                })}
+                inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'ab-halo' }}
                 sx={{ width: 110 }}
               />
               <TextField
@@ -421,6 +451,10 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                 label="Método"
                 value={metodoRes}
                 onChange={(e) => setMetodoRes(e.target.value)}
+                onKeyDown={handleLimsEnterNext([...ADD_RES_FOCUS_ORDER], 'ab-metodo', {
+                  onAfterLast: () => addResBtnRef.current?.focus(),
+                })}
+                inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'ab-metodo' }}
                 sx={{ minWidth: 140 }}
               />
               <TextField
@@ -428,10 +462,15 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
                 label="Estándar/versión"
                 value={estandar}
                 onChange={(e) => setEstandar(e.target.value)}
+                onKeyDown={handleLimsEnterNext([...ADD_RES_FOCUS_ORDER], 'ab-estandar', {
+                  onAfterLast: () => addResBtnRef.current?.focus(),
+                })}
+                inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'ab-estandar' }}
                 placeholder="CLSI / EUCAST"
                 sx={{ minWidth: 160 }}
               />
               <Button
+                ref={addResBtnRef}
                 variant="contained"
                 onClick={agregarResultado}
                 disabled={antibiogramasAbiertos.length === 0}
@@ -578,6 +617,10 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
               label="Método"
               value={editAbForm.metodo}
               onChange={(e) => setEditAbForm((f) => ({ ...f, metodo: e.target.value }))}
+              onKeyDown={handleLimsEnterNext([...EDIT_AB_FOCUS_ORDER], 'edit-ab-metodo', {
+                onAfterLast: () => editAbSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ab-metodo' }}
             />
             <TextField
               size="small"
@@ -587,12 +630,22 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
               minRows={2}
               value={editAbForm.observaciones}
               onChange={(e) => setEditAbForm((f) => ({ ...f, observaciones: e.target.value }))}
+              onKeyDown={handleLimsEnterNext([...EDIT_AB_FOCUS_ORDER], 'edit-ab-obs', {
+                onAfterLast: () => editAbSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-ab-obs' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditAb(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={guardarAb} disabled={editSaving}>
+          <Button
+            ref={editAbSaveBtnRef}
+            variant="contained"
+            onClick={guardarAb}
+            disabled={editSaving}
+          >
             Guardar
           </Button>
         </DialogActions>
@@ -623,18 +676,30 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
               label="MIC/CIM"
               value={editResForm.mic}
               onChange={(e) => setEditResForm((f) => ({ ...f, mic: e.target.value }))}
+              onKeyDown={handleLimsEnterNext([...EDIT_RES_FOCUS_ORDER], 'edit-mic', {
+                onAfterLast: () => editResSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-mic' }}
             />
             <TextField
               size="small"
               label="Halo (mm)"
               value={editResForm.halo_mm}
               onChange={(e) => setEditResForm((f) => ({ ...f, halo_mm: e.target.value }))}
+              onKeyDown={handleLimsEnterNext([...EDIT_RES_FOCUS_ORDER], 'edit-halo', {
+                onAfterLast: () => editResSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-halo' }}
             />
             <TextField
               size="small"
               label="Método"
               value={editResForm.metodo}
               onChange={(e) => setEditResForm((f) => ({ ...f, metodo: e.target.value }))}
+              onKeyDown={handleLimsEnterNext([...EDIT_RES_FOCUS_ORDER], 'edit-metodo', {
+                onAfterLast: () => editResSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-metodo' }}
             />
             <TextField
               size="small"
@@ -643,6 +708,10 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
               onChange={(e) =>
                 setEditResForm((f) => ({ ...f, estandar_version: e.target.value }))
               }
+              onKeyDown={handleLimsEnterNext([...EDIT_RES_FOCUS_ORDER], 'edit-estandar', {
+                onAfterLast: () => editResSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-estandar' }}
             />
             <TextField
               size="small"
@@ -654,12 +723,22 @@ const AntibiogramaPanel: React.FC<AntibiogramaPanelProps> = ({
               onChange={(e) =>
                 setEditResForm((f) => ({ ...f, observaciones: e.target.value }))
               }
+              onKeyDown={handleLimsEnterNext([...EDIT_RES_FOCUS_ORDER], 'edit-obs', {
+                onAfterLast: () => editResSaveBtnRef.current?.focus(),
+              })}
+              inputProps={{ [LIMS_ENTER_FOCUS_ATTR]: 'edit-obs' }}
+              helperText="Enter → siguiente · Shift+Enter → nueva línea"
             />
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditRes(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={guardarRes} disabled={editSaving}>
+          <Button
+            ref={editResSaveBtnRef}
+            variant="contained"
+            onClick={guardarRes}
+            disabled={editSaving}
+          >
             Guardar
           </Button>
         </DialogActions>

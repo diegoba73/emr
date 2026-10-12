@@ -822,18 +822,26 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
-    // Multi-material → N órdenes nuevas (forzar); no ofrecer merge a una sola abierta.
+    // Mismo material + PENDIENTE sin etiquetas → avisar merge a esa orden.
+    // Otro material → orden nueva (sin este diálogo). Con etiquetas/en proceso el BE rechaza.
     const pacienteId = paciente?.id ?? pacienteInicial?.id;
     if (hasLab && groups.length === 1 && pacienteId) {
-      try {
-        const abierta = await getOrdenAbiertaPaciente(pacienteId, fechaProgramadaToma);
-        if (abierta) {
-          setMergeConfirm({ id: abierta.id, numero: abierta.numero });
-          setPendingSubmit(draftMode ? 'draft' : 'create');
-          return;
+      const mat = (groups[0].material.codigo || '').toUpperCase();
+      if (mat && mat !== '_') {
+        try {
+          const abierta = await getOrdenAbiertaPaciente(
+            pacienteId,
+            fechaProgramadaToma,
+            mat
+          );
+          if (abierta) {
+            setMergeConfirm({ id: abierta.id, numero: abierta.numero });
+            setPendingSubmit(draftMode ? 'draft' : 'create');
+            return;
+          }
+        } catch {
+          /* si falla el check, seguimos con create */
         }
-      } catch {
-        /* si falla el check, seguimos con create */
       }
     }
 
@@ -1264,9 +1272,10 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         <DialogContent>
           <DialogContentText>
             El paciente ya tiene la orden{' '}
-            <strong>{mergeConfirm?.numero || `#${mergeConfirm?.id}`}</strong> pendiente de toma. Los
-            exámenes de Lab. Clínico se agregarán a esa orden. Los cultivos de microbiología se
-            crean aparte. ¿Continuar?
+            <strong>{mergeConfirm?.numero || `#${mergeConfirm?.id}`}</strong> pendiente sin
+            etiquetas y del mismo material. Los exámenes de Lab. Clínico se agregarán a esa orden.
+            Si pedís otro material, se crea una orden nueva. Los cultivos de microbiología se crean
+            aparte. ¿Continuar?
           </DialogContentText>
         </DialogContent>
         <DialogActions>

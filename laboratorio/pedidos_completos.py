@@ -355,20 +355,6 @@ def crear_pedido_completo(
 
     adquirir_locks_materiales(paciente.pk, mats_clinicos | mats_micro, fecha_programada_toma)
 
-    if mats_clinicos:
-        conflictos = buscar_conflictos_materiales_clinicos(
-            paciente.pk, fecha_programada_toma, mats_clinicos
-        )
-        if conflictos:
-            c0 = conflictos[0]
-            raise ValidationError(
-                {
-                    "detail": c0.mensaje,
-                    "solicitud_id": c0.solicitud_id,
-                    "material": c0.material,
-                }
-            )
-
     for mat in mats_micro:
         msgs = buscar_conflictos_micro(
             paciente.pk, fecha_programada_toma, material_pedido=mat
@@ -376,8 +362,57 @@ def crear_pedido_completo(
         if msgs:
             raise ValidationError({"detail": msgs[0], "material": mat})
 
+    from laboratorio.solicitud_orden_abierta import (
+        agregar_examenes_a_solicitud,
+        orden_esta_abierta,
+    )
+
     creadas_lab: list[SolicitudExamen] = []
     for g in solicitudes_lab:
+        mat = normalizar_material_pedido(g.get("material_pedido"))
+        conflictos = buscar_conflictos_materiales_clinicos(
+            paciente.pk, fecha_programada_toma, {mat}
+        )
+        if conflictos:
+            c0 = conflictos[0]
+            sol_exist = (
+                SolicitudExamen.objects.select_for_update()
+                .prefetch_related("muestras")
+                .get(pk=c0.solicitud_id)
+            )
+            # Mismo material + PENDIENTE sin etiquetas → agregar a esa orden.
+            # Otro estado (con etiquetas / en proceso) → no crear orden duplicada.
+            if orden_esta_abierta(sol_exist):
+                agregar_examenes_a_solicitud(
+                    sol_exist,
+                    examenes_ids=list(g.get("examenes_ids") or []),
+                    paneles_ids=list(g.get("paneles_ids") or []),
+                    user=user,
+                )
+                if (g.get("observaciones") or observaciones) and not (
+                    sol_exist.observaciones or ""
+                ).strip():
+                    sol_exist.observaciones = (
+                        g.get("observaciones") or observaciones or ""
+                    ).strip()
+                    sol_exist.save(update_fields=["observaciones"])
+                creadas_lab.append(sol_exist)
+            else:
+                raise ValidationError(
+                    {
+                        "detail": (
+                            f"Ya existe una orden de {mat} para ese día "
+                            f"({sol_exist.numero or sol_exist.pk}) con etiquetas o en proceso. "
+                            "Un pedido médico no puede crear otra ni agregar exámenes; "
+                            "el laboratorio puede agregarlos a la orden existente, "
+                            "o programalo para otro día."
+                        ),
+                        "solicitud_id": sol_exist.pk,
+                        "material": mat,
+                    }
+                )
+            continue
+
         sol = _crear_solicitud_material(
             paciente=paciente,
             medico_interno=medico,
@@ -417,13 +452,19 @@ def crear_pedido_completo(
             raise ValidationError({"detail": str(exc)}) from exc
         creados_micro.append(est)
 
-    pedidos = [{"tipo": "LAB_CLINICO", "id": s.pk} for s in creadas_lab] + [
-        {"tipo": "MICROBIOLOGIA", "id": e.pk} for e in creados_micro
+    # Únicos: merge al mismo id no debe duplicar en la respuesta.
+    sol_ids: list[int] = []
+    for s in creadas_lab:
+        if s.pk not in sol_ids:
+            sol_ids.append(s.pk)
+    micro_ids = [e.pk for e in creados_micro]
+    pedidos = [{"tipo": "LAB_CLINICO", "id": sid} for sid in sol_ids] + [
+        {"tipo": "MICROBIOLOGIA", "id": mid} for mid in micro_ids
     ]
     response = {
         "pedidos": pedidos,
-        "solicitudes_ids": [s.pk for s in creadas_lab],
-        "estudios_micro_ids": [e.pk for e in creados_micro],
+        "solicitudes_ids": sol_ids,
+        "estudios_micro_ids": micro_ids,
         "fecha_programada_toma": fecha_programada_toma.isoformat()
         if hasattr(fecha_programada_toma, "isoformat")
         else str(fecha_programada_toma),

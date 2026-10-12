@@ -11,7 +11,12 @@ import {
   pathDetalleEstudioMicro,
   pathDetalleOrdenLab,
 } from '../../utils/limsAccess';
-import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import { estadoOrdenColor, labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import {
+  estadoMicroGeneralColor,
+  labelEstadoMicroGeneral,
+} from '../../utils/limsEstadosMicro';
+import type { EstadoSolicitudLims } from '../../types/lims';
 import { pacienteFichaAnalisisPath, withNavBack } from '../../utils/navBack';
 import { downloadInformeLimsPdf } from '../../services/limsApi';
 import { downloadInformeMicroPdf } from '../../services/limsMicroApi';
@@ -117,7 +122,11 @@ const PacienteLabsAccesoPanel: React.FC<PacienteLabsAccesoPanelProps> = ({
           <Typography variant="body2" fontWeight={600}>
             {s.numero || `#${s.id}`}
           </Typography>
-          <Chip size="small" label={labelEstadoOrdenLims(s.estado)} />
+          <Chip
+            size="small"
+            label={labelEstadoOrdenLims(s.estado)}
+            color={estadoOrdenColor(s.estado as EstadoSolicitudLims)}
+          />
           {s.estado === 'INFORMADO_PARCIAL' && (
             <Alert severity="warning" sx={{ py: 0, px: 1, flex: '1 1 100%' }}>
               Informe parcial vigente
@@ -168,10 +177,25 @@ const PacienteLabsAccesoPanel: React.FC<PacienteLabsAccesoPanelProps> = ({
           <Typography variant="body2" fontWeight={600}>
             {e.numero || `#${e.id}`}
           </Typography>
-          <Chip size="small" label={e.estado} />
+          <Chip
+            size="small"
+            label={labelEstadoMicroGeneral(e.estado, {
+              tieneInformePreliminar: e.tiene_informe_preliminar,
+              tieneInformeFinal: e.tiene_informe_final,
+            })}
+            color={estadoMicroGeneralColor(e.estado, {
+              tieneInformePreliminar: e.tiene_informe_preliminar,
+              tieneInformeFinal: e.tiene_informe_final,
+            })}
+          />
           <Typography variant="caption" color="text.secondary">
             {e.tipo_cultivo_nombre || e.tipo_estudio}
           </Typography>
+          {e.tiene_informe_preliminar && !e.tiene_informe_final && (
+            <Alert severity="warning" sx={{ py: 0, px: 1, flex: '1 1 100%' }}>
+              Informe preliminar vigente
+            </Alert>
+          )}
           <Button
             size="small"
             onClick={() =>
@@ -184,7 +208,10 @@ const PacienteLabsAccesoPanel: React.FC<PacienteLabsAccesoPanelProps> = ({
             Abrir
           </Button>
           {canDownloadInformeMicroPdf(currentUser, e.estado, {
-            tieneFinalValidado: e.estado === 'VALIDADO' || e.estado === 'INFORMADO',
+            tieneFinalValidado: Boolean(e.tiene_informe_final) ||
+              e.estado === 'VALIDADO' ||
+              e.estado === 'INFORMADO',
+            tienePreliminarEmitido: Boolean(e.tiene_informe_preliminar),
           }) && (
             <Button
               size="small"
@@ -195,7 +222,11 @@ const PacienteLabsAccesoPanel: React.FC<PacienteLabsAccesoPanelProps> = ({
                 );
               }}
             >
-              PDF
+              {e.tiene_informe_final
+                ? 'PDF'
+                : e.tiene_informe_preliminar
+                  ? 'PDF preliminar'
+                  : 'PDF'}
             </Button>
           )}
         </Box>

@@ -335,12 +335,22 @@ class MuestraTransaccionalViewSet(viewsets.ModelViewSet):
     def etiqueta_zpl(self, request, pk=None):
         """Vista previa JSON+ZPL 40×23 mm (sin enviar a impresora)."""
         from laboratorio.services_etiqueta_muestra import (
+            EtiquetaMuestraError,
             build_etiqueta_muestra,
             etiqueta_payload_to_dict,
         )
 
         muestra = self.get_object()
-        payload = build_etiqueta_muestra(muestra, require_printable=False)
+        try:
+            payload = build_etiqueta_muestra(muestra, require_printable=False)
+        except EtiquetaMuestraError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("etiqueta-zpl muestra pk=%s", pk)
+            return Response(
+                {"error": "No se pudo generar la vista previa de la etiqueta."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         return Response(etiqueta_payload_to_dict(payload), status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="imprimir-etiqueta")

@@ -448,7 +448,12 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'detail': 'fecha_programada_toma inválida (use YYYY-MM-DD).'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        sol = buscar_orden_abierta(paciente_id, fecha_programada_toma=fecha_toma)
+        material = (request.query_params.get('material_pedido') or '').strip() or None
+        sol = buscar_orden_abierta(
+            paciente_id,
+            fecha_programada_toma=fecha_toma,
+            material_pedido=material,
+        )
         if not sol:
             return Response(None)
         return Response(
@@ -458,6 +463,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 'fecha_solicitud': sol.fecha_solicitud,
                 'fecha_programada_toma': sol.fecha_programada_toma,
                 'estado': sol.estado,
+                'material_pedido': getattr(sol, 'material_pedido', None) or '',
             }
         )
 

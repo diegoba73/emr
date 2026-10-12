@@ -116,14 +116,21 @@ export function clearGuardiaPendingDraft(): void {
   }
 }
 
+export function countConsultaPedidosDraftItems(draft: ConsultaPedidosDraft): number {
+  return (
+    draft.solicitudesLab.length +
+    (draft.solicitudesMicro?.length || 0) +
+    draft.estudios.length
+  );
+}
+
 /** Traslada el borrador de guardia al consulta HC recién creado. */
-export function migrateGuardiaPendingDraftToConsulta(consultaHcId: number): void {
-  const pending = loadGuardiaPendingDraft();
-  if (
-    pending.solicitudesLab.length === 0 &&
-    pending.solicitudesMicro.length === 0 &&
-    pending.estudios.length === 0
-  ) {
+export function migrateGuardiaPendingDraftToConsulta(
+  consultaHcId: number,
+  draftOverride?: ConsultaPedidosDraft
+): void {
+  const pending = draftOverride ?? loadGuardiaPendingDraft();
+  if (countConsultaPedidosDraftItems(pending) === 0) {
     return;
   }
   saveConsultaPedidosDraft(consultaHcId, pending);
@@ -131,12 +138,7 @@ export function migrateGuardiaPendingDraftToConsulta(consultaHcId: number): void
 }
 
 export function countGuardiaPendingDraftItems(): number {
-  const pending = loadGuardiaPendingDraft();
-  return (
-    pending.solicitudesLab.length +
-    pending.solicitudesMicro.length +
-    pending.estudios.length
-  );
+  return countConsultaPedidosDraftItems(loadGuardiaPendingDraft());
 }
 
 export function loadConsultaPedidosDraft(consultaHcId: number): ConsultaPedidosDraft {

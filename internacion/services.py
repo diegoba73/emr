@@ -235,6 +235,7 @@ class InternacionClinicalService:
             )
             .exclude(origen_solicitud__in=origenes_no_internacion)
             .select_related('tipo_cultivo', 'tipo_muestra_micro')
+            .prefetch_related('informes')
             .order_by('-created_at')
         )
         if fin:
@@ -247,6 +248,17 @@ class InternacionClinicalService:
             fecha_prog = getattr(est_micro, 'fecha_programada_toma', None)
             cultivo = est_micro.tipo_cultivo
             muestra = est_micro.tipo_muestra_micro
+            informes = list(est_micro.informes.all())
+            tiene_final = any(
+                (inf.tipo or '') == 'FINAL'
+                and (inf.estado or '') in ('VALIDADO', 'EMITIDO')
+                for inf in informes
+            )
+            tiene_prelim = any(
+                (inf.tipo or '') == 'PRELIMINAR'
+                and (inf.estado or '') in ('VALIDADO', 'EMITIDO')
+                for inf in informes
+            )
             microbiologia.append({
                 'id': est_micro.pk,
                 'numero': est_micro.numero,
@@ -260,6 +272,8 @@ class InternacionClinicalService:
                 ),
                 'cultivo_nombre': cultivo.nombre if cultivo else (est_micro.tipo_estudio or ''),
                 'muestra_nombre': muestra.nombre if muestra else '',
+                'tiene_informe_preliminar': tiene_prelim,
+                'tiene_informe_final': tiene_final,
             })
 
         est_filter = Q(paciente_id=paciente_id)

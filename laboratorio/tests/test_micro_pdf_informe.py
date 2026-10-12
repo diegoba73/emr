@@ -206,6 +206,27 @@ class TestMicroPdfInforme(TestCase):
             )
             self.assertTrue(r.content.startswith(b"%PDF"))
 
+    def test_estudio_detalle_expone_flags_informe_preliminar_y_final(self):
+        url = f"/api/lab/microbiologia/estudios/{self.ctx['estudio'].pk}/"
+        self.client.force_authenticate(self.lab)
+        r0 = self.client.get(url)
+        self.assertEqual(r0.status_code, status.HTTP_200_OK, r0.content)
+        self.assertFalse(r0.json().get("tiene_informe_preliminar"))
+        self.assertFalse(r0.json().get("tiene_informe_final"))
+
+        self._emitir_preliminar()
+        r1 = self.client.get(url)
+        self.assertEqual(r1.status_code, status.HTTP_200_OK, r1.content)
+        self.assertTrue(r1.json().get("tiene_informe_preliminar"))
+        self.assertFalse(r1.json().get("tiene_informe_final"))
+
+        self._validar_final()
+        r2 = self.client.get(url)
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
+        # Al validar FINAL se anulan preliminares; queda solo el final entregable.
+        self.assertFalse(r2.json().get("tiene_informe_preliminar"))
+        self.assertTrue(r2.json().get("tiene_informe_final"))
+
     def test_preliminar_deja_de_descargarse_tras_final_validado(self):
         prelim_id = self._emitir_preliminar()
         self._validar_final()

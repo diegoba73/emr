@@ -343,3 +343,126 @@ class TestPedidosCompletosRemediacion(TestCase):
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         self.assertEqual(len(r.data["solicitudes_ids"]), 1)
         self.assertEqual(len(r.data["estudios_micro_ids"]), 1)
+
+    def test_medico_merge_mismo_material_pendiente_sin_etiqueta(self):
+        """Misma muestra + PENDIENTE sin etiquetas → agrega a la orden existente."""
+        self.client.force_authenticate(self.medico)
+        r1 = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "examenes_ids": [self.glu.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        sol_id = r1.data["solicitudes_ids"][0]
+        r2 = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "examenes_ids": [self.crea.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
+        self.assertEqual(r2.data["solicitudes_ids"], [sol_id])
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
+        sol = SolicitudExamen.objects.get(pk=sol_id)
+        tipos = set(sol.resultados.values_list("tipo_examen_id", flat=True))
+        self.assertEqual(tipos, {self.glu.pk, self.crea.pk})
+
+    def test_medico_otro_material_crea_orden_nueva(self):
+        self.client.force_authenticate(self.medico)
+        r1 = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "examenes_ids": [self.glu.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        r2 = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "ORINA",
+                        "examenes_ids": [self.orina_ex.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
+
+    def test_medico_bloquea_si_orden_ya_tiene_etiquetas(self):
+        from laboratorio.models import Muestra
+
+        self.client.force_authenticate(self.medico)
+        r1 = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "examenes_ids": [self.glu.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        sol = SolicitudExamen.objects.get(pk=r1.data["solicitudes_ids"][0])
+        Muestra.objects.create(
+            solicitud=sol,
+            paciente=self.pac,
+            tipo_muestra=self.tm_suero,
+            estado="PENDIENTE_TOMA",
+        )
+        r2 = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "examenes_ids": [self.crea.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)

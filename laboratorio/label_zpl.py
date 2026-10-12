@@ -209,7 +209,9 @@ def format_line_lugar(
 ) -> str:
     lugar = escape_zpl_fd(normalize_lugar_extraccion(lugar_extraccion))
     while lugar and not text_fits(lugar, min_char_width, max_content_width):
-        lugar = lugar[:-1]
+        # rstrip: al cortar puede quedar espacio/guión colgando; el render re-escapa
+        # y striparía, rompiendo la paridad preview↔ZPL.
+        lugar = lugar[:-1].rstrip()
     return lugar
 
 
@@ -228,7 +230,7 @@ def format_line_fecha_tipo(
             return line
         if not tipo:
             return fecha_part  # fecha completa; sizing bajará w si hace falta
-        tipo = tipo[:-1]
+        tipo = tipo[:-1].rstrip()
 
 
 @dataclass(frozen=True)

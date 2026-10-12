@@ -214,8 +214,9 @@ Por instrucción del responsable del sistema, médico, secretaría y enfermería
 pueden listar y buscar todos los pacientes, aunque no haya turnos previos.
 Secretaría y enfermería pueden leer y descargar archivos médicos de cualquier
 paciente y consultar estudios complementarios y análisis. Secretaría también
-lee los valores LIMS (incl. `INFORMADO_PARCIAL` / «Informe parcial» en pantalla;
-PDF solo en `FINALIZADO`) y el texto de informes microbiológicos validados.
+lee los valores LIMS (incl. `INFORMADO_PARCIAL` / «Informe parcial» en pantalla y
+PDF/envío parcial o final según rol) y el texto de informes microbiológicos
+(preliminar emitido o final validado, con PDF correspondiente).
 La gestión de agenda y entrega de estudios de secretaría permanece habilitada.
 El rol admin tiene acceso administrativo y clínico global, sin exigir vínculos;
 las validaciones de integridad y los mecanismos de rectificación siguen aplicando.

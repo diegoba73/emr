@@ -215,43 +215,6 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
 
       <Stack spacing={2}>
         <TextField
-          label="Subjetivo (S)"
-          multiline
-          minRows={3}
-          value={formState.subjetivo}
-          onChange={handleChange('subjetivo')}
-          disabled={!canSave}
-          fullWidth
-        />
-        <TextField
-          label="Objetivo (O)"
-          multiline
-          minRows={3}
-          value={formState.objetivo}
-          onChange={handleChange('objetivo')}
-          disabled={!canSave}
-          fullWidth
-        />
-        <TextField
-          label="Signos vitales (resumen cache)"
-          multiline
-          minRows={2}
-          value={formState.signos_vitales_resumen}
-          onChange={handleChange('signos_vitales_resumen')}
-          disabled={!canSave}
-          fullWidth
-          helperText="Se actualiza automáticamente al registrar signos vitales estructurados."
-        />
-        <TextField
-          label="Análisis (A)"
-          multiline
-          minRows={3}
-          value={formState.analisis}
-          onChange={handleChange('analisis')}
-          disabled={!canSave}
-          fullWidth
-        />
-        <TextField
           label="Diagnóstico actualizado"
           multiline
           minRows={2}

@@ -57,7 +57,10 @@ export interface InformesMicrobiologiaPanelProps {
 }
 
 const ESTADOS_PDF_BIO = new Set(['EMITIDO', 'VALIDADO']);
-const ESTADOS_PDF_PUBLICO = new Set(['VALIDADO']);
+/** Informe FINAL entregable a roles no operadores (médico/secretaría). */
+const ESTADOS_PDF_FINAL_PUBLICO = new Set(['VALIDADO']);
+/** PRELIMINAR EMITIDO es el equivalente al informe parcial clínico. */
+const ESTADOS_PDF_PRELIM_PUBLICO = new Set(['EMITIDO', 'VALIDADO']);
 
 const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   estudio,
@@ -98,9 +101,19 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
   }, [informes]);
 
   const finalVigente = informes.find((i) => i.tipo === 'FINAL' && i.estado !== 'ANULADO');
-  const estadosPdf = canOperate || canValidar ? ESTADOS_PDF_BIO : ESTADOS_PDF_PUBLICO;
+  const prelimVigente = informes.find((i) => i.tipo === 'PRELIMINAR' && i.estado !== 'ANULADO');
+  const esOperadorInforme = canOperate || canValidar;
+  const estadosFinalPdf = esOperadorInforme ? ESTADOS_PDF_BIO : ESTADOS_PDF_FINAL_PUBLICO;
+  const estadosPrelimPdf = esOperadorInforme ? ESTADOS_PDF_BIO : ESTADOS_PDF_PRELIM_PUBLICO;
   const finalEntregable =
-    finalVigente && estadosPdf.has(finalVigente.estado) ? finalVigente : null;
+    finalVigente && estadosFinalPdf.has(finalVigente.estado) ? finalVigente : null;
+  const prelimEntregable =
+    !finalEntregable &&
+    prelimVigente &&
+    estadosPrelimPdf.has(prelimVigente.estado)
+      ? prelimVigente
+      : null;
+  const informeEntregable = finalEntregable || prelimEntregable;
   const faltaFinal = !finalVigente && estudio.estado !== 'CANCELADO';
   const lecturasolo = !canOperate && !canValidar;
   const osPermiteValidar = ordenPuedeValidarObraSocial(estudio);
@@ -232,7 +245,8 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
     return (
       <Box>
         <Alert severity="info">
-          El informe estará disponible para consulta y descarga cuando el bioquímico lo valide.
+          El informe estará disponible para consulta y descarga cuando el laboratorio emita un
+          preliminar o valide el final.
         </Alert>
       </Box>
     );
@@ -277,16 +291,26 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
           Informe final validado. Ya puede consultarlo o descargar el PDF.
         </Alert>
       )}
-      {finalEntregable && (canDownloadPdf || canEnviar) && (
+      {lecturasolo && !finalEntregable && prelimEntregable && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Informe preliminar emitido. Podés consultarlo o descargar el PDF; el final reemplazará
+          este avance cuando el bioquímico lo valide.
+        </Alert>
+      )}
+      {informeEntregable && (canDownloadPdf || canEnviar) && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
           {canDownloadPdf && (
             <Button variant="outlined" onClick={descargarPdf} disabled={downloading}>
-              {downloading ? 'Descargando…' : 'Descargar PDF'}
+              {downloading
+                ? 'Descargando…'
+                : prelimEntregable
+                  ? 'Descargar PDF preliminar'
+                  : 'Descargar PDF'}
             </Button>
           )}
           {canEnviar && (
             <Button variant="contained" onClick={() => setEnviarOpen(true)}>
-              Enviar informe
+              {prelimEntregable ? 'Enviar informe preliminar' : 'Enviar informe'}
             </Button>
           )}
         </Box>
@@ -454,6 +478,7 @@ const InformesMicrobiologiaPanel: React.FC<InformesMicrobiologiaPanelProps> = ({
       <EnviarInformeMicroDialog
         open={enviarOpen}
         estudio={estudio}
+        preliminarEmitido={Boolean(prelimEntregable)}
         onClose={() => setEnviarOpen(false)}
         onSuccess={onRefresh}
       />

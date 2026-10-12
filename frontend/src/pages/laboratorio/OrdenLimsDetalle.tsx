@@ -58,15 +58,20 @@ import {
 import { MotivoDialog, useMotivoDialog } from '../../components/common/MotivoDialog';
 import { countResultadosConValor, ordenResultadosCompletos } from '../../utils/limsOrdenResultados';
 import CargaResultadosLims from '../../components/lims/CargaResultadosLims';
-import MuestrasOrdenPanel from '../../components/lims/MuestrasOrdenPanel';
 import OrdenLimsResumenPanel from '../../components/lims/OrdenLimsResumenPanel';
+import MuestrasOrdenPanel from '../../components/lims/MuestrasOrdenPanel';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
 import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDialog';
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 import EditarOrdenLimsDialog from '../../components/lims/EditarOrdenLimsDialog';
 import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
 import { colorEstadoObraSocial, labelEstadoObraSocial, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
-import { limsActionBtnSoftSx, limsActionBtnSx } from '../../utils/limsActionButtonSx';
+import {
+  limsActionBtnErrorSx,
+  limsActionBtnPrimaryOutlineSx,
+  limsActionBtnSoftSx,
+  limsActionBtnSuccessSx,
+} from '../../utils/limsActionButtonSx';
 
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -88,7 +93,6 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
   const [openQuitarExamenes, setOpenQuitarExamenes] = useState(false);
   const [openEditarOrden, setOpenEditarOrden] = useState(false);
-  const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
   const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
   const [qcOverrideOpen, setQcOverrideOpen] = useState(false);
   const [qcOverrideMotivo, setQcOverrideMotivo] = useState('');
@@ -234,7 +238,7 @@ const OrdenLimsDetalle: React.FC = () => {
       setOrden(updated);
       setOpenDesvalidar(false);
       setMotivoDesvalidar('');
-      setTab(2);
+      setTab(1);
       toast.success('Orden reabierta. Corregí los resultados y volvé a validar.');
       try {
         setIqcPrecheck(await getIqcPrecheck(updated.id));
@@ -430,10 +434,9 @@ const OrdenLimsDetalle: React.FC = () => {
           {canOp && ordenPuedeAgregarExamenes(orden) && (
             <Button
               size="small"
-              variant="contained"
+              variant="outlined"
               color="primary"
-              disableElevation
-              sx={limsActionBtnSx}
+              sx={limsActionBtnPrimaryOutlineSx}
               onClick={() => setOpenAgregarExamenes(true)}
             >
               Agregar exámenes
@@ -453,11 +456,10 @@ const OrdenLimsDetalle: React.FC = () => {
           {enProceso && canOp && !resultadosCompletos && (
             <Button
               size="small"
-              variant="contained"
+              variant="outlined"
               color="primary"
-              disableElevation
-              sx={limsActionBtnSx}
-              onClick={() => setTab(2)}
+              sx={limsActionBtnPrimaryOutlineSx}
+              onClick={() => setTab(1)}
             >
               Cargar resultados
             </Button>
@@ -468,7 +470,7 @@ const OrdenLimsDetalle: React.FC = () => {
               variant="outlined"
               color="primary"
               sx={limsActionBtnSoftSx}
-              onClick={() => setTab(2)}
+              onClick={() => setTab(1)}
             >
               Corregir resultados
             </Button>
@@ -484,10 +486,9 @@ const OrdenLimsDetalle: React.FC = () => {
               <span>
                 <Button
                   size="small"
-                  variant="contained"
+                  variant="outlined"
                   color="success"
-                  disableElevation
-                  sx={limsActionBtnSx}
+                  sx={limsActionBtnSuccessSx}
                   disabled={validando || !osPermiteValidar}
                   onClick={() => void handleValidar()}
                 >
@@ -520,23 +521,28 @@ const OrdenLimsDetalle: React.FC = () => {
             </Button>
           )}
           {canOp && ordenPuedeCancelar(e) && (
-            <Button color="error" variant="outlined" onClick={handleCancelarOrden}>
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              sx={limsActionBtnErrorSx}
+              onClick={handleCancelarOrden}
+            >
               Cancelar orden
             </Button>
           )}
-          {puedeEnviarInforme && finalizada && canEnviar && (
+          {puedeEnviarInforme && canEnviar && (
             <Button
               size="small"
-              variant="contained"
+              variant="outlined"
               color="primary"
-              disableElevation
-              sx={limsActionBtnSx}
+              sx={limsActionBtnPrimaryOutlineSx}
               onClick={() => setOpenEnviarInforme(true)}
             >
-              Enviar informe
+              {informadoParcial ? 'Enviar informe parcial' : 'Enviar informe'}
             </Button>
           )}
-          {finalizada && canPdf && (
+          {canPdf && (
             <Button
               size="small"
               variant="outlined"
@@ -545,7 +551,11 @@ const OrdenLimsDetalle: React.FC = () => {
               disabled={downloadingPdf}
               onClick={handleDownloadPdf}
             >
-              {downloadingPdf ? 'Descargando…' : 'Descargar informe PDF'}
+              {downloadingPdf
+                ? 'Descargando…'
+                : informadoParcial
+                  ? 'Descargar PDF parcial'
+                  : 'Descargar informe PDF'}
             </Button>
           )}
         </Box>
@@ -637,16 +647,17 @@ const OrdenLimsDetalle: React.FC = () => {
             {informadoParcial ? (
               <>
                 Orden en <strong>Informe parcial</strong> ({progreso.conValor} de {progreso.total}{' '}
-                resultados). Seguí completando en Resultados; al completar los ensayos exigibles
-                pasa a <strong>Listo para validar</strong>. El PDF y el envío solo están disponibles
-                tras la validación del bioquímico.
+                resultados). Ya podés <strong>descargar o enviar el PDF parcial</strong>. Seguí
+                completando en Resultados; al completar los ensayos exigibles pasa a{' '}
+                <strong>Listo para validar</strong>.
               </>
             ) : (
               <>
                 Podés guardar resultados de a poco en Resultados. Si querés que el médico vea el
-                avance, usá <strong>Guardar e informar parcialmente</strong>. Al completar los
-                ensayos exigibles, la orden pasa a <strong>Listo para validar</strong>. Descarga y
-                envío del informe recién después de <strong>Validar y liberar</strong>.
+                avance, usá <strong>Guardar e informar parcialmente</strong> (habilita PDF/envío
+                parcial). Al completar los ensayos exigibles, la orden pasa a{' '}
+                <strong>Listo para validar</strong>; el informe definitivo tras{' '}
+                <strong>Validar y liberar</strong>.
               </>
             )}
           </Typography>
@@ -654,8 +665,8 @@ const OrdenLimsDetalle: React.FC = () => {
         {listaParaValidar && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Resultados completos — estado <strong>Listo para validar</strong>. Un bioquímico debe{' '}
-            <strong>Validar y liberar</strong> para finalizar. Hasta entonces no se puede descargar ni
-            enviar el informe.
+            <strong>Validar y liberar</strong> para el informe definitivo. Hasta entonces no hay
+            PDF/envío de informe final (el parcial, si existía, ya no aplica en este estado).
           </Typography>
         )}
         {finalizada && resultadosCompletos && (
@@ -676,30 +687,30 @@ const OrdenLimsDetalle: React.FC = () => {
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab data-demo="lims-tab-0" label="Resumen" />
-        <Tab data-demo="lims-tab-1" label="Muestras" />
-        <Tab data-demo="lims-tab-2" label="Resultados" />
+        <Tab data-demo="lims-tab-1" label="Resultados" />
       </Tabs>
 
       <Box data-demo="lims-content">
-        {tab === 0 && <OrdenLimsResumenPanel orden={orden} />}
-
-        {tab === 1 && (
-          <MuestrasOrdenPanel
-            solicitudId={orden.id}
-            solicitudNumero={orden.numero}
-            ordenEstado={orden.estado}
-            canOperate={canOp}
-            reloadToken={muestrasReloadToken}
-            onMuestrasChange={setMuestras}
-            origenOrden={{
-              origen_solicitud: orden.origen_solicitud,
-              origen_solicitud_display: orden.origen_solicitud_display,
-              procedencia_display: orden.procedencia_display,
-            }}
-          />
+        {tab === 0 && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <OrdenLimsResumenPanel orden={orden} />
+            {/* Incluye CANCELADA: trazabilidad y continuidad de códigos de barra. */}
+            <MuestrasOrdenPanel
+              solicitudId={orden.id}
+              solicitudNumero={orden.numero}
+              ordenEstado={orden.estado}
+              canOperate={canOp && !cancelada && !finalizada}
+              onMuestrasChange={setMuestras}
+              origenOrden={{
+                origen_solicitud: orden.origen_solicitud,
+                origen_solicitud_display: orden.origen_solicitud_display,
+                procedencia_display: orden.procedencia_display,
+              }}
+            />
+          </Box>
         )}
 
-        {tab === 2 && (
+        {tab === 1 && (
           <CargaResultadosLims
             orden={orden}
             muestras={muestras}
@@ -708,7 +719,6 @@ const OrdenLimsDetalle: React.FC = () => {
             onGuardado={async (o) => {
               setOrden(o);
               await refreshMuestras(o.id, o.numero);
-              setMuestrasReloadToken((t) => t + 1);
               try {
                 const fresh = await getSolicitudExamen(o.id);
                 setOrden(fresh);
@@ -732,12 +742,10 @@ const OrdenLimsDetalle: React.FC = () => {
         onPrepared={async (o) => {
           setOrden(o);
           await refreshMuestras(o.id, o.numero);
-          setMuestrasReloadToken((t) => t + 1);
         }}
         onSuccess={async (o) => {
           setOrden(o);
           await refreshMuestras(o.id, o.numero);
-          setMuestrasReloadToken((t) => t + 1);
           try {
             const fresh = await getSolicitudExamen(o.id);
             setOrden(fresh);

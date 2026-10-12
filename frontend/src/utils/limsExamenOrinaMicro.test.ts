@@ -25,7 +25,7 @@ describe('limsExamenOrinaMicro', () => {
     expect(vacio.ORI_CRIS).toBe(VALOR_NO_CONTIENE);
     expect(vacio.ORI_COLOR).toBe('');
     expect(vacio.ORI_PH).toBe('');
-    expect(vacio.ORI_CONC).toBe('');
+    expect(vacio.ORI_CONC).toBe('--');
   });
 
   it('admite urocultivo por flag o tipo_estudio', () => {

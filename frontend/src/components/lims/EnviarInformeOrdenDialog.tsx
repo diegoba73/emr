@@ -49,7 +49,9 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
   const medicoLabel =
     orden.medico_interno_nombre || orden.medico_display || 'Médico solicitante';
 
-  const ordenValidada = orden.estado === 'FINALIZADO';
+  const ordenFinalizada = orden.estado === 'FINALIZADO';
+  const ordenParcial = orden.estado === 'INFORMADO_PARCIAL';
+  const puedeEnviarAhora = ordenFinalizada || ordenParcial;
 
   useEffect(() => {
     if (!open) return;
@@ -69,8 +71,10 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
   };
 
   const handleEnviar = async () => {
-    if (!ordenValidada) {
-      toast.error('Solo se puede enviar el informe después de la validación del bioquímico.');
+    if (!puedeEnviarAhora) {
+      toast.error(
+        'Solo se puede enviar con informe parcial o después de Validar y liberar.'
+      );
       return;
     }
     if (!algunoSeleccionado) {
@@ -147,7 +151,13 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>{pasoWhatsapp ? 'Abrir WhatsApp' : 'Enviar informe'}</DialogTitle>
+      <DialogTitle>
+        {pasoWhatsapp
+          ? 'Abrir WhatsApp'
+          : ordenParcial
+            ? 'Enviar informe parcial'
+            : 'Enviar informe'}
+      </DialogTitle>
       <DialogContent>
         {pasoWhatsapp ? (
           <WhatsAppAbrirChatsStep
@@ -160,9 +170,16 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
               Orden {orden.numero || orden.id} — {orden.paciente_nombre || 'Paciente'}
               {medicoLabel ? ` · ${medicoLabel}` : ''}
             </Typography>
-            {!ordenValidada && (
+            {ordenParcial && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Se enviará el <strong>informe parcial</strong> (PDF con leyenda). Al validar el
+                definitivo, este avance deja de estar vigente.
+              </Alert>
+            )}
+            {!puedeEnviarAhora && (
               <Alert severity="error" sx={{ mb: 2 }}>
-                La orden aún no está validada. Solo se puede enviar el informe después de{' '}
+                La orden aún no tiene informe enviable. Usá{' '}
+                <strong>Guardar e informar parcialmente</strong> o{' '}
                 <strong>Validar y liberar</strong>.
               </Alert>
             )}
@@ -287,9 +304,13 @@ const EnviarInformeOrdenDialog: React.FC<EnviarInformeOrdenDialogProps> = ({
               variant="contained"
               color="primary"
               onClick={handleEnviar}
-              disabled={sending || !algunoSeleccionado || !ordenValidada}
+              disabled={sending || !algunoSeleccionado || !puedeEnviarAhora}
             >
-              {sending ? 'Enviando…' : 'Enviar informe'}
+              {sending
+                ? 'Enviando…'
+                : ordenParcial
+                  ? 'Enviar parcial'
+                  : 'Enviar informe'}
             </Button>
           </>
         )}

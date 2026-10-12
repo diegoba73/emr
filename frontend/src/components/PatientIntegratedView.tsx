@@ -62,12 +62,13 @@ import {
   getSolicitudExamen,
   listSolicitudesExamen,
 } from '../services/limsApi';
-import { listEstudiosMicrobiologia } from '../services/limsMicroApi';
+import { downloadInformeMicroPdf, listEstudiosMicrobiologia } from '../services/limsMicroApi';
 import type { EstudioMicrobiologia, ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
 import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
 import {
   canDownloadInformeClinicoPdf,
+  canDownloadInformeMicroPdf,
   pathDetalleEstudioMicro,
 } from '../utils/limsAccess';
 import { pacienteFichaAnalisisPath, withNavBack } from '../utils/navBack';
@@ -75,7 +76,12 @@ import { formatLimsPdfDownloadError } from '../utils/limsDownload';
 import toast from 'react-hot-toast';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import ResultadosOrdenLista from './lims/ResultadosOrdenLista';
-import { labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import { estadoOrdenColor, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
+import {
+  estadoMicroGeneralColor,
+  labelEstadoMicroGeneral,
+} from '../utils/limsEstadosMicro';
+import type { EstadoSolicitudLims } from '../types/lims';
 
 function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string {
   if (!s) return 'N/A';
@@ -85,14 +91,6 @@ function medicoSolicitudLabel(s: SolicitudExamenLims | null | undefined): string
     s.medico_externo_nombre ||
     'N/A'
   );
-}
-
-function chipColorEstado(estado: string): 'success' | 'warning' | 'info' | 'default' {
-  if (estado === 'FINALIZADO' || estado === 'COMPLETADA') return 'success';
-  if (estado === 'INFORMADO_PARCIAL') return 'info';
-  if (estado === 'EN_PROCESO' || estado === 'LISTO_PARA_VALIDAR') return 'warning';
-  if (estado === 'PENDIENTE') return 'info';
-  return 'default';
 }
 
 interface TabPanelProps {
@@ -1005,7 +1003,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                       <TableCell>
                         <Chip
                           label={labelEstadoOrdenLims(analisis.estado)}
-                          color={chipColorEstado(analisis.estado)}
+                          color={estadoOrdenColor(analisis.estado as EstadoSolicitudLims)}
                           size="small"
                         />
                       </TableCell>
@@ -1045,7 +1043,12 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                       </TableCell>
                     </TableRow>
                   ))}
-                  {estudiosMicro.map((est) => (
+                  {estudiosMicro.map((est) => {
+                    const microInformeOpts = {
+                      tieneInformePreliminar: Boolean(est.tiene_informe_preliminar),
+                      tieneInformeFinal: Boolean(est.tiene_informe_final),
+                    };
+                    return (
                     <TableRow key={`micro-${est.id}`} hover>
                       <TableCell>
                         <Chip size="small" color="success" label="Micro" variant="outlined" />
@@ -1075,7 +1078,11 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                         )}
                       </TableCell>
                       <TableCell>
-                        <Chip label={est.estado} size="small" color="default" />
+                        <Chip
+                          label={labelEstadoMicroGeneral(est.estado, microInformeOpts)}
+                          size="small"
+                          color={estadoMicroGeneralColor(est.estado, microInformeOpts)}
+                        />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
@@ -1083,25 +1090,48 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<Science />}
-                          onClick={() =>
-                            navigate(
-                              pathDetalleEstudioMicro(est.id),
-                              withNavBack(
-                                pacienteFichaAnalisisPath(paciente.id),
-                                '← Volver a la ficha'
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Science />}
+                            onClick={() =>
+                              navigate(
+                                pathDetalleEstudioMicro(est.id),
+                                withNavBack(
+                                  pacienteFichaAnalisisPath(paciente.id),
+                                  '← Volver a la ficha'
+                                )
                               )
-                            )
-                          }
-                        >
-                          Ver estudio
-                        </Button>
+                            }
+                          >
+                            Ver estudio
+                          </Button>
+                          {canDownloadInformeMicroPdf(currentUser, est.estado, {
+                            tieneFinalValidado: microInformeOpts.tieneInformeFinal,
+                            tienePreliminarEmitido: microInformeOpts.tieneInformePreliminar,
+                          }) && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                void downloadInformeMicroPdf(est.id).catch((err) =>
+                                  toast.error(formatLimsPdfDownloadError(err))
+                                );
+                              }}
+                            >
+                              {microInformeOpts.tieneInformeFinal
+                                ? 'PDF'
+                                : microInformeOpts.tieneInformePreliminar
+                                  ? 'PDF preliminar'
+                                  : 'PDF'}
+                            </Button>
+                          )}
+                        </Stack>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -1218,7 +1248,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                         <Typography variant="subtitle2" color="textSecondary">Estado</Typography>
                         <Chip
                           label={labelEstadoOrdenLims(selectedAnalisis.estado)}
-                          color={chipColorEstado(selectedAnalisis.estado)}
+                          color={estadoOrdenColor(selectedAnalisis.estado as EstadoSolicitudLims)}
                           size="small"
                         />
                       </Box>

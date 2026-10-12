@@ -310,6 +310,8 @@ export interface RevistaMicroItem {
   es_de_hoy: boolean;
   cultivo_nombre: string;
   muestra_nombre: string;
+  tiene_informe_preliminar?: boolean;
+  tiene_informe_final?: boolean;
 }
 
 export interface RevistaInternacionContexto {

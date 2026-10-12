@@ -345,8 +345,9 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
             # Create granular: laboratorio / bioquímico / admin (mostrador lab).
             return role in ROLES_LIMS_WRITE
         if action == 'agregar_examenes':
-            # Médico/secretaría no agregan post-confirmación; lab solo EN_PROCESO (servicio).
-            return role in ROLES_LIMS_WRITE
+            # Lab/bio/admin: amplia. Médico/secretaría: solo PENDIENTE sin etiquetas
+            # (enforce en agregar_examenes_a_solicitud).
+            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
         if action == 'quitar_examenes':
             return role in ROLES_LIMS_WRITE
         if action == 'orden_abierta':

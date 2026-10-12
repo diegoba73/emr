@@ -109,6 +109,27 @@ class TestLabelZplRenderer(TestCase):
         self.assertTrue(rendered.all_fit_width())
         self.assertIn(f"^A0N,{rendered.layouts[0].height},17^FD{codigo}^FS", rendered.zpl)
 
+    def test_lugar_largo_ambulatorio_truncado_sin_romper_paridad_zpl(self):
+        """Procedencia ambulatoria larga (Consultorio — CEHTA) no debe 500 en preview."""
+        lugar = "Consultorio Ambulatorio — Consultorio 1 — CEHTA"
+        lines = build_label_lines(
+            codigo_barra="LAB-2026-00073-01",
+            apellido="Abrigo",
+            nombre="Maria Luisa",
+            dni="5924318",
+            lugar_extraccion=lugar,
+            fecha_toma=timezone.now(),
+            tipo_operacional="SUERO",
+        )
+        self.assertFalse(lines.lugar.endswith(" "), msg=repr(lines.lugar))
+        rendered = render_zpl_40x23(lines)
+        for expected, lay in zip(lines.as_list(), rendered.layouts, strict=True):
+            self.assertEqual(expected, lay.text)
+            self.assertIn(f"^FD{lay.text}^FS", rendered.zpl)
+        self.assertTrue(rendered.all_fit_width())
+        # build_etiqueta_muestra usa la misma paridad; no debe lanzar.
+        # (cubierto vía render; el bug real era trailing space tras truncar.)
+
     def test_codigo_max_length_32_sin_truncar(self):
         codigo32 = "L" + "A" * 30 + "B"
         self.assertEqual(len(codigo32), 32)
