@@ -36,7 +36,7 @@ class TestFechaProgramadaToma(TestCase):
         self.medico = Medico.objects.create(
             nombre="Ana", apellido="Ruiz", matricula=f"M-{suf}", especialidad=esp
         )
-        tm = TipoMuestra.objects.create(codigo=f"TM{suf}", nombre="Sangre", activo=True)
+        tm, _ = TipoMuestra.objects.get_or_create(codigo="SUERO", defaults={"nombre": "Suero", "activo": True})
         self.glu, _ = TipoExamen.objects.get_or_create(
             codigo="GLU",
             defaults={
@@ -59,6 +59,7 @@ class TestFechaProgramadaToma(TestCase):
                 "origen_solicitud": "INTERNACION_UCO",
                 "examenes_ids": examenes or [self.glu.pk],
                 "paneles_ids": [],
+                "material_pedido": "SANGRE",
                 "fecha_programada_toma": fecha.isoformat(),
             },
             format="json",
@@ -89,11 +90,10 @@ class TestFechaProgramadaToma(TestCase):
         self.assertNotEqual(r2.json()["id"], id_hoy)
         self.assertFalse(r2.json().get("merged"))
 
-    def test_merge_solo_mismo_dia_extraccion(self):
+    def test_anti_dup_mismo_material_mismo_dia(self):
         r1 = self._crear(self.manana)
         self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.content)
-        id_manana = r1.json()["id"]
-        # segundo pedido mañana → merge
+        # segundo pedido mañana mismo material → bloqueo
         urea, _ = TipoExamen.objects.get_or_create(
             codigo="UREA",
             defaults={
@@ -104,9 +104,7 @@ class TestFechaProgramadaToma(TestCase):
             },
         )
         r2 = self._crear(self.manana, examenes=[urea.pk])
-        self.assertIn(r2.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED), r2.content)
-        self.assertTrue(r2.json().get("merged"))
-        self.assertEqual(r2.json()["id"], id_manana)
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.content)
 
     def test_list_vista_extraccion_hoy_vs_programadas(self):
         self._crear(self.hoy)

@@ -235,6 +235,15 @@ class EstudioMicrobiologia(models.Model):
         default=timezone.localdate,
         db_index=True,
     )
+    # Material de pedido del bloque UI (distingue ASPIRADO compartido entre sitios).
+    material_pedido = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Material de pedido",
+        help_text="Código de material del pedido (p. ej. HISOP_NAS, LCR). Vacío en estudios legados.",
+    )
     examen_orina = models.JSONField(
         default=dict,
         blank=True,

@@ -23,7 +23,7 @@ import {
   marcarEstudioMicrobiologiaInformado,
   downloadInformeMicroPdf,
 } from '../../services/limsApi';
-import { printTalonEstudioMicro, patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
+import { printTalonEstudioMicro } from '../../services/limsMicroApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   canAccessMicrobiologiaLectura,
@@ -49,7 +49,6 @@ import InformesMicrobiologiaPanel from '../../components/lims/micro/InformesMicr
 import EstudioMicroExamenOrinaTab from '../../components/lims/micro/EstudioMicroExamenOrinaTab';
 import EnviarInformeMicroDialog from '../../components/lims/EnviarInformeMicroDialog';
 import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/MotivoDialog';
-import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
 import { ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
@@ -69,7 +68,6 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const [downloadingTalon, setDownloadingTalon] = useState(false);
   const [confirmingRecepcion, setConfirmingRecepcion] = useState(false);
   const [openImprimirEtiqueta, setOpenImprimirEtiqueta] = useState(false);
-  const [openObraSocial, setOpenObraSocial] = useState(false);
   const [openEditarOrden, setOpenEditarOrden] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [openEnviarInforme, setOpenEnviarInforme] = useState(false);
@@ -285,9 +283,18 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
     );
   }
 
+  const informeOpts = {
+    tienePreliminarEmitido: bundle.informes.some(
+      (i) => i.tipo === 'PRELIMINAR' && i.estado === 'EMITIDO'
+    ),
+    tieneFinalValidado: bundle.informes.some(
+      (i) => i.tipo === 'FINAL' && i.estado === 'VALIDADO'
+    ),
+  };
+
   if (modoEntrega) {
-    const puedePdf = canDownloadInformeMicroPdf(currentUser, estudio.estado);
-    const puedeEnviar = canEnviarInformeMicro(currentUser, estudio.estado);
+    const puedePdf = canDownloadInformeMicroPdf(currentUser, estudio.estado, informeOpts);
+    const puedeEnviar = canEnviarInformeMicro(currentUser, estudio.estado, informeOpts);
     return (
       <Box sx={{ p: 3 }}>
         <Button size="small" onClick={handleVolver} sx={{ mb: 2 }}>
@@ -364,7 +371,6 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onImprimirTalon={() => void onImprimirTalon()}
           onConfirmarRecepcion={() => void onConfirmarRecepcion()}
           onCancelar={onCancelar}
-          onObraSocial={canOp ? () => setOpenObraSocial(true) : undefined}
           onEditarOrden={canOp ? () => setOpenEditarOrden(true) : undefined}
         />
         <ImprimirPedidoMicroDialog
@@ -378,18 +384,6 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           }}
         />
         <MotivoDialog {...dialogProps} />
-        {estudio && (
-          <EstadoObraSocialDialog
-            open={openObraSocial}
-            numero={estudio.numero}
-            value={estudio.estado_obra_social}
-            onClose={() => setOpenObraSocial(false)}
-            onSave={async (estado) => {
-              const fresh = await patchEstadoObraSocialEstudio(estudio.id, estado);
-              setEstudio(fresh);
-            }}
-          />
-        )}
         {estudio && (
           <EditarEstudioMicroDialog
             open={openEditarOrden}
@@ -475,7 +469,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         estudio.estado !== 'INFORMADO' && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             En órdenes ambulatorias la obra social tiene que estar <strong>Autorizada</strong> para
-            validar y emitir el informe. Usá <strong>Obra social</strong> y elegí Autorizado.
+            validar y emitir el informe. Actualizá el estado desde <strong>Órdenes LIMS</strong>{' '}
+            (Obra social → Autorizado).
           </Alert>
         )}
 
@@ -500,9 +495,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           onMarcarInformado={() =>
             void runEstudio(() => marcarEstudioMicrobiologiaInformado(estudioId))
           }
-          canEditarObraSocial={canOp}
           canEditarOrden={canOpEstudio}
-          onObraSocial={() => setOpenObraSocial(true)}
           onEditarOrden={() => setOpenEditarOrden(true)}
           onReimprimirEtiquetas={canOp ? onReimprimir : undefined}
           onImprimirTalon={canOp ? () => void onImprimirTalon() : undefined}
@@ -558,8 +551,8 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
           aislados={bundle.aislados}
           canOperate={canOpInforme && !estudioCerrado}
           canValidar={canVal}
-          canDownloadPdf={canDownloadInformeMicroPdf(currentUser, estudio.estado)}
-          canEnviar={canEnviarInformeMicro(currentUser, estudio.estado)}
+          canDownloadPdf={canDownloadInformeMicroPdf(currentUser, estudio.estado, informeOpts)}
+          canEnviar={canEnviarInformeMicro(currentUser, estudio.estado, informeOpts)}
           onRefresh={loadAll}
         />
       )}
@@ -574,16 +567,6 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
         }}
       />
       <MotivoDialog {...dialogProps} />
-      <EstadoObraSocialDialog
-        open={openObraSocial}
-        numero={estudio.numero}
-        value={estudio.estado_obra_social}
-        onClose={() => setOpenObraSocial(false)}
-        onSave={async (estado) => {
-          const fresh = await patchEstadoObraSocialEstudio(estudio.id, estado);
-          setEstudio(fresh);
-        }}
-      />
       <EditarEstudioMicroDialog
         open={openEditarOrden}
         estudio={estudio}

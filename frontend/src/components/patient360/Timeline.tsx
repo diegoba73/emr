@@ -20,6 +20,8 @@ export interface TimelineItem {
   title: string;
   subtitle?: string;
   date: Date;
+  /** Si viene, reemplaza la fecha única (p. ej. Solicitud + Extracción). */
+  dateLines?: string[];
   critical?: boolean;
   onClick?: () => void;
   episodeGroupId?: string;
@@ -160,11 +162,25 @@ const Timeline: React.FC<TimelineProps> = ({ items, emptyLabel = 'Sin eventos cl
                 />
                 {item.critical && <Chip size="small" color="error" label="Riesgo" sx={{ height: 22, fontSize: '0.7rem' }} />}
               </Box>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                {item.date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
-              </Typography>
+              {item.dateLines && item.dateLines.length > 0 ? (
+                item.dateLines.map((line, idx) => (
+                  <Typography
+                    key={`${item.id}-date-${idx}`}
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mb: 0.25 }}
+                  >
+                    {line}
+                  </Typography>
+                ))
+              ) : (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  {item.date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                </Typography>
+              )}
               {item.subtitle && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                   {item.subtitle}
                 </Typography>
               )}

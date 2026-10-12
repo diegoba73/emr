@@ -11,7 +11,11 @@ import {
 } from '@mui/material';
 import toast from 'react-hot-toast';
 import type { EtiquetaEstudioMicroZpl } from '../../../types/lims';
-import { getEstudioMicroEtiquetaZpl, printTalonEstudioMicro } from '../../../services/limsMicroApi';
+import {
+  getEstudioMicroEtiquetaZpl,
+  postEstudioMicroImprimirEtiqueta,
+  printTalonEstudioMicro,
+} from '../../../services/limsMicroApi';
 import {
   imprimirEtiquetaEstudioMicroLocal,
   LabelPrintAgentError,
@@ -23,67 +27,102 @@ export interface ImprimirPedidoMicroDialogProps {
   open: boolean;
   estudioId: number;
   estudioNumero?: string | null;
-  /** true = reimpresión (ya esperando recepción) */
+  /** true = reimpresión (ya esperando recepción / ya etiquetado) */
   reimpresion?: boolean;
   onClose: () => void;
-  /** Tras imprimir etiqueta (marca etiquetas_impresas); no se llama al bajar solo el talón. */
-  onEtiquetasOk?: () => void;
+  /**
+   * Tras marcar etiquetas_impresas (pasa a Esperando recepción).
+   * Se llama al confirmar «Imprimir etiqueta», aunque falle el agente USB.
+   */
+  onEtiquetasOk?: () => void | Promise<void>;
 }
 
 /**
- * Vista previa ZPL 40×23 + impresión USB local (mismo agente que lab clínico) + talón A4.
- * El talón no muta estado ni etiquetas_impresas_at.
+ * Vista previa ZPL (sin mutar) + Imprimir etiqueta / talón.
+ * Al imprimir: marca etiquetas → callback (Pendientes → Esperando recepción) → envía ZPL al USB.
  */
 const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
   open,
   estudioId,
   estudioNumero,
-  reimpresion,
+  reimpresion = false,
   onClose,
   onEtiquetasOk,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'etiqueta' | 'talon' | null>(null);
   const [payload, setPayload] = useState<EtiquetaEstudioMicroZpl | null>(null);
   const printLock = useRef(false);
+  const onEtiquetasOkRef = useRef(onEtiquetasOk);
+  onEtiquetasOkRef.current = onEtiquetasOk;
 
   useEffect(() => {
     if (!open) {
       setPayload(null);
+      setLoadError(null);
+      setLoading(false);
+      setBusy(null);
       printLock.current = false;
       return;
     }
+
     let cancelled = false;
     setLoading(true);
+    setLoadError(null);
+    setPayload(null);
+
     getEstudioMicroEtiquetaZpl(estudioId)
       .then((data) => {
         if (!cancelled) setPayload(data);
       })
       .catch((e) => {
         if (!cancelled) {
-          toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-          onClose();
+          const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes);
+          setLoadError(msg);
+          toast.error(msg);
         }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [open, estudioId, onClose]);
+  }, [open, estudioId]);
 
   const handleEtiqueta = async () => {
-    if (printLock.current || busy) return;
+    if (printLock.current || busy || loading) return;
     printLock.current = true;
     setBusy('etiqueta');
     try {
-      await imprimirEtiquetaEstudioMicroLocal(estudioId);
-      toast.success(reimpresion ? 'Etiqueta reimpresa.' : 'Etiqueta enviada a impresión.');
-      onEtiquetasOk?.();
-      onClose();
+      if (!reimpresion) {
+        // Marca etiquetas_impresas_at (sin depender del agente USB).
+        await postEstudioMicroImprimirEtiqueta(estudioId);
+      }
+
+      let printOk = false;
+      try {
+        await imprimirEtiquetaEstudioMicroLocal(estudioId);
+        printOk = true;
+        toast.success(
+          reimpresion ? 'Etiqueta reimpresa.' : 'Etiqueta enviada a impresión.'
+        );
+      } catch (printErr) {
+        toast.error(
+          `${printerErrorMessage(printErr)}${
+            reimpresion ? '' : ' El pedido igual pasó a Esperando recepción.'
+          }`
+        );
+      }
+
+      // Mover de pestaña / refrescar recién al terminar (evita desmontar el diálogo a mitad).
+      if (!reimpresion || printOk) {
+        await onEtiquetasOkRef.current?.();
+      }
     } catch (e) {
-      toast.error(printerErrorMessage(e));
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
     } finally {
       setBusy(null);
       printLock.current = false;
@@ -91,7 +130,7 @@ const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
   };
 
   const handleTalon = async () => {
-    if (busy) return;
+    if (busy || loading) return;
     setBusy('talon');
     try {
       await printTalonEstudioMicro(estudioId);
@@ -110,28 +149,47 @@ const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
   const lines = payload?.lines ?? [];
   const errors = payload?.validation_errors ?? [];
   const canPrint = Boolean(payload?.printable);
+  const anyBusy = Boolean(busy) || loading;
 
   return (
-    <Dialog open={open} onClose={() => !busy && onClose()} maxWidth="xs" fullWidth>
+    <Dialog
+      open={open}
+      onClose={() => !anyBusy && onClose()}
+      maxWidth="sm"
+      fullWidth
+      scroll="paper"
+    >
       <DialogTitle>
-        Imprimir — {estudioNumero || `estudio ${estudioId}`}
+        Imprimir etiquetas
+        {estudioNumero ? ` — orden ${estudioNumero}` : ''}
       </DialogTitle>
-      <DialogContent>
+      <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          <strong>Etiqueta</strong>: 40 × 23 mm por USB (agente local), igual que lab clínico
-          {reimpresion ? '' : ' — pasa a «Esperando recepción» la primera vez'}.{' '}
-          <strong>Talón</strong>: hoja A4 por orden — no cambia el estado del pedido.
+          Etiqueta = impresora USB (agente ZPL). Talón = hoja A4 si falla la etiquetadora. Al
+          imprimir la etiqueta el pedido pasa a «Esperando recepción»; no recepciona la muestra.
         </Typography>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={28} />
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4, gap: 1 }}>
+            <CircularProgress size={32} />
+            <Typography variant="body2" color="text.secondary" textAlign="center">
+              Cargando etiqueta…
+            </Typography>
           </Box>
+        ) : loadError ? (
+          <Typography color="error" variant="body2">
+            {loadError}
+          </Typography>
         ) : (
           <>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               Etiqueta 40 × 23 mm · Perfil 203 dpi
               {payload?.profile ? ` · ${payload.profile}` : ''}
             </Typography>
+            {estudioNumero ? (
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                {estudioNumero}
+              </Typography>
+            ) : null}
             {lines.length === 4 ? (
               <Box
                 sx={{
@@ -164,27 +222,33 @@ const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
                 ))}
               </Box>
             )}
+            <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                size="small"
+                disabled={anyBusy || !!loadError || !canPrint}
+                onClick={() => void handleEtiqueta()}
+              >
+                {busy === 'etiqueta'
+                  ? 'Imprimiendo…'
+                  : reimpresion
+                    ? 'Reimprimir etiqueta'
+                    : 'Imprimir etiqueta'}
+              </Button>
+            </Box>
           </>
         )}
-        {busy ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={28} />
-          </Box>
-        ) : null}
       </DialogContent>
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-        <Button variant="outlined" disabled={!!busy || loading} onClick={() => void handleTalon()}>
-          Imprimir talón
-        </Button>
         <Button
-          variant="contained"
-          disabled={!!busy || loading || !canPrint}
-          onClick={() => void handleEtiqueta()}
+          variant="outlined"
+          disabled={anyBusy || !!loadError}
+          onClick={() => void handleTalon()}
         >
-          {reimpresion ? 'Reimprimir etiqueta' : 'Imprimir etiqueta'}
+          {busy === 'talon' ? 'Abriendo impresión…' : 'Imprimir talón'}
         </Button>
         <Box sx={{ flex: 1 }} />
-        <Button onClick={onClose} disabled={!!busy}>
+        <Button onClick={onClose} disabled={anyBusy}>
           Cerrar
         </Button>
       </DialogActions>

@@ -14,6 +14,7 @@ CITRATO_VSG = ERITRO
 HEPARINA = "HEPARINA"
 SUERO = "SUERO"
 FRASCO_ORINA = "FRASCO_ORINA"
+FRASCO_ESTERIL = "FRASCO_ESTERIL"
 BIDON_ORINA_24H = "BIDON_ORINA_24H"
 
 CONTENEDORES_SEED = (
@@ -31,6 +32,12 @@ CONTENEDORES_SEED = (
 
 CONTENEDORES_EXTRA = (
     (FRASCO_ORINA, "Frasco de orina", "Ámbar", "Sin aditivo"),
+    (
+        FRASCO_ESTERIL,
+        "Frasco / tubo estéril",
+        "Transparente",
+        "Sin aditivo (líquidos y secreciones)",
+    ),
     (
         BIDON_ORINA_24H,
         "Bidón orina 24 hs",
@@ -281,6 +288,23 @@ def tubo_codigo_para_examen(
     c = (codigo or "").upper().strip()
     if c in EXAMENES_SIN_CONTENEDOR or c in EXAMENES_CALCULADOS_SIN_TUBO:
         return None
+
+    # Materiales de pedido (LCR, líquidos, secreciones, tejidos) → frasco estéril.
+    # Antes que reglas de sangre (GLU/LACT/…) para no pisar analitos homónimos.
+    from laboratorio.materiales_pedido_catalogo import (
+        CONTENEDOR_ESTERIL,
+        todas_muestras_clinicas,
+    )
+
+    m_up = (muestra or "").upper().strip()
+    # LCR / Esputo: frasco estéril siempre (también por sufijo de código).
+    if m_up == "LCR" or c.endswith("_LCR"):
+        return FRASCO_ESTERIL
+    if m_up == "ESPUTO" or c.endswith("_ESP"):
+        return FRASCO_ESTERIL
+    if m_up and m_up in todas_muestras_clinicas():
+        return CONTENEDOR_ESTERIL
+
     if c in _EDTA:
         return EDTA
     if c in _ERITRO:

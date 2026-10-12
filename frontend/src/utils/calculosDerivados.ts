@@ -1,5 +1,6 @@
 /**
- * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs, RAC).
+ * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs, RAC,
+ * calcio iónico Zeisler).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
@@ -9,6 +10,10 @@ export const RESULTADO_NO_CALCULABLE = 'No calculable con estos datos';
 export const FACTOR_TRANS_DESDE_TIBC = 0.8;
 /** Minutos en 24 horas (denominador del clearance de creatinina). */
 export const MINUTOS_24H = 1440;
+/** Factor clínico mg/dL → mmol/L para calcio iónico estimado (Zeisler). */
+export const FACTOR_CA_MG_DL_A_MMOL_L = 4.008;
+/** Estimable por fórmula pero editable (valor de equipo / EAB). */
+export const CODIGOS_OVERRIDEABLES_ESTIMADOS = new Set(['CA_ION']);
 
 export function esResultadoNoCalculable(valor?: string | null): boolean {
   return valor?.trim() === RESULTADO_NO_CALCULABLE;
@@ -123,6 +128,20 @@ export function calcExcrecionPorLitroA24h(
 export function calcRac(microalbMgL: number, creaUMgDl: number): number | null {
   if (creaUMgDl <= 0) return null;
   return roundHalfUp((microalbMgL / creaUMgDl) * 100, 1);
+}
+
+/** Ca iónico estimado (mg/dL) por Zeisler: (6.25×CA − 0.375×PROT) / (PROT + 6.5). */
+export function calcCaIonZeislerMgDl(caMgDl: number, protGDl: number): number | null {
+  const denom = protGDl + 6.5;
+  if (denom <= 0) return null;
+  return roundHalfUp((6.25 * caMgDl - 0.375 * protGDl) / denom, 2);
+}
+
+/** Ca iónico estimado en mmol/L (Zeisler mg/dL ÷ 4.008). */
+export function calcCaIonZeislerMmolL(caMgDl: number, protGDl: number): number | null {
+  const mg = calcCaIonZeislerMgDl(caMgDl, protGDl);
+  if (mg == null) return null;
+  return roundHalfUp(mg / FACTOR_CA_MG_DL_A_MMOL_L, 2);
 }
 
 export function calcAbsolutoFormula(pct: number, leucos: number): number | null {
@@ -268,6 +287,17 @@ export function calcularDerivados(
     }
   } else if (microalb != null || creaU != null) {
     out.RAC = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  const ca = valores.CA;
+  const protT = valores.PROT_T;
+  if (ca != null && protT != null) {
+    const caIon = calcCaIonZeislerMmolL(ca, protT);
+    if (caIon != null) {
+      out.CA_ION = { numerico: caIon, informe: fmt(caIon, 2) };
+    } else {
+      out.CA_ION = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
   }
 
   return out;

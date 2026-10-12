@@ -1,11 +1,9 @@
 import toast from 'react-hot-toast';
 import {
-  createSolicitudExamenLims,
+  createPedidoCompletoLims,
   formatDrfError,
-  getOrdenAbiertaPaciente,
   type ItemImpresionOrden,
 } from '../../services/limsApi';
-import { createEstudiosMicrobiologiaBatch } from '../../services/limsMicroApi';
 import { createEstudioComplementario } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../estudios/apiErrors';
 import type { EstudioPractica } from '../../types/estudios';
@@ -19,6 +17,8 @@ export interface DraftSolicitudLab {
   observaciones?: string;
   /** YYYY-MM-DD */
   fecha_programada_toma: string;
+  /** Código material (SANGRE, ORINA…). */
+  material_pedido: string;
 }
 
 export interface DraftPedidoMicroItem {
@@ -26,6 +26,8 @@ export interface DraftPedidoMicroItem {
   tipo_muestra_micro_id: number;
   cultivo_nombre: string;
   muestra_nombre: string;
+  /** Material de pedido del bloque UI (anti-dup ASPIRADO). */
+  material_pedido?: string;
 }
 
 export interface DraftPedidoMicro {
@@ -34,6 +36,7 @@ export interface DraftPedidoMicro {
   observaciones?: string;
   /** YYYY-MM-DD */
   fecha_programada_toma: string;
+  material_pedido?: string;
 }
 
 export interface DraftEstudioComplementario {
@@ -67,12 +70,14 @@ function normalizeDraft(parsed: Partial<ConsultaPedidosDraft>): ConsultaPedidosD
       (s) => ({
         ...s,
         fecha_programada_toma: s.fecha_programada_toma || fallbackFecha,
+        material_pedido: (s.material_pedido || '').toUpperCase(),
       })
     ),
     solicitudesMicro: (Array.isArray(parsed.solicitudesMicro) ? parsed.solicitudesMicro : []).map(
       (s) => ({
         ...s,
         fecha_programada_toma: s.fecha_programada_toma || fallbackFecha,
+        material_pedido: (s.material_pedido || '').toUpperCase() || undefined,
       })
     ),
     estudios: Array.isArray(parsed.estudios) ? parsed.estudios : [],
@@ -173,7 +178,7 @@ export interface FlushConsultaPedidosParams {
 }
 
 export interface FlushConsultaPedidosResult {
-  /** Órdenes lab/micro creadas o mergeadas — para impresión papel institucional. */
+  /** Órdenes lab/micro creadas — para impresión papel institucional. */
   pedidosPapel: ItemImpresionOrden[];
 }
 
@@ -185,7 +190,10 @@ function pushPedidoUnique(
   dest.push(item);
 }
 
-/** Persiste borradores en LIMS / micro / estudios complementarios. Lanza si alguna creación falla. */
+/**
+ * Persiste borradores LIMS/micro de forma atómica (pedidos-completos).
+ * Estudios complementarios siguen por su API. Lanza si falla; borrador intacto.
+ */
 export async function flushConsultaPedidosDrafts(
   params: FlushConsultaPedidosParams,
   draftOverride?: ConsultaPedidosDraft
@@ -201,93 +209,115 @@ export async function flushConsultaPedidosDrafts(
     return { pedidosPapel };
   }
 
-  if (draft.solicitudesLab.length > 0) {
-    try {
-      // Chequeo de merge: usa la fecha del primer borrador (misma extracción).
-      const fechaCheck = draft.solicitudesLab[0]?.fecha_programada_toma;
-      const abierta = await getOrdenAbiertaPaciente(pacienteId, fechaCheck);
-      if (abierta) {
-        const ok = window.confirm(
-          `Ya hay una orden solicitada (${abierta.numero || `#${abierta.id}`}) pendiente de toma ` +
-            `para el ${fechaCheck || 'mismo día'}. ` +
-            'Los exámenes de laboratorio se agregarán a esa orden. ¿Continuar?'
-        );
-        if (!ok) {
-          throw new Error('Pedido de laboratorio cancelado: ya existe una orden abierta.');
-        }
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith('Pedido de laboratorio cancelado')) {
-        throw e;
-      }
-      /* si falla el check, seguimos */
+  const hasLims =
+    draft.solicitudesLab.length > 0 || draft.solicitudesMicro.length > 0;
+
+  if (hasLims) {
+    const fechas = new Set(
+      [
+        ...draft.solicitudesLab.map((s) => s.fecha_programada_toma),
+        ...draft.solicitudesMicro.map((s) => s.fecha_programada_toma),
+      ].filter(Boolean)
+    );
+    if (fechas.size > 1) {
+      throw new Error(
+        'El borrador mezcla fechas de extracción distintas. Separá los pedidos por día.'
+      );
     }
-  }
+    const fecha =
+      draft.solicitudesLab[0]?.fecha_programada_toma ||
+      draft.solicitudesMicro[0]?.fecha_programada_toma;
+    if (!fecha) {
+      throw new Error('Indicá el día de la extracción en el pedido.');
+    }
 
-  const errors: string[] = [];
-  const remaining: ConsultaPedidosDraft = {
-    solicitudesLab: [],
-    solicitudesMicro: [],
-    estudios: [],
-  };
-
-  for (const sol of draft.solicitudesLab) {
-    try {
-      const orden = await createSolicitudExamenLims({
-        paciente_id: pacienteId,
-        medico_id: medicoId ?? undefined,
-        consulta_hc_id: consultaHcId,
+    const solicitudes_lab = draft.solicitudesLab.map((sol) => {
+      const mat = (sol.material_pedido || '').toUpperCase();
+      if (!mat) {
+        throw new Error('Cada pedido clínico debe tener material_pedido.');
+      }
+      return {
+        material_pedido: mat,
         examenes_ids: sol.examenes_ids,
         paneles_ids: sol.paneles_ids,
         observaciones: sol.observaciones,
-        origen_solicitud: origenSolicitud,
-        fecha_programada_toma: sol.fecha_programada_toma,
-      });
-      pushPedidoUnique(pedidosPapel, { tipo: 'LAB_CLINICO', id: orden.id });
-      if (orden.merged) {
-        toast.success(
-          `Exámenes agregados a la orden ${orden.numero || `#${orden.id}`} (aún pendiente de toma).`
-        );
-      }
-    } catch (e) {
-      errors.push(`Lab. clínico: ${formatDrfError(e)}`);
-      remaining.solicitudesLab.push(sol);
-    }
-  }
+      };
+    });
 
-  for (const micro of draft.solicitudesMicro) {
-    try {
+    const estudios_micro: Array<{
+      material_pedido: string;
+      tipo_cultivo_id: number;
+      tipo_muestra_micro_id: number;
+      observaciones?: string;
+    }> = [];
+    for (const micro of draft.solicitudesMicro) {
       const items = (micro.items || []).filter(
         (i) => i.tipo_cultivo_id && i.tipo_muestra_micro_id
       );
       if (items.length === 0) {
         throw new Error('Pedido de microbiología sin cultivos/muestras válidos.');
       }
-      const estudios = await createEstudiosMicrobiologiaBatch({
-        paciente_id: pacienteId,
-        medico_id: medicoId ?? null,
-        consulta_hc_id: consultaHcId,
-        origen_solicitud: origenSolicitud,
-        observaciones: micro.observaciones,
-        fecha_programada_toma: micro.fecha_programada_toma,
-        items: items.map((i) => ({
+      for (const i of items) {
+        const mat = (
+          i.material_pedido ||
+          micro.material_pedido ||
+          ''
+        ).toUpperCase();
+        if (!mat) {
+          throw new Error(
+            'Cada estudio de microbiología debe tener material_pedido.'
+          );
+        }
+        estudios_micro.push({
+          material_pedido: mat,
           tipo_cultivo_id: i.tipo_cultivo_id,
           tipo_muestra_micro_id: i.tipo_muestra_micro_id,
-        })),
-      });
-      for (const est of estudios) {
-        pushPedidoUnique(pedidosPapel, { tipo: 'MICROBIOLOGIA', id: est.id });
+          observaciones: micro.observaciones,
+        });
       }
-      toast.success(
-        estudios.length === 1
-          ? `Pedido micro ${estudios[0].numero || `#${estudios[0].id}`} creado.`
-          : `${estudios.length} pedidos de microbiología creados.`
+    }
+
+    const idempotencyKey =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? `consulta-${consultaHcId}-${crypto.randomUUID()}`
+        : `consulta-${consultaHcId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    try {
+      const result = await createPedidoCompletoLims(
+        {
+          paciente_id: pacienteId,
+          medico_id: medicoId ?? undefined,
+          consulta_hc_id: consultaHcId,
+          origen_solicitud: origenSolicitud,
+          fecha_programada_toma: fecha,
+          solicitudes_lab,
+          estudios_micro,
+        },
+        { idempotencyKey }
       );
+      for (const p of result.pedidos || []) {
+        pushPedidoUnique(pedidosPapel, { tipo: p.tipo, id: p.id });
+      }
+      const nLab = result.solicitudes_ids?.length || 0;
+      const nMicro = result.estudios_micro_ids?.length || 0;
+      if (nLab || nMicro) {
+        toast.success(
+          [
+            nLab ? `${nLab} orden(es) lab.` : null,
+            nMicro ? `${nMicro} estudio(s) micro` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') + ' creados.'
+        );
+      }
     } catch (e) {
-      errors.push(`Microbiología: ${formatDrfError(e)}`);
-      remaining.solicitudesMicro.push(micro);
+      // Conservar borrador íntegro (sin flush parcial).
+      throw new Error(`Laboratorio: ${formatDrfError(e)}`);
     }
   }
+
+  const errors: string[] = [];
+  const remainingEstudios: DraftEstudioComplementario[] = [];
 
   for (const est of draft.estudios) {
     try {
@@ -304,13 +334,17 @@ export async function flushConsultaPedidosDrafts(
       errors.push(
         `Estudio: ${parseEstudiosApiError(e, 'No se pudo registrar un estudio complementario.')}`
       );
-      remaining.estudios.push(est);
+      remainingEstudios.push(est);
     }
   }
 
   if (errors.length > 0) {
-    // Conservar solo lo que falló para poder reintentar al guardar de nuevo.
-    saveConsultaPedidosDraft(consultaHcId, remaining);
+    // LIMS ya persistió: conservar solo estudios fallidos.
+    saveConsultaPedidosDraft(consultaHcId, {
+      solicitudesLab: [],
+      solicitudesMicro: [],
+      estudios: remainingEstudios,
+    });
     throw new Error(errors.join(' · '));
   }
 

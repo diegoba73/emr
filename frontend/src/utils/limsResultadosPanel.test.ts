@@ -143,4 +143,29 @@ describe('groupResultadosPorPanel', () => {
       grupos.indexOf(grupos.find((g) => g.codigo === 'PAN_ORI')!)
     );
   });
+
+  it('agrupa CA / PROT_T / CA_ION cuando hay iónico e insumos', () => {
+    const resultados = [
+      { ...res(1, 1), tipo_examen_codigo: 'CA', tipo_examen_nombre: 'Calcemia' },
+      { ...res(2, 2), tipo_examen_codigo: 'PROT_T', tipo_examen_nombre: 'Proteinemia' },
+      { ...res(3, 3), tipo_examen_codigo: 'CA_ION', tipo_examen_nombre: 'Calcio iónico' },
+    ];
+    const grupos = groupResultadosPorPanel({ tipos_examen: [1, 2, 3] }, resultados);
+    const g = grupos.find((x) => x.codigo === 'GRP_CA_ION');
+    expect(g?.titulo).toBe('Calcio iónico');
+    expect(g?.resultados.map((r) => r.tipo_examen_codigo)).toEqual([
+      'CA',
+      'PROT_T',
+      'CA_ION',
+    ]);
+  });
+
+  it('CA_ION solo no se agrupa (caso equipo/EAB)', () => {
+    const resultados = [
+      { ...res(3, 3), tipo_examen_codigo: 'CA_ION', tipo_examen_nombre: 'Calcio iónico' },
+    ];
+    const grupos = groupResultadosPorPanel({ tipos_examen: [3] }, resultados);
+    expect(grupos.find((x) => x.codigo === 'GRP_CA_ION')).toBeUndefined();
+    expect(grupos).toHaveLength(1);
+  });
 });

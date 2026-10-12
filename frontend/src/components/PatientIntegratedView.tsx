@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -56,10 +57,22 @@ import {
 import { Paciente, Atencion } from '../types';
 import { updatePaciente } from '../services/apiService';
 import { apiService } from '../services/api';
-import { getSolicitudExamen, listSolicitudesExamen } from '../services/limsApi';
-import type { ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
+import {
+  downloadInformeLimsPdf,
+  getSolicitudExamen,
+  listSolicitudesExamen,
+} from '../services/limsApi';
+import { listEstudiosMicrobiologia } from '../services/limsMicroApi';
+import type { EstudioMicrobiologia, ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
 import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
+import {
+  canDownloadInformeClinicoPdf,
+  pathDetalleEstudioMicro,
+} from '../utils/limsAccess';
+import { pacienteFichaAnalisisPath, withNavBack } from '../utils/navBack';
+import { formatLimsPdfDownloadError } from '../utils/limsDownload';
+import toast from 'react-hot-toast';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import ResultadosOrdenLista from './lims/ResultadosOrdenLista';
 import { labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
@@ -125,6 +138,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
   initialTab = 0,
 }) => {
   const isPage = variant === 'page';
+  const navigate = useNavigate();
   const { currentUser } = useData();
   const canEditDemographics = canUpdatePacienteDemographics(currentUser);
   const [tabValue, setTabValue] = useState(() =>
@@ -134,6 +148,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
   const [loadingAtenciones, setLoadingAtenciones] = useState(false);
   const [selectedAtencionId, setSelectedAtencionId] = useState<number | null>(null);
   const [analisisLims, setAnalisisLims] = useState<SolicitudExamenLims[]>([]);
+  const [estudiosMicro, setEstudiosMicro] = useState<EstudioMicrobiologia[]>([]);
   const [loadingAnalisis, setLoadingAnalisis] = useState(false);
   const [showResultadosDialog, setShowResultadosDialog] = useState(false);
   const [selectedAnalisis, setSelectedAnalisis] = useState<SolicitudExamenLims | null>(null);
@@ -192,15 +207,25 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
   const loadAnalisisLims = useCallback(async (silent = false) => {
     if (!silent) setLoadingAnalisis(true);
     try {
-      const rows = await listSolicitudesExamen({ paciente: paciente.id });
+      const [rows, micros] = await Promise.all([
+        listSolicitudesExamen({ paciente: paciente.id }),
+        listEstudiosMicrobiologia({ paciente: paciente.id }).catch(() => [] as EstudioMicrobiologia[]),
+      ]);
       rows.sort((a, b) => {
         const fa = a.fecha_solicitud || '';
         const fb = b.fecha_solicitud || '';
         return fb.localeCompare(fa);
       });
+      micros.sort((a, b) => {
+        const fa = a.created_at || '';
+        const fb = b.created_at || '';
+        return fb.localeCompare(fa);
+      });
       setAnalisisLims(rows);
+      setEstudiosMicro(micros);
     } catch {
       setAnalisisLims([]);
+      setEstudiosMicro([]);
     } finally {
       if (!silent) setLoadingAnalisis(false);
     }
@@ -898,10 +923,10 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
               <Typography variant="h6" gutterBottom>
-                Análisis de Laboratorio ({analisisLims.length})
+                Análisis de Laboratorio ({analisisLims.length + estudiosMicro.length})
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Resultados de exámenes de laboratorio del LIMS
+                Órdenes clínicas y microbiología del LIMS
               </Typography>
             </Box>
             <Button
@@ -920,7 +945,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <CircularProgress />
             </Box>
-          ) : analisisLims.length === 0 ? (
+          ) : analisisLims.length === 0 && estudiosMicro.length === 0 ? (
             <Alert severity="info">
               No hay análisis de laboratorio registrados para este paciente.
             </Alert>
@@ -929,6 +954,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell>Tipo</TableCell>
                     <TableCell>Número / perfiles</TableCell>
                     <TableCell>Fecha</TableCell>
                     <TableCell>Estado</TableCell>
@@ -938,7 +964,10 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                 </TableHead>
                 <TableBody>
                   {analisisLims.map((analisis) => (
-                    <TableRow key={analisis.id} hover>
+                    <TableRow key={`lab-${analisis.id}`} hover>
+                      <TableCell>
+                        <Chip size="small" label="Clínica" variant="outlined" />
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {analisis.numero || analisis.id}
@@ -964,6 +993,14 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                         <Typography variant="body2">
                           {formatDate(analisis.fecha_solicitud)}
                         </Typography>
+                        {(analisis.fecha_toma_muestra || analisis.fecha_programada_toma) && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Ext.:{' '}
+                            {analisis.fecha_toma_muestra
+                              ? formatDate(analisis.fecha_toma_muestra)
+                              : `${analisis.fecha_programada_toma} (prog.)`}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -978,17 +1015,89 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
                         </Typography>
                       </TableCell>
                       <TableCell>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Science />}
+                            onClick={async () => {
+                              setSelectedAnalisis(analisis);
+                              setShowResultadosDialog(true);
+                              await loadResultadosDetallados(analisis.id);
+                            }}
+                          >
+                            Ver Resultados
+                          </Button>
+                          {canDownloadInformeClinicoPdf(currentUser, analisis.estado) && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                void downloadInformeLimsPdf(analisis.id).catch((err) =>
+                                  toast.error(formatLimsPdfDownloadError(err))
+                                );
+                              }}
+                            >
+                              {analisis.estado === 'INFORMADO_PARCIAL' ? 'PDF parcial' : 'PDF'}
+                            </Button>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {estudiosMicro.map((est) => (
+                    <TableRow key={`micro-${est.id}`} hover>
+                      <TableCell>
+                        <Chip size="small" color="success" label="Micro" variant="outlined" />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {est.numero || est.id}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {est.tipo_cultivo_nombre || est.tipo_estudio}
+                          {est.tipo_muestra_micro_nombre
+                            ? ` · ${est.tipo_muestra_micro_nombre}`
+                            : ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {formatDate(est.created_at || undefined)}
+                        </Typography>
+                        {(est.fecha_inicio || est.fecha_programada_toma) && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Ext.:{' '}
+                            {est.fecha_inicio
+                              ? formatDate(est.fecha_inicio)
+                              : `${est.fecha_programada_toma} (prog.)`}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={est.estado} size="small" color="default" />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {est.medico_display || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
                         <Button
                           size="small"
                           variant="outlined"
                           startIcon={<Science />}
-                          onClick={async () => {
-                            setSelectedAnalisis(analisis);
-                            setShowResultadosDialog(true);
-                            await loadResultadosDetallados(analisis.id);
-                          }}
+                          onClick={() =>
+                            navigate(
+                              pathDetalleEstudioMicro(est.id),
+                              withNavBack(
+                                pacienteFichaAnalisisPath(paciente.id),
+                                '← Volver a la ficha'
+                              )
+                            )
+                          }
                         >
-                          Ver Resultados
+                          Ver estudio
                         </Button>
                       </TableCell>
                     </TableRow>

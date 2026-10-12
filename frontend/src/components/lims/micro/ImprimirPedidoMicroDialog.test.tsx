@@ -2,11 +2,13 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mockGetZpl = jest.fn();
+const mockPrepare = jest.fn();
 const mockTalon = jest.fn();
 const mockImprimirLocal = jest.fn();
 
 jest.mock('../../../services/limsMicroApi', () => ({
   getEstudioMicroEtiquetaZpl: (...args: any[]) => mockGetZpl(...args),
+  postEstudioMicroImprimirEtiqueta: (...args: any[]) => mockPrepare(...args),
   printTalonEstudioMicro: (...args: any[]) => mockTalon(...args),
 }));
 
@@ -45,11 +47,17 @@ describe('ImprimirPedidoMicroDialog', () => {
       printable: true,
       validation_errors: [],
     });
+    mockPrepare.mockResolvedValue({
+      estudio_id: 7,
+      profile: 'p',
+      resultado: 'prepared',
+      zpl: '^XA^XZ',
+    });
     mockTalon.mockResolvedValue(undefined);
     mockImprimirLocal.mockResolvedValue(undefined);
   });
 
-  it('talon no llama imprimir etiqueta ZPL', async () => {
+  it('al abrir solo preview: no marca recepción', async () => {
     const onEtiquetasOk = jest.fn();
     render(
       <ImprimirPedidoMicroDialog
@@ -61,37 +69,53 @@ describe('ImprimirPedidoMicroDialog', () => {
       />
     );
     await waitFor(() => {
-      expect(mockGetZpl).toHaveBeenCalledWith(7);
-      expect(screen.getByRole('button', { name: 'Imprimir talón' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Imprimir etiqueta' })).toBeEnabled();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Imprimir talón' }));
-    await waitFor(() => {
-      expect(mockTalon).toHaveBeenCalledWith(7);
-    });
-    expect(mockImprimirLocal).not.toHaveBeenCalled();
+    expect(mockPrepare).not.toHaveBeenCalled();
     expect(onEtiquetasOk).not.toHaveBeenCalled();
   });
 
-  it('imprimir etiqueta usa agente local ZPL', async () => {
-    const onEtiquetasOk = jest.fn();
-    const onClose = jest.fn();
+  it('imprimir: marca etiquetas, imprime y notifica (pasa a esperando recepción)', async () => {
+    const onEtiquetasOk = jest.fn().mockResolvedValue(undefined);
     render(
       <ImprimirPedidoMicroDialog
         open
         estudioId={7}
         estudioNumero="LAB-2026-00099"
-        onClose={onClose}
+        onClose={jest.fn()}
         onEtiquetasOk={onEtiquetasOk}
       />
     );
     await waitFor(() => {
-      expect(screen.getByText('LAB-2026-00099')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Imprimir etiqueta' })).toBeEnabled();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
     await waitFor(() => {
+      expect(mockPrepare).toHaveBeenCalledWith(7);
       expect(mockImprimirLocal).toHaveBeenCalledWith(7);
+      expect(onEtiquetasOk).toHaveBeenCalled();
     });
-    expect(onEtiquetasOk).toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('si falla el USB igual notifica tras marcar etiquetas', async () => {
+    mockImprimirLocal.mockRejectedValue(new Error('sin agente'));
+    const onEtiquetasOk = jest.fn().mockResolvedValue(undefined);
+    render(
+      <ImprimirPedidoMicroDialog
+        open
+        estudioId={7}
+        estudioNumero="LAB-2026-00099"
+        onClose={jest.fn()}
+        onEtiquetasOk={onEtiquetasOk}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Imprimir etiqueta' })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimir etiqueta' }));
+    await waitFor(() => {
+      expect(mockPrepare).toHaveBeenCalled();
+      expect(onEtiquetasOk).toHaveBeenCalled();
+    });
   });
 });

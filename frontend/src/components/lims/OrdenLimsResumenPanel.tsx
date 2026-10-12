@@ -102,6 +102,15 @@ const OrdenLimsResumenPanel: React.FC<OrdenLimsResumenPanelProps> = ({ orden }) 
               Solicitud: {new Date(orden.fecha_solicitud).toLocaleString('es-AR')}
             </Typography>
           )}
+          {(orden.fecha_toma_muestra || orden.fecha_programada_toma) && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Extracción:{' '}
+              {orden.fecha_toma_muestra
+                ? new Date(orden.fecha_toma_muestra).toLocaleString('es-AR')
+                : orden.fecha_programada_toma}
+              {!orden.fecha_toma_muestra && orden.fecha_programada_toma ? ' (programada)' : ''}
+            </Typography>
+          )}
         </Box>
       </Box>
 

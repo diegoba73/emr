@@ -16,11 +16,12 @@ import {
 import { ArrowBack, Edit, PersonOutline, WarningAmber } from '@mui/icons-material';
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
-import { pathDetalleOrdenLab } from '../../utils/limsAccess';
+import { pathDetalleEstudioMicro, pathDetalleOrdenLab } from '../../utils/limsAccess';
 import type { User } from '../../types';
 import { listSolicitudesExamen } from '../../services/limsApi';
+import { listEstudiosMicrobiologia } from '../../services/limsMicroApi';
 import { Atencion, ArchivoMedico, InternacionCama, Paciente, PacienteTimelineEvent } from '../../types';
-import type { SolicitudExamenLims } from '../../types/lims';
+import type { EstudioMicrobiologia, SolicitudExamenLims } from '../../types/lims';
 import { getInternaciones } from '../../services/apiService';
 import PatientIntegratedView from '../PatientIntegratedView';
 import PacienteFormDialog from '../PacienteFormDialog';
@@ -40,12 +41,18 @@ export function mapTimelineEvent(
   const date = ev.date ? new Date(ev.date) : new Date(0);
   if (Number.isNaN(date.getTime())) return null;
   const type = (ev.type || 'otro') as TimelineItemType;
+  const fromEvent = Array.isArray(ev.date_lines) ? ev.date_lines.filter(Boolean) : [];
+  const fromMeta = Array.isArray(ev.meta?.date_lines)
+    ? (ev.meta.date_lines as unknown[]).filter((x): x is string => typeof x === 'string' && Boolean(x))
+    : [];
+  const dateLines = fromEvent.length > 0 ? fromEvent : fromMeta.length > 0 ? fromMeta : undefined;
   return {
     id: ev.id,
     type,
     title: ev.title,
     subtitle: ev.subtitle || undefined,
     date,
+    dateLines,
     critical: Boolean(ev.critical),
     nested: Boolean(ev.nested),
     episodeGroupId: ev.episode_group_id || undefined,
@@ -60,6 +67,13 @@ export function mapTimelineEvent(
       if (path.startsWith('/solicitudes/')) {
         navigate(
           pathDetalleOrdenLab(user, Number(path.split('/')[2])),
+          withNavBack(pacienteFichaAnalisisPath(pacienteId), '← Volver a la ficha')
+        );
+        return;
+      }
+      if (path.startsWith('/laboratorio/microbiologia/estudios/')) {
+        navigate(
+          path,
           withNavBack(pacienteFichaAnalisisPath(pacienteId), '← Volver a la ficha')
         );
         return;
@@ -92,6 +106,7 @@ const PatientDashboard: React.FC = () => {
   const [atenciones, setAtenciones] = useState<Atencion[]>([]);
   const [internaciones, setInternaciones] = useState<InternacionCama[]>([]);
   const [ordenesLab, setOrdenesLab] = useState<SolicitudExamenLims[]>([]);
+  const [estudiosMicro, setEstudiosMicro] = useState<EstudioMicrobiologia[]>([]);
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [loadingAte, setLoadingAte] = useState(false);
   const [loadingTimeline, setLoadingTimeline] = useState(false);
@@ -159,9 +174,14 @@ const PatientDashboard: React.FC = () => {
     listSolicitudesExamen({ paciente: paciente.id })
       .then(setOrdenesLab)
       .catch(() => setOrdenesLab([]));
+    listEstudiosMicrobiologia({ paciente: paciente.id })
+      .then(setEstudiosMicro)
+      .catch(() => setEstudiosMicro([]));
   }, [paciente?.id]);
 
   const ordenesLabPx = ordenesLab;
+  const estudiosMicroPx = estudiosMicro;
+  const analisisResumenCount = ordenesLabPx.length + estudiosMicroPx.length;
   const archivosPx: ArchivoMedico[] = useMemo(
     () => archivosMedicos.filter((a) => a.paciente_id === pid),
     [archivosMedicos, pid]
@@ -418,21 +438,40 @@ const PatientDashboard: React.FC = () => {
                 </Button>
               }
             >
-              {ordenesLabPx.length === 0 ? (
+              {analisisResumenCount === 0 ? (
                 <Typography variant="body2" color="text.secondary">
                   Sin órdenes de laboratorio
                 </Typography>
               ) : (
                 <Stack direction="row" flexWrap="wrap" gap={0.5}>
-                  {ordenesLabPx.slice(0, 6).map((s) => (
+                  {ordenesLabPx.slice(0, 4).map((s) => (
                     <Chip
-                      key={s.id}
+                      key={`lab-${s.id}`}
                       size="small"
                       label={s.numero ? `${s.numero} · ${s.estado}` : s.estado}
                       variant="outlined"
                       onClick={() =>
                         navigate(
                           pathDetalleOrdenLab(currentUser, s.id),
+                          withNavBack(pacienteFichaAnalisisPath(pid), '← Volver a la ficha')
+                        )
+                      }
+                    />
+                  ))}
+                  {estudiosMicroPx.slice(0, 4).map((e) => (
+                    <Chip
+                      key={`micro-${e.id}`}
+                      size="small"
+                      color="success"
+                      label={
+                        e.numero
+                          ? `Micro ${e.numero} · ${e.estado}`
+                          : `Micro · ${e.estado}`
+                      }
+                      variant="outlined"
+                      onClick={() =>
+                        navigate(
+                          pathDetalleEstudioMicro(e.id),
                           withNavBack(pacienteFichaAnalisisPath(pid), '← Volver a la ficha')
                         )
                       }

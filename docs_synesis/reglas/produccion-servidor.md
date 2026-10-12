@@ -54,3 +54,10 @@ En producción **ya hay pacientes con órdenes y resultados** (en curso, informa
 - Migraciones que toquen FKs de `ResultadoExamen` / `Muestra` / catálogo usado por órdenes vivas
 
 Procedimiento del asistente: `DOC_PROTOCOLO_TRABAJO_ASISTENTE.md` §6.6.
+
+### Pedidos LIMS multi-material (oct 2026)
+
+- Campo aditivo `material_pedido` (nullable/vacío en legacy): **no** muta órdenes históricas; anti-dup infiere materiales.
+- Desplegar **backend + frontend juntos** (confirmación médica solo `POST /api/lab/pedidos-completos/`; create/agregar/micro granular médico → 403).
+- Reversión: no rehabilitar flush parcial médico; no borrar órdenes ya creadas por el atómico. Preferir hotfix forward o rollback BE+FE acoplado.
+- Smoke post-deploy: confirmación multi-material; médico create directo 403; lab/bio agregar-quitar en orden no finalizada; clearance con creatininemia en informe; hoy≠mañana; impresión guardia/consulta/internación/LIMS.

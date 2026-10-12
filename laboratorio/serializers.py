@@ -421,6 +421,12 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
         allow_null=True,
         default=None,
     )
+    muestra_fecha_toma = serializers.DateTimeField(
+        source="muestra.fecha_toma",
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
     tipo_muestra_nombre = serializers.CharField(
         source="muestra.tipo_muestra.nombre",
         read_only=True,
@@ -478,6 +484,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'observaciones',
             'muestra_id',
             'muestra_estado',
+            'muestra_fecha_toma',
             'tipo_muestra_nombre',
             'tipo_examen_muestra_codigo',
             'laboratorio_derivacion',
@@ -499,6 +506,7 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'fecha_validacion',
             'muestra_id',
             'muestra_estado',
+            'muestra_fecha_toma',
             'tipo_muestra_nombre',
             'tipo_examen_muestra_codigo',
             'laboratorio_derivacion',
@@ -569,9 +577,11 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     procedencia_display = serializers.SerializerMethodField()
     origen_solicitud_display = serializers.SerializerMethodField()
     fecha_toma_muestra = serializers.SerializerMethodField()
+    fecha_recepcion_muestra = serializers.SerializerMethodField()
     diagnostico = serializers.SerializerMethodField()
     extraccion_completa = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
+    tipos_muestra_display = serializers.SerializerMethodField()
     orden_abierta = serializers.SerializerMethodField()
     esperando_recepcion = serializers.SerializerMethodField()
     puede_agregar_examenes = serializers.SerializerMethodField()
@@ -621,7 +631,9 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'afiliado_efectivo',
             'fecha_solicitud',
             'fecha_programada_toma',
+            'material_pedido',
             'fecha_toma_muestra',
+            'fecha_recepcion_muestra',
             'diagnostico',
             'fecha_entrega_prometida',
             'observaciones',
@@ -636,6 +648,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'orden_grupos_informe',
             'extraccion_completa',
             'tubos_pendientes_extraccion',
+            'tipos_muestra_display',
             'orden_abierta',
             'esperando_recepcion',
             'puede_agregar_examenes',
@@ -711,6 +724,27 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {'fecha_programada_toma': 'La fecha de extracción es obligatoria.'}
                 )
+            # Revalidar anti-dup en la fecha destino.
+            nueva = attrs['fecha_programada_toma']
+            if nueva != getattr(self.instance, 'fecha_programada_toma', None):
+                from laboratorio.material_pedido_orden import (
+                    buscar_conflictos_materiales_clinicos,
+                    inferir_materiales_de_solicitud,
+                )
+
+                inf = inferir_materiales_de_solicitud(self.instance)
+                mats = set(inf.materiales)
+                if mats:
+                    conflictos = buscar_conflictos_materiales_clinicos(
+                        self.instance.paciente_id,
+                        nueva,
+                        mats,
+                        exclude_solicitud_id=self.instance.pk,
+                    )
+                    if conflictos:
+                        raise serializers.ValidationError(
+                            {'fecha_programada_toma': conflictos[0].mensaje}
+                        )
         return attrs
 
     def to_representation(self, instance):
@@ -820,6 +854,15 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         ]
         return max(fechas) if fechas else None
 
+    def get_fecha_recepcion_muestra(self, obj):
+        """Última recepción real en lab (no confundir con fecha programada)."""
+        fechas = [
+            getattr(m, "fecha_recepcion", None)
+            for m in self._muestras_prefetched(obj)
+            if getattr(m, "fecha_recepcion", None)
+        ]
+        return max(fechas) if fechas else None
+
     def get_diagnostico(self, obj):
         from laboratorio.orden_cabecera import diagnostico_orden_display
 
@@ -855,6 +898,32 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
                 }
             )
         return out
+
+    def get_tipos_muestra_display(self, obj):
+        """Nombres de material clínicos de la orden (para listado, como micro)."""
+        nombres: list[str] = []
+        seen: set[str] = set()
+
+        def _add(nom: str | None) -> None:
+            n = (nom or "").strip()
+            if n and n not in seen:
+                seen.add(n)
+                nombres.append(n)
+
+        for m in self._muestras_prefetched(obj):
+            tm = getattr(m, "tipo_muestra", None)
+            _add(getattr(tm, "nombre", None))
+
+        if not nombres:
+            for te in obj.tipos_examen.all():
+                tm = getattr(te, "tipo_muestra_requerida", None)
+                _add(getattr(tm, "nombre", None))
+            for panel in obj.paneles.all():
+                for te in panel.tipos_examen.all():
+                    tm = getattr(te, "tipo_muestra_requerida", None)
+                    _add(getattr(tm, "nombre", None))
+
+        return " · ".join(nombres) if nombres else None
 
     def get_orden_abierta(self, obj):
         from laboratorio.solicitud_orden_abierta import orden_esta_abierta
@@ -987,12 +1056,14 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
     origen_solicitud_display = serializers.SerializerMethodField()
     procedencia_display = serializers.SerializerMethodField()
     fecha_toma_muestra = serializers.SerializerMethodField()
+    fecha_recepcion_muestra = serializers.SerializerMethodField()
     orden_abierta = serializers.SerializerMethodField()
     esperando_recepcion = serializers.SerializerMethodField()
     puede_agregar_examenes = serializers.SerializerMethodField()
     puede_quitar_examenes = serializers.SerializerMethodField()
     pedido_adicional = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
+    tipos_muestra_display = serializers.SerializerMethodField()
     estado_obra_social_display = serializers.SerializerMethodField()
     obra_social_efectiva = serializers.SerializerMethodField()
     afiliado_efectivo = serializers.SerializerMethodField()
@@ -1022,12 +1093,14 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
             "fecha_solicitud",
             "fecha_programada_toma",
             "fecha_toma_muestra",
+            "fecha_recepcion_muestra",
             "orden_abierta",
             "esperando_recepcion",
             "puede_agregar_examenes",
             "puede_quitar_examenes",
             "pedido_adicional",
             "tubos_pendientes_extraccion",
+            "tipos_muestra_display",
         )
         read_only_fields = fields
 
@@ -1039,6 +1112,8 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
     get_procedencia_display = SolicitudExamenSerializer.get_procedencia_display
     get_orden_abierta = SolicitudExamenSerializer.get_orden_abierta
     get_esperando_recepcion = SolicitudExamenSerializer.get_esperando_recepcion
+    get_tipos_muestra_display = SolicitudExamenSerializer.get_tipos_muestra_display
+    get_fecha_recepcion_muestra = SolicitudExamenSerializer.get_fecha_recepcion_muestra
     get_puede_agregar_examenes = SolicitudExamenSerializer.get_puede_agregar_examenes
     get_puede_quitar_examenes = SolicitudExamenSerializer.get_puede_quitar_examenes
     get_pedido_adicional = SolicitudExamenSerializer.get_pedido_adicional
@@ -1132,6 +1207,22 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         required=False,
         default=False,
     )
+    # Uso interno / lab: crear orden nueva sin merge (no salta anti-dup por material).
+    forzar_nueva_orden = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+        help_text=(
+            "Si true, omite merge a orden abierta. No salta el anti-duplicado "
+            "paciente+material+fecha_programada_toma."
+        ),
+    )
+    material_pedido = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Código de material (SANGRE, ORINA…). Obligatorio en altas nuevas.",
+    )
     # Snapshot OS del pedido (opcional; vacío → fallback ficha paciente en lectura).
     obra_social = serializers.CharField(
         write_only=True,
@@ -1167,9 +1258,11 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             'paneles_ids',
             'consulta_hc_id',
             'fecha_programada_toma',
+            'material_pedido',
             'fecha_entrega_prometida',
             'observaciones',
             'repeticion_control',
+            'forzar_nueva_orden',
             'obra_social',
             'numero_afiliado',
             'afiliacion_id',
@@ -1237,35 +1330,39 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         """
-        Método create atómico:
-        - Si el paciente ya tiene orden abierta (PENDIENTE sin toma) el mismo día
-          de extracción, fusiona exámenes.
-        - Si ya hay otra orden no FINALIZADO el mismo día (etiquetas / en curso),
-          rechaza (permite otro día o tras finalizar).
-        - Si no: crea Solicitud + ResultadoExamen (directos y de paneles, sin duplicados).
+        Create granular (lab/bio/admin). Médico/secretaría: pedidos-completos.
+
+        Anti-dup: paciente + material_pedido + fecha_programada_toma.
+        Paneles: solo componentes del material de la orden.
+        forzar_nueva_orden no salta anti-dup.
         """
+        from laboratorio.material_pedido_orden import (
+            adquirir_locks_materiales,
+            buscar_conflictos_materiales_clinicos,
+            componentes_panel_por_material,
+            material_pedido_valido,
+            muestra_codigo_a_material,
+            normalizar_material_pedido,
+            tipo_examen_compatible_con_material,
+        )
         from laboratorio.restricciones_frecuencia import (
             RestriccionFrecuenciaError,
             assert_puede_agregar_ensayos,
         )
         from laboratorio.solicitud_orden_abierta import (
-            MENSAJE_ORDEN_ACTIVA_MISMO_DIA,
             RepeticionControlError,
             _resolver_tipo_examen_ids,
-            agregar_examenes_a_solicitud,
             assert_repeticion_control_valida,
-            buscar_orden_abierta,
-            paciente_tiene_orden_activa_mismo_dia,
         )
 
         examenes_ids = validated_data.pop('examenes_ids', [])
         paneles_ids = validated_data.pop('paneles_ids', [])
         repeticion_control = bool(validated_data.pop('repeticion_control', False))
+        validated_data.pop('forzar_nueva_orden', False)  # no salta anti-dup
         origen_explicito = validated_data.pop('origen_solicitud', None)
         obra_social_in = validated_data.pop('obra_social', None)
         numero_afiliado_in = validated_data.pop('numero_afiliado', None)
         afiliacion_id = validated_data.pop('afiliacion_id', None)
-        # Campos write_only no están del modelo; se aplican al snapshot más abajo.
         paciente = validated_data.get('paciente')
         consulta_hc = validated_data.get('consulta_hc')
         fecha_toma = validated_data.get('fecha_programada_toma')
@@ -1294,7 +1391,41 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                     }
                 )
 
-        # Repetición/control: 2ª orden el mismo día (no merge a PENDIENTE).
+        # Inferir / validar material_pedido.
+        mat = normalizar_material_pedido(validated_data.get('material_pedido'))
+        if not mat:
+            mats_inf: set[str] = set()
+            for tid in examenes_ids or []:
+                te = TipoExamen.objects.filter(pk=tid).select_related(
+                    "tipo_muestra_requerida"
+                ).first()
+                if te:
+                    tm = getattr(te.tipo_muestra_requerida, "codigo", None) if te.tipo_muestra_requerida_id else None
+                    m = muestra_codigo_a_material(tm)
+                    if m:
+                        mats_inf.add(m)
+            for pid in paneles_ids or []:
+                panel = PanelExamen.objects.filter(pk=pid).first()
+                if panel:
+                    for m, _ids in componentes_panel_por_material(panel).items():
+                        mats_inf.add(m)
+            if len(mats_inf) == 1:
+                mat = next(iter(mats_inf))
+            elif len(mats_inf) > 1:
+                raise serializers.ValidationError(
+                    {
+                        'material_pedido': (
+                            'Indicá material_pedido: la selección incluye varios materiales. '
+                            'Preferí POST /lab/pedidos-completos/.'
+                        )
+                    }
+                )
+        if not material_pedido_valido(mat) and not repeticion_control:
+            raise serializers.ValidationError(
+                {'material_pedido': 'material_pedido es obligatorio en altas nuevas.'}
+            )
+        validated_data['material_pedido'] = mat or ""
+
         if repeticion_control:
             try:
                 origen_parcial = assert_repeticion_control_valida(
@@ -1309,31 +1440,35 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             ref = origen_parcial.numero or f'#{origen_parcial.pk}'
             prefijo = f'Repetición/control de orden {ref}.'
             validated_data['observaciones'] = f'{prefijo} {obs}'.strip() if obs else prefijo
-            # Sigue create normal más abajo (sin chequeo de orden activa).
+            if not mat:
+                validated_data['material_pedido'] = (
+                    getattr(origen_parcial, 'material_pedido', None) or ""
+                )
+                mat = validated_data['material_pedido']
+        elif mat and fecha_toma is not None:
+            adquirir_locks_materiales(paciente.pk, {mat}, fecha_toma)
+            conflictos = buscar_conflictos_materiales_clinicos(
+                paciente.pk, fecha_toma, {mat}
+            )
+            if conflictos:
+                raise serializers.ValidationError(conflictos[0].mensaje)
+
+        # Tipos: paneles repartidos por material (sin expansión total).
+        tipos_resueltos: set[int] = set()
+        paneles_vincular: set[int] = set()
+        if mat:
+            from laboratorio.pedidos_completos import _resolver_tipos_para_material
+
+            tipos_resueltos, paneles_vincular, errores = _resolver_tipos_para_material(
+                list(examenes_ids or []), list(paneles_ids or []), mat
+            )
+            if errores:
+                raise serializers.ValidationError(errores[0])
         else:
-            abierta = buscar_orden_abierta(paciente.pk, fecha_programada_toma=fecha_toma)
-            if abierta is not None:
-                try:
-                    solicitud = agregar_examenes_a_solicitud(
-                        abierta,
-                        examenes_ids=examenes_ids,
-                        paneles_ids=paneles_ids,
-                        user=user,
-                    )
-                except RestriccionFrecuenciaError as exc:
-                    raise serializers.ValidationError(str(exc)) from exc
-                solicitud._orden_merged = True
-                return solicitud
+            tipos_resueltos, paneles_vincular = _resolver_tipo_examen_ids(
+                examenes_ids, paneles_ids
+            )
 
-            # Una sola orden no finalizada por paciente y día de extracción.
-            # Hoy + mañana OK; tras FINALIZADO se puede pedir otra el mismo día.
-            # Excepción: repeticion_control (rama de arriba).
-            if fecha_toma is not None and paciente_tiene_orden_activa_mismo_dia(
-                paciente.pk, fecha_programada_toma=fecha_toma
-            ):
-                raise serializers.ValidationError(MENSAJE_ORDEN_ACTIVA_MISMO_DIA)
-
-        tipos_resueltos, _ = _resolver_tipo_examen_ids(examenes_ids, paneles_ids)
         try:
             assert_puede_agregar_ensayos(user, paciente.pk, tipos_resueltos)
         except RestriccionFrecuenciaError as exc:
@@ -1381,59 +1516,19 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         solicitud = SolicitudExamen.objects.create(**validated_data)
         solicitud._orden_merged = False
 
-        if paneles_ids:
-            solicitud.paneles.set(paneles_ids)
+        if paneles_vincular:
+            solicitud.paneles.set(list(paneles_vincular))
 
         tipos_examen_creados = set()
         from laboratorio.derivacion_service import defaults_derivacion_para_tipo
-
         from laboratorio.examen_orina_micro import valor_inicial_resultado
 
-        for tipo_examen_id in examenes_ids:
+        for tipo_examen_id in sorted(tipos_resueltos):
             try:
                 tipo_examen = TipoExamen.objects.select_related(
-                    "laboratorio_derivacion"
+                    "laboratorio_derivacion", "tipo_muestra_requerida"
                 ).get(id=tipo_examen_id)
-                ResultadoExamen.objects.create(
-                    solicitud=solicitud,
-                    tipo_examen=tipo_examen,
-                    valor_obtenido=valor_inicial_resultado(tipo_examen),
-                    es_patologico=False,
-                    **defaults_derivacion_para_tipo(tipo_examen),
-                )
-                tipos_examen_creados.add(tipo_examen_id)
-            except TipoExamen.DoesNotExist:
-                logger.warning(f"TipoExamen con ID {tipo_examen_id} no existe")
-
-        for panel_id in paneles_ids:
-            try:
-                panel = PanelExamen.objects.get(id=panel_id)
-                tipos_examen_panel = ordenar_queryset_panel(panel)
-
-                for tipo_examen in tipos_examen_panel:
-                    if tipo_examen.id not in tipos_examen_creados:
-                        te = TipoExamen.objects.select_related(
-                            "laboratorio_derivacion"
-                        ).get(pk=tipo_examen.id)
-                        ResultadoExamen.objects.create(
-                            solicitud=solicitud,
-                            tipo_examen=te,
-                            valor_obtenido=valor_inicial_resultado(te),
-                            es_patologico=False,
-                            **defaults_derivacion_para_tipo(te),
-                        )
-                        tipos_examen_creados.add(tipo_examen.id)
-            except PanelExamen.DoesNotExist:
-                logger.warning(f"PanelExamen con ID {panel_id} no existe")
-            except TipoExamen.DoesNotExist:
-                logger.warning("TipoExamen de panel inexistente")
-
-        # Calculados sueltos (p. ej. RAC): crear insumos medidos resueltos.
-        for tipo_examen_id in tipos_resueltos - tipos_examen_creados:
-            try:
-                tipo_examen = TipoExamen.objects.select_related(
-                    "laboratorio_derivacion"
-                ).get(id=tipo_examen_id)
+                # tipos_resueltos ya incluye insumos cruzados (CREATI en clearance).
                 ResultadoExamen.objects.create(
                     solicitud=solicitud,
                     tipo_examen=tipo_examen,
@@ -1531,6 +1626,31 @@ class SolicitudExamenUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"fecha_programada_toma": "La fecha de extracción es obligatoria."}
             )
+        if (
+            instance is not None
+            and "fecha_programada_toma" in attrs
+            and getattr(instance, "estado", None) == "PENDIENTE"
+        ):
+            nueva = attrs["fecha_programada_toma"]
+            if nueva != getattr(instance, "fecha_programada_toma", None):
+                from laboratorio.material_pedido_orden import (
+                    buscar_conflictos_materiales_clinicos,
+                    inferir_materiales_de_solicitud,
+                )
+
+                inf = inferir_materiales_de_solicitud(instance)
+                mats = set(inf.materiales)
+                if mats:
+                    conflictos = buscar_conflictos_materiales_clinicos(
+                        instance.paciente_id,
+                        nueva,
+                        mats,
+                        exclude_solicitud_id=instance.pk,
+                    )
+                    if conflictos:
+                        raise serializers.ValidationError(
+                            {"fecha_programada_toma": conflictos[0].mensaje}
+                        )
         return attrs
 
 

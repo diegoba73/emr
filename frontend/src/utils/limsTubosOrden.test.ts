@@ -49,7 +49,8 @@ describe('limsTubosOrden', () => {
     ];
     expect(orina.length).toBeGreaterThan(10);
     expect(unidadesParaCalculoTubos(orina)).toBe(1);
-    expect(unidadesParaCalculoTubos([...orina, 'PROT_U_AZ'])).toBe(2);
+    expect(unidadesParaCalculoTubos([...orina, 'PROT_U_AZ'])).toBe(1);
+    expect(unidadesParaCalculoTubos([...orina, 'PROT_U_AZ', 'NA_U', 'MICROALB'])).toBe(1);
   });
 
   it('totalEtiquetasDesdeTubos suma cantidades', () => {

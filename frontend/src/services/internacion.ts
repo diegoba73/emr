@@ -301,6 +301,17 @@ export interface RevistaEstudioItem {
   fecha_realizacion: string | null;
 }
 
+export interface RevistaMicroItem {
+  id: number;
+  numero: string | null;
+  estado: string;
+  fecha_solicitud: string | null;
+  fecha_programada_toma?: string | null;
+  es_de_hoy: boolean;
+  cultivo_nombre: string;
+  muestra_nombre: string;
+}
+
 export interface RevistaInternacionContexto {
   internacion_id: number;
   paciente_id: number;
@@ -311,6 +322,8 @@ export interface RevistaInternacionContexto {
   evolucion_hoy: RevistaEvolucionItem | null;
   evoluciones: RevistaEvolucionItem[];
   laboratorio: RevistaLabItem[];
+  /** Pedidos de microbiología del episodio (cultivos). */
+  microbiologia?: RevistaMicroItem[];
   estudios: RevistaEstudioItem[];
 }
 

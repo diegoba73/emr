@@ -10,6 +10,8 @@ Reglas por defecto:
   y se ordena con la presentación (junto a CREATI), para que al informar el
   clearance figuren juntos CREATI + CREA_U + DIUR + CLEAR_CREA.
 - Dentro del bloque orina, **orina completa (PAN_ORI)** va siempre al final.
+- Materiales de pedido (LCR, líquidos, etc.): físicos → celulares → químicos
+  (`rank_presentacion_codigo_material`). Sangre/orina usan las reglas de arriba.
 - Perfiles/paneles agrupan sus componentes; si no hay panel pedido, se infiere
   por códigos del catálogo cuando hay suficientes analitos.
 """
@@ -19,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, TypeVar
 
 from laboratorio.catalogo_solicitud_papel import ORDEN_PRESENTACION_PEDIDO, PANELES
+from laboratorio.materiales_pedido_catalogo import rank_presentacion_codigo_material
 from laboratorio.panel_componentes_orden import ordenar_resultados_por_panel
 
 T = TypeVar("T")
@@ -138,6 +141,12 @@ def prioridad_grupo_default(grupo: GrupoInformeSpec) -> tuple:
     if codigo and codigo in ORDEN_PRESENTACION_RANK:
         return (0, ORDEN_PRESENTACION_RANK[codigo], grupo.titulo, grupo.key)
 
+    # Materiales de pedido (líquidos, etc.): físicos → celulares → químicos.
+    # Sangre/orina no usan estos códigos (presets legacy + ORDEN_PRESENTACION).
+    mat_rank = rank_presentacion_codigo_material(codigo) if codigo else None
+    if mat_rank is not None:
+        return (1, mat_rank, grupo.titulo, grupo.key)
+
     # Fuera de la lista canónica (no orina): paneles / sueltos por nombre.
     if grupo.panel_codigo == PANEL_HEMOGRAMA:
         bucket = 0
@@ -145,7 +154,7 @@ def prioridad_grupo_default(grupo: GrupoInformeSpec) -> tuple:
         bucket = 1
     else:
         bucket = 2
-    return (1, bucket, grupo.titulo, grupo.key)
+    return (1, 10_000 + bucket, grupo.titulo, grupo.key)
 
 
 def _inferir_perfiles_por_codigo(

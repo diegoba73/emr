@@ -208,20 +208,68 @@ def build_paciente_timeline(paciente_id: int, user=None) -> list[dict[str, Any]]
         from api.permissions import usuario_puede_ver_solicitud_lims
         from laboratorio.models import SolicitudExamen
 
-        lab_qs = SolicitudExamen.objects.filter(paciente_id=paciente_id).select_related(
-            'medico_interno', 'paciente'
+        from laboratorio.orden_cabecera import lineas_fechas_orden_timeline
+
+        lab_qs = (
+            SolicitudExamen.objects.filter(paciente_id=paciente_id)
+            .select_related('medico_interno', 'paciente')
+            .prefetch_related('muestras__tipo_muestra')
         )
         for s in lab_qs:
             if user is not None and not usuario_puede_ver_solicitud_lims(user, s):
                 continue
+            eventos_fechas = lineas_fechas_orden_timeline(s)
             events.append({
                 'id': f'lab-{s.id}',
                 'type': 'solicitud',
                 'title': f'Laboratorio {s.numero or s.id}',
                 'subtitle': s.estado,
                 'date': _iso(s.fecha_solicitud),
+                'date_lines': eventos_fechas,
                 'navigate_to': f'/solicitudes/{s.id}',
-                'meta': {'solicitud_examen_id': s.id},
+                'meta': {
+                    'solicitud_examen_id': s.id,
+                    'date_lines': eventos_fechas,
+                },
+            })
+    except Exception:
+        pass
+
+    # --- Estudios de microbiología ---
+    try:
+        from api.permissions import usuario_puede_ver_estudio_micro
+        from laboratorio.models_microbiologia import EstudioMicrobiologia
+        from laboratorio.orden_cabecera import lineas_fechas_estudio_micro_timeline
+
+        micro_qs = EstudioMicrobiologia.objects.filter(
+            paciente_id=paciente_id
+        ).select_related(
+            'tipo_cultivo',
+            'tipo_muestra_micro',
+            'medico_interno',
+            'paciente',
+        )
+        for est in micro_qs:
+            if user is not None and not usuario_puede_ver_estudio_micro(user, est):
+                continue
+            eventos_fechas = lineas_fechas_estudio_micro_timeline(est)
+            cultivo = ''
+            if est.tipo_cultivo_id and est.tipo_cultivo:
+                cultivo = (est.tipo_cultivo.nombre or '').strip()
+            if not cultivo:
+                cultivo = (est.tipo_estudio or 'Microbiología').replace('_', ' ')
+            events.append({
+                'id': f'micro-{est.id}',
+                'type': 'solicitud',
+                'title': f'Microbiología {est.numero or est.id}',
+                'subtitle': f'{cultivo} · {est.estado}',
+                'date': _iso(getattr(est, 'created_at', None)),
+                'date_lines': eventos_fechas,
+                'navigate_to': f'/laboratorio/microbiologia/estudios/{est.id}',
+                'meta': {
+                    'estudio_microbiologia_id': est.id,
+                    'date_lines': eventos_fechas,
+                },
             })
     except Exception:
         pass

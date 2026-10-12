@@ -11,8 +11,9 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import type { EstadoSolicitudLims, SolicitudExamenLims } from '../../types/lims';
-import { estadoOrdenColor, labelEstadoOrdenLims, ordenPuedeAgregarExamenes } from '../../utils/limsEstadosOrden';
+import type { EstadoSolicitudLims } from '../../types/lims';
+import { estadoOrdenColor, labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
+import { limsActionBtnSoftSx, limsActionBtnSx } from '../../utils/limsActionButtonSx';
 import type { PendientePedidoRow } from '../../utils/limsPendientesUnificados';
 import OrigenProcedenciaCellView from './OrigenProcedenciaCell';
 import EstadoObraSocialDialog from './EstadoObraSocialDialog';
@@ -26,9 +27,6 @@ export interface OrdenesLimsTablaProps {
   onVer: (row: PendientePedidoRow) => void;
   /** Si se define, el botón principal invoca esto con la fila (p. ej. imprimir etiquetas). */
   onAccion?: (row: PendientePedidoRow) => void;
-  /** Agregar exámenes a la orden Lab (solo LAB_CLINICO). */
-  onAgregarExamenes?: (orden: SolicitudExamenLims) => void;
-  columnaFecha?: 'solicitud' | 'toma';
   accionLabel?: string;
   /** Botón «Obra social» junto a imprimir / ver. */
   puedeObraSocial?: boolean;
@@ -48,8 +46,6 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
   emptyMessage,
   onVer,
   onAccion,
-  onAgregarExamenes,
-  columnaFecha = 'solicitud',
   accionLabel = 'Ver',
   puedeObraSocial = false,
   onObraSocialSaved,
@@ -79,30 +75,18 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
           <TableCell>Médico</TableCell>
           <TableCell sx={{ minWidth: 180 }}>Origen</TableCell>
           <TableCell>Estado</TableCell>
-          {!modoEntrega && <TableCell>IQC</TableCell>}
-          <TableCell>{columnaFecha === 'toma' ? 'Muestra tomada' : 'Fecha pedido'}</TableCell>
           <TableCell align="right">Acción</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={modoEntrega ? 7 : 8}>
+            <TableCell colSpan={6}>
               <Typography color="text.secondary">{emptyMessage}</Typography>
             </TableCell>
           </TableRow>
         ) : (
-          rows.map((r, idx) => {
-            const fechaMostrar =
-              columnaFecha === 'toma'
-                ? r.fecha_toma_muestra || null
-                : r.fecha_solicitud || null;
-            const puedeAgregar =
-              r.tipo === 'LAB_CLINICO' &&
-              Boolean(onAgregarExamenes) &&
-              Boolean(r.labOrden) &&
-              ordenPuedeAgregarExamenes(r.labOrden!);
-            return (
+          rows.map((r, idx) => (
               <TableRow key={r.key} hover>
                 <TableCell>
                   <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -132,6 +116,11 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       {r.muestra_nombre ? ` · ${r.muestra_nombre}` : ''}
                     </Typography>
                   ) : null}
+                  {r.tipo === 'LAB_CLINICO' && (r.tipos_muestra_display || r.muestra_nombre) ? (
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {r.tipos_muestra_display || r.muestra_nombre}
+                    </Typography>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   {r.paciente_nombre}
@@ -140,13 +129,16 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       DNI {r.paciente_dni}
                     </Typography>
                   ) : null}
-                  {r.fecha_programada_toma ? (
+                  {r.fecha_toma_muestra ? (
                     <Typography variant="caption" display="block" color="primary.main" sx={{ mt: 0.25 }}>
                       Extracción{' '}
-                      {(() => {
-                        const [y, m, d] = r.fecha_programada_toma.split('-');
-                        return d && m ? `${d}/${m}` : r.fecha_programada_toma;
-                      })()}
+                      {new Date(r.fecha_toma_muestra).toLocaleString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </Typography>
                   ) : null}
                 </TableCell>
@@ -161,80 +153,86 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                   />
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    size="small"
-                    label={labelEstadoOrdenLims(r.estado)}
-                    color={estadoOrdenColor(r.estado as EstadoSolicitudLims)}
-                  />
-                  {r.esperando_recepcion && !modoEntrega && (
+                  <Stack spacing={0.5} alignItems="flex-start">
                     <Chip
                       size="small"
-                      label="Esperando recepción"
-                      color="info"
-                      variant="outlined"
-                      sx={{ ml: 0.5, mt: 0.5 }}
+                      label={labelEstadoOrdenLims(r.estado)}
+                      color={estadoOrdenColor(r.estado as EstadoSolicitudLims)}
                     />
-                  )}
-                  {r.pedido_adicional && !modoEntrega && (
-                    <Chip
-                      size="small"
-                      label="Pedido adicional"
-                      color="secondary"
-                      variant="outlined"
-                      sx={{ ml: 0.5, mt: 0.5 }}
-                    />
-                  )}
-                  {!modoEntrega && r.tubos_pendientes_extraccion && r.tubos_pendientes_extraccion.length > 0 && (
-                    <Typography variant="caption" display="block" color="warning.main">
-                      Faltan {r.tubos_pendientes_extraccion.length} tubo(s)
-                    </Typography>
-                  )}
-                  {r.estado_obra_social ? (
-                    <Chip
-                      size="small"
-                      label={labelEstadoObraSocial(r.estado_obra_social)}
-                      color={colorEstadoObraSocial(r.estado_obra_social)}
-                      variant="outlined"
-                      sx={{ mt: 0.5 }}
-                    />
-                  ) : null}
-                </TableCell>
-                {!modoEntrega && (
-                <TableCell>
-                  {r.tipo !== 'LAB_CLINICO' || !r.iqcStatus || r.iqcStatus === 'na' ? (
-                    <Typography variant="caption" color="text.secondary">
-                      —
-                    </Typography>
-                  ) : r.iqcStatus === 'ok' ? (
-                    <Chip size="small" label="IQC OK" color="success" variant="outlined" />
-                  ) : r.iqcStatus === 'sin_config' ? (
-                    <Chip size="small" label="Sin IQC" color="default" variant="outlined" />
-                  ) : (
-                    <Chip size="small" label="Falta IQC" color="warning" variant="outlined" />
-                  )}
-                </TableCell>
-                )}
-                <TableCell>{fechaMostrar ? new Date(fechaMostrar).toLocaleString() : '—'}</TableCell>
-                <TableCell align="right">
-                  <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
-                    {puedeAgregar && r.labOrden && (
-                      <Button
+                    {r.estado_obra_social ? (
+                      <Chip
                         size="small"
+                        label={labelEstadoObraSocial(r.estado_obra_social)}
+                        color={colorEstadoObraSocial(r.estado_obra_social)}
                         variant="outlined"
-                        onClick={() => onAgregarExamenes?.(r.labOrden!)}
-                      >
-                        Agregar exámenes
-                      </Button>
+                      />
+                    ) : null}
+                    {r.esperando_recepcion && !modoEntrega && (
+                      <Chip
+                        size="small"
+                        label="Esperando recepción"
+                        color="info"
+                        variant="outlined"
+                      />
                     )}
+                    {r.pedido_adicional && !modoEntrega && (
+                      <Chip
+                        size="small"
+                        label="Pedido adicional"
+                        color="secondary"
+                        variant="outlined"
+                      />
+                    )}
+                    {!modoEntrega &&
+                      r.tubos_pendientes_extraccion &&
+                      r.tubos_pendientes_extraccion.length > 0 && (
+                        <Typography variant="caption" color="warning.main">
+                          Faltan {r.tubos_pendientes_extraccion.length} tubo(s)
+                        </Typography>
+                      )}
+                    {/* IQC: sin columna; solo aviso cuando hay que actuar o no hay config. */}
+                    {!modoEntrega &&
+                      r.tipo === 'LAB_CLINICO' &&
+                      r.iqcStatus === 'falta' && (
+                        <Chip
+                          size="small"
+                          label="Falta IQC"
+                          color="warning"
+                          variant="outlined"
+                        />
+                      )}
+                    {!modoEntrega &&
+                      r.tipo === 'LAB_CLINICO' &&
+                      r.iqcStatus === 'sin_config' && (
+                        <Chip
+                          size="small"
+                          label="Sin IQC"
+                          color="default"
+                          variant="outlined"
+                        />
+                      )}
+                  </Stack>
+                </TableCell>
+                <TableCell align="right" sx={{ verticalAlign: 'middle' }}>
+                  <Stack direction="column" spacing={0.75} alignItems="stretch" sx={{ minWidth: 132 }}>
                     <Button
                       size="small"
                       variant="contained"
+                      color="primary"
+                      disableElevation
+                      sx={limsActionBtnSx}
                       onClick={() => (onAccion ? onAccion(r) : onVer(r))}
                     >
                       {accionLabel}
                     </Button>
                     {onAccion && (
-                      <Button size="small" variant="text" onClick={() => onVer(r)}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={limsActionBtnSoftSx}
+                        onClick={() => onVer(r)}
+                      >
                         Ver
                       </Button>
                     )}
@@ -242,6 +240,8 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                       <Button
                         size="small"
                         variant="outlined"
+                        color="primary"
+                        sx={limsActionBtnSx}
                         onClick={() => setObraSocialRow(r)}
                       >
                         Obra social
@@ -250,8 +250,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                   </Stack>
                 </TableCell>
               </TableRow>
-            );
-          })
+          ))
         )}
       </TableBody>
     </Table>

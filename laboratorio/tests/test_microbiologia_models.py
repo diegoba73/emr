@@ -791,6 +791,40 @@ class TestInformeMicrobiologiaModel:
         inf.refresh_from_db()
         assert inf.estado == "EMITIDO"
 
+    def test_emitir_final_anula_preliminar_emitido(self, base_data):
+        from laboratorio.models_microbiologia import InformeMicrobiologia
+
+        ctx = _estudio_con_lectura_sin_aislados(base_data)
+        EstudioMicrobiologia.objects.filter(pk=ctx["estudio"].pk).update(estado="ANTIBIOGRAMA")
+        prelim = crear_informe_borrador(
+            estudio_id=ctx["estudio"].pk,
+            tipo="PRELIMINAR",
+            texto="preliminar",
+            observaciones="",
+            reemplaza_a_id=None,
+            actor=None,
+            view="t",
+        )
+        aplicar_emitir_informe(prelim.pk, actor=None, view="t", texto="Preliminar vigente.")
+        prelim.refresh_from_db()
+        assert prelim.estado == "EMITIDO"
+
+        final = crear_informe_borrador(
+            estudio_id=ctx["estudio"].pk,
+            tipo="FINAL",
+            texto="final",
+            observaciones="",
+            reemplaza_a_id=None,
+            actor=None,
+            view="t",
+        )
+        aplicar_emitir_informe(final.pk, actor=None, view="t", texto="Cultivo sin desarrollo.")
+        prelim.refresh_from_db()
+        assert prelim.estado == "ANULADO"
+        assert InformeMicrobiologia.objects.filter(
+            estudio_id=ctx["estudio"].pk, tipo="PRELIMINAR", estado="EMITIDO"
+        ).count() == 0
+
     def test_final_bloqueado_solo_lectura_pendiente(self, base_data):
         m = _muestra_recibida(base_data["sol"], base_data["tm"])
         medio = _medio()

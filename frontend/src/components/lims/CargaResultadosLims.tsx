@@ -59,6 +59,7 @@ import {
   validateCargaResultadosValores,
   resultadoDebeGuardarse,
   resultadoPuedeOmitirseSinMuestra,
+  resultadoTieneValorGuardado,
   type DraftCargaRow,
 } from '../../utils/limsCargaMuestra';
 import { countResultadosConValor } from '../../utils/limsOrdenResultados';
@@ -73,6 +74,7 @@ import {
 } from '../../utils/entradaResultados';
 import {
   calcAbsolutoFormula,
+  calcCaIonZeislerMmolL,
   formatAbsolutoMm3,
   FORMULA_LEUCO_CODIGOS,
   esResultadoNoCalculable,
@@ -221,6 +223,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   const guardarBtnRef = useRef<HTMLButtonElement>(null);
   const [focusedSysmexKey, setFocusedSysmexKey] = useState<string | null>(null);
   const indicesManualRef = useRef<Set<number>>(new Set());
+  /** Filas que el operador vació a propósito (no rellenar con Zeisler/autofill). */
+  const clearedIdsRef = useRef<Set<number>>(new Set());
 
   const formulaProgress = useMemo(
     () =>
@@ -274,7 +278,14 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   }, []);
 
   useEffect(() => {
-    indicesManualRef.current = new Set();
+    const liveIds = new Set(resultados.map((r) => r.id));
+    Array.from(clearedIdsRef.current).forEach((id) => {
+      if (!liveIds.has(id)) clearedIdsRef.current.delete(id);
+    });
+    Array.from(indicesManualRef.current).forEach((id) => {
+      if (!liveIds.has(id)) indicesManualRef.current.delete(id);
+    });
+
     setDraft((prev) => {
       const next: Record<number, DraftCargaRow> = {};
       for (const r of resultados) {
@@ -318,23 +329,80 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             );
             if (resolved != null) built.muestra_id = resolved;
           }
+          if (
+            draftRowClearsServerValue(r, built, te, codigo) ||
+            clearedIdsRef.current.has(r.id)
+          ) {
+            clearedIdsRef.current.add(r.id);
+            indicesManualRef.current.add(r.id);
+          }
         }
         next[r.id] = built;
         const c = (codigo || '').toUpperCase();
         if (
           (c === 'VCM' || c === 'HCM' || c === 'CHCM') &&
           draftRowHasValue(built, te, codigo) &&
-          (r.valor_obtenido || r.valor_numerico != null)
+          (r.valor_obtenido || r.valor_numerico != null) &&
+          !clearedIdsRef.current.has(r.id)
         ) {
           // Valor ya persistido: tratar como fijado hasta que el operador edite bases.
           indicesManualRef.current.add(r.id);
         }
       }
-      return applyAutofillVcmChcm(resultados, next, tiposExamenMap, indicesManualRef.current);
+      // CA_ION persistido: solo fijar manual si no coincide con Zeisler actual.
+      for (const r of resultados) {
+        const te = tiposExamenMap.get(r.tipo_examen);
+        const c = (r.tipo_examen_codigo || te?.codigo || '').toUpperCase();
+        if (c !== 'CA_ION') continue;
+        if (clearedIdsRef.current.has(r.id)) {
+          indicesManualRef.current.add(r.id);
+          continue;
+        }
+        const built = next[r.id];
+        if (!built || !draftRowHasValue(built, te, r.tipo_examen_codigo)) continue;
+        const byCodigo = new Map<string, (typeof resultados)[number]>();
+        for (const x of resultados) {
+          const cx = (
+            x.tipo_examen_codigo ||
+            tiposExamenMap.get(x.tipo_examen)?.codigo ||
+            ''
+          ).toUpperCase();
+          if (cx) byCodigo.set(cx, x);
+        }
+        const rCa = byCodigo.get('CA');
+        const rProt = byCodigo.get('PROT_T');
+        const caN = rCa
+          ? Number(next[rCa.id]?.valor_numerico || next[rCa.id]?.valor || '')
+          : NaN;
+        const protN = rProt
+          ? Number(next[rProt.id]?.valor_numerico || next[rProt.id]?.valor || '')
+          : NaN;
+        const estimado =
+          Number.isFinite(caN) && Number.isFinite(protN)
+            ? calcCaIonZeislerMmolL(caN, protN)
+            : null;
+        const actual = Number(built.valor_numerico || built.valor || '');
+        if (
+          estimado == null ||
+          !Number.isFinite(actual) ||
+          Math.round(actual * 100) !== Math.round(estimado * 100)
+        ) {
+          indicesManualRef.current.add(r.id);
+        } else {
+          indicesManualRef.current.delete(r.id);
+        }
+      }
+      return applyAutofillVcmChcm(
+        resultados,
+        next,
+        tiposExamenMap,
+        indicesManualRef.current,
+        clearedIdsRef.current
+      );
     });
     setObservacionesOrden(orden.observaciones ?? '');
     setSugerenciaMeta(null);
-  }, [orden, resultados, muestrasProcesables, tiposExamenMap]);
+  }, [analisisFingerprint, muestrasProcesables, tiposExamenMap, orden.observaciones, resultados]);
 
   const progreso = useMemo(() => countResultadosConValor(orden), [orden]);
 
@@ -371,7 +439,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     const r = resultadosRef.current.find((x) => x.id === id);
     const te = r ? tiposExamenMapRef.current.get(r.tipo_examen) : undefined;
     const codigo = (r?.tipo_examen_codigo || te?.codigo || '').toUpperCase();
-    if (codigo === 'VCM' || codigo === 'HCM' || codigo === 'CHCM') {
+    if (codigo === 'VCM' || codigo === 'HCM' || codigo === 'CHCM' || codigo === 'CA_ION') {
       if (patch.valor_sysmex !== undefined || patch.valor !== undefined || patch.valor_numerico !== undefined) {
         indicesManualRef.current.add(id);
       }
@@ -381,12 +449,26 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         ...(d[id] || emptyDraft()),
         ...patch,
       };
+      // Ticket vacío: limpiar también valor/numérico para no dejar basura stale.
+      if (patch.valor_sysmex !== undefined && !String(patch.valor_sysmex).trim()) {
+        merged.valor = '';
+        merged.valor_numerico = '';
+      }
+      if (r && draftRowClearsServerValue(r, merged, te, codigo)) {
+        clearedIdsRef.current.add(id);
+        indicesManualRef.current.add(id);
+      } else if (draftRowHasValue(merged, te, codigo)) {
+        clearedIdsRef.current.delete(id);
+      } else if (r && !resultadoTieneValorGuardado(r)) {
+        clearedIdsRef.current.delete(id);
+      }
       const next = { ...d, [id]: merged };
       return applyAutofillVcmChcm(
         resultadosRef.current,
         next,
         tiposExamenMapRef.current,
-        indicesManualRef.current
+        indicesManualRef.current,
+        clearedIdsRef.current
       );
     });
   };
@@ -456,6 +538,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     const filasAGuardar = resultados.filter((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const row = draft[r.id] || emptyDraft();
+      if (clearedIdsRef.current.has(r.id) && resultadoTieneValorGuardado(r)) {
+        return true;
+      }
       return resultadoDebeGuardarse(r, row, te);
     });
 
@@ -470,7 +555,17 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     // (p. ej. química en heparina cuando el catálogo ya exige suero).
     const draftSave: Record<number, DraftCargaRow> = { ...draft };
     for (const r of filasAGuardar) {
-      const prev = normalizeDraftRow(draftSave[r.id] || emptyDraft());
+      let prev = normalizeDraftRow(draftSave[r.id] || emptyDraft());
+      // Borrado explícito: forzar vacío aunque el autofill haya dejado basura.
+      if (clearedIdsRef.current.has(r.id) && resultadoTieneValorGuardado(r)) {
+        prev = {
+          ...prev,
+          valor: '',
+          valor_sysmex: '',
+          valor_numerico: '',
+        };
+        draftSave[r.id] = prev;
+      }
       const resolved = suggestMuestraIdForResultado(
         r,
         muestrasProcesables,
@@ -544,6 +639,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       } else {
         toast.success('Avance guardado');
       }
+      for (const r of filasPayload) {
+        clearedIdsRef.current.delete(r.id);
+      }
       onGuardado(updated);
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado));
@@ -566,6 +664,70 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     },
     [draft]
   );
+
+  const fechaSolicitudLabel = useMemo(() => {
+    if (!orden.fecha_solicitud) return '—';
+    try {
+      return new Date(orden.fecha_solicitud).toLocaleString('es-AR');
+    } catch {
+      return orden.fecha_solicitud;
+    }
+  }, [orden.fecha_solicitud]);
+
+  const fechaExtraccionLabel = useMemo(() => {
+    if (orden.fecha_toma_muestra) {
+      try {
+        return new Date(orden.fecha_toma_muestra).toLocaleString('es-AR');
+      } catch {
+        return orden.fecha_toma_muestra;
+      }
+    }
+    const fromMuestras = muestras
+      .map((m) => m.fecha_toma)
+      .filter((f): f is string => Boolean(f))
+      .sort()
+      .at(-1);
+    if (fromMuestras) {
+      try {
+        return new Date(fromMuestras).toLocaleString('es-AR');
+      } catch {
+        return fromMuestras;
+      }
+    }
+    if (orden.fecha_programada_toma) {
+      return `${orden.fecha_programada_toma} (programada)`;
+    }
+    return '—';
+  }, [orden.fecha_toma_muestra, orden.fecha_programada_toma, muestras]);
+
+  const fechaExtraccionPorResultado = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const r of resultados) {
+      let iso: string | null | undefined = r.muestra_fecha_toma;
+      if (!iso && r.muestra_id != null) {
+        iso = muestras.find((m) => m.id === r.muestra_id)?.fecha_toma;
+      }
+      if (!iso && r.tipo_examen_muestra_codigo) {
+        const code = r.tipo_examen_muestra_codigo.toUpperCase();
+        const match = muestras
+          .filter(
+            (m) =>
+              (m.tipo_muestra_codigo || '').toUpperCase() === code && Boolean(m.fecha_toma)
+          )
+          .sort((a, b) => String(a.fecha_toma).localeCompare(String(b.fecha_toma)))
+          .at(-1);
+        iso = match?.fecha_toma;
+      }
+      if (iso) {
+        try {
+          map.set(r.id, new Date(iso).toLocaleString('es-AR'));
+        } catch {
+          map.set(r.id, iso);
+        }
+      }
+    }
+    return map;
+  }, [resultados, muestras]);
 
   const renderEditRow = useCallback(
     (
@@ -618,6 +780,29 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         }
       }
 
+      let chipCaIonEstimado = false;
+      if (codigoUpper === 'CA_ION' && !indicesManualRef.current.has(r.id) && row.valor) {
+        const rCa = resultados.find((x) => {
+          const c = (x.tipo_examen_codigo || tiposExamenMap.get(x.tipo_examen)?.codigo || '').toUpperCase();
+          return c === 'CA';
+        });
+        const rProt = resultados.find((x) => {
+          const c = (x.tipo_examen_codigo || tiposExamenMap.get(x.tipo_examen)?.codigo || '').toUpperCase();
+          return c === 'PROT_T';
+        });
+        if (rCa && rProt) {
+          const caN = draftValorClinicoNumerico(rCa, draft, tiposExamenMap);
+          const protN = draftValorClinicoNumerico(rProt, draft, tiposExamenMap);
+          const est =
+            caN != null && protN != null ? calcCaIonZeislerMmolL(caN, protN) : null;
+          const actual = Number(row.valor_numerico || row.valor || '');
+          chipCaIonEstimado =
+            est != null &&
+            Number.isFinite(actual) &&
+            Math.round(actual * 100) === Math.round(est * 100);
+        }
+      }
+
       return (
         <TableRow key={r.id}>
           <TableCell>
@@ -627,6 +812,19 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             <Typography variant="caption" color="text.secondary" display="block">
               {r.tipo_examen_codigo}
             </Typography>
+            {chipCaIonEstimado && (
+              <Chip
+                size="small"
+                variant="outlined"
+                label="Estimado (Zeisler)"
+                sx={{ mt: 0.5, height: 22 }}
+              />
+            )}
+            {fechaExtraccionPorResultado.get(r.id) && (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Extracción: {fechaExtraccionPorResultado.get(r.id)}
+              </Typography>
+            )}
             {r.estado_derivacion && r.estado_derivacion !== 'LOCAL' && (
               <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                 <Chip
@@ -788,34 +986,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       ordenGrupos.length,
       savingOrden,
       previosPorTipo,
+      fechaExtraccionPorResultado,
     ]
   );
-
-  const fechaExtraccionLabel = useMemo(() => {
-    if (orden.fecha_toma_muestra) {
-      try {
-        return new Date(orden.fecha_toma_muestra).toLocaleString();
-      } catch {
-        return orden.fecha_toma_muestra;
-      }
-    }
-    const fromMuestras = muestras
-      .map((m) => m.fecha_toma)
-      .filter((f): f is string => Boolean(f))
-      .sort()
-      .at(-1);
-    if (fromMuestras) {
-      try {
-        return new Date(fromMuestras).toLocaleString();
-      } catch {
-        return fromMuestras;
-      }
-    }
-    if (orden.fecha_programada_toma) {
-      return orden.fecha_programada_toma;
-    }
-    return '—';
-  }, [orden.fecha_toma_muestra, orden.fecha_programada_toma, muestras]);
 
   const diagnosticoLabel = (orden.diagnostico || '').trim() || '—';
 
@@ -831,6 +1004,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     <Box>
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
+          <strong>Fecha de solicitud:</strong> {fechaSolicitudLabel}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           <strong>Fecha de extracción:</strong> {fechaExtraccionLabel}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

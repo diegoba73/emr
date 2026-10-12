@@ -12,6 +12,7 @@ import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import { labelOrigenSolicitudLims } from '../../../utils/limsOrigenSolicitud';
 import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
+import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
 
 export interface EstudioMicroPedidoRecepcionPanelProps {
   estudio: EstudioMicrobiologia;
@@ -19,18 +20,17 @@ export interface EstudioMicroPedidoRecepcionPanelProps {
   reprinting?: boolean;
   downloadingTalon?: boolean;
   confirmingRecepcion?: boolean;
-  onReimprimirEtiquetas: () => void;
+  onReimprimirEtiquetas?: () => void;
   onImprimirTalon?: () => void;
   onConfirmarRecepcion: () => void;
   onCancelar: () => void;
-  onObraSocial?: () => void;
   onEditarOrden?: () => void;
 }
 
 /**
  * Vista de pedido micro en PENDIENTE (pre-recepción), alineada a Orden LIMS pendiente:
- * datos del pedido, reimpresión de etiquetas y confirmación de recepción.
- * No expone siembras / iniciar estudio técnico.
+ * datos del pedido, etiquetas, talón y confirmación de recepción.
+ * Obra social se gestiona desde Órdenes LIMS.
  */
 const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPanelProps> = ({
   estudio,
@@ -42,7 +42,6 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
   onImprimirTalon,
   onConfirmarRecepcion,
   onCancelar,
-  onObraSocial,
   onEditarOrden,
 }) => {
   const tieneEtiqueta = Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
@@ -74,18 +73,22 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
           {canOperate && onEditarOrden && (
-            <Button variant="outlined" onClick={onEditarOrden}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={onEditarOrden}
+            >
               Editar orden
             </Button>
           )}
-          {canOperate && onObraSocial && (
-            <Button variant="outlined" onClick={onObraSocial}>
-              Obra social
-            </Button>
-          )}
-          {canOperate && (
+          {canOperate && onReimprimirEtiquetas && (
             <Button
+              size="small"
               variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
               disabled={reprinting || confirmingRecepcion || downloadingTalon}
               onClick={onReimprimirEtiquetas}
             >
@@ -98,7 +101,10 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           )}
           {canOperate && onImprimirTalon && (
             <Button
+              size="small"
               variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
               disabled={reprinting || confirmingRecepcion || downloadingTalon}
               onClick={onImprimirTalon}
             >
@@ -107,7 +113,11 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           )}
           {canOperate && tieneEtiqueta && (
             <Button
+              size="small"
               variant="contained"
+              color="primary"
+              disableElevation
+              sx={limsActionBtnSx}
               disabled={confirmingRecepcion || reprinting || downloadingTalon}
               onClick={onConfirmarRecepcion}
             >
@@ -122,8 +132,10 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           <Button
             component={RouterLink}
             to="/laboratorio/muestras/recepcion"
-            variant="text"
             size="small"
+            variant="outlined"
+            color="primary"
+            sx={limsActionBtnSoftSx}
           >
             Ir a recepción (escaneo)
           </Button>

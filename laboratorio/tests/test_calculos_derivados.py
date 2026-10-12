@@ -9,13 +9,17 @@ from unittest import TestCase
 
 from laboratorio.calculos_derivados import (
     RESULTADO_NO_CALCULABLE,
+    calc_ca_ion_zeisler_mg_dl,
+    calc_ca_ion_zeisler_mmol_l,
     calc_clearance_creatinina,
     calc_excrecion_mg_dl_a_24h,
     calc_excrecion_por_litro_a_24h,
     calc_ldl_friedewald,
     calc_rac,
     codigos_insumos_de_calculados,
+    codigos_insumos_de_overrideables,
     calcular_derivados,
+    es_codigo_calculado,
 )
 
 
@@ -224,4 +228,41 @@ class TestCalculosDerivados(TestCase):
         self.assertEqual(
             set(codigos_insumos_de_calculados(["LDL", "BIL_I", "CF"])),
             {"COL_TOT", "HDL", "TG", "BIL_T", "BIL_D", "FERR", "UIBC"},
+        )
+
+    def test_ca_ion_zeisler_golden(self):
+        # CA 7.3 + PROT 5.8 → 3.53 mg/dL → 0.88 mmol/L (÷ 4.008)
+        self.assertEqual(
+            calc_ca_ion_zeisler_mg_dl(Decimal("7.3"), Decimal("5.8")),
+            Decimal("3.53"),
+        )
+        self.assertEqual(
+            calc_ca_ion_zeisler_mmol_l(Decimal("7.3"), Decimal("5.8")),
+            Decimal("0.88"),
+        )
+        out = calcular_derivados(
+            {"CA": Decimal("7.3"), "PROT_T": Decimal("5.8")}
+        )
+        self.assertEqual(out["CA_ION"][1], "0.88")
+        self.assertEqual(out["CA_ION"][0], Decimal("0.8800"))
+        self.assertFalse(es_codigo_calculado("CA_ION"))
+
+    def test_ca_ion_sin_insumos_completos_no_emite(self):
+        self.assertNotIn("CA_ION", calcular_derivados({"CA": Decimal("7.3")}))
+        self.assertNotIn("CA_ION", calcular_derivados({"PROT_T": Decimal("5.8")}))
+
+    def test_insumos_ca_ion_overrideable(self):
+        self.assertEqual(
+            codigos_insumos_de_overrideables(["CA_ION"]),
+            ["CA", "PROT_T"],
+        )
+        self.assertEqual(
+            codigos_insumos_de_overrideables(["CA_ION", "CA"]),
+            ["PROT_T"],
+        )
+        self.assertEqual(
+            codigos_insumos_de_overrideables(
+                ["CA_ION"], paneles=["PAN_EAB_ART"]
+            ),
+            [],
         )

@@ -156,8 +156,8 @@ const SolicitudLabDetalle: React.FC = () => {
       {orden.estado === 'INFORMADO_PARCIAL' && puedeVerResultados && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Informe parcial: hay resultados disponibles, pero la orden aún no está completa
-          (faltan determinaciones o muestras). No es el informe final y no hay PDF hasta la
-          validación del laboratorio.
+          (faltan determinaciones o muestras). Podés descargar o enviar el PDF parcial; al
+          validar el informe definitivo este parcial deja de estar vigente.
         </Alert>
       )}
 

@@ -17,6 +17,47 @@ const PANELES_ORINA = new Set([
 
 const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_AZ']);
 const MUESTRAS_ORINA = new Set(['ORINA', 'ORINA_24_H']);
+const MUESTRAS_SANGRE = new Set([
+  'SUERO',
+  'SANGRE',
+  'SANGRE_EDTA',
+  'PLASMA_CITRATO',
+  'SANGRE_ERITRO',
+  'SANGRE_CITRATO_VSG',
+  'SANGRE_HEPARINA',
+  'SANGRE_HEPARINA_ART',
+  'SANGRE_HEPARINA_VEN',
+  'PLASMA_HEPARINA',
+]);
+
+/** Alineado a materiales_pedido_catalogo.PREFIJOS_ORDEN_MATERIAL. */
+const PREFIJOS_ORDEN_MATERIAL: string[] = [
+  'ASP', 'COL', 'VISC', 'PH', 'ESPM', 'MIEL', 'FE', 'CIGEN', 'KARI', 'CMA', 'CALC',
+  'RBC', 'NC', 'LEU', 'RAN', 'HTO', 'PAN_DIF', 'NEUT', 'LINF', 'MOMA', 'EOS', 'OTRA',
+  'CRIS', 'HEMOS', 'CITOL', 'CITO', 'GLU', 'PROT', 'ALB', 'LDH', 'LACT', 'ADA', 'AMIL',
+  'TG', 'CHOL', 'QUIL', 'BILI', 'CREA', 'CEA', 'B2TR', 'BTRA', 'FRUC', 'SOH', 'CALP',
+  'ELAS', 'GRAS', 'UREA', 'CL',
+];
+const PREFIJO_MATERIAL_RANK = new Map(PREFIJOS_ORDEN_MATERIAL.map((p, i) => [p, i]));
+const PREFIJOS_MATERIAL_MATCH = [...PREFIJOS_ORDEN_MATERIAL].sort((a, b) => b.length - a.length);
+
+function prefijoCodigoMaterial(codigo: string): string | null {
+  const c = codigo.toUpperCase();
+  for (const pref of PREFIJOS_MATERIAL_MATCH) {
+    if (c === pref || c.startsWith(`${pref}_`)) return pref;
+  }
+  return null;
+}
+
+function rankPresentacionCodigoMaterial(codigo: string, muestra: string): number | null {
+  if (!codigo || !codigo.includes('_')) return null;
+  if (MUESTRAS_ORINA.has(muestra) || MUESTRAS_SANGRE.has(muestra)) return null;
+  if (/_(ART|VEN)$/.test(codigo)) return null;
+  const pref = prefijoCodigoMaterial(codigo);
+  if (pref == null) return null;
+  if (!muestra && pref === 'COL' && codigo === 'COL_TOT') return null;
+  return PREFIJO_MATERIAL_RANK.get(pref) ?? 9_000;
+}
 
 /** Fila a fila (izq → der) del formulario papel «Solicitud de análisis». */
 export const ORDEN_FORMULARIO_PAPEL: string[] = [
@@ -186,6 +227,11 @@ function prioridadGrupoDefault(grupo: GrupoResultadosMovil): number {
   }
   if (codigo && ORDEN_PAPEL_RANK.has(codigo)) {
     return ORDEN_PAPEL_RANK.get(codigo)!;
+  }
+  const muestra = (grupo.resultados[0]?.tipo_examen_muestra_codigo || '').toUpperCase();
+  const matRank = rankPresentacionCodigoMaterial(codigo, muestra);
+  if (matRank != null) {
+    return presentacionLen + matRank;
   }
   const base = presentacionLen + 100;
   if (grupo.codigo === 'PAN_HEMO') return base;

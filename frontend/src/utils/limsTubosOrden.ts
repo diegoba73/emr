@@ -1,4 +1,4 @@
-/** Utilidades: tubos físicos (tope 10/tubo; hemograma/orina=1; SUERO siempre 1 en backend). */
+/** Utilidades: tubos físicos (tope 10/tubo; hemograma/frasco orina=1; SUERO/FRASCO/BIDON=1 en backend). */
 
 export const MAX_EXAMENES_POR_TUBO = 10;
 
@@ -40,6 +40,16 @@ export const CODIGOS_ORINA_COMPLETA = new Set([
   'ORI_CONC',
 ]);
 
+/** Orina al azar / frasco (misma muestra física que orina completa). */
+export const CODIGOS_FRASCO_ORINA_AZAR = new Set([
+  'PROT_U_AZ',
+  'NA_U',
+  'K_U',
+  'CL_U',
+  'CREA_U',
+  'MICROALB',
+]);
+
 export interface TuboOrdenPreview {
   tipo_muestra_id: number;
   tipo_contenedor_id: number;
@@ -59,23 +69,27 @@ export function cantidadTubosPorExamenes(
 }
 
 /**
- * Unidades hacia el tope: hemograma y orina completa cuentan 1 c/u
- * aunque tengan N componentes.
+ * Unidades hacia el tope: hemograma y frasco orina (completa + al azar)
+ * cuentan 1 c/u aunque tengan N componentes.
  */
 export function unidadesParaCalculoTubos(codigosExamen: string[]): number {
   let tieneHemo = false;
-  let tieneOrina = false;
+  let tieneFrascoOrina = false;
   let otros = 0;
   for (const codigo of codigosExamen) {
     if (CODIGOS_HEMOGRAMA.has(codigo)) {
       tieneHemo = true;
-    } else if (CODIGOS_ORINA_COMPLETA.has(codigo)) {
-      tieneOrina = true;
+    } else if (
+      CODIGOS_ORINA_COMPLETA.has(codigo) ||
+      CODIGOS_FRASCO_ORINA_AZAR.has(codigo) ||
+      codigo.startsWith('ORI_')
+    ) {
+      tieneFrascoOrina = true;
     } else {
       otros += 1;
     }
   }
-  return otros + (tieneHemo ? 1 : 0) + (tieneOrina ? 1 : 0);
+  return otros + (tieneHemo ? 1 : 0) + (tieneFrascoOrina ? 1 : 0);
 }
 
 export function totalEtiquetasDesdeTubos(tubos: TuboOrdenPreview[]): number {

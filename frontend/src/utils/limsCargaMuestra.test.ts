@@ -373,9 +373,49 @@ describe('limsCargaMuestra', () => {
       muestra_id: null,
     };
     expect(draftRowClearsServerValue(r, empty)).toBe(true);
+    expect(resultadoDebeGuardarse(r, empty)).toBe(true);
     const payload = buildCargarResultadoPayload(1, empty);
     expect(payload.valor).toBe('');
     expect(payload.valor_numerico).toBeNull();
+  });
+
+  it('no rellena CA_ION con Zeisler si la fila está en clearedIds', () => {
+    const resultados = (
+      [
+        ['CA', 1],
+        ['PROT_T', 2],
+        ['CA_ION', 3],
+      ] as const
+    ).map(([codigo, id]) => ({
+      id,
+      tipo_examen: id,
+      tipo_examen_codigo: codigo,
+      tipo_examen_nombre: codigo,
+      valor_obtenido: codigo === 'CA_ION' ? '1.25' : '',
+      valor_numerico: codigo === 'CA_ION' ? 1.25 : null,
+    })) as ResultadoExamenLims[];
+    const catalog = new Map<number, LimsTipoExamen>(
+      (
+        [
+          [1, 'CA', 'ESTANDAR'],
+          [2, 'PROT_T', 'ESTANDAR'],
+          [3, 'CA_ION', 'ESTANDAR'],
+        ] as const
+      ).map(([id, codigo, modo]) => [
+        id,
+        { id, codigo, nombre: codigo, tipo_muestra_requerida: 1, modo_entrada: modo },
+      ])
+    );
+    const draft: Record<number, DraftCargaRow> = {
+      1: { valor: '9.0', valor_sysmex: '', valor_numerico: '9.0', unidad: 'mg/dL', muestra_id: null },
+      2: { valor: '7.0', valor_sysmex: '', valor_numerico: '7.0', unidad: 'g/dL', muestra_id: null },
+      3: { valor: '', valor_sysmex: '', valor_numerico: '', unidad: 'mmol/L', muestra_id: null },
+    };
+    const next = applyAutofillVcmChcm(resultados, draft, catalog, new Set([3]), new Set([3]));
+    expect(next[3].valor).toBe('');
+    expect(next[3].valor_numerico).toBe('');
+    expect(draftRowClearsServerValue(resultados[2], next[3], catalog.get(3), 'CA_ION')).toBe(true);
+    expect(resultadoDebeGuardarse(resultados[2], next[3], catalog.get(3))).toBe(true);
   });
 
   it('no reenvía filas intactas (p. ej. CREA_U al guardar otro panel)', () => {

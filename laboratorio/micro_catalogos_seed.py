@@ -1,5 +1,10 @@
 """Catálogos de cultivo y muestra propios de microbiología clínica (no LIMS química)."""
 
+from laboratorio.materiales_pedido_catalogo import (
+    CULTIVOS_MICRO_EXTRA,
+    MUESTRAS_MICRO_EXTRA,
+)
+
 TIPOS_CULTIVO_MICRO_SEED = [
     ("HEMOCULTIVO", "Hemocultivo", 10),
     ("CATETER", "Cultivo de punta de catéter", 20),
@@ -27,6 +32,7 @@ TIPOS_CULTIVO_MICRO_SEED = [
     ("VIGILANCIA_EPIDEMIOLOGICA", "Cultivo de vigilancia epidemiológica", 240),
     ("HISOPADO_ANAL", "Cultivo Hisopado Anal", 245),
     ("AMBIENTAL", "Cultivo ambiental", 250),
+    *CULTIVOS_MICRO_EXTRA,
 ]
 
 TIPOS_MUESTRA_MICRO_SEED = [
@@ -51,6 +57,7 @@ TIPOS_MUESTRA_MICRO_SEED = [
     ("PROTESIS", "Prótesis", 190),
     ("DISPOSITIVO", "Dispositivos", 200),
     ("HISOPADO_VIGILANCIA", "Hisopados de vigilancia", 210),
+    *MUESTRAS_MICRO_EXTRA,
 ]
 
 

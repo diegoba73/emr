@@ -165,6 +165,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "afiliado_efectivo",
             "observaciones",
             "fecha_programada_toma",
+            "material_pedido",
             "examen_orina",
             "admite_examen_orina",
             "fecha_inicio",
@@ -357,6 +358,7 @@ class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
     tipo_estudio = serializers.CharField(required=False, allow_blank=True, default="")
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
     fecha_programada_toma = serializers.DateField(required=True)
+    material_pedido = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate(self, attrs):
         from pacientes.models import Paciente
@@ -472,6 +474,7 @@ class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
 class EstudioMicroItemSerializer(serializers.Serializer):
     tipo_cultivo_id = serializers.IntegerField()
     tipo_muestra_micro_id = serializers.IntegerField()
+    material_pedido = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
@@ -655,6 +658,22 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
                         )
                     }
                 )
+            nueva = attrs.get("fecha_programada_toma")
+            if nueva and nueva != getattr(self.instance, "fecha_programada_toma", None):
+                from laboratorio.material_pedido_orden import buscar_conflictos_micro
+
+                mat = (getattr(self.instance, "material_pedido", None) or "").strip()
+                if mat:
+                    msgs = buscar_conflictos_micro(
+                        self.instance.paciente_id,
+                        nueva,
+                        material_pedido=mat,
+                        exclude_estudio_id=self.instance.pk,
+                    )
+                    if msgs:
+                        raise serializers.ValidationError(
+                            {"fecha_programada_toma": msgs[0]}
+                        )
 
         if "paciente_id" in attrs:
             try:

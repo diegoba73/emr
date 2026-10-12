@@ -15,7 +15,7 @@ const base: EstudioMicrobiologia = {
 } as EstudioMicrobiologia;
 
 describe('EstudioMicroResumenTab', () => {
-  it('muestra reimprimir etiquetas y talón tras recepción', () => {
+  it('muestra reimprimir etiquetas y talón tras recepción; sin obra social', () => {
     const onEtq = jest.fn();
     const onTalon = jest.fn();
     render(
@@ -30,6 +30,7 @@ describe('EstudioMicroResumenTab', () => {
         onMarcarInformado={jest.fn()}
       />
     );
+    expect(screen.queryByRole('button', { name: /obra social/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Reimprimir etiquetas' }));
     expect(onEtq).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Imprimir talón' }));

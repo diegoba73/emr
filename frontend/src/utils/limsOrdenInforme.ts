@@ -20,6 +20,19 @@ export const PANELES_ORINA = new Set([
 
 const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_AZ']);
 const MUESTRAS_ORINA = new Set(['ORINA', 'ORINA_24_H']);
+/** Muestras de sangre (preset legacy); no aplican ranking de materiales. */
+const MUESTRAS_SANGRE = new Set([
+  'SUERO',
+  'SANGRE',
+  'SANGRE_EDTA',
+  'PLASMA_CITRATO',
+  'SANGRE_ERITRO',
+  'SANGRE_CITRATO_VSG',
+  'SANGRE_HEPARINA',
+  'SANGRE_HEPARINA_ART',
+  'SANGRE_HEPARINA_VEN',
+  'PLASMA_HEPARINA',
+]);
 
 /**
  * Orden de presentación clínica (talón / resultados / informe).
@@ -71,6 +84,91 @@ export const ORDEN_PRESENTACION_PEDIDO: string[] = [
 export const ORDEN_FORMULARIO_PAPEL = ORDEN_PRESENTACION_PEDIDO;
 
 const ORDEN_PRESENTACION_RANK = new Map(ORDEN_PRESENTACION_PEDIDO.map((c, i) => [c, i]));
+
+/**
+ * Prefijos materiales de pedido: físicos → estudios → celulares → micro → químicos.
+ * Alineado a `PREFIJOS_ORDEN_MATERIAL` en materiales_pedido_catalogo.py.
+ */
+const PREFIJOS_ORDEN_MATERIAL: string[] = [
+  'ASP',
+  'COL',
+  'VISC',
+  'PH',
+  'ESPM',
+  'MIEL',
+  'FE',
+  'CIGEN',
+  'KARI',
+  'CMA',
+  'CALC',
+  'RBC',
+  'NC',
+  'LEU',
+  'RAN',
+  'HTO',
+  'PAN_DIF',
+  'NEUT',
+  'LINF',
+  'MOMA',
+  'EOS',
+  'OTRA',
+  'CRIS',
+  'HEMOS',
+  'CITOL',
+  'CITO',
+  'GLU',
+  'PROT',
+  'ALB',
+  'LDH',
+  'LACT',
+  'ADA',
+  'AMIL',
+  'TG',
+  'CHOL',
+  'QUIL',
+  'BILI',
+  'CREA',
+  'CEA',
+  'B2TR',
+  'BTRA',
+  'FRUC',
+  'SOH',
+  'CALP',
+  'ELAS',
+  'GRAS',
+  'UREA',
+  'CL',
+];
+const PREFIJO_MATERIAL_RANK = new Map(PREFIJOS_ORDEN_MATERIAL.map((p, i) => [p, i]));
+const PREFIJOS_MATERIAL_MATCH = [...PREFIJOS_ORDEN_MATERIAL].sort((a, b) => b.length - a.length);
+
+function prefijoCodigoMaterial(codigo: string): string | null {
+  const c = codigo.toUpperCase();
+  for (const pref of PREFIJOS_MATERIAL_MATCH) {
+    if (c === pref || c.startsWith(`${pref}_`)) return pref;
+  }
+  return null;
+}
+
+function muestraGrupo(grupo: GrupoResultadosOrden): string {
+  const r = grupo.resultados[0];
+  return (r?.tipo_examen_muestra_codigo || '').toUpperCase();
+}
+
+/** Rank materiales (LCR/líquidos); null si sangre/orina/EAB u otro legacy. */
+function rankPresentacionCodigoMaterial(
+  codigo: string,
+  muestra: string
+): number | null {
+  if (!codigo || !codigo.includes('_')) return null;
+  if (MUESTRAS_ORINA.has(muestra) || MUESTRAS_SANGRE.has(muestra)) return null;
+  if (/_(ART|VEN)$/.test(codigo)) return null;
+  const pref = prefijoCodigoMaterial(codigo);
+  if (pref == null) return null;
+  // Sin muestra: solo códigos con forma PREFIX_SUF típica de materiales.
+  if (!muestra && pref === 'COL' && codigo === 'COL_TOT') return null;
+  return PREFIJO_MATERIAL_RANK.get(pref) ?? 9_000;
+}
 
 export function grupoKeyPanel(panelId: number): string {
   return `panel-${panelId}`;
@@ -139,6 +237,11 @@ export function prioridadGrupoDefault(grupo: GrupoResultadosOrden): number {
 
   if (codigo && ORDEN_PRESENTACION_RANK.has(codigo)) {
     return ORDEN_PRESENTACION_RANK.get(codigo)!;
+  }
+
+  const matRank = rankPresentacionCodigoMaterial(codigo, muestraGrupo(grupo));
+  if (matRank != null) {
+    return presentacionLen + matRank;
   }
 
   const base = presentacionLen + 100;

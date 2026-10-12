@@ -1,11 +1,14 @@
 import {
   RESULTADO_NO_CALCULABLE,
+  calcCaIonZeislerMgDl,
+  calcCaIonZeislerMmolL,
   calcClearanceCreatinina,
   calcExcrecionMgDlA24h,
   calcExcrecionPorLitroA24h,
   calcLdlFriedewald,
   calcRac,
   calcularDerivados,
+  esCodigoCalculado,
 } from './calculosDerivados';
 
 describe('calculosDerivados Corte A', () => {
@@ -102,5 +105,19 @@ describe('calculosDerivados Corte A', () => {
     expect(calcularDerivados({ MICROALB: 30, CREA_U: 0 }).RAC?.informe).toBe(
       RESULTADO_NO_CALCULABLE
     );
+  });
+
+  it('Zeisler CA_ION: CA 7.3 + PROT 5.8 → 0.88 mmol/L', () => {
+    expect(calcCaIonZeislerMgDl(7.3, 5.8)).toBe(3.53);
+    expect(calcCaIonZeislerMmolL(7.3, 5.8)).toBe(0.88);
+    const out = calcularDerivados({ CA: 7.3, PROT_T: 5.8 });
+    expect(out.CA_ION?.numerico).toBe(0.88);
+    expect(out.CA_ION?.informe).toBe('0.88');
+    expect(esCodigoCalculado('CA_ION')).toBe(false);
+  });
+
+  it('Zeisler no emite CA_ION si falta insumo', () => {
+    expect(calcularDerivados({ CA: 7.3 }).CA_ION).toBeUndefined();
+    expect(calcularDerivados({ PROT_T: 5.8 }).CA_ION).toBeUndefined();
   });
 });

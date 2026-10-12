@@ -60,17 +60,36 @@ def _asegurar_codigos_panel(solicitud: SolicitudExamen, panel_codigo: str) -> in
     if not faltan:
         return 0
 
+    from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
     from laboratorio.examen_orina_micro import valor_inicial_resultado
+    from laboratorio.material_pedido_orden import tipo_examen_compatible_con_material
+
+    mat = (getattr(solicitud, "material_pedido", None) or "").strip().upper() or None
+    # Insumos de calculados del panel (CREATI en PAN_CLEAR) viajan aunque el
+    # material de la orden sea orina: hacen falta para calcular e informar.
+    insumos_cruzados: set[str] = set()
+    for calc in codigos_panel:
+        for insumo in INSUMOS_POR_CODIGO_CALCULADO.get((calc or "").strip().upper(), ()):
+            insumos_cruzados.add((insumo or "").strip().upper())
+    for calc in existentes:
+        for insumo in INSUMOS_POR_CODIGO_CALCULADO.get(calc, ()):
+            insumos_cruzados.add((insumo or "").strip().upper())
 
     tipos = {
         te.codigo: te
-        for te in TipoExamen.objects.filter(codigo__in=faltan, activo=True)
+        for te in TipoExamen.objects.filter(codigo__in=faltan, activo=True).select_related(
+            "tipo_muestra_requerida"
+        )
     }
     creados = 0
     for codigo in faltan:
         te = tipos.get(codigo)
         if te is None:
             continue
+        # Panel multi-material: no expandir otro material, salvo insumos cruzados.
+        if mat and not tipo_examen_compatible_con_material(te, mat):
+            if (codigo or "").strip().upper() not in insumos_cruzados:
+                continue
         _, was_created = ResultadoExamen.objects.get_or_create(
             solicitud=solicitud,
             tipo_examen=te,
@@ -91,8 +110,11 @@ def asegurar_resultados_panel_hemograma(solicitud: SolicitudExamen) -> int:
 
 
 def _asegurar_insumos_calculados(solicitud: SolicitudExamen) -> int:
-    """Si hay un calculado suelto (p. ej. RAC), crea filas de sus medidos."""
-    from laboratorio.calculos_derivados import codigos_insumos_de_calculados
+    """Si hay un calculado/estimable suelto (RAC, CA_ION), crea filas de insumos."""
+    from laboratorio.calculos_derivados import (
+        codigos_insumos_de_calculados,
+        codigos_insumos_de_overrideables,
+    )
     from laboratorio.examen_orina_micro import valor_inicial_resultado
 
     existentes = {
@@ -101,7 +123,14 @@ def _asegurar_insumos_calculados(solicitud: SolicitudExamen) -> int:
             id__in=solicitud.resultados.values_list("tipo_examen_id", flat=True)
         )
     }
-    faltan = codigos_insumos_de_calculados(existentes)
+    paneles = {
+        (c or "").strip().upper()
+        for c in solicitud.paneles.values_list("codigo", flat=True)
+    }
+    faltan = list(codigos_insumos_de_calculados(existentes))
+    for code in codigos_insumos_de_overrideables(existentes, paneles=paneles):
+        if code not in faltan and code not in existentes:
+            faltan.append(code)
     if not faltan:
         return 0
 

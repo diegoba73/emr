@@ -32,13 +32,13 @@ class TestOrdenUnicaAbierta(TestCase):
             dni=f"4{self.suf[:7]}",
             fecha_nacimiento="1990-01-01",
         )
-        self.tm = TipoMuestra.objects.create(
-            codigo=f"S{self.suf[:4]}",
-            nombre=f"Sangre {self.suf}",
+        self.tm, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO",
+            defaults={"nombre": f"Suero {self.suf}", "activo": True},
         )
-        self.tm_orina = TipoMuestra.objects.create(
-            codigo=f"O{self.suf[:4]}",
-            nombre=f"Orina {self.suf}",
+        self.tm_orina, _ = TipoMuestra.objects.get_or_create(
+            codigo="ORINA",
+            defaults={"nombre": f"Orina {self.suf}", "activo": True},
         )
         self.hep = TipoContenedor.objects.create(
             codigo=f"HEP{self.suf[:4]}",
@@ -79,17 +79,20 @@ class TestOrdenUnicaAbierta(TestCase):
             tipo_resultado="TEXTO",
         )
 
-    def _create(self, examenes_ids):
+    def _create(self, examenes_ids, *, material_pedido="SANGRE", **extra):
         from django.utils import timezone
 
+        body = {
+            "paciente_id": self.pac.id,
+            "examenes_ids": examenes_ids,
+            "origen_solicitud": "AMBULATORIO_CEHTA",
+            "fecha_programada_toma": timezone.localdate().isoformat(),
+            "material_pedido": material_pedido,
+        }
+        body.update(extra)
         return self.client.post(
             "/api/lab/solicitudes/",
-            {
-                "paciente_id": self.pac.id,
-                "examenes_ids": examenes_ids,
-                "origen_solicitud": "AMBULATORIO_CEHTA",
-                "fecha_programada_toma": timezone.localdate().isoformat(),
-            },
+            body,
             format="json",
             HTTP_HOST="localhost",
         )
@@ -102,31 +105,53 @@ class TestOrdenUnicaAbierta(TestCase):
             HTTP_HOST="localhost",
         )
 
-    def test_segunda_orden_merge_misma_numero(self):
+    def test_segunda_orden_mismo_material_mismo_dia_bloquea(self):
         r1 = self._create([self.glu.id])
         self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
         self.assertFalse(r1.data.get("merged"))
-        numero = r1.data["numero"]
         id1 = r1.data["id"]
 
         r2 = self._create([self.crea.id])
-        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
-        self.assertTrue(r2.data.get("merged"))
-        self.assertEqual(r2.data["id"], id1)
-        self.assertEqual(r2.data["numero"], numero)
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
         self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
-        tipos = set(
-            ResultadoExamen.objects.filter(solicitud_id=id1).values_list(
-                "tipo_examen_id", flat=True
-            )
+        self.assertTrue(SolicitudExamen.objects.filter(pk=id1).exists())
+
+    def test_forzar_nueva_orden_omite_merge_y_lock_mismo_dia(self):
+        """Pedido multi-material: N órdenes clínicas el mismo día sin merge."""
+        from django.utils import timezone
+
+        r1 = self._create([self.glu.id])
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        id1 = r1.data["id"]
+
+        r2 = self._create(
+            [self.orina.id],
+            material_pedido="ORINA",
+            forzar_nueva_orden=True,
         )
-        self.assertEqual(tipos, {self.glu.id, self.crea.id})
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
+        self.assertFalse(r2.data.get("merged"))
+        self.assertNotEqual(r2.data["id"], id1)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
+
+        # forzar_nueva_orden no salta anti-dup del mismo material.
+        self._poner_en_proceso(id1)
+        r3 = self._create([self.crea.id], forzar_nueva_orden=True)
+        self.assertEqual(r3.status_code, status.HTTP_400_BAD_REQUEST, r3.data)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
 
     def test_dedup_mismo_examen(self):
         r1 = self._create([self.glu.id])
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
         id1 = r1.data["id"]
-        r2 = self._create([self.glu.id, self.urea.id])
-        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+        self._poner_en_proceso(id1)
+        r2 = self.client.post(
+            f"/api/lab/solicitudes/{id1}/agregar-examenes/",
+            {"examenes_ids": [self.glu.id, self.urea.id]},
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
         self.assertEqual(
             ResultadoExamen.objects.filter(solicitud_id=id1, tipo_examen=self.glu).count(),
             1,
@@ -176,11 +201,11 @@ class TestOrdenUnicaAbierta(TestCase):
             {self.glu.id, self.crea.id},
         )
 
-        # Mismo día: no se puede crear otra mientras hay una en proceso
+        # Mismo material + día: no se puede crear otra mientras hay una activa
         r2 = self._create([self.urea.id])
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
         self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
-        self.assertIn("día de extracción", str(r2.data).lower())
+        self.assertIn("activa", str(r2.data).lower())
 
         # Otro día (mañana): sí se puede
         manana = (timezone.localdate() + timedelta(days=1)).isoformat()
@@ -188,6 +213,7 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.urea.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
                 "fecha_programada_toma": manana,
@@ -210,29 +236,15 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertFalse(orden_esta_abierta(sol))
         self.assertEqual(sol.estado, "PENDIENTE")
         self.assertTrue(sol.muestras.filter(estado="PENDIENTE_TOMA").exists())
-        n_antes = Muestra.objects.filter(solicitud_id=sol_id).count()
 
-        # Orina = otro tubo → se crea tubo PENDIENTE_TOMA en la misma orden
+        # Con etiquetas (PENDIENTE): lab/bio sí pueden agregar.
         r_add = self.client.post(
             f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
-            {"examenes_ids": [self.orina.id]},
+            {"examenes_ids": [self.crea.id]},
             format="json",
             HTTP_HOST="localhost",
         )
         self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
-        self.assertTrue(
-            ResultadoExamen.objects.filter(
-                solicitud_id=sol_id, tipo_examen_id=self.orina.id
-            ).exists()
-        )
-        self.assertEqual(Muestra.objects.filter(solicitud_id=sol_id).count(), n_antes + 1)
-        self.assertTrue(
-            Muestra.objects.filter(
-                solicitud_id=sol_id,
-                tipo_contenedor=self.frasco,
-                estado="PENDIENTE_TOMA",
-            ).exists()
-        )
 
         r_get = self.client.get(
             f"/api/lab/solicitudes/{sol_id}/",
@@ -244,16 +256,22 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertTrue(r_get.data.get("puede_agregar_examenes"))
         self.assertFalse(r_get.data.get("pedido_adicional"))
 
-        # Mismo día con etiquetas pendientes: nueva orden bloqueada (agregar a la existente)
+        # Orina (otro material) el mismo día: permitido.
+        r_orina = self._create([self.orina.id], material_pedido="ORINA")
+        self.assertEqual(r_orina.status_code, status.HTTP_201_CREATED, r_orina.data)
+        # Mismo material + día: nueva orden sangre bloqueada
         r2 = self._create([self.urea.id])
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
-        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
 
     def test_etiquetas_impresas_permiten_agregar_mismo_tubo(self):
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
         r_tom = self._imprimir_etiquetas(sol_id)
         self.assertEqual(r_tom.status_code, status.HTTP_200_OK, getattr(r_tom, "data", r_tom))
+        self._poner_en_proceso(sol_id)
+        # Tubos en EN_PROCESO / recibida para carga
+        Muestra.objects.filter(solicitud_id=sol_id).update(estado="RECIBIDA")
         n_muestras = Muestra.objects.filter(solicitud_id=sol_id).count()
 
         r_add = self.client.post(
@@ -264,8 +282,6 @@ class TestOrdenUnicaAbierta(TestCase):
         )
         self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
         self.assertTrue(r_add.data.get("merged"))
-        self.assertFalse(r_add.data.get("orden_abierta"))
-        self.assertTrue(r_add.data.get("esperando_recepcion"))
         self.assertTrue(r_add.data.get("puede_agregar_examenes"))
         self.assertEqual(
             ResultadoExamen.objects.filter(solicitud_id=sol_id).count(),
@@ -296,6 +312,8 @@ class TestOrdenUnicaAbierta(TestCase):
             Muestra.objects.filter(solicitud_id=sol_id, estado="PENDIENTE_TOMA").count(),
             1,
         )
+        self._poner_en_proceso(sol_id)
+        Muestra.objects.filter(solicitud_id=sol_id).update(estado="RECIBIDA")
 
         r_add = self.client.post(
             f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
@@ -311,12 +329,14 @@ class TestOrdenUnicaAbierta(TestCase):
         )
         self.assertEqual(
             Muestra.objects.filter(solicitud_id=sol_id, estado="PENDIENTE_TOMA").count(),
-            2,
+            1,
         )
 
     def test_agregar_examenes_endpoint_ok(self):
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
+        self._poner_en_proceso(sol_id)
+        Muestra.objects.filter(solicitud_id=sol_id).update(estado="RECIBIDA")
         r_add = self.client.post(
             f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
             {"examenes_ids": [self.crea.id]},
@@ -325,7 +345,6 @@ class TestOrdenUnicaAbierta(TestCase):
         )
         self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
         self.assertTrue(r_add.data.get("merged"))
-        self.assertTrue(r_add.data.get("orden_abierta"))
         self.assertTrue(r_add.data.get("puede_agregar_examenes"))
         self.assertEqual(
             ResultadoExamen.objects.filter(solicitud_id=sol_id).count(),
@@ -341,6 +360,7 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.glu.id],
                 "origen_solicitud": INTERNACION_UCO,
                 "fecha_programada_toma": hoy,
@@ -357,6 +377,7 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.crea.id],
                 "origen_solicitud": INTERNACION_UCO,
                 "fecha_programada_toma": hoy,
@@ -366,7 +387,7 @@ class TestOrdenUnicaAbierta(TestCase):
         )
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
         self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
-        self.assertIn("en proceso", str(r2.data).lower())
+        self.assertIn("activa", str(r2.data).lower())
 
     def test_tras_finalizar_permite_nueva_orden_mismo_dia(self):
         r1 = self._create([self.glu.id])
@@ -395,6 +416,7 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.glu.id],
                 "origen_solicitud": INTERNACION_UCO,
                 "fecha_programada_toma": hoy.isoformat(),
@@ -411,6 +433,7 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.crea.id],
                 "origen_solicitud": INTERNACION_UCO,
                 "fecha_programada_toma": manana.isoformat(),
@@ -468,27 +491,41 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertIn(pan.id, set(sol.paneles.values_list("id", flat=True)))
 
     def test_en_proceso_agrega_tubo_nuevo(self):
+        # Otro contenedor sangre (mismo material) → tubo PENDIENTE_TOMA nuevo.
+        edta = TipoContenedor.objects.create(
+            codigo=f"EDT{self.suf[:4]}",
+            nombre="EDTA OU",
+            activo=True,
+        )
+        hb = TipoExamen.objects.create(
+            codigo=f"HB{self.suf[:4]}",
+            nombre="Hb OU",
+            tipo_muestra_requerida=self.tm,
+            tipo_contenedor=edta,
+            tipo_resultado="NUMERICO",
+        )
         r1 = self._create([self.glu.id])
         sol_id = r1.data["id"]
         self._poner_en_proceso(sol_id)
+        Muestra.objects.filter(solicitud_id=sol_id).update(estado="RECIBIDA")
         n_antes = Muestra.objects.filter(solicitud_id=sol_id).count()
         r_add = self.client.post(
             f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
-            {"examenes_ids": [self.orina.id]},
+            {"examenes_ids": [hb.id]},
             format="json",
             HTTP_HOST="localhost",
         )
         self.assertEqual(r_add.status_code, status.HTTP_200_OK, r_add.data)
         self.assertTrue(
             ResultadoExamen.objects.filter(
-                solicitud_id=sol_id, tipo_examen=self.orina
+                solicitud_id=sol_id, tipo_examen=hb
             ).exists()
         )
         self.assertEqual(Muestra.objects.filter(solicitud_id=sol_id).count(), n_antes + 1)
         self.assertTrue(
             Muestra.objects.filter(
                 solicitud_id=sol_id,
-                tipo_contenedor=self.frasco,
+                tipo_contenedor=edta,
                 estado="PENDIENTE_TOMA",
             ).exists()
         )
@@ -589,7 +626,8 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
-                "examenes_ids": [self.orina.id],
+                "material_pedido": "SANGRE",
+                "examenes_ids": [],
                 "paneles_ids": [pan_a.id, pan_b.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
                 "fecha_programada_toma": timezone.localdate().isoformat(),
@@ -616,7 +654,6 @@ class TestOrdenUnicaAbierta(TestCase):
         self.assertNotIn(self.glu.id, tipos)
         self.assertIn(self.crea.id, tipos)
         self.assertIn(self.urea.id, tipos)
-        self.assertIn(self.orina.id, tipos)
         sol = SolicitudExamen.objects.get(pk=sol_id)
         self.assertNotIn(pan_a.id, set(sol.paneles.values_list("id", flat=True)))
         self.assertIn(pan_b.id, set(sol.paneles.values_list("id", flat=True)))
@@ -630,6 +667,7 @@ class TestOrdenUnicaAbierta(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [],
                 "paneles_ids": [pan_a.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
@@ -693,9 +731,9 @@ class TestRepeticionControl(TestCase):
             dni=f"6{self.suf[:7]}",
             fecha_nacimiento="1988-01-01",
         )
-        self.tm = TipoMuestra.objects.create(
-            codigo=f"RC{self.suf[:4]}",
-            nombre=f"Sangre RC {self.suf}",
+        self.tm, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO",
+            defaults={"nombre": f"Suero RC {self.suf}", "activo": True},
         )
         self.trop = TipoExamen.objects.create(
             codigo=f"TRP{self.suf[:4]}",
@@ -729,6 +767,7 @@ class TestRepeticionControl(TestCase):
             estado="INFORMADO_PARCIAL",
             origen_solicitud="AMBULATORIO_CEHTA",
             fecha_programada_toma=self.hoy,
+            material_pedido="SANGRE",
         )
         ResultadoExamen.objects.create(
             solicitud=sol,
@@ -778,6 +817,7 @@ class TestRepeticionControl(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.trop.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
                 "fecha_programada_toma": self.hoy.isoformat(),
@@ -803,6 +843,7 @@ class TestRepeticionControl(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.trop.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
                 "fecha_programada_toma": self.hoy.isoformat(),
@@ -812,7 +853,7 @@ class TestRepeticionControl(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
         detail = r.data if isinstance(r.data, str) else str(r.data)
-        self.assertIn("pendiente o en proceso", detail)
+        self.assertIn("activa", detail.lower())
 
     def test_create_rechaza_ensayo_no_informado(self):
         self._create_parcial_con_trop_informada()
@@ -820,6 +861,7 @@ class TestRepeticionControl(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.crea.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
                 "fecha_programada_toma": self.hoy.isoformat(),
@@ -836,6 +878,7 @@ class TestRepeticionControl(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.trop.id],
                 "paneles_ids": [self.panel.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
@@ -855,6 +898,7 @@ class TestRepeticionControl(TestCase):
             "/api/lab/solicitudes/",
             {
                 "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
                 "examenes_ids": [self.urea.id],
                 "origen_solicitud": "AMBULATORIO_CEHTA",
                 "fecha_programada_toma": self.hoy.isoformat(),

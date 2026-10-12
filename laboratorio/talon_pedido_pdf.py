@@ -2,9 +2,11 @@
 Talón PDF de respaldo (hoja común) para pedidos LIMS clínico y microbiología.
 
 Formato físico: un talón por ORDEN (no por tubo). Lista completa de paneles
-y exámenes sueltos (sin expandir los componentes de cada perfil). Hasta 15
-ítems por columna; si hay más, siguen en la columna siguiente (y página
-siguiente si no caben más columnas).
+y exámenes sueltos (sin expandir los componentes de cada perfil).
+
+El contenido de la orden queda en la **mitad superior** de la hoja A4. Los
+exámenes van en columnas: si no caben en la altura disponible hasta la mitad,
+siguen en la columna siguiente (y en otra página si se agotan las columnas).
 No muta estado ni FSM.
 """
 from __future__ import annotations
@@ -27,12 +29,17 @@ from laboratorio.models_microbiologia import EstudioMicrobiologia
 PAGE_W, PAGE_H = A4
 MARGIN_X = 12 * mm
 MARGIN_Y = 10 * mm
-# Pie con fecha de generación.
+# El talón no baja de la mitad de la hoja.
+HALF_PAGE_Y = PAGE_H / 2
+# Pie con fecha de generación (zona inferior; no invade el talón).
 FOOTER_RESERVE = 10 * mm
-# Lista de paneles/exámenes: como máximo 15 por columna; si hay más, otra columna.
+# Fallback / tests del splitter (el dibujo usa filas según altura real).
 MAX_EXAMENES_POR_COLUMNA = 15
 # En A4 caben hasta 3 columnas legibles; el resto sigue en la página siguiente.
 MAX_COLUMNAS_POR_PAGINA = 3
+# Exámenes: 50% más grandes que el tamaño histórico (8 pt → 12 pt).
+EXAMEN_FONT_SIZE = 12
+EXAMEN_LINE_H = 4.6 * mm * 0.92 * 1.5
 
 
 def nombre_archivo_talon_solicitud(solicitud: SolicitudExamen) -> str:
@@ -125,20 +132,33 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
     """Paneles/perfiles como ítem único + exámenes sueltos (sin componentes del panel).
 
     Orden: ORDEN_PRESENTACION_PEDIDO; orinas al final (orina completa última).
+    Si hay tomas en horarios distintos, anota la F. extracción del material de cada ítem.
     """
+    from laboratorio.orden_cabecera import (
+        fecha_extraccion_de_tipo_examen_dt,
+        fechas_extraccion_distintas_en_orden,
+        formatear_fecha_extraccion,
+    )
     from laboratorio.orden_grupos_informe import PANELES_ORINA, CODIGOS_ORINA_SUELTOS, MUESTRAS_ORINA
 
-    items: list[tuple[str, str, bool]] = []  # (nombre, codigo, es_orina)
+    # (nombre, codigo, es_orina, tipo_examen_ref)
+    items: list[tuple[str, str, bool, object | None]] = []
     seen: set[str] = set()
+    muestras = list(solicitud.muestras.all())
+    anotar_ext = fechas_extraccion_distintas_en_orden(solicitud, muestras=muestras)
+
     paneles = list(solicitud.paneles.all().prefetch_related("tipos_examen"))
     componentes_panel: set[int] = set()
     for panel in paneles:
-        componentes_panel.update(te.pk for te in panel.tipos_examen.all())
+        tipos_panel = list(panel.tipos_examen.all())
+        componentes_panel.update(te.pk for te in tipos_panel)
         codigo = (panel.codigo or "").strip().upper()
         n = (panel.nombre or panel.codigo or "").strip()
         if n and n not in seen:
             seen.add(n)
-            items.append((n, codigo, codigo in PANELES_ORINA))
+            # Representante del panel para resolver tubo (hemograma/orina/química).
+            te_ref = tipos_panel[0] if tipos_panel else None
+            items.append((n, codigo, codigo in PANELES_ORINA, te_ref))
 
     for te in solicitud.tipos_examen.select_related("tipo_muestra_requerida").all():
         if te.pk in componentes_panel:
@@ -154,7 +174,7 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
             else ""
         )
         es_orina = codigo in CODIGOS_ORINA_SUELTOS or muestra in MUESTRAS_ORINA
-        items.append((n, codigo, es_orina))
+        items.append((n, codigo, es_orina, te))
 
     if not items:
         for res in solicitud.resultados.select_related(
@@ -174,10 +194,23 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
                 else ""
             )
             es_orina = codigo in CODIGOS_ORINA_SUELTOS or muestra in MUESTRAS_ORINA
-            items.append((n, codigo, es_orina))
+            items.append((n, codigo, es_orina, te))
 
     items.sort(key=lambda it: _rank_presentacion_item(it[1], es_orina=it[2], nombre=it[0]))
-    return [n for n, _c, _o in items]
+
+    out: list[str] = []
+    for nombre, _codigo, _orina, te_ref in items:
+        label = nombre
+        if anotar_ext and te_ref is not None:
+            ft = formatear_fecha_extraccion(
+                fecha_extraccion_de_tipo_examen_dt(
+                    te_ref, solicitud, muestras=muestras
+                )
+            )
+            if ft:
+                label = f"{nombre} · ext. {ft}"
+        out.append(label)
+    return out
 
 
 def _lugar_estudio_micro(estudio: EstudioMicrobiologia) -> str:
@@ -232,6 +265,7 @@ class TalonHalfData:
     examenes: list[str]
     codigo_barra: str
     tubo_label: str = ""
+    fecha_solicitud: str = ""
     fecha_extraccion: str = ""
 
 
@@ -255,7 +289,25 @@ def columnas_examenes(
     return [items[i : i + max_por_columna] for i in range(0, len(items), max_por_columna)]
 
 
-def _max_chars_columna(c: canvas.Canvas, col_w: float, font: str = "Helvetica", size: float = 8) -> int:
+def filas_examenes_hasta_mitad(
+    list_top: float,
+    *,
+    exam_line: float = EXAMEN_LINE_H,
+    half_y: float = HALF_PAGE_Y,
+) -> int:
+    """Cuántas filas de examen caben entre ``list_top`` y la mitad de la hoja."""
+    disponible = list_top - half_y
+    if disponible <= 0 or exam_line <= 0:
+        return 1
+    return max(1, int(disponible // exam_line))
+
+
+def _max_chars_columna(
+    c: canvas.Canvas,
+    col_w: float,
+    font: str = "Helvetica",
+    size: float = EXAMEN_FONT_SIZE,
+) -> int:
     """Estima cuántos caracteres entran en el ancho de columna (bullet + margen)."""
     usable = max(col_w - 4 * mm, 10 * mm)
     # Aproximación: medir "M" y acotar.
@@ -264,21 +316,22 @@ def _max_chars_columna(c: canvas.Canvas, col_w: float, font: str = "Helvetica", 
 
 
 def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
-    """Dibuja el talón de una orden; exámenes en columnas (máx. 15 c/u)."""
+    """Dibuja el talón (mitad superior); exámenes en columnas según altura."""
     line = 4.6 * mm
-    exam_line = line * 0.92
-    examenes = data.examenes or ["—"]
-    cols_all = columnas_examenes(examenes)
+    exam_line = EXAMEN_LINE_H
+    remaining = list(data.examenes or ["—"])
     page_idx = 0
-    col_offset = 0
 
-    while col_offset < len(cols_all):
+    while remaining or page_idx == 0:
         if page_idx > 0:
             c.showPage()
         y = PAGE_H - MARGIN_Y
         x = MARGIN_X
 
-        c.setFont("Helvetica-Bold", 11)
+        # Título + Pedido + Paciente: mismo tamaño/formato (Helvetica-Bold 11).
+        title_size = 11
+        title_line = line * 1.15
+        c.setFont("Helvetica-Bold", title_size)
         if page_idx == 0:
             c.drawString(x, y, "TALÓN — LABORATORIO (por orden)")
         else:
@@ -290,19 +343,19 @@ def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
         c.setFillGray(0)
         y -= line * 1.05
 
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(x, y, _trunc(data.titulo, 70))
-        y -= line
-        c.setFont("Helvetica", 9)
+        c.setFont("Helvetica-Bold", title_size)
         pedido = f"Pedido: {_texto(data.numero_pedido)}"
         if data.tubo_label:
-            pedido = f"{pedido}  ·  {data.tubo_label}"
+            pedido = f"{pedido} · {data.tubo_label}"
         if page_idx > 0:
-            pedido = f"{pedido}  ·  pág. {page_idx + 1}"
-        c.drawString(x, y, _trunc(pedido, 95))
-        y -= line * 1.15
+            pedido = f"{pedido} · pág. {page_idx + 1}"
+        c.drawString(x, y, _trunc(pedido, 72))
+        y -= title_line
 
         if page_idx == 0:
+            c.setFont("Helvetica-Bold", title_size)
+            c.drawString(x, y, _trunc(f"Paciente: {_texto(data.paciente_nombre)}", 72))
+            y -= title_line * 1.1
 
             def _campo(label: str, value: str) -> None:
                 nonlocal y
@@ -312,38 +365,45 @@ def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
                 c.drawString(x + 32 * mm, y, _trunc(value, 78))
                 y -= line
 
-            _campo("Paciente", data.paciente_nombre)
             _campo("DNI", data.dni)
             _campo("Lugar", data.lugar)
             _campo("Médico", data.medico)
+            _campo("F. solicitud", data.fecha_solicitud or "—")
             _campo("F. extracción", data.fecha_extraccion or "—")
             _campo("Código", data.codigo_barra or "(sin código aún)")
             y -= line * 0.25
 
-        c.setFont("Helvetica-Bold", 8.5)
+        c.setFont("Helvetica-Bold", 9)
         if page_idx == 0:
             c.drawString(x, y, "Exámenes / estudios:")
         else:
             c.drawString(x, y, "Exámenes / estudios (continuación):")
         y -= line
 
-        page_cols = cols_all[col_offset : col_offset + MAX_COLUMNAS_POR_PAGINA]
+        list_top = y
+        max_rows = filas_examenes_hasta_mitad(list_top, exam_line=exam_line)
+        cupo_pagina = max_rows * MAX_COLUMNAS_POR_PAGINA
+        page_items = remaining[:cupo_pagina]
+        remaining = remaining[cupo_pagina:]
+        page_cols = columnas_examenes(page_items, max_por_columna=max_rows)
         n_cols = max(1, len(page_cols))
         usable_w = PAGE_W - 2 * MARGIN_X
         col_w = usable_w / n_cols
-        max_chars = _max_chars_columna(c, col_w)
-        c.setFont("Helvetica", 8)
-        list_top = y
+        max_chars = _max_chars_columna(c, col_w, size=EXAMEN_FONT_SIZE)
+        c.setFont("Helvetica", EXAMEN_FONT_SIZE)
         for ci, col_items in enumerate(page_cols):
             cx = MARGIN_X + ci * col_w
             cy = list_top
             for item in col_items:
+                if cy < HALF_PAGE_Y:
+                    break
                 c.drawString(cx + 1.5 * mm, cy, f"• {_trunc(item, max_chars)}")
                 cy -= exam_line
 
         _draw_footer(c)
-        col_offset += len(page_cols)
         page_idx += 1
+        if not remaining:
+            break
 
 
 def _render_talones_pdf(talones: list[TalonHalfData]) -> bytes:
@@ -387,7 +447,10 @@ def construir_talon_solicitud(solicitud: SolicitudExamen) -> TalonHalfData:
         )
         .get(pk=solicitud.pk)
     )
-    from laboratorio.orden_cabecera import fecha_extraccion_display
+    from laboratorio.orden_cabecera import (
+        fecha_extraccion_display,
+        fecha_solicitud_display,
+    )
 
     pac_nombre, dni = _fmt_paciente(sol.paciente)
     medico = _fmt_medico(sol.medico_interno)
@@ -411,6 +474,7 @@ def construir_talon_solicitud(solicitud: SolicitudExamen) -> TalonHalfData:
         examenes=examenes,
         codigo_barra=_codigo_barra_orden(muestras),
         tubo_label=tubo_label or ("Sin tubos generados aún" if not muestras else ""),
+        fecha_solicitud=fecha_solicitud_display(sol),
         fecha_extraccion=fecha_extraccion_display(sol),
     )
 
@@ -436,8 +500,11 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
 
     pac_nombre, dni = _fmt_paciente(est.paciente)
     codigo = (est.codigo_barra or est.numero or "").strip()
+    fecha_sol = formatear_fecha_extraccion(getattr(est, "created_at", None))
     fecha_ext = formatear_fecha_extraccion(
-        getattr(est, "fecha_inicio", None) or getattr(est, "created_at", None)
+        getattr(est, "fecha_inicio", None)
+        or getattr(est, "fecha_programada_toma", None)
+        or getattr(est, "created_at", None)
     )
     talon = TalonHalfData(
         titulo="Pedido microbiología — talón por orden",
@@ -449,6 +516,7 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
         examenes=_examenes_micro(est),
         codigo_barra=codigo,
         tubo_label="Cultivo",
+        fecha_solicitud=fecha_sol or "—",
         fecha_extraccion=fecha_ext or "—",
     )
     return _render_talones_pdf([talon])

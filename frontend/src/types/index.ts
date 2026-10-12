@@ -495,6 +495,8 @@ export interface PacienteTimelineEvent {
   title: string;
   subtitle?: string | null;
   date: string;
+  /** Líneas de fecha ya etiquetadas (p. ej. Solicitud / Extracción sangre|orina). */
+  date_lines?: string[] | null;
   critical?: boolean;
   nested?: boolean;
   episode_group_id?: string | null;
@@ -616,6 +618,7 @@ export interface ConsultaSolicitudLabResumen {
   numero?: string | null;
   estado: string;
   fecha_solicitud: string;
+  material_pedido?: string;
   tipos_examen?: number[];
   tipos_examen_nombres: string[];
   paneles_nombres: string[];
@@ -624,10 +627,25 @@ export interface ConsultaSolicitudLabResumen {
   resultados: ConsultaResultadoLabResumen[];
 }
 
+export interface ConsultaEstudioMicroResumen {
+  id: number;
+  numero?: string | null;
+  estado: string;
+  estado_general: string;
+  fecha_solicitud?: string | null;
+  material_pedido?: string;
+  tipo_cultivo_nombre?: string | null;
+  tipo_muestra_micro_nombre?: string | null;
+  fecha_programada_toma?: string | null;
+  tiene_informe_preliminar: boolean;
+  tiene_informe_final: boolean;
+}
+
 export interface ConsultaDetalle extends Consulta {
   archivos?: ConsultaArchivoResumen[];
   estudios_complementarios?: ConsultaEstudioResumen[];
   solicitudes_laboratorio?: ConsultaSolicitudLabResumen[];
+  estudios_microbiologia?: ConsultaEstudioMicroResumen[];
 }
 
 export interface DiagnosticoCIE10 extends BaseModel {

@@ -2,7 +2,7 @@
 PDF de informe microbiológico clínico — generación en memoria (formato ICPL).
 
 Vista derivada. No modifica estado ni persiste archivos.
-Requiere informe FINAL en estado EMITIDO o VALIDADO.
+Preferencia: FINAL EMITIDO/VALIDADO; si no hay, PRELIMINAR EMITIDO.
 """
 from __future__ import annotations
 
@@ -54,13 +54,33 @@ def informe_final_entregable(estudio: EstudioMicrobiologia) -> InformeMicrobiolo
     )
 
 
+def informe_preliminar_entregable(estudio: EstudioMicrobiologia) -> InformeMicrobiologia | None:
+    return (
+        InformeMicrobiologia.objects.filter(
+            estudio_id=estudio.pk,
+            tipo="PRELIMINAR",
+            estado="EMITIDO",
+        )
+        .order_by("-fecha_emision", "-pk")
+        .first()
+    )
+
+
+def informe_vigente_para_pdf(estudio: EstudioMicrobiologia) -> InformeMicrobiologia | None:
+    """FINAL entregable si existe; si no, PRELIMINAR EMITIDO."""
+    final = informe_final_entregable(estudio)
+    if final is not None:
+        return final
+    return informe_preliminar_entregable(estudio)
+
+
 def assert_estudio_puede_generar_pdf(estudio: EstudioMicrobiologia) -> InformeMicrobiologia:
     if estudio.estado == "CANCELADO":
         raise InformeMicroPdfError("El estudio está cancelado.")
-    informe = informe_final_entregable(estudio)
+    informe = informe_vigente_para_pdf(estudio)
     if informe is None:
         raise InformeMicroPdfError(
-            "Se requiere un informe FINAL emitido o validado para generar el PDF."
+            "Se requiere un informe FINAL emitido/validado o un PRELIMINAR emitido."
         )
     return informe
 
@@ -130,23 +150,21 @@ def _protocolo(estudio: EstudioMicrobiologia) -> str:
 
 def preparar_contexto_encabezado_micro(estudio: EstudioMicrobiologia) -> dict[str, Any]:
     paciente = estudio.paciente
-    fecha_ref = (
-        estudio.fecha_cierre
-        or estudio.fecha_inicio
-        or getattr(estudio, "created_at", None)
-        or timezone.now()
-    )
+    fecha_solicitud = getattr(estudio, "created_at", None) or timezone.now()
     hc = str(estudio.consulta_hc_id) if estudio.consulta_hc_id else "—"
     from laboratorio.orden_cabecera import formatear_fecha_extraccion
 
     fecha_ext = formatear_fecha_extraccion(
-        estudio.fecha_inicio or getattr(estudio, "created_at", None)
+        estudio.fecha_inicio
+        or getattr(estudio, "fecha_programada_toma", None)
+        or getattr(estudio, "created_at", None)
     )
     return {
         "protocolo": _protocolo(estudio),
         "solicitado_por": _medico_label(estudio),
         "derivante": "Microbiología",
-        "fecha": formatear_fecha_larga(fecha_ref),
+        # Misma etiqueta de cabecera ICPL: "F. solicitud".
+        "fecha": formatear_fecha_larga(fecha_solicitud),
         "fecha_extraccion": fecha_ext or "—",
         "paciente": formatear_paciente_apellido_nombre(paciente) if paciente else "—",
         "historia_clinica": hc,
@@ -163,7 +181,16 @@ def _construir_story_micro(
     esc = escape_texto_informe
     story: list[Any] = []
 
-    if estudio.estado not in ("VALIDADO", "INFORMADO"):
+    es_preliminar = getattr(informe, "tipo", None) == "PRELIMINAR"
+    if es_preliminar:
+        story.append(
+            Paragraph(
+                "INFORME PRELIMINAR — no es el informe definitivo del estudio.",
+                styles["partial_banner"],
+            )
+        )
+        story.append(Spacer(1, 0.15 * cm))
+    elif estudio.estado not in ("VALIDADO", "INFORMADO"):
         story.append(
             Paragraph(
                 "INFORME EMITIDO — pendiente de validación bioquímica / cierre.",
@@ -173,12 +200,23 @@ def _construir_story_micro(
         story.append(Spacer(1, 0.15 * cm))
 
     story.append(Paragraph("ESTUDIO MICROBIOLÓGICO", styles["panel"]))
+    from laboratorio.orden_cabecera import formatear_fecha_extraccion
+
+    fecha_sol = formatear_fecha_extraccion(getattr(estudio, "created_at", None)) or "—"
+    fecha_ext = formatear_fecha_extraccion(
+        estudio.fecha_inicio
+        or getattr(estudio, "fecha_programada_toma", None)
+        or getattr(estudio, "created_at", None)
+    ) or "—"
+    tipo_lbl = "PRELIMINAR" if es_preliminar else "FINAL"
     meta_lines = [
         f"Número: {esc(estudio.numero or f'#{estudio.pk}')}",
         f"Cultivo: {esc(_cultivo_label(estudio))}",
         f"Muestra: {esc(_muestra_label(estudio))}",
+        f"Fecha solicitud: {esc(fecha_sol)}",
+        f"Fecha extracción: {esc(fecha_ext)}",
         f"Estado estudio: {esc(estudio.get_estado_display())}",
-        f"Informe: FINAL — {esc(informe.get_estado_display())}",
+        f"Informe: {tipo_lbl} — {esc(informe.get_estado_display())}",
     ]
     for line in meta_lines:
         story.append(Paragraph(line, styles["exam_meta"]))

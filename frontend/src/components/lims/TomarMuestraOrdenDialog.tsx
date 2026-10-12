@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -23,19 +23,27 @@ export interface TomarMuestraOrdenDialogProps {
   orden: SolicitudExamenLims;
   muestrasExistentes?: MuestraTransaccional[];
   onClose: () => void;
+  /** Tubos creados / orden actualizada (detalle). No implica «Esperando recepción» en UI. */
+  onPrepared?: (orden: SolicitudExamenLims) => void;
+  /**
+   * Todas las etiquetas del diálogo se imprimieron.
+   * En Pendientes: recién ahí pasar a «Esperando recepción».
+   */
   onSuccess: (orden: SolicitudExamenLims) => void;
   origenOrden?: OrigenParaLugarExtraccion | null;
 }
 
 /**
  * «Imprimir etiquetas»: crea tubos (PENDIENTE_TOMA) y abre ZPL.
- * No registra toma ni pasa la orden a EN_PROCESO — queda en esperando recepción.
+ * No registra toma ni pasa la orden a EN_PROCESO.
+ * La UI de Pendientes solo pasa a «Esperando recepción» tras imprimir la última etiqueta.
  */
 const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   open,
   orden,
   muestrasExistentes = [],
   onClose,
+  onPrepared,
   onSuccess,
   origenOrden = null,
 }) => {
@@ -44,6 +52,8 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   const [sinTubosCatalogo, setSinTubosCatalogo] = useState(false);
   const [zplOpen, setZplOpen] = useState(false);
   const [ordenLista, setOrdenLista] = useState<SolicitudExamenLims | null>(null);
+  const ordenPreparadaRef = useRef<SolicitudExamenLims | null>(null);
+  const recepcionNotificadaRef = useRef(false);
 
   const origenEfectivo: OrigenParaLugarExtraccion = origenOrden || {
     origen_solicitud: orden.origen_solicitud,
@@ -60,6 +70,8 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
     if (!open) {
       setZplOpen(false);
       setOrdenLista(null);
+      ordenPreparadaRef.current = null;
+      recepcionNotificadaRef.current = false;
       setPrepError(null);
       setSinTubosCatalogo(false);
       setPreparing(false);
@@ -86,9 +98,10 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
 
         const updated = await postTomarMuestraOrden(orden.id, {});
         if (cancelled) return;
+        ordenPreparadaRef.current = updated;
         setOrdenLista(updated);
         setZplOpen(true);
-        onSuccess(updated);
+        onPrepared?.(updated);
       } catch (e) {
         if (!cancelled) {
           const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden);
@@ -106,9 +119,23 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir / cambiar orden
   }, [open, orden.id]);
 
+  const notifyRecepcion = () => {
+    if (recepcionNotificadaRef.current) return;
+    const o = ordenPreparadaRef.current || ordenLista || orden;
+    recepcionNotificadaRef.current = true;
+    onSuccess(o);
+  };
+
   const handleCloseAll = () => {
+    // Tubos ya creados ⇒ en backend es «esperando recepción». Si cierra sin imprimir
+    // todas (p. ej. sin agente USB), igual refresca la pestaña.
+    const pendingNotify = Boolean(ordenPreparadaRef.current);
     setZplOpen(false);
     setOrdenLista(null);
+    if (pendingNotify) {
+      notifyRecepcion();
+    }
+    ordenPreparadaRef.current = null;
     onClose();
   };
 
@@ -158,6 +185,7 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
         solicitudNumero={(ordenLista || orden).numero}
         origenOrden={origenEfectivo}
         onClose={handleCloseAll}
+        onAllPrinted={notifyRecepcion}
       />
     </>
   );

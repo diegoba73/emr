@@ -453,7 +453,7 @@ class _InformeIcplDoc(BaseDocTemplate):
         row("Solicitante", ctx["solicitado_por"], doc.leftMargin + 0.25 * cm, y)
         row("Historia clínica", ctx["historia_clinica"], mid_x, y)
         y -= row_step
-        row("Fecha informe", ctx["fecha"], doc.leftMargin + 0.25 * cm, y)
+        row("F. solicitud", ctx["fecha"], doc.leftMargin + 0.25 * cm, y)
         row("Documento", ctx["documento"], mid_x, y)
         y -= row_step
         row("F. extracción", ctx.get("fecha_extraccion") or "—", doc.leftMargin + 0.25 * cm, y)
@@ -616,9 +616,16 @@ def _celda_examen(
     styles: dict[str, ParagraphStyle],
     *,
     omitir_metodo: bool = False,
+    fecha_extraccion: str | None = None,
 ) -> list[Any]:
     nombre = _escape((res.tipo_examen.nombre or "").upper())
     parts: list[Any] = [Paragraph(nombre, styles["exam_title"])]
+
+    ext = (fecha_extraccion or "").strip()
+    if ext and ext != "—":
+        parts.append(
+            Paragraph(f"Fecha de Extracción: {_escape(ext)}", styles["exam_meta"])
+        )
 
     if not omitir_metodo:
         metodo = _metodo_texto(res)
@@ -660,11 +667,17 @@ def _fila_resultado(
     *,
     valores_por_codigo: dict[str, Any] | None = None,
     omitir_metodo: bool = False,
+    fecha_extraccion: str | None = None,
 ) -> Table:
     valor, unidad = _valor_y_unidad(res, valores_por_codigo=valores_por_codigo)
     ref = _referencia_texto(res) or "—"
 
-    left_parts = _celda_examen(res, styles, omitir_metodo=omitir_metodo)
+    left_parts = _celda_examen(
+        res,
+        styles,
+        omitir_metodo=omitir_metodo,
+        fecha_extraccion=fecha_extraccion,
+    )
     left = Table(
         [[p] for p in left_parts],
         colWidths=[COL_EXAMEN - 0.15 * cm],
@@ -731,10 +744,12 @@ def _bloque_panel(
     *,
     valores_por_codigo: dict[str, Any] | None = None,
     mostrar_encabezado_columnas: bool = True,
+    fechas_extraccion_por_resultado: dict[int, str] | None = None,
 ) -> list[Any]:
     """Bloque de resultados. Encabezado de sección solo si es perfil/panel."""
     flow: list[Any] = []
     es_perfil = bool(grupo.panel_codigo)
+    fechas_ext = fechas_extraccion_por_resultado or {}
 
     if es_perfil:
         panel_header = Table(
@@ -790,6 +805,7 @@ def _bloque_panel(
                 styles,
                 valores_por_codigo=vals,
                 omitir_metodo=bool(metodo_panel),
+                fecha_extraccion=fechas_ext.get(res.pk),
             )
         )
 
@@ -852,6 +868,17 @@ def construir_story_icpl(
     conclusion_hemo_insertada = False
     vals_global = _valores_por_codigo(list(resultados))
 
+    from laboratorio.orden_cabecera import fecha_extraccion_de_resultado_display
+
+    try:
+        muestras_orden = list(solicitud.muestras.all())
+    except Exception:
+        muestras_orden = []
+    fechas_ext_por_res = {
+        r.pk: fecha_extraccion_de_resultado_display(r, muestras=muestras_orden)
+        for r in resultados
+    }
+
     if not grupos:
         story.append(Paragraph("Sin resultados registrados.", styles["empty"]))
     else:
@@ -871,12 +898,22 @@ def construir_story_icpl(
                 from laboratorio.proteinograma_pdf import bloque_proteinograma
 
                 story.extend(
-                    bloque_proteinograma(grupo, styles, valores_por_codigo=vals_global)
+                    bloque_proteinograma(
+                        grupo,
+                        styles,
+                        valores_por_codigo=vals_global,
+                        fechas_extraccion_por_resultado=fechas_ext_por_res,
+                    )
                 )
                 needs_suelto_header = True
             elif es_perfil:
                 story.extend(
-                    _bloque_panel(grupo, styles, valores_por_codigo=vals_global)
+                    _bloque_panel(
+                        grupo,
+                        styles,
+                        valores_por_codigo=vals_global,
+                        fechas_extraccion_por_resultado=fechas_ext_por_res,
+                    )
                 )
                 needs_suelto_header = True
             else:
@@ -886,6 +923,7 @@ def construir_story_icpl(
                         styles,
                         valores_por_codigo=vals_global,
                         mostrar_encabezado_columnas=needs_suelto_header,
+                        fechas_extraccion_por_resultado=fechas_ext_por_res,
                     )
                 )
                 needs_suelto_header = False

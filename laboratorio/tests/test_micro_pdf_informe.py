@@ -173,6 +173,51 @@ class TestMicroPdfInforme(TestCase):
         r = self.client.get(self._url_pdf())
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
+    def _emitir_preliminar(self, texto="Preliminar: cocos Gram positivos."):
+        self.client.force_authenticate(self.bio)
+        r = self.client.post(
+            "/api/lab/microbiologia/informes/",
+            {
+                "estudio_id": self.ctx["estudio"].pk,
+                "tipo": "PRELIMINAR",
+                "texto": texto,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.content)
+        iid = r.json()["id"]
+        r2 = self.client.post(
+            f"/api/lab/microbiologia/informes/{iid}/emitir/",
+            {"texto": texto},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
+        return iid
+
+    def test_roles_parcial_descargan_pdf_preliminar_emitido(self):
+        self._emitir_preliminar()
+        for user in (self.lab, self.med_user):
+            self.client.force_authenticate(user)
+            r = self.client.get(self._url_pdf())
+            self.assertEqual(
+                r.status_code,
+                status.HTTP_200_OK,
+                msg=f"rol={user.rol}",
+            )
+            self.assertTrue(r.content.startswith(b"%PDF"))
+
+    def test_preliminar_deja_de_descargarse_tras_final_validado(self):
+        prelim_id = self._emitir_preliminar()
+        self._validar_final()
+        from laboratorio.models_microbiologia import InformeMicrobiologia
+
+        prelim = InformeMicrobiologia.objects.get(pk=prelim_id)
+        self.assertEqual(prelim.estado, "ANULADO")
+        self.client.force_authenticate(self.med_user)
+        r = self.client.get(self._url_pdf())
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertTrue(r.content.startswith(b"%PDF"))
+
     def test_medico_vinculado_descarga_pdf_validado(self):
         self._validar_final()
         self.client.force_authenticate(self.med_user)

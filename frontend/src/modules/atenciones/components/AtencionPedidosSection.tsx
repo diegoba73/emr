@@ -1,7 +1,8 @@
 import React from 'react';
-import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Divider, Typography } from '@mui/material';
 import ConsultaPedidosPanel from './ConsultaPedidosPanel';
 import { useConsultaHcForAtencion } from '../hooks/useConsultaHcForAtencion';
+import PacienteLabsAccesoPanel from '../../../components/lims/PacienteLabsAccesoPanel';
 
 interface AtencionPedidosSectionProps {
   atencionId: number;
@@ -72,15 +73,27 @@ const AtencionPedidosSection: React.FC<AtencionPedidosSectionProps> = ({
   }
 
   return (
-    <ConsultaPedidosPanel
-      consultaHcId={consultaHcId}
-      pacienteId={pacienteId}
-      canEdit={canEdit}
-      variant={variant}
-      showLab={showLab}
-      showEstudios={showEstudios}
-      key={`pedidos-${consultaHcId}-${variant}-${showLab}-${showEstudios}`}
-    />
+    <Box>
+      <ConsultaPedidosPanel
+        consultaHcId={consultaHcId}
+        pacienteId={pacienteId}
+        canEdit={canEdit}
+        variant={variant}
+        showLab={showLab}
+        showEstudios={showEstudios}
+        key={`pedidos-${consultaHcId}-${variant}-${showLab}-${showEstudios}`}
+      />
+      {pacienteId && variant === 'full' && (
+        <Box sx={{ mt: 2 }}>
+          <Divider sx={{ mb: 1.5 }} />
+          <PacienteLabsAccesoPanel
+            pacienteId={pacienteId}
+            backPath="/turnos"
+            backLabel="← Volver a turnos"
+          />
+        </Box>
+      )}
+    </Box>
   );
 };
 

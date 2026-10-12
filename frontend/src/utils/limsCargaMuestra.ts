@@ -177,15 +177,16 @@ export function parseValorNumerico(raw: string): number | string | undefined {
 }
 
 export function draftRowHasValue(
-  row: DraftCargaRow,
+  row: DraftCargaRow | Partial<DraftCargaRow> | null | undefined,
   te?: LimsTipoExamen | null,
   codigo?: string | null
 ): boolean {
+  const safe = normalizeDraftRow(row);
   const c = te?.codigo ?? codigo ?? '';
   if (usesTicketEntry(te, c)) {
-    return !!row.valor_sysmex.trim();
+    return !!safe.valor_sysmex.trim();
   }
-  return !!(row.valor.trim() || row.valor_numerico.trim());
+  return !!(safe.valor.trim() || safe.valor_numerico.trim());
 }
 
 /** True si el resultado ya tenía valor persistido (informado). */
@@ -203,7 +204,13 @@ export function draftRowClearsServerValue(
   te?: LimsTipoExamen | null,
   codigo?: string | null
 ): boolean {
-  return resultadoTieneValorGuardado(r) && !draftRowHasValue(row, te, codigo);
+  if (!resultadoTieneValorGuardado(r)) return false;
+  const safe = normalizeDraftRow(row);
+  const c = te?.codigo ?? codigo ?? '';
+  if (usesTicketEntry(te, c)) {
+    return !safe.valor_sysmex.trim();
+  }
+  return !safe.valor.trim() && !safe.valor_numerico.trim();
 }
 
 /**
@@ -501,14 +508,16 @@ function patchValorCalculado(
 
 /**
  * Rellena índices hemo (VCM/HCM/CHCM) y parámetros calculados
- * (lípidos / BIL_I / perfil férrico).
- * VCM/HCM/CHCM respetan edición manual; los CALCULADO siempre se sobrescriben.
+ * (lípidos / BIL_I / férrico / clearance / Zeisler CA_ION).
+ * ``manualIds`` / ``clearedIds``: no pisar edición manual ni borrado explícito.
+ * Los CALCULADO se sobrescriben salvo que estén en clearedIds.
  */
 export function applyAutofillVcmChcm(
   resultados: ResultadoExamenLims[],
   draft: Record<number, DraftCargaRow>,
   catalog: Map<number, LimsTipoExamen>,
-  manualIds: ReadonlySet<number>
+  manualIds: ReadonlySet<number>,
+  clearedIds: ReadonlySet<number> = new Set()
 ): Record<number, DraftCargaRow> {
   const byCodigo = new Map<string, ResultadoExamenLims>();
   for (const r of resultados) {
@@ -516,6 +525,8 @@ export function applyAutofillVcmChcm(
     const c = (r.tipo_examen_codigo || te?.codigo || '').trim().toUpperCase();
     if (c) byCodigo.set(c, r);
   }
+
+  const locked = (id: number) => manualIds.has(id) || clearedIds.has(id);
 
   let next = draft;
   const rHgb = byCodigo.get('HGB');
@@ -531,15 +542,15 @@ export function applyAutofillVcmChcm(
     const rbc = draftValorClinicoNumerico(rRbc, next, catalog);
     if (hgb != null && hto != null && rbc != null) {
       const vcm = calcVcmFl(hto, rbc);
-      if (rVcm && vcm != null) {
+      if (rVcm && vcm != null && !locked(rVcm.id)) {
         next = patchIndiceTicket(next, rVcm, catalog, vcm, manualIds);
       }
       const hcm = calcHcmPg(hgb, rbc);
-      if (rHcm && hcm != null) {
+      if (rHcm && hcm != null && !locked(rHcm.id)) {
         next = patchIndiceTicket(next, rHcm, catalog, hcm, manualIds);
       }
       const chcm = calcChcmGdl(hgb, hto);
-      if (rChcm && chcm != null) {
+      if (rChcm && chcm != null && !locked(rChcm.id)) {
         next = patchIndiceTicket(next, rChcm, catalog, chcm, manualIds);
       }
     }
@@ -547,12 +558,18 @@ export function applyAutofillVcmChcm(
 
   const valores: Record<string, number | null> = {};
   byCodigo.forEach((r, codigo) => {
+    // Fila vaciada a propósito: no alimentar derivados con el valor de servidor.
+    if (clearedIds.has(r.id)) {
+      valores[codigo] = null;
+      return;
+    }
     valores[codigo] = draftValorClinicoNumerico(r, next, catalog);
   });
   const derivados = calcularDerivados(valores);
   for (const [codigo, val] of Object.entries(derivados)) {
     const row = byCodigo.get(codigo);
     if (!row) continue;
+    if (locked(row.id)) continue;
     next = patchValorCalculado(next, row, catalog, val.numerico, val.informe);
   }
 

@@ -23,6 +23,7 @@ import {
 } from '../../modules/laboratorio/solicitudAnalisisPapelLayout';
 import {
   CARTUCHO_CARDIACO_CODIGOS,
+  CA_ION_INCLUYE_CODIGOS,
   EAB_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
   esCodigoCartuchoCardiaco,
@@ -40,6 +41,18 @@ export interface SolicitudAnalisisPapelFormProps {
   onObservacionesChange?: (value: string) => void;
   showHeader?: boolean;
   disabled?: boolean;
+  /**
+   * Códigos (panel o examen) a ocultar del grid papel y del buscador «Agregar».
+   * Útil en prototipos / vistas por material (p. ej. sacar orina del bloque sangre).
+   */
+  omitCodigos?: ReadonlySet<string>;
+  /**
+   * Si se indica, el buscador «Agregar» solo ofrece exámenes cuyo
+   * `tipo_muestra_codigo` esté en este set (p. ej. solo sangre).
+   */
+  agregarSoloMuestras?: ReadonlySet<string>;
+  /** Etiqueta del buscador de catálogo (default: «Agregar examen del catálogo»). */
+  agregarLabel?: string;
 }
 
 function DerivBadge({ exam }: { exam: LimsTipoExamen | undefined }) {
@@ -114,6 +127,9 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
   onObservacionesChange,
   showHeader = true,
   disabled = false,
+  omitCodigos,
+  agregarSoloMuestras,
+  agregarLabel = 'Agregar examen del catálogo',
 }) => {
   const maps = useMemo(() => buildCatalogMaps(paneles, examenes), [paneles, examenes]);
   const examenesById = useMemo(() => {
@@ -125,20 +141,32 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
   const papelCodes = useMemo(() => papelCodigosSet(), []);
 
   const otrosOpciones = useMemo(() => {
-    return examenes.filter(
-      (e) =>
-        e.activo !== false &&
-        !papelCodes.has(e.codigo) &&
-        !EXAMENES_FUERA_DE_SOLICITUD.has(e.codigo) &&
-        !selectedExamenesIds.has(e.id)
-    );
-  }, [examenes, papelCodes, selectedExamenesIds]);
+    return examenes.filter((e) => {
+      if (e.activo === false) return false;
+      if (papelCodes.has(e.codigo)) return false;
+      if (EXAMENES_FUERA_DE_SOLICITUD.has(e.codigo)) return false;
+      if (omitCodigos?.has(e.codigo)) return false;
+      if (selectedExamenesIds.has(e.id)) return false;
+      if (agregarSoloMuestras) {
+        const m = (e.tipo_muestra_codigo || '').toUpperCase();
+        if (!agregarSoloMuestras.has(m)) return false;
+      }
+      return true;
+    });
+  }, [examenes, papelCodes, selectedExamenesIds, omitCodigos, agregarSoloMuestras]);
 
   const otrosSeleccionados = useMemo(() => {
-    return examenes.filter(
-      (e) => selectedExamenesIds.has(e.id) && !papelCodes.has(e.codigo)
-    );
-  }, [examenes, selectedExamenesIds, papelCodes]);
+    return examenes.filter((e) => {
+      if (!selectedExamenesIds.has(e.id)) return false;
+      if (papelCodes.has(e.codigo)) return false;
+      if (omitCodigos?.has(e.codigo)) return false;
+      if (agregarSoloMuestras) {
+        const m = (e.tipo_muestra_codigo || '').toUpperCase();
+        if (!agregarSoloMuestras.has(m)) return false;
+      }
+      return true;
+    });
+  }, [examenes, selectedExamenesIds, papelCodes, omitCodigos, agregarSoloMuestras]);
 
   const [otrosInput, setOtrosInput] = useState('');
 
@@ -154,6 +182,9 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
 
   const renderCell = (item: PapelItemRef | null | undefined) => {
     if (!item) {
+      return <Box sx={{ minHeight: 42 }} />;
+    }
+    if (omitCodigos?.has(item.codigo)) {
       return <Box sx={{ minHeight: 42 }} />;
     }
     const id = resolvePapelItemId(item, maps);
@@ -267,7 +298,7 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
           }}
           disabled={disabled}
           renderInput={(params) => (
-            <TextField {...params} label="Agregar examen del catálogo" placeholder="Código o nombre" />
+            <TextField {...params} label={agregarLabel} placeholder="Código o nombre" />
           )}
           noOptionsText={otrosInput.trim().length < 1 ? 'Escribí para buscar' : 'Sin coincidencias'}
         />
@@ -408,17 +439,41 @@ export function useSolicitudAnalisisSelection(
           }
           return next;
         }
-        if (selecting) next.add(id);
-        else next.delete(id);
+        if (selecting) {
+          next.add(id);
+          if ((codigo || '').toUpperCase() === 'CA_ION') {
+            return addExamenesByCodigo(next, CA_ION_INCLUYE_CODIGOS);
+          }
+        } else {
+          next.delete(id);
+        }
         return next;
       });
     },
-    [examCodigoById, examIdByCodigo]
+    [addExamenesByCodigo, examCodigoById, examIdByCodigo]
   );
 
   const resetSelection = React.useCallback(() => {
     setSelectedPanelesIds(new Set());
     setSelectedExamenesIds(new Set());
+  }, []);
+
+  /** Quita paneles/exámenes por id sin toggles encadenados (evita estado stale). */
+  const deselectMany = React.useCallback((panelIds: number[], examenIds: number[]) => {
+    if (panelIds.length) {
+      setSelectedPanelesIds((prev) => {
+        const next = new Set(prev);
+        panelIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+    if (examenIds.length) {
+      setSelectedExamenesIds((prev) => {
+        const next = new Set(prev);
+        examenIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
   }, []);
 
   const getSelectionArrays = React.useCallback(() => {
@@ -451,6 +506,7 @@ export function useSolicitudAnalisisSelection(
     togglePanel,
     toggleExamen,
     resetSelection,
+    deselectMany,
     getSelectionArrays,
     hasSelection,
   };

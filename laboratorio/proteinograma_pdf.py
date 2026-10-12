@@ -109,6 +109,7 @@ def bloque_proteinograma(
     styles: dict[str, ParagraphStyle],
     *,
     valores_por_codigo: dict[str, Any] | None = None,
+    fechas_extraccion_por_resultado: dict[int, str] | None = None,
 ) -> list[Any]:
     """
     Layout clínico: título, material/método, tabla %/g/dL/ref,
@@ -151,6 +152,15 @@ def bloque_proteinograma(
     flow.append(Paragraph("Material: suero", styles["panel_meta"]))
     if metodo:
         flow.append(Paragraph(f"Método: {_escape(metodo)}", styles["panel_meta"]))
+    fechas_ext = fechas_extraccion_por_resultado or {}
+    ext_panel = ""
+    for res in resultados:
+        cand = (fechas_ext.get(res.pk) or "").strip()
+        if cand and cand != "—":
+            ext_panel = cand
+            break
+    if ext_panel:
+        flow.append(Paragraph(f"Extracción: {_escape(ext_panel)}", styles["panel_meta"]))
     flow.append(Spacer(1, 0.12 * cm))
 
     flow.append(Paragraph("FRACCIONAMIENTO PROTEICO", styles["observaciones_title"]))

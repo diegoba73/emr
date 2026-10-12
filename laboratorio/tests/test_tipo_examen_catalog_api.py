@@ -109,3 +109,41 @@ class TestTipoExamenCatalogApi(TestCase):
             HTTP_HOST='localhost',
         )
         self.assertEqual(r.status_code, 400, r.data)
+
+    def test_list_filtra_por_tipo_muestra(self):
+        otra = TipoMuestra.objects.create(codigo='ORINA_T', nombre='Orina test')
+        TipoExamen.objects.create(
+            codigo='ORI_T',
+            nombre='Orina test exam',
+            tipo_muestra_requerida=otra,
+        )
+        url = '/api/lab/examenes/'
+        r = self.client.get(
+            url,
+            {'tipo_muestra_requerida': self.muestra.pk},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(r.status_code, 200, r.data)
+        results = r.data.get('results', r.data)
+        codigos = {row['codigo'] for row in results}
+        self.assertIn('GLU_T', codigos)
+        self.assertNotIn('ORI_T', codigos)
+
+    def test_list_filtra_por_tipo_muestra_in(self):
+        otra = TipoMuestra.objects.create(codigo='ORINA_T2', nombre='Orina test 2')
+        TipoExamen.objects.create(
+            codigo='ORI_T2',
+            nombre='Orina test exam 2',
+            tipo_muestra_requerida=otra,
+        )
+        url = '/api/lab/examenes/'
+        r = self.client.get(
+            url,
+            {'tipo_muestra_requerida__in': f'{self.muestra.pk},{otra.pk}'},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(r.status_code, 200, r.data)
+        results = r.data.get('results', r.data)
+        codigos = {row['codigo'] for row in results}
+        self.assertIn('GLU_T', codigos)
+        self.assertIn('ORI_T2', codigos)

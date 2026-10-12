@@ -153,6 +153,7 @@ class InternacionClinicalService:
         from django.db.models import Q
         from estudios.models import EstudioComplementario
         from laboratorio.models import SolicitudExamen
+        from laboratorio.models_microbiologia import EstudioMicrobiologia
         from laboratorio.origen_solicitud import (
             AMBULATORIO_CEHTA,
             AMBULATORIO_ICPL,
@@ -225,6 +226,40 @@ class InternacionClinicalService:
                 'paneles_resumen': paneles_resumen_solicitud(sol),
                 'orden_grupos_informe': list(sol.orden_grupos_informe or []),
                 'resultados': resultados,
+            })
+
+        # Pedidos de microbiología del episodio (misma ventana / filtro de origen).
+        micro_qs = (
+            EstudioMicrobiologia.objects.filter(
+                paciente_id=paciente_id, created_at__gte=inicio
+            )
+            .exclude(origen_solicitud__in=origenes_no_internacion)
+            .select_related('tipo_cultivo', 'tipo_muestra_micro')
+            .order_by('-created_at')
+        )
+        if fin:
+            micro_qs = micro_qs.filter(created_at__lte=fin)
+
+        microbiologia = []
+        for est_micro in micro_qs:
+            fecha = est_micro.created_at
+            fecha_local = timezone.localtime(fecha).date() if fecha else None
+            fecha_prog = getattr(est_micro, 'fecha_programada_toma', None)
+            cultivo = est_micro.tipo_cultivo
+            muestra = est_micro.tipo_muestra_micro
+            microbiologia.append({
+                'id': est_micro.pk,
+                'numero': est_micro.numero,
+                'estado': est_micro.estado,
+                'fecha_solicitud': fecha.isoformat() if fecha else None,
+                'fecha_programada_toma': (
+                    fecha_prog.isoformat() if fecha_prog else None
+                ),
+                'es_de_hoy': (
+                    (fecha_prog == hoy) if fecha_prog is not None else (fecha_local == hoy)
+                ),
+                'cultivo_nombre': cultivo.nombre if cultivo else (est_micro.tipo_estudio or ''),
+                'muestra_nombre': muestra.nombre if muestra else '',
             })
 
         est_filter = Q(paciente_id=paciente_id)
@@ -322,6 +357,7 @@ class InternacionClinicalService:
             'evolucion_hoy': InternacionClinicalService._serialize_evolucion(evo_hoy) if evo_hoy else None,
             'evoluciones': evoluciones,
             'laboratorio': laboratorio,
+            'microbiologia': microbiologia,
             'estudios': estudios,
             'hc': hc,
         }

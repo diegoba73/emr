@@ -103,6 +103,11 @@ export function pathDetalleOrdenLab(user: User | null, ordenId: number): string 
   return `/solicitudes/${ordenId}`;
 }
 
+/** Detalle de estudio de microbiología (misma ruta para operadores y lectura clínica). */
+export function pathDetalleEstudioMicro(estudioId: number): string {
+  return `/laboratorio/microbiologia/estudios/${estudioId}`;
+}
+
 /**
  * Compatibilidad con pantallas anteriores: secretaría tiene lectura clínica completa.
  */
@@ -124,13 +129,30 @@ export function canSeeResultadosClinicos(
   return canAccessAnalisisClinicoLab(user);
 }
 
-/** Descargar informe PDF desde el portal clínico (solo orden validada / FINALIZADO). */
+/** Roles que pueden PDF/enviar informe parcial (no paciente ni enfermería). */
+function rolInformeParcial(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const r = normalizeRol(user);
+  return (
+    r === 'admin' ||
+    r === 'medico' ||
+    r === 'secretaria' ||
+    isOperadorLimsRole(r)
+  );
+}
+
+/** Descargar PDF clínico: FINALIZADO (lectura clínica) o INFORMADO_PARCIAL (roles parcial). */
 export function canDownloadInformeClinicoPdf(
   user: User | null,
   estado?: string | null
 ): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
+  const e = estado == null || estado === undefined ? null : String(estado).toUpperCase();
+  if (e === 'INFORMADO_PARCIAL') {
+    return rolInformeParcial(user);
+  }
   const r = normalizeRol(user);
   const roleOk =
     r === 'admin' ||
@@ -139,8 +161,8 @@ export function canDownloadInformeClinicoPdf(
     r === 'secretaria' ||
     r === 'enfermeria';
   if (!roleOk) return false;
-  if (estado == null || estado === undefined) return true;
-  return String(estado).toUpperCase() === 'FINALIZADO';
+  if (e == null) return true;
+  return e === 'FINALIZADO';
 }
 
 /** Operaciones de laboratorio sobre orden/muestra/resultados (admin + operadores). */
@@ -151,18 +173,22 @@ export function canOperateLims(user: User | null): boolean {
   return r === 'admin' || isOperadorLimsRole(r);
 }
 
-/** Enviar informe al paciente/médico: operadores LIMS y secretaría, solo FINALIZADO. */
+/** Enviar informe: FINALIZADO (LIMS+secretaría) o INFORMADO_PARCIAL (roles parcial). */
 export function canEnviarInformeLims(
   user: User | null,
   estado?: string | null
 ): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
+  const e = estado == null || estado === undefined ? null : String(estado).toUpperCase();
+  if (e === 'INFORMADO_PARCIAL') {
+    return rolInformeParcial(user);
+  }
   const r = normalizeRol(user);
   const roleOk = r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
   if (!roleOk) return false;
-  if (estado == null || estado === undefined) return true;
-  return String(estado).toUpperCase() === 'FINALIZADO';
+  if (e == null) return true;
+  return e === 'FINALIZADO';
 }
 
 /** @deprecated Usar canEnviarInformeLims */
@@ -177,14 +203,15 @@ export function canValidarOrdenLims(user: User | null): boolean {
   return puedeValidarLimsRole(normalizeRol(user));
 }
 
-/** Descargar informe PDF LIMS: solo tras validación (FINALIZADO). */
+/** Descargar PDF LIMS: FINALIZADO o INFORMADO_PARCIAL. */
 export function canDownloadInformeLimsPdf(
   user: User | null,
   estado?: string | null
 ): boolean {
   if (!canAccessLimsModule(user)) return false;
   if (estado == null || estado === undefined) return false;
-  return String(estado).toUpperCase() === 'FINALIZADO';
+  const e = String(estado).toUpperCase();
+  return e === 'FINALIZADO' || e === 'INFORMADO_PARCIAL';
 }
 
 /** Operación LIMS de microbiología (admin, laboratorio, bioquímico). */
@@ -251,57 +278,85 @@ export function canOperateInformeMicro(user: User | null): boolean {
 
 /**
  * Ver contenido de un informe micro.
- * Bio/admin: siempre. Resto (lab, médico): solo VALIDADO.
+ * Bio/admin: siempre. Roles parcial: VALIDADO o PRELIMINAR EMITIDO.
+ * Enfermería: solo VALIDADO.
  */
 export function canSeeInformeMicro(
   user: User | null,
-  estadoInforme: string | null | undefined
+  estadoInforme: string | null | undefined,
+  tipoInforme?: string | null
 ): boolean {
   if (!user) return false;
   if (isSecretariaEntregaLab(user)) return false;
   if (canOperateInformeMicro(user)) return true;
   if (!canAccessMicrobiologiaLectura(user)) return false;
-  return String(estadoInforme || '').toUpperCase() === 'VALIDADO';
+  const e = String(estadoInforme || '').toUpperCase();
+  const t = String(tipoInforme || '').toUpperCase();
+  if (e === 'VALIDADO') return true;
+  if (e === 'EMITIDO' && t === 'PRELIMINAR') {
+    return rolInformeParcial(user);
+  }
+  return false;
 }
 
 /**
- * Descargar PDF de informe micro.
- * Bio/admin: EMITIDO o VALIDADO (revisión previa).
- * Lab / médico: solo cuando el estudio/informe está VALIDADO (o INFORMADO).
+ * Descargar PDF micro.
+ * Definitivo: VALIDADO/INFORMADO (clínico) o EMITIDO+ (bio).
+ * Preliminar: cualquier estudio no cancelado si el rol es de parcial
+ * (el backend elige PRELIMINAR EMITIDO si no hay FINAL).
  */
 export function canDownloadInformeMicroPdf(
   user: User | null,
-  estadoEstudio?: string | null
+  estadoEstudio?: string | null,
+  opts?: { tienePreliminarEmitido?: boolean; tieneFinalValidado?: boolean }
 ): boolean {
   if (!canAccessMicrobiologiaLectura(user)) return false;
+  const e = estadoEstudio == null ? null : String(estadoEstudio).toUpperCase();
+  if (e === 'CANCELADO') return false;
+
+  if (opts?.tieneFinalValidado) {
+    if (canOperateInformeMicro(user)) return true;
+    return e === 'VALIDADO' || e === 'INFORMADO' || e == null;
+  }
+  if (opts?.tienePreliminarEmitido && rolInformeParcial(user)) {
+    return true;
+  }
+
   if (canOperateInformeMicro(user)) {
-    if (estadoEstudio == null || estadoEstudio === undefined) return true;
-    const e = String(estadoEstudio).toUpperCase();
+    if (e == null) return true;
     return (
       e === 'EMITIDO' ||
       e === 'LISTO_PARA_VALIDAR' ||
       e === 'VALIDADO' ||
-      e === 'INFORMADO'
+      e === 'INFORMADO' ||
+      e === 'RECIBIDO' ||
+      e === 'SEMBRADO' ||
+      e === 'LECTURA_PRELIMINAR' ||
+      e === 'IDENTIFICACION' ||
+      e === 'ANTIBIOGRAMA'
     );
   }
-  if (estadoEstudio == null || estadoEstudio === undefined) return false;
-  const e = String(estadoEstudio).toUpperCase();
+  if (e == null) return false;
   return e === 'VALIDADO' || e === 'INFORMADO';
 }
 
-/** Enviar informe micro por email/WhatsApp (operadores LIMS y secretaría, solo tras VALIDADO). */
+/** Enviar informe micro: FINAL VALIDADO (LIMS+secretaría) o preliminar (roles parcial). */
 export function canEnviarInformeMicro(
   user: User | null,
-  estadoEstudio?: string | null
+  estadoEstudio?: string | null,
+  opts?: { tienePreliminarEmitido?: boolean; tieneFinalValidado?: boolean }
 ): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
-  const r = normalizeRol(user);
-  const roleOk = r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
-  if (!roleOk) return false;
-  if (estadoEstudio == null || estadoEstudio === undefined) return true;
-  const e = String(estadoEstudio).toUpperCase();
-  return e === 'VALIDADO' || e === 'INFORMADO';
+  const e = estadoEstudio == null ? null : String(estadoEstudio).toUpperCase();
+  if (opts?.tieneFinalValidado || e === 'VALIDADO' || e === 'INFORMADO') {
+    const r = normalizeRol(user);
+    return r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
+  }
+  if (opts?.tienePreliminarEmitido) {
+    return rolInformeParcial(user);
+  }
+  return false;
 }
 
 /** Estados en los que no se admiten mutaciones técnicas (B3-frontend-validación-A). */

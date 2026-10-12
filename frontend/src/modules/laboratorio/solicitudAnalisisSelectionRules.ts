@@ -12,6 +12,12 @@ export const EAB_INCLUYE_CODIGOS = {
   examenes: ['LACT', 'CA_ION'] as const,
 };
 
+/**
+ * Al pedir CA_ION suelto (no vía EAB): incluir Ca total y proteínas
+ * para poder estimar Zeisler en carga. Con EAB el iónico viene del equipo.
+ */
+export const CA_ION_INCLUYE_CODIGOS = ['CA', 'PROT_T'] as const;
+
 export const PANELES_EAB = new Set(['PAN_EAB_ART', 'PAN_EAB_VEN']);
 
 /** Componentes del formulario que no deben ir sueltos si su panel ya está pedido. */

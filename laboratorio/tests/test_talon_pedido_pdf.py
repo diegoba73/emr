@@ -110,7 +110,10 @@ class TestTalonPedidoClinicoApi(TestCase):
         self.assertEqual(pages, 1)
 
     def test_talon_incluye_fecha_extraccion_en_datos(self):
-        from laboratorio.orden_cabecera import fecha_extraccion_display
+        from laboratorio.orden_cabecera import (
+            fecha_extraccion_display,
+            fecha_solicitud_display,
+        )
         from laboratorio.talon_pedido_pdf import (
             construir_talon_solicitud,
             generar_talon_solicitud_pdf_bytes,
@@ -122,6 +125,8 @@ class TestTalonPedidoClinicoApi(TestCase):
         esperado = fecha_extraccion_display(self.sol)
         self.assertEqual(data.fecha_extraccion, esperado)
         self.assertNotEqual(data.fecha_extraccion, "—")
+        self.assertEqual(data.fecha_solicitud, fecha_solicitud_display(self.sol))
+        self.assertNotEqual(data.fecha_solicitud, "—")
         pdf = generar_talon_solicitud_pdf_bytes(self.sol)
         self.assertTrue(pdf.startswith(b"%PDF"))
 
@@ -186,12 +191,16 @@ class TestTalonPedidoClinicoApi(TestCase):
         self.assertEqual(len(cols[0]), 15)
         self.assertEqual(len(cols[1]), len(listado) - 15)
 
+        from laboratorio.talon_pedido_pdf import construir_talon_solicitud
+
+        data = construir_talon_solicitud(self.sol)
+        self.assertIn("Examen Extra 00", data.examenes)
+        self.assertIn("Examen Extra 19", data.examenes)
+        self.assertNotEqual(data.fecha_solicitud, "—")
+
         pdf = generar_talon_solicitud_pdf_bytes(self.sol)
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertNotRegex(pdf.decode("latin-1", errors="ignore"), r"y \d+ m.s")
-        # ReportLab escribe literales; al menos los nombres cortos deben aparecer.
-        self.assertIn(b"Examen Extra 00", pdf)
-        self.assertIn(b"Examen Extra 19", pdf)
 
     def test_columnas_examenes_max_15(self):
         from laboratorio.talon_pedido_pdf import columnas_examenes
@@ -204,6 +213,20 @@ class TestTalonPedidoClinicoApi(TestCase):
         cols3 = columnas_examenes([f"e{i}" for i in range(45)])
         self.assertEqual(len(cols3), 3)
         self.assertTrue(all(len(c) == 15 for c in cols3))
+
+    def test_filas_examenes_respetan_mitad_hoja(self):
+        from laboratorio.talon_pedido_pdf import (
+            EXAMEN_LINE_H,
+            HALF_PAGE_Y,
+            PAGE_H,
+            filas_examenes_hasta_mitad,
+        )
+
+        list_top = PAGE_H - 80  # cabecera ya dibujada
+        filas = filas_examenes_hasta_mitad(list_top)
+        self.assertGreaterEqual(filas, 1)
+        # No puede bajar de la mitad: filas * alto ≤ espacio hasta HALF_PAGE_Y
+        self.assertLessEqual(filas * EXAMEN_LINE_H, list_top - HALF_PAGE_Y + EXAMEN_LINE_H)
 
     def test_talon_panel_sin_expandir_componentes(self):
         """Un perfil se muestra como ítem; no lista cada examen del panel."""

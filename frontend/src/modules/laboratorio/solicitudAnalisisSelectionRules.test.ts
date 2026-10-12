@@ -1,4 +1,5 @@
 import {
+  CA_ION_INCLUYE_CODIGOS,
   CARTUCHO_CARDIACO_CODIGOS,
   EAB_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
@@ -18,6 +19,10 @@ describe('solicitudAnalisisSelectionRules', () => {
     expect(esPanelEab('PAN_EAB_ART')).toBe(true);
     expect(EAB_INCLUYE_CODIGOS.paneles).toContain('PAN_IONO');
     expect(EAB_INCLUYE_CODIGOS.examenes).toEqual(expect.arrayContaining(['LACT', 'CA_ION']));
+  });
+
+  it('CA_ION suelto incluye CA y PROT_T para Zeisler', () => {
+    expect(CA_ION_INCLUYE_CODIGOS).toEqual(['CA', 'PROT_T']);
   });
 
   it('cubre INR y CL por sus paneles', () => {

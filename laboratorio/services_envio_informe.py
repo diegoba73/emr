@@ -122,10 +122,17 @@ def _mensaje_whatsapp_con_enlace(intro: str, enlace: str | None, fallback: str) 
 
 def _mensaje_whatsapp_paciente(solicitud: SolicitudExamen, enlace_descarga: str | None) -> str:
     numero = solicitud.numero or f"#{solicitud.pk}"
-    intro = (
-        f"Hola, le informamos que los resultados de laboratorio de su orden {numero} "
-        f"ya están disponibles."
-    )
+    es_parcial = getattr(solicitud, "estado", None) == "INFORMADO_PARCIAL"
+    if es_parcial:
+        intro = (
+            f"Hola, le informamos un INFORME PARCIAL de laboratorio de su orden {numero}. "
+            f"Aún faltan determinaciones; no es el informe definitivo."
+        )
+    else:
+        intro = (
+            f"Hola, le informamos que los resultados de laboratorio de su orden {numero} "
+            f"ya están disponibles."
+        )
     return _mensaje_whatsapp_con_enlace(
         intro, enlace_descarga, "Puede solicitarlo en la institución."
     )
@@ -136,10 +143,12 @@ def _mensaje_whatsapp_medico(solicitud: SolicitudExamen, enlace_descarga: str | 
     paciente_nombre = ""
     if solicitud.paciente_id:
         paciente_nombre = getattr(solicitud.paciente, "nombre_completo", "") or ""
+    es_parcial = getattr(solicitud, "estado", None) == "INFORMADO_PARCIAL"
+    tipo = "INFORME PARCIAL" if es_parcial else "resultados"
     intro = (
-        f"Hola, los resultados de laboratorio de la orden {numero}"
+        f"Hola, {tipo} de laboratorio de la orden {numero}"
         + (f" del paciente {paciente_nombre}" if paciente_nombre else "")
-        + " ya están disponibles."
+        + (" (aún incompleto)." if es_parcial else " ya están disponibles.")
     )
     return _mensaje_whatsapp_con_enlace(
         intro, enlace_descarga, "Puede consultarlo en el sistema."
@@ -207,16 +216,23 @@ def _enviar_email_pdf(
     destinatario_label: str,
 ) -> None:
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@localhost"
-    asunto = f"Informe de laboratorio — {solicitud.numero or solicitud.pk}"
+    es_parcial = getattr(solicitud, "estado", None) == "INFORMADO_PARCIAL"
+    prefijo = "Informe parcial de laboratorio" if es_parcial else "Informe de laboratorio"
+    asunto = f"{prefijo} — {solicitud.numero or solicitud.pk}"
     cuerpo = (
-        f"Adjuntamos el informe PDF de laboratorio de la orden "
-        f"{solicitud.numero or solicitud.pk}"
+        f"Adjuntamos el {'informe parcial' if es_parcial else 'informe'} PDF de laboratorio "
+        f"de la orden {solicitud.numero or solicitud.pk}"
     )
     if destinatario_label == "medico" and solicitud.paciente_id:
         nombre_pac = getattr(solicitud.paciente, "nombre_completo", "") or ""
         if nombre_pac:
             cuerpo += f" (paciente {nombre_pac})"
     cuerpo += ".\n\n"
+    if es_parcial:
+        cuerpo += (
+            "ATENCIÓN: este es un INFORME PARCIAL. Faltan determinaciones o la orden "
+            "aún no fue validada. No reemplaza el informe definitivo.\n\n"
+        )
     if enlace_descarga:
         cuerpo += f"También puede descargarlo desde: {enlace_descarga}\n\n"
     cuerpo += "Mensaje generado por el sistema de laboratorio."
@@ -264,9 +280,9 @@ def enviar_informe_solicitud(
     view: str,
     public_base_url: str | None = None,
 ) -> ResultadoEnvioInforme:
-    if solicitud.estado != "FINALIZADO":
+    if solicitud.estado not in ("FINALIZADO", "INFORMADO_PARCIAL"):
         raise EnvioInformeError(
-            "Solo se puede enviar el informe de una orden validada (FINALIZADO)."
+            "Solo se puede enviar el informe de una orden en INFORMADO_PARCIAL o FINALIZADO."
         )
     if not solicitud_tiene_algun_resultado(solicitud):
         raise EnvioInformeError(
@@ -484,6 +500,18 @@ def _medico_contacto_estudio(estudio) -> tuple[str | None, str | None, str | Non
     return nombre, email, telefono
 
 
+def _informe_micro_es_preliminar(estudio) -> bool:
+    from laboratorio.models_microbiologia import InformeMicrobiologia
+
+    if InformeMicrobiologia.objects.filter(
+        estudio_id=estudio.pk, tipo="FINAL", estado="VALIDADO"
+    ).exists():
+        return False
+    return InformeMicrobiologia.objects.filter(
+        estudio_id=estudio.pk, tipo="PRELIMINAR", estado="EMITIDO"
+    ).exists()
+
+
 def _enviar_email_pdf_micro(
     *,
     destino: str,
@@ -495,13 +523,23 @@ def _enviar_email_pdf_micro(
 ) -> None:
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@localhost"
     numero = estudio.numero or f"#{estudio.pk}"
-    asunto = f"Informe de microbiología — {numero}"
-    cuerpo = f"Adjuntamos el informe PDF de microbiología del estudio {numero}"
+    es_prev = _informe_micro_es_preliminar(estudio)
+    prefijo = "Informe preliminar de microbiología" if es_prev else "Informe de microbiología"
+    asunto = f"{prefijo} — {numero}"
+    cuerpo = (
+        f"Adjuntamos el {'informe preliminar' if es_prev else 'informe'} PDF de microbiología "
+        f"del estudio {numero}"
+    )
     if destinatario_label == "medico" and estudio.paciente_id:
         nombre_pac = getattr(estudio.paciente, "nombre_completo", "") or ""
         if nombre_pac:
             cuerpo += f" (paciente {nombre_pac})"
     cuerpo += ".\n\n"
+    if es_prev:
+        cuerpo += (
+            "ATENCIÓN: este es un INFORME PRELIMINAR. No reemplaza el informe definitivo "
+            "cuando el estudio esté validado.\n\n"
+        )
     if enlace_descarga:
         cuerpo += f"También puede descargarlo desde: {enlace_descarga}\n\n"
     cuerpo += "Mensaje generado por el sistema de laboratorio."
@@ -538,10 +576,17 @@ def _enviar_email_pdf_micro(
 
 def _mensaje_whatsapp_paciente_micro(estudio, enlace_descarga: str | None) -> str:
     numero = estudio.numero or f"#{estudio.pk}"
-    intro = (
-        f"Hola, le informamos que el informe de microbiología de su estudio {numero} "
-        f"ya está disponible."
-    )
+    es_prev = _informe_micro_es_preliminar(estudio)
+    if es_prev:
+        intro = (
+            f"Hola, le informamos un INFORME PRELIMINAR de microbiología del estudio {numero}. "
+            f"No es el informe definitivo."
+        )
+    else:
+        intro = (
+            f"Hola, le informamos que el informe de microbiología de su estudio {numero} "
+            f"ya está disponible."
+        )
     return _mensaje_whatsapp_con_enlace(
         intro, enlace_descarga, "Puede solicitarlo en la institución."
     )
@@ -552,7 +597,8 @@ def _mensaje_whatsapp_medico_micro(estudio, enlace_descarga: str | None) -> str:
     paciente_nombre = ""
     if estudio.paciente_id:
         paciente_nombre = getattr(estudio.paciente, "nombre_completo", "") or ""
-    intro = f"Informe de microbiología {numero}"
+    es_prev = _informe_micro_es_preliminar(estudio)
+    intro = ("Informe preliminar" if es_prev else "Informe") + f" de microbiología {numero}"
     if paciente_nombre:
         intro += f" (paciente {paciente_nombre})"
     intro += " disponible."
@@ -570,7 +616,7 @@ def enviar_informe_estudio_micro(
     view: str,
     public_base_url: str | None = None,
 ) -> ResultadoEnvioInforme:
-    """Envía el PDF del informe FINAL micro **VALIDADO** por email y/o WhatsApp."""
+    """Envía PDF micro: FINAL VALIDADO o PRELIMINAR EMITIDO (si aún no hay final)."""
     from laboratorio.informe_entrega_token import construir_url_entrega_informe_micro
     from laboratorio.models_microbiologia import InformeMicrobiologia
     from laboratorio.services_informes_micro_pdf import (
@@ -580,13 +626,19 @@ def enviar_informe_estudio_micro(
         nombre_archivo_pdf_micro,
     )
 
-    if not InformeMicrobiologia.objects.filter(
+    tiene_final = InformeMicrobiologia.objects.filter(
         estudio_id=estudio.pk,
         tipo="FINAL",
         estado="VALIDADO",
-    ).exists():
+    ).exists()
+    tiene_preliminar = InformeMicrobiologia.objects.filter(
+        estudio_id=estudio.pk,
+        tipo="PRELIMINAR",
+        estado="EMITIDO",
+    ).exists()
+    if not tiene_final and not tiene_preliminar:
         raise EnvioInformeError(
-            "Solo se puede enviar un informe FINAL validado por el bioquímico."
+            "No hay informe FINAL validado ni PRELIMINAR emitido para enviar."
         )
 
     try:

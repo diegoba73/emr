@@ -8,6 +8,7 @@ Perfil ferrico — se cargan FERR, UIBC (, FERRIT); CF, SAT_FE y TRANS se calcul
 Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA se calcula.
 Orinas 24 hs — concentración + DIUR → excreción (PROT_U_24, NA/K/CL_U24, MICROALB_24).
 RAC — se cargan MICROALB + CREA_U; RAC (mg/g) = (MICROALB / CREA_U) × 100.
+Calcio iónico — opcional Zeisler desde CA + PROT_T (mg/dL → mmol/L); sigue editable (equipo).
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ from laboratorio.entrada_resultados import quantize_valor_numerico
 TG_MAX_FRIEDEWALD = Decimal("400")
 RESULTADO_NO_CALCULABLE = "No calculable con estos datos"
 MINUTOS_24H = Decimal("1440")
+# Factor clínico mg/dL → mmol/L para calcio iónico estimado.
+FACTOR_CA_MG_DL_A_MMOL_L = Decimal("4.008")
 CODIGOS_LIPIDO_MEDIDOS = frozenset({"COL_TOT", "HDL", "TG"})
 CODIGOS_LIPIDO_CALCULADOS = frozenset(
     {"LDL", "VLDL", "COL_NO_LDL", "COL_RESID", "RATIO_CT_HDL"}
@@ -32,6 +35,14 @@ CODIGOS_ORINA_24H_CALCULADOS = frozenset(
     {"PROT_U_24", "NA_U24", "K_U24", "CL_U24", "MICROALB_24"}
 )
 CODIGOS_RAC_CALCULADOS = frozenset({"RAC"})
+# Estimable por fórmula pero editable (valor de equipo / EAB). No es CALCULADO de catálogo.
+CODIGOS_OVERRIDEABLES_ESTIMADOS = frozenset({"CA_ION"})
+# Pedido suelto de CA_ION → incluir CA + PROT_T para estimar Zeisler en carga.
+# No aplica si la orden trae EAB (el iónico viene del equipo de gases).
+INSUMOS_POR_CODIGO_OVERRIDEABLE: dict[str, tuple[str, ...]] = {
+    "CA_ION": ("CA", "PROT_T"),
+}
+PANELES_SIN_INSUMOS_CA_ION = frozenset({"PAN_EAB_ART", "PAN_EAB_VEN"})
 CODIGOS_CALCULADOS = (
     CODIGOS_LIPIDO_CALCULADOS
     | CODIGOS_HEPAT_CALCULADOS
@@ -198,6 +209,23 @@ def calc_rac(microalb_mg_l: Decimal, crea_u_mg_dl: Decimal) -> Decimal | None:
     return _q((microalb_mg_l / crea_u_mg_dl) * Decimal(100), 1)
 
 
+def calc_ca_ion_zeisler_mg_dl(ca_mg_dl: Decimal, prot_g_dl: Decimal) -> Decimal | None:
+    """Ca iónico estimado (mg/dL) por Zeisler desde calcio total y proteínas."""
+    denom = prot_g_dl + Decimal("6.5")
+    if denom <= 0:
+        return None
+    num = Decimal("6.25") * ca_mg_dl - Decimal("0.375") * prot_g_dl
+    return _q(num / denom, 2)
+
+
+def calc_ca_ion_zeisler_mmol_l(ca_mg_dl: Decimal, prot_g_dl: Decimal) -> Decimal | None:
+    """Ca iónico estimado en mmol/L (Zeisler mg/dL ÷ 4.008)."""
+    mg = calc_ca_ion_zeisler_mg_dl(ca_mg_dl, prot_g_dl)
+    if mg is None:
+        return None
+    return _q(mg / FACTOR_CA_MG_DL_A_MMOL_L, 2)
+
+
 def format_absoluto_mm3(n: int) -> str:
     return f"{n:,}".replace(",", ".")
 
@@ -334,6 +362,15 @@ def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[De
         # aplicar_* solo escribe si la orden tiene fila RAC.
         out["RAC"] = (None, RESULTADO_NO_CALCULABLE)
 
+    ca = _dec(valores.get("CA"))
+    prot_t = _dec(valores.get("PROT_T"))
+    if ca is not None and prot_t is not None:
+        ca_ion = calc_ca_ion_zeisler_mmol_l(ca, prot_t)
+        if ca_ion is not None:
+            out["CA_ION"] = (quantize_valor_numerico(ca_ion), _fmt(ca_ion, 2))
+        else:
+            out["CA_ION"] = (None, RESULTADO_NO_CALCULABLE)
+
     return out
 
 
@@ -348,6 +385,31 @@ def codigos_insumos_de_calculados(codigos: Iterable[str]) -> list[str]:
     vistos: set[str] = set()
     for calc in presentes:
         for insumo in INSUMOS_POR_CODIGO_CALCULADO.get(calc, ()):
+            code = (insumo or "").strip().upper()
+            if not code or code in presentes or code in vistos:
+                continue
+            vistos.add(code)
+            faltan.append(code)
+    return faltan
+
+
+def codigos_insumos_de_overrideables(
+    codigos: Iterable[str],
+    *,
+    paneles: Iterable[str] | None = None,
+) -> list[str]:
+    """Insumos de estimables editables (p. ej. CA_ION → CA + PROT_T).
+
+    Con panel EAB no se piden: el iónico lo da el equipo de gases.
+    """
+    presentes = {(c or "").strip().upper() for c in codigos if c}
+    paneles_norm = {(p or "").strip().upper() for p in (paneles or []) if p}
+    if paneles_norm & PANELES_SIN_INSUMOS_CA_ION:
+        return []
+    faltan: list[str] = []
+    vistos: set[str] = set()
+    for codigo in presentes:
+        for insumo in INSUMOS_POR_CODIGO_OVERRIDEABLE.get(codigo, ()):
             code = (insumo or "").strip().upper()
             if not code or code in presentes or code in vistos:
                 continue
@@ -382,9 +444,30 @@ def aplicar_calculos_derivados_solicitud(
             num = _dec(res.valor_obtenido)
         valores[codigo] = num
 
-    derivados = calcular_derivados(valores)
+    derivados_all = calcular_derivados(valores)
     if solo_calculados:
-        derivados = {k: v for k, v in derivados.items() if k in CODIGOS_CALCULADOS}
+        derivados = {k: v for k, v in derivados_all.items() if k in CODIGOS_CALCULADOS}
+    else:
+        derivados = dict(derivados_all)
+
+    # CA_ION: estimable por Zeisler pero editable (equipo). Solo rellenar si vacío
+    # o si el valor actual coincide con el estimado (recalcular sin pisar equipo).
+    if "CA_ION" in derivados_all and "CA_ION" in by_codigo:
+        res_ca = by_codigo["CA_ION"]
+        num_est, texto_est = derivados_all["CA_ION"]
+        if not (res_ca.validado_por_id or res_ca.fecha_validacion):
+            actual_txt = (res_ca.valor_obtenido or "").strip()
+            actual_num = _dec(res_ca.valor_numerico)
+            if actual_num is None:
+                actual_num = _dec(res_ca.valor_obtenido)
+            vacio = actual_num is None and not actual_txt
+            mismo_estimado = False
+            if num_est is not None and actual_num is not None:
+                mismo_estimado = _q(actual_num, 2) == _q(num_est, 2)
+            elif texto_est and actual_txt == texto_est:
+                mismo_estimado = True
+            if vacio or mismo_estimado:
+                derivados["CA_ION"] = (num_est, texto_est)
 
     actualizados = 0
     for codigo, (num, texto) in derivados.items():

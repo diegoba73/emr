@@ -85,6 +85,10 @@ frontend/run_jest_capture.sh
 *.code-workspace
 /docs_synesis_gpt_knowledge/
 
+# Exportaciones clínicas locales (PHI) — no versionar
+/reportes/
+reportes/
+
 # Exportaciones clínicas y artefactos de trabajo locales
 /data/labwin_export/
 /_*

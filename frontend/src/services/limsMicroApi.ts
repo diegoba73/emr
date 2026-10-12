@@ -51,6 +51,8 @@ export const listEstudiosMicrobiologia = (params?: {
   search?: string;
   /** Protocolo exacto (LAB-YYYY-NNNNN). */
   numero?: string;
+  /** Filtra por paciente (ficha 360 / análisis). */
+  paciente?: number;
   estado?: string;
   /** YYYY-MM-DD — día operativo (fecha_inicio o created_at). */
   fecha?: string;
@@ -64,6 +66,7 @@ export const listEstudiosMicrobiologia = (params?: {
   const q: Record<string, string | number | undefined> = { page_size: 100 };
   if (params?.search) q.search = params.search;
   if (params?.numero) q.numero = params.numero;
+  if (params?.paciente != null) q.paciente = params.paciente;
   if (params?.estado) q.estado = params.estado;
   if (params?.fecha) q.fecha = params.fecha;
   if (params?.sin_etiquetas) q.sin_etiquetas = '1';

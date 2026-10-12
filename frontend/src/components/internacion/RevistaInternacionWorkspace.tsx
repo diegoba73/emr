@@ -23,13 +23,25 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import EvolucionInternacionForm from '../../modules/atenciones/components/forms/EvolucionInternacionForm';
-import { canOpenDetalleOrdenLab, pathDetalleOrdenLab } from '../../utils/limsAccess';
+import {
+  canAccessMicrobiologiaLectura,
+  canDownloadInformeClinicoPdf,
+  canOpenDetalleOrdenLab,
+  pathDetalleEstudioMicro,
+  pathDetalleOrdenLab,
+} from '../../utils/limsAccess';
 import { labelEstadoOrdenLims, estadoOrdenColor } from '../../utils/limsEstadosOrden';
+import {
+  estadoEstudioMicroColor,
+  labelEstadoEstudioMicro,
+} from '../../utils/limsEstadosMicro';
 import { withNavBack } from '../../utils/navBack';
+import { downloadInformeLimsPdf } from '../../services/limsApi';
+import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import RevistaHcDiarioAccordions from './hc/RevistaHcDiarioAccordions';
 import NuevaOrdenLimsDialog from '../lims/NuevaOrdenLimsDialog';
 import ResultadosOrdenLista from '../lims/ResultadosOrdenLista';
-import type { ResultadoExamenLims } from '../../types/lims';
+import type { EstadoSolicitudLims, ResultadoExamenLims } from '../../types/lims';
 import {
   createEstudioComplementario,
   listTiposEstudioComplementario,
@@ -40,6 +52,7 @@ import type {
   RevistaEstudioItem,
   RevistaInternacionContexto,
   RevistaLabItem,
+  RevistaMicroItem,
   RevistaEvolucionItem,
 } from '../../services/internacion';
 import type { Paciente } from '../../types';
@@ -52,6 +65,7 @@ type PedidoPanel = 'lab' | 'estudios' | null;
 
 type HistoriaEvento =
   | { key: string; kind: 'lab'; fecha: string; item: RevistaLabItem }
+  | { key: string; kind: 'micro'; fecha: string; item: RevistaMicroItem }
   | { key: string; kind: 'estudio'; fecha: string; item: RevistaEstudioItem }
   | { key: string; kind: 'evolucion'; fecha: string; item: RevistaEvolucionItem };
 
@@ -93,6 +107,14 @@ const buildHistoria = (contexto: RevistaInternacionContexto | null): HistoriaEve
       kind: 'lab',
       fecha: lab.fecha_solicitud || '',
       item: lab,
+    });
+  }
+  for (const micro of contexto.microbiologia || []) {
+    eventos.push({
+      key: `micro-${micro.id}`,
+      kind: 'micro',
+      fecha: micro.fecha_solicitud || '',
+      item: micro,
     });
   }
   for (const est of contexto.estudios) {
@@ -138,6 +160,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
   const navigate = useNavigate();
   const { currentUser } = useData();
   const puedeAbrirLab = canOpenDetalleOrdenLab(currentUser);
+  const puedeAbrirMicro = canAccessMicrobiologiaLectura(currentUser);
   const [pedidoPanel, setPedidoPanel] = useState<PedidoPanel>(null);
   const [soapOpen, setSoapOpen] = useState(false);
   const [pedidoError, setPedidoError] = useState<string | null>(null);
@@ -432,13 +455,7 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                     <Chip
                       size="small"
                       label={labelEstadoOrdenLims(lab.estado)}
-                      color={
-                        lab.estado === 'INFORMADO_PARCIAL'
-                          ? estadoOrdenColor('INFORMADO_PARCIAL')
-                          : lab.tiene_resultados
-                            ? 'success'
-                            : 'default'
-                      }
+                      color={estadoOrdenColor(lab.estado as EstadoSolicitudLims)}
                     />
                     <Button size="small" onClick={() => setEventoAbierto(abierto ? null : ev.key)}>
                       {abierto ? 'Ocultar' : 'Ver'}
@@ -456,13 +473,26 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                         Abrir en laboratorio
                       </Button>
                     )}
+                    {canDownloadInformeClinicoPdf(currentUser, lab.estado) && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          void downloadInformeLimsPdf(lab.id).catch((err) =>
+                            toast.error(formatLimsPdfDownloadError(err))
+                          );
+                        }}
+                      >
+                        {lab.estado === 'INFORMADO_PARCIAL' ? 'PDF parcial' : 'PDF informe'}
+                      </Button>
+                    )}
                   </Stack>
                   {abierto && (
                     <Box sx={{ mt: 1 }}>
                       {lab.estado === 'INFORMADO_PARCIAL' && (
                         <Alert severity="warning" sx={{ mb: 1 }}>
                           Informe parcial: hay resultados disponibles, pero la orden aún no está
-                          completa. No es el informe final.
+                          completa. Al validar el definitivo, este parcial deja de estar vigente.
                         </Alert>
                       )}
                       <Typography variant="caption" color="text.secondary" display="block" mb={1}>
@@ -501,6 +531,56 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
                           Sin resultados cargados todavía.
                         </Typography>
                       )}
+                    </Box>
+                  )}
+                </Box>
+              );
+            }
+            if (ev.kind === 'micro') {
+              const micro = ev.item;
+              const detalleMicro = [micro.cultivo_nombre, micro.muestra_nombre]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <Box
+                  key={ev.key}
+                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.25 }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Chip size="small" label="Micro" color="secondary" variant="outlined" />
+                    <Typography variant="body2" fontWeight={600}>
+                      {formatFecha(ev.fecha)}
+                    </Typography>
+                    <Typography variant="body2">
+                      {micro.numero || `Estudio #${micro.id}`}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={labelEstadoEstudioMicro(micro.estado)}
+                      color={estadoEstudioMicroColor(micro.estado)}
+                    />
+                    <Button size="small" onClick={() => setEventoAbierto(abierto ? null : ev.key)}>
+                      {abierto ? 'Ocultar' : 'Ver'}
+                    </Button>
+                    {puedeAbrirMicro && (
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          navigate(
+                            pathDetalleEstudioMicro(micro.id),
+                            withNavBack('/internacion', '← Volver a internación')
+                          )
+                        }
+                      >
+                        Abrir en laboratorio
+                      </Button>
+                    )}
+                  </Stack>
+                  {abierto && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {detalleMicro || 'Pedido de microbiología.'}
+                      </Typography>
                     </Box>
                   )}
                 </Box>

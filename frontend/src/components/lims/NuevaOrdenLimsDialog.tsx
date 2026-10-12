@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -18,8 +18,6 @@ import {
   MenuItem,
   Select,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   ThemeProvider,
   Typography,
@@ -34,17 +32,18 @@ import { createMedico, getEspecialidades } from '../../services/apiService';
 import type { Especialidad } from '../../types';
 import {
   agregarExamenesSolicitudLims,
+  createPedidoCompletoLims,
   createSolicitudExamenLims,
   getOrdenAbiertaPaciente,
   getRepeticionControlCandidatos,
   getRestriccionesEnsayosPaciente,
   getTiposExamenMap,
+  listMaterialesPedidoLims,
   listPanelesLims,
   type RepeticionControlResponse,
   type RestriccionesEnsayosLims,
 } from '../../services/limsApi';
 import {
-  createEstudiosMicrobiologiaBatch,
   listTiposCultivoMicro,
   listTiposMuestraMicro,
 } from '../../services/limsMicroApi';
@@ -52,6 +51,7 @@ import type { Paciente } from '../../types';
 import type {
   LimsPanelExamen,
   LimsTipoExamen,
+  MaterialPedidoLims,
   OrigenSolicitudLims,
   TipoCultivoMicrobiologia,
   TipoMuestraMicrobiologia,
@@ -70,16 +70,18 @@ import {
   useClinicalDrawerDialogTheme,
   Z_DIALOG_OVER_CLINICAL_DRAWER,
 } from '../../utils/layerZIndex';
-import SolicitudAnalisisPapelForm, {
-  useSolicitudAnalisisSelection,
-} from './SolicitudAnalisisPapelForm';
-import SolicitudMicrobiologiaForm, {
-  type MicroPedidoItem,
-} from './SolicitudMicrobiologiaForm';
+import { useSolicitudAnalisisSelection } from './SolicitudAnalisisPapelForm';
+import SolicitudAnalisisMaterialesForm from './SolicitudAnalisisMaterialesForm';
+import { type MicroPedidoItem } from './SolicitudMicrobiologiaForm';
 import { addLocalDays, formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
+import {
+  cultivosCodigosAutoPreselect,
+  cultivosCodigosDeMateriales,
+  muestraPreferidaPorCultivoDeMateriales,
+  syncMicroItemsConMateriales,
+} from '../../utils/limsMaterialesMicro';
 import { mensajeBloqueoExamen, puedeOmitirRestriccionFrecuenciaEnsayos } from '../../utils/limsRestriccionesEnsayos';
-
-export type PedidoTab = 'lab' | 'micro';
+import { particionarSeleccionPorMateriales } from '../../utils/limsParticionMateriales';
 
 export interface DraftMicroPayload {
   items: Array<{
@@ -87,9 +89,11 @@ export interface DraftMicroPayload {
     tipo_muestra_micro_id: number;
     cultivo_nombre: string;
     muestra_nombre: string;
+    material_pedido?: string;
   }>;
   observaciones?: string;
   fecha_programada_toma: string;
+  material_pedido?: string;
 }
 
 export interface NuevaOrdenLimsDialogProps {
@@ -112,6 +116,7 @@ export interface NuevaOrdenLimsDialogProps {
     paneles_labels: string[];
     observaciones?: string;
     fecha_programada_toma: string;
+    material_pedido: string;
   }) => void;
   onAddDraftMicro?: (payload: DraftMicroPayload) => void;
   /** Si se setea, agrega exámenes a esa orden abierta en lugar de crear una nueva. */
@@ -139,7 +144,6 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
 }) => {
   const dialogTheme = useClinicalDrawerDialogTheme();
   const soloLab = Boolean(agregarAOrdenId);
-  const [tab, setTab] = useState<PedidoTab>('lab');
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -162,6 +166,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     : ORIGEN_SOLICITUD_LIMS_OPTIONS;
   const [examenes, setExamenes] = useState<LimsTipoExamen[]>([]);
   const [paneles, setPaneles] = useState<LimsPanelExamen[]>([]);
+  const [materialesPedido, setMaterialesPedido] = useState<MaterialPedidoLims[]>([]);
+  const [selectedMaterialCodigos, setSelectedMaterialCodigos] = useState<string[]>([]);
   const [cultivos, setCultivos] = useState<TipoCultivoMicrobiologia[]>([]);
   const [tiposMuestraMicro, setTiposMuestraMicro] = useState<TipoMuestraMicrobiologia[]>([]);
   const [microItems, setMicroItems] = useState<MicroPedidoItem[]>([]);
@@ -208,6 +214,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     togglePanel,
     toggleExamen,
     resetSelection,
+    deselectMany,
     getSelectionArrays,
     hasSelection,
   } = useSolicitudAnalisisSelection({ examenes, paneles });
@@ -219,7 +226,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     setObservacionesMicro('');
     setFechaProgramadaToma(formatFechaLocal(startOfLocalDay()));
     setMicroItems([]);
-    setTab('lab');
+    setSelectedMaterialCodigos([]);
     setError('');
     setOrigenManual(origenInicial || 'AMBULATORIO_ICPL');
     setMedicoExterno('');
@@ -282,7 +289,6 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     if (enabled) {
       resetSelection();
       setMicroItems([]);
-      setTab('lab');
       setError('');
     }
   };
@@ -345,6 +351,81 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     },
     [examenes, restriccionesEnsayos, selectedExamenesIds, toggleExamen]
   );
+
+  const materialesSeleccionados = useMemo(() => {
+    if (!selectedMaterialCodigos.length) return [];
+    const byCode = new Map(materialesPedido.map((m) => [m.codigo, m]));
+    return selectedMaterialCodigos
+      .map((c) => byCode.get(c))
+      .filter((m): m is MaterialPedidoLims => Boolean(m));
+  }, [selectedMaterialCodigos, materialesPedido]);
+
+  /**
+   * Cultivos permitidos = unión de todos los materiales del pedido.
+   * Auto-preselect: orina/fecal/LCR/líquidos/hisopados; sangre no fuerza hemocultivo.
+   * Antes ORINA quedaba fuera del filtro y, al sumar LCR, el effect borraba el urocultivo.
+   */
+  const cultivosPermitidos = useMemo(
+    () => cultivosCodigosDeMateriales(materialesSeleccionados),
+    [materialesSeleccionados]
+  );
+
+  const cultivosAutoPreselect = useMemo(
+    () => cultivosCodigosAutoPreselect(materialesSeleccionados),
+    [materialesSeleccionados]
+  );
+
+  const muestraPreferidaPorCultivo = useMemo(
+    () => muestraPreferidaPorCultivoDeMateriales(materialesSeleccionados),
+    [materialesSeleccionados]
+  );
+
+  useEffect(() => {
+    if (soloLab) return;
+    if (!cultivosPermitidos.length && !cultivosAutoPreselect.length) {
+      setMicroItems((prev) => (prev.length ? [] : prev));
+      return;
+    }
+    setMicroItems((prev) =>
+      syncMicroItemsConMateriales(prev, {
+        permitidos: cultivosPermitidos,
+        autoPreselect: cultivosAutoPreselect,
+        buildItem: (codigoCultivo) => {
+          const cultivo = cultivos.find(
+            (c) =>
+              (c.codigo || '').toUpperCase() === codigoCultivo.toUpperCase() &&
+              c.activo !== false
+          );
+          if (!cultivo) return null;
+          const preferida =
+            muestraPreferidaPorCultivo[cultivo.codigo] ||
+            muestraPreferidaPorCultivo[cultivo.codigo.toUpperCase()];
+          const muestra =
+            (preferida &&
+              tiposMuestraMicro.find(
+                (t) => (t.codigo || '').toUpperCase() === preferida.toUpperCase()
+              )) ||
+            tiposMuestraMicro[0];
+          if (!muestra) return null;
+          return {
+            key: `${cultivo.id}:${muestra.id}`,
+            tipo_cultivo_id: cultivo.id,
+            tipo_muestra_micro_id: muestra.id,
+            cultivo_codigo: cultivo.codigo,
+            cultivo_nombre: cultivo.nombre,
+            muestra_nombre: muestra.nombre,
+          };
+        },
+      })
+    );
+  }, [
+    soloLab,
+    cultivosPermitidos,
+    cultivosAutoPreselect,
+    cultivos,
+    tiposMuestraMicro,
+    muestraPreferidaPorCultivo,
+  ]);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -358,6 +439,13 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       listPanelesLims({ activo: true }).then((panList) => {
         if (!cancelled) setPaneles(panList.filter((p) => p.activo !== false));
       }),
+      listMaterialesPedidoLims()
+        .then((list) => {
+          if (!cancelled) setMaterialesPedido(list);
+        })
+        .catch(() => {
+          if (!cancelled) setMaterialesPedido([]);
+        }),
     ];
     if (!soloLab) {
       loaders.push(
@@ -446,17 +534,6 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     return () => window.clearTimeout(tmr);
   }, [medicoQuery, open, lockMedico, draftMode, consultaHcId, usarMedicoExterno]);
 
-  const resolveLabels = () => {
-    const { paneles_ids, examenes_ids } = getSelectionArrays();
-    const paneles_labels = paneles_ids
-      .map((id) => paneles.find((p) => p.id === id)?.nombre)
-      .filter(Boolean) as string[];
-    const examenes_labels = examenes_ids
-      .map((id) => examenes.find((e) => e.id === id)?.nombre)
-      .filter(Boolean) as string[];
-    return { paneles_ids, examenes_ids, paneles_labels, examenes_labels };
-  };
-
   const pacienteVisible = paciente ?? pacienteInicial;
 
   const osPayload = () => {
@@ -469,32 +546,87 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     };
   };
 
+  const gruposLabPorMaterial = () => {
+    const { paneles_ids, examenes_ids } = getSelectionArrays();
+    if (examenes_ids.length === 0 && paneles_ids.length === 0) return [];
+    const groups = particionarSeleccionPorMateriales({
+      materialesOrden: materialesSeleccionados,
+      selectedExamenesIds: new Set(examenes_ids),
+      selectedPanelesIds: new Set(paneles_ids),
+      examenes,
+      paneles,
+    });
+    if (groups.length > 0) return groups;
+    // Sin materiales mapeados: un solo grupo con toda la selección.
+    return [
+      {
+        material: materialesSeleccionados[0] ?? {
+          codigo: '_',
+          nombre: 'Lab. clínico',
+          tipo_muestra_codigos: [],
+          grilla_codigos: [],
+        },
+        examenes_ids,
+        paneles_ids,
+      },
+    ];
+  };
+
+  const materialCodigoParaCultivo = (cultivoCodigo: string): string => {
+    const up = (cultivoCodigo || '').toUpperCase();
+    const mat = materialesSeleccionados.find(
+      (m) => (m.cultivo_micro_codigo || '').toUpperCase() === up
+    );
+    return (mat?.codigo || '').toUpperCase();
+  };
+
   const executeDraft = () => {
     if (!fechaProgramadaToma) {
       setError('Indicá el día de la extracción.');
       return;
     }
-    if (hasSelection) {
-      const { paneles_ids, examenes_ids, paneles_labels, examenes_labels } = resolveLabels();
+    const groups = gruposLabPorMaterial();
+    for (const g of groups) {
+      const mat = (g.material.codigo || '').toUpperCase();
+      if (!mat || mat === '_') {
+        setError('Seleccioná un material de pedido válido.');
+        return;
+      }
+      const paneles_labels = g.paneles_ids
+        .map((id) => paneles.find((p) => p.id === id)?.nombre)
+        .filter(Boolean) as string[];
+      const examenes_labels = g.examenes_ids
+        .map((id) => examenes.find((e) => e.id === id)?.nombre)
+        .filter(Boolean) as string[];
       onAddDraft?.({
-        paneles_ids,
-        examenes_ids,
+        paneles_ids: g.paneles_ids,
+        examenes_ids: g.examenes_ids,
         paneles_labels,
         examenes_labels,
         observaciones: observaciones.trim() || undefined,
         fecha_programada_toma: fechaProgramadaToma,
+        material_pedido: mat,
       });
     }
-    if (microItems.length > 0) {
+    for (const i of microItems) {
+      const mat = materialCodigoParaCultivo(i.cultivo_codigo);
+      if (!mat) {
+        setError(`No se pudo asociar material al cultivo ${i.cultivo_nombre}.`);
+        return;
+      }
       onAddDraftMicro?.({
-        items: microItems.map((i) => ({
-          tipo_cultivo_id: i.tipo_cultivo_id,
-          tipo_muestra_micro_id: i.tipo_muestra_micro_id,
-          cultivo_nombre: i.cultivo_nombre,
-          muestra_nombre: i.muestra_nombre,
-        })),
+        items: [
+          {
+            tipo_cultivo_id: i.tipo_cultivo_id,
+            tipo_muestra_micro_id: i.tipo_muestra_micro_id,
+            cultivo_nombre: i.cultivo_nombre,
+            muestra_nombre: i.muestra_nombre,
+            material_pedido: mat,
+          },
+        ],
         observaciones: observacionesMicro.trim() || undefined,
         fecha_programada_toma: fechaProgramadaToma,
+        material_pedido: mat,
       });
     }
     onClose();
@@ -551,8 +683,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
-    const { paneles_ids, examenes_ids } = getSelectionArrays();
-    const hasLab = examenes_ids.length > 0 || paneles_ids.length > 0;
+    const groups = gruposLabPorMaterial();
+    const hasLab = groups.length > 0;
     const hasMicro = microItems.length > 0;
     if (!hasLab && !hasMicro) {
       setError('Seleccioná análisis de Lab. Clínico y/o cultivos de Microbiología.');
@@ -561,63 +693,71 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
 
     setSaving(true);
     try {
-      let labId: number | undefined;
-      if (hasLab) {
-        const orden = await createSolicitudExamenLims({
+      const solicitudes_lab = groups.map((g) => {
+        const mat = (g.material.codigo || '').toUpperCase();
+        if (!mat || mat === '_') {
+          throw new Error('Seleccioná un material de pedido válido.');
+        }
+        return {
+          material_pedido: mat,
+          examenes_ids: g.examenes_ids,
+          paneles_ids: g.paneles_ids,
+          observaciones: observaciones.trim() || undefined,
+        };
+      });
+      const estudios_micro = microItems.map((i) => {
+        const mat = materialCodigoParaCultivo(i.cultivo_codigo);
+        if (!mat) {
+          throw new Error(`No se pudo asociar material al cultivo ${i.cultivo_nombre}.`);
+        }
+        return {
+          material_pedido: mat,
+          tipo_cultivo_id: i.tipo_cultivo_id,
+          tipo_muestra_micro_id: i.tipo_muestra_micro_id,
+          observaciones: observacionesMicro.trim() || undefined,
+        };
+      });
+
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `pedido-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const result = await createPedidoCompletoLims(
+        {
           paciente_id: paciente.id,
           medico_id: usarMedicoExterno
             ? undefined
             : medicoId ?? medicoInterno?.id ?? undefined,
-          consulta_hc_id: consultaHcId,
-          origen_solicitud: consultaHcId ? undefined : origenManual,
-          medico_externo_nombre: usarMedicoExterno
-            ? medicoExterno.trim()
-            : undefined,
-          examenes_ids,
-          paneles_ids,
-          observaciones: observaciones.trim() || undefined,
-          fecha_programada_toma: fechaProgramadaToma,
-          ...osPayload(),
-        });
-        labId = orden.id;
-        if (orden.merged) {
-          toast.success(
-            `Exámenes agregados a la orden ${orden.numero || `#${orden.id}`}.`
-          );
-        } else {
-          toast.success(`Orden Lab. ${orden.numero || `#${orden.id}`} creada.`);
-        }
-        onCreated?.(orden.id);
-      }
-
-      if (hasMicro) {
-        const estudios = await createEstudiosMicrobiologiaBatch({
-          paciente_id: paciente.id,
-          medico_id: usarMedicoExterno
-            ? null
-            : medicoId ?? medicoInterno?.id ?? null,
           medico_externo_nombre: usarMedicoExterno
             ? medicoExterno.trim()
             : undefined,
           consulta_hc_id: consultaHcId,
           origen_solicitud: consultaHcId ? undefined : origenManual,
-          observaciones: observacionesMicro.trim() || undefined,
           fecha_programada_toma: fechaProgramadaToma,
-          items: microItems.map((i) => ({
-            tipo_cultivo_id: i.tipo_cultivo_id,
-            tipo_muestra_micro_id: i.tipo_muestra_micro_id,
-          })),
+          solicitudes_lab: hasLab ? solicitudes_lab : [],
+          estudios_micro: hasMicro ? estudios_micro : [],
           ...osPayload(),
-        });
-        toast.success(
-          estudios.length === 1
-            ? `Pedido micro ${estudios[0].numero || `#${estudios[0].id}`} creado.`
-            : `${estudios.length} pedidos de microbiología creados.`
-        );
-        onCreatedMicro?.(estudios.map((e) => e.id));
-        if (!labId && estudios[0]) onCreated?.(estudios[0].id);
-      }
+        },
+        { idempotencyKey }
+      );
 
+      for (const id of result.solicitudes_ids || []) {
+        onCreated?.(id);
+      }
+      if (result.estudios_micro_ids?.length) {
+        onCreatedMicro?.(result.estudios_micro_ids);
+      }
+      const nLab = result.solicitudes_ids?.length || 0;
+      const nMicro = result.estudios_micro_ids?.length || 0;
+      toast.success(
+        [
+          nLab ? `${nLab} orden(es) lab.` : null,
+          nMicro ? `${nMicro} micro` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') + ' creados.'
+      );
       onClose();
     } catch (e) {
       const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes);
@@ -673,7 +813,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
-    const hasLab = hasSelection;
+    const groups = gruposLabPorMaterial();
+    const hasLab = groups.length > 0;
     const hasMicro = !soloLab && microItems.length > 0;
 
     if (!hasLab && !hasMicro) {
@@ -681,8 +822,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
+    // Multi-material → N órdenes nuevas (forzar); no ofrecer merge a una sola abierta.
     const pacienteId = paciente?.id ?? pacienteInicial?.id;
-    if (hasLab && pacienteId) {
+    if (hasLab && groups.length === 1 && pacienteId) {
       try {
         const abierta = await getOrdenAbiertaPaciente(pacienteId, fechaProgramadaToma);
         if (abierta) {
@@ -1010,24 +1152,6 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               </>
             )}
 
-            {!soloLab && !repeticionMode && (
-              <Tabs
-                value={tab}
-                onChange={(_, v: PedidoTab) => setTab(v)}
-                variant="fullWidth"
-                sx={{ borderBottom: 1, borderColor: 'divider' }}
-              >
-                <Tab
-                  value="lab"
-                  label={`Lab. Clínico${hasSelection ? ` (${selectedExamenesIds.size + selectedPanelesIds.size})` : ''}`}
-                />
-                <Tab
-                  value="micro"
-                  label={`Microbiología${microItems.length ? ` (${microItems.length})` : ''}`}
-                />
-              </Tabs>
-            )}
-
             {repeticionMode ? (
               <Stack spacing={1.5}>
                 <Typography variant="body2" color="text.secondary">
@@ -1075,38 +1199,28 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               <Box display="flex" justifyContent="center" py={4}>
                 <CircularProgress size={32} />
               </Box>
-            ) : tab === 'lab' || soloLab ? (
-              <SolicitudAnalisisPapelForm
+            ) : (
+              <SolicitudAnalisisMaterialesForm
                 examenes={examenes}
                 paneles={paneles}
+                materialesPedido={materialesPedido}
                 selectedPanelesIds={selectedPanelesIds}
                 selectedExamenesIds={selectedExamenesIds}
                 onTogglePanel={togglePanel}
                 onToggleExamen={handleToggleExamen}
+                onDeselectMany={deselectMany}
+                onSelectedMaterialsChange={setSelectedMaterialCodigos}
                 observaciones={observaciones}
                 onObservacionesChange={setObservaciones}
                 disabled={saving}
+                showMicroPorMaterial={!soloLab}
+                cultivos={cultivos}
+                tiposMuestraMicro={tiposMuestraMicro}
+                microItems={microItems}
+                onChangeMicroItems={setMicroItems}
+                observacionesMicro={observacionesMicro}
+                onObservacionesMicroChange={setObservacionesMicro}
               />
-            ) : (
-              <Stack spacing={2}>
-                <SolicitudMicrobiologiaForm
-                  cultivos={cultivos}
-                  tiposMuestra={tiposMuestraMicro}
-                  items={microItems}
-                  onChangeItems={setMicroItems}
-                  disabled={saving}
-                />
-                <TextField
-                  fullWidth
-                  size="small"
-                  multiline
-                  minRows={2}
-                  label="Observaciones (microbiología)"
-                  value={observacionesMicro}
-                  onChange={(e) => setObservacionesMicro(e.target.value)}
-                  disabled={saving}
-                />
-              </Stack>
             )}
           </Stack>
         </DialogContent>

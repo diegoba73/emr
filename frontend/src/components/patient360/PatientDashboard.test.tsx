@@ -14,6 +14,7 @@ jest.mock('react-router-dom', () => ({
 }));
 jest.mock('../../contexts/DataContext', () => ({ useData: jest.fn() }));
 jest.mock('../../services/limsApi', () => ({ listSolicitudesExamen: jest.fn() }));
+jest.mock('../../services/limsMicroApi', () => ({ listEstudiosMicrobiologia: jest.fn(async () => []) }));
 jest.mock('../../services/api', () => ({ apiService: {
   getAtenciones: jest.fn(async () => ({ results: [] })),
   getPacienteTimeline: jest.fn(async () => []),

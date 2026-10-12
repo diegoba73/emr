@@ -30,8 +30,13 @@ export interface EtiquetasMuestrasZplOrdenDialogProps {
   /** Reservado: el backend resuelve lugar desde origen de la solicitud. */
   origenOrden?: OrigenParaLugarExtraccion | null;
   onClose: () => void;
-  /** Tras cerrar / refrescar muestras en el padre. */
+  /** Tras cada impresión (p. ej. refrescar listado en reimpresión). */
   onUpdated?: () => void;
+  /**
+   * Cuando se imprimieron todas las etiquetas del diálogo.
+   * En primera impresión desde Pendientes: recién ahí pasar a «Esperando recepción».
+   */
+  onAllPrinted?: () => void;
 }
 
 type RowState = {
@@ -97,11 +102,15 @@ const EtiquetasMuestrasZplOrdenDialog: React.FC<EtiquetasMuestrasZplOrdenDialogP
   solicitudNumero,
   onClose,
   onUpdated,
+  onAllPrinted,
 }) => {
   const [rows, setRows] = useState<RowState[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [downloadingTalon, setDownloadingTalon] = useState(false);
   const printLocks = useRef<Record<number, boolean>>({});
+  const printedIds = useRef<Set<number>>(new Set());
+  const onAllPrintedRef = useRef(onAllPrinted);
+  onAllPrintedRef.current = onAllPrinted;
 
   const loadPreviews = useCallback(async (muestras: MuestraTransaccional[]) => {
     const initial: RowState[] = muestras.map((m) => ({
@@ -161,6 +170,7 @@ const EtiquetasMuestrasZplOrdenDialog: React.FC<EtiquetasMuestrasZplOrdenDialogP
     if (!open) {
       setRows([]);
       printLocks.current = {};
+      printedIds.current = new Set();
       return;
     }
     void reload();
@@ -187,14 +197,23 @@ const EtiquetasMuestrasZplOrdenDialog: React.FC<EtiquetasMuestrasZplOrdenDialogP
       const payload = await getMuestraEtiquetaZpl(id);
       const muestras = await listMuestrasPorSolicitud(solicitudId, solicitudNumero);
       const fresh = muestras.find((m) => m.id === id) || row.muestra;
-      setRows((prev) =>
-        prev.map((r) =>
+      printedIds.current.add(id);
+      let allDone = false;
+      setRows((prev) => {
+        const next = prev.map((r) =>
           r.muestra.id === id
             ? { ...r, muestra: fresh, payload, loading: false, error: undefined }
             : r
-        )
-      );
+        );
+        const ids = next.map((r) => r.muestra.id);
+        allDone =
+          ids.length > 0 && ids.every((mid) => printedIds.current.has(mid));
+        return next;
+      });
       onUpdated?.();
+      if (allDone) {
+        onAllPrintedRef.current?.();
+      }
     } catch (e) {
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 400) {

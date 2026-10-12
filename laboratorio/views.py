@@ -147,7 +147,11 @@ class TipoExamenViewSet(viewsets.ModelViewSet):
     serializer_class = TipoExamenSerializer
     permission_classes = [LimsTipoExamenCatalogPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['activo', 'tipo_muestra_requerida', 'modo_entrada']
+    filterset_fields = {
+        'activo': ['exact'],
+        'tipo_muestra_requerida': ['exact', 'in'],
+        'modo_entrada': ['exact'],
+    }
     search_fields = ['nombre', 'codigo', 'codigo_nbu', 'abreviatura', 'metodo']
     ordering_fields = ['nombre', 'codigo', 'precio']
     ordering = ['nombre']
@@ -256,12 +260,13 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         'medico_interno',
         'consulta_hc__turno__recurso',
     ).prefetch_related(
-        'tipos_examen',
-        'paneles',
+        'tipos_examen__tipo_muestra_requerida',
+        'paneles__tipos_examen__tipo_muestra_requerida',
         'resultados__tipo_examen',
         'resultados__muestra',
         'resultados__laboratorio_derivacion',
         'muestras__tipo_contenedor',
+        'muestras__tipo_muestra',
     ).all()
     permission_classes = [LimsSolicitudExamenPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -636,7 +641,12 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                     'medico_interno',
                     'consulta_hc__turno__recurso',
                 )
-                .prefetch_related('muestras__tipo_contenedor')
+                .prefetch_related(
+                    'muestras__tipo_contenedor',
+                    'muestras__tipo_muestra',
+                    'tipos_examen__tipo_muestra_requerida',
+                    'paneles__tipos_examen__tipo_muestra_requerida',
+                )
                 .defer('orden_grupos_informe')
             )
         else:

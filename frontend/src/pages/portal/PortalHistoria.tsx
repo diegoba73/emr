@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
-import Timeline, { TimelineItem, TimelineItemType } from '../../components/patient360/Timeline';
+import { useNavigate } from 'react-router-dom';
+import Timeline, { TimelineItem } from '../../components/patient360/Timeline';
 import type { PacienteTimelineEvent } from '../../types';
+import { mapTimelineEvent } from './portalTimelineUtils';
 
 const PortalHistoria: React.FC = () => {
   const { currentUser } = useData();
+  const navigate = useNavigate();
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const pacienteId = currentUser?.paciente?.id;
@@ -21,27 +24,13 @@ const PortalHistoria: React.FC = () => {
       .then((events: PacienteTimelineEvent[]) => {
         setItems(
           events
-            .map((ev) => {
-              const date = ev.date ? new Date(ev.date) : new Date(0);
-              if (Number.isNaN(date.getTime())) return null;
-              return {
-                id: ev.id,
-                type: (ev.type || 'otro') as TimelineItemType,
-                title: ev.title,
-                subtitle: ev.subtitle || undefined,
-                date,
-                critical: Boolean(ev.critical),
-                nested: Boolean(ev.nested),
-                episodeGroupId: ev.episode_group_id || undefined,
-                episodeGroupTitle: ev.episode_group_title || undefined,
-              } as TimelineItem;
-            })
+            .map((ev) => mapTimelineEvent(ev, navigate))
             .filter((x): x is TimelineItem => Boolean(x)),
         );
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, [pacienteId]);
+  }, [pacienteId, navigate]);
 
   return (
     <Box sx={{ p: 2 }} data-demo="page-portal-historia">

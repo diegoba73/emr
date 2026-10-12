@@ -3,14 +3,14 @@ import { Box, Button, Chip, Paper, Typography } from '@mui/material';
 import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
+import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
 
 export interface EstudioMicroResumenTabProps {
   estudio: EstudioMicrobiologia;
   canOperateTecnico: boolean;
   canMarcarInformado: boolean;
-  canEditarObraSocial?: boolean;
   canEditarOrden?: boolean;
-  /** Impresión / reimpresión ZPL (post-recepción incluido; mismo diálogo que pendientes). */
+  /** Impresión / reimpresión ZPL (post-recepción incluido). */
   onReimprimirEtiquetas?: () => void;
   /** Talón A4 — no muta estado ni etiquetas_impresas_at. */
   onImprimirTalon?: () => void;
@@ -18,7 +18,6 @@ export interface EstudioMicroResumenTabProps {
   onIniciar: () => void;
   onCancelar: () => void;
   onMarcarInformado: () => void;
-  onObraSocial?: () => void;
   onEditarOrden?: () => void;
 }
 
@@ -26,7 +25,6 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   estudio,
   canOperateTecnico,
   canMarcarInformado,
-  canEditarObraSocial = false,
   canEditarOrden = false,
   onReimprimirEtiquetas,
   onImprimirTalon,
@@ -34,13 +32,11 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   onIniciar,
   onCancelar,
   onMarcarInformado,
-  onObraSocial,
   onEditarOrden,
 }) => {
   const e = estudio.estado;
   const tieneEtiqueta = Boolean(estudio.etiquetas_impresas_at || estudio.codigo_barra);
-  const puedeImprimirEtiqueta =
-    Boolean(onReimprimirEtiquetas) && e !== 'CANCELADO';
+  const puedeImprimirEtiqueta = Boolean(onReimprimirEtiquetas) && e !== 'CANCELADO';
   const puedeImprimirTalon = Boolean(onImprimirTalon) && e !== 'CANCELADO';
   return (
     <Paper sx={{ p: 2 }}>
@@ -81,7 +77,15 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
         </Typography>
       ) : null}
       <Typography sx={{ mt: 1 }}>
-        <strong>Inicio:</strong> {estudio.fecha_inicio ? new Date(estudio.fecha_inicio).toLocaleString() : '—'}
+        <strong>Solicitud:</strong>{' '}
+        {estudio.created_at ? new Date(estudio.created_at).toLocaleString('es-AR') : '—'}
+      </Typography>
+      <Typography sx={{ mt: 1 }}>
+        <strong>Extracción:</strong>{' '}
+        {estudio.fecha_inicio
+          ? new Date(estudio.fecha_inicio).toLocaleString('es-AR')
+          : estudio.fecha_programada_toma || '—'}
+        {!estudio.fecha_inicio && estudio.fecha_programada_toma ? ' (programada)' : ''}
       </Typography>
       {estudio.motivo_cancelacion ? (
         <Typography sx={{ mt: 1 }} color="error">
@@ -93,29 +97,38 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       </Typography>
       {(canOperateTecnico ||
         canMarcarInformado ||
-        canEditarObraSocial ||
         canEditarOrden ||
         puedeImprimirEtiqueta ||
         puedeImprimirTalon) && (
         <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {canEditarOrden && onEditarOrden && (
-            <Button variant="outlined" onClick={onEditarOrden}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={onEditarOrden}
+            >
               Editar orden
             </Button>
           )}
-          {canEditarObraSocial && onObraSocial && (
-            <Button variant="outlined" onClick={onObraSocial}>
-              Obra social
-            </Button>
-          )}
           {puedeImprimirEtiqueta && (
-            <Button variant="outlined" onClick={onReimprimirEtiquetas}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={onReimprimirEtiquetas}
+            >
               {tieneEtiqueta ? 'Reimprimir etiquetas' : 'Imprimir etiquetas'}
             </Button>
           )}
           {puedeImprimirTalon && (
             <Button
+              size="small"
               variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
               disabled={Boolean(downloadingTalon)}
               onClick={onImprimirTalon}
             >
@@ -123,7 +136,14 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
             </Button>
           )}
           {canOperateTecnico && e === 'PENDIENTE' && (
-            <Button variant="contained" onClick={onIniciar}>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              disableElevation
+              sx={limsActionBtnSx}
+              onClick={onIniciar}
+            >
               Confirmar recepción
             </Button>
           )}
@@ -133,7 +153,14 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
             </Button>
           )}
           {canMarcarInformado && (
-            <Button variant="contained" color="success" onClick={onMarcarInformado}>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              disableElevation
+              sx={limsActionBtnSx}
+              onClick={onMarcarInformado}
+            >
               Marcar informado
             </Button>
           )}

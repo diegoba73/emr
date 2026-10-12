@@ -32,6 +32,28 @@ export function labelDiaOrden(d: Date, ref: Date = startOfLocalDay()): string {
   return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+/**
+ * Texto de extracción prevista (YYYY-MM-DD).
+ * Hoy → «Extracción hoy»; futuro → «… (programada)»; pasado → fecha sin etiqueta.
+ */
+export function labelExtraccionPrevista(
+  fechaIso: string,
+  ref: Date = startOfLocalDay()
+): string {
+  const hoy = formatFechaLocal(ref);
+  const fecha = (fechaIso || '').trim();
+  if (!fecha) return '';
+  if (fecha === hoy) return 'Extracción hoy';
+  const d = parseFechaLocal(fecha);
+  const label = d.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  if (fecha > hoy) return `Extracción ${label} (programada)`;
+  return `Extracción ${label}`;
+}
+
 /** Días consecutivos hacia atrás desde hoy (índice 0 = hoy). */
 export function buildDiasLaboratorio(cantidad: number, desde: Date = new Date()): Date[] {
   const hoy = startOfLocalDay(desde);

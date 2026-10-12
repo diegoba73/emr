@@ -41,6 +41,29 @@ export function labelEstadoOrdenLims(estado: EstadoSolicitudLims | string): stri
   return ESTADO_ORDEN_LABEL[estado as EstadoSolicitudLims] || estado;
 }
 
+/**
+ * Cuatro estados generales de UI (plan remediación LIMS):
+ * Pendientes | En proceso | Informe parcial | Finalizado.
+ * LISTO_PARA_VALIDAR se muestra como En proceso.
+ */
+export function labelEstadoOrdenGeneral(estado: EstadoSolicitudLims | string): string {
+  switch (estado) {
+    case 'PENDIENTE':
+      return 'Pendiente';
+    case 'EN_PROCESO':
+    case 'LISTO_PARA_VALIDAR':
+      return 'En proceso';
+    case 'INFORMADO_PARCIAL':
+      return 'Informe parcial';
+    case 'FINALIZADO':
+      return 'Finalizado';
+    case 'CANCELADO':
+      return 'Cancelado';
+    default:
+      return labelEstadoOrdenLims(estado);
+  }
+}
+
 export function estadoOrdenColor(
   estado: EstadoSolicitudLims
 ): 'default' | 'primary' | 'success' | 'error' | 'warning' | 'info' {
@@ -93,9 +116,9 @@ export function ordenListaParaValidar(
   return estado === 'LISTO_PARA_VALIDAR';
 }
 
-/** Solo informe validado (FINALIZADO): sin borradores ni parciales. */
+/** Informe entregable: definitivo o parcial liberado. */
 export function ordenPuedeEnviarInforme(estado: EstadoSolicitudLims): boolean {
-  return estado === 'FINALIZADO';
+  return estado === 'FINALIZADO' || estado === 'INFORMADO_PARCIAL';
 }
 
 export function ordenEsFinalizada(estado: EstadoSolicitudLims): boolean {

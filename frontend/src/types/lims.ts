@@ -133,6 +133,20 @@ export interface LimsPanelExamen {
   activo?: boolean;
 }
 
+/** Material de pedido (GET /lab/materiales-pedido/). */
+export interface MaterialPedidoLims {
+  codigo: string;
+  nombre: string;
+  ui_preset?: 'sangre' | 'orina' | string | null;
+  tipo_muestra_codigos: string[];
+  grilla_codigos: string[];
+  cultivo_micro_codigo?: string | null;
+  muestra_micro_codigo?: string | null;
+  tiene_estudio_celular?: boolean;
+  /** Aparece al abrir el selector sin tipear (Sangre es el default aparte). */
+  frecuente?: boolean;
+}
+
 /** Catálogo contenedor (GET /lab/contenedores/) */
 export interface LimsTipoContenedor {
   id: number;
@@ -168,6 +182,8 @@ export interface ResultadoExamenLims {
   observaciones?: string;
   muestra_id?: number | null;
   muestra_estado?: string | null;
+  /** Fecha/hora de toma del tubo vinculado a este resultado. */
+  muestra_fecha_toma?: string | null;
   tipo_muestra_nombre?: string | null;
   /** Código del tipo de muestra requerida por el examen (catálogo). */
   tipo_examen_muestra_codigo?: string | null;
@@ -221,6 +237,8 @@ export interface SolicitudExamenLims {
   fecha_programada_toma?: string;
   /** Última fecha de toma física (max de Muestra.fecha_toma). */
   fecha_toma_muestra?: string | null;
+  /** Última recepción en laboratorio (max de Muestra.fecha_recepcion). */
+  fecha_recepcion_muestra?: string | null;
   /** Diagnóstico clínico (internación/cama o consulta/ficha paciente). */
   diagnostico?: string | null;
   fecha_entrega_prometida?: string | null;
@@ -263,6 +281,8 @@ export interface SolicitudExamenLims {
     tipo_contenedor_nombre?: string | null;
     estado?: string;
   }>;
+  /** Materiales clínicos de la orden (p. ej. «Líquido ascítico · Suero»). */
+  tipos_muestra_display?: string | null;
 }
 
 export interface EnvioInformeLimsResultado {

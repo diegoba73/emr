@@ -108,6 +108,13 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
   },
 ];
 
+/** Agrupa CA / PROT_T / CA_ION cuando el iónico está pedido (Zeisler o equipo). */
+export const GRUPO_CA_ION_ZEISLER = {
+  codigo: 'GRP_CA_ION',
+  nombre: 'Calcio iónico',
+  examenes: ['CA', 'PROT_T', 'CA_ION'] as const,
+};
+
 function sortByPanelOrder(
   resultados: ResultadoExamenLims[],
   orderedIds: number[] | undefined
@@ -134,12 +141,46 @@ function sortByCodigoOrder(
   });
 }
 
+function inferirGrupoCaIon(
+  pool: ResultadoExamenLims[]
+): { grupo: GrupoResultadosOrden | null; sobrantes: ResultadoExamenLims[] } {
+  const set = new Set(GRUPO_CA_ION_ZEISLER.examenes.map((c) => c.toUpperCase()));
+  const match = pool.filter((r) => set.has((r.tipo_examen_codigo || '').toUpperCase()));
+  const tieneCaIon = match.some(
+    (r) => (r.tipo_examen_codigo || '').toUpperCase() === 'CA_ION'
+  );
+  // Solo agrupar si hay CA_ION y al menos un insumo (CA o PROT_T), o solo CA_ION.
+  if (!tieneCaIon) {
+    return { grupo: null, sobrantes: pool };
+  }
+  if (match.length === 1) {
+    // Solo CA_ION: dejar como suelto (caso EAB/equipo).
+    return { grupo: null, sobrantes: pool };
+  }
+  const matchIds = new Set(match.map((r) => r.id));
+  return {
+    grupo: {
+      key: `inferido-${GRUPO_CA_ION_ZEISLER.codigo}`,
+      titulo: GRUPO_CA_ION_ZEISLER.nombre,
+      codigo: GRUPO_CA_ION_ZEISLER.codigo,
+      resultados: sortByCodigoOrder(match, GRUPO_CA_ION_ZEISLER.examenes),
+    },
+    sobrantes: pool.filter((r) => !matchIds.has(r.id)),
+  };
+}
+
 function inferirGruposPorCodigo(
   restantes: ResultadoExamenLims[],
   codigosPanelYaUsados: Set<string>
 ): { grupos: GrupoResultadosOrden[]; sobrantes: ResultadoExamenLims[] } {
   let pool = [...restantes];
   const grupos: GrupoResultadosOrden[] = [];
+
+  const { grupo: grupoCaIon, sobrantes: trasCaIon } = inferirGrupoCaIon(pool);
+  if (grupoCaIon) {
+    grupos.push(grupoCaIon);
+    pool = trasCaIon;
+  }
 
   for (const perfil of PERFILES_POR_CODIGO) {
     if (codigosPanelYaUsados.has(perfil.codigo)) continue;

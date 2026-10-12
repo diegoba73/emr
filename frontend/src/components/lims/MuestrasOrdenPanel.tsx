@@ -161,6 +161,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
               <TableCell>Tubo</TableCell>
               <TableCell>Tipo muestra</TableCell>
               <TableCell>Estado</TableCell>
+              <TableCell>Extracción</TableCell>
               <TableCell>Ubicación</TableCell>
               <TableCell align="right">Acciones</TableCell>
             </TableRow>
@@ -168,7 +169,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={7}>
                   <Typography color="text.secondary">Sin muestras registradas.</Typography>
                 </TableCell>
               </TableRow>
@@ -181,6 +182,15 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
                       conts.find((c) => c.id === m.tipo_contenedor)?.nombre ||
                       `#${m.tipo_contenedor}`
                     : '—';
+                const fechaExt = m.fecha_toma
+                  ? (() => {
+                      try {
+                        return new Date(m.fecha_toma).toLocaleString('es-AR');
+                      } catch {
+                        return m.fecha_toma;
+                      }
+                    })()
+                  : '—';
                 return (
                   <TableRow key={m.id}>
                     <TableCell>{m.codigo_barra || '—'}</TableCell>
@@ -189,6 +199,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
                   <TableCell>
                     <MuestraEstadoBadge estado={m.estado} />
                   </TableCell>
+                  <TableCell>{fechaExt}</TableCell>
                   <TableCell>{m.ubicacion_actual || '—'}</TableCell>
                   <TableCell align="right">
                     <MuestraAcciones

@@ -101,18 +101,18 @@ def orden_en_curso(solicitud: SolicitudExamen) -> bool:
 
 
 def orden_permite_intentar_agregar_examenes(solicitud: SolicitudExamen) -> bool:
-    """UI/API: se puede abrir el flujo de agregar (validación de tubos en el backend)."""
-    if orden_esta_abierta(solicitud):
-        return True
-    if orden_esperando_recepcion(solicitud) and _muestras_activas_solo_pendiente_toma(
-        solicitud
-    ):
-        return True
-    return orden_en_curso(solicitud)
+    """
+    Lab/bioquímico/admin: agregar mientras la orden no esté FINALIZADO/CANCELADO.
+    (PENDIENTE con o sin etiquetas, EN_PROCESO, parcial, listo para validar.)
+    """
+    estado = getattr(solicitud, "estado", None)
+    if estado in ("FINALIZADO", "CANCELADO"):
+        return False
+    return estado == "PENDIENTE" or estado in ESTADOS_ORDEN_EN_CURSO
 
 
 def orden_permite_quitar_examenes(solicitud: SolicitudExamen) -> bool:
-    """PENDIENTE o en curso: se puede intentar quitar (el backend valida resultados)."""
+    """Lab/bioquímico/admin: quitar mientras no esté FINALIZADO/CANCELADO."""
     estado = getattr(solicitud, "estado", None)
     if estado in ("FINALIZADO", "CANCELADO"):
         return False
@@ -391,7 +391,10 @@ def _resolver_tipo_examen_ids(
     Si se pide un calculado suelto (p. ej. RAC), incluye sus insumos medidos.
     Si se pide un examen legacy (p. ej. ENA), lo reemplaza por su panel.
     """
-    from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
+    from laboratorio.calculos_derivados import (
+        INSUMOS_POR_CODIGO_CALCULADO,
+        codigos_insumos_de_overrideables,
+    )
     from laboratorio.catalogo_solicitud_papel import LEGACY_EXAMEN_A_PANEL
 
     exam_ids = {int(x) for x in (examenes_ids or []) if x is not None}
@@ -446,6 +449,15 @@ def _resolver_tipo_examen_ids(
                 code = (insumo or "").strip().upper()
                 if code and code not in codigos:
                     insumos_faltan.add(code)
+        panel_codigos = {
+            (c or "").strip().upper()
+            for c in PanelExamen.objects.filter(pk__in=paneles_ok).values_list(
+                "codigo", flat=True
+            )
+        }
+        insumos_faltan.update(
+            codigos_insumos_de_overrideables(codigos, paneles=panel_codigos)
+        )
         if insumos_faltan:
             tipos.update(
                 TipoExamen.objects.filter(codigo__in=insumos_faltan, activo=True).values_list(
@@ -571,11 +583,51 @@ def agregar_examenes_a_solicitud(
     if not orden_permite_intentar_agregar_examenes(sol):
         raise OrdenNoAbiertaError(
             f"La orden {sol.numero or sol.pk} no admite agregar exámenes "
-            "(finalizada o estado no editable). "
+            "(finalizada o cancelada). "
             "Creá una orden nueva para ese paciente."
         )
 
     tipos_nuevos, paneles_nuevos = _resolver_tipo_examen_ids(examenes_ids or [], paneles_ids or [])
+
+    # Compatibilidad con material: legado permisivo; insumos de calculados
+    # (p. ej. CREATI en orden de clearance/orina) siempre admitidos.
+    from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
+    from laboratorio.material_pedido_orden import tipo_examen_compatible_con_material
+
+    mat_orden = (getattr(sol, "material_pedido", None) or "").strip().upper()
+    if tipos_nuevos and mat_orden:
+        codigos_en_orden = {
+            (c or "").strip().upper()
+            for c in sol.resultados.values_list("tipo_examen__codigo", flat=True)
+        }
+        codigos_nuevos = {
+            (c or "").strip().upper()
+            for c in TipoExamen.objects.filter(pk__in=tipos_nuevos).values_list(
+                "codigo", flat=True
+            )
+        }
+        conjunto = codigos_en_orden | codigos_nuevos
+        insumos_cruzados: set[str] = set()
+        for calc, insumos in INSUMOS_POR_CODIGO_CALCULADO.items():
+            if calc in conjunto:
+                insumos_cruzados.update(insumos)
+
+        incompatibles = []
+        for te in TipoExamen.objects.filter(pk__in=tipos_nuevos).select_related(
+            "tipo_muestra_requerida"
+        ):
+            codigo = (te.codigo or "").strip().upper()
+            if tipo_examen_compatible_con_material(te, mat_orden):
+                continue
+            if codigo in insumos_cruzados:
+                continue
+            incompatibles.append(codigo or str(te.pk))
+        if incompatibles:
+            raise OrdenNoAbiertaError(
+                "Los exámenes no son compatibles con el material de la orden "
+                f"({mat_orden}): {', '.join(incompatibles[:8])}."
+            )
+
     assert_puede_agregar_ensayos(
         user,
         sol.paciente_id,
@@ -585,7 +637,7 @@ def agregar_examenes_a_solicitud(
     existentes = set(sol.resultados.values_list("tipo_examen_id", flat=True))
 
     # Con tubos ya generados, los nuevos ítems deben poder resolverse a contenedor.
-    if not orden_esta_abierta(sol) and orden_tiene_muestras_activas(sol):
+    if orden_tiene_muestras_activas(sol):
         _assert_examenes_con_tubo_configurado(tipos_nuevos)
 
     tipos_map = {

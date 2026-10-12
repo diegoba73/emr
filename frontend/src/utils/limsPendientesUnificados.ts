@@ -27,6 +27,8 @@ export interface PendientePedidoRow {
   tubos_pendientes_extraccion?: SolicitudExamenLims['tubos_pendientes_extraccion'];
   cultivo_nombre?: string | null;
   muestra_nombre?: string | null;
+  /** Lab clínico: tipos de muestra (API tipos_muestra_display). */
+  tipos_muestra_display?: string | null;
   /** Solo Lab: fila original para TomarMuestra / agregar. */
   labOrden?: SolicitudExamenLims;
   /** IQC Fase 1: ok / falta / na (sin materiales QC). */
@@ -49,7 +51,8 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
     estado_obra_social: r.estado_obra_social || '',
     fecha_solicitud: r.fecha_solicitud,
     fecha_programada_toma: r.fecha_programada_toma,
-    fecha_toma_muestra: r.fecha_toma_muestra,
+    // Listado: «Extracción» solo con recepción real, no fecha programada ni sola toma.
+    fecha_toma_muestra: r.fecha_recepcion_muestra || null,
     sin_etiquetas: Boolean(r.orden_abierta),
     esperando_recepcion: Boolean(r.esperando_recepcion),
     orden_abierta: Boolean(r.orden_abierta),
@@ -57,6 +60,8 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
     puede_agregar_examenes: Boolean(r.puede_agregar_examenes),
     puede_quitar_examenes: Boolean(r.puede_quitar_examenes),
     tubos_pendientes_extraccion: r.tubos_pendientes_extraccion,
+    tipos_muestra_display: r.tipos_muestra_display || null,
+    muestra_nombre: r.tipos_muestra_display || null,
     labOrden: r,
   };
 }
@@ -69,11 +74,26 @@ export function estadosMicroDesdeFiltroLab(estadoLab: string): string[] | null {
   const estado = (estadoLab || '').trim();
   if (!estado) return null;
   if (estado === 'FINALIZADO') return ['VALIDADO', 'INFORMADO'];
-  if (estado === 'INFORMADO_PARCIAL') return ['LECTURA_PRELIMINAR'];
-  if (estado === 'EN_PROCESO') {
-    return ['RECIBIDO', 'SEMBRADO', 'LECTURA_PRELIMINAR', 'IDENTIFICACION', 'ANTIBIOGRAMA'];
+  // Informe parcial micro: etapas con preliminar posible (no proxy a solo LECTURA_PRELIMINAR).
+  if (estado === 'INFORMADO_PARCIAL') {
+    return [
+      'LECTURA_PRELIMINAR',
+      'IDENTIFICACION',
+      'ANTIBIOGRAMA',
+      'LISTO_PARA_VALIDAR',
+    ];
   }
-  if (estado === 'PENDIENTE' || estado === 'LISTO_PARA_VALIDAR') return [estado];
+  if (estado === 'EN_PROCESO' || estado === 'LISTO_PARA_VALIDAR') {
+    return [
+      'RECIBIDO',
+      'SEMBRADO',
+      'LECTURA_PRELIMINAR',
+      'IDENTIFICACION',
+      'ANTIBIOGRAMA',
+      'LISTO_PARA_VALIDAR',
+    ];
+  }
+  if (estado === 'PENDIENTE') return [estado];
   return [estado];
 }
 
@@ -108,7 +128,9 @@ export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow
     estado_obra_social: e.estado_obra_social || '',
     fecha_solicitud: e.created_at,
     fecha_programada_toma: e.fecha_programada_toma,
-    fecha_toma_muestra: e.fecha_inicio || e.created_at,
+    // Extracción = recepción real (PENDIENTE → RECIBIDO). Nunca created_at ni programada.
+    fecha_toma_muestra:
+      e.estado !== 'PENDIENTE' && e.fecha_inicio ? e.fecha_inicio : null,
     sin_etiquetas: Boolean(e.sin_etiquetas ?? (e.estado === 'PENDIENTE' && !e.etiquetas_impresas_at)),
     esperando_recepcion: Boolean(
       e.esperando_recepcion ?? (e.estado === 'PENDIENTE' && e.etiquetas_impresas_at)

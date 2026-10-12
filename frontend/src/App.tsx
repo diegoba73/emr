@@ -57,7 +57,6 @@ import QcHubPage from './pages/laboratorio/qc/QcHubPage';
 import AnalyticsAnalitosPage from './pages/laboratorio/AnalyticsAnalitosPage';
 import FiltrosAvanzadosPage from './pages/laboratorio/FiltrosAvanzadosPage';
 import InstrumentosPage from './pages/laboratorio/InstrumentosPage';
-import PrototipoPedidoMultiMaterialPage from './pages/laboratorio/PrototipoPedidoMultiMaterialPage';
 import PatientDashboard from './components/patient360/PatientDashboard';
 import AuditEventsPage from './pages/AuditEventsPage';
 import BiDashboard from './pages/BiDashboard';
@@ -825,19 +824,6 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsModule}
               >
                 <InstrumentosPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/laboratorio/prototipo-pedido-multi-material"
-            element={
-              <ProtectedRoute
-                currentUser={currentUser}
-                isAuthenticated={isAuthenticated}
-                isLoading={isLoading}
-                canAccess={canAccessLimsModule}
-              >
-                <PrototipoPedidoMultiMaterialPage />
               </ProtectedRoute>
             }
           />

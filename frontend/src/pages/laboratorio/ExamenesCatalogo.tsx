@@ -10,6 +10,7 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   InputLabel,
   MenuItem,
   Paper,
@@ -27,10 +28,17 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { LimsTipoContenedor, LimsTipoExamen, LimsTipoMuestra, TipoExamenLimsWriteBody } from '../../types/lims';
+import type {
+  LimsTipoContenedor,
+  LimsTipoExamen,
+  LimsTipoMuestra,
+  MaterialPedidoLims,
+  TipoExamenLimsWriteBody,
+} from '../../types/lims';
 import {
   createTipoExamenLims,
   listContenedoresLims,
+  listMaterialesPedidoLims,
   listTiposExamenLims,
   listTiposMuestraLims,
   patchTipoExamenLims,
@@ -124,9 +132,11 @@ const ExamenesCatalogo: React.FC = () => {
   const { currentUser } = useData();
   const [rows, setRows] = useState<LimsTipoExamen[]>([]);
   const [tiposMuestra, setTiposMuestra] = useState<LimsTipoMuestra[]>([]);
+  const [materiales, setMateriales] = useState<MaterialPedidoLims[]>([]);
   const [contenedores, setContenedores] = useState<LimsTipoContenedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filtroMaterial, setFiltroMaterial] = useState('');
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -135,27 +145,91 @@ const ExamenesCatalogo: React.FC = () => {
   const allowed = canAccessLimsCatalogos(currentUser);
   const canEdit = canEditLimsCatalogos(currentUser);
 
+  const muestraIdsDelMaterial = useMemo(() => {
+    if (!filtroMaterial) return null as number[] | null;
+    const mat = materiales.find((m) => m.codigo === filtroMaterial);
+    if (!mat?.tipo_muestra_codigos?.length) return [];
+    const codes = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
+    return tiposMuestra
+      .filter((t) => codes.has((t.codigo || '').toUpperCase()))
+      .map((t) => t.id);
+  }, [filtroMaterial, materiales, tiposMuestra]);
+
+  const examenListParams = useMemo(() => {
+    const params: Parameters<typeof listTiposExamenLims>[0] = {
+      search: search.trim() || undefined,
+    };
+    if (muestraIdsDelMaterial == null) return params;
+    if (muestraIdsDelMaterial.length === 1) {
+      params.tipo_muestra_requerida = muestraIdsDelMaterial[0];
+    } else if (muestraIdsDelMaterial.length > 1) {
+      params.tipo_muestra_requerida__in = muestraIdsDelMaterial;
+    }
+    return params;
+  }, [search, muestraIdsDelMaterial]);
+
+  const materialSinMuestras =
+    Boolean(filtroMaterial) && (muestraIdsDelMaterial?.length ?? 0) === 0;
+
+  const frascoEsterilId = useMemo(
+    () => contenedores.find((c) => c.codigo === 'FRASCO_ESTERIL')?.id,
+    [contenedores]
+  );
+
+  const muestraCodigoById = useMemo(() => {
+    const map = new Map(tiposMuestra.map((t) => [t.id, (t.codigo || '').toUpperCase()]));
+    return (id: number | '') => (id === '' ? '' : map.get(id) || '');
+  }, [tiposMuestra]);
+
+  /** Muestras con tubo siempre FRASCO_ESTERIL (mismo criterio que LCR). */
+  const MUESTRAS_FRASCO_ESTERIL = useMemo(() => new Set(['LCR', 'ESPUTO']), []);
+  const muestraCodigoForm = muestraCodigoById(form.tipo_muestra_requerida);
+  const esTuboFrascoEsterilFijo = MUESTRAS_FRASCO_ESTERIL.has(muestraCodigoForm);
+
+  const loadCatalogMeta = useCallback(async () => {
+    const [muestras, conts, mats] = await Promise.all([
+      listTiposMuestraLims(),
+      listContenedoresLims(),
+      listMaterialesPedidoLims(),
+    ]);
+    setTiposMuestra(muestras);
+    setContenedores(conts.filter((c) => c.activo !== false));
+    setMateriales(mats);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [examenes, muestras, conts] = await Promise.all([
-        listTiposExamenLims({ search: search.trim() || undefined }),
-        listTiposMuestraLims(),
-        listContenedoresLims(),
-      ]);
+      if (materialSinMuestras) {
+        setRows([]);
+        return;
+      }
+      const examenes = await listTiposExamenLims(examenListParams);
       setRows(examenes);
-      setTiposMuestra(muestras);
-      setContenedores(conts.filter((c) => c.activo !== false));
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [examenListParams, materialSinMuestras]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    loadCatalogMeta().catch((e) => {
+      toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
+    });
+  }, [allowed, loadCatalogMeta]);
 
   useEffect(() => {
     if (allowed) load();
   }, [allowed, load]);
+
+  useEffect(() => {
+    if (!esTuboFrascoEsterilFijo || frascoEsterilId == null) return;
+    if (form.tipo_contenedor !== frascoEsterilId) {
+      setForm((f) => ({ ...f, tipo_contenedor: frascoEsterilId }));
+    }
+  }, [esTuboFrascoEsterilFijo, frascoEsterilId, form.tipo_contenedor]);
 
   const contenedorLabel = useMemo(() => {
     const map = new Map(contenedores.map((t) => [t.id, `${t.codigo} — ${t.nombre}`]));
@@ -195,7 +269,12 @@ const ExamenesCatalogo: React.FC = () => {
       ub_nbu: form.ub_nbu.trim() || null,
       abreviatura: form.abreviatura.trim() || undefined,
       tipo_muestra_requerida: Number(form.tipo_muestra_requerida),
-      tipo_contenedor: form.tipo_contenedor === '' ? null : Number(form.tipo_contenedor),
+      tipo_contenedor:
+        esTuboFrascoEsterilFijo && frascoEsterilId != null
+          ? frascoEsterilId
+          : form.tipo_contenedor === ''
+            ? null
+            : Number(form.tipo_contenedor),
       tipo_resultado: form.tipo_resultado,
       metodo: form.metodo.trim() || undefined,
       unidad_default: form.unidad_default.trim() || undefined,
@@ -300,6 +379,21 @@ const ExamenesCatalogo: React.FC = () => {
           placeholder="Código IACA, NBU, nombre, método…"
           sx={{ minWidth: 260 }}
         />
+        <FormControl size="small" sx={{ minWidth: 260 }}>
+          <InputLabel>Material</InputLabel>
+          <Select
+            label="Material"
+            value={filtroMaterial}
+            onChange={(ev) => setFiltroMaterial(ev.target.value)}
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {materiales.map((m) => (
+              <MenuItem key={m.codigo} value={m.codigo}>
+                {m.nombre}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <Button variant="outlined" onClick={() => load()} disabled={loading}>
           Actualizar
         </Button>
@@ -455,9 +549,16 @@ const ExamenesCatalogo: React.FC = () => {
               <Select
                 label="Tipo de muestra"
                 value={form.tipo_muestra_requerida === '' ? '' : String(form.tipo_muestra_requerida)}
-                onChange={(ev) =>
-                  patchForm({ tipo_muestra_requerida: Number(ev.target.value) })
-                }
+                onChange={(ev) => {
+                  const id = Number(ev.target.value);
+                  const codigo = (tiposMuestra.find((t) => t.id === id)?.codigo || '').toUpperCase();
+                  patchForm({
+                    tipo_muestra_requerida: id,
+                    ...(MUESTRAS_FRASCO_ESTERIL.has(codigo) && frascoEsterilId != null
+                      ? { tipo_contenedor: frascoEsterilId }
+                      : {}),
+                  });
+                }}
               >
                 {tiposMuestra.map((t) => (
                   <MenuItem key={t.id} value={t.id}>
@@ -466,7 +567,7 @@ const ExamenesCatalogo: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
-            <FormControl>
+            <FormControl disabled={esTuboFrascoEsterilFijo}>
               <InputLabel>Tipo de tubo</InputLabel>
               <Select
                 label="Tipo de tubo"
@@ -483,6 +584,11 @@ const ExamenesCatalogo: React.FC = () => {
                   </MenuItem>
                 ))}
               </Select>
+              {esTuboFrascoEsterilFijo ? (
+                <FormHelperText>
+                  {muestraCodigoForm}: siempre FRASCO_ESTERIL — Frasco / tubo estéril
+                </FormHelperText>
+              ) : null}
             </FormControl>
             <FormControl>
               <InputLabel>Tipo de resultado</InputLabel>

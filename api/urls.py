@@ -24,6 +24,7 @@ from laboratorio.views_impresion_ordenes import (
     PedidosPapelPdfView,
     ResenasSugeridasView,
 )
+from laboratorio.views_pedidos_completos import PedidoCompletoCreateView
 from laboratorio.views_muestras import (
     AreaLaboratorioViewSet,
     MuestraTransaccionalViewSet,
@@ -76,6 +77,7 @@ from laboratorio.views_instrumentos import (
     MapeoAnalitoInstrumentoViewSet,
     MensajeInstrumentoViewSet,
 )
+from laboratorio.views_materiales_pedido import MaterialesPedidoListView
 from usuarios.views import PacienteRegisterView
 from core.views import HealthCheckView
 from .views_bi import BiKpisView
@@ -389,6 +391,13 @@ urlpatterns = [
     # BI / KPIs operativos
     path('bi/kpis/', BiKpisView.as_view(), name='bi_kpis'),
 
+    # Pedido multi-material atómico (confirmación médica / lab preferido)
+    path(
+        'lab/pedidos-completos/',
+        PedidoCompletoCreateView.as_view(),
+        name='lab-pedidos-completos',
+    ),
+
     # IQC precheck (gate temprano / bandeja)
     path('lab/qc/precheck/', IqcPrecheckView.as_view(), name='lab-qc-precheck'),
     path('lab/qc/precheck-batch/', IqcPrecheckView.as_view(), name='lab-qc-precheck-batch'),
@@ -434,7 +443,17 @@ urlpatterns = [
         IngestaInstrumentoView.as_view(),
         name='lab-instrumentos-ingesta',
     ),
-    
+    path(
+        'laboratorio/materiales-pedido/',
+        MaterialesPedidoListView.as_view(),
+        name='laboratorio-materiales-pedido',
+    ),
+    path(
+        'lab/materiales-pedido/',
+        MaterialesPedidoListView.as_view(),
+        name='lab-materiales-pedido',
+    ),
+
     # Endpoint público para obtener token CSRF
     path('auth/csrf-token/', views.csrf_token_view, name='csrf_token'),
     

@@ -122,18 +122,23 @@ const secUser: User = { ...labUser, id: 11, username: 'sec', rol: 'SECRETARIA' }
 const enfUser: User = { ...labUser, id: 12, username: 'enf', rol: 'ENFERMERIA' };
 
 describe('canDownloadInformeLimsPdf / canEnviarInformeLims', () => {
-  it('admin, laboratorio y bioquímico solo tras FINALIZADO', () => {
+  it('LIMS: FINALIZADO o INFORMADO_PARCIAL; envío parcial por roles parcial', () => {
     expect(canDownloadInformeLimsPdf(adminUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canDownloadInformeLimsPdf(labUser, 'EN_PROCESO')).toBe(false);
-    expect(canDownloadInformeLimsPdf(bioUser, 'INFORMADO_PARCIAL')).toBe(false);
+    expect(canDownloadInformeLimsPdf(bioUser, 'INFORMADO_PARCIAL')).toBe(true);
+    expect(canDownloadInformeLimsPdf(labUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canDownloadInformeLimsPdf(adminUser, 'FINALIZADO')).toBe(true);
     expect(canDownloadInformeLimsPdf(labUser, 'FINALIZADO')).toBe(true);
     expect(canDownloadInformeLimsPdf(bioUser, 'FINALIZADO')).toBe(true);
     expect(canEnviarInformeLims(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canEnviarInformeLims(labUser, 'FINALIZADO')).toBe(true);
+    expect(canEnviarInformeLims(labUser, 'INFORMADO_PARCIAL')).toBe(true);
+    expect(canEnviarInformeLims(bioUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canEnviarInformeLims(secUser, 'EN_PROCESO')).toBe(false);
     expect(canEnviarInformeLims(secUser, 'FINALIZADO')).toBe(true);
+    expect(canEnviarInformeLims(secUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canEnviarInformeLims(enfUser, 'FINALIZADO')).toBe(false);
+    expect(canEnviarInformeLims(enfUser, 'INFORMADO_PARCIAL')).toBe(false);
   });
 
   it('médico, secretaría y enfermería no descargan desde módulo LIMS', () => {
@@ -156,29 +161,38 @@ describe('canOperateInformeMicro / canSeeInformeMicro / canDownloadInformeMicroP
     expect(canOperateInformeMicro(medUser)).toBe(false);
   });
 
-  it('lab y médico no ven contenido hasta VALIDADO', () => {
+  it('lab y médico ven VALIDADO; preliminar EMITIDO sí para roles parcial', () => {
     expect(canSeeInformeMicro(labUser, 'EMITIDO')).toBe(false);
+    expect(canSeeInformeMicro(labUser, 'EMITIDO', 'PRELIMINAR')).toBe(true);
     expect(canSeeInformeMicro(medUser, 'BORRADOR')).toBe(false);
+    expect(canSeeInformeMicro(medUser, 'EMITIDO', 'PRELIMINAR')).toBe(true);
     expect(canSeeInformeMicro(labUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(medUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(bioUser, 'BORRADOR')).toBe(true);
     expect(canSeeInformeMicro(secUser, 'VALIDADO')).toBe(true);
     expect(canSeeInformeMicro(secUser, 'BORRADOR')).toBe(false);
+    expect(canSeeInformeMicro(enfUser, 'EMITIDO', 'PRELIMINAR')).toBe(false);
   });
 
-  it('PDF: bio puede con emitido; lab/médico solo validado', () => {
+  it('PDF: bio con emitido; lab/médico validado o preliminar emitido', () => {
     expect(canDownloadInformeMicroPdf(bioUser, 'LISTO_PARA_VALIDAR')).toBe(true);
     expect(canDownloadInformeMicroPdf(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canDownloadInformeMicroPdf(medUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canDownloadInformeMicroPdf(labUser, 'VALIDADO')).toBe(true);
     expect(canDownloadInformeMicroPdf(medUser, 'VALIDADO')).toBe(true);
+    expect(
+      canDownloadInformeMicroPdf(medUser, 'RECIBIDO', { tienePreliminarEmitido: true })
+    ).toBe(true);
   });
 
-  it('enviar solo tras VALIDADO/INFORMADO', () => {
+  it('enviar tras VALIDADO/INFORMADO o preliminar emitido', () => {
     expect(canEnviarInformeMicro(labUser, 'LISTO_PARA_VALIDAR')).toBe(false);
     expect(canEnviarInformeMicro(labUser, 'VALIDADO')).toBe(true);
     expect(canEnviarInformeMicro(secUser, 'VALIDADO')).toBe(true);
     expect(canEnviarInformeMicro(enfUser, 'VALIDADO')).toBe(false);
+    expect(
+      canEnviarInformeMicro(medUser, 'RECIBIDO', { tienePreliminarEmitido: true })
+    ).toBe(true);
   });
 });
 
@@ -212,7 +226,7 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
     expect(canSeeResultadosClinicos(adminUser, 'PENDIENTE')).toBe(true);
   });
 
-  it('médico y secretaría ven resultados; PDF solo FINALIZADO', () => {
+  it('médico/secretaría: PDF en FINALIZADO o INFORMADO_PARCIAL; enfermería/paciente no parcial', () => {
     expect(canSeeResultadosClinicos(medUser, 'EN_PROCESO')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canSeeResultadosClinicos(medUser, 'FINALIZADO')).toBe(true);
@@ -221,9 +235,12 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
     expect(isSecretariaEntregaLab(secUser)).toBe(false);
     expect(isSecretariaEntregaLab(medUser)).toBe(false);
 
-    expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(false);
+    expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(true);
+    expect(canDownloadInformeClinicoPdf(secUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canDownloadInformeClinicoPdf(medUser, 'FINALIZADO')).toBe(true);
     expect(canDownloadInformeClinicoPdf(secUser, 'FINALIZADO')).toBe(true);
+    expect(canDownloadInformeClinicoPdf(enfUser, 'INFORMADO_PARCIAL')).toBe(false);
+    expect(canDownloadInformeClinicoPdf(pacUser, 'INFORMADO_PARCIAL')).toBe(false);
     expect(canDownloadInformeClinicoPdf(pacUser, 'EN_PROCESO')).toBe(false);
   });
 });

@@ -15,6 +15,7 @@ import type {
   LimsTipoExamen,
   TipoExamenLimsWriteBody,
   LimsTipoMuestra,
+  MaterialPedidoLims,
   MuestraTransaccional,
   MuestraLookupLims,
   Paginated,
@@ -517,10 +518,72 @@ export interface CreateSolicitudExamenLimsPayload {
   fecha_programada_toma: string;
   /** 2ª orden mismo día: solo ensayos ya informados de un INFORMADO_PARCIAL. */
   repeticion_control?: boolean;
+  /** Código material (SANGRE, ORINA…). Obligatorio en altas lab. */
+  material_pedido?: string;
+  /**
+   * Omite merge a orden abierta. No salta anti-dup material+fecha.
+   * Preferir createPedidoCompletoLims para pedidos médicos.
+   */
+  forzar_nueva_orden?: boolean;
   /** Snapshot OS del pedido (y upsert afiliación paciente). */
   obra_social?: string;
   numero_afiliado?: string;
   afiliacion_id?: number | null;
+}
+
+export type PedidoCompletoItem = {
+  tipo: 'LAB_CLINICO' | 'MICROBIOLOGIA';
+  id: number;
+};
+
+export interface CreatePedidoCompletoLimsPayload {
+  paciente_id: number;
+  medico_id?: number | null;
+  medico_externo_nombre?: string;
+  consulta_hc_id?: number;
+  origen_solicitud?: OrigenSolicitudLims;
+  fecha_programada_toma: string;
+  observaciones?: string;
+  observaciones_micro?: string;
+  obra_social?: string;
+  numero_afiliado?: string;
+  afiliacion_id?: number | null;
+  solicitudes_lab?: Array<{
+    material_pedido: string;
+    examenes_ids?: number[];
+    paneles_ids?: number[];
+    observaciones?: string;
+  }>;
+  estudios_micro?: Array<{
+    material_pedido: string;
+    tipo_cultivo_id: number;
+    tipo_muestra_micro_id: number;
+    observaciones?: string;
+  }>;
+}
+
+export interface CreatePedidoCompletoLimsResult {
+  pedidos: PedidoCompletoItem[];
+  solicitudes_ids: number[];
+  estudios_micro_ids: number[];
+  fecha_programada_toma: string;
+}
+
+/** Confirmación atómica multi-material (único camino médico). */
+export async function createPedidoCompletoLims(
+  body: CreatePedidoCompletoLimsPayload,
+  options?: { idempotencyKey?: string }
+): Promise<CreatePedidoCompletoLimsResult> {
+  const headers: Record<string, string> = {};
+  if (options?.idempotencyKey) {
+    headers['Idempotency-Key'] = options.idempotencyKey;
+  }
+  const { data } = await apiClient.post<CreatePedidoCompletoLimsResult>(
+    `${LAB}/pedidos-completos/`,
+    body,
+    { headers }
+  );
+  return data;
 }
 
 export async function createSolicitudExamenLims(
@@ -973,10 +1036,20 @@ export async function downloadTalonOrden(solicitudId: number): Promise<void> {
 export async function listTiposExamenLims(params?: {
   activo?: boolean;
   search?: string;
+  /** Filtro exacto por PK de TipoMuestra. */
+  tipo_muestra_requerida?: number;
+  /** Varias muestras (p. ej. todas las del material Sangre). */
+  tipo_muestra_requerida__in?: number[];
 }): Promise<LimsTipoExamen[]> {
   const query: Record<string, string | number | undefined> = { page_size: 2000 };
   if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
   if (params?.search) query.search = params.search;
+  if (params?.tipo_muestra_requerida != null) {
+    query.tipo_muestra_requerida = params.tipo_muestra_requerida;
+  }
+  if (params?.tipo_muestra_requerida__in?.length) {
+    query.tipo_muestra_requerida__in = params.tipo_muestra_requerida__in.join(',');
+  }
   return getPaginatedAll<LimsTipoExamen>(`${LAB}/examenes/`, query);
 }
 
@@ -1055,6 +1128,11 @@ export async function listPanelesLims(params?: {
   if (params?.activo !== undefined) query.activo = params.activo ? 'true' : 'false';
   if (params?.search) query.search = params.search;
   return getPaginatedAll<LimsPanelExamen>(`${LAB}/paneles/`, query);
+}
+
+export async function listMaterialesPedidoLims(): Promise<MaterialPedidoLims[]> {
+  const { data } = await apiClient.get<MaterialPedidoLims[]>(`${LAB}/materiales-pedido/`);
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createPanelExamenLims(body: {

@@ -308,6 +308,7 @@ class SolicitudLaboratorioResumenSerializer(serializers.Serializer):
     numero = serializers.CharField(allow_null=True)
     estado = serializers.CharField()
     fecha_solicitud = serializers.DateTimeField()
+    material_pedido = serializers.CharField(allow_blank=True, required=False)
     tipos_examen_nombres = serializers.ListField(child=serializers.CharField())
     tipos_examen = serializers.ListField(child=serializers.IntegerField(), required=False)
     paneles_nombres = serializers.ListField(child=serializers.CharField())
@@ -318,6 +319,20 @@ class SolicitudLaboratorioResumenSerializer(serializers.Serializer):
     resultados = ResultadoLaboratorioResumenSerializer(many=True)
 
 
+class EstudioMicrobiologiaConsultaResumenSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    numero = serializers.CharField(allow_null=True, allow_blank=True)
+    estado = serializers.CharField()
+    estado_general = serializers.CharField()
+    fecha_solicitud = serializers.DateTimeField(allow_null=True, required=False)
+    material_pedido = serializers.CharField(allow_blank=True, required=False)
+    tipo_cultivo_nombre = serializers.CharField(allow_null=True, allow_blank=True)
+    tipo_muestra_micro_nombre = serializers.CharField(allow_null=True, allow_blank=True)
+    fecha_programada_toma = serializers.DateField(allow_null=True, required=False)
+    tiene_informe_preliminar = serializers.BooleanField()
+    tiene_informe_final = serializers.BooleanField()
+
+
 class ConsultaDetalleSerializer(ConsultaSerializer):
     """Consulta con archivos, pedidos de laboratorio y estudios complementarios vinculados."""
 
@@ -325,6 +340,7 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
     archivos = serializers.SerializerMethodField()
     estudios_complementarios = serializers.SerializerMethodField()
     solicitudes_laboratorio = serializers.SerializerMethodField()
+    estudios_microbiologia = serializers.SerializerMethodField()
 
     class Meta(ConsultaSerializer.Meta):
         fields = ConsultaSerializer.Meta.fields + [
@@ -332,6 +348,7 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
             'archivos',
             'estudios_complementarios',
             'solicitudes_laboratorio',
+            'estudios_microbiologia',
         ]
 
     def get_archivos(self, obj):
@@ -405,6 +422,7 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
                 'numero': sol.numero,
                 'estado': sol.estado,
                 'fecha_solicitud': sol.fecha_solicitud,
+                'material_pedido': getattr(sol, 'material_pedido', '') or '',
                 'tipos_examen': [te.id for te in sol.tipos_examen.all()],
                 'tipos_examen_nombres': [te.nombre for te in sol.tipos_examen.all()],
                 'paneles_nombres': [p.nombre for p in sol.paneles.all()],
@@ -413,6 +431,64 @@ class ConsultaDetalleSerializer(ConsultaSerializer):
                 'resultados': resultados,
             })
         return SolicitudLaboratorioResumenSerializer(data, many=True).data
+
+    def get_estudios_microbiologia(self, obj):
+        from laboratorio.models_microbiologia import EstudioMicrobiologia, InformeMicrobiologia
+
+        estudios = (
+            EstudioMicrobiologia.objects.filter(consulta_hc_id=obj.pk)
+            .select_related('tipo_cultivo', 'tipo_muestra_micro')
+            .prefetch_related('informes')
+            .order_by('-created_at', '-id')
+        )
+        data = []
+        for est in estudios:
+            informes = list(est.informes.all()) if hasattr(est, 'informes') else []
+            if not informes:
+                informes = list(
+                    InformeMicrobiologia.objects.filter(estudio_id=est.pk).only(
+                        'tipo', 'estado'
+                    )
+                )
+            tiene_final = any(
+                (inf.tipo or '') == 'FINAL'
+                and (inf.estado or '') in ('VALIDADO', 'EMITIDO')
+                for inf in informes
+            )
+            tiene_prelim = any(
+                (inf.tipo or '') == 'PRELIMINAR'
+                and (inf.estado or '') in ('VALIDADO', 'EMITIDO')
+                for inf in informes
+            )
+            # Estados generales UI: Pendiente | En proceso | Informe parcial | Finalizado
+            if est.estado in ('VALIDADO', 'INFORMADO') or tiene_final:
+                estado_general = 'FINALIZADO'
+            elif tiene_prelim and not tiene_final:
+                estado_general = 'INFORME_PARCIAL'
+            elif est.estado == 'PENDIENTE':
+                estado_general = 'PENDIENTE'
+            elif est.estado == 'CANCELADO':
+                estado_general = 'CANCELADO'
+            else:
+                estado_general = 'EN_PROCESO'
+            data.append({
+                'id': est.id,
+                'numero': est.numero,
+                'estado': est.estado,
+                'estado_general': estado_general,
+                'fecha_solicitud': getattr(est, 'created_at', None),
+                'material_pedido': getattr(est, 'material_pedido', '') or '',
+                'tipo_cultivo_nombre': (
+                    est.tipo_cultivo.nombre if est.tipo_cultivo_id else None
+                ),
+                'tipo_muestra_micro_nombre': (
+                    est.tipo_muestra_micro.nombre if est.tipo_muestra_micro_id else None
+                ),
+                'fecha_programada_toma': est.fecha_programada_toma,
+                'tiene_informe_preliminar': tiene_prelim,
+                'tiene_informe_final': tiene_final,
+            })
+        return EstudioMicrobiologiaConsultaResumenSerializer(data, many=True).data
 
 
 # ============================================================================

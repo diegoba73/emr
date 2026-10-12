@@ -152,6 +152,11 @@ class EvolucionInternacionTestCase(APITestCase):
     def test_api_contexto_revista_incluye_labs_estudios_y_soap(self):
         from estudios.models import EstudioComplementario, TipoEstudioComplementario
         from laboratorio.models import TipoMuestra, TipoExamen, SolicitudExamen, ResultadoExamen
+        from laboratorio.models_microbiologia import (
+            EstudioMicrobiologia,
+            TipoCultivoMicrobiologia,
+            TipoMuestraMicrobiologia,
+        )
         from laboratorio.origen_solicitud import AMBULATORIO_CEHTA, INTERNACION_UCO
 
         outcome = InternacionClinicalService.iniciar_evolucion_internacion(
@@ -195,6 +200,34 @@ class EvolucionInternacionTestCase(APITestCase):
             estado='FINALIZADO',
         )
         ambulatoria.tipos_examen.add(tipo_examen)
+        cultivo = TipoCultivoMicrobiologia.objects.create(
+            codigo=f'URO{suffix}'[:20],
+            nombre='Urocultivo',
+            activo=True,
+        )
+        muestra_micro = TipoMuestraMicrobiologia.objects.create(
+            codigo=f'ORI{suffix}'[:20],
+            nombre='Orina',
+            activo=True,
+        )
+        estudio_micro = EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud=INTERNACION_UCO,
+            tipo_cultivo=cultivo,
+            tipo_muestra_micro=muestra_micro,
+            tipo_estudio=cultivo.codigo,
+            estado='PENDIENTE',
+        )
+        EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud=AMBULATORIO_CEHTA,
+            tipo_cultivo=cultivo,
+            tipo_muestra_micro=muestra_micro,
+            tipo_estudio=cultivo.codigo,
+            estado='PENDIENTE',
+        )
         tipo_est = TipoEstudioComplementario.objects.create(
             nombre=f'RX torax {suffix}',
             practica=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
@@ -230,6 +263,11 @@ class EvolucionInternacionTestCase(APITestCase):
         self.assertEqual(lab['resultados'][0]['tipo_examen'], tipo_examen.id)
         self.assertEqual(lab['resultados'][0]['tipo_examen_codigo'], tipo_examen.codigo)
         self.assertEqual(lab['resultados'][0]['valor_obtenido'], '110')
+        self.assertEqual(len(response.data['microbiologia']), 1)
+        micro = response.data['microbiologia'][0]
+        self.assertEqual(micro['id'], estudio_micro.pk)
+        self.assertEqual(micro['estado'], 'PENDIENTE')
+        self.assertEqual(micro['cultivo_nombre'], 'Urocultivo')
         self.assertEqual(len(response.data['estudios']), 1)
 
     def test_contexto_revista_orden_manana_no_es_de_hoy(self):

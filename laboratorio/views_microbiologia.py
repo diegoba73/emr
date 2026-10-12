@@ -291,10 +291,23 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 pass
             else:
                 return qs.none()
-            # Médico en listado: solo liberados (equivalente clínico a FINALIZADO).
-            # Retrieve por id sigue permitido en otros estados (p. ej. pedido propio).
-            if role == "medico" and getattr(self, "action", None) == "list":
-                qs = qs.filter(estado__in=("VALIDADO", "INFORMADO"))
+
+        paciente = (self.request.query_params.get("paciente") or "").strip()
+        if paciente:
+            try:
+                qs = qs.filter(paciente_id=int(paciente))
+            except (TypeError, ValueError):
+                qs = qs.none()
+
+        # Médico en bandeja global: solo liberados. Con ?paciente= (ficha 360)
+        # ve todos los del paciente, igual que la timeline.
+        if (
+            not user.is_superuser
+            and get_normalized_role(user) == "medico"
+            and getattr(self, "action", None) == "list"
+            and not paciente
+        ):
+            qs = qs.filter(estado__in=("VALIDADO", "INFORMADO"))
 
         numero = (self.request.query_params.get("numero") or "").strip()
         if numero:
@@ -388,6 +401,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     origen_solicitud=vd.get("_origen_solicitud") or "",
                     consulta_hc=vd.get("_consulta_hc"),
                     fecha_programada_toma=vd.get("fecha_programada_toma"),
+                    material_pedido=vd.get("material_pedido") or "",
                 )
             else:
                 estudio = crear_estudio(
@@ -1724,12 +1738,20 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return qs.none()
         if not user.is_superuser and not usuario_puede_operar_informe_micro(user):
-            role = get_normalized_role(user)
-            # Técnico y médico: solo informes ya validados (contenido liberado).
-            qs = qs.filter(estado="VALIDADO")
-            if role == "medico":
-                from django.db.models import Q
+            from django.db.models import Q
 
+            from api.permissions import ROLES_INFORME_PARCIAL
+
+            role = get_normalized_role(user)
+            # Liberados: FINAL VALIDADO; roles parcial también ven PRELIMINAR EMITIDO.
+            if role in ROLES_INFORME_PARCIAL:
+                qs = qs.filter(
+                    Q(estado="VALIDADO", tipo="FINAL")
+                    | Q(estado="EMITIDO", tipo="PRELIMINAR")
+                )
+            else:
+                qs = qs.filter(estado="VALIDADO", tipo="FINAL")
+            if role == "medico":
                 from laboratorio.access import q_lectura_lims_medico
 
                 q_via_solicitud = Q(estudio__solicitud__isnull=False) & q_lectura_lims_medico(

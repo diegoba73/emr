@@ -33,6 +33,7 @@ def _cargar_datos_solicitud(solicitud: SolicitudExamen) -> dict[str, Any]:
             "resultados__validado_por",
             "paneles__tipos_examen",
             "tipos_examen",
+            "muestras__tipo_muestra",
         )
         .get(pk=solicitud.pk)
     )

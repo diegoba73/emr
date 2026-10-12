@@ -142,6 +142,7 @@ def crear_estudio(
     fecha_programada_toma=None,
     obra_social_orden: str = "",
     afiliado_orden: str = "",
+    material_pedido: str = "",
 ) -> EstudioMicrobiologia:
     """Crea un estudio microbiológico en estado PENDIENTE.
 
@@ -201,6 +202,7 @@ def crear_estudio(
             fecha_programada_toma=fecha_programada_toma,
             obra_social_orden=(obra_social_orden or "").strip(),
             afiliado_orden=(afiliado_orden or "").strip(),
+            material_pedido=(material_pedido or "").strip().upper(),
             estado="PENDIENTE",
         )
         estudio.save()
@@ -235,6 +237,7 @@ def crear_estudio_desde_pedido(
     fecha_programada_toma=None,
     obra_social_orden: str = "",
     afiliado_orden: str = "",
+    material_pedido: str = "",
 ) -> EstudioMicrobiologia:
     """
     Alta de estudio de microbiología: paciente + médico + cultivo + muestra micro.
@@ -274,6 +277,7 @@ def crear_estudio_desde_pedido(
             fecha_programada_toma=fecha_programada_toma,
             obra_social_orden=obra_social_orden,
             afiliado_orden=afiliado_orden,
+            material_pedido=material_pedido,
         )
 
     try:
@@ -301,6 +305,20 @@ def crear_estudio_desde_pedido(
             or ""
         )
 
+    mat = (material_pedido or "").strip().upper()
+    if mat and fecha_programada_toma is not None:
+        from laboratorio.material_pedido_orden import (
+            adquirir_locks_materiales,
+            buscar_conflictos_micro,
+        )
+
+        adquirir_locks_materiales(paciente.pk, {mat}, fecha_programada_toma)
+        msgs = buscar_conflictos_micro(
+            paciente.pk, fecha_programada_toma, material_pedido=mat
+        )
+        if msgs:
+            raise MicrobiologiaAccionError(msgs[0])
+
     return crear_estudio(
         paciente=paciente,
         tipo_cultivo=cultivo,
@@ -316,6 +334,7 @@ def crear_estudio_desde_pedido(
         fecha_programada_toma=fecha_programada_toma,
         obra_social_orden=obra_social_orden,
         afiliado_orden=afiliado_orden,
+        material_pedido=mat,
     )
 
 
@@ -354,6 +373,7 @@ def crear_estudios_batch(
                 fecha_programada_toma=fecha_programada_toma,
                 obra_social_orden=obra_social_orden,
                 afiliado_orden=afiliado_orden,
+                material_pedido=(item.get("material_pedido") or ""),
             )
             creados.append(estudio)
         return creados
@@ -1725,6 +1745,45 @@ def _texto_efectivo_emitir(informe: InformeMicrobiologia, texto_payload: str | N
     return t.strip()
 
 
+def _anular_preliminares_al_definitivo(
+    estudio,
+    *,
+    actor: "AbstractUser | None",
+    view: str,
+    motivo: str,
+) -> None:
+    """Anula PRELIMINARES en BORRADOR/EMITIDO cuando hay FINAL vigente del mismo estudio."""
+    qs = InformeMicrobiologia.objects.filter(
+        estudio_id=estudio.pk,
+        tipo="PRELIMINAR",
+        estado__in=("BORRADOR", "EMITIDO"),
+    ).select_for_update(of=("self",))
+    for prev in qs:
+        before = safe_model_snapshot(prev)
+        prev_estado = prev.estado
+        prev.estado = "ANULADO"
+        prev.motivo_anulacion = motivo
+        prev.fecha_anulacion = timezone.now()
+        if actor and getattr(actor, "is_authenticated", False):
+            prev.anulado_por = actor
+        prev.save()
+        prev.refresh_from_db()
+        log_update(
+            actor=actor,
+            entity=prev,
+            before=before,
+            module="laboratorio",
+            metadata=_base_informe_metadata(
+                prev,
+                accion="anular_preliminar_por_definitivo",
+                view=view,
+                actor=actor,
+                estado_anterior=prev_estado,
+                estado_nuevo=prev.estado,
+            ),
+        )
+
+
 def aplicar_emitir_informe(
     informe_id: int,
     *,
@@ -1773,6 +1832,12 @@ def aplicar_emitir_informe(
 
         if informe.tipo == "FINAL":
             verificar_completitud_para_informe_final(estudio)
+            _anular_preliminares_al_definitivo(
+                estudio,
+                actor=actor,
+                view=view,
+                motivo="Anulado automáticamente al emitir el informe FINAL del estudio.",
+            )
             prev_es = estudio.estado
             if estudio.estado not in ("VALIDADO", "INFORMADO", "LISTO_PARA_VALIDAR"):
                 before_es = safe_model_snapshot(estudio)
@@ -1840,6 +1905,13 @@ def aplicar_validar_informe_final(
             before=before_inf,
             module="laboratorio",
             metadata=meta_inf,
+        )
+
+        _anular_preliminares_al_definitivo(
+            estudio,
+            actor=actor,
+            view=view,
+            motivo="Anulado automáticamente al validar el informe FINAL del estudio.",
         )
 
         prev_es = estudio.estado

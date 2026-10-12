@@ -15,7 +15,8 @@
 **Actualización (B3-frontend-validación-A [VALIDADO] + UX parcial):** junio de 2026 — Alta estudio micro: picker solicitud/muestra LIMS (`RECIBIDA`/`CONSERVADA`/`EN_PROCESO`). Detalle micro: listados globales + filtro cliente [GAP filtros API].  
 **Actualización (DOC-01 — política LIMS externo solicitudes genéricas):** 24 de junio de 2026  
 **Actualización (interfaz analizadores CM260 / Sysmex XP-300):** 9 de septiembre de 2026  
-**Actualización (alineación FSM/permisos orden LIMS vs código):** 12 de septiembre de 2026
+**Actualización (alineación FSM/permisos orden LIMS vs código):** 12 de septiembre de 2026  
+**Actualización (remediación pedido multi-material / anti-dup / atómico):** 11 de octubre de 2026
 
 > **[VIGENTE — sep 2026]** máquina de `SolicitudExamen`: `PENDIENTE` → `EN_PROCESO` → (`INFORMADO_PARCIAL` opcional) → `LISTO_PARA_VALIDAR` → `FINALIZADO`. Reapertura: `LISTO_PARA_VALIDAR` → `EN_PROCESO` al vaciar un resultado completo. Fuente: `laboratorio/solicitud_estado.py`. IQC: `docs_synesis/reglas/control-calidad.md`.
 >
@@ -27,12 +28,25 @@
 
 ---
 
+## Pedido multi-material (O6) — confirmación médica atómica [VIGENTE — oct 2026]
+
+1. **Único camino médico/secretaría:** `POST /api/lab/pedidos-completos/` (transacción atómica: N clínicas + M micros). Header opcional `Idempotency-Key`.
+2. **Anti-duplicado clínica:** paciente + `material_pedido` + `fecha_programada_toma` (activa ∉ `{FINALIZADO, CANCELADO}`). Legacy `material_pedido` vacío: se **infieren** materiales desde exámenes/paneles **sin mutar** la fila.
+3. **Anti-duplicado micro:** paciente + `material_pedido` + fecha (estudios ∉ `{CANCELADO, VALIDADO, INFORMADO}`). Clínica y micro del mismo material **pueden coexistir**.
+4. **Paneles multi-material:** se reparte por material; cada orden vincula el panel pero solo crea componentes de ese material (sin expansión total).
+5. **Médico/secretaría:** no `POST /lab/solicitudes/`, no `agregar-examenes`, no micro create/batch. Lab/bio/admin: create granular con anti-dup; **agregar/quitar** en cualquier estado no terminal (`PENDIENTE`…`LISTO_PARA_VALIDAR`).
+6. **Calculados multi-material (p. ej. clearance):** en la orden de orina/clearance se incluyen insumos de suero necesarios (`CREATI`) para cargar a mano, calcular e **informar** juntos.
+7. **Activación:** desplegar BE + FE juntos; no hay flush secuencial médico como fallback.
+8. **Estados generales UI:** Pendiente | En proceso (`EN_PROCESO`+`LISTO_PARA_VALIDAR`) | Informe parcial | Finalizado. Micro: FINAL prevalece sobre preliminar.
+
+---
+
 ## Flujo de órdenes (`SolicitudExamen`)
 
-1. **Creación:** `POST` al ViewSet registrado como `lab/solicitudes` y duplicado `laboratorio/solicitudes` (mismo ViewSet).
-2. **Día de extracción (`fecha_programada_toma`) [VIGENTE]:** obligatorio al crear. **Una sola orden no `FINALIZADO` por paciente y día** (PENDIENTE / EN_PROCESO / parcial / a validar). Si ya hay orden **PENDIENTE sin etiquetas** ese día → se **fusionan** los exámenes. Si hay orden con etiquetas o en curso ese día → **400** (agregar a la existente o esperar finalización). **Hoy y mañana no colisionan.** Tras `FINALIZADO` se puede pedir otra el mismo día (y así sucesivamente).
+1. **Creación lab:** `POST` `lab/solicitudes` (solo `ROLES_LIMS_WRITE`). Confirmación médica: `POST lab/pedidos-completos/`.
+2. **Día de extracción (`fecha_programada_toma`) [VIGENTE]:** obligatorio al crear. Anti-dup por **material** (no una sola orden por día): sangre hoy + orina hoy OK; sangre hoy + sangre hoy → 400; sangre hoy + sangre mañana OK; tras `FINALIZADO` se puede repetir el material el mismo día. Cambio de fecha solo en `PENDIENTE` (revalida anti-dup).
 3. **Serializer lectura:** `SolicitudExamenSerializer` expone `medico_display` (propiedad del modelo) como `CharField(read_only=True)` **sin** `source` redundante (compatible con DRF reciente).
-4. **Serializer escritura:** `SolicitudExamenCreateSerializer` recibe `paciente_id`, `medico_id` opcional, `medico_externo_nombre`, `origen_solicitud`, `examenes_ids`, `paneles_ids`, `fecha_programada_toma`, fechas/observaciones.
+4. **Serializer escritura:** `SolicitudExamenCreateSerializer` recibe `paciente_id`, `medico_id` opcional, `medico_externo_nombre`, `origen_solicitud`, `examenes_ids`, `paneles_ids`, `material_pedido`, `fecha_programada_toma`, fechas/observaciones.
 5. **Número de protocolo:** generado en `save()` si vacío: `LAB-YYYY-XXXXX` secuencial compartido (lab clínico + microbiología) vía `LabProtocoloCounter` + `select_for_update`. Se valida la entidad **antes** de consumir el correlativo y ambos quedan en la misma transacción (no quemar números por `full_clean` fallido). Listados LIMS ordenan por `numero` **ascendente** (primero → último).
 6. **Origen:** `EMR`, `GUARDIA`, `EXTERNO_PAPEL`, internación, etc.
 7. **Médico híbrido:** `medico_interno` (FK) o texto `medico_externo_nombre`.

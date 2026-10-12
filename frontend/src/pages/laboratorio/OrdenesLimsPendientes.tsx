@@ -66,13 +66,11 @@ const OrdenesLimsPendientes: React.FC = () => {
   const [nuevaOrdenOpen, setNuevaOrdenOpen] = useState(false);
   const [ordenEtiquetas, setOrdenEtiquetas] = useState<SolicitudExamenLims | null>(null);
   const [ordenZplReimprimir, setOrdenZplReimprimir] = useState<SolicitudExamenLims | null>(null);
-  const [ordenAgregar, setOrdenAgregar] = useState<SolicitudExamenLims | null>(null);
   const [microImprimir, setMicroImprimir] = useState<PendientePedidoRow | null>(null);
 
   const allowed = canAccessLimsPendientes(currentUser);
   const puedeCrear = canOperateLims(currentUser);
   const puedeImprimir = canOperateLims(currentUser);
-  const puedeAgregar = canOperateLims(currentUser);
 
   const goTab = useCallback(
     (next: TabPendiente) => {
@@ -292,7 +290,6 @@ const OrdenesLimsPendientes: React.FC = () => {
                   ? 'No hay pedidos esperando recepción para hoy.'
                   : 'No hay pedidos pendientes sin etiquetas para hoy.'
             }
-            columnaFecha="solicitud"
             accionLabel={
               !puedeImprimir
                 ? 'Ver'
@@ -301,12 +298,7 @@ const OrdenesLimsPendientes: React.FC = () => {
                   : 'Imprimir etiquetas'
             }
             onVer={handleVer}
-            onAgregarExamenes={
-              puedeAgregar ? (orden) => setOrdenAgregar(orden) : undefined
-            }
             onAccion={puedeImprimir ? handleAccionEtiquetas : undefined}
-            puedeObraSocial={puedeImprimir}
-            onObraSocialSaved={load}
           />
         </Paper>
       )}
@@ -318,18 +310,6 @@ const OrdenesLimsPendientes: React.FC = () => {
           load();
         }}
         onCreatedMicro={() => {
-          load();
-        }}
-      />
-
-      <NuevaOrdenLimsDialog
-        open={!!ordenAgregar}
-        onClose={() => setOrdenAgregar(null)}
-        agregarAOrdenId={ordenAgregar?.id ?? null}
-        agregarAOrdenNumero={ordenAgregar?.numero ?? null}
-        pacienteId={ordenAgregar?.paciente ?? null}
-        onCreated={() => {
-          setOrdenAgregar(null);
           load();
         }}
       />
@@ -346,8 +326,11 @@ const OrdenesLimsPendientes: React.FC = () => {
           }}
           onClose={() => setOrdenEtiquetas(null)}
           onSuccess={() => {
-            load();
-            goTab('esperando_recepcion');
+            void (async () => {
+              setOrdenEtiquetas(null);
+              await load();
+              goTab('esperando_recepcion');
+            })();
           }}
         />
       )}
@@ -374,8 +357,9 @@ const OrdenesLimsPendientes: React.FC = () => {
           estudioNumero={microImprimir.numero}
           reimpresion={tab === 'esperando_recepcion'}
           onClose={() => setMicroImprimir(null)}
-          onEtiquetasOk={() => {
-            load();
+          onEtiquetasOk={async () => {
+            setMicroImprimir(null);
+            await load();
             goTab('esperando_recepcion');
           }}
         />

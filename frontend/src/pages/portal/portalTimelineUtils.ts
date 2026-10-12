@@ -9,12 +9,18 @@ export function mapTimelineEvent(
   const date = ev.date ? new Date(ev.date) : new Date(0);
   if (Number.isNaN(date.getTime())) return null;
   const type = (ev.type || 'otro') as TimelineItemType;
+  const fromEvent = Array.isArray(ev.date_lines) ? ev.date_lines.filter(Boolean) : [];
+  const fromMeta = Array.isArray(ev.meta?.date_lines)
+    ? (ev.meta.date_lines as unknown[]).filter((x): x is string => typeof x === 'string' && Boolean(x))
+    : [];
+  const dateLines = fromEvent.length > 0 ? fromEvent : fromMeta.length > 0 ? fromMeta : undefined;
   return {
     id: ev.id,
     type,
     title: ev.title,
     subtitle: ev.subtitle || undefined,
     date,
+    dateLines,
     critical: Boolean(ev.critical),
     nested: Boolean(ev.nested),
     episodeGroupId: ev.episode_group_id || undefined,

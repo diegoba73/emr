@@ -99,3 +99,45 @@ class TestTimelineLimsVisibilidadMedico:
             self.sol_ajena.id,
             self.sol_externa.id,
         }
+
+    def test_lab_event_incluye_date_lines_solicitud(self):
+        events = build_paciente_timeline(self.paciente.id, user=self.user_medico)
+        lab = next(
+            ev
+            for ev in events
+            if ev.get("meta", {}).get("solicitud_examen_id") == self.sol_propia.id
+        )
+        assert lab.get("date_lines")
+        assert lab["date_lines"][0].startswith("Solicitud:")
+        assert lab["meta"]["date_lines"] == lab["date_lines"]
+
+    def test_estudio_micro_aparece_en_timeline(self):
+        from laboratorio.models_microbiologia import (
+            EstudioMicrobiologia,
+            TipoCultivoMicrobiologia,
+        )
+
+        cultivo = TipoCultivoMicrobiologia.objects.create(
+            codigo="UROCULT_TL",
+            nombre="Urocultivo",
+            activo=True,
+        )
+        est = EstudioMicrobiologia.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            tipo_cultivo=cultivo,
+            tipo_estudio="UROCULTIVO",
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="PENDIENTE",
+            fecha_programada_toma=date.today(),
+        )
+        events = build_paciente_timeline(self.paciente.id, user=self.user_medico)
+        micro = next(
+            ev
+            for ev in events
+            if ev.get("meta", {}).get("estudio_microbiologia_id") == est.id
+        )
+        assert micro["title"].startswith("Microbiología")
+        assert micro["navigate_to"] == f"/laboratorio/microbiologia/estudios/{est.id}"
+        assert micro["date_lines"][0].startswith("Solicitud:")
+        assert any(ln.startswith("Extracción:") for ln in micro["date_lines"])

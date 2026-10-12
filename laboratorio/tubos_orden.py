@@ -6,11 +6,12 @@ cantidad = ceil(n / MAX).
 
 Excepciones (cuentan como 1 unidad hacia el tope, no como N componentes):
 - Hemograma (PAN_HEMO) → un EDTA
-- Orina completa (PAN_ORI) → un frasco de orina
+- Orina completa + al azar (FRASCO_ORINA) → un frasco
 - Química de rutina → un suero (mismo tubo rojo que el resto de bioquímica)
 - Orina 24 hs (clearance, proteinuria 24h, ionograma 24h, etc.) → un bidón
 
-Contenedor SUERO: siempre 1 tubo físico (si hace falta otro, se reimprime la etiqueta).
+Contenedores SUERO / FRASCO_ORINA / BIDON_ORINA_24H: siempre 1 unidad física
+(si hace falta otro, se reimprime la etiqueta).
 """
 from __future__ import annotations
 
@@ -25,11 +26,13 @@ from laboratorio.tubos_catalogo import (
     BIDON_ORINA_24H,
     EXAMENES_CALCULADOS_SIN_TUBO,
     EXAMENES_SIN_CONTENEDOR,
+    FRASCO_ORINA,
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
     SUERO,
     _EAB_ART,
     _EAB_VEN,
+    _FRASCO_ORINA,
     _ORINA_24H,
     _ORINA_DUAL,
     _QUIMICA_RUTINA,
@@ -102,6 +105,14 @@ def es_codigo_orina_completa(codigo: str | None) -> bool:
     return bool(codigo) and codigo in _CODIGOS_ORINA_COMPLETA
 
 
+def es_codigo_frasco_orina(codigo: str | None) -> bool:
+    """Orina completa o al azar → mismo frasco físico."""
+    if not codigo:
+        return False
+    c = codigo.strip().upper()
+    return c in _FRASCO_ORINA or c in _CODIGOS_ORINA_COMPLETA or c.startswith("ORI_")
+
+
 def es_codigo_quimica_rutina(codigo: str | None) -> bool:
     return bool(codigo) and codigo in _CODIGOS_QUIMICA_RUTINA
 
@@ -114,11 +125,11 @@ def unidades_para_calculo_tubos(examenes) -> int:
     """
     Unidades hacia el tope de exámenes/tubo.
 
-    Cada examen cuenta 1, excepto bloques: hemograma, orina completa,
-    química rutina y orina 24 hs fija (1 unidad c/u).
+    Cada examen cuenta 1, excepto bloques: hemograma, frasco orina
+    (completa + al azar), química rutina y orina 24 hs (1 unidad c/u).
     """
     tiene_hemo = False
-    tiene_orina = False
+    tiene_frasco_orina = False
     tiene_quimica = False
     tiene_orina_24 = False
     otros = 0
@@ -126,8 +137,8 @@ def unidades_para_calculo_tubos(examenes) -> int:
         codigo = getattr(ex, "codigo", None) or ""
         if es_codigo_hemograma(codigo):
             tiene_hemo = True
-        elif es_codigo_orina_completa(codigo):
-            tiene_orina = True
+        elif es_codigo_frasco_orina(codigo):
+            tiene_frasco_orina = True
         elif es_codigo_quimica_rutina(codigo):
             tiene_quimica = True
         elif es_codigo_orina_24h(codigo):
@@ -137,7 +148,7 @@ def unidades_para_calculo_tubos(examenes) -> int:
     return (
         otros
         + (1 if tiene_hemo else 0)
-        + (1 if tiene_orina else 0)
+        + (1 if tiene_frasco_orina else 0)
         + (1 if tiene_quimica else 0)
         + (1 if tiene_orina_24 else 0)
     )
@@ -207,7 +218,7 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
 
     Orina 24 hs (incl. duales NA_U/CREA_U/MICROALB cuando la orden tiene
     contexto 24 hs) van al bidón; orina completa/al azar quedan en frasco.
-    Todos los de 24 hs juntos → cantidad 1 (un bidón).
+    Todos los de 24 hs juntos → 1 bidón; completa + al azar → 1 frasco.
     """
     examenes = [
         e for e in _tipos_examen_para_tubos(solicitud) if not _examen_sin_tubo_fisico(e)
@@ -285,6 +296,9 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
     result: list[TuboOrdenGrupo] = []
     for key, g in meta.items():
         if g.tipo_contenedor_codigo == BIDON_ORINA_24H:
+            g.cantidad = 1
+        elif g.tipo_contenedor_codigo == FRASCO_ORINA:
+            # Orina completa + al azar comparten un solo frasco físico.
             g.cantidad = 1
         elif g.tipo_contenedor_codigo == SUERO:
             # Un solo tubo suero por orden/grupo; reimprimir etiqueta si hace falta otro físico.

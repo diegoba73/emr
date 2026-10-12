@@ -467,6 +467,18 @@ class SolicitudExamen(models.Model):
         default=timezone.localdate,
         db_index=True,
     )
+    # Material de pedido (SANGRE, ORINA, LCR…). Null = orden legacy / mixta.
+    material_pedido = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Material de pedido",
+        help_text=(
+            "Código de material del catálogo de pedido (p. ej. SANGRE, ORINA). "
+            "Vacío en órdenes históricas o mixtas previas al campo."
+        ),
+    )
     fecha_entrega_prometida = models.DateTimeField(
         null=True,
         blank=True,
@@ -550,6 +562,10 @@ class SolicitudExamen(models.Model):
             models.Index(
                 fields=['estado', 'fecha_programada_toma'],
                 name='laboratorio_estado_fpt_idx',
+            ),
+            models.Index(
+                fields=['paciente', 'material_pedido', 'fecha_programada_toma'],
+                name='laboratorio_pac_mat_fpt_idx',
             ),
         ]
 
@@ -857,5 +873,8 @@ from laboratorio.models_instrumentos import (  # noqa: E402,F401
 from laboratorio.models_derivacion import (  # noqa: E402,F401
     EstadoDerivacion,
     LaboratorioDerivacion,
+)
+from laboratorio.models_pedido_idempotencia import (  # noqa: E402,F401
+    PedidoCompletoIdempotencia,
 )
 

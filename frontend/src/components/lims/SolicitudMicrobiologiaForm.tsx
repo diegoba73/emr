@@ -25,26 +25,51 @@ export interface SolicitudMicrobiologiaFormProps {
   items: MicroPedidoItem[];
   onChangeItems: (items: MicroPedidoItem[]) => void;
   disabled?: boolean;
+  /**
+   * Si hay códigos, solo se muestran esos cultivos.
+   * Mapa cultivo → muestra micro preferida (desde materiales de pedido).
+   */
+  cultivosPermitidos?: string[] | null;
+  muestraPreferidaPorCultivo?: Record<string, string>;
 }
 
 function resolverMuestra(
   cultivo: TipoCultivoMicrobiologia,
-  tiposMuestra: TipoMuestraMicrobiologia[]
+  tiposMuestra: TipoMuestraMicrobiologia[],
+  preferidaCodigo?: string
 ): TipoMuestraMicrobiologia | null {
+  if (preferidaCodigo) {
+    const exact = tiposMuestra.find(
+      (t) => (t.codigo || '').toUpperCase() === preferidaCodigo.toUpperCase()
+    );
+    if (exact) return exact;
+  }
   return sugerirMuestraPorCultivo(cultivo.codigo, tiposMuestra) || tiposMuestra[0] || null;
 }
 
-const SolicitudMicrobiologiaForm: React.FC<SolicitudMicrobiologiaFormProps> = ({
+export default function SolicitudMicrobiologiaForm({
   cultivos,
   tiposMuestra,
   items,
   onChangeItems,
   disabled,
-}) => {
+  cultivosPermitidos,
+  muestraPreferidaPorCultivo,
+}: SolicitudMicrobiologiaFormProps) {
   const selectedCultivoIds = useMemo(
     () => new Set(items.map((i) => i.tipo_cultivo_id)),
     [items]
   );
+
+  const cultivosVisibles = useMemo(() => {
+    if (!cultivosPermitidos || cultivosPermitidos.length === 0) {
+      return cultivos.filter((c) => c.activo !== false);
+    }
+    const allow = new Set(cultivosPermitidos.map((c) => c.toUpperCase()));
+    return cultivos.filter(
+      (c) => c.activo !== false && allow.has((c.codigo || '').toUpperCase())
+    );
+  }, [cultivos, cultivosPermitidos]);
 
   const toggleCultivo = (cultivo: TipoCultivoMicrobiologia) => {
     if (disabled) return;
@@ -52,7 +77,8 @@ const SolicitudMicrobiologiaForm: React.FC<SolicitudMicrobiologiaFormProps> = ({
       onChangeItems(items.filter((i) => i.tipo_cultivo_id !== cultivo.id));
       return;
     }
-    const muestra = resolverMuestra(cultivo, tiposMuestra);
+    const preferida = muestraPreferidaPorCultivo?.[cultivo.codigo];
+    const muestra = resolverMuestra(cultivo, tiposMuestra, preferida);
     if (!muestra) return;
     onChangeItems([
       ...items,
@@ -67,12 +93,15 @@ const SolicitudMicrobiologiaForm: React.FC<SolicitudMicrobiologiaFormProps> = ({
     ]);
   };
 
+  const filtrado = Boolean(cultivosPermitidos && cultivosPermitidos.length > 0);
+
   return (
     <Stack spacing={2}>
       <Typography variant="subtitle2">Tipos de cultivo</Typography>
       <Typography variant="caption" color="text.secondary">
-        Cada cultivo seleccionado genera una muestra y una etiqueta. El tipo de muestra se
-        asigna automáticamente según el cultivo.
+        {filtrado
+          ? 'Solo se muestran los cultivos del material elegido en Lab. Clínico (evita seleccionar otro por error).'
+          : 'Cada cultivo seleccionado genera una muestra y una etiqueta. El tipo de muestra se asigna automáticamente según el cultivo.'}
       </Typography>
       <Box
         sx={{
@@ -87,7 +116,7 @@ const SolicitudMicrobiologiaForm: React.FC<SolicitudMicrobiologiaFormProps> = ({
           p: 1,
         }}
       >
-        {cultivos.map((c) => (
+        {cultivosVisibles.map((c) => (
           <FormControlLabel
             key={c.id}
             sx={{ m: 0, alignItems: 'flex-start' }}
@@ -108,6 +137,13 @@ const SolicitudMicrobiologiaForm: React.FC<SolicitudMicrobiologiaFormProps> = ({
           />
         ))}
       </Box>
+
+      {filtrado && cultivosVisibles.length === 0 && (
+        <Typography variant="body2" color="warning.main">
+          No hay cultivos mapeados para el material elegido, o aún no están cargados en el
+          catálogo. Corré el seed de materiales de pedido.
+        </Typography>
+      )}
 
       {items.length > 0 && (
         <Stack direction="row" flexWrap="wrap" useFlexGap spacing={0.75}>
@@ -134,6 +170,4 @@ const SolicitudMicrobiologiaForm: React.FC<SolicitudMicrobiologiaFormProps> = ({
       )}
     </Stack>
   );
-};
-
-export default SolicitudMicrobiologiaForm;
+}

@@ -29,6 +29,7 @@ import { imprimirPedidosPapel } from '../../../services/limsApi';
 import type { Medico, Paciente } from '../../../types';
 import { formatPacienteLabel } from '../../../utils/pacienteFormat';
 import { normalizeRol } from '../../../utils/permissions';
+import PacienteLabsAccesoPanel from '../../../components/lims/PacienteLabsAccesoPanel';
 
 export type GuardiaDialogMode = 'create' | 'edit' | 'view';
 
@@ -450,6 +451,17 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
 
             {showPedidosReadOnly && consultaHcId && (
               <ConsultaPedidosPanel consultaHcId={consultaHcId} canEdit={false} variant="full" />
+            )}
+
+            {(selectedPaciente?.id || atencion?.paciente?.id) && !isCreate && (
+              <>
+                <Divider />
+                <PacienteLabsAccesoPanel
+                  pacienteId={selectedPaciente?.id ?? atencion!.paciente!.id}
+                  backPath="/guardia"
+                  backLabel="← Volver a guardia"
+                />
+              </>
             )}
           </Stack>
         )}

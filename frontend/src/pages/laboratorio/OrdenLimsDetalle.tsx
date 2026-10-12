@@ -26,7 +26,6 @@ import {
   getIqcPrecheck,
   getSolicitudExamen,
   listMuestrasPorSolicitud,
-  patchEstadoObraSocialSolicitud,
   postCancelarSolicitud,
   postDesvalidarSolicitud,
   postMarcarDerivacion,
@@ -66,8 +65,8 @@ import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDi
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 import EditarOrdenLimsDialog from '../../components/lims/EditarOrdenLimsDialog';
 import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
-import EstadoObraSocialDialog from '../../components/lims/EstadoObraSocialDialog';
 import { colorEstadoObraSocial, labelEstadoObraSocial, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
+import { limsActionBtnSoftSx, limsActionBtnSx } from '../../utils/limsActionButtonSx';
 
 const OrdenLimsDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -89,7 +88,6 @@ const OrdenLimsDetalle: React.FC = () => {
   const [openAgregarExamenes, setOpenAgregarExamenes] = useState(false);
   const [openQuitarExamenes, setOpenQuitarExamenes] = useState(false);
   const [openEditarOrden, setOpenEditarOrden] = useState(false);
-  const [openObraSocial, setOpenObraSocial] = useState(false);
   const [muestrasReloadToken, setMuestrasReloadToken] = useState(0);
   const [iqcPrecheck, setIqcPrecheck] = useState<IqcPrecheckResult | null>(null);
   const [qcOverrideOpen, setQcOverrideOpen] = useState(false);
@@ -405,38 +403,73 @@ const OrdenLimsDetalle: React.FC = () => {
           Acciones de orden
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {canOp && (e === 'PENDIENTE' || (orden.tubos_pendientes_extraccion?.length ?? 0) > 0) && (
-            <Button variant="outlined" onClick={() => setOpenTomarMuestra(true)}>
-              Imprimir etiquetas
+          {canOp && e !== 'FINALIZADO' && e !== 'CANCELADO' && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={() => setOpenTomarMuestra(true)}
+            >
+              {orden.orden_abierta || muestras.length === 0
+                ? 'Imprimir etiquetas'
+                : 'Reimprimir etiquetas'}
             </Button>
           )}
           {canOp && e !== 'FINALIZADO' && e !== 'CANCELADO' && (
-            <Button variant="outlined" onClick={() => setOpenEditarOrden(true)}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={() => setOpenEditarOrden(true)}
+            >
               Editar orden
             </Button>
           )}
-          {canOp && e !== 'CANCELADO' && (
-            <Button variant="outlined" onClick={() => setOpenObraSocial(true)}>
-              Obra social
-            </Button>
-          )}
           {canOp && ordenPuedeAgregarExamenes(orden) && (
-            <Button variant="contained" color="secondary" onClick={() => setOpenAgregarExamenes(true)}>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              disableElevation
+              sx={limsActionBtnSx}
+              onClick={() => setOpenAgregarExamenes(true)}
+            >
               Agregar exámenes
             </Button>
           )}
           {canOp && ordenPuedeQuitarExamenes(orden) && (
-            <Button variant="outlined" color="secondary" onClick={() => setOpenQuitarExamenes(true)}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={() => setOpenQuitarExamenes(true)}
+            >
               Quitar exámenes
             </Button>
           )}
           {enProceso && canOp && !resultadosCompletos && (
-            <Button variant="contained" onClick={() => setTab(2)}>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              disableElevation
+              sx={limsActionBtnSx}
+              onClick={() => setTab(2)}
+            >
               Cargar resultados
             </Button>
           )}
           {listaParaValidar && canOp && (
-            <Button variant="outlined" onClick={() => setTab(2)}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              onClick={() => setTab(2)}
+            >
               Corregir resultados
             </Button>
           )}
@@ -450,8 +483,11 @@ const OrdenLimsDetalle: React.FC = () => {
             >
               <span>
                 <Button
+                  size="small"
                   variant="contained"
                   color="success"
+                  disableElevation
+                  sx={limsActionBtnSx}
                   disabled={validando || !osPermiteValidar}
                   onClick={() => void handleValidar()}
                 >
@@ -470,8 +506,10 @@ const OrdenLimsDetalle: React.FC = () => {
           )}
           {ordenPuedeDesvalidar(e) && canValidar && (
             <Button
+              size="small"
               variant="outlined"
-              color="warning"
+              color="primary"
+              sx={limsActionBtnSoftSx}
               disabled={desvalidando}
               onClick={() => {
                 setMotivoDesvalidar('');
@@ -487,12 +525,26 @@ const OrdenLimsDetalle: React.FC = () => {
             </Button>
           )}
           {puedeEnviarInforme && finalizada && canEnviar && (
-            <Button variant="contained" color="primary" onClick={() => setOpenEnviarInforme(true)}>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              disableElevation
+              sx={limsActionBtnSx}
+              onClick={() => setOpenEnviarInforme(true)}
+            >
               Enviar informe
             </Button>
           )}
           {finalizada && canPdf && (
-            <Button variant="outlined" disabled={downloadingPdf} onClick={handleDownloadPdf}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={limsActionBtnSoftSx}
+              disabled={downloadingPdf}
+              onClick={handleDownloadPdf}
+            >
               {downloadingPdf ? 'Descargando…' : 'Descargar informe PDF'}
             </Button>
           )}
@@ -506,8 +558,8 @@ const OrdenLimsDetalle: React.FC = () => {
         )}
         {canOp && e === 'PENDIENTE' && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-            Pendiente de recepción. <strong>Imprimir etiquetas</strong> genera los tubos con código de
-            barras; confirmá el ingreso escaneando en <strong>Recepción</strong>.
+            Pendiente de recepción. <strong>Imprimir / Reimprimir etiquetas</strong> genera los tubos
+            con código de barras; confirmá el ingreso escaneando en <strong>Recepción</strong>.
           </Typography>
         )}
         {cancelada && (
@@ -522,7 +574,8 @@ const OrdenLimsDetalle: React.FC = () => {
         {bloqueoObraSocial && (
           <Alert severity="warning" sx={{ mt: 1.5 }}>
             En órdenes ambulatorias la obra social tiene que estar <strong>Autorizada</strong> para
-            validar y emitir el informe. Usá <strong>Obra social</strong> y elegí Autorizado.
+            validar y emitir el informe. Actualizá el estado desde <strong>Órdenes LIMS</strong>{' '}
+            (Obra social → Autorizado).
           </Alert>
         )}
         {orden.tubos_pendientes_extraccion && orden.tubos_pendientes_extraccion.length > 0 && (
@@ -676,6 +729,11 @@ const OrdenLimsDetalle: React.FC = () => {
           procedencia_display: orden.procedencia_display,
         }}
         onClose={() => setOpenTomarMuestra(false)}
+        onPrepared={async (o) => {
+          setOrden(o);
+          await refreshMuestras(o.id, o.numero);
+          setMuestrasReloadToken((t) => t + 1);
+        }}
         onSuccess={async (o) => {
           setOrden(o);
           await refreshMuestras(o.id, o.numero);
@@ -729,16 +787,6 @@ const OrdenLimsDetalle: React.FC = () => {
           } catch {
             /* keep updated */
           }
-        }}
-      />
-      <EstadoObraSocialDialog
-        open={openObraSocial}
-        numero={orden.numero}
-        value={orden.estado_obra_social}
-        onClose={() => setOpenObraSocial(false)}
-        onSave={async (estado) => {
-          const fresh = await patchEstadoObraSocialSolicitud(orden.id, estado);
-          setOrden(fresh);
         }}
       />
       <EnviarInformeOrdenDialog

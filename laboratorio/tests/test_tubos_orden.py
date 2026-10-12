@@ -52,7 +52,11 @@ class TestCantidadTubos(TestCase):
         orina = [_E(c) for c in PANEL_COMPONENTES_BY_CODIGO["PAN_ORI"]]
         assert len(orina) > 10
         assert unidades_para_calculo_tubos(orina) == 1
-        assert unidades_para_calculo_tubos(orina + [_E("PROT_U_AZ")]) == 2
+        # Completa + al azar = un solo frasco (1 unidad)
+        assert unidades_para_calculo_tubos(orina + [_E("PROT_U_AZ")]) == 1
+        assert unidades_para_calculo_tubos(
+            orina + [_E("PROT_U_AZ"), _E("NA_U"), _E("MICROALB")]
+        ) == 1
         assert unidades_para_calculo_tubos(orina + [_E("HEMATIES")]) == 2
 
     def test_unidades_quimica_rutina_cuenta_como_uno(self):

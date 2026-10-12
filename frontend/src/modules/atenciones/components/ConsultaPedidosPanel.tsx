@@ -38,6 +38,8 @@ import { buildEstudioTipoCatalogOptions } from '../../../utils/estudioTipoCatalo
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
 import ResultadosOrdenLista from '../../../components/lims/ResultadosOrdenLista';
 import type { ResultadoExamenLims } from '../../../types/lims';
+import { labelEstadoOrdenGeneral } from '../../../utils/limsEstadosOrden';
+import { labelEstadoMicroGeneral } from '../../../utils/limsEstadosMicro';
 import {
   loadConsultaPedidosDraft,
   loadGuardiaPendingDraft,
@@ -234,6 +236,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
     paneles_labels: string[];
     observaciones?: string;
     fecha_programada_toma: string;
+    material_pedido: string;
   }) => {
     persistDraft((prev) => ({
       ...prev,
@@ -254,9 +257,11 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
       tipo_muestra_micro_id: number;
       cultivo_nombre: string;
       muestra_nombre: string;
+      material_pedido?: string;
     }>;
     observaciones?: string;
     fecha_programada_toma: string;
+    material_pedido?: string;
   }) => {
     if (!payload.items.length) return;
     persistDraft((prev) => ({
@@ -268,6 +273,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
           items: payload.items,
           observaciones: payload.observaciones,
           fecha_programada_toma: payload.fecha_programada_toma,
+          material_pedido: payload.material_pedido,
         },
       ],
     }));
@@ -357,6 +363,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   );
 
   const solicitudesLab = detalle?.solicitudes_laboratorio ?? [];
+  const estudiosMicro = detalle?.estudios_microbiologia ?? [];
   const estudios = detalle?.estudios_complementarios ?? [];
   const draftLab = draft.solicitudesLab;
   const draftMicro = draft.solicitudesMicro || [];
@@ -706,7 +713,10 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                   <Typography variant="body2" fontWeight={600}>
                     {sol.numero || `Orden #${sol.id}`}
                   </Typography>
-                  <Chip label={sol.estado} size="small" />
+                  <Chip label={labelEstadoOrdenGeneral(sol.estado)} size="small" />
+                  {sol.material_pedido ? (
+                    <Chip label={sol.material_pedido} size="small" variant="outlined" />
+                  ) : null}
                   <Typography variant="caption" color="text.secondary">
                     {new Date(sol.fecha_solicitud).toLocaleString()}
                   </Typography>
@@ -754,38 +764,109 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
       </Box>
       )}
 
-      {showLab && canEdit && draftMicro.length > 0 && (
+      {showLab && !canEdit && estudiosMicro.length > 0 && (
         <Box>
           <Typography variant="subtitle1" fontWeight={600} mb={1}>
-            Microbiología (borrador)
+            Microbiología
           </Typography>
           <Stack spacing={2}>
-            {draftMicro.map((sol) => (
-              <Box key={sol.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" mb={1}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" fontWeight={600}>
-                      Pedido de microbiología
-                    </Typography>
-                    <Chip label="Pendiente de guardar" size="small" color="warning" variant="outlined" />
-                  </Stack>
-                  <IconButton
+            {estudiosMicro.map((est) => (
+              <Box key={est.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
+                  <Typography variant="body2" fontWeight={600}>
+                    {est.numero || `Micro #${est.id}`}
+                  </Typography>
+                  <Chip
+                    label={labelEstadoMicroGeneral(est.estado, {
+                      tieneInformePreliminar: est.tiene_informe_preliminar,
+                      tieneInformeFinal: est.tiene_informe_final,
+                    })}
                     size="small"
-                    color="error"
-                    aria-label="Eliminar pedido de microbiología"
-                    onClick={() => handleEliminarMicroBorrador(sol.id)}
-                  >
-                    <Delete fontSize="small" />
-                  </IconButton>
+                  />
+                  {est.material_pedido ? (
+                    <Chip label={est.material_pedido} size="small" variant="outlined" />
+                  ) : null}
                 </Stack>
                 <Typography variant="caption" color="text.secondary" display="block">
-                  {sol.items
-                    .map((i) => `${i.cultivo_nombre} (${i.muestra_nombre})`)
+                  {[est.tipo_cultivo_nombre, est.tipo_muestra_micro_nombre]
+                    .filter(Boolean)
                     .join(' · ') || '—'}
                 </Typography>
               </Box>
             ))}
           </Stack>
+        </Box>
+      )}
+
+      {showLab && canEdit && (draftMicro.length > 0 || estudiosMicro.length > 0) && (
+        <Box>
+          {estudiosMicro.length > 0 && (
+            <>
+              <Typography variant="subtitle1" fontWeight={600} mb={1}>
+                Microbiología
+              </Typography>
+              <Stack spacing={2} mb={draftMicro.length ? 2 : 0}>
+                {estudiosMicro.map((est) => (
+                  <Box key={est.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
+                      <Typography variant="body2" fontWeight={600}>
+                        {est.numero || `Micro #${est.id}`}
+                      </Typography>
+                      <Chip
+                        label={labelEstadoMicroGeneral(est.estado, {
+                          tieneInformePreliminar: est.tiene_informe_preliminar,
+                          tieneInformeFinal: est.tiene_informe_final,
+                        })}
+                        size="small"
+                      />
+                      {est.material_pedido ? (
+                        <Chip label={est.material_pedido} size="small" variant="outlined" />
+                      ) : null}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {[est.tipo_cultivo_nombre, est.tipo_muestra_micro_nombre]
+                        .filter(Boolean)
+                        .join(' · ') || '—'}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </>
+          )}
+          {draftMicro.length > 0 && (
+            <>
+              <Typography variant="subtitle1" fontWeight={600} mb={1}>
+                Microbiología (borrador)
+              </Typography>
+              <Stack spacing={2}>
+                {draftMicro.map((sol) => (
+                  <Box key={sol.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" mb={1}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="body2" fontWeight={600}>
+                          Pedido de microbiología
+                        </Typography>
+                        <Chip label="Pendiente de guardar" size="small" color="warning" variant="outlined" />
+                      </Stack>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label="Eliminar pedido de microbiología"
+                        onClick={() => handleEliminarMicroBorrador(sol.id)}
+                      >
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {sol.items
+                        .map((i) => `${i.cultivo_nombre} (${i.muestra_nombre})`)
+                        .join(' · ') || '—'}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </>
+          )}
         </Box>
       )}
 

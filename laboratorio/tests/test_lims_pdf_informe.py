@@ -155,6 +155,49 @@ class TestLimsPdfInforme(TestCase):
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertTrue(r.content.startswith(b"%PDF"))
 
+    def test_roles_parcial_pueden_descargar_informe_parcial(self):
+        self.sol.estado = "INFORMADO_PARCIAL"
+        self.sol.save(update_fields=["estado"])
+        sec = User.objects.create_user(
+            username=f"sec_par_pdf_{self.suf}",
+            email=f"spar{self.suf}@test.invalid",
+            password="x",
+            rol="secretaria",
+        )
+        for user in (self.lab, self.med_user, sec):
+            self.client.force_authenticate(user)
+            r = self.client.get(self._url())
+            self.assertEqual(
+                r.status_code,
+                status.HTTP_200_OK,
+                msg=f"rol={getattr(user, 'rol', user)}",
+            )
+            self.assertTrue(r.content.startswith(b"%PDF"))
+
+    def test_enfermeria_paciente_no_descargan_informe_parcial(self):
+        self.sol.estado = "INFORMADO_PARCIAL"
+        self.sol.save(update_fields=["estado"])
+        enf = User.objects.create_user(
+            username=f"enf_par_pdf_{self.suf}",
+            email=f"epar{self.suf}@test.invalid",
+            password="x",
+            rol="enfermeria",
+        )
+        pac = User.objects.create_user(
+            username=f"pac_par_pdf_{self.suf}",
+            email=f"ppar{self.suf}@test.invalid",
+            password="x",
+            rol="paciente",
+        )
+        for user in (enf, pac):
+            self.client.force_authenticate(user)
+            r = self.client.get(self._url())
+            self.assertIn(
+                r.status_code,
+                (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
+                msg=f"rol={user.rol}",
+            )
+
     def test_medico_sin_orden_validada_no_descarga_informe_pdf(self):
         self.assertEqual(self.sol.estado, "EN_PROCESO")
         self.client.force_authenticate(self.med_user)

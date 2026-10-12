@@ -7,6 +7,10 @@ import type {
   EstadoInformeMicrobiologia,
   InterpretacionAntibiotico,
 } from '../../../types/lims';
+import {
+  estadoEstudioMicroColor,
+  labelEstadoEstudioMicro,
+} from '../../../utils/limsEstadosMicro';
 
 type ChipSize = 'small' | 'medium';
 
@@ -14,13 +18,12 @@ export const EstudioMicrobiologiaEstadoBadge: React.FC<{
   estado: EstadoEstudioMicrobiologia | string;
   size?: ChipSize;
 }> = ({ estado, size = 'small' }) => {
-  const term = ['CANCELADO', 'INFORMADO'].includes(estado);
-  const ok = ['VALIDADO', 'LISTO_PARA_VALIDAR'].includes(estado);
+  const term = estado === 'CANCELADO';
   return (
     <Chip
       size={size}
-      label={estado}
-      color={estado === 'CANCELADO' ? 'error' : ok ? 'success' : term ? 'default' : 'primary'}
+      label={labelEstadoEstudioMicro(estado)}
+      color={estadoEstudioMicroColor(estado)}
       variant={term ? 'outlined' : 'filled'}
     />
   );

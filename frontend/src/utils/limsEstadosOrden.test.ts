@@ -44,7 +44,7 @@ describe('limsEstadosOrden — LISTO_PARA_VALIDAR', () => {
   });
 
   it('solo permite enviar informe validado (FINALIZADO)', () => {
-    expect(ordenPuedeEnviarInforme('INFORMADO_PARCIAL')).toBe(false);
+    expect(ordenPuedeEnviarInforme('INFORMADO_PARCIAL')).toBe(true);
     expect(ordenPuedeEnviarInforme('LISTO_PARA_VALIDAR')).toBe(false);
     expect(ordenPuedeEnviarInforme('FINALIZADO')).toBe(true);
     expect(ordenPuedeEnviarInforme('EN_PROCESO')).toBe(false);

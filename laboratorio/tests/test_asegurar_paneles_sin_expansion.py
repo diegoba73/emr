@@ -11,8 +11,10 @@ from pacientes.models import Paciente
 
 def _sol_con_codigos(*codigos: str, paneles: tuple[str, ...] = ()) -> SolicitudExamen:
     call_command("seed_catalogo_solicitud_papel", stdout=StringIO())
+    # DNI max 20 chars en Paciente.
+    dni_body = "-".join(codigos)[:12]
     paciente = Paciente.objects.create(
-        dni=f"NOEXP-{'-'.join(codigos)[:20]}",
+        dni=f"NX{dni_body}"[:20],
         nombre="No",
         apellido="Expand",
     )
@@ -86,6 +88,26 @@ def test_rac_suelto_trae_microalb_y_crea_u():
     assert "MICROALB_24" not in _codigos(sol)
     assert "DIUR" not in _codigos(sol)
     assert "CLEAR_CREA" not in _codigos(sol)
+
+
+@pytest.mark.django_db
+def test_ca_ion_suelto_trae_ca_y_prot_t():
+    """CA_ION suelto completa CA + PROT_T para Zeisler; no arrastra EAB."""
+    sol = _sol_con_codigos("CA_ION")
+    assert asegurar_resultados_paneles_derivados(sol) == 2
+    assert _codigos(sol) == {"CA_ION", "CA", "PROT_T"}
+
+
+@pytest.mark.django_db
+def test_ca_ion_con_eab_no_trae_insumos_zeisler():
+    """Con EAB el iónico viene del equipo: no forzar CA/PROT_T."""
+    sol = _sol_con_codigos("CA_ION", paneles=("PAN_EAB_ART",))
+    # Puede completar componentes EAB del panel; no debe agregar CA/PROT_T.
+    asegurar_resultados_paneles_derivados(sol)
+    codigos = _codigos(sol)
+    assert "CA_ION" in codigos
+    assert "CA" not in codigos
+    assert "PROT_T" not in codigos
 
 
 @pytest.mark.django_db
