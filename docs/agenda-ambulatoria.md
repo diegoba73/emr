@@ -6,7 +6,9 @@
 - Médico: no puede configurar horarios ni excepciones, tampoco mediante la API.
 - Cada franja define día, inicio, fin y atención (consulta o estudio). Permite agregar, editar y quitar franjas. Para lunes a viernes de 09:00 a 13:00 se cargan cinco franjas.
 - Consultas: consultorio opcional configurado por el secretaría/administrador. Estudios: sala obligatoria. El paciente no selecciona estos recursos.
-- Paciente: **Mis turnos**, selecciona médico, consulta/estudio y fecha. El calendario muestra los horarios libres del día seleccionado y sus propias reservas. Seleccionar un horario abre una confirmación con motivo opcional.
+- Paciente: **Mis turnos**, selecciona médico, consulta/estudio y fecha. El calendario muestra los horarios libres del día seleccionado y sus propias reservas. Seleccionar un horario abre una confirmación con motivo opcional. La reserva queda `RESERVADO`; secretaría confirma. El paciente no cancela ni reprograma (pide a secretaría).
+- Secretaría/admin: crean turnos ya `CONFIRMADO`; confirman reservas del portal; cancelan y reprograman. Al reprogramar se notifica al paciente por push (app móvil) y WhatsApp (Twilio o enlace wa.me).
+- Médico: no crea, confirma, cancela ni reprograma turnos; solo inicia y cierra la consulta/atención clínica.
 - Los horarios libres nunca incluyen datos de otros pacientes. No hay selector de prioridad ni consultorio para el paciente.
 
 ## Reglas

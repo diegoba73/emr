@@ -33,6 +33,12 @@ export function esOrigenAmbulatorioExterno(
   return codigo === 'EXTERNO_CEHTA' || codigo === 'EXTERNO_ICPL';
 }
 
+export function esOrigenInternacion(
+  codigo: OrigenSolicitudLims | string | null | undefined
+): boolean {
+  return codigo === 'INTERNACION_UCO' || codigo === 'INTERNACION_UCE';
+}
+
 /**
  * Origen LIMS sugerido según el sector de la cama (alineado a backend
  * ``origen_solicitud._sector_es_uco/_uce``).

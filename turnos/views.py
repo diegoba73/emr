@@ -19,7 +19,6 @@ from pacientes.services import ensure_paciente_linked_to_user
 from medicos.models import Medico
 from .models import Turno, Recurso, Atencion, ConsultaAmbulatoria, EvolucionInternacion
 from . import turno_estado
-from .access import medico_es_dueno_turno
 from .services import AtencionService, BusinessLogicError, _detail_from_django_validation
 from .serializers import (
     TurnoSerializer,
@@ -84,24 +83,6 @@ def _es_rol_agenda_solo_lectura(user) -> bool:
     if _es_enfermeria(user) or _es_operador_lims(user):
         return True
     return _rol_usuario(user) in ROLES_ESTUDIO_COMPLEMENTARIO
-
-
-def _reject_foreign_medico_assignment(serializer, medico) -> None:
-    if 'medico' not in serializer.validated_data:
-        return
-    nuevo = serializer.validated_data['medico']
-    nuevo_id = nuevo.id if nuevo else None
-    if nuevo_id != medico.id:
-        raise PermissionDenied('No puede reasignar el turno a otro médico.')
-
-
-def _reject_foreign_paciente_assignment(serializer, paciente) -> None:
-    if 'paciente' not in serializer.validated_data:
-        return
-    nuevo = serializer.validated_data['paciente']
-    nuevo_id = nuevo.id if nuevo else None
-    if nuevo_id != paciente.id:
-        raise PermissionDenied('No puede reasignar el turno a otro paciente.')
 
 
 def _safe_audit(callable_, *args, **kwargs):
@@ -280,7 +261,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
         """Reserva del portal: paciente, recurso, duración y estado se resuelven aquí."""
         from rest_framework import serializers
         from medicos.models import DisponibilidadMedico
-        from medicos.agenda import validar_reserva, DURACION
+        from medicos.agenda import validar_reserva, duracion_de
         if _rol_usuario(request.user) != 'paciente':
             raise PermissionDenied('Esta operación corresponde al portal del paciente.')
         class ReservaInput(serializers.Serializer):
@@ -300,18 +281,25 @@ class TurnoViewSet(viewsets.ModelViewSet):
             paciente = ensure_paciente_linked_to_user(request.user)
             if not paciente:
                 raise ValidationError('Su usuario no tiene una ficha de paciente vinculada.')
+            from turnos.paciente_reserva import turno_activo_futuro
+            if turno_activo_futuro(paciente):
+                raise ValidationError(
+                    'Ya tenés un turno reservado. Si necesitás cambiarlo o sacar otro, '
+                    'comunicate con secretaría.'
+                )
             inicio = datos.validated_data['inicio']
-            validar_reserva(horario.medico, inicio, inicio + DURACION, horario.recurso,
+            slot = duracion_de(horario.medico)
+            validar_reserva(horario.medico, inicio, inicio + slot, horario.recurso,
                             exigir_horario=True, horario_id=horario.pk)
             turno = Turno.objects.create(paciente=paciente, medico=horario.medico,
-                recurso=horario.recurso, fecha_hora_inicio=inicio, fecha_hora_fin=inicio+DURACION,
+                recurso=horario.recurso, fecha_hora_inicio=inicio, fecha_hora_fin=inicio+slot,
                 estado=Turno.Estado.RESERVADO, motivo_reserva=datos.validated_data.get('motivo', ''))
             _safe_audit(log_create, actor=request.user, entity=turno, module='turnos',
                         metadata={'view': 'TurnoViewSet.reservar_horario'})
         return Response(self.get_serializer(turno).data, status=201)
 
     def _validar_agenda(self, serializer, instance=None):
-        from medicos.agenda import validar_reserva, DURACION
+        from medicos.agenda import validar_reserva, duracion_de
         data = serializer.validated_data
         if instance and not any(k in data and data[k] != getattr(instance, k)
                                 for k in ('medico', 'recurso', 'fecha_hora_inicio', 'fecha_hora_fin')):
@@ -322,46 +310,32 @@ class TurnoViewSet(viewsets.ModelViewSet):
         inicio = data.get('fecha_hora_inicio', getattr(instance, 'fecha_hora_inicio', None))
         fin = data.get('fecha_hora_fin', getattr(instance, 'fecha_hora_fin', None))
         if not fin and inicio:
-            fin = inicio + DURACION
+            fin = inicio + duracion_de(medico)
             data['fecha_hora_fin'] = fin
         validar_reserva(medico, inicio, fin, data.get('recurso', getattr(instance, 'recurso', None)),
                         excluir=getattr(instance, 'pk', None))
 
     def perform_create(self, serializer):
         """
-        Matriz de creación (C5.8.1): no confiar en IDs del cliente para médico/paciente
-        cuando el rol exige turno propio.
+        Matriz de creación (C5.8.1): solo secretaría/admin crean turnos por API.
+        El paciente reserva vía ``reservar-horario``; el médico solo inicia atención.
+        Turnos creados por secretaría nacen CONFIRMADO.
         """
         user = self.request.user
         rol = _rol_usuario(user)
         if rol == 'paciente':
             raise PermissionDenied('Reserve desde los horarios disponibles del portal.')
-
-        if 'estado' in serializer.validated_data:
-            try:
-                turno_estado.validate_estado_en_creacion(
-                    serializer.validated_data['estado'],
-                )
-            except turno_estado.TurnoEstadoTransitionError as exc:
-                raise ValidationError({'estado': str(exc)}) from exc
+        if rol == 'medico':
+            raise PermissionDenied(
+                'La gestión de turnos corresponde a secretaría. '
+                'Inicie la atención clínica desde un turno confirmado.'
+            )
+        if not _puede_gestionar_turnos_global(user):
+            raise PermissionDenied('No tiene permiso para crear turnos.')
 
         with transaction.atomic():
-            if _puede_gestionar_turnos_global(user):
-                self._validar_agenda(serializer)
-                instance = serializer.save()
-            elif _es_rol_agenda_solo_lectura(user):
-                raise PermissionDenied('No tiene permiso para crear turnos.')
-            elif rol == 'medico':
-                try:
-                    med = user.medico
-                except ObjectDoesNotExist:
-                    raise PermissionDenied(
-                        'El usuario médico no tiene ficha profesional vinculada.'
-                    )
-                self._validar_agenda(serializer)
-                instance = serializer.save(medico=med)
-            else:
-                raise PermissionDenied('No tiene permiso para crear turnos.')
+            self._validar_agenda(serializer)
+            instance = serializer.save(estado=Turno.Estado.CONFIRMADO)
 
             _safe_audit(
                 log_create,
@@ -383,53 +357,28 @@ class TurnoViewSet(viewsets.ModelViewSet):
         })
 
     def perform_update(self, serializer):
-        """Matriz de modificación (C5.8.1) además del acotamiento por ``get_queryset``."""
+        """Matriz de modificación (C5.8.1): solo secretaría/admin mutan la agenda."""
         user = self.request.user
         rol = _rol_usuario(user)
         instance = self.get_object()
         self._reject_direct_estado_change(serializer)
         before = safe_model_snapshot(instance)
 
-        if rol == 'paciente' and set(self.request.data) - {'motivo_reserva'}:
-            raise PermissionDenied('Use las acciones de reserva, cancelación o reprogramación del portal.')
+        if rol == 'paciente':
+            raise PermissionDenied(
+                'Si necesitás cambiar o cancelar el turno, comunicate con secretaría.'
+            )
+        if rol == 'medico':
+            raise PermissionDenied(
+                'La gestión de turnos corresponde a secretaría. '
+                'Inicie o continúe la atención clínica desde el turno.'
+            )
+        if not _puede_gestionar_turnos_global(user):
+            raise PermissionDenied('No tiene permiso para modificar turnos.')
 
         with transaction.atomic():
-            if _puede_gestionar_turnos_global(user):
-                self._validar_agenda(serializer, instance)
-                instance = serializer.save()
-            elif _es_rol_agenda_solo_lectura(user):
-                raise PermissionDenied('No tiene permiso para modificar turnos.')
-            elif rol == 'medico':
-                try:
-                    med = user.medico
-                except ObjectDoesNotExist:
-                    raise PermissionDenied(
-                        'El usuario médico no tiene ficha profesional vinculada.'
-                    )
-                if not medico_es_dueno_turno(med, instance):
-                    raise PermissionDenied('No puede modificar turnos de otro médico.')
-                _reject_foreign_medico_assignment(serializer, med)
-                self._validar_agenda(serializer, instance)
-                instance = serializer.save(medico=instance.medico or med)
-            elif rol == 'paciente':
-                pac = ensure_paciente_linked_to_user(user)
-                if not pac:
-                    raise PermissionDenied(
-                        'El usuario paciente no tiene ficha de paciente vinculada.'
-                    )
-                if instance.paciente_id != pac.id:
-                    raise PermissionDenied('No puede modificar turnos de otro paciente.')
-                if instance.estado in (Turno.Estado.REALIZADO, Turno.Estado.CANCELADO):
-                    raise PermissionDenied('No puede modificar un turno finalizado.')
-                if Atencion.objects.filter(turno_id=instance.pk).exists():
-                    raise PermissionDenied(
-                        'No puede modificar un turno con atención clínica iniciada.'
-                    )
-                _reject_foreign_paciente_assignment(serializer, pac)
-                self._validar_agenda(serializer, instance)
-                instance = serializer.save(paciente=pac)
-            else:
-                raise PermissionDenied('No tiene permiso para modificar turnos.')
+            self._validar_agenda(serializer, instance)
+            instance = serializer.save()
 
             _safe_audit(
                 log_update,
@@ -535,9 +484,6 @@ class TurnoViewSet(viewsets.ModelViewSet):
             except (Recurso.DoesNotExist, ValueError, TypeError):
                 raise ValidationError({'recurso_id': 'Recurso no válido.'}) from None
 
-        if _rol_usuario(request.user) == 'paciente' and ('recurso_id' in request.data or 'medico_id' in request.data):
-            raise PermissionDenied('Para cambiar de médico, cancele y reserve un nuevo horario.')
-
         with transaction.atomic():
             turno = self._get_turno_locked_for_estado_action(pk)
             if not turno_estado.puede_reprogramar_turno(request.user, turno):
@@ -556,7 +502,21 @@ class TurnoViewSet(viewsets.ModelViewSet):
             except turno_estado.TurnoEstadoTransitionError as exc:
                 raise ValidationError({'detail': str(exc)}) from exc
 
-        return self._estado_action_response(outcome)
+        response = self._estado_action_response(outcome)
+        if outcome.applied:
+            from .notificar_reprogramacion import notificar_reprogramacion
+
+            turno_notif = (
+                Turno.objects.select_related('paciente', 'medico')
+                .filter(pk=outcome.turno.pk)
+                .first()
+            )
+            if turno_notif is not None:
+                notif = notificar_reprogramacion(turno_notif)
+                data = dict(response.data)
+                data['notificacion'] = notif.as_dict()
+                response.data = data
+        return response
 
     @action(detail=True, methods=['post'], url_path='marcar-realizado')
     def marcar_realizado(self, request, pk=None):

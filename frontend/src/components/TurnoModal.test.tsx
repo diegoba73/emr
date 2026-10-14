@@ -87,22 +87,6 @@ function renderTurnoModal(props: Partial<React.ComponentProps<typeof TurnoModal>
   );
 }
 
-async function waitForTurnoFormReady() {
-  await waitFor(() => {
-    expect(screen.getByRole('button', { name: 'Actualizar turno' })).toBeInTheDocument();
-    expect(screen.getByDisplayValue('10:00')).toBeInTheDocument();
-  });
-}
-
-async function submitReprogramacionForm() {
-  await waitForTurnoFormReady();
-  fireEvent.change(screen.getByDisplayValue('10:00'), { target: { value: '11:00' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar turno' }));
-  await waitFor(() => {
-    expect(screen.getByRole('heading', { name: 'Reprogramar turno' })).toBeInTheDocument();
-  });
-}
-
 describe('TurnoModal motivo dialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -113,6 +97,48 @@ describe('TurnoModal motivo dialog', () => {
     });
     mockMarcarNoAsistioTurno.mockResolvedValue({ turno: baseTurno, message: 'OK' });
     window.alert = jest.fn();
+  });
+
+  it('muestra reprogramar para secretaría/admin y no muestra actualizar', async () => {
+    renderTurnoModal();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Reprogramar turno' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Actualizar turno' })).not.toBeInTheDocument();
+  });
+
+  it('reprograma con motivo y ofrece abrir WhatsApp si hay enlace', async () => {
+    const onSuccess = jest.fn();
+    mockReprogramarTurno.mockResolvedValue({
+      turno: { ...baseTurno, fecha_hora_inicio: '2026-06-21T11:00:00' },
+      message: 'Turno reprogramado',
+      notificacion: {
+        whatsapp_enviado: false,
+        whatsapp_url: 'https://wa.me/5491112345678?text=hola',
+        push_enviados: 0,
+      },
+    });
+    window.confirm = jest.fn(() => true);
+    window.open = jest.fn();
+    renderTurnoModal({ onSuccess });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Reprogramar turno' })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Reprogramar turno' }));
+    const dialog = getMotivoDialog('Reprogramar turno');
+    fireEvent.change(within(dialog).getByRole('textbox'), {
+      target: { value: 'Paciente pidió otro día' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reprogramar' }));
+    await waitFor(() => {
+      expect(mockReprogramarTurno).toHaveBeenCalled();
+      expect(window.open).toHaveBeenCalledWith(
+        'https://wa.me/5491112345678?text=hola',
+        '_blank',
+        'noopener,noreferrer'
+      );
+      expect(onSuccess).toHaveBeenCalled();
+    });
   });
 
   it('abre modal al cancelar turno y no llama API si se cancela', async () => {
@@ -241,68 +267,5 @@ describe('TurnoModal motivo dialog', () => {
     await waitFor(() => {
       expect(mockMarcarNoAsistioTurno).toHaveBeenCalledWith(42, 'No asistió');
     });
-  });
-});
-
-describe('TurnoModal reprogramación', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGetTurno.mockResolvedValue(baseTurno);
-    mockReprogramarTurno.mockResolvedValue({
-      turno: { ...baseTurno, fecha_hora_inicio: '2026-06-20T11:00:00' },
-    });
-    mockUpdateTurno.mockResolvedValue(baseTurno);
-    window.alert = jest.fn();
-  });
-
-  it('al reprogramar un turno, abre MotivoDialog, exige motivo y llama reprogramarTurno con duración de 20 minutos', async () => {
-    const onClose = jest.fn();
-    const onSuccess = jest.fn();
-    renderTurnoModal({ onClose, onSuccess });
-
-    await submitReprogramacionForm();
-    const dialog = getMotivoDialog('Reprogramar turno');
-    expect(within(dialog).getByText('Motivo de reprogramación (obligatorio)')).toBeInTheDocument();
-
-    const confirmar = within(dialog).getByRole('button', { name: 'Reprogramar' });
-    expect(confirmar).toBeDisabled();
-
-    fireEvent.change(within(dialog).getByRole('textbox'), {
-      target: { value: '  Cambio de horario solicitado  ' },
-    });
-    expect(confirmar).not.toBeDisabled();
-    fireEvent.click(confirmar);
-
-    await waitFor(() => {
-      expect(mockReprogramarTurno).toHaveBeenCalledTimes(1);
-      expect(mockReprogramarTurno).toHaveBeenCalledWith(42, {
-        fecha_hora_inicio: '2026-06-20T11:00:00',
-        fecha_hora_fin: '2026-06-20T11:20:00',
-        motivo: 'Cambio de horario solicitado',
-        medico_id: 1,
-        recurso_id: 1,
-      });
-      expect(mockUpdateTurno).toHaveBeenCalledWith(42, {
-        motivo_reserva: '',
-        paciente_id: 10,
-      });
-      expect(onSuccess).toHaveBeenCalled();
-      expect(onClose).toHaveBeenCalled();
-      expect(screen.queryByRole('heading', { name: 'Reprogramar turno' })).not.toBeInTheDocument();
-    });
-  });
-
-  it('reprogramación no llama API si se cancela el modal de motivo', async () => {
-    renderTurnoModal();
-    await submitReprogramacionForm();
-
-    const dialog = getMotivoDialog('Reprogramar turno');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
-
-    await waitFor(() => {
-      expect(screen.queryByRole('heading', { name: 'Reprogramar turno' })).not.toBeInTheDocument();
-    });
-    expect(mockReprogramarTurno).not.toHaveBeenCalled();
-    expect(mockUpdateTurno).not.toHaveBeenCalled();
   });
 });

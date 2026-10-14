@@ -34,6 +34,7 @@ import {
   agregarExamenesSolicitudLims,
   createPedidoCompletoLims,
   createSolicitudExamenLims,
+  getEnsayosRecientesInternacion,
   getOrdenAbiertaPaciente,
   getRepeticionControlCandidatos,
   getRestriccionesEnsayosPaciente,
@@ -49,6 +50,7 @@ import {
 } from '../../services/limsMicroApi';
 import type { Paciente } from '../../types';
 import type {
+  EnsayoRecienteInternacionLims,
   LimsPanelExamen,
   LimsTipoExamen,
   MaterialPedidoLims,
@@ -57,10 +59,16 @@ import type {
   TipoMuestraMicrobiologia,
 } from '../../types/lims';
 import { formatPacienteLabel, formatPacienteObraSocial } from '../../utils/pacienteFormat';
+import UltimosResultadosPaciente from './UltimosResultadosPaciente';
+import { pacienteFichaAnalisisPath } from '../../utils/navBack';
 import ObraSocialPedidoFields, {
   type ObraSocialPedidoValue,
 } from './ObraSocialPedidoFields';
-import { ORIGEN_SOLICITUD_LIMS_OPTIONS, esOrigenAmbulatorioExterno } from '../../utils/limsOrigenSolicitud';
+import {
+  ORIGEN_SOLICITUD_LIMS_OPTIONS,
+  esOrigenAmbulatorioExterno,
+  esOrigenInternacion,
+} from '../../utils/limsOrigenSolicitud';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   clinicalDrawerDialogProps,
@@ -151,7 +159,18 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     id: number;
     numero: string | null;
   } | null>(null);
-  const [pendingSubmit, setPendingSubmit] = useState<'draft' | 'create' | null>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<'draft' | 'create' | 'agregar' | null>(
+    null
+  );
+  const [ensayosRecientesInternacion, setEnsayosRecientesInternacion] = useState<
+    EnsayoRecienteInternacionLims[]
+  >([]);
+  const [sugerenciaConfirm, setSugerenciaConfirm] = useState<
+    EnsayoRecienteInternacionLims[] | null
+  >(null);
+  const [sugerenciaSelectedIds, setSugerenciaSelectedIds] = useState<Set<number>>(
+    () => new Set()
+  );
   const [repeticionMode, setRepeticionMode] = useState(false);
   const [repeticionInfo, setRepeticionInfo] = useState<RepeticionControlResponse | null>(null);
   const [selectedRepeticionIds, setSelectedRepeticionIds] = useState<Set<number>>(() => new Set());
@@ -238,8 +257,50 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     setRepeticionMode(false);
     setRepeticionInfo(null);
     setSelectedRepeticionIds(new Set());
+    setEnsayosRecientesInternacion([]);
+    setSugerenciaConfirm(null);
+    setSugerenciaSelectedIds(new Set());
+    setMergeConfirm(null);
+    setPendingSubmit(null);
     resetSelection();
   }, [open, pacienteInicial, origenInicial, resetSelection]);
+
+  // Prefetch ensayos recientes de internación (sugerencia al crear).
+  useEffect(() => {
+    if (!open || draftMode || repeticionMode) {
+      setEnsayosRecientesInternacion([]);
+      return;
+    }
+    if (!esOrigenInternacion(origenManual)) {
+      setEnsayosRecientesInternacion([]);
+      return;
+    }
+    const pid = paciente?.id ?? pacienteInicial?.id ?? pacienteId ?? null;
+    if (!pid || !fechaProgramadaToma) {
+      setEnsayosRecientesInternacion([]);
+      return;
+    }
+    let cancelled = false;
+    getEnsayosRecientesInternacion(pid, 7, fechaProgramadaToma)
+      .then((data) => {
+        if (!cancelled) setEnsayosRecientesInternacion(data.examenes || []);
+      })
+      .catch(() => {
+        if (!cancelled) setEnsayosRecientesInternacion([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    draftMode,
+    repeticionMode,
+    origenManual,
+    paciente?.id,
+    pacienteInicial?.id,
+    pacienteId,
+    fechaProgramadaToma,
+  ]);
 
   // Candidatos a repetición/control (orden INFORMADO_PARCIAL mismo día).
   useEffect(() => {
@@ -546,12 +607,44 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     };
   };
 
-  const gruposLabPorMaterial = () => {
+  const idsExamenesYaSeleccionados = useCallback((): Set<number> => {
+    const ids = new Set(selectedExamenesIds);
+    Array.from(selectedPanelesIds).forEach((panelId) => {
+      const panel = paneles.find((p) => p.id === panelId);
+      (panel?.tipos_examen || []).forEach((teId) => {
+        ids.add(teId);
+      });
+    });
+    return ids;
+  }, [paneles, selectedExamenesIds, selectedPanelesIds]);
+
+  const faltantesSugerencia = useCallback((): EnsayoRecienteInternacionLims[] => {
+    if (!esOrigenInternacion(origenManual)) return [];
+    if (!ensayosRecientesInternacion.length) return [];
+    const ya = idsExamenesYaSeleccionados();
+    return ensayosRecientesInternacion.filter((e) => !ya.has(e.id));
+  }, [ensayosRecientesInternacion, idsExamenesYaSeleccionados, origenManual]);
+
+  /** true si se abrió el diálogo y hay que esperar confirmación. */
+  const gateSugerenciaSeguimiento = (next: 'create' | 'agregar'): boolean => {
+    if (draftMode || repeticionMode) return false;
+    const faltantes = faltantesSugerencia();
+    if (!faltantes.length) return false;
+    setSugerenciaConfirm(faltantes);
+    setSugerenciaSelectedIds(new Set());
+    setPendingSubmit(next);
+    return true;
+  };
+
+  const gruposLabPorMaterial = (extraExamenesIds?: number[]) => {
     const { paneles_ids, examenes_ids } = getSelectionArrays();
-    if (examenes_ids.length === 0 && paneles_ids.length === 0) return [];
+    const examMerged = Array.from(
+      new Set([...examenes_ids, ...(extraExamenesIds || [])])
+    );
+    if (examMerged.length === 0 && paneles_ids.length === 0) return [];
     const groups = particionarSeleccionPorMateriales({
       materialesOrden: materialesSeleccionados,
-      selectedExamenesIds: new Set(examenes_ids),
+      selectedExamenesIds: new Set(examMerged),
       selectedPanelesIds: new Set(paneles_ids),
       examenes,
       paneles,
@@ -566,7 +659,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           tipo_muestra_codigos: [],
           grilla_codigos: [],
         },
-        examenes_ids,
+        examenes_ids: examMerged,
         paneles_ids,
       },
     ];
@@ -632,7 +725,33 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     onClose();
   };
 
-  const executeCreate = async () => {
+  const executeAgregar = async (extraExamenesIds?: number[]) => {
+    if (!agregarAOrdenId) return;
+    const { paneles_ids, examenes_ids } = getSelectionArrays();
+    const merged = Array.from(new Set([...examenes_ids, ...(extraExamenesIds || [])]));
+    if (merged.length === 0 && paneles_ids.length === 0) {
+      setError('Seleccioná al menos un análisis o panel.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const orden = await agregarExamenesSolicitudLims(agregarAOrdenId, {
+        examenes_ids: merged,
+        paneles_ids,
+      });
+      toast.success(
+        `Exámenes agregados a la orden ${orden.numero || agregarAOrdenNumero || `#${orden.id}`}.`
+      );
+      onCreated?.(orden.id);
+      onClose();
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const executeCreate = async (extraExamenesIds?: number[]) => {
     if (!paciente?.id) {
       setError('Seleccioná un paciente.');
       return;
@@ -683,7 +802,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
-    const groups = gruposLabPorMaterial();
+    const groups = gruposLabPorMaterial(extraExamenesIds);
     const hasLab = groups.length > 0;
     const hasMicro = microItems.length > 0;
     if (!hasLab && !hasMicro) {
@@ -775,23 +894,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         setError('Seleccioná al menos un análisis o panel.');
         return;
       }
-      const { paneles_ids, examenes_ids } = getSelectionArrays();
-      setSaving(true);
-      try {
-        const orden = await agregarExamenesSolicitudLims(agregarAOrdenId, {
-          examenes_ids,
-          paneles_ids,
-        });
-        toast.success(
-          `Exámenes agregados a la orden ${orden.numero || agregarAOrdenNumero || `#${orden.id}`}.`
-        );
-        onCreated?.(orden.id);
-        onClose();
-      } catch (e) {
-        setError(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
-      } finally {
-        setSaving(false);
-      }
+      if (gateSugerenciaSeguimiento('agregar')) return;
+      await executeAgregar();
       return;
     }
 
@@ -824,13 +928,13 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
 
     // Mismo material + PENDIENTE sin etiquetas → avisar merge a esa orden.
     // Otro material → orden nueva (sin este diálogo). Con etiquetas/en proceso el BE rechaza.
-    const pacienteId = paciente?.id ?? pacienteInicial?.id;
-    if (hasLab && groups.length === 1 && pacienteId) {
+    const pacienteIdMerge = paciente?.id ?? pacienteInicial?.id;
+    if (hasLab && groups.length === 1 && pacienteIdMerge) {
       const mat = (groups[0].material.codigo || '').toUpperCase();
       if (mat && mat !== '_') {
         try {
           const abierta = await getOrdenAbiertaPaciente(
-            pacienteId,
+            pacienteIdMerge,
             fechaProgramadaToma,
             mat
           );
@@ -849,6 +953,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       executeDraft();
       return;
     }
+    if (gateSugerenciaSeguimiento('create')) return;
     await executeCreate();
   };
 
@@ -856,11 +961,40 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     const mode = pendingSubmit;
     setMergeConfirm(null);
     setPendingSubmit(null);
-    if (mode === 'draft') executeDraft();
+    if (mode === 'draft') {
+      executeDraft();
+      return;
+    }
+    if (mode === 'create') {
+      if (gateSugerenciaSeguimiento('create')) return;
+      await executeCreate();
+    }
+  };
+
+  const confirmSugerenciaCrearIgual = async () => {
+    const mode = pendingSubmit;
+    setSugerenciaConfirm(null);
+    setSugerenciaSelectedIds(new Set());
+    setPendingSubmit(null);
+    if (mode === 'agregar') await executeAgregar();
     else if (mode === 'create') await executeCreate();
   };
 
+  const confirmSugerenciaAgregarYCrear = async () => {
+    const mode = pendingSubmit;
+    const extras = Array.from(sugerenciaSelectedIds);
+    setSugerenciaConfirm(null);
+    setSugerenciaSelectedIds(new Set());
+    setPendingSubmit(null);
+    for (const id of extras) {
+      if (!selectedExamenesIds.has(id)) toggleExamen(id);
+    }
+    if (mode === 'agregar') await executeAgregar(extras);
+    else if (mode === 'create') await executeCreate(extras);
+  };
+
   const showPacientePicker = !draftMode && !pacienteInicial && !agregarAOrdenId;
+  const pacienteIdHistorial = pacienteVisible?.id ?? pacienteId ?? null;
 
   return (
     <ThemeProvider theme={dialogTheme}>
@@ -941,6 +1075,16 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               <Alert severity="info" sx={{ py: 0.5 }}>
                 Paciente: <strong>{formatPacienteLabel(pacienteInicial)}</strong>
               </Alert>
+            )}
+
+            {pacienteIdHistorial != null && (
+              <UltimosResultadosPaciente
+                pacienteId={pacienteIdHistorial}
+                compact
+                defaultExpanded
+                backPath={pacienteFichaAnalisisPath(pacienteIdHistorial)}
+                backLabel="← Volver a la ficha"
+              />
             )}
 
             {pacienteVisible && !agregarAOrdenId && (
@@ -1289,6 +1433,78 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           </Button>
           <Button variant="contained" onClick={() => void confirmMerge()}>
             Continuar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(sugerenciaConfirm)}
+        onClose={() => {
+          setSugerenciaConfirm(null);
+          setSugerenciaSelectedIds(new Set());
+          setPendingSubmit(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Ensayos recientes de internación</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 1.5 }}>
+            En los últimos 7 días (incluido el día de este pedido) se pidieron estos ensayos
+            y no están en la selección actual. Podés agregarlos o continuar igual.
+          </DialogContentText>
+          <FormGroup>
+            {(sugerenciaConfirm || []).map((ex) => (
+              <FormControlLabel
+                key={ex.id}
+                control={
+                  <Checkbox
+                    checked={sugerenciaSelectedIds.has(ex.id)}
+                    onChange={() => {
+                      setSugerenciaSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(ex.id)) next.delete(ex.id);
+                        else next.add(ex.id);
+                        return next;
+                      });
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    <strong>{ex.codigo}</strong> — {ex.nombre}
+                    <Typography component="span" variant="caption" color="text.secondary">
+                      {` · ${ex.ultima_fecha}${
+                        ex.orden_numero ? ` · ${ex.orden_numero}` : ''
+                      }`}
+                    </Typography>
+                  </Typography>
+                }
+              />
+            ))}
+          </FormGroup>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setSugerenciaConfirm(null);
+              setSugerenciaSelectedIds(new Set());
+              setPendingSubmit(null);
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button onClick={() => void confirmSugerenciaCrearIgual()}>
+            {pendingSubmit === 'agregar' ? 'Continuar igual' : 'Crear igual'}
+          </Button>
+          <Button
+            variant="contained"
+            disabled={sugerenciaSelectedIds.size === 0}
+            onClick={() => void confirmSugerenciaAgregarYCrear()}
+          >
+            {pendingSubmit === 'agregar'
+              ? 'Agregar seleccionados'
+              : 'Agregar seleccionados y crear'}
           </Button>
         </DialogActions>
       </Dialog>

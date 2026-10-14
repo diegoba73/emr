@@ -85,6 +85,29 @@ class MedicoViewSet(viewsets.ModelViewSet):
             }
         )
 
+    @action(detail=True, methods=["get"], url_path="dias-disponibles")
+    def dias_disponibles(self, request, pk=None):
+        from .agenda import dias_disponibles as listar_dias_disponibles
+
+        medico = self.get_object()
+        try:
+            desde = date.fromisoformat(request.query_params.get("desde", ""))
+            hasta = date.fromisoformat(request.query_params.get("hasta", ""))
+        except ValueError as exc:
+            raise ValidationError("Indique desde y hasta válidos (AAAA-MM-DD).") from exc
+        tipo = request.query_params.get("tipo", "CONSULTA")
+        if tipo not in ("CONSULTA", "ESTUDIO"):
+            raise ValidationError("Tipo de atención inválido.")
+        return Response(
+            {
+                "medico_id": medico.pk,
+                "desde": desde.isoformat(),
+                "hasta": hasta.isoformat(),
+                "tipo": tipo,
+                "dias": listar_dias_disponibles(medico, desde, hasta, tipo),
+            }
+        )
+
     def get_serializer_class(self):
         if self.action == "list":
             return MedicoLightSerializer

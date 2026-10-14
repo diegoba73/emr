@@ -1,5 +1,9 @@
 import type { ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
-import { ordenResultadosCompletos, resultadoTieneValor } from './limsOrdenResultados';
+import {
+  ordenResultadosCompletos,
+  resultadoTieneValor,
+  valorTextoDesdeResultado,
+} from './limsOrdenResultados';
 
 describe('limsOrdenResultados', () => {
   const baseOrden = (resultados: ResultadoExamenLims[]): SolicitudExamenLims => ({
@@ -37,6 +41,21 @@ describe('limsOrdenResultados', () => {
   });
 
   it('ignora espacios en blanco', () => {
-    expect(resultadoTieneValor({ id: 1, solicitud: 1, tipo_examen: 1, valor_obtenido: '  ' })).toBe(false);
+    expect(resultadoTieneValor({ valor_obtenido: '  ' })).toBe(false);
+  });
+
+  it('no trata solo valor_numerico como informado (cualitativos / símbolos mandan por texto)', () => {
+    expect(resultadoTieneValor({ valor_obtenido: '', valor_numerico: 40 })).toBe(false);
+    expect(resultadoTieneValor({ valor_obtenido: 'Positivo' })).toBe(true);
+    expect(resultadoTieneValor({ valor_obtenido: '<0.5' })).toBe(true);
+  });
+
+  it('valorTextoDesdeResultado prioriza texto/símbolos y solo rellena número finito si no hay texto', () => {
+    expect(
+      valorTextoDesdeResultado({ valor_obtenido: 'Positivo', valor_numerico: 1 })
+    ).toBe('Positivo');
+    expect(valorTextoDesdeResultado({ valor_obtenido: '<0.5', valor_numerico: 0.5 })).toBe('<0.5');
+    expect(valorTextoDesdeResultado({ valor_obtenido: '', valor_numerico: 40 })).toBe('40');
+    expect(valorTextoDesdeResultado({ valor_obtenido: '  ', valor_numerico: null })).toBe('');
   });
 });

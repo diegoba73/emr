@@ -87,6 +87,7 @@ class TestTurnoCreatePermissions(APITestCase):
         )
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['medico']['id'] == self.medico_a.id
+        assert response.data['estado'] == Turno.Estado.CONFIRMADO
 
     def test_secretaria_puede_crear_turno(self):
         sec = User.objects.create_user(
@@ -102,9 +103,10 @@ class TestTurnoCreatePermissions(APITestCase):
             format='json',
         )
         assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['estado'] == Turno.Estado.CONFIRMADO
 
-    def test_no_se_puede_crear_turno_realizado(self):
-        """C5.9.2: POST genérico no crea turnos en estado REALIZADO."""
+    def test_secretaria_create_fuerza_confirmado_aunque_envien_otro_estado(self):
+        """Secretaría/admin siempre crean CONFIRMADO (override del payload)."""
         admin = User.objects.create_user(
             username='ta_mut_crea_rea',
             email='ta_mut_crea_rea@test.com',
@@ -113,16 +115,15 @@ class TestTurnoCreatePermissions(APITestCase):
             is_staff=True,
         )
         payload = _turno_payload(self.paciente_a, self.medico_a, self.recurso, 199)
-        payload['estado'] = Turno.Estado.REALIZADO
-        n_antes = Turno.objects.filter(estado=Turno.Estado.REALIZADO).count()
+        payload['estado'] = Turno.Estado.RESERVADO
+        n_realizados = Turno.objects.filter(estado=Turno.Estado.REALIZADO).count()
         self.client.force_authenticate(user=admin)
         response = self.client.post('/api/turnos/', payload, format='json')
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'estado' in response.data
-        assert Turno.objects.filter(estado=Turno.Estado.REALIZADO).count() == n_antes
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['estado'] == Turno.Estado.CONFIRMADO
+        assert Turno.objects.filter(estado=Turno.Estado.REALIZADO).count() == n_realizados
 
-    def test_no_se_puede_crear_turno_cancelado(self):
-        """C5.9.2: POST genérico no crea turnos en estado CANCELADO."""
+    def test_secretaria_create_ignora_estado_cancelado_del_payload(self):
         sec = User.objects.create_user(
             username='ta_mut_crea_can_sec',
             email='ta_mut_crea_can_sec@test.com',
@@ -134,8 +135,8 @@ class TestTurnoCreatePermissions(APITestCase):
         n_antes = Turno.objects.filter(estado=Turno.Estado.CANCELADO).count()
         self.client.force_authenticate(user=sec)
         response = self.client.post('/api/turnos/', payload, format='json')
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'estado' in response.data
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['estado'] == Turno.Estado.CONFIRMADO
         assert Turno.objects.filter(estado=Turno.Estado.CANCELADO).count() == n_antes
 
     def test_enfermeria_no_puede_crear_turno(self):
@@ -153,7 +154,7 @@ class TestTurnoCreatePermissions(APITestCase):
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_medico_crea_turno_forzado_a_si_mismo(self):
+    def test_medico_no_puede_crear_turno(self):
         user = User.objects.create_user(
             username='ta_mut_med_own',
             email='ta_mut_med_own@test.com',
@@ -168,27 +169,9 @@ class TestTurnoCreatePermissions(APITestCase):
             _turno_payload(self.paciente_a, self.medico_a, self.recurso, 53),
             format='json',
         )
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['medico']['id'] == self.medico_a.id
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_medico_no_puede_crear_turno_confirmado_sin_paciente(self):
-        user = User.objects.create_user(
-            username='ta_mut_med_sin_pac',
-            email='ta_mut_med_sin_pac@test.com',
-            password='x',
-            rol='medico',
-        )
-        self.medico_a.user = user
-        self.medico_a.save()
-        self.client.force_authenticate(user=user)
-        payload = _turno_payload(self.paciente_a, self.medico_a, self.recurso, 53)
-        del payload['paciente_id']
-        payload['estado'] = Turno.Estado.CONFIRMADO
-        response = self.client.post('/api/turnos/', payload, format='json')
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'paciente_id' in response.data
-
-    def test_medico_no_puede_crear_turno_para_otro_medico(self):
+    def test_medico_no_puede_crear_turno_aunque_envíe_otro_medico(self):
         user = User.objects.create_user(
             username='ta_mut_med_other',
             email='ta_mut_med_other@test.com',
@@ -200,9 +183,7 @@ class TestTurnoCreatePermissions(APITestCase):
         self.client.force_authenticate(user=user)
         payload = _turno_payload(self.paciente_a, self.medico_b, self.recurso, 54)
         response = self.client.post('/api/turnos/', payload, format='json')
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['medico']['id'] == self.medico_a.id
-        assert response.data['medico']['id'] != self.medico_b.id
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_medico_sin_ficha_no_puede_crear_turno(self):
         user = User.objects.create_user(
@@ -337,7 +318,7 @@ class TestTurnoPatchPermissions(APITestCase):
             estado=Turno.Estado.RESERVADO,
         )
 
-    def test_medico_puede_patch_turno_propio(self):
+    def test_medico_no_puede_patch_turno_propio(self):
         user = User.objects.create_user(
             username='ta_mut_patch_med_ok',
             email='ta_mut_patch_med_ok@test.com',
@@ -353,9 +334,9 @@ class TestTurnoPatchPermissions(APITestCase):
             {'motivo_reserva': 'Actualizado por médico'},
             format='json',
         )
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_403_FORBIDDEN
         turno.refresh_from_db()
-        assert turno.motivo_reserva == 'Actualizado por médico'
+        assert turno.motivo_reserva != 'Actualizado por médico'
 
     def test_medico_no_puede_patch_turno_ajeno(self):
         user = User.objects.create_user(
@@ -395,7 +376,7 @@ class TestTurnoPatchPermissions(APITestCase):
         turno.refresh_from_db()
         assert turno.medico_id == self.medico_a.id
 
-    def test_paciente_puede_patch_turno_propio(self):
+    def test_paciente_no_puede_patch_turno_propio(self):
         user = User.objects.create_user(
             username='ta_mut_patch_pac_ok',
             email='ta_mut_patch_pac_ok@test.com',
@@ -411,7 +392,7 @@ class TestTurnoPatchPermissions(APITestCase):
             {'motivo_reserva': 'Paciente actualiza'},
             format='json',
         )
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_paciente_no_puede_patch_turno_ajeno(self):
         user = User.objects.create_user(

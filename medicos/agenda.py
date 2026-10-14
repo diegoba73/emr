@@ -4,7 +4,22 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from .models import DisponibilidadMedico, ExcepcionMedico, Medico
 
-DURACION = timedelta(minutes=20)
+DEFAULT_DURACION_MIN = 20
+# Compat: importadores legacy. Preferir duracion_de(medico).
+DURACION = timedelta(minutes=DEFAULT_DURACION_MIN)
+
+
+def duracion_minutos(medico) -> int:
+    if medico is None:
+        return DEFAULT_DURACION_MIN
+    minutes = getattr(medico, 'duracion_slot_min', None) or DEFAULT_DURACION_MIN
+    if minutes not in Medico.DURACIONES_SLOT_PERMITIDAS:
+        return DEFAULT_DURACION_MIN
+    return minutes
+
+
+def duracion_de(medico) -> timedelta:
+    return timedelta(minutes=duracion_minutos(medico))
 
 
 def tipo_para_recurso(recurso):
@@ -17,6 +32,7 @@ def intervalos(medico, fecha, tipo=None):
         horarios = horarios.filter(tipo=tipo)
     excepciones = list(ExcepcionMedico.objects.filter(medico=medico, fecha=fecha))
     tz = timezone.get_current_timezone()
+    slot = duracion_de(medico)
     def dt(hora):
         return timezone.make_aware(datetime.combine(fecha, hora), tz)
     for horario in horarios:
@@ -26,8 +42,8 @@ def intervalos(medico, fecha, tipo=None):
         ajustes = [e for e in excepciones if e.tipo == 'AJUSTE' and e.hora_inicio and e.hora_fin]
         rangos = [(dt(e.hora_inicio), dt(e.hora_fin)) for e in ajustes] if ajustes else [(inicio, fin)]
         for inicio, fin in rangos:
-            while inicio + DURACION <= fin:
-                final = inicio + DURACION
+            while inicio + slot <= fin:
+                final = inicio + slot
                 bloqueado = any(e.tipo == 'BLOQUEO' and (
                     not e.hora_inicio or not e.hora_fin or
                     inicio < dt(e.hora_fin) and final > dt(e.hora_inicio)
@@ -46,28 +62,64 @@ def ocupado(medico, inicio, fin, recurso=None, excluir=None):
     alcance = Q(medico=medico) if medico else Q(pk__in=[])
     if recurso:
         alcance |= Q(recurso=recurso)
+    slot = duracion_de(medico)
     # Incluir turnos iniciados antes del día y legacy sin fin.
     qs = qs.filter(alcance, fecha_hora_inicio__lt=fin).filter(
         Q(fecha_hora_fin__gt=inicio) |
-        Q(fecha_hora_fin__isnull=True, fecha_hora_inicio__gt=inicio-DURACION)
+        Q(fecha_hora_fin__isnull=True, fecha_hora_inicio__gt=inicio-slot)
     )
     return qs.exists()
 
 
 def slots_disponibles(medico, fecha, tipo=None):
     vistos = set()
+    minutes = duracion_minutos(medico)
     for horario, inicio, fin in intervalos(medico, fecha, tipo):
         key = (inicio, horario.tipo)
         if inicio <= timezone.now() or key in vistos or ocupado(medico, inicio, fin, horario.recurso):
             continue
         vistos.add(key)
-        yield {'horario_id': horario.pk, 'inicio': inicio.isoformat(), 'fin': fin.isoformat(),
-               'duracion_min': 20, 'tipo': horario.tipo}
+        yield {
+            'horario_id': horario.pk,
+            'inicio': inicio.isoformat(),
+            'fin': fin.isoformat(),
+            'duracion_min': minutes,
+            'tipo': horario.tipo,
+            'recurso_id': horario.recurso_id,
+            'recurso_nombre': horario.recurso.nombre if horario.recurso_id else None,
+        }
+
+
+def dias_disponibles(medico, desde, hasta, tipo=None):
+    """Días con al menos un slot libre entre desde y hasta (inclusive)."""
+    if hasta < desde:
+        return []
+    if (hasta - desde).days > 62:
+        raise ValidationError('El rango máximo es de 62 días.')
+    dias_semana = set(
+        DisponibilidadMedico.objects.filter(medico=medico, activo=True)
+        .filter(**({'tipo': tipo} if tipo else {}))
+        .values_list('dia_semana', flat=True)
+        .distinct()
+    )
+    if not dias_semana:
+        return []
+    resultado = []
+    dia = desde
+    while dia <= hasta:
+        if dia.weekday() in dias_semana:
+            cantidad = sum(1 for _ in slots_disponibles(medico, dia, tipo))
+            if cantidad:
+                resultado.append({'fecha': dia.isoformat(), 'cantidad_slots': cantidad})
+        dia += timedelta(days=1)
+    return resultado
 
 
 def validar_reserva(medico, inicio, fin, recurso=None, *, excluir=None, exigir_horario=False, horario_id=None):
-    if inicio and fin != inicio + DURACION:
-        raise ValidationError({'fecha_hora_fin': 'Los turnos deben durar 20 minutos.'})
+    slot = duracion_de(medico)
+    minutes = duracion_minutos(medico)
+    if inicio and fin != inicio + slot:
+        raise ValidationError({'fecha_hora_fin': f'Los turnos de este médico deben durar {minutes} minutos.'})
     if exigir_horario and (not medico or not inicio):
         raise ValidationError('Seleccione un médico y un horario disponible.')
     if not inicio:

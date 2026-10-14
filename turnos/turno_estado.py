@@ -14,7 +14,6 @@ from auditoria.audit_service import log_update
 from auditoria.snapshot import safe_model_snapshot
 from api.permissions import emr_staff_or_admin_global
 from medicos.models import Medico
-from pacientes.services import ensure_paciente_linked_to_user
 
 from .access import medico_es_dueno_turno
 from .models import Recurso, Turno, Atencion
@@ -52,74 +51,23 @@ def turno_tiene_atencion_clinica(turno: Turno) -> bool:
 
 
 def puede_confirmar_turno(user, turno: Turno) -> bool:
-    if puede_gestionar_turnos_global(user):
-        return True
-    if _rol_usuario(user) != 'medico':
-        return False
-    try:
-        return medico_es_dueno_turno(user.medico, turno)
-    except ObjectDoesNotExist:
-        return False
+    """Solo secretaría/admin: el paciente reserva; secretaría confirma."""
+    return puede_gestionar_turnos_global(user)
 
 
 def puede_cancelar_turno(user, turno: Turno) -> bool:
-    if puede_gestionar_turnos_global(user):
-        return True
-    rol = _rol_usuario(user)
-    if rol == 'medico':
-        try:
-            return medico_es_dueno_turno(user.medico, turno)
-        except ObjectDoesNotExist:
-            return False
-    if rol == 'paciente':
-        pac = ensure_paciente_linked_to_user(user)
-        if not pac or turno.paciente_id != pac.id:
-            return False
-        if turno.estado in (Turno.Estado.REALIZADO, Turno.Estado.CANCELADO):
-            return False
-        if turno_tiene_atencion_clinica(turno):
-            return False
-        return True
-    return False
+    """Gestión de agenda: solo secretaría/admin."""
+    return puede_gestionar_turnos_global(user)
 
 
 def puede_reprogramar_turno(user, turno: Turno) -> bool:
-    if _rol_usuario(user) in {'enfermeria', 'laboratorio'}:
-        return False
-    if puede_gestionar_turnos_global(user):
-        return True
-    rol = _rol_usuario(user)
-    if rol == 'medico':
-        try:
-            return medico_es_dueno_turno(user.medico, turno)
-        except ObjectDoesNotExist:
-            return False
-    if rol == 'paciente':
-        pac = ensure_paciente_linked_to_user(user)
-        if not pac or turno.paciente_id != pac.id:
-            return False
-        if turno.estado in (Turno.Estado.REALIZADO, Turno.Estado.CANCELADO):
-            return False
-        if turno_tiene_atencion_clinica(turno):
-            return False
-        return True
-    return False
+    """Mover/cambiar día: solo secretaría/admin."""
+    return puede_gestionar_turnos_global(user)
 
 
 def puede_marcar_realizado_turno(user, turno: Turno) -> bool:
-    if _rol_usuario(user) in {'enfermeria', 'laboratorio', 'paciente'}:
-        return False
-    if puede_gestionar_turnos_global(user):
-        return True
-    if _rol_usuario(user) == 'medico':
-        try:
-            return (
-                medico_es_dueno_turno(user.medico, turno)
-                and turno.estado == Turno.Estado.CONFIRMADO
-            )
-        except ObjectDoesNotExist:
-            return False
-    return False
+    """Cierre operativo de agenda: solo secretaría/admin (médico usa iniciar-atencion)."""
+    return puede_gestionar_turnos_global(user)
 
 
 def puede_iniciar_atencion_turno(user, turno: Turno) -> bool:
@@ -140,16 +88,8 @@ def puede_iniciar_atencion_turno(user, turno: Turno) -> bool:
 
 
 def puede_marcar_no_asistio_turno(user, turno: Turno) -> bool:
-    if _rol_usuario(user) in {'enfermeria', 'laboratorio', 'paciente'}:
-        return False
-    if puede_gestionar_turnos_global(user):
-        return True
-    if _rol_usuario(user) == 'medico':
-        try:
-            return medico_es_dueno_turno(user.medico, turno)
-        except ObjectDoesNotExist:
-            return False
-    return False
+    """No asistencia: solo secretaría/admin."""
+    return puede_gestionar_turnos_global(user)
 
 
 def validate_estado_en_creacion(estado: str | None) -> None:

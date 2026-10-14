@@ -76,6 +76,7 @@ import { formatLimsPdfDownloadError } from '../utils/limsDownload';
 import toast from 'react-hot-toast';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import ResultadosOrdenLista from './lims/ResultadosOrdenLista';
+import UltimosResultadosPaciente from './lims/UltimosResultadosPaciente';
 import { estadoOrdenColor, labelEstadoOrdenLims } from '../utils/limsEstadosOrden';
 import {
   estadoMicroGeneralColor,
@@ -938,6 +939,13 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
               {loadingAnalisis ? 'Actualizando...' : 'Actualizar'}
             </Button>
           </Box>
+
+          <UltimosResultadosPaciente
+            pacienteId={paciente.id}
+            compact={false}
+            backPath={pacienteFichaAnalisisPath(paciente.id)}
+            backLabel="← Volver a la ficha"
+          />
 
           {loadingAnalisis ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>

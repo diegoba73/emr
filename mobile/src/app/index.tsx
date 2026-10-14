@@ -46,6 +46,14 @@ export default function Home() {
       ? dateKey(new Date(t.fecha_hora_inicio)) === fecha
       : new Date(t.fecha_hora_inicio).getTime() > now && t.estado !== 'CANCELADO'
   );
+  const turnoActivoPaciente =
+    user?.rol === 'paciente'
+      ? turnos.find(
+          (t) =>
+            new Date(t.fecha_hora_inicio).getTime() > now &&
+            (t.estado === 'RESERVADO' || t.estado === 'CONFIRMADO')
+        )
+      : undefined;
 
   return (
     <Page>
@@ -74,8 +82,27 @@ export default function Home() {
         <Action title="Pedir laboratorio" onPress={() => router.push('/lab')} />
       )}
 
-      {user?.rol === 'paciente' && (
+      {user?.rol === 'paciente' && !turnoActivoPaciente && (
         <Action title="Reservar un turno" onPress={() => router.push('/reservar')} />
+      )}
+      {user?.rol === 'paciente' && turnoActivoPaciente && (
+        <Card>
+          <Body>
+            Ya tenés un turno el{' '}
+            {new Date(turnoActivoPaciente.fecha_hora_inicio).toLocaleString('es-AR')}. No
+            podés sacar otro desde la app; si necesitás cambiarlo, contactá a secretaría.
+          </Body>
+          <Action
+            secondary
+            title="Ver turno"
+            onPress={() =>
+              router.push({
+                pathname: '/turno/[id]',
+                params: { id: String(turnoActivoPaciente.id) },
+              })
+            }
+          />
+        </Card>
       )}
 
       {puedeTurnos && (

@@ -201,25 +201,23 @@ class TestMedicoEstudioTurnoApi(APITestCase):
         self.client.force_authenticate(user=user)
         return user
 
-    def test_medico_solicitante_puede_patch_turno_estudio(self):
+    def test_medico_solicitante_no_puede_patch_turno_estudio(self):
         self._auth_medico()
         r = self.client.patch(
             f'/api/turnos/{self.turno_estudio.id}/',
             {'motivo_reserva': 'Estudio: RX — actualizado por médico'},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
-        self.turno_estudio.refresh_from_db()
-        assert 'actualizado por médico' in self.turno_estudio.motivo_reserva
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_medico_solicitante_puede_confirmar_turno_estudio(self):
+    def test_medico_solicitante_no_puede_confirmar_turno_estudio(self):
         self.turno_estudio.estado = Turno.Estado.RESERVADO
         self.turno_estudio.save(update_fields=['estado'])
         self._auth_medico()
         r = self.client.post(f'/api/turnos/{self.turno_estudio.id}/confirmar/')
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
         self.turno_estudio.refresh_from_db()
-        assert self.turno_estudio.estado == Turno.Estado.CONFIRMADO
+        assert self.turno_estudio.estado == Turno.Estado.RESERVADO
 
     def test_medico_ajeno_no_puede_patch_turno_estudio(self):
         user = User.objects.create_user(
@@ -238,7 +236,7 @@ class TestMedicoEstudioTurnoApi(APITestCase):
         )
         assert r.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_paciente_puede_patch_turno_estudio_activo(self):
+    def test_paciente_no_puede_patch_turno_estudio_activo(self):
         user = User.objects.create_user(
             username='te_est_pac',
             email='te_est_pac@test.com',
@@ -253,7 +251,7 @@ class TestMedicoEstudioTurnoApi(APITestCase):
             {'motivo_reserva': 'Estudio: RX — paciente'},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_paciente_no_puede_patch_turno_estudio_realizado(self):
         user = User.objects.create_user(

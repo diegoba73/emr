@@ -81,46 +81,11 @@ describe('medicoEsDuenoTurno', () => {
 describe('pacientePuedeMutarTurno', () => {
   const pacienteUser = user({ rol: 'PACIENTE', paciente: { id: 20 } as User['paciente'] });
 
-  it('permite editar turno propio activo', () => {
+  it('nunca permite mutar (agenda solo secretaría)', () => {
     expect(
       pacientePuedeMutarTurno(
         pacienteUser,
         turno({ paciente_id: 20, estado: 'RESERVADO' }),
-      ),
-    ).toBe(true);
-  });
-
-  it('bloquea turno REALIZADO', () => {
-    expect(
-      pacientePuedeMutarTurno(
-        pacienteUser,
-        turno({ paciente_id: 20, estado: 'REALIZADO' }),
-      ),
-    ).toBe(false);
-  });
-
-  it('bloquea turno CANCELADO', () => {
-    expect(
-      pacientePuedeMutarTurno(
-        pacienteUser,
-        turno({ paciente_id: 20, estado: 'CANCELADO' }),
-      ),
-    ).toBe(false);
-  });
-
-  it('bloquea si hay atención clínica iniciada', () => {
-    expect(
-      pacientePuedeMutarTurno(
-        pacienteUser,
-        turno({
-          paciente_id: 20,
-          estado: 'CONFIRMADO',
-          atencion: {
-            id: 1,
-            fecha_admision: '2026-07-10T09:00:00',
-            tipo_atencion: 'CONSULTORIO',
-          },
-        }),
       ),
     ).toBe(false);
   });
@@ -129,7 +94,7 @@ describe('pacientePuedeMutarTurno', () => {
 describe('canEditTurno — médico y estudio', () => {
   const medicoUser = user({ rol: 'MEDICO', medico: { id: 10 } as User['medico'] });
 
-  it('permite editar turno de estudio donde es solicitante', () => {
+  it('deniega edición de agenda al médico (solo atención clínica)', () => {
     expect(
       canEditTurno(
         medicoUser,
@@ -139,7 +104,7 @@ describe('canEditTurno — médico y estudio', () => {
           estudio_complementario: { id: 1, estado: 'CONFIRMADO', medico_solicitante_id: 10 },
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('deniega turno de consulta ajeno', () => {
@@ -149,6 +114,15 @@ describe('canEditTurno — médico y estudio', () => {
         turno({ medico_id: 99, medico: { id: 99 } as Turno['medico'] }),
       ),
     ).toBe(false);
+  });
+
+  it('permite secretaría', () => {
+    expect(
+      canEditTurno(
+        user({ rol: 'SECRETARIA' }),
+        turno({ medico_id: 10 }),
+      ),
+    ).toBe(true);
   });
 });
 

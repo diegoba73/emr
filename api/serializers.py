@@ -60,6 +60,7 @@ class MedicoLightSerializer(serializers.ModelSerializer):
             'matricula',
             'especialidad_nombre',
             'ambito_atencion',
+            'duracion_slot_min',
         ]
         read_only_fields = fields
 
@@ -94,6 +95,7 @@ class MedicoSerializer(serializers.ModelSerializer):
             'especialidad_id',
             'user',
             'ambito_atencion',
+            'duracion_slot_min',
             'areas_interes_ia',
             'email',
             'telefono',
@@ -116,6 +118,14 @@ class MedicoSerializer(serializers.ModelSerializer):
             return None
         value = value.strip()
         return value or None
+
+    def validate_duracion_slot_min(self, value):
+        if value not in Medico.DURACIONES_SLOT_PERMITIDAS:
+            permitidas = ', '.join(str(m) for m in Medico.DURACIONES_SLOT_PERMITIDAS)
+            raise serializers.ValidationError(
+                f'La duración del turno debe ser una de: {permitidas} minutos.'
+            )
+        return value
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -161,11 +171,14 @@ class DisponibilidadMedicoSerializer(serializers.ModelSerializer):
         fin = attrs.get('hora_fin', getattr(self.instance, 'hora_fin', None))
         if not inicio or not fin or fin <= inicio:
             raise serializers.ValidationError('La hora de fin debe ser posterior al inicio.')
-        if inicio.second or fin.second or inicio.minute % 20 or fin.minute % 20:
-            raise serializers.ValidationError('Use horarios en bloques de 20 minutos (:00, :20 o :40).')
-        if attrs.get('duracion_slot_min', 20) != 20:
-            raise serializers.ValidationError('La duración del turno es de 20 minutos.')
-        attrs['duracion_slot_min'] = 20
+        from medicos.agenda import duracion_minutos
+        slot = duracion_minutos(medico)
+        if inicio.second or fin.second or inicio.minute % slot or fin.minute % slot:
+            raise serializers.ValidationError(
+                f'Use horarios alineados a bloques de {slot} minutos.'
+            )
+        # Duración denormalizada desde el médico (fuente de verdad).
+        attrs['duracion_slot_min'] = slot
         tipo = attrs.get('tipo', getattr(self.instance, 'tipo', 'CONSULTA'))
         recurso = attrs.get('recurso', getattr(self.instance, 'recurso', None))
         from medicos.agenda import tipo_para_recurso

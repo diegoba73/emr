@@ -354,6 +354,50 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     });
   };
 
+  const handleReprogramarTurno = () => {
+    if (!editingTurno?.id) return;
+    if (!formData.fecha || !formData.horaInicio || !formData.duracionMin) {
+      alert('Completá fecha, hora y duración antes de reprogramar.');
+      return;
+    }
+    openMotivoDialog({
+      title: 'Reprogramar turno',
+      label: 'Motivo de reprogramación (obligatorio)',
+      confirmLabel: 'Reprogramar',
+      onConfirm: async (motivo) => {
+        try {
+          const [y, m, d] = formData.fecha.split('-').map(Number);
+          const [hh, mm] = formData.horaInicio.split(':').map(Number);
+          const inicio = new Date(y, m - 1, d, hh, mm, 0, 0);
+          const fin = new Date(inicio.getTime() + formData.duracionMin * 60_000);
+          const { turno, notificacion } = await apiService.reprogramarTurno(editingTurno.id, {
+            fecha_hora_inicio: formatLocalDateTimeSeconds(inicio),
+            fecha_hora_fin: formatLocalDateTimeSeconds(fin),
+            motivo,
+          });
+          setTurnoEfectivo(turno);
+          if (notificacion?.whatsapp_url) {
+            const abrir = window.confirm(
+              'Turno reprogramado. ¿Abrir WhatsApp para avisar al paciente?'
+            );
+            if (abrir) {
+              window.open(notificacion.whatsapp_url, '_blank', 'noopener,noreferrer');
+            }
+          } else if (notificacion?.whatsapp_enviado) {
+            alert('Turno reprogramado. Se envió WhatsApp al paciente.');
+          } else {
+            alert('Turno reprogramado.');
+          }
+          onSuccess?.();
+        } catch (error: unknown) {
+          throw new Error(
+            getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoReprogramar)
+          );
+        }
+      },
+    });
+  };
+
   const handleMarcarRealizado = async () => {
     if (!editingTurno?.id) return;
     setLoading(true);
@@ -621,6 +665,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     }
 
     const baseEstado = (estadosDisponibles.length > 0 ? estadosDisponibles[0].value : 'RESERVADO') as 'RESERVADO' | 'CONFIRMADO' | 'REALIZADO' | 'CANCELADO';
+    const duracionMedico = currentUser?.medico?.duracion_slot_min || 20;
 
     if (selectedDateTime && !Number.isNaN(selectedDateTime.getTime())) {
       setFormData({
@@ -629,7 +674,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         recurso: '',
         fecha: formatFecha(selectedDateTime),
         horaInicio: formatHora(selectedDateTime),
-        duracionMin: 20,
+        duracionMin: duracionMedico,
         motivo: '',
         estado: baseEstado,
         prioridad: 'NORMAL',
@@ -641,7 +686,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         recurso: '',
         fecha: '',
         horaInicio: '',
-        duracionMin: 20,
+        duracionMin: duracionMedico,
         motivo: '',
         estado: baseEstado,
         prioridad: 'NORMAL',
@@ -656,6 +701,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         nombre: (m as Medico).nombre || currentUser.first_name || '',
         apellido: (m as Medico).apellido || currentUser.last_name || '',
         matricula: m.matricula || '',
+        duracion_slot_min: (m as Medico).duracion_slot_min || duracionMedico,
       } as Medico);
     }
   }, [
@@ -711,7 +757,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           setEstudioFormError('Fecha u hora inválida.');
           return;
         }
-        const fin = new Date(inicio.getTime() + 20 * 60_000);
+        const fin = new Date(inicio.getTime() + (formData.duracionMin || 20) * 60_000);
         const turnoPayload = {
           recurso_id: Number(formData.recurso),
           fecha_hora_inicio: inicio.toISOString(),
@@ -741,6 +787,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       } finally {
         setLoading(false);
       }
+      return;
+    }
+
+    if (editingTurno) {
       return;
     }
 
@@ -776,8 +826,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         const pacienteIdRaw = formData.paciente?.trim();
         const pacienteId = pacienteIdRaw ? Number(pacienteIdRaw) : NaN;
         const tienePacienteValido = !Number.isNaN(pacienteId) && pacienteId > 0;
-        const pacienteEnEdicion = editingTurno?.paciente_id ?? editingTurno?.paciente?.id;
-        if (!tienePacienteValido && !pacienteEnEdicion) {
+        if (!tienePacienteValido) {
           alert('Por favor, seleccione un paciente');
           setLoading(false);
           return;
@@ -793,9 +842,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         if (!isNaN(pacienteId) && pacienteId > 0) {
           payload.paciente_id = pacienteId;
         }
-      } else if (editingTurno && editingTurno.paciente_id) {
-        // Si estamos editando y no hay paciente en el form, mantener el original
-        payload.paciente_id = editingTurno.paciente_id;
       }
       
       // Médico (ya validado arriba)
@@ -809,9 +855,6 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         } else {
           throw new Error('Por favor, seleccione un recurso válido');
         }
-      } else if (editingTurno && editingTurno.recurso_id) {
-        // Si estamos editando y no hay recurso en el form, mantener el original
-        payload.recurso_id = editingTurno.recurso_id;
       } else {
         throw new Error('Por favor, seleccione un recurso');
       }
@@ -828,9 +871,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       payload.fecha_hora_inicio = formatLocalDateTimeSeconds(fechaInicioLocal);
       payload.fecha_hora_fin = formatLocalDateTimeSeconds(fechaFinLocal);
       
-      if (!editingTurno) {
-        payload.estado = formData.estado || 'RESERVADO';
-      }
+      payload.estado = formData.estado || 'RESERVADO';
 
       // Motivo
       payload.motivo_reserva = formData.motivo || '';
@@ -844,61 +885,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       // No enviar prioridad ya que no existe en el modelo del backend
       // payload.prioridad se omite
 
-      if (editingTurno) {
-        const origMedicoId = editingTurno.medico_id ?? editingTurno.medico?.id;
-        const origRecursoId = editingTurno.recurso_id ?? editingTurno.recurso?.id;
-        const origInicio = turnoInicioFromApi(editingTurno);
-        const origInicioStr = origInicio ? formatLocalDateTimeSeconds(origInicio) : '';
-        const logisticChanged =
-          payload.fecha_hora_inicio !== origInicioStr ||
-          payload.medico_id !== origMedicoId ||
-          payload.recurso_id !== origRecursoId;
-
-        if (logisticChanged && canReprogramarTurno(currentUser, editingTurno)) {
-          setLoading(false);
-          openMotivoDialog({
-            title: 'Reprogramar turno',
-            label: 'Motivo de reprogramación (obligatorio)',
-            confirmLabel: 'Reprogramar',
-            initialMotivo: formData.motivo || '',
-            onConfirm: async (motivoRep) => {
-              try {
-                await apiService.reprogramarTurno(editingTurno.id, {
-                  fecha_hora_inicio: payload.fecha_hora_inicio,
-                  fecha_hora_fin: payload.fecha_hora_fin,
-                  motivo: motivoRep,
-                  ...(payload.medico_id ? { medico_id: payload.medico_id } : {}),
-                  ...(payload.recurso_id ? { recurso_id: payload.recurso_id } : {}),
-                });
-                const patchMotivo: Record<string, unknown> = { motivo_reserva: payload.motivo_reserva };
-                if (payload.paciente_id) {
-                  patchMotivo.paciente_id = payload.paciente_id;
-                }
-                if (Object.keys(patchMotivo).length > 0) {
-                  await apiService.updateTurno(editingTurno.id, patchMotivo);
-                }
-                onSuccess?.();
-                onClose();
-              } catch (error: unknown) {
-                throw new Error(
-                  getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoReprogramar)
-                );
-              }
-            },
-          });
-          return;
-        } else {
-          const patchPayload = { ...payload };
-          delete patchPayload.estado;
-          delete patchPayload.fecha_hora_inicio;
-          delete patchPayload.fecha_hora_fin;
-          delete patchPayload.medico_id;
-          delete patchPayload.recurso_id;
-          await apiService.updateTurno(editingTurno.id, patchPayload);
-        }
-      } else {
-        await apiService.createTurno(payload);
-      }
+      await apiService.createTurno(payload);
 
       onSuccess?.();
       onClose();
@@ -926,14 +913,18 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   const isTurnoRealizado = () => isTurnoBloqueado();
   const isTurnoDeEstudio = Boolean(editingTurno && isTurnoEstudio(editingTurno));
   const canEditFormFields = () => {
+    if (editingTurno) return false;
     if (!canMutateByRole || isTurnoBloqueado()) return false;
     if (isTurnoDeEstudio) {
-      if (canMutateTurnosGlobally(currentUser)) return true;
-      if (isMedico() && canEditTurnoByRole(currentUser, turnoVista)) return true;
-      if (isPaciente() && pacientePuedeMutarTurno(currentUser, turnoVista)) return true;
-      return false;
+      return canMutateTurnosGlobally(currentUser);
     }
     return true;
+  };
+
+  /** Secretaría puede cambiar fecha/hora de un turno existente (reprogramar). */
+  const canEditAgendaSlot = () => {
+    if (!editingTurno || isTurnoBloqueado() || isTurnoDeEstudio) return false;
+    return canReprogramarTurno(currentUser, turnoParaAcciones);
   };
 
   // Resolver el nombre completo del paciente actual
@@ -1410,7 +1401,11 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               }}
               onChange={(newValue) => {
                 setSelectedMedico(newValue);
-                setFormData({ ...formData, medico: newValue ? String(newValue.id) : '' });
+                setFormData({
+                  ...formData,
+                  medico: newValue ? String(newValue.id) : '',
+                  duracionMin: newValue?.duracion_slot_min || 20,
+                });
               }}
               value={selectedMedico}
               required
@@ -1457,10 +1452,17 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               label="📅 Fecha"
               type="date"
               value={formData.fecha}
-              onChange={(e) => setFormData({...formData, fecha: e.target.value, duracionMin: 20})}
+              onChange={(e) => setFormData({
+                ...formData,
+                fecha: e.target.value,
+                duracionMin: selectedMedico?.duracion_slot_min
+                  || currentUser?.medico?.duracion_slot_min
+                  || formData.duracionMin
+                  || 20,
+              })}
               InputLabelProps={{ shrink: true }}
               required
-              disabled={!canEditFormFields()}
+              disabled={!canEditFormFields() && !canEditAgendaSlot()}
             />
 
             <TextField
@@ -1468,10 +1470,17 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               label="🕐 Hora Inicio"
               type="time"
               value={formData.horaInicio}
-              onChange={(e) => setFormData({...formData, horaInicio: e.target.value, duracionMin: 20})}
+              onChange={(e) => setFormData({
+                ...formData,
+                horaInicio: e.target.value,
+                duracionMin: selectedMedico?.duracion_slot_min
+                  || currentUser?.medico?.duracion_slot_min
+                  || formData.duracionMin
+                  || 20,
+              })}
               InputLabelProps={{ shrink: true }}
               required
-              disabled={!canEditFormFields()}
+              disabled={!canEditFormFields() && !canEditAgendaSlot()}
             />
 
             <TextField
@@ -1481,8 +1490,9 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               value={formData.duracionMin}
               onChange={(e) => setFormData({...formData, duracionMin: Number(e.target.value)})}
               inputProps={{ readOnly: true }}
+              helperText="Según la configuración del médico"
               required
-              disabled={!canEditFormFields()}
+              disabled={!canEditFormFields() && !canEditAgendaSlot()}
             />
           </Box>
           )}
@@ -1520,7 +1530,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 size="small"
               />
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                Use las acciones del pie del modal (confirmar, cancelar, marcar realizado, no asistió).
+                Secretaría: confirmar, reprogramar, cancelar, marcar realizado o no asistió. Médico: iniciar/cerrar la consulta.
               </Typography>
             </Box>
 
@@ -1597,6 +1607,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             Confirmar turno
           </Button>
         )}
+        {editingTurno && canReprogramarTurno(currentUser, turnoParaAcciones) && (
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={handleReprogramarTurno}
+            disabled={loading || isTurnoBloqueado()}
+          >
+            Reprogramar turno
+          </Button>
+        )}
         {editingTurno && canCancelarTurnoAccion(currentUser, turnoParaAcciones) && (
           <Button
             variant="outlined"
@@ -1627,7 +1647,8 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             No asistió
           </Button>
         )}
-        {(canEditFormFields() || (isModoEstudio && puedeAgendarEstudio && !editingTurno)) && (
+        {!editingTurno &&
+          (canEditFormFields() || (isModoEstudio && puedeAgendarEstudio)) && (
           <Button
             type="submit"
             form="turno-form"
@@ -1637,17 +1658,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           >
             {loading
               ? 'Guardando...'
-              : editingTurno
-                ? 'Actualizar turno'
-                : isModoEstudio
-                  ? 'Confirmar turno de estudio'
-                  : 'Crear consulta'}
+              : isModoEstudio
+                ? 'Confirmar turno de estudio'
+                : 'Crear consulta'}
           </Button>
         )}
         {(forceReadOnly || (editingTurno && !canMutateByRole)) && (
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 100%', order: -1, mb: 1 }}>
-            No tenés permiso para modificar este turno. La eliminación física no está disponible (use cambio de
-            estado cuando exista el flujo de negocio).
+            {isMedico()
+              ? 'La gestión de turnos corresponde a secretaría. Podés iniciar o continuar la atención clínica desde este turno.'
+              : 'No tenés permiso para modificar este turno. Si necesitás cambios, pedile a secretaría.'}
           </Typography>
         )}
         {isTurnoRealizado() && (

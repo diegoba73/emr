@@ -190,13 +190,13 @@ const MicrobiologiaCatalogos: React.FC = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = { search: search.trim() || undefined };
     try {
+      // Sin ?search= en cada tecla: filtramos en cliente (evita carrera de respuestas).
       const [m, mi, a, f] = await Promise.all([
-        listMediosCultivo(params),
-        listMicroorganismos(params),
-        listAntibioticos(params),
-        listFrasesRapidasMicro(params),
+        listMediosCultivo(),
+        listMicroorganismos(),
+        listAntibioticos(),
+        listFrasesRapidasMicro(),
       ]);
       setMedios(m);
       setMicros(mi);
@@ -207,14 +207,38 @@ const MicrobiologiaCatalogos: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, []);
 
   useEffect(() => {
-    if (allowed) load();
+    if (allowed) void load();
   }, [allowed, load]);
 
+  const q = search.trim().toLowerCase();
+  const filterHay = (hay: string) => !q || hay.toLowerCase().includes(q);
+
+  const mediosFiltrados = !q
+    ? medios
+    : medios.filter((r) => filterHay(`${r.codigo} ${r.nombre} ${r.tipo ?? ''}`));
+  const microsFiltrados = !q
+    ? micros
+    : micros.filter((r) =>
+        filterHay(`${r.codigo} ${r.nombre} ${r.genero ?? ''} ${r.especie ?? ''}`)
+      );
+  const absFiltrados = !q
+    ? abs
+    : abs.filter((r) => filterHay(`${r.codigo} ${r.nombre} ${r.familia ?? ''}`));
+  const frasesFiltradas = !q
+    ? frases
+    : frases.filter((r) => filterHay(`${r.abreviatura} ${r.texto} ${r.categoria ?? ''}`));
+
   const rows =
-    tab === 0 ? medios : tab === 1 ? micros : tab === 2 ? abs : frases;
+    tab === 0
+      ? mediosFiltrados
+      : tab === 1
+        ? microsFiltrados
+        : tab === 2
+          ? absFiltrados
+          : frasesFiltradas;
   const colSpan = canEdit ? (tab === 1 ? 6 : 5) : tab === 1 ? 5 : 4;
 
   const openCreate = () => {
@@ -506,7 +530,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : tab === 0 ? (
-              medios.map((r) => (
+              mediosFiltrados.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
                   <TableCell>{r.nombre}</TableCell>
@@ -540,7 +564,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
                 </TableRow>
               ))
             ) : tab === 1 ? (
-              micros.map((r) => (
+              microsFiltrados.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
                   <TableCell>{r.nombre}</TableCell>
@@ -575,7 +599,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
                 </TableRow>
               ))
             ) : tab === 2 ? (
-              abs.map((r) => (
+              absFiltrados.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
                   <TableCell>{r.nombre}</TableCell>
@@ -613,7 +637,7 @@ const MicrobiologiaCatalogos: React.FC = () => {
                 </TableRow>
               ))
             ) : (
-              frases.map((r) => (
+              frasesFiltradas.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.abreviatura}</TableCell>
                   <TableCell sx={{ maxWidth: 360, whiteSpace: 'pre-wrap' }}>

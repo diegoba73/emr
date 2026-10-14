@@ -42,6 +42,9 @@ from laboratorio.solicitud_cierre import (
     desvalidar_solicitud_manual,
     finalizar_solicitud_manual,
     informar_parcial_si_corresponde,
+    solicitud_resultados_completos,
+    solicitud_resultados_parciales,
+    solicitud_tiene_algun_resultado,
 )
 from laboratorio.solicitud_estado import SolicitudEstadoTransitionError
 from pacientes.services import ensure_paciente_linked_to_user
@@ -147,10 +150,11 @@ class InformeMovilSerializer(serializers.ModelSerializer):
 
     def get_puede_informar_parcial(self, obj):
         user = self.context['request'].user
-        return _rol(user) in ROLES_MOVIL_VALIDAR and obj.estado in (
-            'EN_PROCESO',
-            'INFORMADO_PARCIAL',
-            'LISTO_PARA_VALIDAR',
+        # Solo con carga incompleta en proceso (LISTO_PARA_VALIDAR ya está completo).
+        return (
+            _rol(user) in ROLES_MOVIL_VALIDAR
+            and obj.estado == 'EN_PROCESO'
+            and solicitud_resultados_parciales(obj)
         )
 
 
@@ -345,6 +349,14 @@ class InformeMovilInformarParcial(APIView):
                     view='InformeMovilInformarParcial.post',
                 )
                 if not ok:
+                    if sol.estado == 'LISTO_PARA_VALIDAR' or (
+                        solicitud_tiene_algun_resultado(sol)
+                        and solicitud_resultados_completos(sol)
+                    ):
+                        raise ValidationError(
+                            'Los resultados de la orden ya están completos, '
+                            'ya se pueden validar.'
+                        )
                     raise ValidationError(
                         'No se puede informar parcialmente: hace falta al menos un '
                         'resultado cargado y que aún falten otros.'

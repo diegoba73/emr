@@ -35,8 +35,49 @@ def test_slots_20_min_sin_datos_de_otros_pacientes(agenda):
     r = client(user).get(f'/api/medicos/{med.pk}/slots/', {'fecha': fecha.isoformat()})
     assert r.status_code == 200
     assert len(r.data['slots']) == 11
-    assert all(set(s) == {'horario_id','inicio','fin','duracion_min','tipo'} for s in r.data['slots'])
+    assert all(
+        set(s) >= {'horario_id', 'inicio', 'fin', 'duracion_min', 'tipo', 'recurso_id', 'recurso_nombre'}
+        for s in r.data['slots']
+    )
     assert r.data['slots'][0]['duracion_min'] == 20
+    assert r.data['slots'][0]['recurso_id'] is None
+
+
+def test_dias_disponibles_paciente_ve_cupo_del_mes(agenda):
+    med, other, _, _, user, pac, fecha, inicio, h = agenda
+    c = client(user)
+    desde = fecha.replace(day=1)
+    if fecha.month == 12:
+        hasta = fecha.replace(year=fecha.year + 1, month=1, day=1) - timedelta(days=1)
+    else:
+        hasta = fecha.replace(month=fecha.month + 1, day=1) - timedelta(days=1)
+    r = c.get(f'/api/medicos/{med.pk}/dias-disponibles/', {
+        'desde': desde.isoformat(), 'hasta': hasta.isoformat(), 'tipo': 'CONSULTA',
+    })
+    assert r.status_code == 200, r.data
+    fechas = {d['fecha'] for d in r.data['dias']}
+    assert fecha.isoformat() in fechas
+    assert all(d['cantidad_slots'] > 0 for d in r.data['dias'])
+    # Solo días del weekday de la franja configurada
+    assert all(date.fromisoformat(f).weekday() == fecha.weekday() for f in fechas)
+
+    r = c.get(f'/api/medicos/{other.pk}/dias-disponibles/', {
+        'desde': desde.isoformat(), 'hasta': hasta.isoformat(),
+    })
+    assert r.status_code == 200
+    assert r.data['dias'] == []
+
+    r = c.get(f'/api/medicos/{med.pk}/dias-disponibles/', {
+        'desde': desde.isoformat(), 'hasta': hasta.isoformat(), 'tipo': 'ESTUDIO',
+    })
+    assert r.status_code == 200
+    assert r.data['dias'] == []
+
+    r = c.get(f'/api/medicos/{med.pk}/dias-disponibles/', {
+        'desde': fecha.isoformat(),
+        'hasta': (fecha + timedelta(days=70)).isoformat(),
+    })
+    assert r.status_code == 400
 
 
 def test_paciente_reserva_propio_sin_consultorio_prioridad_y_no_duplica(agenda):
@@ -47,8 +88,15 @@ def test_paciente_reserva_propio_sin_consultorio_prioridad_y_no_duplica(agenda):
     t = Turno.objects.get(pk=r.data['id'])
     assert t.paciente == pac and t.estado == 'RESERVADO' and t.recurso is None
     assert t.fecha_hora_fin-t.fecha_hora_inicio == timedelta(minutes=20)
+    # Mismo horario ocupado / ya tiene turno activo
     r = c.post('/api/turnos/reservar-horario/', data, format='json')
     assert r.status_code == 400
+    assert Turno.objects.count() == 1
+    # Otro horario libre: tampoco puede (solo un turno activo; secretaría puede por /turnos/)
+    otro = inicio + timedelta(minutes=20)
+    r = c.post('/api/turnos/reservar-horario/', {'horario_id': h.pk, 'inicio': otro.isoformat()}, format='json')
+    assert r.status_code == 400
+    assert 'secretaría' in str(r.data).lower() or 'secretaria' in str(r.data).lower() or 'turno reservado' in str(r.data).lower()
     assert Turno.objects.count() == 1
 
 
@@ -116,10 +164,111 @@ def test_roles_no_autorizados_no_configuran(agenda, rol):
     assert client(u).post('/api/disponibilidades/', payload(agenda[0]), format='json').status_code == 403
 
 
-@pytest.mark.parametrize('changes', [{'hora_fin':'08:00'}, {'hora_inicio':'09:10'}, {'duracion_slot_min':30}, {'tipo':'ESTUDIO'}])
+@pytest.mark.parametrize('changes', [{'hora_fin':'08:00'}, {'hora_inicio':'09:10'}, {'tipo':'ESTUDIO'}])
 def test_validacion_horario(agenda, changes):
     r = client(agenda[3]).post('/api/disponibilidades/', {**payload(agenda[1]), **changes}, format='json')
     assert r.status_code == 400, r.data
+
+
+def test_duracion_por_medico_genera_slots_y_reserva(agenda):
+    med, _, _, admin, user, pac, fecha, inicio, h = agenda
+    med.duracion_slot_min = 15
+    med.save(update_fields=['duracion_slot_min'])
+    h.hora_inicio = time(9, 0)
+    h.hora_fin = time(10, 0)
+    h.duracion_slot_min = 15
+    h.save()
+    r = client(user).get(f'/api/medicos/{med.pk}/slots/', {'fecha': fecha.isoformat()})
+    assert r.status_code == 200
+    assert len(r.data['slots']) == 4
+    assert r.data['slots'][0]['duracion_min'] == 15
+    r = client(user).post('/api/turnos/reservar-horario/', {
+        'horario_id': h.pk, 'inicio': inicio.isoformat(),
+    }, format='json')
+    assert r.status_code == 201, r.data
+    t = Turno.objects.get(pk=r.data['id'])
+    assert t.fecha_hora_fin - t.fecha_hora_inicio == timedelta(minutes=15)
+
+
+def test_configurar_semana_upsert_y_estudio_exige_sala(agenda):
+    med, _, _, admin, _, _, _, _, h = agenda
+    c = client(admin)
+    sala = Recurso.objects.create(nombre='Sala semana', ubicacion='CEHTA', tipo_recurso='SALA_PROCEDIMIENTO')
+    consultorio = Recurso.objects.create(nombre='Cons semana', ubicacion='CEHTA', tipo_recurso='CONSULTORIO')
+
+    dias_off = [{'dia_semana': i, 'activo': False} for i in range(7)]
+    dias_consulta = [
+        {
+            'dia_semana': i,
+            'activo': i < 5,
+            'hora_inicio': '09:00' if i < 5 else None,
+            'hora_fin': '12:00' if i < 5 else None,
+            'recurso': consultorio.pk if i < 5 else None,
+        }
+        for i in range(7)
+    ]
+    r = c.post('/api/disponibilidades/configurar-semana/', {
+        'medico': med.pk,
+        'tipo': 'CONSULTA',
+        'duracion_slot_min': 30,
+        'dias': dias_consulta,
+    }, format='json')
+    assert r.status_code == 200, r.data
+    assert r.data['duracion_slot_min'] == 30
+    assert len(r.data['horarios']) == 5
+    med.refresh_from_db()
+    assert med.duracion_slot_min == 30
+    assert not DisponibilidadMedico.objects.filter(pk=h.pk).exists()
+
+    r = c.post('/api/disponibilidades/configurar-semana/', {
+        'medico': med.pk,
+        'tipo': 'ESTUDIO',
+        'dias': [
+            {
+                'dia_semana': i,
+                'activo': i == 0,
+                'hora_inicio': '14:00' if i == 0 else None,
+                'hora_fin': '16:00' if i == 0 else None,
+                'recurso': None,
+            }
+            for i in range(7)
+        ],
+    }, format='json')
+    assert r.status_code == 400
+
+    r = c.post('/api/disponibilidades/configurar-semana/', {
+        'medico': med.pk,
+        'tipo': 'ESTUDIO',
+        'dias': [
+            {
+                'dia_semana': i,
+                'activo': i == 0,
+                'hora_inicio': '14:00' if i == 0 else None,
+                'hora_fin': '16:00' if i == 0 else None,
+                'recurso': sala.pk if i == 0 else None,
+            }
+            for i in range(7)
+        ],
+    }, format='json')
+    assert r.status_code == 200, r.data
+    assert len(r.data['horarios']) == 1
+    assert r.data['horarios'][0]['recurso'] == sala.pk
+
+    # Limpiar consultas: semana inactiva
+    r = c.post('/api/disponibilidades/configurar-semana/', {
+        'medico': med.pk, 'tipo': 'CONSULTA', 'dias': dias_off,
+    }, format='json')
+    assert r.status_code == 200, r.data
+    assert r.data['horarios'] == []
+    assert DisponibilidadMedico.objects.filter(medico=med, tipo='CONSULTA').count() == 0
+
+
+def test_configurar_semana_roles_no_autorizados(agenda):
+    med, _, _, _, user, _, _, _, _ = agenda
+    dias = [{'dia_semana': i, 'activo': False} for i in range(7)]
+    assert client(user).post('/api/disponibilidades/configurar-semana/', {
+        'medico': med.pk, 'tipo': 'CONSULTA', 'dias': dias,
+    }, format='json').status_code == 403
 
 
 def test_staff_no_puede_reservar_fuera_horario_configurado(agenda):

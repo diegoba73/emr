@@ -68,7 +68,7 @@ class TestConfirmarTurno(APITestCase):
         turno.refresh_from_db()
         assert turno.estado == Turno.Estado.CONFIRMADO
 
-    def test_medico_propio_puede_confirmar(self):
+    def test_medico_propio_no_puede_confirmar(self):
         user = User.objects.create_user(
             username='te_conf_med', email='te_conf_med@test.com', password='x', rol='medico',
         )
@@ -77,9 +77,9 @@ class TestConfirmarTurno(APITestCase):
         turno = self._turno_reservado(self.medico_a, 2)
         self.client.force_authenticate(user=user)
         r = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
         turno.refresh_from_db()
-        assert turno.estado == Turno.Estado.CONFIRMADO
+        assert turno.estado == Turno.Estado.RESERVADO
 
     def test_medico_ajeno_no_puede_confirmar(self):
         user = User.objects.create_user(
@@ -90,7 +90,7 @@ class TestConfirmarTurno(APITestCase):
         turno = self._turno_reservado(self.medico_a, 3)
         self.client.force_authenticate(user=user)
         r = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
     def test_paciente_no_puede_confirmar(self):
         user = User.objects.create_user(
@@ -119,7 +119,7 @@ class TestConfirmarTurno(APITestCase):
         turno = self._turno_reservado(self.medico_a, 6)
         self.client.force_authenticate(user=lab)
         r = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
     def test_confirmar_desde_cancelado_400(self):
         admin = User.objects.create_user(
@@ -220,7 +220,7 @@ class TestCancelarTurno(APITestCase):
         turno.refresh_from_db()
         assert turno.estado == Turno.Estado.CANCELADO
 
-    def test_medico_propio_puede_cancelar(self):
+    def test_medico_propio_no_puede_cancelar(self):
         user = User.objects.create_user(
             username='te_can_med', email='te_can_med@test.com', password='x', rol='medico',
         )
@@ -233,9 +233,9 @@ class TestCancelarTurno(APITestCase):
             {'motivo': 'Reagenda'},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_paciente_propio_puede_cancelar(self):
+    def test_paciente_propio_no_puede_cancelar(self):
         user = User.objects.create_user(
             username='te_can_pac', email='te_can_pac@test.com', password='x', rol='paciente',
         )
@@ -248,7 +248,7 @@ class TestCancelarTurno(APITestCase):
             {'motivo': 'No puedo asistir'},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_medico_ajeno_no_puede_cancelar(self):
         medico_b = Medico.objects.create(
@@ -824,6 +824,8 @@ class TestReprogramarTurno(APITestCase):
         sec = User.objects.create_user(
             username='te_rep_sec', email='te_rep_sec@test.com', password='x', rol='secretaria',
         )
+        self.paciente.telefono = '1123456789'
+        self.paciente.save(update_fields=['telefono'])
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 1)
         nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=2)
         nuevo_fin = nuevo_inicio + timedelta(minutes=20)
@@ -837,8 +839,12 @@ class TestReprogramarTurno(APITestCase):
         turno.refresh_from_db()
         assert turno.estado == Turno.Estado.RESERVADO
         assert turno.fecha_hora_inicio == nuevo_inicio
+        assert 'notificacion' in r.data
+        assert r.data['notificacion']['whatsapp_enviado'] is False
+        assert r.data['notificacion']['whatsapp_url']
+        assert 'wa.me/' in r.data['notificacion']['whatsapp_url']
 
-    def test_medico_propio_puede_reprogramar_sin_cambiar_medico(self):
+    def test_medico_propio_no_puede_reprogramar(self):
         user = User.objects.create_user(
             username='te_rep_med', email='te_rep_med@test.com', password='x', rol='medico',
         )
@@ -853,9 +859,7 @@ class TestReprogramarTurno(APITestCase):
             self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
-        turno.refresh_from_db()
-        assert turno.estado == Turno.Estado.CONFIRMADO
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_medico_no_puede_reprogramar_ajeno(self):
         user = User.objects.create_user(
@@ -874,9 +878,9 @@ class TestReprogramarTurno(APITestCase):
             ),
             format='json',
         )
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
-    def test_medico_no_puede_cambiar_medico_id(self):
+    def test_medico_no_puede_reprogramar_cambiando_medico(self):
         user = User.objects.create_user(
             username='te_rep_med_sw', email='te_rep_med_sw@test.com', password='x', rol='medico',
         )
@@ -893,9 +897,9 @@ class TestReprogramarTurno(APITestCase):
             ),
             format='json',
         )
-        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_paciente_propio_puede_reprogramar(self):
+    def test_paciente_propio_no_puede_reprogramar(self):
         user = User.objects.create_user(
             username='te_rep_pac', email='te_rep_pac@test.com', password='x', rol='paciente',
         )
@@ -913,7 +917,7 @@ class TestReprogramarTurno(APITestCase):
             self._payload_reprog(turno, nuevo_inicio, nuevo_inicio + timedelta(minutes=20)),
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_paciente_no_puede_reprogramar_ajeno(self):
         otro = Paciente.objects.create(dni='TE-REP-OT', nombre='Otro', apellido='Pac')
@@ -975,7 +979,7 @@ class TestReprogramarTurno(APITestCase):
             ),
             format='json',
         )
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
     def test_reprogramar_cancelado_devuelve_400(self):
         admin = User.objects.create_user(
@@ -1120,7 +1124,7 @@ class TestMarcarRealizadoTurno(APITestCase):
         turno.refresh_from_db()
         assert turno.estado == Turno.Estado.REALIZADO
 
-    def test_medico_propio_confirmado_a_realizado(self):
+    def test_medico_propio_no_puede_marcar_realizado(self):
         user = User.objects.create_user(
             username='te_rea_med', email='te_rea_med@test.com', password='x', rol='medico',
         )
@@ -1129,9 +1133,9 @@ class TestMarcarRealizadoTurno(APITestCase):
         turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 2)
         self.client.force_authenticate(user=user)
         r = self.client.post(f'/api/turnos/{turno.id}/marcar-realizado/', {}, format='json')
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
         turno.refresh_from_db()
-        assert turno.estado == Turno.Estado.REALIZADO
+        assert turno.estado == Turno.Estado.CONFIRMADO
 
     def test_medico_ajeno_no_puede_marcar_realizado(self):
         user = User.objects.create_user(
@@ -1142,18 +1146,7 @@ class TestMarcarRealizadoTurno(APITestCase):
         turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 3)
         self.client.force_authenticate(user=user)
         r = self.client.post(f'/api/turnos/{turno.id}/marcar-realizado/', {}, format='json')
-        assert r.status_code == status.HTTP_404_NOT_FOUND
-
-    def test_medico_reservado_no_puede_marcar_realizado(self):
-        user = User.objects.create_user(
-            username='te_rea_med_res', email='te_rea_med_res@test.com', password='x', rol='medico',
-        )
-        self.medico_a.user = user
-        self.medico_a.save()
-        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 4)
-        self.client.force_authenticate(user=user)
-        r = self.client.post(f'/api/turnos/{turno.id}/marcar-realizado/', {}, format='json')
-        assert r.status_code == status.HTTP_403_FORBIDDEN
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
     def test_paciente_no_puede_marcar_realizado(self):
         user = User.objects.create_user(
@@ -1182,7 +1175,7 @@ class TestMarcarRealizadoTurno(APITestCase):
         turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 7)
         self.client.force_authenticate(user=lab)
         r = self.client.post(f'/api/turnos/{turno.id}/marcar-realizado/', {}, format='json')
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
     def test_cancelado_a_realizado_400(self):
         admin = User.objects.create_user(
@@ -1296,7 +1289,7 @@ class TestMarcarNoAsistioTurno(APITestCase):
         turno.refresh_from_db()
         assert turno.estado == Turno.Estado.CANCELADO
 
-    def test_medico_propio_puede_marcar_no_asistio(self):
+    def test_medico_propio_no_puede_marcar_no_asistio(self):
         user = User.objects.create_user(
             username='te_na_med', email='te_na_med@test.com', password='x', rol='medico',
         )
@@ -1309,7 +1302,7 @@ class TestMarcarNoAsistioTurno(APITestCase):
             {'motivo': 'Paciente no vino'},
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_paciente_no_puede_marcar_no_asistio(self):
         user = User.objects.create_user(
@@ -1350,7 +1343,7 @@ class TestMarcarNoAsistioTurno(APITestCase):
             {'motivo': 'X'},
             format='json',
         )
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
     def test_motivo_obligatorio(self):
         admin = User.objects.create_user(

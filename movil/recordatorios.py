@@ -65,7 +65,7 @@ def enviar_pendientes(now=None, limit=100):
             try:
                 response = requests.post(EXPO_SEND, headers=headers(), timeout=10, json={
                     'to': dispositivo.token, 'title': f'SYNESIS movil · {settings.MOBILE_INSTITUTION_NAME}',
-                    'body': 'Tenés un turno próximo. Abrí la app para confirmar, cancelar o reprogramar.',
+                    'body': 'Tenés un turno próximo. Abrí la app para confirmar tu asistencia. Si necesitás cancelar, contactá a secretaría.',
                     'data': {'turno_id': turno.pk, 'institucion': settings.MOBILE_INSTITUTION_CODE}, 'sound': 'default', 'channelId': 'turnos',
                     'ttl': max(1, int((turno.fecha_hora_inicio-now).total_seconds())),
                 })

@@ -42,6 +42,7 @@ export interface User extends BaseModel {
     nombre?: string;
     apellido?: string;
     ambito_atencion?: 'COMPLETO' | 'AMBULATORIO';
+    duracion_slot_min?: number;
     especialidad?: {
       id: number;
       nombre: string;
@@ -114,6 +115,8 @@ export interface Medico extends BaseModel {
   especialidad_nombre?: string | null;
   /** COMPLETO (default) o AMBULATORIO (solo consultorio). */
   ambito_atencion?: 'COMPLETO' | 'AMBULATORIO';
+  /** Intervalo de cada turno en la agenda ambulatoria (10/15/20/30/45/60). */
+  duracion_slot_min?: number;
   telefono?: string;
   email?: string;
   activo: boolean;

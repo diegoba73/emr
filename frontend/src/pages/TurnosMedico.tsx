@@ -32,31 +32,6 @@ const TurnosMedico: React.FC = () => {
     !filterEstado || turno.estado === filterEstado
   );
 
-  const handleConfirmarTurno = async (turno: Turno) => {
-    if (!window.confirm('¿Confirmar este turno?')) return;
-    
-    setLoading(true);
-    try {
-      await apiService.confirmarTurno(turno.id);
-      
-      // Actualizar estado local
-      setTurnos(prevTurnos => 
-        prevTurnos.map(t => 
-          t.id === turno.id ? { ...t, estado: 'CONFIRMADO' } : t
-        )
-      );
-      
-      alert('Turno confirmado exitosamente');
-    } catch (error: any) {
-      console.error('Error confirmando turno:', error);
-      alert(`Error: ${error.response?.data?.error || error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
 
 
   const getEstadoColor = (estado: string) => {
@@ -67,10 +42,6 @@ const TurnosMedico: React.FC = () => {
       'CANCELADO': '#EF4444',
     };
     return colors[estado as keyof typeof colors] || '#6B7280';
-  };
-
-  const canConfirmar = (turno: Turno) => {
-    return turno.estado === 'RESERVADO';
   };
 
   // Función helper para verificar si un turno tiene un registro de intervención
@@ -320,16 +291,6 @@ const TurnosMedico: React.FC = () => {
               </div>
 
               <div className="turno-medico-actions">
-                {canConfirmar(turno) && (
-                  <button 
-                    onClick={() => handleConfirmarTurno(turno)}
-                    className="btn-confirm"
-                    disabled={loading}
-                  >
-                    ✅ Confirmar
-                  </button>
-                )}
-                
                 {(turno.estado === 'CONFIRMADO' || turno.estado === 'REALIZADO') && (
                   <button 
                     onClick={() => handleOpenAtencion(turno)}

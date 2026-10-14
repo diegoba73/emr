@@ -28,12 +28,19 @@ const PortalTurnos: React.FC = () => {
   const mine = turnos;
 
   const now = Date.now();
-  const proximos = mine
-    .filter((t) => t.fecha_hora_inicio && new Date(t.fecha_hora_inicio).getTime() >= now)
+  const activos = mine
+    .filter(
+      (t) =>
+        t.fecha_hora_inicio &&
+        new Date(t.fecha_hora_inicio).getTime() >= now &&
+        (t.estado === 'RESERVADO' || t.estado === 'CONFIRMADO'),
+    )
     .sort(
       (a, b) =>
         new Date(a.fecha_hora_inicio).getTime() - new Date(b.fecha_hora_inicio).getTime(),
     );
+  const turnoActivo = activos[0] ?? null;
+  const proximos = activos;
   const historial = mine
     .filter((t) => t.fecha_hora_inicio && new Date(t.fecha_hora_inicio).getTime() < now)
     .sort(
@@ -46,8 +53,36 @@ const PortalTurnos: React.FC = () => {
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Mis turnos
       </Typography>
-      <ReservaTurnoPaciente turnos={turnos} onReserved={() => setReload(r => r+1)} />
       {loading && <CircularProgress size={24} />}
+      {!loading && !turnoActivo && (
+        <ReservaTurnoPaciente turnos={turnos} onReserved={() => setReload((r) => r + 1)} />
+      )}
+      {!loading && turnoActivo && (
+        <Box sx={{ mb: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, boxShadow: 1 }}>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            Tu turno
+          </Typography>
+          <Typography>
+            {new Date(turnoActivo.fecha_hora_inicio).toLocaleString('es-AR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 1 }}>
+            {(turnoActivo.medico
+              ? `${turnoActivo.medico.apellido}, ${turnoActivo.medico.nombre}`
+              : turnoActivo.motivo_reserva) || 'Turno'}{' '}
+            · {turnoActivo.estado}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Ya tenés un turno reservado. No podés sacar otro desde aquí. Si necesitás
+            cambiarlo o cancelarlo, pedile a secretaría.
+          </Typography>
+        </Box>
+      )}
       <Typography variant="subtitle1" sx={{ mt: 2 }}>
         Próximos
       </Typography>

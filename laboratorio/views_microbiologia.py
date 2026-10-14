@@ -319,6 +319,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
 
         cola = (self.request.query_params.get("cola") or "").strip().lower()
         if cola in ("trabajo", "pendientes_carga", "pendientes"):
+            # Abiertas: sin VALIDADO/INFORMADO (equivalente a no FINALIZADO en lab).
             qs = qs.filter(
                 estado__in=(
                     "RECIBIDO",
@@ -327,7 +328,6 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     "IDENTIFICACION",
                     "ANTIBIOGRAMA",
                     "LISTO_PARA_VALIDAR",
-                    "VALIDADO",
                 )
             )
 
@@ -346,6 +346,22 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             qs = qs.filter(
                 Q(fecha_inicio__date=fecha)
                 | Q(fecha_inicio__isnull=True, created_at__date=fecha)
+            )
+
+        # Rango (p. ej. Finalizados últimos N días).
+        from django.utils.dateparse import parse_date as _parse_date
+
+        fecha_desde = _parse_date((self.request.query_params.get("fecha_desde") or "").strip() or "")
+        fecha_hasta = _parse_date((self.request.query_params.get("fecha_hasta") or "").strip() or "")
+        if fecha_desde:
+            qs = qs.filter(
+                Q(fecha_inicio__date__gte=fecha_desde)
+                | Q(fecha_inicio__isnull=True, created_at__date__gte=fecha_desde)
+            )
+        if fecha_hasta:
+            qs = qs.filter(
+                Q(fecha_inicio__date__lte=fecha_hasta)
+                | Q(fecha_inicio__isnull=True, created_at__date__lte=fecha_hasta)
             )
 
         sin_etiquetas = self.request.query_params.get("sin_etiquetas")

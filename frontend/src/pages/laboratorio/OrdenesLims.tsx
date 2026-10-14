@@ -29,6 +29,7 @@ import {
   isLimsOperativaLimitada,
 } from '../../utils/limsAccess';
 import {
+  addLocalDays,
   buildDiasLaboratorio,
   diasVisiblesParaIncluir,
   formatFechaLocal,
@@ -52,11 +53,19 @@ import { interpretarNumeroOrden } from '../../utils/limsBusquedaOrden';
 /** Estados en bandeja diaria (muestra ya tomada). */
 const ESTADOS_BANDEJA = ESTADOS_ORDEN_LIMS.filter((s) => s !== 'PENDIENTE');
 
+/** A completar: abiertas (sin finalizadas ni canceladas). */
+const ESTADOS_A_COMPLETAR = ESTADOS_BANDEJA.filter(
+  (s) => s !== 'FINALIZADO' && s !== 'CANCELADO'
+);
+
 /** Roles restringidos: solo órdenes finalizadas en esta vista. */
 const ESTADOS_BANDEJA_LIMITADA = ['FINALIZADO'] as const;
 
 const DIAS_PESTANAS_INICIAL = 7;
 const COLA_TAB = '__cola__';
+const FINALIZADOS_TAB = '__finalizados__';
+
+type ModoLista = 'dia' | 'completar' | 'finalizados';
 
 const MICRO_EN_BANDEJA = new Set([
   'RECIBIDO',
@@ -69,6 +78,7 @@ const MICRO_EN_BANDEJA = new Set([
   'INFORMADO',
 ]);
 
+/** Cola abierta micro: sin VALIDADO/INFORMADO (van a Finalizados). */
 const MICRO_COLA = new Set([
   'RECIBIDO',
   'SEMBRADO',
@@ -76,8 +86,12 @@ const MICRO_COLA = new Set([
   'IDENTIFICACION',
   'ANTIBIOGRAMA',
   'LISTO_PARA_VALIDAR',
-  'VALIDADO',
 ]);
+
+const MICRO_FINALIZADOS = ['VALIDADO', 'INFORMADO'] as const;
+
+/** Ventana de listado en solapa Finalizados (hoy inclusive). */
+const FINALIZADOS_DIAS = 15;
 
 async function cargarMicrosConEstados(
   base: Parameters<typeof listEstudiosMicrobiologia>[0],
@@ -115,19 +129,30 @@ const OrdenesLims: React.FC = () => {
   const [filtroPacienteDebounced, setFiltroPacienteDebounced] = useState('');
   const [diaSeleccionado, setDiaSeleccionado] = useState(() => startOfLocalDay());
   const [diasPestanas, setDiasPestanas] = useState(DIAS_PESTANAS_INICIAL);
-  const [modoCola, setModoCola] = useState(false);
+  const [modoLista, setModoLista] = useState<ModoLista>(() =>
+    isLimsOperativaLimitada(currentUser) ? 'finalizados' : 'dia'
+  );
   const [imprimiendoListado, setImprimiendoListado] = useState(false);
   const [dialogPedidosOpen, setDialogPedidosOpen] = useState(false);
 
   const allowed = canAccessLimsOrdenes(currentUser);
   const vistaLimitada = isLimsOperativaLimitada(currentUser);
   const puedeObraSocial = canOperateLims(currentUser);
-  const estadosBandeja = vistaLimitada ? ESTADOS_BANDEJA_LIMITADA : ESTADOS_BANDEJA;
   const colaDisponible = !vistaLimitada;
+  const modoCompletar = colaDisponible && modoLista === 'completar';
+  const modoFinalizados = modoLista === 'finalizados';
 
   const [estadoFiltro, setEstadoFiltro] = useState<string>(() =>
-    vistaLimitada ? 'FINALIZADO' : ''
+    isLimsOperativaLimitada(currentUser) ? 'FINALIZADO' : ''
   );
+
+  const estadosFiltroOpciones = modoFinalizados
+    ? ESTADOS_BANDEJA_LIMITADA
+    : modoCompletar
+      ? ESTADOS_A_COMPLETAR
+      : vistaLimitada
+        ? ESTADOS_BANDEJA_LIMITADA
+        : ESTADOS_BANDEJA;
 
   const fechaApi = formatFechaLocal(diaSeleccionado);
   const interpNumero = useMemo(
@@ -141,7 +166,11 @@ const OrdenesLims: React.FC = () => {
   const busquedaGlobal = busquedaPorProtocolo || busquedaPorPaciente;
 
   const diasTabs = useMemo(() => buildDiasLaboratorio(diasPestanas), [diasPestanas]);
-  const tabValue = modoCola && colaDisponible ? COLA_TAB : fechaApi;
+  const tabValue = modoCompletar
+    ? COLA_TAB
+    : modoFinalizados
+      ? FINALIZADOS_TAB
+      : fechaApi;
 
   useEffect(() => {
     const t = window.setTimeout(() => setFiltroNumeroDebounced(filtroNumero), 300);
@@ -212,15 +241,21 @@ const OrdenesLims: React.FC = () => {
         return;
       }
 
-      // 3) Cola de pendientes.
-      if (colaDisponible && modoCola) {
+      // 3) A completar: abiertas (nunca FINALIZADO).
+      if (modoCompletar) {
         const labParams: Parameters<typeof listSolicitudesExamen>[0] = {};
         const microParams: Parameters<typeof listEstudiosMicrobiologia>[0] = {};
         let microEstadosFiltro: string[] | null = null;
 
-        if (estadoFiltro) {
-          labParams.estado = estadoFiltro;
-          microEstadosFiltro = estadosMicroDesdeFiltroLab(estadoFiltro);
+        // No permitir FINALIZADO/CANCELADO en esta solapa aunque el filtro diga otra cosa.
+        const estadoAbierto =
+          estadoFiltro && ESTADOS_A_COMPLETAR.includes(estadoFiltro as (typeof ESTADOS_A_COMPLETAR)[number])
+            ? estadoFiltro
+            : '';
+
+        if (estadoAbierto) {
+          labParams.estado = estadoAbierto;
+          microEstadosFiltro = estadosMicroDesdeFiltroLab(estadoAbierto);
         } else {
           labParams.cola = 'trabajo';
           microParams.cola = 'trabajo';
@@ -239,6 +274,42 @@ const OrdenesLims: React.FC = () => {
         } else {
           microRows = microRows.filter((r) => MICRO_COLA.has(r.estado));
         }
+        // Defensa: nunca mostrar cierre micro en A completar.
+        microRows = microRows.filter((r) => !MICRO_FINALIZADOS.includes(r.estado as (typeof MICRO_FINALIZADOS)[number]));
+
+        setRows(
+          await attachIqcStatusToRows(
+            sortPedidosPorNumero([
+              ...labs.filter((l) => l.estado !== 'FINALIZADO' && l.estado !== 'CANCELADO').map(mapLabToPendiente),
+              ...microRows,
+            ])
+          )
+        );
+        return;
+      }
+
+      // 4) Finalizados: solo cierre clínico / micro informado-validado (últimos 15 días).
+      // La búsqueda por número (arriba) no aplica este tope: encuentra cualquier año.
+      if (modoFinalizados) {
+        const hoy = startOfLocalDay();
+        const fechaHasta = formatFechaLocal(hoy);
+        const fechaDesde = formatFechaLocal(addLocalDays(hoy, -(FINALIZADOS_DIAS - 1)));
+        const [labsRes, microsRes] = await Promise.all([
+          listSolicitudesExamen({
+            estado: 'FINALIZADO',
+            fecha_desde: fechaDesde,
+            fecha_hasta: fechaHasta,
+          }),
+          cargarMicrosConEstados(
+            { fecha_desde: fechaDesde, fecha_hasta: fechaHasta },
+            [...MICRO_FINALIZADOS]
+          ).catch(() => []),
+        ]);
+        labs = labsRes;
+        micros = microsRes;
+        const microRows = micros
+          .map(mapMicroToPendiente)
+          .filter((r) => MICRO_FINALIZADOS.includes(r.estado as (typeof MICRO_FINALIZADOS)[number]));
 
         setRows(
           await attachIqcStatusToRows(
@@ -248,7 +319,7 @@ const OrdenesLims: React.FC = () => {
         return;
       }
 
-      // 4) Vista por día (lab por fecha_muestra; micro por fecha en API).
+      // 5) Vista por día (lab por fecha_muestra; micro por fecha en API).
       const [labsRes, microsRes] = await Promise.all([
         listSolicitudesExamen({
           estado: estadoFiltro || undefined,
@@ -262,10 +333,14 @@ const OrdenesLims: React.FC = () => {
         .filter((e) => MICRO_EN_BANDEJA.has(e.estado))
         .map(mapMicroToPendiente);
       if (vistaLimitada) {
-        microRows = microRows.filter((r) => r.estado === 'INFORMADO');
+        microRows = microRows.filter((r) =>
+          MICRO_FINALIZADOS.includes(r.estado as (typeof MICRO_FINALIZADOS)[number])
+        );
       } else if (estadoFiltro) {
         if (estadoFiltro === 'FINALIZADO') {
-          microRows = microRows.filter((r) => r.estado === 'INFORMADO');
+          microRows = microRows.filter((r) =>
+            MICRO_FINALIZADOS.includes(r.estado as (typeof MICRO_FINALIZADOS)[number])
+          );
         } else {
           const allowedMicro = estadosMicroDesdeFiltroLab(estadoFiltro);
           microRows = allowedMicro
@@ -285,11 +360,11 @@ const OrdenesLims: React.FC = () => {
     }
   }, [
     allowed,
-    colaDisponible,
     estadoFiltro,
     fechaApi,
     interpNumero,
-    modoCola,
+    modoCompletar,
+    modoFinalizados,
     qPaciente,
     vistaLimitada,
   ]);
@@ -300,7 +375,11 @@ const OrdenesLims: React.FC = () => {
 
   const filtradas = rows;
 
-  const etiquetaVista = modoCola && colaDisponible ? 'Pendientes' : labelDiaOrden(diaSeleccionado);
+  const etiquetaVista = modoCompletar
+    ? 'A completar'
+    : modoFinalizados
+      ? 'Finalizados'
+      : labelDiaOrden(diaSeleccionado);
 
   const imprimirListado = async () => {
     if (!filtradas.length) return;
@@ -308,7 +387,7 @@ const OrdenesLims: React.FC = () => {
     try {
       const blob = await getListadoOrdenesDiaPdfBlob(
         filtradas.map((r) => ({ tipo: r.tipo, id: r.id })),
-        modoCola && colaDisponible ? formatFechaLocal(startOfLocalDay()) : fechaApi
+        modoCompletar || modoFinalizados ? formatFechaLocal(startOfLocalDay()) : fechaApi
       );
       await printPdfBlob(blob);
     } catch (e) {
@@ -320,17 +399,29 @@ const OrdenesLims: React.FC = () => {
 
   const handleTabChange = (_: React.SyntheticEvent, v: string) => {
     if (v === COLA_TAB) {
-      setModoCola(true);
+      setModoLista('completar');
+      setEstadoFiltro((prev) =>
+        prev && ESTADOS_A_COMPLETAR.includes(prev as (typeof ESTADOS_A_COMPLETAR)[number])
+          ? prev
+          : ''
+      );
       return;
     }
-    setModoCola(false);
+    if (v === FINALIZADOS_TAB) {
+      setModoLista('finalizados');
+      setEstadoFiltro('FINALIZADO');
+      return;
+    }
+    setModoLista('dia');
+    setEstadoFiltro(vistaLimitada ? 'FINALIZADO' : '');
     setDiaSeleccionado(parseFechaLocal(v));
   };
 
   const handleFechaManual = (iso: string) => {
     if (!iso) return;
     const d = parseFechaLocal(iso);
-    setModoCola(false);
+    setModoLista('dia');
+    setEstadoFiltro(vistaLimitada ? 'FINALIZADO' : '');
     setDiaSeleccionado(d);
     setDiasPestanas((n) => diasVisiblesParaIncluir(d, n));
   };
@@ -369,11 +460,13 @@ const OrdenesLims: React.FC = () => {
               ? `Protocolo exacto ${interpNumero.numero}.`
               : busquedaPorPaciente
                 ? `Búsqueda por paciente «${qPaciente}».`
-                : modoCola && colaDisponible
-                  ? 'Pendientes: pedidos no finalizados (todos los días). Extracción y etiquetas en '
-                  : vistaLimitada
-                    ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
-                    : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
+                : modoCompletar
+                  ? 'A completar: pedidos no finalizados (todos los días). Extracción y etiquetas en '
+                  : modoFinalizados
+                    ? `Finalizados: liberadas de los últimos ${FINALIZADOS_DIAS} días. Buscá por número (solo dígitos = año actual; anteponé el año para otros). Extracción y etiquetas en `
+                    : vistaLimitada
+                      ? `Pedidos finalizados / informados con actividad el ${labelDiaOrden(diaSeleccionado)}. Las pendientes de recepción están en `
+                      : `Lab clínico (muestra tomada) y microbiología (recibidos) el ${labelDiaOrden(diaSeleccionado)}. Pendientes de recepción en `}
             {!busquedaGlobal && (
               <Button
                 size="small"
@@ -401,7 +494,11 @@ const OrdenesLims: React.FC = () => {
           }}
         >
           <Typography variant="subtitle2">
-            {modoCola && colaDisponible ? 'Pendientes' : 'Día de toma / recepción'}
+            {modoCompletar
+              ? 'A completar'
+              : modoFinalizados
+                ? 'Finalizados'
+                : 'Día de toma / recepción'}
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <TextField
@@ -425,8 +522,9 @@ const OrdenesLims: React.FC = () => {
           sx={{ px: 1 }}
         >
           {colaDisponible && (
-            <Tab value={COLA_TAB} label="PENDIENTES" sx={{ fontWeight: 700 }} />
+            <Tab value={COLA_TAB} label="A COMPLETAR" sx={{ fontWeight: 700 }} />
           )}
+          <Tab value={FINALIZADOS_TAB} label="FINALIZADOS" sx={{ fontWeight: 700 }} />
           {diasTabs.map((d) => {
             const key = formatFechaLocal(d);
             return <Tab key={key} value={key} label={labelDiaOrden(d)} />;
@@ -435,13 +533,34 @@ const OrdenesLims: React.FC = () => {
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 2,
+            alignItems: 'center',
+            // Reserva espacio para helperText absoluto (evita desalineado Número vs Paciente).
+            pb: 2.5,
+            '& .MuiTextField-root': {
+              position: 'relative',
+              '& .MuiFormHelperText-root': {
+                position: 'absolute',
+                left: 0,
+                top: '100%',
+                m: 0,
+                mt: 0.25,
+                lineHeight: 1.25,
+                whiteSpace: 'nowrap',
+              },
+            },
+          }}
+        >
           <TextField
             size="small"
             label="Número"
             value={filtroNumero}
             onChange={(e) => setFiltroNumero(e.target.value)}
-            sx={{ width: 160 }}
+            sx={{ width: 180 }}
             placeholder="130"
             helperText="130 = año actual · 2025-00130"
             inputProps={{ inputMode: 'numeric', 'aria-label': 'Número de protocolo' }}
@@ -461,29 +580,30 @@ const OrdenesLims: React.FC = () => {
             <InputLabel>Estado</InputLabel>
             <Select
               label="Estado"
-              value={estadoFiltro}
+              value={modoFinalizados ? 'FINALIZADO' : estadoFiltro}
               onChange={(e) => setEstadoFiltro(e.target.value as string)}
-              disabled={vistaLimitada}
+              disabled={vistaLimitada || modoFinalizados}
             >
-              {!vistaLimitada && (
+              {!vistaLimitada && !modoFinalizados && (
                 <MenuItem value="">
-                  {modoCola ? 'No finalizadas' : 'Todos (con muestra)'}
+                  {modoCompletar ? 'No finalizadas' : 'Todos (con muestra)'}
                 </MenuItem>
               )}
-              {estadosBandeja.map((s) => (
+              {estadosFiltroOpciones.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          <Button variant="outlined" onClick={load} disabled={loading}>
+          <Button size="small" variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
           <Chip size="small" label={`${filtradas.length} pedido(s)`} variant="outlined" />
           {puedeObraSocial && (
-            <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: { sm: 'auto' } }}>
               <Button
+                size="small"
                 variant="outlined"
                 onClick={imprimirListado}
                 disabled={loading || imprimiendoListado || filtradas.length === 0}
@@ -492,6 +612,7 @@ const OrdenesLims: React.FC = () => {
                 Imprimir listado
               </Button>
               <Button
+                size="small"
                 variant="contained"
                 onClick={() => setDialogPedidosOpen(true)}
                 disabled={loading || filtradas.length === 0}
@@ -523,11 +644,13 @@ const OrdenesLims: React.FC = () => {
                 ? 'Sin pedidos con ese número.'
                 : busquedaPorPaciente
                   ? 'Sin pedidos para ese paciente.'
-                  : modoCola && colaDisponible
-                    ? 'Sin pedidos pendientes.'
-                    : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
+                  : modoCompletar
+                    ? 'Sin pedidos por completar.'
+                    : modoFinalizados
+                      ? `Sin finalizados en los últimos ${FINALIZADOS_DIAS} días. Buscá por número para órdenes más antiguas.`
+                      : `Sin pedidos el ${labelDiaOrden(diaSeleccionado).toLowerCase()}.`
             }
-            mostrarIndiceDia={!modoCola || !colaDisponible}
+            mostrarIndiceDia={modoLista === 'dia'}
             onVer={onVer}
             puedeObraSocial={puedeObraSocial}
             onObraSocialSaved={load}

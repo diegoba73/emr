@@ -78,6 +78,10 @@ from laboratorio.views_instrumentos import (
     MensajeInstrumentoViewSet,
 )
 from laboratorio.views_materiales_pedido import MaterialesPedidoListView
+from laboratorio.views_ensayos_recientes_internacion import (
+    EnsayosRecientesInternacionView,
+)
+from laboratorio.views_ultimos_resultados import UltimosResultadosPacienteView
 from usuarios.views import PacienteRegisterView
 from core.views import HealthCheckView
 from .views_bi import BiKpisView
@@ -396,6 +400,16 @@ urlpatterns = [
         'lab/pedidos-completos/',
         PedidoCompletoCreateView.as_view(),
         name='lab-pedidos-completos',
+    ),
+    path(
+        'lab/pacientes/<int:paciente_id>/ultimos-resultados/',
+        UltimosResultadosPacienteView.as_view(),
+        name='lab-pacientes-ultimos-resultados',
+    ),
+    path(
+        'lab/pacientes/<int:paciente_id>/ensayos-recientes-internacion/',
+        EnsayosRecientesInternacionView.as_view(),
+        name='lab-pacientes-ensayos-recientes-internacion',
     ),
 
     # IQC precheck (gate temprano / bandeja)

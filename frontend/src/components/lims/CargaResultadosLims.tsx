@@ -13,6 +13,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -62,7 +63,7 @@ import {
   resultadoTieneValorGuardado,
   type DraftCargaRow,
 } from '../../utils/limsCargaMuestra';
-import { countResultadosConValor } from '../../utils/limsOrdenResultados';
+import { countResultadosConValor, valorTextoDesdeResultado } from '../../utils/limsOrdenResultados';
 import { ordenPuedeCargarResultados } from '../../utils/limsEstadosOrden';
 import {
   computeFormulaProgress,
@@ -94,6 +95,13 @@ export interface CargaResultadosLimsProps {
   /** Si false, oculta el formulario de carga/edición (solo lectura). */
   permitirEdicion?: boolean;
   onGuardado: (o: SolicitudExamenLims) => void;
+  /** Mostrar «Validar y liberar» junto a Guardar (bioquímico/admin, lista para validar). */
+  mostrarValidar?: boolean;
+  onValidar?: () => void;
+  validando?: boolean;
+  /** p.ej. obra social no autorizada en ambulatorio. */
+  validarDeshabilitado?: boolean;
+  validarDeshabilitadoMotivo?: string;
 }
 
 /** Anchos fijos para que Valor/Unidad/Referencia alineen entre paneles. */
@@ -169,6 +177,11 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   canOperate,
   permitirEdicion = true,
   onGuardado,
+  mostrarValidar = false,
+  onValidar,
+  validando = false,
+  validarDeshabilitado = false,
+  validarDeshabilitadoMotivo,
 }) => {
   const resultados = orden.resultados || [];
   const [draft, setDraft] = useState<Record<number, DraftCargaRow>>({});
@@ -302,11 +315,15 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           te?.unidad_default?.trim() ||
           getSysmexUnidad(codigo) ||
           '';
+        const valorNumericoStr =
+          r.valor_numerico !== null && r.valor_numerico !== undefined
+            ? String(r.valor_numerico)
+            : '';
         const built: DraftCargaRow = {
-          valor: r.valor_obtenido ?? '',
+          // Texto/símbolos (valor_obtenido) mandan; numérico solo si no hay texto.
+          valor: valorTextoDesdeResultado(r),
           valor_sysmex: draftSysmexTicketFromResultado(r, te, codigo),
-          valor_numerico:
-            r.valor_numerico !== null && r.valor_numerico !== undefined ? String(r.valor_numerico) : '',
+          valor_numerico: valorNumericoStr,
           unidad: unidadCatalogo,
           muestra_id: muestraId,
         };
@@ -525,6 +542,39 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     }
   };
 
+  const resultadosYaCompletos =
+    orden.estado === 'LISTO_PARA_VALIDAR' ||
+    (progreso.total > 0 && progreso.conValor >= progreso.total);
+
+  const toastSinFilasAGuardar = () => {
+    const filaTieneValorEnPantalla = (r: (typeof resultados)[number]) => {
+      const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
+      const row = draft[r.id] || emptyDraft();
+      return (
+        draftRowHasValue(row, te, r.tipo_examen_codigo) || resultadoTieneValorGuardado(r)
+      );
+    };
+    const completosEnPantalla =
+      resultadosYaCompletos ||
+      (resultados.length > 0 && resultados.every(filaTieneValorEnPantalla));
+    if (completosEnPantalla) {
+      toast.success(
+        'Los resultados de la orden ya están completos, ya se pueden validar.'
+      );
+      return;
+    }
+    // Ya hay valores pero nada dirty: no mostrar error engañoso de “ingresá un valor”.
+    if (resultados.some(filaTieneValorEnPantalla)) {
+      toast.success(
+        'No hay cambios nuevos para guardar. Completá el resto de ensayos o informá parcialmente.'
+      );
+      return;
+    }
+    toast.error(
+      'Ingresá al menos un valor para guardar, o borrá un valor ya cargado para marcarlo como no informado.'
+    );
+  };
+
   const handleGuardar = async (informarParcial = false) => {
     if (iqcBloqueaCarga) {
       toast.error(
@@ -545,9 +595,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     });
 
     if (!filasAGuardar.length) {
-      toast.error(
-        'Ingresá al menos un valor para guardar, o borrá un valor ya cargado para marcarlo como no informado.'
-      );
+      toastSinFilasAGuardar();
       return;
     }
 
@@ -586,6 +634,19 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     });
 
     if (!filasPayload.length) {
+      if (resultadosYaCompletos) {
+        toast.success(
+          'Los resultados de la orden ya están completos, ya se pueden validar.'
+        );
+        return;
+      }
+      const hayValorGuardado = resultados.some((r) => resultadoTieneValorGuardado(r));
+      if (hayValorGuardado) {
+        toast.success(
+          'No hay cambios nuevos para guardar. Completá el resto de ensayos o informá parcialmente.'
+        );
+        return;
+      }
       toast.error(
         'Ingresá al menos un valor para guardar, o asociá la muestra requerida en los exámenes pendientes.'
       );
@@ -635,7 +696,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       if (informarParcial && updated.estado === 'INFORMADO_PARCIAL') {
         toast.success('Resultados guardados — Informe parcial');
       } else if (updated.estado === 'LISTO_PARA_VALIDAR') {
-        toast.success('Resultados completos — listo para validar');
+        toast.success(
+          'Los resultados de la orden ya están completos, ya se pueden validar.'
+        );
       } else {
         toast.success('Avance guardado');
       }
@@ -1230,7 +1293,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             />
           )}
 
-          <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <Button
               ref={guardarBtnRef}
               variant="contained"
@@ -1258,6 +1321,20 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             >
               Guardar e informar parcialmente
             </Button>
+            {mostrarValidar && onValidar && (
+              <Tooltip title={validarDeshabilitado ? validarDeshabilitadoMotivo || '' : ''}>
+                <span>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    disabled={saving || validando || validarDeshabilitado}
+                    onClick={() => void onValidar()}
+                  >
+                    {validando ? 'Validando…' : 'Validar y liberar'}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
           </Box>
           {progreso.conValor < progreso.total && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>

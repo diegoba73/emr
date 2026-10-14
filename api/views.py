@@ -93,6 +93,125 @@ class DisponibilidadMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewS
     serializer_class = DisponibilidadMedicoSerializer
     permission_classes = [CanManageAgendaMedica]
 
+    @action(detail=False, methods=['post'], url_path='configurar-semana')
+    def configurar_semana(self, request):
+        """Upsert de la semana completa (consulta o estudio) para un médico."""
+        from rest_framework import serializers as drf_serializers
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from medicos.agenda import tipo_para_recurso
+
+        class DiaInput(drf_serializers.Serializer):
+            dia_semana = drf_serializers.IntegerField(min_value=0, max_value=6)
+            activo = drf_serializers.BooleanField(default=False)
+            hora_inicio = drf_serializers.TimeField(required=False, allow_null=True)
+            hora_fin = drf_serializers.TimeField(required=False, allow_null=True)
+            recurso = drf_serializers.IntegerField(required=False, allow_null=True, min_value=1)
+
+        class SemanaInput(drf_serializers.Serializer):
+            medico = drf_serializers.PrimaryKeyRelatedField(queryset=Medico.objects.all())
+            tipo = drf_serializers.ChoiceField(choices=['CONSULTA', 'ESTUDIO'])
+            duracion_slot_min = drf_serializers.IntegerField(required=False)
+            dias = DiaInput(many=True)
+
+        datos = SemanaInput(data=request.data)
+        datos.is_valid(raise_exception=True)
+        medico = datos.validated_data['medico']
+        tipo = datos.validated_data['tipo']
+        dias = datos.validated_data['dias']
+        duracion = datos.validated_data.get('duracion_slot_min')
+
+        if len({d['dia_semana'] for d in dias}) != len(dias):
+            raise DRFValidationError({'dias': 'Cada día de la semana puede aparecer una sola vez.'})
+        if {d['dia_semana'] for d in dias} != set(range(7)):
+            raise DRFValidationError({'dias': 'Debe enviar los 7 días de la semana (0–6).'})
+
+        if duracion is not None and duracion not in Medico.DURACIONES_SLOT_PERMITIDAS:
+            permitidas = ', '.join(str(m) for m in Medico.DURACIONES_SLOT_PERMITIDAS)
+            raise DRFValidationError({
+                'duracion_slot_min': f'Debe ser una de: {permitidas} minutos.',
+            })
+
+        with transaction.atomic():
+            medico = Medico.objects.select_for_update().get(pk=medico.pk)
+            if duracion is not None and medico.duracion_slot_min != duracion:
+                medico.duracion_slot_min = duracion
+                medico.full_clean()
+                medico.save(update_fields=['duracion_slot_min', 'ultima_actualizacion'])
+            slot = medico.duracion_slot_min
+
+            # Una franja por día y tipo: reemplazar todas las del tipo.
+            DisponibilidadMedico.objects.filter(medico=medico, tipo=tipo).delete()
+
+            for dia in sorted(dias, key=lambda d: d['dia_semana']):
+                if not bool(dia.get('activo')):
+                    continue
+
+                dia_n = dia['dia_semana']
+                inicio = dia.get('hora_inicio')
+                fin = dia.get('hora_fin')
+                if not inicio or not fin or fin <= inicio:
+                    raise DRFValidationError({
+                        'dias': f'Día {dia_n}: la hora de fin debe ser posterior al inicio.',
+                    })
+                if inicio.second or fin.second or inicio.minute % slot or fin.minute % slot:
+                    raise DRFValidationError({
+                        'dias': f'Día {dia_n}: use horarios alineados a bloques de {slot} minutos.',
+                    })
+
+                recurso_id = dia.get('recurso')
+                recurso = None
+                if recurso_id:
+                    try:
+                        recurso = Recurso.objects.get(pk=recurso_id, activo=True)
+                    except Recurso.DoesNotExist as exc:
+                        raise DRFValidationError({
+                            'dias': f'Día {dia_n}: el recurso indicado no está disponible.',
+                        }) from exc
+                    if tipo_para_recurso(recurso) != tipo:
+                        raise DRFValidationError({
+                            'dias': f'Día {dia_n}: el recurso no corresponde al tipo de atención.',
+                        })
+                if tipo == 'ESTUDIO' and not recurso:
+                    raise DRFValidationError({
+                        'dias': f'Día {dia_n}: seleccione la sala para la agenda de estudios.',
+                    })
+
+                solapa = DisponibilidadMedico.objects.filter(
+                    medico=medico, dia_semana=dia_n, activo=True,
+                    hora_inicio__lt=fin, hora_fin__gt=inicio,
+                )
+                if solapa.exists():
+                    raise DRFValidationError({
+                        'dias': f'Día {dia_n}: la franja se superpone con otro horario del médico.',
+                    })
+
+                DisponibilidadMedico.objects.create(
+                    medico=medico,
+                    dia_semana=dia_n,
+                    hora_inicio=inicio,
+                    hora_fin=fin,
+                    tipo=tipo,
+                    recurso=recurso,
+                    activo=True,
+                    duracion_slot_min=slot,
+                )
+
+            DisponibilidadMedico.objects.filter(medico=medico).exclude(
+                duracion_slot_min=slot
+            ).update(duracion_slot_min=slot)
+
+        horarios = DisponibilidadMedico.objects.filter(medico=medico, tipo=tipo).order_by(
+            'dia_semana', 'hora_inicio'
+        )
+        return Response({
+            'medico': medico.pk,
+            'tipo': tipo,
+            'duracion_slot_min': slot,
+            'horarios': DisponibilidadMedicoSerializer(
+                horarios, many=True, context={'request': request}
+            ).data,
+        })
+
 
 class ExcepcionMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewSet):
     queryset = ExcepcionMedico.objects.select_related('medico').all()
@@ -1686,6 +1805,8 @@ def _build_current_user_payload(user):
                 'apellido': medico.apellido,
                 'email': medico.email,
                 'matricula': medico.matricula,
+                'ambito_atencion': medico.ambito_atencion,
+                'duracion_slot_min': medico.duracion_slot_min,
                 'especialidad': {
                     'id': medico.especialidad.id,
                     'nombre': medico.especialidad.nombre

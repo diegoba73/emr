@@ -56,6 +56,10 @@ export const listEstudiosMicrobiologia = (params?: {
   estado?: string;
   /** YYYY-MM-DD — día operativo (fecha_inicio o created_at). */
   fecha?: string;
+  /** YYYY-MM-DD — inicio de rango (fecha_inicio / created_at). */
+  fecha_desde?: string;
+  /** YYYY-MM-DD — fin de rango (fecha_inicio / created_at). */
+  fecha_hasta?: string;
   sin_etiquetas?: boolean;
   esperando_recepcion?: boolean;
   fecha_programada_toma?: string;
@@ -69,6 +73,8 @@ export const listEstudiosMicrobiologia = (params?: {
   if (params?.paciente != null) q.paciente = params.paciente;
   if (params?.estado) q.estado = params.estado;
   if (params?.fecha) q.fecha = params.fecha;
+  if (params?.fecha_desde) q.fecha_desde = params.fecha_desde;
+  if (params?.fecha_hasta) q.fecha_hasta = params.fecha_hasta;
   if (params?.sin_etiquetas) q.sin_etiquetas = '1';
   if (params?.esperando_recepcion) q.esperando_recepcion = '1';
   if (params?.fecha_programada_toma) q.fecha_programada_toma = params.fecha_programada_toma;

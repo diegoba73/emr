@@ -23,6 +23,8 @@ import type {
   EnviarInformeOrdenResponse,
   ResultadoExamenLims,
   SolicitudExamenLims,
+  UltimosResultadosPacienteLims,
+  EnsayosRecientesInternacionLims,
 } from '../types/lims';
 import type { TuboOrdenPreview } from '../utils/limsTubosOrden';
 
@@ -137,6 +139,10 @@ export async function listSolicitudesExamen(params?: {
   search?: string;
   /** YYYY-MM-DD — fecha de creación de la orden. */
   fecha?: string;
+  /** YYYY-MM-DD — inicio de rango (fecha_solicitud inclusive). */
+  fecha_desde?: string;
+  /** YYYY-MM-DD — fin de rango (fecha_solicitud inclusive). */
+  fecha_hasta?: string;
   /** YYYY-MM-DD — día en que se tomó la muestra (bandeja diaria de laboratorio). */
   fecha_muestra?: string;
   /** YYYY-MM-DD — día programado de extracción. */
@@ -264,6 +270,47 @@ export async function getHistorialAnalitos(
   const { data } = await apiClient.get<HistorialAnalitosOrdenLims>(
     `${LAB}/solicitudes/${id}/historial-analitos/`,
     { params: { n } }
+  );
+  return data;
+}
+
+/** Últimos valores informados del paciente (ventana días, orden tipo informe). */
+export async function getUltimosResultadosPaciente(
+  pacienteId: number,
+  options?: { dias?: number; limit?: number; fechaHasta?: string }
+): Promise<UltimosResultadosPacienteLims> {
+  const dias = options?.dias ?? 7;
+  const limit = options?.limit ?? 200;
+  const { data } = await apiClient.get<UltimosResultadosPacienteLims>(
+    `${LAB}/pacientes/${pacienteId}/ultimos-resultados/`,
+    {
+      params: {
+        dias,
+        limit,
+        ...(options?.fechaHasta ? { fecha_hasta: options.fechaHasta } : {}),
+      },
+    }
+  );
+  return data;
+}
+
+/**
+ * Ensayos pedidos en internación en [fechaHasta - dias, fechaHasta]
+ * (incluye el mismo día del pedido en curso).
+ */
+export async function getEnsayosRecientesInternacion(
+  pacienteId: number,
+  dias = 7,
+  fechaHasta?: string
+): Promise<EnsayosRecientesInternacionLims> {
+  const { data } = await apiClient.get<EnsayosRecientesInternacionLims>(
+    `${LAB}/pacientes/${pacienteId}/ensayos-recientes-internacion/`,
+    {
+      params: {
+        dias,
+        ...(fechaHasta ? { fecha_hasta: fechaHasta } : {}),
+      },
+    }
   );
   return data;
 }

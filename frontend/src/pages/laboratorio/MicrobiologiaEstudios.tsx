@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Autocomplete,
   Box,
@@ -75,8 +75,10 @@ const MicrobiologiaEstudios: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const [openCreate, setOpenCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const loadSeqRef = useRef(0);
 
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [pacienteQuery, setPacienteQuery] = useState('');
@@ -101,23 +103,31 @@ const MicrobiologiaEstudios: React.FC = () => {
   const canCrearPedido = canCreatePedidoMicrobiologia(currentUser);
   const estadosFiltro = canOp ? ESTADOS_OPERADOR : ESTADOS_LECTURA_MEDICO;
 
+  useEffect(() => {
+    const t = window.setTimeout(() => setBusquedaDebounced(busqueda), 350);
+    return () => window.clearTimeout(t);
+  }, [busqueda]);
+
   const load = useCallback(async () => {
     if (!allowed) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const data = await listEstudiosMicrobiologia(
-        busqueda.trim() ? { search: busqueda.trim() } : undefined
+        busquedaDebounced.trim() ? { search: busquedaDebounced.trim() } : undefined
       );
+      if (seq !== loadSeqRef.current) return;
       setRows(data);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarEstudiosMicro));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [allowed, busqueda]);
+  }, [allowed, busquedaDebounced]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const filtradas = useMemo(() => {

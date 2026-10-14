@@ -167,7 +167,7 @@ class TurnosMovil(TurnoViewSet):
 
     def reprogramar_horario(self, request, pk=None):
         from medicos.models import DisponibilidadMedico
-        from medicos.agenda import validar_reserva, DURACION
+        from medicos.agenda import validar_reserva, duracion_de
         from turnos import turno_estado
         class Input(serializers.Serializer):
             horario_id = serializers.IntegerField(min_value=1)
@@ -187,11 +187,12 @@ class TurnosMovil(TurnoViewSet):
             if horario.tipo != tipo_para_recurso(turno.recurso):
                 raise ValidationError('Seleccione el mismo tipo de atención.')
             inicio = datos.validated_data['inicio']
-            validar_reserva(horario.medico, inicio, inicio+DURACION, horario.recurso,
+            slot = duracion_de(horario.medico)
+            validar_reserva(horario.medico, inicio, inicio+slot, horario.recurso,
                             excluir=turno.pk, exigir_horario=True, horario_id=horario.pk)
             try:
                 resultado = turno_estado.reprogramar_turno(turno, actor=request.user,
-                    fecha_hora_inicio=inicio, fecha_hora_fin=inicio+DURACION,
+                    fecha_hora_inicio=inicio, fecha_hora_fin=inicio+slot,
                     motivo=datos.validated_data['motivo'], recurso=horario.recurso)
             except turno_estado.TurnoEstadoTransitionError as exc:
                 raise ValidationError(str(exc)) from exc

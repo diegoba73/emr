@@ -709,6 +709,16 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             if fecha:
                 queryset = queryset.filter(fecha_solicitud__date=fecha)
 
+        # Rango por fecha de solicitud (p. ej. Finalizados últimos N días).
+        from django.utils.dateparse import parse_date as _parse_date
+
+        fecha_desde = _parse_date((self.request.query_params.get('fecha_desde') or '').strip() or '')
+        fecha_hasta = _parse_date((self.request.query_params.get('fecha_hasta') or '').strip() or '')
+        if fecha_desde:
+            queryset = queryset.filter(fecha_solicitud__date__gte=fecha_desde)
+        if fecha_hasta:
+            queryset = queryset.filter(fecha_solicitud__date__lte=fecha_hasta)
+
         fecha_prog = self.request.query_params.get('fecha_programada_toma')
         if fecha_prog:
             queryset = queryset.filter(fecha_programada_toma=fecha_prog)

@@ -56,7 +56,7 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Alta de pacientes | admin, secretaría, médico, laboratorio, bioquímico (`_ROLES_ALTA_PACIENTE`); sin PATCH demográfico para lab/bio |
 | Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
 | Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
-| Gestionar turnos (crear/modificar) | secretaria, admin/staff; médico y paciente solo propios; enfermería solo lectura (C5.8.1) |
+| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaria, admin/staff; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
 
 Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
@@ -121,20 +121,19 @@ Implementación: `turnos.views.TurnoViewSet.get_queryset`, tests en `turnos/test
 
 | Rol | Leer turnos | Crear turnos | Modificar turnos |
 |-----|-------------|--------------|------------------|
-| superuser / staff | Global | Global | Global |
-| `admin` | Global | Global | Global |
-| `secretaria` | Global | Global | Global |
+| superuser / staff | Global | Global → `CONFIRMADO` | Global |
+| `admin` | Global | Global → `CONFIRMADO` | Global |
+| `secretaria` | Global | Global → `CONFIRMADO` | Global |
 | `enfermeria` | Global | No (403) | No (403) |
-| `medico` (con ficha) | Propios | Propios (`medico` forzado) | Propios; no reasignar `medico_id` |
+| `medico` (con ficha) | Propios | No (403); solo inicia atención | No (403); agenda = secretaría |
 | `medico` sin ficha | Vacío | No (403) | No (403) |
-| `paciente` vinculado | Propios | Propios (`paciente` forzado) | Propios; no reasignar `paciente_id` |
+| `paciente` vinculado | Propios | Solo `POST .../reservar-horario/` → `RESERVADO` | No (403); cambios vía secretaría |
 | `laboratorio` | No | No (403) | No (403) |
 | Rol no reconocido | Vacío | No (403) | No (403) |
 
-- `DELETE` físico sigue **405** (cancelar vía `estado`, no borrado).
-- Cambio de `estado` por PATCH directo: permitido dentro del turno editable por rol; **[DEUDA]** mover a acciones de negocio (`cancelar`, `confirmar`, etc.).
-- Tests: `turnos/tests/test_permissions_mutations.py`, regresión en `turnos/tests/test_api.py`.
-- **[DEUDA]** Aplicar `CanManageTurnos` o permiso DRF unificado; código duplicado en `api/views.TurnoViewSet` (no registrado en router).
+- `DELETE` físico sigue **405** (cancelar vía acción de negocio, no borrado).
+- Cambio de `estado` por PATCH directo: **bloqueado** (400); usar acciones (`cancelar`, `confirmar`, etc.).
+- Tests: `turnos/tests/test_permissions_mutations.py`, `turnos/tests/test_estado_turnos.py`.
 
 ---
 
@@ -142,12 +141,12 @@ Implementación: `turnos.views.TurnoViewSet.get_queryset`, tests en `turnos/test
 
 Helpers: `frontend/src/utils/turnoPermissions.ts` (`canCreateTurno`, `canEditTurno`, `canDeleteTurno` → siempre `false`).
 
-| Rol | Pantalla `/turnos` | Crear (botón / slot) | Editar formulario |
-|-----|-------------------|----------------------|-------------------|
-| admin / staff / superuser / secretaria | Agenda global | Sí | Sí (todos) |
+| Rol | Pantalla `/turnos` | Crear (botón / slot) | Editar formulario / acciones |
+|-----|-------------------|----------------------|------------------------------|
+| admin / staff / superuser / secretaria | Agenda global | Sí (queda confirmado) | Sí: confirmar, reprogramar, cancelar, realizado, no asistió |
 | enfermería | Agenda global, banner solo lectura | No | No (modal ver turno) |
-| médico | Propios | Sí (médico fijo en modal) | Solo propios |
-| paciente | Propios | Sí (paciente fijo) | Solo propios |
+| médico | Propios | No | Solo iniciar/continuar atención clínica |
+| paciente | Propios / portal | Reserva en portal (`RESERVADO`) | No; pedir a secretaría |
 | laboratorio | Mensaje sin acceso | No | No |
 
 - **DELETE** no se ofrece en UI (API 405).
@@ -162,16 +161,17 @@ Endpoints en `turnos.views.TurnoViewSet`:
 
 | Acción | Ruta | Transición / efecto | Roles |
 |--------|------|---------------------|-------|
-| Confirmar | `POST .../confirmar/` | `RESERVADO` → `CONFIRMADO` | admin/staff, secretaría, médico propio |
-| Cancelar | `POST .../cancelar/` | → `CANCELADO` (motivo obligatorio) | admin/staff, secretaría, médico/paciente propio |
-| Reprogramar | `POST .../reprogramar/` | conserva estado; cambia agenda | admin/staff, secretaría, médico/paciente propio |
-| Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría; médico propio si `CONFIRMADO` |
-| Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría, médico propio |
+| Confirmar | `POST .../confirmar/` | `RESERVADO` → `CONFIRMADO` | admin/staff, secretaría |
+| Cancelar | `POST .../cancelar/` | → `CANCELADO` (motivo obligatorio) | admin/staff, secretaría |
+| Reprogramar | `POST .../reprogramar/` | conserva estado; cambia agenda; notifica paciente (push + WhatsApp Twilio/wa.me) | admin/staff, secretaría |
+| Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría |
+| Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría |
 | Iniciar atención **(C5.10.1)** | `POST .../iniciar-atencion/` | `REALIZADO` + atención clínica | médico propio; admin/staff/superuser; **no** secretaría/paciente/enfermería/laboratorio |
 | Alta atención compat **(C5.10.2)** | `POST /api/atenciones/` | Crea/obtiene atención; turno sin cambio | Mismos permisos que `AtencionViewSet`; **deprecated** (headers); no usar en UI de agenda |
 
 - **PATCH/PUT `estado`:** bloqueado para **todos** (400).
 - Auditoría: metadata por acción (`reprogramar` incluye fechas/médico/recurso antes/después).
+- Notificación reprogramación: `turnos/notificar_reprogramacion.py` (Expo push + WhatsApp).
 - Servicio: `turnos/turno_estado.py`. Tests: `turnos/tests/test_estado_turnos.py`.
 - **[DEUDA]:** estado `NO_ASISTIO`; campos estructurales; endpoints legacy `api/views.py`.
 

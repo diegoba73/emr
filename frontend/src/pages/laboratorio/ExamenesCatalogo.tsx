@@ -155,19 +155,6 @@ const ExamenesCatalogo: React.FC = () => {
       .map((t) => t.id);
   }, [filtroMaterial, materiales, tiposMuestra]);
 
-  const examenListParams = useMemo(() => {
-    const params: Parameters<typeof listTiposExamenLims>[0] = {
-      search: search.trim() || undefined,
-    };
-    if (muestraIdsDelMaterial == null) return params;
-    if (muestraIdsDelMaterial.length === 1) {
-      params.tipo_muestra_requerida = muestraIdsDelMaterial[0];
-    } else if (muestraIdsDelMaterial.length > 1) {
-      params.tipo_muestra_requerida__in = muestraIdsDelMaterial;
-    }
-    return params;
-  }, [search, muestraIdsDelMaterial]);
-
   const materialSinMuestras =
     Boolean(filtroMaterial) && (muestraIdsDelMaterial?.length ?? 0) === 0;
 
@@ -200,18 +187,41 @@ const ExamenesCatalogo: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (materialSinMuestras) {
-        setRows([]);
-        return;
-      }
-      const examenes = await listTiposExamenLims(examenListParams);
+      // Catálogo completo una sola vez; la búsqueda/material se filtran en cliente
+      // (evitar carrera: respuesta vieja sin filtro pisaba el resultado).
+      const examenes = await listTiposExamenLims();
       setRows(examenes);
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
     } finally {
       setLoading(false);
     }
-  }, [examenListParams, materialSinMuestras]);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (materialSinMuestras) return [] as LimsTipoExamen[];
+    let list = rows;
+    if (muestraIdsDelMaterial) {
+      const ids = new Set(muestraIdsDelMaterial);
+      list = list.filter((r) => ids.has(r.tipo_muestra_requerida));
+    }
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((r) => {
+      const hay = [
+        r.codigo,
+        r.codigo_nbu,
+        r.nombre,
+        r.metodo,
+        r.abreviatura,
+        r.unidad_default,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [rows, search, muestraIdsDelMaterial, materialSinMuestras]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -221,7 +231,7 @@ const ExamenesCatalogo: React.FC = () => {
   }, [allowed, loadCatalogMeta]);
 
   useEffect(() => {
-    if (allowed) load();
+    if (allowed) void load();
   }, [allowed, load]);
 
   useEffect(() => {
@@ -435,14 +445,18 @@ const ExamenesCatalogo: React.FC = () => {
                   <Typography color="text.secondary">Cargando…</Typography>
                 </TableCell>
               </TableRow>
-            ) : rows.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={canEdit ? 11 : 10}>
-                  <Typography color="text.secondary">Sin registros.</Typography>
+                  <Typography color="text.secondary">
+                    {search.trim() || filtroMaterial
+                      ? 'Sin resultados para la búsqueda.'
+                      : 'Sin registros.'}
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((r) => (
+              filtered.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.codigo}</TableCell>
                   <TableCell>{r.codigo_nbu || '—'}</TableCell>

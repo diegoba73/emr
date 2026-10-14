@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -24,6 +25,7 @@ class Medico(models.Model):
         (AMBITO_COMPLETO, 'Completo (ambulatorio, guardia e internación)'),
         (AMBITO_AMBULATORIO, 'Solo ambulatorio'),
     ]
+    DURACIONES_SLOT_PERMITIDAS = (10, 15, 20, 30, 45, 60)
 
     # Relación con el usuario del sistema
     user = models.OneToOneField(
@@ -61,6 +63,12 @@ class Medico(models.Model):
         help_text="COMPLETO ve guardia e internación; AMBULATORIO solo consultorio.",
     )
 
+    duracion_slot_min = models.PositiveIntegerField(
+        default=20,
+        verbose_name="Duración del turno (minutos)",
+        help_text="Intervalo de cada consulta/estudio en la agenda ambulatoria del médico.",
+    )
+
     # Campos adicionales para futura integración con IA (ej. áreas de interés, datos de rendimiento)
     areas_interes_ia = models.TextField(blank=True, null=True, verbose_name="Áreas de Interés para IA (Ej. Patologías específicas)")
     # Podríamos añadir campos para un "perfil de rendimiento" o "experiencia en diagnósticos" si los datos están disponibles
@@ -70,6 +78,14 @@ class Medico(models.Model):
 
     def es_solo_ambulatorio(self) -> bool:
         return self.ambito_atencion == self.AMBITO_AMBULATORIO
+
+    def clean(self):
+        super().clean()
+        if self.duracion_slot_min not in self.DURACIONES_SLOT_PERMITIDAS:
+            permitidas = ', '.join(str(m) for m in self.DURACIONES_SLOT_PERMITIDAS)
+            raise ValidationError({
+                'duracion_slot_min': f'Debe ser una de: {permitidas} minutos.',
+            })
 
     class Meta:
         verbose_name = "Médico"

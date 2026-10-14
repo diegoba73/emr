@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -65,18 +65,26 @@ const FrasesRapidasCatalogSection: React.FC<FrasesRapidasCatalogSectionProps> = 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listFrasesRapidasMicro({ search: search.trim() || undefined });
+      const data = await listFrasesRapidasMicro();
       setRows(data);
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarCatalogo));
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) =>
+      `${r.abreviatura} ${r.texto} ${r.categoria ?? ''}`.toLowerCase().includes(q)
+    );
+  }, [rows, search]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -160,14 +168,16 @@ const FrasesRapidasCatalogSection: React.FC<FrasesRapidasCatalogSectionProps> = 
                   <Typography color="text.secondary">Cargando…</Typography>
                 </TableCell>
               </TableRow>
-            ) : rows.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={canEdit ? 6 : 5}>
-                  <Typography color="text.secondary">Sin frases.</Typography>
+                  <Typography color="text.secondary">
+                    {search.trim() ? 'Sin resultados para la búsqueda.' : 'Sin frases.'}
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((r) => (
+              filtered.map((r) => (
                 <TableRow key={r.id} sx={{ opacity: r.activo === false ? 0.6 : 1 }}>
                   <TableCell>{r.abreviatura}</TableCell>
                   <TableCell sx={{ maxWidth: 360 }}>

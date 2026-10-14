@@ -1,6 +1,6 @@
 # SYNESIS movil: APK para pacientes (ICPL)
 
-Usa **datos reales de producción**. Reservar, cancelar o reprogramar modifica turnos reales.
+Usa **datos reales de producción**. Reservar o cancelar modifica turnos reales.
 El APK abre sin Metro ni PC; requiere Internet y HTTPS válido.
 
 ## Estado vigente
@@ -74,12 +74,16 @@ volumes:
   - /srv/emr/public:/srv/emr/public:ro
 ```
 
-Incluir el location de `deploy/nginx/synesis-movil-apk.snippet.conf` en el `server { … }` del dominio clínico y recrear nginx:
+Incluir el location de `deploy/nginx/synesis-movil-apk.snippet.conf` en el `server { … }` del dominio clínico (**antes** del `try_files` / SPA). Si falta, nginx responde el `index.html` del login y el QR “no baja la app”.
+
+Script recomendado (publica APK + verifica volumen + inserta location si falta + reload):
 
 ```bash
-sudo mkdir -p /srv/emr/public
-# … editar compose + conf nginx …
+# En el server, con el APK a mano (p. ej. scp desde la PC)
+cd /srv/emr/app
+# asegurar volumen en compose, luego:
 docker compose -f docker-compose.server.yml up -d nginx   # o el compose real del host
+bash scripts/ensure_movil_apk_persistente.sh /ruta/al/app-release.apk
 ```
 
 ### Cada vez que haya APK nuevo
@@ -87,6 +91,7 @@ docker compose -f docker-compose.server.yml up -d nginx   # o el compose real de
 ```bash
 # En el server — NO uses solo docker cp al html del contenedor
 bash scripts/publish_movil_apk.sh /ruta/al/app-release.apk
+# (o de nuevo ensure_movil_apk_persistente.sh si preferís)
 curl -sSI 'https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk' | head -15
 # Esperado: HTTP 200 y Content-Type application/vnd.android.package-archive
 ```

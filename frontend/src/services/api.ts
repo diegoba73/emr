@@ -839,7 +839,16 @@ class ApiService {
       medico_id?: number;
       recurso_id?: number;
     },
-  ): Promise<{ turno: Turno; message: string }> {
+  ): Promise<{
+    turno: Turno;
+    message: string;
+    notificacion?: {
+      whatsapp_enviado: boolean;
+      whatsapp_url: string | null;
+      push_enviados: number;
+      detalle?: string | null;
+    };
+  }> {
     const response = await fetchWithCSRF(`${this.api.defaults.baseURL}/turnos/${id}/reprogramar/`, {
       method: 'POST',
       body: JSON.stringify(body),
@@ -855,7 +864,11 @@ class ApiService {
       throw new Error(msg || `HTTP ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
-    return { turno: data.turno as Turno, message: data.message || '' };
+    return {
+      turno: data.turno as Turno,
+      message: data.message || '',
+      notificacion: data.notificacion,
+    };
   }
 
   async marcarRealizadoTurno(

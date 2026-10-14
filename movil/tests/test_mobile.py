@@ -136,10 +136,13 @@ def test_invalid_device_deactivated(data,settings):
         assert enviar_pendientes()==0
     data[5].refresh_from_db();assert not data[5].activo
 
-def test_mobile_booking_and_reschedule(data):
+def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
     from datetime import datetime, time
     from medicos.models import DisponibilidadMedico
     c,_,_,t,_,_,_=data
+    # Liberar el turno del fixture para poder reservar otro desde la app.
+    t.estado = 'CANCELADO'
+    t.save(update_fields=['estado'])
     day=timezone.localdate()+timedelta(days=7)
     start=timezone.make_aware(datetime.combine(day,time(9)))
     h=DisponibilidadMedico.objects.create(medico=t.medico,dia_semana=day.weekday(),hora_inicio=time(9),hora_fin=time(13))
@@ -148,12 +151,14 @@ def test_mobile_booking_and_reschedule(data):
     pk=r.data['id']
     assert 'prioridad' not in r.data and 'recurso' not in r.data
     assert c.post(f'/api/movil/turnos/{pk}/asistencia/').status_code==200
+    # Reprogramar/cancelar desde la app: solo secretaría (gestión de agenda).
     r=c.post(f'/api/movil/turnos/{pk}/reprogramar-horario/',{'horario_id':h.pk,'inicio':(start+timedelta(minutes=20)).isoformat(),'motivo':'Cambio de horario'},format='json')
-    assert r.status_code==200,r.data
+    assert r.status_code==403
+    assert c.post(f'/api/movil/turnos/{pk}/cancelar/',{'motivo':'No puedo asistir'},format='json').status_code==403
     updated=Turno.objects.get(pk=pk)
-    assert updated.asistencia_confirmada_en is None
-    assert updated.fecha_hora_inicio==start+timedelta(minutes=20)
-    assert c.post(f'/api/movil/turnos/{pk}/cancelar/',{'motivo':'No puedo asistir'},format='json').status_code==200
+    assert updated.asistencia_confirmada_en is not None
+    assert updated.fecha_hora_inicio==start
+    assert updated.estado=='RESERVADO'
 
 def test_transient_push_error_retries_later(data,settings):
     import requests

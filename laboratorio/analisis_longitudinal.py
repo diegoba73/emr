@@ -9,17 +9,53 @@ Pensado para alimentar alertas en el LIMS y, en fases posteriores, el contexto d
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from django.db.models import Q
 from django.utils import timezone
 
 from laboratorio.analisis_longitudinal_config import umbrales_para_codigo
 from laboratorio.models import ResultadoExamen, SolicitudExamen
+from laboratorio.orden_grupos_informe import (
+    construir_grupos_informe,
+    ordenar_grupos_por_defecto,
+)
 from laboratorio.resultados_clinicos import calcular_es_critico, calcular_es_patologico
 
 ESTADOS_HISTORIAL_VALIDOS = ("FINALIZADO", "INFORMADO_PARCIAL")
+DIAS_ULTIMOS_RESULTADOS_DEFAULT = 7
+LIMIT_ULTIMOS_RESULTADOS_DEFAULT = 200
+LIMIT_ULTIMOS_RESULTADOS_MAX = 300
+
+
+class _PanelesVacios:
+    """Stub para construir_grupos_informe sin paneles de una orden concreta."""
+
+    def prefetch_related(self, *args, **kwargs):
+        return self
+
+    def all(self):
+        return []
+
+
+class _SolicitudParaOrdenInforme:
+    paneles = _PanelesVacios()
+
+
+def _ordenar_items_como_informe(
+    resultados_actuales: list[ResultadoExamen],
+) -> list[ResultadoExamen]:
+    """Agrupa paneles/perfiles y ordena como el PDF (presentación clínica)."""
+    if not resultados_actuales:
+        return []
+    grupos = construir_grupos_informe(_SolicitudParaOrdenInforme(), resultados_actuales)
+    ordered = ordenar_grupos_por_defecto(grupos)
+    flat: list[ResultadoExamen] = []
+    for g in ordered:
+        flat.extend(g.resultados)
+    return flat
 
 
 def _decimal_a_json(value: Decimal | None) -> str | None:
@@ -536,4 +572,159 @@ def analizar_solicitud_optimizado(solicitud: SolicitudExamen) -> dict[str, Any]:
         "total_analizados": len(items),
         "total_con_historial": con_historial,
         "total_cambios_significativos": cambios_significativos,
+    }
+
+
+def _tendencia_desde_historial(hist: dict[str, Any]) -> str:
+    """Etiqueta corta para UI de pedido: sube / baja / igual / cambio / sin_dato."""
+    variacion = hist.get("variacion") or "sin_historial"
+    if variacion in ("sin_historial", "sin_comparacion_numerica"):
+        return "sin_dato"
+    if variacion == "estable":
+        return "igual"
+    if variacion == "cambio_cualitativo":
+        return "cambio"
+    delta = hist.get("delta_porcentual")
+    try:
+        d = Decimal(str(delta)) if delta is not None else None
+    except (InvalidOperation, TypeError, ValueError):
+        d = None
+    if d is None:
+        return "sin_dato"
+    if d > 0:
+        return "sube"
+    if d < 0:
+        return "baja"
+    return "igual"
+
+
+def ultimos_resultados_paciente(
+    paciente_id: int,
+    *,
+    dias: int = DIAS_ULTIMOS_RESULTADOS_DEFAULT,
+    fecha_hasta: date | None = None,
+    limit: int = LIMIT_ULTIMOS_RESULTADOS_DEFAULT,
+) -> dict[str, Any]:
+    """
+    Último valor informado por analito (vista de pedido médico).
+
+    Incluye todos los analitos con al menos un resultado informado en
+    ``[fecha_hasta - dias, fecha_hasta]`` (órdenes FINALIZADO / INFORMADO_PARCIAL
+    con valor cargado). El valor anterior puede ser más viejo (comparación).
+
+    El orden de filas sigue la presentación del informe PDF (paneles juntos).
+    """
+    dias = max(1, min(int(dias or DIAS_ULTIMOS_RESULTADOS_DEFAULT), 30))
+    limit = max(1, min(int(limit or LIMIT_ULTIMOS_RESULTADOS_DEFAULT), LIMIT_ULTIMOS_RESULTADOS_MAX))
+    hasta = fecha_hasta or timezone.localdate()
+    desde_fecha = hasta - timedelta(days=dias)
+    tz = timezone.get_current_timezone()
+    desde_dt = timezone.make_aware(datetime.combine(desde_fecha, time.min), tz)
+    hasta_dt_excl = timezone.make_aware(
+        datetime.combine(hasta + timedelta(days=1), time.min), tz
+    )
+
+    base_qs = (
+        ResultadoExamen.objects.filter(
+            solicitud__paciente_id=paciente_id,
+            solicitud__estado__in=ESTADOS_HISTORIAL_VALIDOS,
+        )
+        .exclude(valor_obtenido="")
+        .exclude(valor_obtenido__isnull=True)
+    )
+
+    # Analitos tocados en la ventana (fecha de validación o, si falta, de solicitud).
+    tipos_en_ventana = (
+        base_qs.filter(
+            Q(fecha_validacion__gte=desde_dt, fecha_validacion__lt=hasta_dt_excl)
+            | Q(
+                fecha_validacion__isnull=True,
+                solicitud__fecha_solicitud__gte=desde_dt,
+                solicitud__fecha_solicitud__lt=hasta_dt_excl,
+            )
+        )
+        .values_list("tipo_examen_id", flat=True)
+        .distinct()
+    )
+    tipo_ids = list(tipos_en_ventana)
+    if not tipo_ids:
+        return {
+            "paciente_id": paciente_id,
+            "dias": dias,
+            "fecha_desde": desde_fecha.isoformat(),
+            "fecha_hasta": hasta.isoformat(),
+            "limit": limit,
+            "total": 0,
+            "items": [],
+        }
+
+    # Último + anterior por tipo (historial completo), solo tipos de la ventana.
+    qs = (
+        base_qs.filter(tipo_examen_id__in=tipo_ids)
+        .select_related(
+            "solicitud",
+            "tipo_examen",
+            "tipo_examen__tipo_muestra_requerida",
+        )
+        .order_by(
+            "tipo_examen_id",
+            "-fecha_validacion",
+            "-solicitud__fecha_solicitud",
+            "-id",
+        )
+    )
+
+    por_tipo: dict[int, list[ResultadoExamen]] = {}
+    for res in qs.iterator(chunk_size=500):
+        tid = res.tipo_examen_id
+        bucket = por_tipo.get(tid)
+        if bucket is None:
+            por_tipo[tid] = [res]
+            continue
+        if len(bucket) < 2:
+            bucket.append(res)
+
+    items_by_resultado_id: dict[int, dict[str, Any]] = {}
+    actuales: list[ResultadoExamen] = []
+    for _tid, rows in por_tipo.items():
+        actual = rows[0]
+        anterior = rows[1] if len(rows) > 1 else None
+        te = actual.tipo_examen
+        sol = actual.solicitud
+        fecha_ref = actual.fecha_validacion or sol.fecha_solicitud
+        hist = _analisis_historial(actual, anterior, fecha_referencia=fecha_ref)
+        items_by_resultado_id[actual.pk] = {
+            "tipo_examen_id": te.id,
+            "tipo_examen_codigo": te.codigo,
+            "tipo_examen_nombre": te.nombre,
+            **serializar_historial_analito(actual),
+            "estado_orden": sol.estado,
+            "valor_anterior": hist.get("valor_anterior"),
+            "fecha_anterior": hist.get("fecha_anterior"),
+            "variacion": hist.get("variacion"),
+            "delta_porcentual": hist.get("delta_porcentual"),
+            "tendencia": _tendencia_desde_historial(hist),
+        }
+        actuales.append(actual)
+
+    ordenados = _ordenar_items_como_informe(actuales)
+    items = [
+        items_by_resultado_id[r.pk]
+        for r in ordenados
+        if r.pk in items_by_resultado_id
+    ]
+    # Por si algún resultado no entró al orden (no debería).
+    seen = {i["resultado_id"] for i in items}
+    for res_id, item in items_by_resultado_id.items():
+        if res_id not in seen:
+            items.append(item)
+
+    return {
+        "paciente_id": paciente_id,
+        "dias": dias,
+        "fecha_desde": desde_fecha.isoformat(),
+        "fecha_hasta": hasta.isoformat(),
+        "limit": limit,
+        "total": len(items),
+        "items": items[:limit],
     }

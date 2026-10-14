@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiService } from '../../services/api';
 import { TipoExamen, ApiResponse } from '../../types';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
@@ -9,7 +9,9 @@ const ListaExamenesTest: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchDebounced, setSearchDebounced] = useState<string>('');
   const [totalCount, setTotalCount] = useState<number>(0);
+  const loadSeqRef = useRef(0);
 
   // Helper function para formatear el precio
   const formatPrecio = (precio: string | number | undefined): string => {
@@ -19,24 +21,32 @@ const ListaExamenesTest: React.FC = () => {
   };
 
   useEffect(() => {
-    loadExamenes();
+    const t = window.setTimeout(() => setSearchDebounced(searchTerm), 350);
+    return () => window.clearTimeout(t);
   }, [searchTerm]);
 
-  const loadExamenes = async () => {
+  const loadExamenes = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     try {
       setLoading(true);
       setError(null);
       const response: ApiResponse<TipoExamen> = await apiService.getTiposExamen(
-        searchTerm || undefined
+        searchDebounced || undefined
       );
+      if (seq !== loadSeqRef.current) return;
       setExamenes(response.results || []);
       setTotalCount(response.count || 0);
     } catch (err: unknown) {
+      if (seq !== loadSeqRef.current) return;
       setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.limsCargarExamenes));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  };
+  }, [searchDebounced]);
+
+  useEffect(() => {
+    void loadExamenes();
+  }, [loadExamenes]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);

@@ -788,3 +788,56 @@ export interface HistorialAnalitosOrdenLims {
   limit: number;
   analitos: HistorialAnalitoItemLims[];
 }
+
+/** Último valor por analito (pedido médico / ficha). */
+export type TendenciaUltimoResultadoLims =
+  | 'sube'
+  | 'baja'
+  | 'igual'
+  | 'cambio'
+  | 'sin_dato';
+
+export interface UltimoResultadoItemLims {
+  tipo_examen_id: number;
+  tipo_examen_codigo: string;
+  tipo_examen_nombre: string;
+  resultado_id: number;
+  valor: string;
+  valor_numerico?: string | null;
+  unidad?: string | null;
+  fecha: string | null;
+  solicitud_id: number;
+  solicitud_numero: string | null;
+  estado_orden?: string;
+  valor_anterior?: string | null;
+  fecha_anterior?: string | null;
+  variacion?: string | null;
+  delta_porcentual?: string | null;
+  tendencia: TendenciaUltimoResultadoLims;
+}
+
+export interface UltimosResultadosPacienteLims {
+  paciente_id: number;
+  dias?: number;
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  limit: number;
+  total: number;
+  items: UltimoResultadoItemLims[];
+}
+
+/** Ensayo pedido en internación en la ventana reciente (sugerencia al crear). */
+export interface EnsayoRecienteInternacionLims {
+  id: number;
+  codigo: string;
+  nombre: string;
+  ultima_fecha: string;
+  orden_numero: string | null;
+}
+
+export interface EnsayosRecientesInternacionLims {
+  dias: number;
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  examenes: EnsayoRecienteInternacionLims[];
+}

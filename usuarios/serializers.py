@@ -459,6 +459,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
                     'nombre': obj.medico.nombre,
                     'apellido': obj.medico.apellido,
                     'ambito_atencion': obj.medico.ambito_atencion,
+                    'duracion_slot_min': obj.medico.duracion_slot_min,
                     'especialidad': {
                         'id': obj.medico.especialidad.id,
                         'nombre': obj.medico.especialidad.nombre

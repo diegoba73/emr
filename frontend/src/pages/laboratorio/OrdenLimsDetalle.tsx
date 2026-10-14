@@ -716,6 +716,15 @@ const OrdenLimsDetalle: React.FC = () => {
             muestras={muestras}
             canOperate={canOp}
             permitirEdicion={(enProceso || informadoParcial) && !finalizada}
+            mostrarValidar={listaParaValidar && canValidar}
+            onValidar={() => void handleValidar()}
+            validando={validando}
+            validarDeshabilitado={!osPermiteValidar}
+            validarDeshabilitadoMotivo={
+              osPermiteValidar
+                ? undefined
+                : 'La obra social tiene que estar Autorizada para validar y emitir el informe.'
+            }
             onGuardado={async (o) => {
               setOrden(o);
               await refreshMuestras(o.id, o.numero);
@@ -760,6 +769,12 @@ const OrdenLimsDetalle: React.FC = () => {
         agregarAOrdenId={orden.id}
         agregarAOrdenNumero={orden.numero}
         pacienteId={orden.paciente}
+        origenInicial={
+          orden.origen_solicitud === 'INTERNACION_UCO' ||
+          orden.origen_solicitud === 'INTERNACION_UCE'
+            ? orden.origen_solicitud
+            : null
+        }
         onCreated={async () => {
           try {
             const fresh = await getSolicitudExamen(orden.id);
