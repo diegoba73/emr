@@ -1,5 +1,7 @@
 """Catálogos de cultivo y muestra propios de microbiología clínica (no LIMS química)."""
 
+from __future__ import annotations
+
 from laboratorio.materiales_pedido_catalogo import (
     CULTIVOS_MICRO_EXTRA,
     MUESTRAS_MICRO_EXTRA,
@@ -61,15 +63,23 @@ TIPOS_MUESTRA_MICRO_SEED = [
 ]
 
 
-def seed_catalogos_microbiologia(*, update_existing: bool = True) -> dict[str, int]:
+def seed_catalogos_microbiologia(
+    *,
+    update_existing: bool = True,
+    deactivate_missing: bool | None = None,
+) -> dict[str, int]:
     """Idempotente: crea/actualiza tipos de cultivo y muestra micro.
 
-    Desactiva cultivos cuyo código ya no está en el seed actual.
+    Por defecto desactiva cultivos cuyo código ya no está en el seed actual.
+    Con deactivate_missing=False (p. ej. --solo-nuevos) solo crea faltantes.
     """
     from laboratorio.models_microbiologia import (
         TipoCultivoMicrobiologia,
         TipoMuestraMicrobiologia,
     )
+
+    if deactivate_missing is None:
+        deactivate_missing = update_existing
 
     created_c = updated_c = deactivated_c = 0
     codigos_cultivo = {c for c, _, _ in TIPOS_CULTIVO_MICRO_SEED}
@@ -95,11 +105,12 @@ def seed_catalogos_microbiologia(*, update_existing: bool = True) -> dict[str, i
                 obj.save()
                 updated_c += 1
 
-    for obj in TipoCultivoMicrobiologia.objects.exclude(codigo__in=codigos_cultivo):
-        if obj.activo:
-            obj.activo = False
-            obj.save(update_fields=["activo", "updated_at"])
-            deactivated_c += 1
+    if deactivate_missing:
+        for obj in TipoCultivoMicrobiologia.objects.exclude(codigo__in=codigos_cultivo):
+            if obj.activo:
+                obj.activo = False
+                obj.save(update_fields=["activo", "updated_at"])
+                deactivated_c += 1
 
     created_m = updated_m = 0
     for codigo, nombre, orden in TIPOS_MUESTRA_MICRO_SEED:
