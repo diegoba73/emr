@@ -23,5 +23,6 @@ for p in paths:
     img = qrcode.make(url, box_size=12, border=2)
     p.parent.mkdir(parents=True, exist_ok=True)
     img.save(p)
-    print(f"wrote {p} -> {url}")
+    p.chmod(0o644)  # nginx del contenedor debe poder leerlo (evitar 403)
+    print(f"wrote {p} mode={oct(p.stat().st_mode & 0o777)} -> {url}")
 PY
