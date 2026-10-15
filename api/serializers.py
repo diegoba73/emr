@@ -44,12 +44,17 @@ class EspecialidadSerializer(serializers.ModelSerializer):
 
 class MedicoLightSerializer(serializers.ModelSerializer):
     """
-    Serializer ligero para búsquedas y dropdowns.
-    Excluye campos pesados como areas_interes_ia.
+    Serializer ligero para búsquedas, dropdowns y ABM `/medicos`.
+    Incluye especialidad_id/email/teléfono para poder editar desde el listado.
     """
-    especialidad_nombre = serializers.CharField(source='especialidad.nombre', read_only=True)
+    especialidad_nombre = serializers.CharField(
+        source='especialidad.nombre', read_only=True, allow_null=True, default=None
+    )
+    especialidad_id = serializers.IntegerField(read_only=True, allow_null=True)
     nombre_completo = serializers.ReadOnlyField()
-    
+    email = serializers.SerializerMethodField()
+    telefono = serializers.SerializerMethodField()
+
     class Meta:
         model = Medico
         fields = [
@@ -58,11 +63,20 @@ class MedicoLightSerializer(serializers.ModelSerializer):
             'apellido',
             'nombre_completo',
             'matricula',
+            'especialidad_id',
             'especialidad_nombre',
             'ambito_atencion',
             'duracion_slot_min',
+            'email',
+            'telefono',
         ]
         read_only_fields = fields
+
+    def get_email(self, obj):
+        return obj.email_display()
+
+    def get_telefono(self, obj):
+        return obj.telefono_display()
 
 
 class MedicoSerializer(serializers.ModelSerializer):
@@ -80,8 +94,8 @@ class MedicoSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     nombre_completo = serializers.ReadOnlyField()
-    email = serializers.SerializerMethodField()
-    telefono = serializers.SerializerMethodField()
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
+    telefono = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Medico
@@ -106,8 +120,6 @@ class MedicoSerializer(serializers.ModelSerializer):
             'id',
             'especialidad',
             'nombre_completo',
-            'email',
-            'telefono',
             'fecha_registro',
             'ultima_actualizacion',
         )
@@ -117,6 +129,13 @@ class MedicoSerializer(serializers.ModelSerializer):
         if value is None:
             return None
         value = value.strip()
+        return value or None
+
+    @staticmethod
+    def _clean_contact(value):
+        if value is None:
+            return None
+        value = str(value).strip()
         return value or None
 
     def validate_duracion_slot_min(self, value):
@@ -139,23 +158,62 @@ class MedicoSerializer(serializers.ModelSerializer):
             )
         return attrs
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Lectura: ficha propia, con fallback a User vinculado.
+        data['email'] = instance.email_display()
+        data['telefono'] = instance.telefono_display()
+        return data
+
+    def _sync_user_contact(self, instance, email, telefono, *, email_set: bool, telefono_set: bool):
+        user = instance.user
+        if not user:
+            return
+        dirty = []
+        if email_set and email is not None and user.email != email:
+            user.email = email or ''
+            dirty.append('email')
+        if telefono_set and hasattr(user, 'telefono') and telefono is not None and user.telefono != telefono:
+            user.telefono = telefono or ''
+            dirty.append('telefono')
+        if dirty:
+            user.save(update_fields=dirty)
+
     def create(self, validated_data):
         validated_data['nombre'] = self._clean_name(validated_data.get('nombre'))
         validated_data['apellido'] = self._clean_name(validated_data.get('apellido'))
-        return super().create(validated_data)
+        if 'email' in validated_data:
+            validated_data['email'] = self._clean_contact(validated_data.get('email'))
+        if 'telefono' in validated_data:
+            validated_data['telefono'] = self._clean_contact(validated_data.get('telefono'))
+        email_set = 'email' in validated_data
+        telefono_set = 'telefono' in validated_data
+        email = validated_data.get('email')
+        telefono = validated_data.get('telefono')
+        instance = super().create(validated_data)
+        self._sync_user_contact(
+            instance, email, telefono, email_set=email_set, telefono_set=telefono_set
+        )
+        return instance
 
     def update(self, instance, validated_data):
         if 'nombre' in validated_data:
             validated_data['nombre'] = self._clean_name(validated_data.get('nombre'))
         if 'apellido' in validated_data:
             validated_data['apellido'] = self._clean_name(validated_data.get('apellido'))
-        return super().update(instance, validated_data)
-
-    def get_email(self, obj):
-        return obj.email
-
-    def get_telefono(self, obj):
-        return obj.telefono
+        email_set = 'email' in validated_data
+        telefono_set = 'telefono' in validated_data
+        if email_set:
+            validated_data['email'] = self._clean_contact(validated_data.get('email'))
+        if telefono_set:
+            validated_data['telefono'] = self._clean_contact(validated_data.get('telefono'))
+        email = validated_data.get('email')
+        telefono = validated_data.get('telefono')
+        instance = super().update(instance, validated_data)
+        self._sync_user_contact(
+            instance, email, telefono, email_set=email_set, telefono_set=telefono_set
+        )
+        return instance
 
 
 class DisponibilidadMedicoSerializer(serializers.ModelSerializer):
@@ -1370,16 +1428,10 @@ class MedicoSearchSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'apellido', 'matricula', 'especialidad', 'email', 'telefono']
     
     def get_email(self, obj):
-        """Obtener email del usuario asociado si existe"""
-        if obj.user and obj.user.email:
-            return obj.user.email
-        return None
-    
+        return obj.email_display()
+
     def get_telefono(self, obj):
-        """Obtener teléfono del usuario asociado si existe"""
-        if obj.user and obj.user.telefono:
-            return obj.user.telefono
-        return None
+        return obj.telefono_display()
 
 
 class ConsultaSearchSerializer(serializers.ModelSerializer):

@@ -165,8 +165,9 @@ const ImprimirPedidoMicroDialog: React.FC<ImprimirPedidoMicroDialogProps> = ({
       </DialogTitle>
       <DialogContent dividers>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Etiqueta = impresora USB (agente ZPL). Talón = hoja A4 si falla la etiquetadora. Al
-          imprimir la etiqueta el pedido pasa a «Esperando recepción»; no recepciona la muestra.
+          Etiqueta = impresora USB (agente ZPL). Talón = hoja A4 (impresora común) si falla la
+          etiquetadora — podés imprimirlo antes de cerrar. Al imprimir la etiqueta el pedido pasa
+          a «Esperando recepción»; no recepciona la muestra.
         </Typography>
         {loading ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4, gap: 1 }}>

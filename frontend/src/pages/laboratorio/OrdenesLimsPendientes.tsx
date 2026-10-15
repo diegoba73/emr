@@ -326,8 +326,8 @@ const OrdenesLimsPendientes: React.FC = () => {
           }}
           onClose={() => setOrdenEtiquetas(null)}
           onSuccess={() => {
+            // No cerrar: dejar el diálogo abierto para «Imprimir talón».
             void (async () => {
-              setOrdenEtiquetas(null);
               await load();
               goTab('esperando_recepcion');
             })();
@@ -358,7 +358,7 @@ const OrdenesLimsPendientes: React.FC = () => {
           reimpresion={tab === 'esperando_recepcion'}
           onClose={() => setMicroImprimir(null)}
           onEtiquetasOk={async () => {
-            setMicroImprimir(null);
+            // No cerrar: dejar «Imprimir talón» disponible (Cerrar desmonta el diálogo).
             await load();
             goTab('esperando_recepcion');
           }}

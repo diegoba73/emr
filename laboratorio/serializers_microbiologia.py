@@ -262,12 +262,16 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         mi = getattr(obj, "medico_interno", None)
         if not mi:
             return None
+        if callable(getattr(mi, "email_display", None)):
+            return mi.email_display()
         return (getattr(mi, "email", None) or "").strip() or None
 
     def get_medico_telefono(self, obj):
         mi = getattr(obj, "medico_interno", None)
         if not mi:
             return None
+        if callable(getattr(mi, "telefono_display", None)):
+            return mi.telefono_display()
         return (getattr(mi, "telefono", None) or "").strip() or None
 
     def get_solicitud_numero(self, obj):

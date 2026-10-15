@@ -666,8 +666,9 @@ export default function SolicitudAnalisisMaterialesForm({
                   </Typography>
                   {soloMicro ? (
                     <Typography variant="body2" color="text.secondary">
-                      Este material no tiene determinaciones clínicas de grilla. Pedí el cultivo
-                      en Microbiología (abajo).
+                      Este material (p. ej. hisopo) no genera tubos de Lab. Clínico. Marcá el
+                      cultivo en <strong>Microbiología</strong> (abajo) para pedirlo; la etiqueta
+                      es de microbiología, no de tubo.
                     </Typography>
                   ) : null}
                   {grid.length > 0 && (
@@ -835,6 +836,16 @@ export default function SolicitudAnalisisMaterialesForm({
                       </Typography>
                       {cultivoMat ? (
                         <>
+                          {soloMicro && !cultivoChecked ? (
+                            <Typography
+                              variant="body2"
+                              color="warning.main"
+                              sx={{ mb: 1 }}
+                            >
+                              Marcá el cultivo para agregar el hisopo/pedido de microbiología.
+                              No se selecciona solo.
+                            </Typography>
+                          ) : null}
                           <FormControlLabel
                             sx={{ alignItems: 'flex-start', m: 0 }}
                             control={

@@ -716,13 +716,41 @@ export type RestriccionEnsayoLims = {
 export type RestriccionesEnsayosLims = Record<string, RestriccionEnsayoLims>;
 
 export async function getRestriccionesEnsayosPaciente(
-  pacienteId: number
+  pacienteId: number,
+  origenSolicitud?: string | null
 ): Promise<RestriccionesEnsayosLims> {
   const { data } = await apiClient.get<RestriccionesEnsayosLims>(
     `${LAB}/solicitudes/restricciones-ensayos/`,
-    { params: { paciente_id: pacienteId } }
+    {
+      params: {
+        paciente_id: pacienteId,
+        ...(origenSolicitud ? { origen_solicitud: origenSolicitud } : {}),
+      },
+    }
   );
   return data ?? {};
+}
+
+export type AlertaFrecuenciaOrden = {
+  codigo: string;
+  nombre: string;
+  mensaje: string;
+  tipo_examen_id?: number | null;
+};
+
+export type AlertasFrecuenciaOrdenResponse = {
+  aplica_revision_etiquetas: boolean;
+  alertas: AlertaFrecuenciaOrden[];
+};
+
+export async function getAlertasFrecuenciaOrden(
+  solicitudId: number
+): Promise<AlertasFrecuenciaOrdenResponse> {
+  assertValidSolicitudId(solicitudId);
+  const { data } = await apiClient.get<AlertasFrecuenciaOrdenResponse>(
+    `${LAB}/solicitudes/${solicitudId}/alertas-frecuencia/`
+  );
+  return data ?? { aplica_revision_etiquetas: false, alertas: [] };
 }
 
 export async function postMarcarDerivacion(

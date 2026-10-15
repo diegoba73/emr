@@ -7,12 +7,14 @@ Fuentes:
 - Fecha extracción (determinación): ResultadoExamen.muestra.fecha_toma; si no hay FK,
   tubo compatible de la orden por tipo de muestra; si no, programada de la orden.
 - Diagnóstico internado: Internacion activa (CIE o texto de ingreso), como en cama.
+- Diagnóstico guardia: motivo cargado en la atención (observaciones_generales) o
+  motivo_consulta_detalle de la consulta HC (omite stub genérico).
 - Diagnóstico ambulatorio: consulta HC vinculada; si no, antecedentes personales del paciente.
 """
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from django.utils import timezone
 
@@ -20,9 +22,20 @@ if TYPE_CHECKING:
     from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen
     from laboratorio.models_catalog import Muestra
 
+# Motivo placeholder al crear Consulta HC de guardia sin texto clínico real.
+_MOTIVOS_GUARDIA_STUB = frozenset(
+    {
+        "guardia cardiológica",
+        "guardia",
+        "consulta médica",
+    }
+)
+
 
 def fecha_solicitud_dt(solicitud: SolicitudExamen) -> datetime | date | None:
-    return getattr(solicitud, "fecha_solicitud", None) or None
+    return getattr(solicitud, "fecha_solicitud", None) or getattr(
+        solicitud, "created_at", None
+    )
 
 
 def formatear_fecha_extraccion(dt: datetime | date | None) -> str:
@@ -237,14 +250,25 @@ def lineas_fechas_estudio_micro_timeline(estudio) -> list[str]:
     return lines
 
 
-def _diagnostico_internacion(solicitud: SolicitudExamen) -> str:
+def _fecha_ref_diagnostico(obj: Any) -> datetime | date:
+    return (
+        getattr(obj, "fecha_solicitud", None)
+        or getattr(obj, "created_at", None)
+        or timezone.now()
+    )
+
+
+def _diagnostico_internacion(solicitud: Any) -> str:
     from internacion.models import Internacion
 
+    paciente_id = getattr(solicitud, "paciente_id", None)
+    if not paciente_id:
+        return ""
     internacion = (
         Internacion.objects.filter(
-            paciente_id=solicitud.paciente_id,
+            paciente_id=paciente_id,
             activo=True,
-            fecha_ingreso__lte=solicitud.fecha_solicitud,
+            fecha_ingreso__lte=_fecha_ref_diagnostico(solicitud),
         )
         .select_related("diagnostico_cie")
         .order_by("-fecha_ingreso")
@@ -259,7 +283,10 @@ def _diagnostico_internacion(solicitud: SolicitudExamen) -> str:
         if codigo and desc:
             return f"{codigo} - {desc}"
         return codigo or desc
-    return (internacion.diagnostico_ingreso or "").strip()
+    texto = (internacion.diagnostico_ingreso or "").strip()
+    if texto:
+        return texto
+    return (internacion.motivo_ingreso or "").strip()
 
 
 def _diagnostico_consulta(consulta) -> str:
@@ -284,18 +311,70 @@ def _diagnostico_paciente(paciente) -> str:
     return (getattr(paciente, "antecedentes_personales", None) or "").strip()
 
 
-def diagnostico_orden_display(solicitud: SolicitudExamen) -> str:
-    """
-    Diagnóstico para cabecera / carga de resultados.
+def _motivo_guardia_texto(texto: str | None) -> str:
+    t = (texto or "").strip()
+    if not t:
+        return ""
+    if t.casefold() in _MOTIVOS_GUARDIA_STUB:
+        return ""
+    return t
 
-    Internación → cama/internación activa.
-    Ambulatorio / resto → consulta HC; si no hay, datos del paciente (antecedentes).
+
+def _diagnostico_guardia(solicitud: Any) -> str:
+    """Motivo de guardia: atención.observaciones_generales → consulta.motivo."""
+    from laboratorio.origen_solicitud import _atencion_desde_consulta
+
+    consulta = getattr(solicitud, "consulta_hc", None)
+    atencion = _atencion_desde_consulta(consulta)
+    if atencion is not None:
+        motivo = _motivo_guardia_texto(
+            getattr(atencion, "observaciones_generales", None)
+        )
+        if motivo:
+            return motivo
+    if consulta is not None:
+        motivo = _motivo_guardia_texto(
+            getattr(consulta, "motivo_consulta_detalle", None)
+        )
+        if motivo:
+            return motivo
+    return ""
+
+
+def _es_contexto_internacion(solicitud: Any, procedencia_tipo: str | None) -> bool:
+    if procedencia_tipo == "INTERNACION":
+        return True
+    origen = (getattr(solicitud, "origen_solicitud", None) or "").strip()
+    return origen.startswith("INTERNACION")
+
+
+def _es_contexto_guardia(solicitud: Any, procedencia_tipo: str | None) -> bool:
+    if procedencia_tipo == "GUARDIA":
+        return True
+    origen = (getattr(solicitud, "origen_solicitud", None) or "").strip()
+    return origen == "GUARDIA"
+
+
+def diagnostico_orden_display(solicitud: Any) -> str:
+    """
+    Diagnóstico para cabecera / carga de resultados / pedidos impresos.
+
+    Internación → cama/internación activa (CIE, texto ingreso o motivo).
+    Guardia → motivo cargado en la atención / consulta.
+    Ambulatorio / resto → consulta HC; si no hay, antecedentes del paciente.
     """
     from laboratorio.procedencia_display import resolver_procedencia_solicitud
 
     procedencia = resolver_procedencia_solicitud(solicitud)
-    if procedencia.get("procedencia_tipo") == "INTERNACION":
+    procedencia_tipo = procedencia.get("procedencia_tipo")
+
+    if _es_contexto_internacion(solicitud, procedencia_tipo):
         dx = _diagnostico_internacion(solicitud)
+        if dx:
+            return dx
+
+    if _es_contexto_guardia(solicitud, procedencia_tipo):
+        dx = _diagnostico_guardia(solicitud)
         if dx:
             return dx
 
@@ -305,3 +384,12 @@ def diagnostico_orden_display(solicitud: SolicitudExamen) -> str:
         return dx
 
     return _diagnostico_paciente(getattr(solicitud, "paciente", None)) or "—"
+
+
+def diagnostico_para_impresion(obj: Any) -> str:
+    """Texto de diagnóstico para PDF de pedidos (vacío si no hay dato)."""
+    sol = getattr(obj, "solicitud", None)
+    if sol is not None and getattr(obj, "solicitud_id", None):
+        obj = sol
+    dx = diagnostico_orden_display(obj)
+    return "" if dx in ("", "—") else dx

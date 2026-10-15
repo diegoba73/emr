@@ -19,7 +19,11 @@ import {
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
-import type { MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
+import type {
+  MuestraTransaccional,
+  OrigenSolicitudLims,
+  SolicitudExamenLims,
+} from '../../types/lims';
 import { resolveNavBack } from '../../utils/navBack';
 import {
   downloadInformeLimsPdf,
@@ -769,12 +773,7 @@ const OrdenLimsDetalle: React.FC = () => {
         agregarAOrdenId={orden.id}
         agregarAOrdenNumero={orden.numero}
         pacienteId={orden.paciente}
-        origenInicial={
-          orden.origen_solicitud === 'INTERNACION_UCO' ||
-          orden.origen_solicitud === 'INTERNACION_UCE'
-            ? orden.origen_solicitud
-            : null
-        }
+        origenInicial={(orden.origen_solicitud as OrigenSolicitudLims | undefined) || null}
         onCreated={async () => {
           try {
             const fresh = await getSolicitudExamen(orden.id);

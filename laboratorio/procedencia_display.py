@@ -62,13 +62,20 @@ def resolver_procedencia_solicitud(solicitud: SolicitudExamen) -> dict[str, Any]
             }
 
     try:
+        from django.utils import timezone
+
         from internacion.models import Internacion
 
+        fecha_ref = (
+            getattr(solicitud, "fecha_solicitud", None)
+            or getattr(solicitud, "created_at", None)
+            or timezone.now()
+        )
         internacion = (
             Internacion.objects.filter(
                 paciente_id=solicitud.paciente_id,
                 activo=True,
-                fecha_ingreso__lte=solicitud.fecha_solicitud,
+                fecha_ingreso__lte=fecha_ref,
             )
             .select_related("cama__sector")
             .order_by("-fecha_ingreso")

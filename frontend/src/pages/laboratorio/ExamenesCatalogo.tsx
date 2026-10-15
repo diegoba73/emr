@@ -168,10 +168,47 @@ const ExamenesCatalogo: React.FC = () => {
     return (id: number | '') => (id === '' ? '' : map.get(id) || '');
   }, [tiposMuestra]);
 
-  /** Muestras con tubo siempre FRASCO_ESTERIL (mismo criterio que LCR). */
-  const MUESTRAS_FRASCO_ESTERIL = useMemo(() => new Set(['LCR', 'ESPUTO']), []);
+  /**
+   * Muestras que no van en tubo EDTA/suero sino en frasco estéril
+   * (LCR, esputo, hisopos y demás materiales de pedido no sangre/orina).
+   */
+  const muestrasFrascoEsteril = useMemo(() => {
+    // Códigos legacy / clínicos frecuentes de secreciones (además de materiales de pedido).
+    const set = new Set<string>([
+      'LCR',
+      'ESPUTO',
+      'VAGINAL',
+      'URETRAL',
+      'ENDOCERVICAL',
+      'EXUDADO_GENITAL',
+      'EXUDADO_VAGINAL',
+      'EXUDADO_URETRAL',
+    ]);
+    for (const m of materiales) {
+      const mat = (m.codigo || '').toUpperCase();
+      if (
+        mat === 'SANGRE' ||
+        mat === 'ORINA' ||
+        m.ui_preset === 'sangre' ||
+        m.ui_preset === 'orina'
+      ) {
+        continue;
+      }
+      for (const tm of m.tipo_muestra_codigos || []) {
+        const c = (tm || '').toUpperCase();
+        if (c) set.add(c);
+      }
+      if (mat) set.add(mat);
+    }
+    return set;
+  }, [materiales]);
   const muestraCodigoForm = muestraCodigoById(form.tipo_muestra_requerida);
-  const esTuboFrascoEsterilFijo = MUESTRAS_FRASCO_ESTERIL.has(muestraCodigoForm);
+  const esMuestraHisopoOSecrecion =
+    muestraCodigoForm.startsWith('HISOP') ||
+    muestraCodigoForm.startsWith('SEC_') ||
+    muestraCodigoForm.startsWith('EXUDADO_');
+  const esTuboFrascoEsterilFijo =
+    muestrasFrascoEsteril.has(muestraCodigoForm) || esMuestraHisopoOSecrecion;
 
   const loadCatalogMeta = useCallback(async () => {
     const [muestras, conts, mats] = await Promise.all([
@@ -431,7 +468,7 @@ const ExamenesCatalogo: React.FC = () => {
               <TableCell>Nombre</TableCell>
               <TableCell>Método</TableCell>
               <TableCell>Muestra</TableCell>
-              <TableCell>Tubo</TableCell>
+              <TableCell>Contenedor</TableCell>
               <TableCell>Unidad</TableCell>
               <TableCell>Modo ingreso</TableCell>
               <TableCell>Estado</TableCell>
@@ -566,9 +603,14 @@ const ExamenesCatalogo: React.FC = () => {
                 onChange={(ev) => {
                   const id = Number(ev.target.value);
                   const codigo = (tiposMuestra.find((t) => t.id === id)?.codigo || '').toUpperCase();
+                  const fuerzaFrasco =
+                    muestrasFrascoEsteril.has(codigo) ||
+                    codigo.startsWith('HISOP') ||
+                    codigo.startsWith('SEC_') ||
+                    codigo.startsWith('EXUDADO_');
                   patchForm({
                     tipo_muestra_requerida: id,
-                    ...(MUESTRAS_FRASCO_ESTERIL.has(codigo) && frascoEsterilId != null
+                    ...(fuerzaFrasco && frascoEsterilId != null
                       ? { tipo_contenedor: frascoEsterilId }
                       : {}),
                   });
@@ -582,9 +624,9 @@ const ExamenesCatalogo: React.FC = () => {
               </Select>
             </FormControl>
             <FormControl disabled={esTuboFrascoEsterilFijo}>
-              <InputLabel>Tipo de tubo</InputLabel>
+              <InputLabel>Tipo de contenedor</InputLabel>
               <Select
-                label="Tipo de tubo"
+                label="Tipo de contenedor"
                 value={form.tipo_contenedor === '' ? '' : String(form.tipo_contenedor)}
                 onChange={(ev) => {
                   const v = ev.target.value;
@@ -600,9 +642,16 @@ const ExamenesCatalogo: React.FC = () => {
               </Select>
               {esTuboFrascoEsterilFijo ? (
                 <FormHelperText>
-                  {muestraCodigoForm}: siempre FRASCO_ESTERIL — Frasco / tubo estéril
+                  {esMuestraHisopoOSecrecion || muestraCodigoForm === 'VAGINAL'
+                    ? 'Hisopo/secreción: no usa EDTA/suero — queda FRASCO_ESTERIL.'
+                    : `${muestraCodigoForm}: siempre FRASCO_ESTERIL — Frasco / contenedor estéril`}
                 </FormHelperText>
-              ) : null}
+              ) : (
+                <FormHelperText>
+                  Sangre → EDTA/suero/etc. Hisopos y secreciones → al elegir la muestra se fija
+                  frasco estéril.
+                </FormHelperText>
+              )}
             </FormControl>
             <FormControl>
               <InputLabel>Tipo de resultado</InputLabel>

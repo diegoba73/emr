@@ -195,15 +195,25 @@ def _intentar_twilio_whatsapp(
         return False, f"Twilio rechazó el envío: {exc}"
 
 
-def _medico_contacto(solicitud: SolicitudExamen) -> tuple[str | None, str | None, str | None]:
-    """Devuelve (nombre, email, telefono) del médico interno, si existe."""
-    medico = getattr(solicitud, "medico_interno", None)
+def _contacto_desde_medico(medico) -> tuple[str | None, str | None, str | None]:
+    """(nombre, email, telefono): ficha del médico, con fallback al User vinculado."""
     if not medico:
         return None, None, None
     nombre = getattr(medico, "nombre_completo", None) or str(medico)
-    email = (getattr(medico, "email", None) or "").strip() or None
-    telefono = (getattr(medico, "telefono", None) or "").strip() or None
+    if callable(getattr(medico, "email_display", None)):
+        email = medico.email_display()
+    else:
+        email = (getattr(medico, "email", None) or "").strip() or None
+    if callable(getattr(medico, "telefono_display", None)):
+        telefono = medico.telefono_display()
+    else:
+        telefono = (getattr(medico, "telefono", None) or "").strip() or None
     return nombre, email, telefono
+
+
+def _medico_contacto(solicitud: SolicitudExamen) -> tuple[str | None, str | None, str | None]:
+    """Devuelve (nombre, email, telefono) del médico interno, si existe."""
+    return _contacto_desde_medico(getattr(solicitud, "medico_interno", None))
 
 
 def _enviar_email_pdf(
@@ -483,6 +493,8 @@ def enviar_informe_solicitud(
         and not resultado.whatsapp_enviado
         and not tiene_fallback_wa
     ):
+        if resultado.advertencias:
+            raise EnvioInformeError(" ".join(resultado.advertencias))
         raise EnvioInformeError(
             "No hay datos de contacto del paciente ni del médico para enviar el informe."
         )
@@ -491,13 +503,7 @@ def enviar_informe_solicitud(
 
 
 def _medico_contacto_estudio(estudio) -> tuple[str | None, str | None, str | None]:
-    medico = getattr(estudio, "medico_interno", None)
-    if not medico:
-        return None, None, None
-    nombre = getattr(medico, "nombre_completo", None) or str(medico)
-    email = (getattr(medico, "email", None) or "").strip() or None
-    telefono = (getattr(medico, "telefono", None) or "").strip() or None
-    return nombre, email, telefono
+    return _contacto_desde_medico(getattr(estudio, "medico_interno", None))
 
 
 def _informe_micro_es_preliminar(estudio) -> bool:
@@ -800,6 +806,8 @@ def enviar_informe_estudio_micro(
         and not resultado.whatsapp_enviado
         and not tiene_fallback_wa
     ):
+        if resultado.advertencias:
+            raise EnvioInformeError(" ".join(resultado.advertencias))
         raise EnvioInformeError(
             "No hay datos de contacto del paciente ni del médico para enviar el informe."
         )

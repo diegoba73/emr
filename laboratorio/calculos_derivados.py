@@ -227,7 +227,18 @@ def calc_ca_ion_zeisler_mmol_l(ca_mg_dl: Decimal, prot_g_dl: Decimal) -> Decimal
 
 
 def format_absoluto_mm3(n: int) -> str:
-    return f"{n:,}".replace(",", ".")
+    """Recuento absoluto de fórmula leucocitaria (junto al %): p. ej. «abs. 4.185/mm³»."""
+    num = f"{n:,}".replace(",", ".")
+    return f"abs. {num}/mm³"
+
+
+def format_valor_formula_leuco_con_absoluto(pct_texto: str, absoluto: int) -> str:
+    """Valor de fórmula para informe: «45%  ·  abs. 4.185/mm³» (% pegado al porcentaje)."""
+    base = (pct_texto or "").strip()
+    if not base:
+        return format_absoluto_mm3(absoluto)
+    con_pct = f"{base[:-1].rstrip()}%" if base.endswith("%") else f"{base}%"
+    return f"{con_pct}  ·  {format_absoluto_mm3(absoluto)}"
 
 
 def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[Decimal | None, str]]:

@@ -100,16 +100,18 @@ def cargar_resultados_solicitud(
     Persiste valores en resultados de la orden y sincroniza estado.
 
     ``fuente``: MANUAL | INSTRUMENTO (solo metadata de auditoría).
-    """
-    if not resultados_data:
-        raise CargaResultadosError("Se requiere una lista de resultados.")
 
+    Con ``informar_parcial=True`` y sin ítems a persistir (valores ya guardados),
+    solo marca ``INFORMADO_PARCIAL`` — mismo criterio que el endpoint móvil.
+    """
     items_a_persistir = [
         i
-        for i in resultados_data
+        for i in (resultados_data or [])
         if payload_item_tiene_valor(i) or payload_item_limpia_valor(i)
     ]
-    if not items_a_persistir:
+    if not items_a_persistir and not informar_parcial:
+        if not resultados_data:
+            raise CargaResultadosError("Se requiere una lista de resultados.")
         raise CargaResultadosError(
             "Indique al menos un resultado con valor para guardar, "
             "o deje en blanco un valor ya cargado para marcarlo como no informado."
@@ -134,15 +136,17 @@ def cargar_resultados_solicitud(
                 "en proceso, informadas parcialmente o listas para validar."
             )
 
-        try:
-            verificar_iqc_para_solicitud(
-                solicitud,
-                actor=actor,
-                permitir_override=False,
-                equipo=equipo_iqc,
-            )
-        except QcGateError as exc:
-            raise CargaResultadosError(str(exc), code="iqc") from exc
+        # Solo marcar parcial (sin mutar valores): no re-exige IQC.
+        if items_a_persistir:
+            try:
+                verificar_iqc_para_solicitud(
+                    solicitud,
+                    actor=actor,
+                    permitir_override=False,
+                    equipo=equipo_iqc,
+                )
+            except QcGateError as exc:
+                raise CargaResultadosError(str(exc), code="iqc") from exc
 
         before_solicitud = safe_model_snapshot(solicitud)
 
@@ -318,11 +322,14 @@ def cargar_resultados_solicitud(
             )
 
         solicitud.refresh_from_db()
-        from laboratorio.calculos_derivados import aplicar_calculos_derivados_solicitud
-        from laboratorio.hemograma_resultados import asegurar_resultados_paneles_derivados
+        if items_a_persistir:
+            from laboratorio.calculos_derivados import aplicar_calculos_derivados_solicitud
+            from laboratorio.hemograma_resultados import asegurar_resultados_paneles_derivados
 
-        asegurar_resultados_paneles_derivados(solicitud)
-        aplicar_calculos_derivados_solicitud(solicitud, solo_calculados=True, actor=actor, view=view)
+            asegurar_resultados_paneles_derivados(solicitud)
+            aplicar_calculos_derivados_solicitud(
+                solicitud, solo_calculados=True, actor=actor, view=view
+            )
 
         try:
             sincronizar_estado_tras_carga(
@@ -335,21 +342,25 @@ def cargar_resultados_solicitud(
             raise
 
         solicitud.refresh_from_db()
+        meta_solicitud = {
+            "action": "cargar_resultados",
+            "accion": "cargar_resultados",
+            "view": view,
+            "fuente": fuente,
+            "estado_anterior": before_solicitud.get("estado"),
+            "estado_nuevo": solicitud.estado,
+            "solicitud_id": solicitud.pk,
+            "numero_solicitud": solicitud.numero,
+        }
+        if informar_parcial and not items_a_persistir:
+            meta_solicitud["accion"] = "informar_parcial"
+            meta_solicitud["solo_marcar_parcial"] = True
         log_update(
             actor=actor,
             entity=solicitud,
             before=before_solicitud,
             module="laboratorio",
-            metadata={
-                "action": "cargar_resultados",
-                "accion": "cargar_resultados",
-                "view": view,
-                "fuente": fuente,
-                "estado_anterior": before_solicitud.get("estado"),
-                "estado_nuevo": solicitud.estado,
-                "solicitud_id": solicitud.pk,
-                "numero_solicitud": solicitud.numero,
-            },
+            metadata=meta_solicitud,
         )
         logger.debug("cargar_resultados completado solicitud_id=%s", solicitud.pk)
         return solicitud

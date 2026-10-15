@@ -125,6 +125,31 @@ class ListoParaValidarFsmTests(TestCase):
         sol.refresh_from_db()
         self.assertEqual(sol.estado, "INFORMADO_PARCIAL")
 
+    def test_informar_parcial_sin_reenviar_valores(self):
+        """Tras Guardar avance, se puede marcar parcial con resultados=[] (como móvil)."""
+        sol = self._solicitud(self.te_a, self.te_b)
+        ra = sol.resultados.get(tipo_examen=self.te_a)
+        self.client.force_authenticate(user=self.user_lab)
+        r_avance = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"resultados": [{"id": ra.pk, "valor": "9"}]},
+            format="json",
+        )
+        self.assertEqual(r_avance.status_code, status.HTTP_200_OK, r_avance.data)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "EN_PROCESO")
+
+        r_parcial = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {"informar_parcial": True, "resultados": []},
+            format="json",
+        )
+        self.assertEqual(r_parcial.status_code, status.HTTP_200_OK, r_parcial.data)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "INFORMADO_PARCIAL")
+        ra.refresh_from_db()
+        self.assertEqual((ra.valor_obtenido or "").strip(), "9")
+
     def test_validar_solo_desde_listo(self):
         sol = self._solicitud(self.te_a)
         res = sol.resultados.get()

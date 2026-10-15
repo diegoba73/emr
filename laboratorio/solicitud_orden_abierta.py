@@ -672,6 +672,7 @@ def agregar_examenes_a_solicitud(
         sol.paciente_id,
         tipos_nuevos,
         exclude_solicitud_id=sol.pk,
+        origen_solicitud=getattr(sol, "origen_solicitud", None),
     )
     existentes = set(sol.resultados.values_list("tipo_examen_id", flat=True))
 

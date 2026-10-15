@@ -69,6 +69,11 @@ class Medico(models.Model):
         help_text="Intervalo de cada consulta/estudio en la agenda ambulatoria del médico.",
     )
 
+    # Contacto en ficha (médicos sin User vinculado, p.ej. import ICPL/CEHTA).
+    # Si hay user, el serializer puede sincronizar; la lectura prioriza estos campos y cae al user.
+    email = models.EmailField(blank=True, null=True, verbose_name="Email")
+    telefono = models.CharField(max_length=50, blank=True, null=True, verbose_name="Teléfono")
+
     # Campos adicionales para futura integración con IA (ej. áreas de interés, datos de rendimiento)
     areas_interes_ia = models.TextField(blank=True, null=True, verbose_name="Áreas de Interés para IA (Ej. Patologías específicas)")
     # Podríamos añadir campos para un "perfil de rendimiento" o "experiencia en diagnósticos" si los datos están disponibles
@@ -103,15 +108,17 @@ class Medico(models.Model):
         especialidad = self.especialidad.nombre if self.especialidad else 'Sin Especialidad'
         return f"{nombre_completo} ({especialidad})"
 
-    @property
-    def email(self):
-        if self.user:
+    def email_display(self):
+        if self.email:
+            return self.email
+        if self.user_id and self.user and self.user.email:
             return self.user.email
         return None
-    
-    @property
-    def telefono(self):
-        if self.user:
+
+    def telefono_display(self):
+        if self.telefono:
+            return self.telefono
+        if self.user_id and self.user and getattr(self.user, 'telefono', None):
             return self.user.telefono
         return None
 

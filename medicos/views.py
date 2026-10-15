@@ -11,11 +11,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api.permissions import get_normalized_role
-from api.serializers import MedicoLightSerializer
+from api.serializers import MedicoLightSerializer, MedicoSerializer
 from usuarios.roles import ROLES_LIMS_OPERADOR
 
 from .models import Especialidad, Medico
-from .serializers import EspecialidadSerializer, MedicoSerializer
+from .serializers import EspecialidadSerializer
 
 _ROLES_ESCRITURA_MEDICO = frozenset(
     {

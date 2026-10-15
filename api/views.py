@@ -1803,7 +1803,7 @@ def _build_current_user_payload(user):
                 'id': medico.id,
                 'nombre': medico.nombre,
                 'apellido': medico.apellido,
-                'email': medico.email,
+                'email': medico.email_display(),
                 'matricula': medico.matricula,
                 'ambito_atencion': medico.ambito_atencion,
                 'duracion_slot_min': medico.duracion_slot_min,

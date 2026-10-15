@@ -33,6 +33,7 @@ from laboratorio.informe_pdf_config import (
     LABORATORIO_STATIC,
     MESES_ES,
 )
+from laboratorio.pdf_logos import draw_logo_cehta, draw_logo_icpl
 from laboratorio.models import ResultadoExamen, SolicitudExamen
 from laboratorio.orden_grupos_informe import (
     PANEL_HEMOGRAMA,
@@ -255,7 +256,7 @@ def _valor_y_unidad(
         FORMULA_LEUCO_CODIGOS,
         RESULTADO_NO_CALCULABLE,
         calc_absoluto_formula,
-        format_absoluto_mm3,
+        format_valor_formula_leuco_con_absoluto,
     )
 
     valor = (res.valor_obtenido or "").strip() or "—"
@@ -274,9 +275,9 @@ def _valor_y_unidad(
         if pct is not None and leuco is not None:
             absoluto = calc_absoluto_formula(Decimal(str(pct)), Decimal(str(leuco)))
             if absoluto is not None:
-                valor = f"{valor}  ·  {format_absoluto_mm3(absoluto)}"
-                if not unidad:
-                    unidad = "%"
+                # «45% · abs. …/mm³» — el % va con el porcentaje cargado.
+                valor = format_valor_formula_leuco_con_absoluto(valor, absoluto)
+                unidad = ""
     return valor, unidad
 
 
@@ -400,20 +401,11 @@ class _InformeIcplDoc(BaseDocTemplate):
         canvas.setFillColor(colors.black)
         canvas.setStrokeColor(colors.black)
 
-        logo = _asset_path(cfg.get("logo"))
-        if logo:
-            try:
-                canvas.drawImage(
-                    ImageReader(logo),
-                    doc.leftMargin,
-                    h - 2.05 * cm,
-                    width=2.4 * cm,
-                    height=1.35 * cm,
-                    preserveAspectRatio=True,
-                    mask="auto",
-                )
-            except Exception:
-                pass
+        # Misma composición que el pedido papel: ICPL izquierda + CEHTA derecha.
+        logo_h = 1.45 * cm
+        logo_y = h - 2.15 * cm
+        draw_logo_icpl(canvas, doc.leftMargin, logo_y, 2.8 * cm, logo_h)
+        draw_logo_cehta(canvas, w - doc.rightMargin, logo_y, 3.2 * cm, logo_h)
 
         canvas.setFont("Helvetica-Bold", 12)
         canvas.drawCentredString(w / 2, h - 1.25 * cm, cfg["titulo"])

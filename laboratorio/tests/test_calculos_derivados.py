@@ -9,6 +9,7 @@ from unittest import TestCase
 
 from laboratorio.calculos_derivados import (
     RESULTADO_NO_CALCULABLE,
+    calc_absoluto_formula,
     calc_ca_ion_zeisler_mg_dl,
     calc_ca_ion_zeisler_mmol_l,
     calc_clearance_creatinina,
@@ -20,6 +21,8 @@ from laboratorio.calculos_derivados import (
     codigos_insumos_de_overrideables,
     calcular_derivados,
     es_codigo_calculado,
+    format_absoluto_mm3,
+    format_valor_formula_leuco_con_absoluto,
 )
 
 
@@ -266,3 +269,12 @@ class TestCalculosDerivados(TestCase):
             ),
             [],
         )
+
+    def test_absoluto_formula_leucocitaria_etiqueta_mm3(self):
+        self.assertEqual(calc_absoluto_formula(Decimal("45"), Decimal("9300")), 4185)
+        self.assertEqual(format_absoluto_mm3(4185), "abs. 4.185/mm³")
+        self.assertEqual(
+            format_valor_formula_leuco_con_absoluto("45", 4185),
+            "45%  ·  abs. 4.185/mm³",
+        )
+

@@ -68,6 +68,7 @@ import {
   ORIGEN_SOLICITUD_LIMS_OPTIONS,
   esOrigenAmbulatorioExterno,
   esOrigenInternacion,
+  origenExigeBloqueoFrecuenciaEnsayos,
 } from '../../utils/limsOrigenSolicitud';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
@@ -373,8 +374,17 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     };
   }, [open, pacienteId, pacienteInicial]);
 
+  // Origen efectivo para bloqueo: al agregar a orden usa el de la orden (origenInicial).
+  const origenParaRestricciones = agregarAOrdenId
+    ? origenInicial || origenManual
+    : origenManual;
+
   useEffect(() => {
     if (!open || omiteRestriccionesEnsayos) {
+      setRestriccionesEnsayos({});
+      return;
+    }
+    if (!origenExigeBloqueoFrecuenciaEnsayos(origenParaRestricciones)) {
       setRestriccionesEnsayos({});
       return;
     }
@@ -384,7 +394,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
     let cancelled = false;
-    getRestriccionesEnsayosPaciente(pid)
+    getRestriccionesEnsayosPaciente(pid, origenParaRestricciones)
       .then((data) => {
         if (!cancelled) setRestriccionesEnsayos(data || {});
       })
@@ -394,7 +404,14 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, omiteRestriccionesEnsayos, paciente?.id, pacienteInicial?.id, pacienteId]);
+  }, [
+    open,
+    omiteRestriccionesEnsayos,
+    origenParaRestricciones,
+    paciente?.id,
+    pacienteInicial?.id,
+    pacienteId,
+  ]);
 
   const handleToggleExamen = useCallback(
     (id: number) => {
@@ -423,8 +440,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
 
   /**
    * Cultivos permitidos = unión de todos los materiales del pedido.
-   * Auto-preselect: orina/fecal/LCR/líquidos/hisopados; sangre no fuerza hemocultivo.
-   * Antes ORINA quedaba fuera del filtro y, al sumar LCR, el effect borraba el urocultivo.
+   * No auto-preselecciona cultivos (orina ≠ urocultivo automático): el operador los marca.
    */
   const cultivosPermitidos = useMemo(
     () => cultivosCodigosDeMateriales(materialesSeleccionados),

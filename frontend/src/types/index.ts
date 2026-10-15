@@ -111,14 +111,16 @@ export interface Medico extends BaseModel {
   matricula: string;
   /** Nested en retrieve/detail; ausente en listados light. */
   especialidad?: Especialidad | null;
+  /** PK plano del listado light (`MedicoLightSerializer`) / escritura. */
+  especialidad_id?: number | null;
   /** Campo plano del listado light (`MedicoLightSerializer`). */
   especialidad_nombre?: string | null;
   /** COMPLETO (default) o AMBULATORIO (solo consultorio). */
   ambito_atencion?: 'COMPLETO' | 'AMBULATORIO';
   /** Intervalo de cada turno en la agenda ambulatoria (10/15/20/30/45/60). */
   duracion_slot_min?: number;
-  telefono?: string;
-  email?: string;
+  telefono?: string | null;
+  email?: string | null;
   activo: boolean;
   nombre_completo?: string;
 }

@@ -1,4 +1,4 @@
-"""Restricciones PSA, Vitamina D, tiroides y T4/SEROS."""
+"""Restricciones PSA, Vitamina D, tiroides y T4/SEROS (bloqueo en guardia/internación)."""
 
 from datetime import datetime, timedelta
 
@@ -9,6 +9,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
+from laboratorio.restricciones_frecuencia import (
+    RestriccionFrecuenciaError,
+    assert_puede_agregar_ensayos,
+)
 from medicos.models import Especialidad, Medico
 from pacientes.models import Paciente
 
@@ -40,6 +44,7 @@ class TestRestriccionesEnsayosExtendidas(TestCase):
             apellido="RestX",
             matricula="M-RESTX",
             especialidad=esp,
+            ambito_atencion=Medico.AMBITO_COMPLETO,
         )
         tm = TipoMuestra.objects.create(codigo="TM_RX", nombre="Sangre RX", activo=True)
 
@@ -73,6 +78,7 @@ class TestRestriccionesEnsayosExtendidas(TestCase):
             origen_solicitud="AMBULATORIO_CEHTA",
             estado="PENDIENTE",
             fecha_programada_toma=fecha_toma,
+            material_pedido="SANGRE",
         )
         sol.tipos_examen.add(tipo)
         ResultadoExamen.objects.create(solicitud=sol, tipo_examen=tipo, valor_obtenido="")
@@ -85,89 +91,109 @@ class TestRestriccionesEnsayosExtendidas(TestCase):
         sol.refresh_from_db()
         return sol
 
-    def _crear(self, user, paciente, examenes_ids):
-        self.client.force_authenticate(user=user)
-        return self.client.post(
-            "/api/lab/solicitudes/",
-            {
-                "paciente_id": paciente.pk,
-                "medico_id": self.medico.pk,
-                "origen_solicitud": "AMBULATORIO_CEHTA",
-                "examenes_ids": examenes_ids,
-                "paneles_ids": [],
-                "fecha_programada_toma": timezone.localdate().isoformat(),
-            },
-            format="json",
+    def _assert_bloquea(self, paciente, tipo_id, *, origen="GUARDIA"):
+        with self.assertRaises(RestriccionFrecuenciaError):
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                paciente.pk,
+                [tipo_id],
+                origen_solicitud=origen,
+            )
+
+    def _assert_ok(self, paciente, tipo_id, *, origen="GUARDIA"):
+        assert_puede_agregar_ensayos(
+            self.medico_user,
+            paciente.pk,
+            [tipo_id],
+            origen_solicitud=origen,
         )
 
     def test_medico_psa_bloqueado_si_ya_este_anio(self):
         self._orden_con(self.paciente, self.psa, dias_atras=10)
-        r = self._crear(self.medico_user, self.paciente, [self.psa.pk])
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("PSA", str(r.data))
+        self._assert_bloquea(self.paciente, self.psa.pk)
 
     def test_admin_puede_psa_aunque_este_anio(self):
         self._orden_con(self.paciente, self.psa, dias_atras=10)
-        r = self._crear(self.admin, self.paciente, [self.psa.pk])
-        self.assertIn(r.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED), r.data)
+        assert_puede_agregar_ensayos(
+            self.admin,
+            self.paciente.pk,
+            [self.psa.pk],
+            origen_solicitud="GUARDIA",
+        )
 
     def test_medico_vitd_bloqueado_si_ya_este_anio(self):
         self._orden_con(self.paciente, self.vitd, dias_atras=20)
-        r = self._crear(self.medico_user, self.paciente, [self.vitd.pk])
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Vitamina D", str(r.data))
+        self._assert_bloquea(self.paciente, self.vitd.pk)
 
     def test_psa_ok_si_anio_anterior(self):
         anio_prev = timezone.localdate().year - 1
         tz = timezone.get_current_timezone()
         fs = timezone.make_aware(datetime(anio_prev, 6, 15, 12, 0, 0), tz)
         self._orden_con(self.paciente, self.psa, dias_atras=400, fecha_solicitud=fs)
-        r = self._crear(self.medico_user, self.paciente, [self.psa.pk])
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self._assert_ok(self.paciente, self.psa.pk)
 
     def test_tsh_bloqueado_si_menos_de_2_meses(self):
         self._orden_con(self.paciente, self.tsh, dias_atras=30)
-        r = self._crear(self.medico_user, self.paciente, [self.tsh.pk])
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("2 meses", str(r.data))
+        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                self.paciente.pk,
+                [self.tsh.pk],
+                origen_solicitud="GUARDIA",
+            )
+        self.assertIn("2 meses", str(ctx.exception))
 
     def test_tsh_ok_si_mas_de_2_meses_y_menos_de_2_en_anio(self):
         self._orden_con(self.paciente, self.tsh, dias_atras=70)
-        r = self._crear(self.medico_user, self.paciente, [self.tsh.pk])
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self._assert_ok(self.paciente, self.tsh.pk)
 
     def test_tsh_bloqueado_si_ya_dos_en_el_anio(self):
         self._orden_con(self.paciente, self.tsh, dias_atras=200)
         self._orden_con(self.paciente, self.tsh, dias_atras=100)
-        r = self._crear(self.medico_user, self.paciente, [self.tsh.pk])
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("dos veces", str(r.data).lower())
+        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                self.paciente.pk,
+                [self.tsh.pk],
+                origen_solicitud="INTERNACION_UCE",
+            )
+        self.assertIn("dos veces", str(ctx.exception).lower())
 
     def test_t3_independiente_de_tsh(self):
-        """Tope por analito: TSH reciente no bloquea T3."""
         self._orden_con(self.paciente, self.tsh, dias_atras=10)
-        r = self._crear(self.medico_user, self.paciente, [self.t3.pk])
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self._assert_ok(self.paciente, self.t3.pk)
 
     def test_t4_seros_bloquea_medico(self):
-        r = self._crear(self.medico_user, self.paciente_seros, [self.t4.pk])
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("SEROS", str(r.data))
+        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                self.paciente_seros.pk,
+                [self.t4.pk],
+                origen_solicitud="GUARDIA",
+            )
+        self.assertIn("SEROS", str(ctx.exception))
 
     def test_t4_seros_lab_puede(self):
-        r = self._crear(self.lab, self.paciente_seros, [self.t4.pk])
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        assert_puede_agregar_ensayos(
+            self.lab,
+            self.paciente_seros.pk,
+            [self.t4.pk],
+            origen_solicitud="GUARDIA",
+        )
 
     def test_t4l_seros_permitido(self):
-        r = self._crear(self.medico_user, self.paciente_seros, [self.t4l.pk])
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self._assert_ok(self.paciente_seros, self.t4l.pk)
+
+    def test_psa_ambulatorio_no_bloquea(self):
+        self._orden_con(self.paciente, self.psa, dias_atras=10)
+        self._assert_ok(self.paciente, self.psa.pk, origen="AMBULATORIO_CEHTA")
 
     def test_endpoint_restricciones_incluye_codigos(self):
         self._orden_con(self.paciente, self.psa, dias_atras=5)
         self.client.force_authenticate(user=self.medico_user)
         r = self.client.get(
             "/api/lab/solicitudes/restricciones-ensayos/",
-            {"paciente_id": self.paciente.pk},
+            {"paciente_id": self.paciente.pk, "origen_solicitud": "GUARDIA"},
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertTrue(r.data["PSA"]["bloqueado"])

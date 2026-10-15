@@ -28,6 +28,7 @@ from auditoria.audit_service import log_event
 from laboratorio.informe_pdf_config import INFORME_LAB_CONFIG, LABORATORIO_STATIC
 from laboratorio.models import SolicitudExamen
 from laboratorio.models_microbiologia import EstudioMicrobiologia
+from laboratorio.pdf_logos import draw_logo_cehta, draw_logo_icpl
 from laboratorio.resena_pedido import (
     ContextoResena,
     componentes_paneles_basicos,
@@ -41,8 +42,6 @@ from laboratorio.talon_pedido_pdf import _fmt_medico, _fmt_paciente
 TIPO_LAB = "LAB_CLINICO"
 TIPO_MICRO = "MICROBIOLOGIA"
 MAX_ITEMS_IMPRESION = 300
-
-CEHTA_LOGO = "cehta_logo.png"
 
 # --- Formulario clínico (columna izquierda | derecha), textos tal cual el papel ---
 # (etiqueta, tipo, código). tipo: "panel" | "examen" | None (sin casilla mapeada).
@@ -297,20 +296,22 @@ def _fecha_corta(dt: datetime | date | None) -> str:
     return dt.strftime("%d/%m/%Y")
 
 
-def _diagnostico_consulta(consulta) -> str:
-    if consulta is None:
-        return ""
-    texto = (getattr(consulta, "diagnostico_presuntivo", None) or "").strip()
-    if texto:
-        return texto
-    try:
-        nombres = [
-            (d.nombre_diagnostico or "").strip()
-            for d in consulta.diagnosticos.all()
-        ]
-    except Exception:
-        nombres = []
-    return "; ".join(n for n in nombres if n)
+def _fecha_extraccion_estudio(estudio: EstudioMicrobiologia) -> datetime | date | None:
+    """Fecha de extracción/toma para un estudio micro (no la de creación del pedido)."""
+    from laboratorio.orden_cabecera import fecha_extraccion_dt
+
+    muestra = getattr(estudio, "muestra", None)
+    if muestra is not None and getattr(muestra, "fecha_toma", None):
+        return muestra.fecha_toma
+    if getattr(estudio, "fecha_inicio", None):
+        return estudio.fecha_inicio
+    prog = getattr(estudio, "fecha_programada_toma", None)
+    if prog:
+        return prog
+    sol = getattr(estudio, "solicitud", None)
+    if sol is not None:
+        return fecha_extraccion_dt(sol)
+    return None
 
 
 def _datos_cabecera(obj, *, medico_externo: str = "") -> DatosPedidoPapel:
@@ -343,9 +344,12 @@ def construir_pedido_clinico(
 ) -> PedidoClinicoPapel:
     from laboratorio.talon_pedido_pdf import _examenes_solicitud
 
+    from laboratorio.orden_cabecera import diagnostico_para_impresion, fecha_extraccion_dt
+
     datos = _datos_cabecera(sol, medico_externo=sol.medico_externo_nombre or "")
-    datos.diagnostico = _diagnostico_consulta(sol.consulta_hc)
-    datos.fecha = _fecha_corta(sol.fecha_solicitud)
+    datos.diagnostico = diagnostico_para_impresion(sol)
+    # Pie "Fecha:" = extracción/toma (o programada), no la fecha del pedido.
+    datos.fecha = _fecha_corta(fecha_extraccion_dt(sol))
 
     codigos_form = {c for _, _, c in (*FORM_CLINICO_IZQ, *FORM_CLINICO_DER) if c}
     paneles = list(sol.paneles.all())
@@ -392,14 +396,13 @@ def _sin_prefijo_cultivo(nombre: str) -> str:
 
 def construir_pedido_micro(estudios: list[EstudioMicrobiologia]) -> PedidoMicroPapel:
     """Una hoja por paciente con todos sus cultivos seleccionados."""
+    from laboratorio.orden_cabecera import diagnostico_para_impresion
+
     base = estudios[0]
     datos = _datos_cabecera(base, medico_externo=base.medico_externo_nombre or "")
-    consulta = base.consulta_hc
-    if consulta is None and base.solicitud_id:
-        consulta = base.solicitud.consulta_hc
-    datos.diagnostico = _diagnostico_consulta(consulta)
-    fechas = [e.created_at for e in estudios if e.created_at]
-    datos.fecha = _fecha_corta(min(fechas) if fechas else None)
+    datos.diagnostico = diagnostico_para_impresion(base)
+    fechas_ext = [f for e in estudios if (f := _fecha_extraccion_estudio(e)) is not None]
+    datos.fecha = _fecha_corta(min(fechas_ext) if fechas_ext else None)
     numeros = [e.numero for e in estudios if e.numero]
     datos.numero = " / ".join(numeros)
     obs = []
@@ -573,80 +576,11 @@ def _linea_punteada(c: rl_canvas.Canvas, x1: float, x2: float, y: float) -> None
 def _dibujar_logo_icpl(
     c: rl_canvas.Canvas, x: float, top_mm: float, w: float, h: float, *, anchor: str = "w"
 ) -> None:
-    path = LABORATORIO_STATIC / (INFORME_LAB_CONFIG.get("logo") or "icpl_logo.png")
-    if path.is_file():
-        try:
-            c.drawImage(
-                ImageReader(str(path)),
-                x,
-                _y(top_mm) - h,
-                width=w,
-                height=h,
-                preserveAspectRatio=True,
-                anchor=anchor,
-                mask="auto",
-            )
-            return
-        except Exception:
-            pass
-    c.setFont(FONT_B, 10)
-    if anchor == "c":
-        c.drawCentredString(x + w / 2, _y(top_mm) - h / 2, "PUEBLO DE LUIS")
-    else:
-        c.drawString(x, _y(top_mm) - h / 2, "PUEBLO DE LUIS")
+    draw_logo_icpl(c, x, _y(top_mm) - h, w, h, anchor=anchor)
 
 
 def _dibujar_logo_cehta(c: rl_canvas.Canvas, right_x: float, top_mm: float, w: float, h: float) -> None:
-    path = LABORATORIO_STATIC / CEHTA_LOGO
-    if path.is_file():
-        try:
-            c.drawImage(
-                ImageReader(str(path)),
-                right_x - w,
-                _y(top_mm) - h,
-                width=w,
-                height=h,
-                preserveAspectRatio=True,
-                anchor="e",
-                mask="auto",
-            )
-            return
-        except Exception:
-            pass
-    # Logotipo vectorial (sin archivo de imagen disponible).
-    rojo = colors.HexColor("#B3122E")
-    azul = colors.HexColor("#1F3A6E")
-    x0 = right_x - w
-    base = _y(top_mm)
-    c.saveState()
-    c.setFillColor(rojo)
-    c.setFont("Times-Bold", 17)
-    c.drawString(x0, base - 6.2 * mm, "CEHTA")
-    ancho_cehta = c.stringWidth("CEHTA", "Times-Bold", 17)
-    c.setFont(FONT_B, 7.2)
-    c.drawString(x0, base - 9.4 * mm, "CARDIOVASCULAR")
-    c.setFillColor(azul)
-    c.setFont(FONT, 4.2)
-    c.drawString(x0, base - 11.6 * mm, "CENTRO DE HIPERTENSIÓN ARTERIAL")
-    c.drawString(x0, base - 13.3 * mm, "Y ENFERMEDADES CARDIOVASCULARES")
-    # Corazón con trazo de pulso.
-    hx = x0 + ancho_cehta + 2.5 * mm
-    hy = base - 5.5 * mm
-    c.setStrokeColor(rojo)
-    c.setLineWidth(1.1)
-    p = c.beginPath()
-    p.moveTo(hx + 4 * mm, hy - 5 * mm)
-    p.curveTo(hx - 1 * mm, hy - 1.5 * mm, hx + 0.5 * mm, hy + 3.2 * mm, hx + 4 * mm, hy + 1 * mm)
-    p.curveTo(hx + 7.5 * mm, hy + 3.2 * mm, hx + 9 * mm, hy - 1.5 * mm, hx + 4 * mm, hy - 5 * mm)
-    c.drawPath(p, stroke=1, fill=0)
-    c.setStrokeColor(azul)
-    c.setLineWidth(0.7)
-    c.line(hx - 1 * mm, hy - 1.2 * mm, hx + 2 * mm, hy - 1.2 * mm)
-    c.line(hx + 2 * mm, hy - 1.2 * mm, hx + 3 * mm, hy + 1.5 * mm)
-    c.line(hx + 3 * mm, hy + 1.5 * mm, hx + 4.2 * mm, hy - 3 * mm)
-    c.line(hx + 4.2 * mm, hy - 3 * mm, hx + 5 * mm, hy - 1.2 * mm)
-    c.line(hx + 5 * mm, hy - 1.2 * mm, hx + 10.5 * mm, hy - 1.2 * mm)
-    c.restoreState()
+    draw_logo_cehta(c, right_x, _y(top_mm) - h, w, h)
 
 
 def _encabezado(c: rl_canvas.Canvas, subtitulo: str | None, numero: str) -> None:

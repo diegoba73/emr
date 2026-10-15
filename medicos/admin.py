@@ -44,7 +44,16 @@ class MedicoAdmin(admin.ModelAdmin):
             'fields': ('user',)
         }),
         ('Información Profesional', {
-            'fields': ('nombre', 'apellido', 'matricula', 'especialidad', 'ambito_atencion', 'duracion_slot_min')
+            'fields': (
+                'nombre',
+                'apellido',
+                'matricula',
+                'especialidad',
+                'ambito_atencion',
+                'duracion_slot_min',
+                'email',
+                'telefono',
+            )
         }),
         ('Información Adicional', {
             'fields': ('areas_interes_ia',),

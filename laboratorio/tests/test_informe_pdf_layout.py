@@ -82,6 +82,21 @@ class TestInformePdfLayout(TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertGreater(len(pdf), 800)
 
+    def test_encabezado_incluye_ambos_logos(self):
+        """ICPL (archivo) + CEHTA (PNG o fallback vectorial) como en el pedido."""
+        from laboratorio.informe_pdf_config import LABORATORIO_STATIC
+        from laboratorio.pdf_logos import CEHTA_LOGO
+
+        self.assertTrue((LABORATORIO_STATIC / "icpl_logo.png").is_file())
+        # CEHTA puede ser PNG o el fallback vectorial de pdf_logos.
+        self.assertTrue(CEHTA_LOGO)
+
+        resultados = list(self.sol.resultados.all())
+        pdf = generar_pdf_icpl_bytes(self.sol, resultados)
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        # El título institucional sigue en el stream (logos no deben romper el header).
+        self.assertIn(b"Informe", pdf)
+
     def test_contexto_incluye_fecha_extraccion(self):
         from laboratorio.informe_pdf_layout import preparar_contexto_encabezado
 

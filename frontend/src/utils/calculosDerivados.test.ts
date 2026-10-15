@@ -1,5 +1,6 @@
 import {
   RESULTADO_NO_CALCULABLE,
+  calcAbsolutoFormula,
   calcCaIonZeislerMgDl,
   calcCaIonZeislerMmolL,
   calcClearanceCreatinina,
@@ -9,6 +10,8 @@ import {
   calcRac,
   calcularDerivados,
   esCodigoCalculado,
+  formatAbsolutoMm3,
+  formatValorFormulaLeucoConAbsoluto,
 } from './calculosDerivados';
 
 describe('calculosDerivados Corte A', () => {
@@ -119,5 +122,15 @@ describe('calculosDerivados Corte A', () => {
   it('Zeisler no emite CA_ION si falta insumo', () => {
     expect(calcularDerivados({ CA: 7.3 }).CA_ION).toBeUndefined();
     expect(calcularDerivados({ PROT_T: 5.8 }).CA_ION).toBeUndefined();
+  });
+
+  it('absoluto de fórmula leucocitaria se etiqueta con abs./mm³', () => {
+    expect(calcAbsolutoFormula(45, 9300)).toBe(4185);
+    expect(formatAbsolutoMm3(4185)).toBe('abs. 4.185/mm³');
+  });
+
+  it('fórmula con absoluto pone el % pegado al porcentaje cargado', () => {
+    expect(formatValorFormulaLeucoConAbsoluto('45', 4185)).toBe('45%  ·  abs. 4.185/mm³');
+    expect(formatValorFormulaLeucoConAbsoluto('45%', 4185)).toBe('45%  ·  abs. 4.185/mm³');
   });
 });

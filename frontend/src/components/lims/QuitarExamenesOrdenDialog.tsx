@@ -23,6 +23,8 @@ export interface QuitarExamenesOrdenDialogProps {
   orden: SolicitudExamenLims;
   onClose: () => void;
   onSuccess: (orden: SolicitudExamenLims) => void;
+  /** Preselecciona estos tipo_examen id (p. ej. alertas de frecuencia). */
+  examenIdsSugeridos?: number[];
 }
 
 function resultadoNoVacio(r: ResultadoExamenLims): boolean {
@@ -45,6 +47,7 @@ const QuitarExamenesOrdenDialog: React.FC<QuitarExamenesOrdenDialogProps> = ({
   orden,
   onClose,
   onSuccess,
+  examenIdsSugeridos = [],
 }) => {
   const [panelIds, setPanelIds] = useState<number[]>([]);
   const [examenIds, setExamenIds] = useState<number[]>([]);
@@ -73,12 +76,20 @@ const QuitarExamenesOrdenDialog: React.FC<QuitarExamenesOrdenDialogProps> = ({
       }));
   }, [resultados, panelExamIds, orden.tipos_examen, orden.tipos_examen_nombres, orden.id]);
 
+  const sugeridosKey = [...examenIdsSugeridos].sort((a, b) => a - b).join(',');
+
   useEffect(() => {
     if (open) {
       setPanelIds([]);
-      setExamenIds([]);
+      const ids = sugeridosKey
+        ? sugeridosKey
+            .split(',')
+            .map((x) => Number(x))
+            .filter((n) => Number.isFinite(n))
+        : [];
+      setExamenIds(ids);
     }
-  }, [open, orden.id]);
+  }, [open, orden.id, sugeridosKey]);
 
   const panelBloqueado = (panel: LimsPanelResumen): boolean => {
     const exclusive = exclusiveExamIds(panel, paneles);

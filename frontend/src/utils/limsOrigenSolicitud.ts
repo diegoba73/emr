@@ -39,6 +39,15 @@ export function esOrigenInternacion(
   return codigo === 'INTERNACION_UCO' || codigo === 'INTERNACION_UCE';
 }
 
+/** Internación o guardia: bloqueo de frecuencia al pedir. Ambulatorio/externo: no. */
+export function origenExigeBloqueoFrecuenciaEnsayos(
+  codigo: OrigenSolicitudLims | string | null | undefined
+): boolean {
+  const o = (codigo || '').toUpperCase();
+  if (o.startsWith('AMBULATORIO') || o.startsWith('EXTERNO')) return false;
+  return true;
+}
+
 /**
  * Origen LIMS sugerido según el sector de la cama (alineado a backend
  * ``origen_solicitud._sector_es_uco/_uce``).

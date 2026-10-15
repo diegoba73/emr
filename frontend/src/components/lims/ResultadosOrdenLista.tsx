@@ -15,7 +15,7 @@ import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
 import { PANEL_HEMOGRAMA } from '../../utils/limsOrdenInforme';
 import {
   calcAbsolutoFormula,
-  formatAbsolutoMm3,
+  formatValorFormulaLeucoConAbsoluto,
   FORMULA_LEUCO_CODIGOS,
   esResultadoNoCalculable,
 } from '../../utils/calculosDerivados';
@@ -40,19 +40,22 @@ export interface ResultadosOrdenListaProps {
 function valorConAbsolutoFormula(
   r: ResultadoExamenLims,
   resultados: ResultadoExamenLims[]
-): string {
+): { texto: string; pctIncluidoEnValor: boolean } {
   const base = (r.valor_obtenido ?? '').trim();
-  if (!base) return '';
+  if (!base) return { texto: '', pctIncluidoEnValor: false };
   const codigo = (r.tipo_examen_codigo || '').toUpperCase();
-  if (!FORMULA_LEUCO_CODIGOS.has(codigo)) return base;
+  if (!FORMULA_LEUCO_CODIGOS.has(codigo)) return { texto: base, pctIncluidoEnValor: false };
   const leuco = resultados.find((x) => (x.tipo_examen_codigo || '').toUpperCase() === 'LEUCO');
-  if (!leuco) return base;
+  if (!leuco) return { texto: base, pctIncluidoEnValor: false };
   const pct = Number(r.valor_numerico ?? base);
   const leu = Number(leuco.valor_numerico ?? leuco.valor_obtenido);
-  if (!Number.isFinite(pct) || !Number.isFinite(leu)) return base;
+  if (!Number.isFinite(pct) || !Number.isFinite(leu)) return { texto: base, pctIncluidoEnValor: false };
   const abs = calcAbsolutoFormula(pct, leu);
-  if (abs == null) return base;
-  return `${base}  ·  ${formatAbsolutoMm3(abs)}`;
+  if (abs == null) return { texto: base, pctIncluidoEnValor: false };
+  return {
+    texto: formatValorFormulaLeucoConAbsoluto(base, abs),
+    pctIncluidoEnValor: true,
+  };
 }
 
 function ResultadoRow({
@@ -66,13 +69,17 @@ function ResultadoRow({
   resultados: ResultadoExamenLims[];
   ordenFinalizada: boolean;
 }) {
-  const valorRaw = valorConAbsolutoFormula(r, resultados);
+  const { texto: valorRaw, pctIncluidoEnValor } = valorConAbsolutoFormula(r, resultados);
   const clinico = modo === 'clinico';
   const ocultarValorClinico =
     clinico && !ordenFinalizada && (!valorRaw || esResultadoNoCalculable(valorRaw));
   const valor = ocultarValorClinico ? '' : valorRaw;
-  const unidad = !valor || esResultadoNoCalculable(valor) ? '' : (r.unidad ?? '').trim();
-
+  const unidadRaw = !valor || esResultadoNoCalculable(valor) ? '' : (r.unidad ?? '').trim();
+  // El % ya va pegado al número cargado («45% · abs.…»); no repetirlo al final.
+  const unidad =
+    pctIncluidoEnValor && (unidadRaw === '%' || unidadRaw.toLowerCase() === 'porcentaje')
+      ? ''
+      : unidadRaw;
   return (
     <TableRow
       key={r.id}

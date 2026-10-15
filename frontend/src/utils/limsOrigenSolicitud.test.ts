@@ -2,6 +2,7 @@ import {
   esOrigenAmbulatorioExterno,
   formatOrigenProcedenciaCell,
   labelOrigenSolicitudLims,
+  origenExigeBloqueoFrecuenciaEnsayos,
   origenLimsDesdeSectorInternacion,
   sugerirLugarExtraccionDesdeOrigen,
 } from './limsOrigenSolicitud';
@@ -35,6 +36,13 @@ describe('limsOrigenSolicitud', () => {
     expect(esOrigenAmbulatorioExterno('EXTERNO_CEHTA')).toBe(true);
     expect(esOrigenAmbulatorioExterno('EXTERNO_ICPL')).toBe(true);
     expect(esOrigenAmbulatorioExterno('AMBULATORIO_CEHTA')).toBe(false);
+  });
+
+  it('origenExigeBloqueoFrecuenciaEnsayos solo internación/guardia', () => {
+    expect(origenExigeBloqueoFrecuenciaEnsayos('GUARDIA')).toBe(true);
+    expect(origenExigeBloqueoFrecuenciaEnsayos('INTERNACION_UCO')).toBe(true);
+    expect(origenExigeBloqueoFrecuenciaEnsayos('AMBULATORIO_CEHTA')).toBe(false);
+    expect(origenExigeBloqueoFrecuenciaEnsayos('EXTERNO_ICPL')).toBe(false);
   });
 
   it('origenLimsDesdeSectorInternacion mapea UCO/UCE', () => {

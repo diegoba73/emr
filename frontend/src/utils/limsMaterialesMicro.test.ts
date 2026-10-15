@@ -15,34 +15,29 @@ describe('limsMaterialesMicro', () => {
     );
   });
 
-  it('auto-preselect no fuerza hemocultivo; sí urocultivo y LCR', () => {
-    expect(cultivosCodigosAutoPreselect([sangre, orina, lcr]).sort()).toEqual(
-      ['LCR', 'UROCULTIVO'].sort()
-    );
+  it('auto-preselect no marca ningún cultivo al elegir materiales', () => {
+    expect(cultivosCodigosAutoPreselect([sangre, orina, lcr])).toEqual([]);
+    expect(cultivosCodigosAutoPreselect([orina])).toEqual([]);
   });
 
-  it('al agregar LCR no elimina urocultivo ya marcado', () => {
-    const prev = [
-      { cultivo_codigo: 'UROCULTIVO' },
-      { cultivo_codigo: 'LCR' },
-    ];
+  it('al agregar orina no auto-marca urocultivo', () => {
+    const next = syncMicroItemsConMateriales([], {
+      permitidos: cultivosCodigosDeMateriales([orina]),
+      autoPreselect: cultivosCodigosAutoPreselect([orina]),
+      buildItem: (c) => ({ cultivo_codigo: c }),
+    });
+    expect(next).toEqual([]);
+  });
+
+  it('conserva cultivos que el operador ya marcó al sumar otro material', () => {
+    const prev = [{ cultivo_codigo: 'UROCULTIVO' }];
     const next = syncMicroItemsConMateriales(prev, {
       permitidos: cultivosCodigosDeMateriales([orina, lcr]),
       autoPreselect: cultivosCodigosAutoPreselect([orina, lcr]),
       buildItem: (c) => ({ cultivo_codigo: c }),
     });
-    const codes = next.map((i) => i.cultivo_codigo).sort();
-    expect(codes).toEqual(['LCR', 'UROCULTIVO']);
-  });
-
-  it('regresión: LCR + orina agrega ambos cultivos aunque prev solo tenía LCR', () => {
-    const next = syncMicroItemsConMateriales([{ cultivo_codigo: 'LCR' }], {
-      permitidos: cultivosCodigosDeMateriales([sangre, orina, lcr]),
-      autoPreselect: cultivosCodigosAutoPreselect([sangre, orina, lcr]),
-      buildItem: (c) => ({ cultivo_codigo: c }),
-    });
-    expect(next.map((i) => i.cultivo_codigo).sort()).toEqual(['LCR', 'UROCULTIVO']);
-    expect(next.map((i) => i.cultivo_codigo)).not.toContain('HEMOCULTIVO');
+    expect(next.map((i) => i.cultivo_codigo)).toEqual(['UROCULTIVO']);
+    expect(next.map((i) => i.cultivo_codigo)).not.toContain('LCR');
   });
 
   it('al quitar orina elimina urocultivo', () => {

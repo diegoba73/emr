@@ -527,7 +527,34 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'detail': 'paciente_id inválido.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response(restricciones_ensayos_para(request.user, paciente_id))
+        origen = request.query_params.get('origen_solicitud') or None
+        return Response(
+            restricciones_ensayos_para(
+                request.user, paciente_id, origen_solicitud=origen
+            )
+        )
+
+    @action(detail=True, methods=['get'], url_path='alertas-frecuencia')
+    def alertas_frecuencia(self, request, pk=None):
+        """
+        Alertas de frecuencia/cobertura para ensayos ya en la orden.
+        Usado al imprimir etiquetas en ambulatorio (lab/bioquímico decide).
+        """
+        from laboratorio.restricciones_frecuencia import (
+            alertas_frecuencia_para_solicitud,
+            origen_exige_bloqueo_frecuencia,
+        )
+
+        solicitud = self.get_object()
+        origen = getattr(solicitud, 'origen_solicitud', None)
+        revision = not origen_exige_bloqueo_frecuencia(origen)
+        alertas = alertas_frecuencia_para_solicitud(solicitud) if revision else []
+        return Response(
+            {
+                'aplica_revision_etiquetas': revision,
+                'alertas': alertas,
+            }
+        )
 
     @action(detail=True, methods=['post'], url_path='marcar-derivacion')
     def marcar_derivacion(self, request, pk=None):

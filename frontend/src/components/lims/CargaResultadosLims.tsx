@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   IconButton,
+  InputAdornment,
   Paper,
   Table,
   TableBody,
@@ -546,14 +547,34 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     orden.estado === 'LISTO_PARA_VALIDAR' ||
     (progreso.total > 0 && progreso.conValor >= progreso.total);
 
-  const toastSinFilasAGuardar = () => {
-    const filaTieneValorEnPantalla = (r: (typeof resultados)[number]) => {
+  const filaTieneValorEnPantalla = useCallback(
+    (r: (typeof resultados)[number]) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const row = draft[r.id] || emptyDraft();
+      if (clearedIdsRef.current.has(r.id) && !draftRowHasValue(row, te, r.tipo_examen_codigo)) {
+        return false;
+      }
       return (
         draftRowHasValue(row, te, r.tipo_examen_codigo) || resultadoTieneValorGuardado(r)
       );
-    };
+    },
+    [draft, tiposExamenMap, resultados]
+  );
+
+  /** Progreso en pantalla (draft + guardado): habilita informar parcial sin exigir otro click. */
+  const progresoPantalla = useMemo(() => {
+    const total = resultados.length;
+    const conValor = resultados.filter(filaTieneValorEnPantalla).length;
+    return { conValor, total };
+  }, [resultados, filaTieneValorEnPantalla]);
+
+  const puedeInformarParcial =
+    progresoPantalla.conValor > 0 &&
+    progresoPantalla.conValor < progresoPantalla.total &&
+    orden.estado !== 'LISTO_PARA_VALIDAR' &&
+    orden.estado !== 'FINALIZADO';
+
+  const toastSinFilasAGuardar = () => {
     const completosEnPantalla =
       resultadosYaCompletos ||
       (resultados.length > 0 && resultados.every(filaTieneValorEnPantalla));
@@ -576,15 +597,6 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   };
 
   const handleGuardar = async (informarParcial = false) => {
-    if (iqcBloqueaCarga) {
-      toast.error(
-        iqcPrecheck?.problemas?.length
-          ? `IQC no vigente: ${iqcPrecheck.problemas.join('; ')}`
-          : 'IQC no vigente. Ejecutá control de calidad antes de cargar resultados.'
-      );
-      return;
-    }
-
     const filasAGuardar = resultados.filter((r) => {
       const te = getTipoExamenCatalog(r.tipo_examen, tiposExamenMap);
       const row = draft[r.id] || emptyDraft();
@@ -593,6 +605,57 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       }
       return resultadoDebeGuardarse(r, row, te);
     });
+
+    // Valores ya guardados, nada dirty: marcar INFORMADO_PARCIAL sin reenviar filas.
+    // No exige IQC (no muta resultados; mismo criterio que móvil / BE).
+    if (!filasAGuardar.length && informarParcial) {
+      if (orden.estado === 'INFORMADO_PARCIAL') {
+        toast.success('La orden ya está en Informe parcial.');
+        return;
+      }
+      if (progreso.conValor === 0) {
+        toast.error('Guardá al menos un valor antes de informar parcialmente.');
+        return;
+      }
+      if (progreso.conValor >= progreso.total || resultadosYaCompletos) {
+        toast.success(
+          'Los resultados de la orden ya están completos, ya se pueden validar.'
+        );
+        return;
+      }
+      setSaving(true);
+      try {
+        const updated = await postCargarResultados(orden.id, [], {
+          observaciones: observacionesOrden,
+          informar_parcial: true,
+          orden_grupos_informe: ordenGrupos,
+        });
+        if (updated.estado === 'INFORMADO_PARCIAL') {
+          toast.success('Resultados guardados — Informe parcial');
+        } else if (updated.estado === 'LISTO_PARA_VALIDAR') {
+          toast.success(
+            'Los resultados de la orden ya están completos, ya se pueden validar.'
+          );
+        } else {
+          toast.success('Avance guardado');
+        }
+        onGuardado(updated);
+      } catch (e) {
+        toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (iqcBloqueaCarga) {
+      toast.error(
+        iqcPrecheck?.problemas?.length
+          ? `IQC no vigente: ${iqcPrecheck.problemas.join('; ')}`
+          : 'IQC no vigente. Ejecutá control de calidad antes de cargar resultados.'
+      );
+      return;
+    }
 
     if (!filasAGuardar.length) {
       toastSinFilasAGuardar();
@@ -976,7 +1039,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               </TableCell>
               <TableCell>
                 <Typography variant="body2" fontWeight={informePreview ? 600 : 400} color={informePreview ? 'text.primary' : 'text.secondary'}>
-                  {(informePreview ?? '—') + valorDisplayExtra}
+                  {informePreview
+                    ? `${informePreview}${esFormula && valorDisplayExtra ? '%' : ''}${valorDisplayExtra}`
+                    : '—'}
                 </Typography>
               </TableCell>
             </>
@@ -989,8 +1054,17 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                   value={row.valor}
                   onChange={(ev) => setRow(r.id, { valor: ev.target.value, valor_numerico: '' })}
                   onKeyDown={handleEnterNext(valorFocusKey)}
-                  placeholder="Ej. 120 o Positivo · Enter → siguiente"
+                  placeholder={esFormula ? 'Ej. 70 · Enter → siguiente' : 'Ej. 120 o Positivo · Enter → siguiente'}
                   inputProps={{ 'data-carga-focus': valorFocusKey }}
+                  InputProps={
+                    esFormula
+                      ? {
+                          endAdornment: (
+                            <InputAdornment position="end">%</InputAdornment>
+                          ),
+                        }
+                      : undefined
+                  }
                   sx={{ flex: '1 1 120px', minWidth: 100 }}
                 />
                 {valorDisplayExtra ? (
@@ -1002,7 +1076,11 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             </TableCell>
           )}
           <TableCell sx={{ whiteSpace: 'nowrap' }}>
-            <Typography variant="body2">{unidadLabel}</Typography>
+            <Typography variant="body2">
+              {esFormula && FORMULA_LEUCO_CODIGOS.has(codigoUpper) && valorDisplayExtra
+                ? '—'
+                : unidadLabel}
+            </Typography>
           </TableCell>
           <TableCell>
             <ResultadoRangoInfo resultado={r} />
@@ -1169,8 +1247,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                       <>
                         {' '}
                         En la <strong>fórmula leucocitaria</strong> (%), ingrese el entero directo
-                        (cayados <strong>70</strong> → informe <strong>70</strong>). Al escribir verás
-                        al lado cuánto falta para <strong>100%</strong>.
+                        (cayados <strong>70</strong> → informe <strong>70</strong>). Al lado del %
+                        se muestra el recuento <strong>absoluto</strong> (abs. …/mm³). Al escribir
+                        verás cuánto falta para <strong>100%</strong>.
                       </>
                     )}
                   </Alert>
@@ -1312,12 +1391,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               variant="outlined"
               color="info"
               onClick={() => void handleGuardar(true)}
-              disabled={
-                saving ||
-                iqcBloqueaCarga ||
-                progreso.conValor === 0 ||
-                progreso.conValor >= progreso.total
-              }
+              disabled={saving || !puedeInformarParcial}
             >
               Guardar e informar parcialmente
             </Button>
@@ -1336,14 +1410,14 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               </Tooltip>
             )}
           </Box>
-          {progreso.conValor < progreso.total && (
+          {progresoPantalla.conValor < progresoPantalla.total && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Guardá solo los valores que tengas listos. Usá{' '}
             <strong>Guardar e informar parcialmente</strong> para marcar{' '}
-            <strong>Informe parcial</strong> (el médico lo ve en pantalla). El PDF y el
-            envío al paciente solo están disponibles después de <strong>Validar y liberar</strong>.
-            Al completar todos los ensayos exigibles, la orden pasa a{' '}
-            <strong>Listo para validar</strong>.
+            <strong>Informe parcial</strong> (el médico lo ve en pantalla; habilita
+            descargar/enviar PDF parcial). Al completar todos los ensayos exigibles, la orden
+            pasa a <strong>Listo para validar</strong>; el informe definitivo tras{' '}
+            <strong>Validar y liberar</strong>.
           </Typography>
           )}
           {orden.estado === 'LISTO_PARA_VALIDAR' && (
@@ -1375,7 +1449,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
             ) : orden.estado === 'INFORMADO_PARCIAL' && !permitirEdicion ? (
               <>
                 La orden está en <strong>Informe parcial</strong>. Podés seguir cargando resultados.
-                El médico ve estos valores en pantalla; el PDF solo tras la validación.
+                El médico ve estos valores en pantalla; ya se puede descargar o enviar el PDF
+                parcial. El informe definitivo es tras <strong>Validar y liberar</strong>.
               </>
             ) : orden.estado === 'FINALIZADO' ? (
               <>

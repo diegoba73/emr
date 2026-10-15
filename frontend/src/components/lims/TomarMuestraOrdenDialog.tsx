@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -13,10 +13,19 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import type { MuestraTransaccional, SolicitudExamenLims } from '../../types/lims';
-import { getTubosPreviewOrden, postTomarMuestraOrden } from '../../services/limsApi';
+import {
+  getAlertasFrecuenciaOrden,
+  getSolicitudExamen,
+  getTubosPreviewOrden,
+  postTomarMuestraOrden,
+  type AlertaFrecuenciaOrden,
+} from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import type { OrigenParaLugarExtraccion } from '../../utils/limsOrigenSolicitud';
+import { origenExigeBloqueoFrecuenciaEnsayos } from '../../utils/limsOrigenSolicitud';
+import AlertasFrecuenciaEtiquetasDialog from './AlertasFrecuenciaEtiquetasDialog';
 import EtiquetasMuestrasZplOrdenDialog from './EtiquetasMuestrasZplOrdenDialog';
+import QuitarExamenesOrdenDialog from './QuitarExamenesOrdenDialog';
 
 export interface TomarMuestraOrdenDialogProps {
   open: boolean;
@@ -33,10 +42,20 @@ export interface TomarMuestraOrdenDialogProps {
   origenOrden?: OrigenParaLugarExtraccion | null;
 }
 
+type Fase =
+  | 'idle'
+  | 'check_alertas'
+  | 'alertas'
+  | 'quitar'
+  | 'preparing'
+  | 'zpl'
+  | 'sin_tubos'
+  | 'error';
+
 /**
  * «Imprimir etiquetas»: crea tubos (PENDIENTE_TOMA) y abre ZPL.
- * No registra toma ni pasa la orden a EN_PROCESO.
- * La UI de Pendientes solo pasa a «Esperando recepción» tras imprimir la última etiqueta.
+ * En ambulatorio, si hay alertas de frecuencia/cobertura, lab/bioquímico decide
+ * continuar o quitar exámenes antes de preparar tubos.
  */
 const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   open,
@@ -47,13 +66,14 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   onSuccess,
   origenOrden = null,
 }) => {
-  const [preparing, setPreparing] = useState(false);
+  const [fase, setFase] = useState<Fase>('idle');
   const [prepError, setPrepError] = useState<string | null>(null);
-  const [sinTubosCatalogo, setSinTubosCatalogo] = useState(false);
-  const [zplOpen, setZplOpen] = useState(false);
+  const [alertas, setAlertas] = useState<AlertaFrecuenciaOrden[]>([]);
+  const [ordenTrabajo, setOrdenTrabajo] = useState<SolicitudExamenLims>(orden);
   const [ordenLista, setOrdenLista] = useState<SolicitudExamenLims | null>(null);
   const ordenPreparadaRef = useRef<SolicitudExamenLims | null>(null);
   const recepcionNotificadaRef = useRef(false);
+  const skipAlertasRef = useRef(false);
 
   const origenEfectivo: OrigenParaLugarExtraccion = origenOrden || {
     origen_solicitud: orden.origen_solicitud,
@@ -63,74 +83,85 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
 
   const yaTieneMuestras =
     muestrasExistentes.length > 0 ||
-    (orden.tubos_pendientes_extraccion?.length ?? 0) > 0 ||
-    !!orden.fecha_toma_muestra;
+    (ordenTrabajo.tubos_pendientes_extraccion?.length ?? 0) > 0 ||
+    !!ordenTrabajo.fecha_toma_muestra;
+
+  const prepareTubos = useCallback(async () => {
+    setFase('preparing');
+    setPrepError(null);
+    try {
+      if (!yaTieneMuestras) {
+        const tubos = await getTubosPreviewOrden(ordenTrabajo.id);
+        if (!tubos.length) {
+          setFase('sin_tubos');
+          return;
+        }
+      }
+      const updated = await postTomarMuestraOrden(ordenTrabajo.id, {});
+      ordenPreparadaRef.current = updated;
+      setOrdenLista(updated);
+      setOrdenTrabajo(updated);
+      setFase('zpl');
+      onPrepared?.(updated);
+    } catch (e) {
+      const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden);
+      setPrepError(msg);
+      setFase('error');
+      toast.error(msg);
+    }
+  }, [yaTieneMuestras, ordenTrabajo.id, onPrepared]);
+
+  const iniciarFlujo = useCallback(async () => {
+    setPrepError(null);
+    setAlertas([]);
+    const origen = origenEfectivo.origen_solicitud || orden.origen_solicitud;
+    const revisaAmbulatorio = !origenExigeBloqueoFrecuenciaEnsayos(origen);
+
+    if (revisaAmbulatorio && !skipAlertasRef.current) {
+      setFase('check_alertas');
+      try {
+        const data = await getAlertasFrecuenciaOrden(orden.id);
+        if (data.aplica_revision_etiquetas && (data.alertas?.length ?? 0) > 0) {
+          setAlertas(data.alertas);
+          setFase('alertas');
+          return;
+        }
+      } catch {
+        // Si falla el check, no bloquear la impresión.
+      }
+    }
+    skipAlertasRef.current = false;
+    await prepareTubos();
+  }, [origenEfectivo.origen_solicitud, orden.origen_solicitud, orden.id, prepareTubos]);
 
   useEffect(() => {
     if (!open) {
-      setZplOpen(false);
+      setFase('idle');
       setOrdenLista(null);
+      setAlertas([]);
+      setPrepError(null);
+      setOrdenTrabajo(orden);
       ordenPreparadaRef.current = null;
       recepcionNotificadaRef.current = false;
-      setPrepError(null);
-      setSinTubosCatalogo(false);
-      setPreparing(false);
+      skipAlertasRef.current = false;
       return;
     }
 
-    let cancelled = false;
-    setPreparing(true);
-    setPrepError(null);
-    setSinTubosCatalogo(false);
-    setZplOpen(false);
-
-    (async () => {
-      try {
-        if (!yaTieneMuestras) {
-          const tubos = await getTubosPreviewOrden(orden.id);
-          if (cancelled) return;
-          if (!tubos.length) {
-            setSinTubosCatalogo(true);
-            setPreparing(false);
-            return;
-          }
-        }
-
-        const updated = await postTomarMuestraOrden(orden.id, {});
-        if (cancelled) return;
-        ordenPreparadaRef.current = updated;
-        setOrdenLista(updated);
-        setZplOpen(true);
-        onPrepared?.(updated);
-      } catch (e) {
-        if (!cancelled) {
-          const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarOrden);
-          setPrepError(msg);
-          toast.error(msg);
-        }
-      } finally {
-        if (!cancelled) setPreparing(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    setOrdenTrabajo(orden);
+    void iniciarFlujo();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir / cambiar orden
   }, [open, orden.id]);
 
   const notifyRecepcion = () => {
     if (recepcionNotificadaRef.current) return;
-    const o = ordenPreparadaRef.current || ordenLista || orden;
+    const o = ordenPreparadaRef.current || ordenLista || ordenTrabajo || orden;
     recepcionNotificadaRef.current = true;
     onSuccess(o);
   };
 
   const handleCloseAll = () => {
-    // Tubos ya creados ⇒ en backend es «esperando recepción». Si cierra sin imprimir
-    // todas (p. ej. sin agente USB), igual refresca la pestaña.
     const pendingNotify = Boolean(ordenPreparadaRef.current);
-    setZplOpen(false);
+    setFase('idle');
     setOrdenLista(null);
     if (pendingNotify) {
       notifyRecepcion();
@@ -139,25 +170,41 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
     onClose();
   };
 
-  const showPrepDialog = open && !zplOpen;
+  const examenIdsSugeridos = alertas
+    .map((a) => a.tipo_examen_id)
+    .filter((id): id is number => typeof id === 'number' && Number.isFinite(id));
+
+  const showPrepDialog =
+    open &&
+    (fase === 'check_alertas' ||
+      fase === 'preparing' ||
+      fase === 'sin_tubos' ||
+      fase === 'error');
 
   return (
     <>
-      <Dialog open={showPrepDialog} onClose={() => !preparing && onClose()} maxWidth="xs" fullWidth>
+      <Dialog
+        open={showPrepDialog}
+        onClose={() => fase !== 'preparing' && fase !== 'check_alertas' && onClose()}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Imprimir etiquetas — orden {orden.numero || orden.id}</DialogTitle>
         <DialogContent>
-          {preparing ? (
+          {fase === 'check_alertas' || fase === 'preparing' ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 3, gap: 1 }}>
               <CircularProgress size={32} />
               <Typography variant="body2" color="text.secondary" textAlign="center">
-                Preparando tubos (siguen pendientes de recepción)…
+                {fase === 'check_alertas'
+                  ? 'Revisando frecuencia de ensayos…'
+                  : 'Preparando tubos (siguen pendientes de recepción)…'}
               </Typography>
             </Box>
-          ) : sinTubosCatalogo ? (
+          ) : fase === 'sin_tubos' ? (
             <Box sx={{ py: 1 }}>
               <Alert severity="warning" sx={{ mb: 2 }}>
-                No se calcularon tubos. Verificá que los exámenes o el panel tengan tipo de tubo
-                (EDTA, Citrato, Heparina, Suero…) en el catálogo.
+                No se calcularon tubos. Verificá que los exámenes o el panel tengan tipo de
+                contenedor (EDTA, Citrato, Heparina, Suero…) en el catálogo.
               </Alert>
               <Button
                 component={RouterLink}
@@ -168,21 +215,78 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
                 Ir a catálogo de exámenes
               </Button>
             </Box>
-          ) : prepError ? (
+          ) : fase === 'error' && prepError ? (
             <Alert severity="error">{prepError}</Alert>
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={preparing}>
+          <Button
+            onClick={onClose}
+            disabled={fase === 'preparing' || fase === 'check_alertas'}
+          >
             Cancelar
           </Button>
         </DialogActions>
       </Dialog>
 
+      <AlertasFrecuenciaEtiquetasDialog
+        open={open && fase === 'alertas'}
+        numeroOrden={ordenTrabajo.numero || String(ordenTrabajo.id)}
+        alertas={alertas}
+        onCancelar={onClose}
+        onContinuar={() => {
+          skipAlertasRef.current = true;
+          void prepareTubos();
+        }}
+        onQuitarExamenes={() => {
+          void (async () => {
+            try {
+              const fresh = await getSolicitudExamen(ordenTrabajo.id);
+              setOrdenTrabajo(fresh);
+            } catch {
+              /* keep */
+            }
+            setFase('quitar');
+          })();
+        }}
+      />
+
+      <QuitarExamenesOrdenDialog
+        open={open && fase === 'quitar'}
+        orden={ordenTrabajo}
+        examenIdsSugeridos={examenIdsSugeridos}
+        onClose={() => setFase('alertas')}
+        onSuccess={async (updated) => {
+          setOrdenTrabajo(updated);
+          onPrepared?.(updated);
+          // Recargar detalle completo (paneles/resultados) y reabrir flujo de etiquetas.
+          try {
+            const fresh = await getSolicitudExamen(updated.id);
+            setOrdenTrabajo(fresh);
+          } catch {
+            /* keep updated */
+          }
+          skipAlertasRef.current = false;
+          setFase('check_alertas');
+          try {
+            const data = await getAlertasFrecuenciaOrden(updated.id);
+            if (data.aplica_revision_etiquetas && (data.alertas?.length ?? 0) > 0) {
+              setAlertas(data.alertas);
+              setFase('alertas');
+              return;
+            }
+            setAlertas([]);
+            await prepareTubos();
+          } catch {
+            await prepareTubos();
+          }
+        }}
+      />
+
       <EtiquetasMuestrasZplOrdenDialog
-        open={zplOpen}
-        solicitudId={(ordenLista || orden).id}
-        solicitudNumero={(ordenLista || orden).numero}
+        open={open && fase === 'zpl'}
+        solicitudId={(ordenLista || ordenTrabajo).id}
+        solicitudNumero={(ordenLista || ordenTrabajo).numero}
         origenOrden={origenEfectivo}
         onClose={handleCloseAll}
         onAllPrinted={notifyRecepcion}

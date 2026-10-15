@@ -384,7 +384,9 @@ class PacienteContextoLabMovil(BaseLabMovil):
             'dni': paciente.dni or '',
             'origen_inferido': origen,
             'origen_display': label_origen_solicitud(origen),
-            'restricciones_ensayos': restricciones_ensayos_para(request.user, paciente.pk),
+            'restricciones_ensayos': restricciones_ensayos_para(
+                request.user, paciente.pk, origen_solicitud=origen
+            ),
             **flags,
         })
 
@@ -398,4 +400,9 @@ class RestriccionesEnsayosLabMovil(BaseLabMovil):
             return Response({'detail': 'Paciente no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
         from laboratorio.restricciones_frecuencia import restricciones_ensayos_para
 
-        return Response(restricciones_ensayos_para(request.user, pk))
+        origen = request.query_params.get('origen_solicitud') or inferir_origen_solicitud(
+            paciente_id=pk
+        )
+        return Response(
+            restricciones_ensayos_para(request.user, pk, origen_solicitud=origen)
+        )

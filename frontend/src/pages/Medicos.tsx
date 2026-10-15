@@ -115,6 +115,34 @@ const Medicos: React.FC = () => {
     page * rowsPerPage + rowsPerPage
   );
 
+  const resolveEspecialidadId = (medico: Medico): string => {
+    if (medico.especialidad?.id != null) {
+      return String(medico.especialidad.id);
+    }
+    if (medico.especialidad_id != null) {
+      return String(medico.especialidad_id);
+    }
+    return '';
+  };
+
+  const formatApiError = (err: unknown): string => {
+    const ax = err as {
+      response?: { data?: Record<string, unknown> | string };
+      message?: string;
+    };
+    const data = ax.response?.data;
+    if (!data) return ax.message || 'Error al guardar el médico';
+    if (typeof data === 'string') return data;
+    if (typeof data.error === 'string') return data.error;
+    if (typeof data.detail === 'string') return data.detail;
+    const parts = Object.entries(data).flatMap(([key, val]) => {
+      if (Array.isArray(val)) return val.map((v) => `${key}: ${v}`);
+      if (typeof val === 'string') return [`${key}: ${val}`];
+      return [];
+    });
+    return parts.length ? parts.join(' · ') : ax.message || 'Error al guardar el médico';
+  };
+
   const handleOpenDialog = (medico?: Medico) => {
     if (medico) {
       setEditingMedico(medico);
@@ -122,7 +150,7 @@ const Medicos: React.FC = () => {
         nombre: medico.nombre || '',
         apellido: medico.apellido || '',
         matricula: medico.matricula || '',
-        especialidad_id: medico.especialidad?.id?.toString() || '',
+        especialidad_id: resolveEspecialidadId(medico),
         ambito_atencion: medico.ambito_atencion === 'AMBULATORIO' ? 'AMBULATORIO' : 'COMPLETO',
         telefono: medico.telefono || '',
         email: medico.email || '',
@@ -153,10 +181,18 @@ const Medicos: React.FC = () => {
     try {
       setSaving(true);
       setError('');
-      
+
       const data = {
-        ...formData,
-        especialidad_id: formData.especialidad_id ? parseInt(formData.especialidad_id) : undefined,
+        nombre: formData.nombre,
+        apellido: formData.apellido,
+        matricula: formData.matricula,
+        ambito_atencion: formData.ambito_atencion,
+        telefono: formData.telefono || null,
+        email: formData.email || null,
+        // null explícito permite quitar especialidad; omitir undefined no la limpia.
+        especialidad_id: formData.especialidad_id
+          ? parseInt(formData.especialidad_id, 10)
+          : null,
       };
 
       if (editingMedico) {
@@ -167,9 +203,9 @@ const Medicos: React.FC = () => {
 
       await loadData();
       handleCloseDialog();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving medico:', error);
-      setError(error.response?.data?.error || error.message || 'Error al guardar el médico');
+      setError(formatApiError(error));
     } finally {
       setSaving(false);
     }

@@ -11,8 +11,10 @@ from catalogos.models import DiagnosticoCIE10
 from internacion.models import Cama, Internacion, Sector
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from laboratorio.muestra_estado import crear_muestra
+from historias_clinicas.models import Consulta, HistoriaClinica
 from laboratorio.orden_cabecera import (
     diagnostico_orden_display,
+    diagnostico_para_impresion,
     fecha_extraccion_de_resultado_display,
     fecha_extraccion_display,
     fecha_solicitud_display,
@@ -21,7 +23,9 @@ from laboratorio.orden_cabecera import (
     lineas_extraccion_timeline,
     lineas_fechas_orden_timeline,
 )
+from medicos.models import Especialidad, Medico
 from pacientes.models import Paciente
+from turnos.models import Atencion
 
 
 class TestOrdenCabecera(TestCase):
@@ -189,3 +193,59 @@ class TestOrdenCabecera(TestCase):
         dx = diagnostico_orden_display(self.sol)
         self.assertIn("Neumonía prueba", dx)
         self.assertIn(cie.codigo, dx)
+        self.assertEqual(diagnostico_para_impresion(self.sol), dx)
+
+    def test_diagnostico_guardia_desde_motivo_atencion(self):
+        suf = uuid.uuid4().hex[:6]
+        esp = Especialidad.objects.create(nombre=f"Esp {suf}")
+        medico = Medico.objects.create(
+            nombre="Ana",
+            apellido="Guardia",
+            matricula=f"MG-{suf}",
+            especialidad=esp,
+        )
+        atencion = Atencion.objects.create(
+            paciente=self.paciente,
+            medico_principal=medico,
+            contexto_atencion=Atencion.ContextoAtencion.GUARDIA,
+            tipo_atencion=Atencion.ContextoAtencion.GUARDIA,
+            observaciones_generales="Dolor precordial irradiado",
+        )
+        hc, _ = HistoriaClinica.objects.get_or_create(paciente=self.paciente)
+        consulta = Consulta.objects.create(
+            historia_clinica=hc,
+            medico=medico,
+            atencion=atencion,
+            fecha_hora_consulta=timezone.now(),
+            motivo_consulta_detalle="Guardia cardiológica",
+        )
+        self.sol.consulta_hc = consulta
+        self.sol.origen_solicitud = "GUARDIA"
+        self.sol.save(update_fields=["consulta_hc", "origen_solicitud"])
+        # Sin internación activa: el paciente de setUp no está internado.
+        dx = diagnostico_orden_display(self.sol)
+        self.assertEqual(dx, "Dolor precordial irradiado")
+        self.assertEqual(diagnostico_para_impresion(self.sol), dx)
+
+    def test_diagnostico_ambulatorio_consulta_presuntivo(self):
+        suf = uuid.uuid4().hex[:6]
+        esp = Especialidad.objects.create(nombre=f"EspA {suf}")
+        medico = Medico.objects.create(
+            nombre="Luis",
+            apellido="Amb",
+            matricula=f"MA-{suf}",
+            especialidad=esp,
+        )
+        hc, _ = HistoriaClinica.objects.get_or_create(paciente=self.paciente)
+        consulta = Consulta.objects.create(
+            historia_clinica=hc,
+            medico=medico,
+            fecha_hora_consulta=timezone.now(),
+            motivo_consulta_detalle="Control",
+            diagnostico_presuntivo="Dislipidemia mixta",
+        )
+        self.sol.consulta_hc = consulta
+        self.sol.origen_solicitud = "AMBULATORIO_CEHTA"
+        self.sol.save(update_fields=["consulta_hc", "origen_solicitud"])
+        self.assertEqual(diagnostico_orden_display(self.sol), "Dislipidemia mixta")
+        self.assertEqual(diagnostico_para_impresion(self.sol), "Dislipidemia mixta")

@@ -125,18 +125,83 @@ class TestImpresionOrdenes(TestCase):
         self.assertEqual(ped.datos.afiliado, "123/45")
         self.assertIn("García", ped.datos.medico)
 
+    def test_pedido_clinico_diagnostico_desde_paciente_ambulatorio(self):
+        self.paciente.antecedentes_personales = "HTA + DBT2"
+        self.paciente.save(update_fields=["antecedentes_personales"])
+        ped = construir_pedido_clinico(self.sol)
+        self.assertEqual(ped.datos.diagnostico, "HTA + DBT2")
+
+    def test_pedido_clinico_diagnostico_desde_internacion(self):
+        from datetime import timedelta
+
+        from catalogos.models import DiagnosticoCIE10
+        from django.utils import timezone
+        from internacion.models import Cama, Internacion, Sector
+
+        suf = uuid.uuid4().hex[:6]
+        sector = Sector.objects.create(nombre=f"UCE {suf}", activo=True)
+        cama = Cama.objects.create(
+            nombre=f"C-{suf}", sector=sector, estado="DISPONIBLE", activo=True
+        )
+        cie = DiagnosticoCIE10.objects.create(
+            codigo=f"I{suf[:3]}",
+            descripcion="Insuficiencia cardíaca",
+            categoria="Cardio",
+        )
+        internacion = Internacion.objects.create(
+            paciente=self.paciente,
+            cama=cama,
+            activo=True,
+            diagnostico_cie=cie,
+        )
+        Internacion.objects.filter(pk=internacion.pk).update(
+            fecha_ingreso=timezone.now() - timedelta(hours=2)
+        )
+        ped = construir_pedido_clinico(self.sol)
+        self.assertIn("Insuficiencia cardíaca", ped.datos.diagnostico)
+        self.assertIn(cie.codigo, ped.datos.diagnostico)
+
     def test_pedido_clinico_incluye_observaciones_y_pdf(self):
         self.sol.observaciones = "Ayuno 8 hs. Control post operatorio."
         self.sol.save(update_fields=["observaciones"])
         ped = construir_pedido_clinico(self.sol)
         self.assertIn("Ayuno 8 hs", ped.datos.observaciones)
-        self.assertTrue(ped.datos.fecha)
         self.assertIn("García", ped.datos.medico)
         pdf, n = generar_pedidos_papel_pdf_bytes(
             parsear_items(self._items(("LAB_CLINICO", self.sol.pk)))
         )
         self.assertEqual(n, 1)
         self.assertTrue(pdf.startswith(b"%PDF"))
+
+    def test_pedido_clinico_fecha_es_extraccion_no_pedido(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from laboratorio.muestra_estado import crear_muestra
+
+        pedido_dt = timezone.now() - timedelta(days=3)
+        extraccion_dt = timezone.now() - timedelta(hours=5)
+        SolicitudExamen.objects.filter(pk=self.sol.pk).update(fecha_solicitud=pedido_dt)
+        self.sol.refresh_from_db()
+        tm = self.glu.tipo_muestra_requerida
+        m = crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=None,
+            view="t",
+        )
+        type(m).objects.filter(pk=m.pk).update(fecha_toma=extraccion_dt)
+        ped = construir_pedido_clinico(self.sol)
+        self.assertEqual(
+            ped.datos.fecha,
+            timezone.localtime(extraccion_dt).strftime("%d/%m/%Y"),
+        )
+        self.assertNotEqual(
+            ped.datos.fecha,
+            timezone.localtime(pedido_dt).strftime("%d/%m/%Y"),
+        )
 
     def test_pedido_clinico_marca_cl_e_inr_con_sus_paneles(self):
         tm = self.glu.tipo_muestra_requerida

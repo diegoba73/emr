@@ -1,12 +1,9 @@
 /**
  * Cultivos de microbiología asociados a materiales de pedido.
- * Sangre no fuerza hemocultivo; orina/fecal/LCR/etc. sí se preseleccionan
- * cuando el material está en el pedido.
+ * Elegir un material NO auto-marca el cultivo: el operador lo pide a propósito
+ * (orina no fuerza urocultivo; sangre no fuerza hemocultivo; etc.).
  */
 import type { MaterialPedidoLims } from '../types/lims';
-
-/** No auto-marcar cultivo al elegir el material (el operador lo pide a propósito). */
-export const MATERIALES_SIN_AUTOPRESELECT_MICRO = new Set(['SANGRE']);
 
 export function cultivosCodigosDeMateriales(
   materiales: Pick<MaterialPedidoLims, 'codigo' | 'cultivo_micro_codigo'>[]
@@ -17,14 +14,11 @@ export function cultivosCodigosDeMateriales(
   return Array.from(new Set(codes));
 }
 
+/** Siempre vacío: no preseleccionar cultivos al agregar material. */
 export function cultivosCodigosAutoPreselect(
-  materiales: Pick<MaterialPedidoLims, 'codigo' | 'cultivo_micro_codigo'>[]
+  _materiales: Pick<MaterialPedidoLims, 'codigo' | 'cultivo_micro_codigo'>[]
 ): string[] {
-  const codes = materiales
-    .filter((m) => !MATERIALES_SIN_AUTOPRESELECT_MICRO.has((m.codigo || '').toUpperCase()))
-    .map((m) => (m.cultivo_micro_codigo || '').trim().toUpperCase())
-    .filter(Boolean);
-  return Array.from(new Set(codes));
+  return [];
 }
 
 export function muestraPreferidaPorCultivoDeMateriales(
@@ -44,8 +38,8 @@ export function muestraPreferidaPorCultivoDeMateriales(
 
 /**
  * Ajusta la lista de micro items al set de materiales:
- * - conserva cultivos que siguen permitidos (incl. hemocultivo si el operador lo marcó);
- * - agrega auto-preselección (orina → urocultivo, LCR → cultivo LCR, etc.);
+ * - conserva cultivos que el operador ya marcó y siguen permitidos;
+ * - no agrega cultivos solos (sin auto-preselect);
  * - quita cultivos de materiales que ya no están en el pedido.
  */
 export function syncMicroItemsConMateriales<T extends { cultivo_codigo: string }>(
@@ -71,7 +65,6 @@ export function syncMicroItemsConMateriales<T extends { cultivo_codigo: string }
     have.add(up);
   }
   if (!added.length && kept.length === prev.length) {
-    // Misma selección (mismo orden no garantizado): si allow filtró igual, devolver prev.
     const prevCodes = prev.map((i) => (i.cultivo_codigo || '').toUpperCase()).sort().join('|');
     const nextCodes = kept.map((i) => (i.cultivo_codigo || '').toUpperCase()).sort().join('|');
     if (prevCodes === nextCodes) return prev;

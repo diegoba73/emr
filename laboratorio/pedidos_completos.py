@@ -171,7 +171,12 @@ def _crear_solicitud_material(
         )
 
     try:
-        assert_puede_agregar_ensayos(None, paciente.pk, tipos)
+        assert_puede_agregar_ensayos(
+            None,
+            paciente.pk,
+            tipos,
+            origen_solicitud=origen_solicitud or "",
+        )
     except RestriccionFrecuenciaError as exc:
         raise ValidationError(str(exc)) from exc
 

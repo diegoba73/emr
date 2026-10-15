@@ -149,10 +149,23 @@ export function calcAbsolutoFormula(pct: number, leucos: number): number | null 
   return Math.round(pct * leucos / 100);
 }
 
+/** Recuento absoluto de fórmula leucocitaria (junto al %): p. ej. «abs. 4.185/mm³». */
 export function formatAbsolutoMm3(n: number): string {
-  return Math.trunc(n)
+  const num = Math.trunc(n)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `abs. ${num}/mm³`;
+}
+
+/**
+ * Valor de fórmula para informe/vista clínica: «45%  ·  abs. 4.185/mm³».
+ * El % va pegado al porcentaje cargado, no al absoluto.
+ */
+export function formatValorFormulaLeucoConAbsoluto(pctTexto: string, abs: number): string {
+  const base = (pctTexto || '').trim();
+  if (!base) return formatAbsolutoMm3(abs);
+  const conPct = /%\s*$/.test(base) ? base.replace(/\s*%\s*$/, '%') : `${base}%`;
+  return `${conPct}  ·  ${formatAbsolutoMm3(abs)}`;
 }
 
 export type DerivadoValor = { numerico: number | null; informe: string };

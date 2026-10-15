@@ -785,12 +785,16 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         medico = getattr(obj, 'medico_interno', None)
         if not medico:
             return None
+        if callable(getattr(medico, 'email_display', None)):
+            return medico.email_display()
         return (getattr(medico, 'email', None) or '').strip() or None
 
     def get_medico_telefono(self, obj):
         medico = getattr(obj, 'medico_interno', None)
         if not medico:
             return None
+        if callable(getattr(medico, 'telefono_display', None)):
+            return medico.telefono_display()
         return (getattr(medico, 'telefono', None) or '').strip() or None
 
     def get_tipos_examen_nombres(self, obj):
@@ -1470,7 +1474,12 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             )
 
         try:
-            assert_puede_agregar_ensayos(user, paciente.pk, tipos_resueltos)
+            assert_puede_agregar_ensayos(
+                user,
+                paciente.pk,
+                tipos_resueltos,
+                origen_solicitud=validated_data.get("origen_solicitud"),
+            )
         except RestriccionFrecuenciaError as exc:
             raise serializers.ValidationError(str(exc)) from exc
 

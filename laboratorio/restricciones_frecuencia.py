@@ -1,4 +1,8 @@
-"""Restricciones de frecuencia / cobertura de ensayos (obra social)."""
+"""Restricciones de frecuencia / cobertura de ensayos (obra social).
+
+Bloqueo duro al pedir: solo internación y guardia.
+Ambulatorio / externo: se puede pedir; al imprimir etiquetas el lab revisa alertas.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +25,17 @@ CODIGOS_UNA_VEZ_ANIO = frozenset({CODIGO_PSA, CODIGO_VITD})
 CODIGOS_RESTRINGIDOS = frozenset(
     {CODIGO_PROBNP, CODIGO_PSA, CODIGO_VITD, *CODIGOS_TIROIDES}
 )
+
+
+def origen_exige_bloqueo_frecuencia(origen: str | None) -> bool:
+    """
+    True = bloquear al crear/agregar (internación, guardia, origen vacío/desconocido).
+    False = ambulatorio / externo: pedir libre; revisión al imprimir etiquetas.
+    """
+    o = (origen or "").strip().upper()
+    if o.startswith("AMBULATORIO") or o.startswith("EXTERNO"):
+        return False
+    return True
 
 VENTANA_DIAS_PROBNP = 31
 MIN_DIAS_ENTRE_TIROIDES = 60  # 2 meses
@@ -239,12 +254,15 @@ def assert_puede_agregar_ensayos(
     tipo_examen_ids: Iterable[int],
     *,
     exclude_solicitud_id: int | None = None,
+    origen_solicitud: str | None = None,
 ) -> None:
     """
-    Bloquea ensayos restringidos salvo admin / laboratorio / bioquímico.
-    Evalúa T4/SEROS, PROBNP, PSA/VITD y tiroides (por analito).
+    Bloquea ensayos restringidos en internación/guardia (salvo lab/bio/admin).
+    Ambulatorio/externo: no bloquea al pedir (revisión al imprimir etiquetas).
     """
     if usuario_exento_restricciones_ensayos(user):
+        return
+    if not origen_exige_bloqueo_frecuencia(origen_solicitud):
         return
     codigos = _codigos_de_tipos(tipo_examen_ids)
     if not codigos:
@@ -275,19 +293,28 @@ def assert_puede_agregar_probnp(
     tipo_examen_ids: Iterable[int],
     *,
     exclude_solicitud_id: int | None = None,
+    origen_solicitud: str | None = None,
 ) -> None:
     assert_puede_agregar_ensayos(
         user,
         paciente_id,
         tipo_examen_ids,
         exclude_solicitud_id=exclude_solicitud_id,
+        origen_solicitud=origen_solicitud,
     )
 
 
-def restricciones_ensayos_para(user: Any, paciente_id: int) -> dict[str, dict[str, Any]]:
-    """Payload UX: mapa código → {bloqueado, mensaje}."""
+def restricciones_ensayos_para(
+    user: Any,
+    paciente_id: int,
+    *,
+    origen_solicitud: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Payload UX: mapa código → {bloqueado, mensaje}. Ambulatorio → sin bloqueo."""
     out: dict[str, dict[str, Any]] = {}
-    if usuario_exento_restricciones_ensayos(user):
+    if usuario_exento_restricciones_ensayos(user) or not origen_exige_bloqueo_frecuencia(
+        origen_solicitud
+    ):
         for codigo in sorted(CODIGOS_RESTRINGIDOS):
             out[codigo] = {"bloqueado": False, "mensaje": None}
         return out
@@ -299,3 +326,51 @@ def restricciones_ensayos_para(user: Any, paciente_id: int) -> dict[str, dict[st
             "mensaje": msg,
         }
     return out
+
+
+def alertas_frecuencia_para_solicitud(solicitud) -> list[dict[str, Any]]:
+    """
+    Alertas de frecuencia para ensayos ya cargados en la orden.
+    Pensado para la puerta de impresión de etiquetas (ambulatorio).
+    No depende del rol: lab/bioquímico decide si dejar o quitar.
+    """
+    paciente_id = getattr(solicitud, "paciente_id", None)
+    if not paciente_id:
+        return []
+    exclude_id = getattr(solicitud, "pk", None)
+
+    # codigo → (tipo_examen_id, nombre) desde la orden (no catálogo global).
+    por_codigo: dict[str, tuple[int | None, str]] = {}
+    for tid, codigo, nombre in solicitud.tipos_examen.values_list(
+        "id", "codigo", "nombre"
+    ):
+        c = (codigo or "").strip().upper()
+        if not c:
+            continue
+        por_codigo[c] = (tid, (nombre or c).strip())
+    if hasattr(solicitud, "resultados"):
+        for tid, codigo, nombre in solicitud.resultados.values_list(
+            "tipo_examen_id", "tipo_examen__codigo", "tipo_examen__nombre"
+        ):
+            c = (codigo or "").strip().upper()
+            if not c or c in por_codigo:
+                continue
+            por_codigo[c] = (tid, (nombre or c).strip())
+
+    alertas: list[dict[str, Any]] = []
+    for codigo in sorted(set(por_codigo) & CODIGOS_RESTRINGIDOS):
+        msg = _mensaje_bloqueo_codigo(
+            codigo, paciente_id, exclude_solicitud_id=exclude_id
+        )
+        if not msg:
+            continue
+        tipo_id, nombre = por_codigo[codigo]
+        alertas.append(
+            {
+                "codigo": codigo,
+                "nombre": nombre or _NOMBRES.get(codigo, codigo),
+                "mensaje": msg,
+                "tipo_examen_id": tipo_id,
+            }
+        )
+    return alertas

@@ -33,6 +33,8 @@ INFORME_LAB_CONFIG = {
         },
     ],
     "logo": "icpl_logo.png",
+    # Segundo logo institucional (derecha), igual que el pedido papel.
+    "logo_cehta": "cehta_logo.png",
     # Métodos analíticos por código de examen (fallback si el modelo no tiene metodo).
     "metodos_por_codigo": {
         "GLU": "Enzimático colorimétrico",
