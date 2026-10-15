@@ -32,8 +32,8 @@ import { useThemeMode } from '../contexts/ThemeModeContext';
 import ThemeModeToggle from '../components/ThemeModeToggle';
 import { authPageGradient } from '../theme/buildAppTheme';
 import { consumeDemoPrefillUsername } from '../demo/demoStorage';
-// QR embebido en el bundle (/static/media/…) — no depende de /qr-*.png en nginx (evita 403).
-import qrSynesisMovilPng from '../assets/qr-synesis-movil.png';
+// Data URI inline: no pide /qr-*.png ni /static/media (evita 403/caché de nginx).
+import qrSynesisMovilPng from '../assets/qrSynesisMovilDataUri';
 
 /** Descarga pública del APK (Android). Sobrescribible por env en builds. */
 const MOVIL_APK_URL =

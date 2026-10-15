@@ -27,3 +27,5 @@ for p in paths:
     p.chmod(0o644)  # nginx del contenedor debe poder leerlo (evitar 403)
     print(f"wrote {p} mode={oct(p.stat().st_mode & 0o777)} -> {url}")
 PY
+# Mantener el data URI del Login alineado con el PNG.
+python3 "$ROOT/scripts/embed_movil_qr_data_uri.py"
