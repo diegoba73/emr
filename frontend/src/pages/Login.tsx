@@ -32,6 +32,8 @@ import { useThemeMode } from '../contexts/ThemeModeContext';
 import ThemeModeToggle from '../components/ThemeModeToggle';
 import { authPageGradient } from '../theme/buildAppTheme';
 import { consumeDemoPrefillUsername } from '../demo/demoStorage';
+// QR embebido en el bundle (/static/media/…) — no depende de /qr-*.png en nginx (evita 403).
+import qrSynesisMovilPng from '../assets/qr-synesis-movil.png';
 
 /** Descarga pública del APK (Android). Sobrescribible por env en builds. */
 const MOVIL_APK_URL =
@@ -257,7 +259,7 @@ const Login: React.FC = () => {
                 >
                   <Box
                     component="img"
-                    src={`${process.env.PUBLIC_URL || ''}/qr-synesis-movil.png`}
+                    src={qrSynesisMovilPng}
                     alt="Código QR para instalar SYNESIS móvil"
                     sx={{ width: 120, height: 120, display: 'block' }}
                   />

@@ -1,0 +1,21 @@
+# Ejemplo de servicio nginx clínico (fragmento).
+# En el host, el compose real debe incluir el volumen del APK o el QR
+# descarga HTML del login tras cada recreate.
+#
+# Pegá/ajustá en docker-compose.server.yml del servidor:
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/frontend-nginx.Dockerfile
+      args:
+        REACT_APP_API_URL: /api
+    container_name: emr_nginx_server
+    ports:
+      - "80:80"
+    volumes:
+      # Obligatorio: APK fuera del contenedor (sobrevive redeploy)
+      - /srv/emr/public:/srv/emr/public:ro
+    depends_on:
+      - backend

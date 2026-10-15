@@ -17,6 +17,7 @@ url = "$URL"
 root = Path(r"$ROOT")
 paths = [
     root / "frontend/public/qr-synesis-movil.png",
+    root / "frontend/src/assets/qr-synesis-movil.png",  # importado por Login.tsx
     root / "mobile/assets/qr-instalacion-synesis-movil.png",
 ]
 for p in paths:

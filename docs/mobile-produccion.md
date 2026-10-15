@@ -54,10 +54,12 @@ Usar la clave de firma EAS existente. Descargar el APK del build (no emulador).
 | Qué | Valor |
 |-----|--------|
 | URL | `https://emr.icpueblodeluis.com.ar:8080/synesis-movil.apk` |
-| Login web | constante `MOVIL_APK_URL` + imagen `frontend/public/qr-synesis-movil.png` |
+| Login web | constante `MOVIL_APK_URL` + QR **embebido** (`frontend/src/assets/qr-synesis-movil.png` → bundle `/static/media/…`) |
 | QR imprimible | `mobile/assets/qr-instalacion-synesis-movil.png` |
+| Nginx prod | `deploy/frontend-nginx.Dockerfile` + `deploy/nginx/nginx.emr.conf` (location APK) en el repo |
 
 No regenerar el QR ni cambiar la URL al publicar una versión nueva de la app.
+El QR del login ya no depende de servir `/qr-synesis-movil.png` (ese path daba 403 tras redeploys).
 
 ### Por qué “se pierde” al regenerar
 
