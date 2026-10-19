@@ -29,6 +29,7 @@ import Recursos from './pages/Recursos';
 import DiagnosticosCIE10 from './pages/catalogos/DiagnosticosCIE10';
 import EstudiosDiagnostico from './pages/catalogos/EstudiosDiagnostico';
 import Procedimientos from './pages/catalogos/Procedimientos';
+import Cirugias from './pages/catalogos/Cirugias';
 import Medicamentos from './pages/catalogos/Medicamentos';
 import Especialidades from './pages/catalogos/Especialidades';
 import TiposDieta from './pages/catalogos/TiposDieta';
@@ -536,6 +537,20 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessCatalogosClinicos}
               >
                 <Procedimientos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/catalogos/cirugias"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                requiredRole={['ADMIN', 'MEDICO']}
+                canAccess={canAccessCatalogosClinicos}
+              >
+                <Cirugias />
               </ProtectedRoute>
             }
           />

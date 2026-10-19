@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db.models import Q
 from django.utils.dateparse import parse_datetime
 
 from auditoria.audit_service import log_update
@@ -224,12 +225,39 @@ def confirmar_turno(
     )
 
 
+def _turno_vinculado_modulo_estudios(turno: Turno) -> bool:
+    """True si el turno está ligado a Estudios y procedimientos.
+
+    Incluye: espejo actual, sesión vigente e historial de reprogramaciones
+    (turno_anterior / turno_nuevo). No impide consulta histórica (solo mutaciones
+    de cancelar/reprogramar por camino genérico).
+    """
+    try:
+        if getattr(turno, 'estudio_complementario', None) is not None:
+            return True
+    except ObjectDoesNotExist:
+        pass
+    from estudios.models import HistorialTurnoSesionActividad, SesionActividad
+    if SesionActividad.objects.filter(turno_id=turno.pk).exists():
+        return True
+    return HistorialTurnoSesionActividad.objects.filter(
+        Q(turno_anterior_id=turno.pk) | Q(turno_nuevo_id=turno.pk)
+    ).exists()
+
+
+_MSG_OPERAR_DESDE_ESTUDIOS = (
+    'Este turno pertenece a Estudios y procedimientos. '
+    'Cancelá o reprogramá desde ese módulo.'
+)
+
+
 def cancelar_turno(
     turno: Turno,
     *,
     actor,
     motivo: str,
     view_name: str = 'TurnoViewSet.cancelar',
+    desde_modulo_estudios: bool = False,
 ) -> TurnoEstadoOutcome:
     motivo_limpio = (motivo or '').strip()
     if not motivo_limpio:
@@ -250,6 +278,9 @@ def cancelar_turno(
         raise TurnoEstadoTransitionError(
             'No se puede cancelar un turno en estado REALIZADO.'
         )
+
+    if not desde_modulo_estudios and _turno_vinculado_modulo_estudios(turno):
+        raise TurnoEstadoTransitionError(_MSG_OPERAR_DESDE_ESTUDIOS)
 
     if estado_anterior not in (
         Turno.Estado.DISPONIBLE,
@@ -292,6 +323,7 @@ def reprogramar_turno(
     medico: Medico | None = None,
     recurso: Recurso | None = None,
     view_name: str = 'TurnoViewSet.reprogramar',
+    desde_modulo_estudios: bool = False,
 ) -> TurnoEstadoOutcome:
     motivo_limpio = (motivo or '').strip()
     if not motivo_limpio:
@@ -302,6 +334,8 @@ def reprogramar_turno(
         raise TurnoEstadoTransitionError(
             f'No se puede reprogramar un turno en estado {estado_anterior}.'
         )
+    if not desde_modulo_estudios and _turno_vinculado_modulo_estudios(turno):
+        raise TurnoEstadoTransitionError(_MSG_OPERAR_DESDE_ESTUDIOS)
     if estado_anterior not in (
         Turno.Estado.DISPONIBLE,
         Turno.Estado.RESERVADO,

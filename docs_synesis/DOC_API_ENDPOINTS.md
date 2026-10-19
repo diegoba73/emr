@@ -92,6 +92,9 @@ Registros `router.register` (recurso → ViewSet). Convención DRF:
 | `registros-quirurgicos` | `api.views.RegistroQuirurgicoViewSet` | PROD-4-A **CERRADO**: `consentimiento_informado` write-only; `consentimiento_informado_download_url`; `GET {id}/download-consentimiento-informado/` | — |
 | `estudios-diagnosticos` | `api.views.EstudioDiagnosticoViewSet` | — | — |
 | `procedimientos-catalogo` | `api.views.ProcedimientoCatalogoViewSet` | — | — |
+| `cirugia-especialidades` | `api.views.CirugiaEspecialidadViewSet` | Catálogo CIRUGIA; `?activo=`; write solo admin (`CirugiaCatalogoPermission`) | — |
+| `cirugia-procedimientos` | `api.views.CirugiaProcedimientoViewSet` | `?especialidad=&activo=`; write solo admin | — |
+| `cirugia-abordajes` | `api.views.CirugiaAbordajeViewSet` | `?procedimiento=&activo=`; write solo admin | — |
 | `documentos` | `api.views.DocumentoViewSet` | Documentos EMR (C6.2: sin URL `/media/`; `GET {id}/download/`) | — |
 
 **ViewSets definidos en `api/views.py` pero no registrados en `api/urls.py`:** p. ej. `SignosVitalesViewSet` — **sin ruta** en el router actual (no aparece `register` para signos).
@@ -116,29 +119,37 @@ Mismo `TipoAtencionViewSet`, `CentroFisicoViewSet`, más `ProcedimientoViewSet` 
 
 Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
-## Estudios complementarios (`/api/estudios-complementarios/`) — C6.4.1 [IMPLEMENTADO]
+## Estudios complementarios (`/api/estudios-complementarios/`) — C6.4 + Etapa A [IMPLEMENTADO]
+
+UI: «Estudios y procedimientos». SoT: `DOC_DISENO_ESTUDIOS_PROCEDIMIENTOS.md`, cierres `CIERRE_ETAPA_A0_A1`…`A6`. **No LIMS.**
 
 | Método | Ruta | Notas |
 |--------|------|-------|
-| GET/POST | `/` | List/create; filtro `paciente`, `estado`, `modalidad` |
-| GET/PATCH | `/{id}/` | **PATCH no modifica `estado`**; DELETE → **405** |
-| POST | `/{id}/marcar-realizado/` | SOLICITADO → REALIZADO |
-| POST | `/{id}/anular/` | body `motivo_anulacion` obligatorio |
-| POST | `/{id}/entregar/` | Requiere informe validado vigente |
+| GET/POST | `/` | List/create. Filtros: `paciente`/`paciente_id`, `estado`, `practica`, `search`, **`bandeja`** (A5; filtra **antes** de paginar). Alta: solo `ESTUDIO`; rechaza proc/cirugía/`permite_multi_sesion` |
+| GET | `/bandejas-resumen/` | A5: conteos por bandeja; mismos permisos + `search`/`practica`/`paciente`; **no** aplica `bandeja` |
+| GET/PATCH | `/{id}/` | **PATCH no modifica `estado`** ni campos A2 protegidos; DELETE → **405** |
+| POST | `/agendar-turno/` | Crea estudio mono o asigna a `estudio_id` (SOLICITADO sin turno); body opcional `sesion_id` (A4) |
+| POST | `/{id}/asignar-turno/` | Sala estudio; `sesion_id` opcional (mono = PK sesión `#1`); multi (fixture) lo exige |
+| POST | `/{id}/marcar-realizado/` | Circuito mono; multi → 400 sin escrituras |
+| POST | `/{id}/anular/` | body `motivo_anulacion`; multi → 400 sin escrituras |
+| POST | `/{id}/entregar/` | Requiere informe validado vigente; estudio `VALIDADO` |
+| POST | `/{id}/corregir-clasificacion-snapshot/` | A2b admin; motivo + snapshot compatible |
 | POST | `/{id}/agregar-archivo/` | body `archivo_medico_id` (mismo paciente) |
 | GET | `/{id}/archivos/` | Sin URL `/media/`; `download_url` protegido |
 | GET | `/{id}/archivos/{archivo_id}/download/` | Descarga vía `ArchivoMedico` |
 | GET/POST | `/{id}/informes/` | Informes versionados |
 | POST | `/{id}/informes/{informe_id}/emitir/` | Borrador → emitido; estudio → INFORMADO |
-| POST | `/{id}/informes/{informe_id}/validar/` | Solo admin/superuser |
+| POST | `/{id}/informes/{informe_id}/validar/` | Realizador o admin (módulo estudios) |
 | POST | `/{id}/informes/{informe_id}/rectificar/` | Nueva versión; motivo obligatorio |
-| GET | `/{id}/informes/{informe_id}/download-pdf/` | PDF del informe (C6.4.3); sin `/media/`; nombre seguro en `Content-Disposition` |
+| GET | `/{id}/informes/{informe_id}/download-pdf/` | PDF; sin `/media/` |
 
-Informes en listado: `tiene_pdf`, `download_pdf_url` (ruta protegida anterior).
+**Bandejas (`bandeja=`):** `pendiente_programar` \| `programados` \| `documentacion_pendiente` \| `pendiente_entrega` \| `finalizados` \| `anulados` \| `todos`. Criterios en `CIERRE_ETAPA_A5.md` / `estudios/bandejas.py`.
 
-No LIMS. No PACS/visor. Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
+**Deshabilitado aún:** altas proc/cirugía/multi; reprogramar/cancelar reserva de estudio (Etapa B); realización/informes por sesión.
 
-**Frontend (C6.4.2):** consumido desde `estudiosComplementariosApi.ts` — rutas listadas arriba; descarga `.../archivos/{archivo_estudio_id}/download/` con `responseType: blob`.
+**Frontend:** `estudiosComplementariosApi.ts`, listado con chips de bandeja.
+
+Ver `docs_synesis/reglas/documentos-e-imagenes.md`.
 
 ## Registros procedimiento / quirúrgico — PROD-4-A + PROD-4-B [CERRADO — jun 2026]
 

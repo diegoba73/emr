@@ -347,10 +347,18 @@ export interface EstudioDiagnostico extends BaseModel {
   activo: boolean;
 }
 
+/** Clasificación del catálogo de procedimientos (Etapa A1). */
+export type ClasificacionQuirurgicaProcedimiento =
+  | 'SIN_ASIGNAR'
+  | 'NO_QUIRURGICO'
+  | 'QUIRURGICO';
+
 export interface ProcedimientoCatalogo extends BaseModel {
   nombre: string;
   descripcion?: string;
   activo: boolean;
+  /** Históricos: SIN_ASIGNAR. Nuevas solicitudes proc/cirugía exigirán valor explícito (A2+). */
+  clasificacion_quirurgica?: ClasificacionQuirurgicaProcedimiento;
 }
 
 export type TipoDocumento = 'INFORME' | 'ESTUDIO' | 'ANALISIS' | 'DIAGNOSTICO' | 'IMAGEN' | 'CONSENTIMIENTO' | 'OTRO';
@@ -421,6 +429,7 @@ export interface RegistroQuirurgicoRecord extends BaseModel {
   diagnostico_preoperatorio: string;
   diagnostico_postoperatorio?: string | null;
   protocolo_quirurgico: string;
+  protocolo_protegido_por_modulo?: boolean;
   hallazgos_operatorios?: string | null;
   complicaciones?: string | null;
   recuento_instrumental_ok: boolean;

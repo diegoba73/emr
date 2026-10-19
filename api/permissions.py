@@ -1,6 +1,7 @@
 from rest_framework import permissions
 
 from usuarios.roles import (
+    ROLES_ESTUDIO_COMPLEMENTARIO,
     ROLES_HC_MEDICO,
     ROLES_INTERNACION,
     ROLES_INTERNACION_ALTA,
@@ -528,6 +529,51 @@ class IsMedicoOrAdmin(permissions.BasePermission):
         # Verificar si el usuario está en el grupo Médicos o es médico
         return (request.user.groups.filter(name='Médicos').exists() or 
                 get_normalized_role(request.user) in ('medico', 'admin'))
+
+
+class ProcedimientoCatalogoPermission(permissions.BasePermission):
+    """Lectura para operadores del módulo Estudios; escritura médico/admin."""
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        rol = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            if rol == 'admin':
+                return True
+            return rol in (
+                'medico',
+                'secretaria',
+                'enfermeria',
+                *ROLES_ESTUDIO_COMPLEMENTARIO,
+            ) or request.user.groups.filter(name='Médicos').exists()
+        return (
+            request.user.groups.filter(name='Médicos').exists()
+            or rol in ('medico', 'admin')
+        )
+
+
+class CirugiaCatalogoPermission(permissions.BasePermission):
+    """Lectura autenticada (no LIMS); escritura solo admin/superuser."""
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        rol = get_normalized_role(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            if request.user.is_superuser or rol == 'admin':
+                return True
+            return rol in (
+                'medico',
+                'secretaria',
+                'enfermeria',
+                *ROLES_ESTUDIO_COMPLEMENTARIO,
+            )
+        if request.user.is_superuser:
+            return True
+        return rol == 'admin'
 
 class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
     """

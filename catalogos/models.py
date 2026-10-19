@@ -237,11 +237,25 @@ class EstudioDiagnostico(models.Model):
 
 
 class ProcedimientoCatalogo(models.Model):
-    """Listado simplificado de procedimientos quirúrgicos/intervencionistas."""
+    """Listado simplificado de procedimientos (no quirúrgicos / legacy)."""
+
+    class ClasificacionQuirurgica(models.TextChoices):
+        SIN_ASIGNAR = "SIN_ASIGNAR", "Sin asignar"
+        NO_QUIRURGICO = "NO_QUIRURGICO", "No quirúrgico"
+        QUIRURGICO = "QUIRURGICO", "Quirúrgico"
 
     nombre = models.CharField(max_length=255, unique=True, verbose_name="Nombre del Procedimiento")
     descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción")
     activo = models.BooleanField(default=True, verbose_name="Activo")
+    # Históricos / ítems sin revisión: SIN_ASIGNAR. Altas nuevas de solicitudes
+    # PROCEDIMIENTO/CIRUGIA (Etapa A2+) exigirán clasificación explícita.
+    clasificacion_quirurgica = models.CharField(
+        max_length=20,
+        choices=ClasificacionQuirurgica.choices,
+        default=ClasificacionQuirurgica.SIN_ASIGNAR,
+        db_index=True,
+        verbose_name="Clasificación quirúrgica",
+    )
 
     class Meta:
         verbose_name = "Procedimiento"
@@ -250,3 +264,71 @@ class ProcedimientoCatalogo(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+class CirugiaEspecialidad(models.Model):
+    """Especialidad del catálogo quirúrgico (CIRUGIA). Independiente de medicos.Especialidad."""
+
+    nombre = models.CharField(max_length=200, unique=True)
+    activo = models.BooleanField(default=True, db_index=True)
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Especialidad quirúrgica"
+        verbose_name_plural = "Especialidades quirúrgicas"
+        ordering = ['orden', 'nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+class CirugiaProcedimiento(models.Model):
+    """Procedimiento quirúrgico bajo una especialidad del catálogo CIRUGIA."""
+
+    especialidad = models.ForeignKey(
+        CirugiaEspecialidad,
+        on_delete=models.PROTECT,
+        related_name='procedimientos',
+    )
+    nombre = models.CharField(max_length=255)
+    activo = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Procedimiento quirúrgico"
+        verbose_name_plural = "Procedimientos quirúrgicos"
+        ordering = ['nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['especialidad', 'nombre'],
+                name='uniq_cirugia_proc_esp_nombre',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.especialidad.nombre} — {self.nombre}'
+
+
+class CirugiaAbordaje(models.Model):
+    """Abordaje opcional de un procedimiento quirúrgico (p. ej. Laparoscópica)."""
+
+    procedimiento = models.ForeignKey(
+        CirugiaProcedimiento,
+        on_delete=models.CASCADE,
+        related_name='abordajes',
+    )
+    nombre = models.CharField(max_length=200)
+    activo = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Abordaje quirúrgico"
+        verbose_name_plural = "Abordajes quirúrgicos"
+        ordering = ['nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['procedimiento', 'nombre'],
+                name='uniq_cirugia_abr_proc_nombre',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.procedimiento.nombre} — {self.nombre}'

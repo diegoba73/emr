@@ -83,3 +83,37 @@ class TestCatalogosModels:
         ProcedimientoCatalogo.objects.create(nombre=nombre, activo=True)
         with pytest.raises(IntegrityError):
             ProcedimientoCatalogo.objects.create(nombre=nombre, activo=True)
+
+    def test_procedimiento_catalogo_clasificacion_default_sin_asignar(self):
+        suffix = uuid.uuid4().hex[:10]
+        proc = ProcedimientoCatalogo.objects.create(
+            nombre=f"Proc clasif default {suffix}",
+            activo=True,
+        )
+        assert (
+            proc.clasificacion_quirurgica
+            == ProcedimientoCatalogo.ClasificacionQuirurgica.SIN_ASIGNAR
+        )
+
+    def test_procedimiento_catalogo_clasificacion_explicita(self):
+        suffix = uuid.uuid4().hex[:10]
+        proc = ProcedimientoCatalogo.objects.create(
+            nombre=f"Proc no quir {suffix}",
+            activo=True,
+            clasificacion_quirurgica=(
+                ProcedimientoCatalogo.ClasificacionQuirurgica.NO_QUIRURGICO
+            ),
+        )
+        assert (
+            proc.clasificacion_quirurgica
+            == ProcedimientoCatalogo.ClasificacionQuirurgica.NO_QUIRURGICO
+        )
+        proc.clasificacion_quirurgica = (
+            ProcedimientoCatalogo.ClasificacionQuirurgica.QUIRURGICO
+        )
+        proc.save(update_fields=["clasificacion_quirurgica"])
+        proc.refresh_from_db()
+        assert (
+            proc.clasificacion_quirurgica
+            == ProcedimientoCatalogo.ClasificacionQuirurgica.QUIRURGICO
+        )

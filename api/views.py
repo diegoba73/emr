@@ -10,6 +10,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .permissions import (
     IsSecretariaOrAdmin,
     IsMedicoOrAdmin,
+    ProcedimientoCatalogoPermission,
+    CirugiaCatalogoPermission,
     CanManageAgendaMedica,
     IsPacienteOrStaff,
     CanManageTurnos,
@@ -49,7 +51,8 @@ from .serializers import (
     ConsultaAmbulatoriaSerializer, RegistroProcedimientoSerializer,
     RegistroQuirurgicoSerializer, EstudioDiagnosticoSerializer,
     ProcedimientoCatalogoSerializer, DocumentoSerializer,
-    SignosVitalesSerializer, AtencionUpdateSerializer
+    SignosVitalesSerializer, AtencionUpdateSerializer,
+    CirugiaEspecialidadSerializer, CirugiaProcedimientoSerializer, CirugiaAbordajeSerializer,
 )
 
 from pacientes.models import Paciente
@@ -59,7 +62,13 @@ from historias_clinicas.models import Consulta, Diagnostico, Prescripcion, Histo
 from catalogos.models import Medicamento, DiagnosticoCIE10
 from turnos.models import Turno, Recurso, Atencion, ConsultaAmbulatoria, RegistroProcedimiento, RegistroQuirurgico
 from turnos.services import AtencionService, BusinessLogicError, resolve_tipo_intervencion_from_recurso
-from catalogos.models import EstudioDiagnostico, ProcedimientoCatalogo
+from catalogos.models import (
+    CirugiaAbordaje,
+    CirugiaEspecialidad,
+    CirugiaProcedimiento,
+    EstudioDiagnostico,
+    ProcedimientoCatalogo,
+)
 from emr.models import Documento, SignosVitales
 from auditoria.audit_service import log_event
 from auditoria.snapshot import safe_model_snapshot
@@ -3117,10 +3126,10 @@ class EstudioDiagnosticoViewSet(viewsets.ModelViewSet):
 
 
 class ProcedimientoCatalogoViewSet(viewsets.ModelViewSet):
-    """ViewSet para catálogo de procedimientos - médicos y admin pueden editar"""
+    """ViewSet para catálogo de procedimientos - lectura operadores; escritura médico/admin"""
     queryset = ProcedimientoCatalogo.objects.all()
     serializer_class = ProcedimientoCatalogoSerializer
-    permission_classes = [IsMedicoOrAdmin]  # Médicos y admin pueden editar
+    permission_classes = [ProcedimientoCatalogoPermission]
     pagination_class = None  # Deshabilitar paginación - SIEMPRE cargar TODOS los procedimientos
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nombre', 'descripcion']
@@ -3128,8 +3137,75 @@ class ProcedimientoCatalogoViewSet(viewsets.ModelViewSet):
     ordering = ['nombre']
     
     def get_queryset(self):
-        """Filtrar por activo si se solicita, o mostrar todos para admin"""
+        """Filtrar por activo / clasificacion_quirurgica si se solicita"""
         queryset = super().get_queryset()
         if self.request.query_params.get('activo') == 'true':
-            return queryset.filter(activo=True)
+            queryset = queryset.filter(activo=True)
+        clasif = self.request.query_params.get('clasificacion_quirurgica')
+        if clasif:
+            queryset = queryset.filter(clasificacion_quirurgica=clasif)
         return queryset
+
+    def filter_queryset(self, queryset):
+        qs = super().filter_queryset(queryset)
+        # Catálogo grande: con search tipado devolver como máximo 50.
+        if self.request.query_params.get('search'):
+            return qs[:50]
+        return qs
+
+
+class CirugiaEspecialidadViewSet(viewsets.ModelViewSet):
+    queryset = CirugiaEspecialidad.objects.all()
+    serializer_class = CirugiaEspecialidadSerializer
+    permission_classes = [CirugiaCatalogoPermission]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nombre']
+    ordering_fields = ['orden', 'nombre']
+    ordering = ['orden', 'nombre']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get('activo') == 'true':
+            return qs.filter(activo=True)
+        return qs
+
+
+class CirugiaProcedimientoViewSet(viewsets.ModelViewSet):
+    queryset = CirugiaProcedimiento.objects.select_related('especialidad').all()
+    serializer_class = CirugiaProcedimientoSerializer
+    permission_classes = [CirugiaCatalogoPermission]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nombre', 'especialidad__nombre']
+    ordering_fields = ['nombre']
+    ordering = ['nombre']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get('activo') == 'true':
+            qs = qs.filter(activo=True)
+        esp = self.request.query_params.get('especialidad')
+        if esp:
+            qs = qs.filter(especialidad_id=esp)
+        return qs
+
+
+class CirugiaAbordajeViewSet(viewsets.ModelViewSet):
+    queryset = CirugiaAbordaje.objects.select_related('procedimiento').all()
+    serializer_class = CirugiaAbordajeSerializer
+    permission_classes = [CirugiaCatalogoPermission]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nombre', 'procedimiento__nombre']
+    ordering_fields = ['nombre']
+    ordering = ['nombre']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get('activo') == 'true':
+            qs = qs.filter(activo=True)
+        proc = self.request.query_params.get('procedimiento')
+        if proc:
+            qs = qs.filter(procedimiento_id=proc)
+        return qs

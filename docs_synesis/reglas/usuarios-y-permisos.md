@@ -19,7 +19,7 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 |-----|-------------------|
 | `admin` | Administración, validación LIMS (`validar`), override IQC de cierre |
 | `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
-| `secretaria` | Agenda, pacientes, gestión turnos; **Guardia** (iniciar/continuar/cerrar, pedidos lab/micro/estudios como médico); lectura de estudios, archivos y resultados LIMS; envío de informe en `FINALIZADO` |
+| `secretaria` | Agenda, pacientes, gestión turnos; **Guardia** (iniciar/continuar/cerrar, pedidos lab/micro/estudios como médico); **operación completa** del módulo Estudios y procedimientos (alta/edición/realización/informes/emitir/validar/rectificar/cerrar/entregar); lectura LIMS; envío de informe en `FINALIZADO` |
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
 | `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO` |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
@@ -58,6 +58,9 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
 | Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaria, admin/staff; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
+| Catálogo quirúrgico jerárquico (`cirugia-especialidades` / `-procedimientos` / `-abordajes`) | Lectura: operadores del módulo Estudios (médico, secretaría, admin, …). **Escritura solo admin/superuser** (`CirugiaCatalogoPermission`). UI admin: `/catalogos/cirugias`. No LIMS. |
+| Catálogo procedimientos plano (`procedimientos-catalogo`) | Lectura: operadores del módulo (incl. secretaría) vía `ProcedimientoCatalogoPermission`. Escritura: médico/admin. Necesario para alta de PROCEDIMIENTO. |
+| Alta estudios/procedimientos/cirugías | `medico_solicitante` obligatorio (profesional o cirujano). CIRUGIA también exige `anestesista_previsto`. |
 
 Detalle: `LimsSolicitudExamenPermission`, `DOC_FLUJOS_LIMS.md`.
 
@@ -217,10 +220,12 @@ paciente y consultar estudios complementarios y análisis. Secretaría también
 lee los valores LIMS (incl. `INFORMADO_PARCIAL` / «Informe parcial» en pantalla y
 PDF/envío parcial o final según rol) y el texto de informes microbiológicos
 (preliminar emitido o final validado, con PDF correspondiente).
-La gestión de agenda y entrega de estudios de secretaría permanece habilitada.
+La gestión de agenda y la **operación completa** del módulo Estudios y procedimientos
+por secretaría permanece habilitada (delegación habitual de los profesionales).
 El rol admin tiene acceso administrativo y clínico global, sin exigir vínculos;
 las validaciones de integridad y los mecanismos de rectificación siguen aplicando.
-La lectura no convierte a secretaría/enfermería en autores o validadores de informes.
+Enfermería sigue en lectura (estudios/archivos/LIMS) sin escritura del módulo EMR de estudios.
+La lectura LIMS no convierte a secretaría/enfermería en validadores de órdenes de laboratorio.
 
 Menú principal: Inicio, Pacientes, Turnos, Guardia, Internación, Laboratorio,
 Atenciones Clínicas, Estudios complementarios, Archivos. Cada rol ve sus opciones

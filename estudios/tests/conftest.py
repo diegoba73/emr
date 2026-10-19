@@ -181,14 +181,17 @@ def estudio_solicitado(paciente, tipo_estudio, medico, admin_user):
     )
 
 
-def _payload_crear(paciente, tipo_estudio):
-    return {
+def _payload_crear(paciente, tipo_estudio, medico=None):
+    data = {
         'paciente_id': paciente.id,
         'tipo_estudio': tipo_estudio.id,
         'practica': tipo_estudio.practica,
         'origen': 'INTERNO',
         'descripcion_clinica': 'Control',
     }
+    if medico is not None:
+        data['medico_solicitante'] = medico.id
+    return data
 
 
 @pytest.fixture(autouse=True)

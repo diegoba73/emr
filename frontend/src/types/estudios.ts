@@ -9,6 +9,11 @@ export type EstudioEstado =
   | 'ENTREGADO'
   | 'ANULADO';
 
+/** A2/C/D — ESTUDIO, PROCEDIMIENTO y CIRUGIA habilitados; multi off. */
+export type TipoActividadEstudio = 'ESTUDIO' | 'PROCEDIMIENTO' | 'CIRUGIA';
+
+export type ClasificacionQuirurgicaSnapshot = 'NO_QUIRURGICO' | 'QUIRURGICO';
+
 export type InformeEstado = 'BORRADOR' | 'EMITIDO' | 'VALIDADO' | 'ANULADO';
 
 /** Códigos legacy (IMAGEN_*) o slugs CEHTA (p.ej. ECOGRAFIA_RENAL). */
@@ -34,11 +39,33 @@ export interface EstudioComplementario {
   tipo_estudio?: number | null;
   tipo_estudio_nombre?: string | null;
   estudio_diagnostico?: number | null;
-  practica: EstudioPractica;
+  practica?: EstudioPractica | null;
+  /** A2/C/D: ESTUDIO | PROCEDIMIENTO | CIRUGIA. */
+  tipo_actividad?: TipoActividadEstudio;
+  procedimiento_catalogo?: number | null;
+  procedimiento_catalogo_nombre?: string | null;
+  cirugia_especialidad?: number | null;
+  cirugia_especialidad_nombre?: string | null;
+  cirugia_especialidad_snapshot?: string | null;
+  cirugia_procedimiento?: number | null;
+  cirugia_procedimiento_nombre?: string | null;
+  cirugia_procedimiento_snapshot?: string | null;
+  cirugia_abordaje?: number | null;
+  cirugia_abordaje_nombre?: string | null;
+  cirugia_abordaje_snapshot?: string | null;
+  clasificacion_quirurgica_snapshot?: ClasificacionQuirurgicaSnapshot | null;
+  /** A2: siempre false hasta A3/A4. */
+  permite_multi_sesion?: boolean;
   estado: EstudioEstado;
   medico_solicitante?: number | null;
+  medico_solicitante_nombre?: string | null;
+  anestesista_previsto?: number | null;
+  anestesista_previsto_nombre?: string | null;
   realizado_por?: number | null;
   realizado_por_nombre?: string | null;
+  cerrado_por?: number | null;
+  fecha_cierre?: string | null;
+  protocolo_cierre_informe?: number | null;
   atencion?: number | null;
   consulta_hc?: number | null;
   solicitud_emr?: number | null;
@@ -54,6 +81,7 @@ export interface EstudioComplementario {
   turno_id?: number | null;
   turno_fecha_hora_inicio?: string | null;
   turno_fecha_hora_fin?: string | null;
+  turno_recurso_id?: number | null;
   turno_recurso_nombre?: string | null;
   turno_estado?: string | null;
   created_at?: string;
@@ -94,18 +122,55 @@ export interface InformeEstudioComplementario {
 /** POST create — incluye paciente; sin estado (lo fija el backend). */
 export interface CreateEstudioComplementarioPayload {
   paciente_id: number;
-  practica: EstudioPractica;
+  practica?: EstudioPractica;
   tipo_estudio?: number | null;
   estudio_diagnostico?: number | null;
+  tipo_actividad?: TipoActividadEstudio;
+  procedimiento_catalogo?: number | null;
+  cirugia_especialidad?: number | null;
+  cirugia_procedimiento?: number | null;
+  cirugia_abordaje?: number | null;
+  medico_solicitante?: number | null;
+  anestesista_previsto?: number | null;
   origen?: string;
   descripcion_clinica?: string;
   fecha_solicitud?: string | null;
   fecha_realizacion?: string | null;
   centro_realizador?: string;
-  medico_solicitante?: number | null;
   atencion?: number | null;
   consulta_hc?: number | null;
   solicitud_emr?: number | null;
+}
+
+export interface CirugiaEspecialidadCatalogo {
+  id: number;
+  nombre: string;
+  activo?: boolean;
+  orden?: number;
+}
+
+export interface CirugiaProcedimientoCatalogo {
+  id: number;
+  especialidad: number;
+  especialidad_nombre?: string;
+  nombre: string;
+  activo?: boolean;
+}
+
+export interface CirugiaAbordajeCatalogo {
+  id: number;
+  procedimiento: number;
+  procedimiento_nombre?: string;
+  nombre: string;
+  activo?: boolean;
+}
+
+export interface MarcarRealizadoEstudioPayload {
+  profesional_id?: number | null;
+  anestesista_id?: number | null;
+  diagnostico_preoperatorio?: string | null;
+  recurso_id?: number | null;
+  fecha_realizacion?: string | null;
 }
 
 /**
@@ -147,6 +212,14 @@ export interface AsignarTurnoEstudioPayload {
   recurso_id: number;
   fecha_hora_inicio: string;
   fecha_hora_fin: string;
+  medico_id?: number | null;
+}
+
+export interface ReprogramarTurnoEstudioPayload {
+  recurso_id: number;
+  fecha_hora_inicio: string;
+  fecha_hora_fin: string;
+  motivo: string;
   medico_id?: number | null;
 }
 

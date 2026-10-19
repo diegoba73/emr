@@ -714,6 +714,81 @@ export const deleteProcedimientoCatalogo = async (id: number): Promise<void> => 
   }
 };
 
+const unwrapCatalogList = <T,>(data: any): T[] => {
+  if (Array.isArray(data)) return data;
+  if (data?.results) return data.results;
+  return [];
+};
+
+export const getCirugiaEspecialidades = async (activo = true) => {
+  const response = await api.get('/cirugia-especialidades/', {
+    params: activo ? { activo: 'true' } : undefined,
+  });
+  return unwrapCatalogList(response.data);
+};
+
+export const createCirugiaEspecialidad = async (data: Record<string, unknown>) => {
+  const response = await api.post('/cirugia-especialidades/', data);
+  return response.data;
+};
+
+export const updateCirugiaEspecialidad = async (id: number, data: Record<string, unknown>) => {
+  const response = await api.patch(`/cirugia-especialidades/${id}/`, data);
+  return response.data;
+};
+
+export const deleteCirugiaEspecialidad = async (id: number) => {
+  await api.delete(`/cirugia-especialidades/${id}/`);
+};
+
+export const getCirugiaProcedimientos = async (especialidad?: number, activo = true) => {
+  const response = await api.get('/cirugia-procedimientos/', {
+    params: {
+      ...(activo ? { activo: 'true' } : {}),
+      ...(especialidad ? { especialidad } : {}),
+    },
+  });
+  return unwrapCatalogList(response.data);
+};
+
+export const createCirugiaProcedimiento = async (data: Record<string, unknown>) => {
+  const response = await api.post('/cirugia-procedimientos/', data);
+  return response.data;
+};
+
+export const updateCirugiaProcedimiento = async (id: number, data: Record<string, unknown>) => {
+  const response = await api.patch(`/cirugia-procedimientos/${id}/`, data);
+  return response.data;
+};
+
+export const deleteCirugiaProcedimiento = async (id: number) => {
+  await api.delete(`/cirugia-procedimientos/${id}/`);
+};
+
+export const getCirugiaAbordajes = async (procedimiento?: number, activo = true) => {
+  const response = await api.get('/cirugia-abordajes/', {
+    params: {
+      ...(activo ? { activo: 'true' } : {}),
+      ...(procedimiento ? { procedimiento } : {}),
+    },
+  });
+  return unwrapCatalogList(response.data);
+};
+
+export const createCirugiaAbordaje = async (data: Record<string, unknown>) => {
+  const response = await api.post('/cirugia-abordajes/', data);
+  return response.data;
+};
+
+export const updateCirugiaAbordaje = async (id: number, data: Record<string, unknown>) => {
+  const response = await api.patch(`/cirugia-abordajes/${id}/`, data);
+  return response.data;
+};
+
+export const deleteCirugiaAbordaje = async (id: number) => {
+  await api.delete(`/cirugia-abordajes/${id}/`);
+};
+
 // Medicamentos - CRUD (médicos y admin) - SIEMPRE obtener TODOS
 export const getMedicamentos = async (): Promise<Medicamento[]> => {
   try {

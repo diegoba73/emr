@@ -217,6 +217,13 @@ export function canEditCatalogosClinicos(user: User | null | undefined): boolean
   return normalizeRol(user) === 'medico';
 }
 
+/** Catálogo quirúrgico jerárquico: escritura solo admin/superuser. */
+export function canEditCirugiaCatalogo(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  return normalizeRol(user) === 'admin';
+}
+
 /** Dashboard BI / indicadores de calidad — solo bioquímico. */
 export function canAccessBiDashboard(user: User | null | undefined): boolean {
   if (!user) return false;

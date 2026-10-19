@@ -8,6 +8,8 @@ import type {
   CreateEstudioComplementarioPayload,
   EstudioComplementario,
   InformeEstudioComplementario,
+  MarcarRealizadoEstudioPayload,
+  ReprogramarTurnoEstudioPayload,
   SubirArchivoEstudioPayload,
   TipoEstudioComplementario,
   UpdateEstudioComplementarioPayload,
@@ -19,8 +21,11 @@ export interface ListEstudiosParams {
   paciente_id?: number;
   estado?: string;
   practica?: string;
+  tipo_actividad?: string;
   search?: string;
   page?: number;
+  /** A5: filtra en servidor antes de paginar */
+  bandeja?: string;
 }
 
 function unwrapList<T>(data: T[] | ApiResponse<T>): T[] {
@@ -72,8 +77,20 @@ export const listTiposEstudioComplementario = async (): Promise<TipoEstudioCompl
 export const listEstudiosComplementarios = async (
   params?: ListEstudiosParams
 ): Promise<EstudioComplementario[]> => {
-  const response = await api.get('/estudios-complementarios/', { params });
-  return unwrapList<EstudioComplementario>(response.data);
+  // A5: el filtro `bandeja` se aplica en servidor antes de paginar; se recorren páginas.
+  return fetchAllPages<EstudioComplementario>('/estudios-complementarios/', {
+    page_size: 100,
+    ...(params || {}),
+  });
+};
+
+export const getBandejasResumenEstudios = async (
+  params?: Omit<ListEstudiosParams, 'bandeja' | 'page'>
+): Promise<Record<string, number>> => {
+  const response = await api.get('/estudios-complementarios/bandejas-resumen/', {
+    params,
+  });
+  return response.data || {};
 };
 
 export const getEstudioComplementario = async (
@@ -98,9 +115,42 @@ export const updateEstudioComplementario = async (
   return response.data;
 };
 
-export const marcarRealizadoEstudio = async (id: number): Promise<EstudioComplementario> => {
-  const response = await api.post(`/estudios-complementarios/${id}/marcar-realizado/`);
+export const marcarRealizadoEstudio = async (
+  id: number,
+  payload?: MarcarRealizadoEstudioPayload
+): Promise<EstudioComplementario> => {
+  const response = await api.post(`/estudios-complementarios/${id}/marcar-realizado/`, payload || {});
   return response.data;
+};
+
+export const cerrarCirugiaEstudio = async (id: number): Promise<EstudioComplementario> => {
+  const response = await api.post(`/estudios-complementarios/${id}/cerrar/`, {});
+  return response.data;
+};
+
+export const listProcedimientosCatalogoQuirurgicos = async (): Promise<
+  { id: number; nombre: string; clasificacion_quirurgica?: string }[]
+> => {
+  return fetchAllPages('/procedimientos-catalogo/', {
+    page_size: 200,
+    clasificacion_quirurgica: 'QUIRURGICO',
+    activo: 'true',
+  });
+};
+
+export const listProcedimientosCatalogoNoQuirurgicos = async (): Promise<
+  { id: number; nombre: string; clasificacion_quirurgica?: string }[]
+> => {
+  // Catálogo vivo: mayoría SIN_ASIGNAR; excluir QUIRURGICO (alta CIRUGIA usa catálogo jerárquico).
+  const rows = await fetchAllPages<{
+    id: number;
+    nombre: string;
+    clasificacion_quirurgica?: string;
+  }>('/procedimientos-catalogo/', {
+    page_size: 200,
+    activo: 'true',
+  });
+  return rows.filter((p) => p.clasificacion_quirurgica !== 'QUIRURGICO');
 };
 
 export const asignarTurnoEstudio = async (
@@ -108,6 +158,14 @@ export const asignarTurnoEstudio = async (
   payload: AsignarTurnoEstudioPayload
 ): Promise<EstudioComplementario> => {
   const response = await api.post(`/estudios-complementarios/${id}/asignar-turno/`, payload);
+  return response.data;
+};
+
+export const reprogramarTurnoEstudio = async (
+  id: number,
+  payload: ReprogramarTurnoEstudioPayload
+): Promise<EstudioComplementario> => {
+  const response = await api.post(`/estudios-complementarios/${id}/reprogramar-turno/`, payload);
   return response.data;
 };
 

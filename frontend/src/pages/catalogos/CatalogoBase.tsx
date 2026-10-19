@@ -54,6 +54,8 @@ interface CatalogoBaseProps<T extends CatalogoItem> {
     type?: 'text' | 'textarea' | 'number' | 'select';
     options?: Array<{ value: string | number; label: string }>;
     required?: boolean;
+    /** Valor inicial al crear (p. ej. clasificación por defecto). */
+    defaultValue?: string | number | boolean;
   }>;
   getDisplayValue?: (item: T) => string;
   /** Solo lectura (p. ej. secretaría). */
@@ -118,7 +120,11 @@ function CatalogoBase<T extends CatalogoItem>({
       setEditingItem(null);
       const initialData: Record<string, any> = {};
       fields.forEach((field) => {
-        initialData[field.key] = field.key === 'activo' ? true : '';
+        if (field.defaultValue !== undefined) {
+          initialData[field.key] = field.defaultValue;
+        } else {
+          initialData[field.key] = field.key === 'activo' ? true : '';
+        }
       });
       setFormData(initialData);
     }

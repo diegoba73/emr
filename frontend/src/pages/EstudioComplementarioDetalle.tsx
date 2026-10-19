@@ -51,6 +51,8 @@ import {
   canAccessEstudiosModule,
   canAnularEstudio,
   canAsignarTurnoEstudio,
+  canMarcarRealizadoUser,
+  canReprogramarTurnoEstudio,
   canAsociarArchivo,
   canCrearInforme,
   canDownloadArchivoEstudio,
@@ -58,6 +60,7 @@ import {
   canEmitirInforme,
   canEnviarInformeEstudio,
   canEntregarEstudio,
+  canCerrarCirugia,
   canMarcarRealizado,
   canQuitarArchivoEstudio,
   canRectificarInforme,
@@ -69,6 +72,7 @@ import { getArchivosPorPaciente } from '../services/apiService';
 import {
   agregarArchivoEstudio,
   anularEstudio,
+  reprogramarTurnoEstudio,
   crearInformeEstudio,
   downloadArchivoEstudio,
   downloadInformeEstudioPdf,
@@ -78,6 +82,7 @@ import {
   listArchivosEstudio,
   listInformesEstudio,
   marcarRealizadoEstudio,
+  cerrarCirugiaEstudio,
   quitarArchivoEstudio,
   rectificarInformeEstudio,
   sugerirInformeEstudio,
@@ -97,6 +102,20 @@ import ArchivoMedicoPreviewDialog, {
   type ArchivoPreviewMeta,
 } from '../components/archivos/ArchivoMedicoPreviewDialog';
 import { inferTipoArchivoFromFileName } from '../utils/archivoMedicoPreview';
+import { listRecursosEstudioAgenda } from '../utils/recursosEstudio';
+
+function toDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDatetimeLocalValue(local: string): string {
+  const d = new Date(local);
+  return d.toISOString();
+}
 
 const EstudioComplementarioDetalle: React.FC = () => {
   const [informeEnvio, setInformeEnvio] = useState<InformeEstudioComplementario | null>(null);
@@ -105,7 +124,7 @@ const EstudioComplementarioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, pacientes, loadPacientes } = useData();
+  const { currentUser, pacientes, loadPacientes, medicos, loadMedicos } = useData();
   const estudioId = Number(id);
   const back = resolveNavBack(location.state, {
     path: '/estudios-complementarios',
@@ -122,6 +141,13 @@ const EstudioComplementarioDetalle: React.FC = () => {
 
   const [anularOpen, setAnularOpen] = useState(false);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [reprogramOpen, setReprogramOpen] = useState(false);
+  const [reprogramRecursos, setReprogramRecursos] = useState<{ id: number; nombre: string }[]>([]);
+  const [reprogramRecursoId, setReprogramRecursoId] = useState<number | ''>('');
+  const [reprogramInicio, setReprogramInicio] = useState('');
+  const [reprogramFin, setReprogramFin] = useState('');
+  const [reprogramMotivo, setReprogramMotivo] = useState('');
+  const [reprogramError, setReprogramError] = useState<string | null>(null);
   const [informeTexto, setInformeTexto] = useState('');
   const [sugeriendoInforme, setSugeriendoInforme] = useState(false);
   const [sugerenciaInformeMeta, setSugerenciaInformeMeta] = useState<{
@@ -142,6 +168,13 @@ const EstudioComplementarioDetalle: React.FC = () => {
 
   const writeAccess = canWriteEstudio(currentUser);
   const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
+  const puedeMarcarRealizado = canMarcarRealizadoUser(currentUser);
+  const [realizarOpen, setRealizarOpen] = useState(false);
+  const [profesionalId, setProfesionalId] = useState<number | ''>('');
+  const [anestesistaId, setAnestesistaId] = useState<number | ''>('');
+  const [dxPreoperatorio, setDxPreoperatorio] = useState('');
+  const [realizarRecursoId, setRealizarRecursoId] = useState<number | ''>('');
+  const [realizarSalas, setRealizarSalas] = useState<{ id: number; nombre: string }[]>([]);
 
   const refresh = useCallback(async () => {
     if (!estudioId || Number.isNaN(estudioId)) return;
@@ -343,16 +376,48 @@ const EstudioComplementarioDetalle: React.FC = () => {
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
           <Box>
             <Typography variant="h5" fontWeight={600}>
-              Estudio #{estudio.id}
+              {estudio.tipo_actividad === 'CIRUGIA'
+                ? `Cirugía #${estudio.id}`
+                : estudio.tipo_actividad === 'PROCEDIMIENTO'
+                  ? `Procedimiento #${estudio.id}`
+                  : `Estudio #${estudio.id}`}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Paciente: {pacienteLabel || `#${estudio.paciente_id}`}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Práctica:{' '}
-              {labelPractica(estudio.practica)}
-              {estudio.tipo_estudio_nombre ? ` · ${estudio.tipo_estudio_nombre}` : ''}
+              {estudio.tipo_actividad === 'CIRUGIA' ? (
+                <>
+                  Cirugía:{' '}
+                  {[
+                    estudio.cirugia_especialidad_snapshot || estudio.cirugia_especialidad_nombre,
+                    estudio.cirugia_procedimiento_snapshot || estudio.cirugia_procedimiento_nombre,
+                    estudio.cirugia_abordaje_snapshot || estudio.cirugia_abordaje_nombre,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || estudio.procedimiento_catalogo_nombre || '—'}
+                </>
+              ) : estudio.tipo_actividad === 'PROCEDIMIENTO' ? (
+                <>Procedimiento: {estudio.procedimiento_catalogo_nombre || '—'}</>
+              ) : (
+                <>
+                  Práctica:{' '}
+                  {labelPractica(estudio.practica)}
+                  {estudio.tipo_estudio_nombre ? ` · ${estudio.tipo_estudio_nombre}` : ''}
+                </>
+              )}
             </Typography>
+            {estudio.medico_solicitante_nombre && (
+              <Typography variant="body2" color="text.secondary">
+                {estudio.tipo_actividad === 'CIRUGIA' ? 'Cirujano' : 'Profesional'}:{' '}
+                {estudio.medico_solicitante_nombre}
+              </Typography>
+            )}
+            {estudio.tipo_actividad === 'CIRUGIA' && estudio.anestesista_previsto_nombre && (
+              <Typography variant="body2" color="text.secondary">
+                Anestesista: {estudio.anestesista_previsto_nombre}
+              </Typography>
+            )}
             {estudio.realizado_por_nombre && (
               <Typography variant="body2" color="text.secondary">
                 Realizado por: {estudio.realizado_por_nombre}
@@ -380,12 +445,52 @@ const EstudioComplementarioDetalle: React.FC = () => {
               Asignar turno
             </Button>
           )}
-          {writeAccess && canMarcarRealizado(estudio) && (
+          {puedeAsignarTurno && canReprogramarTurnoEstudio(estudio) && (
+            <Button
+              variant="outlined"
+              color="info"
+              size="small"
+              startIcon={<CalendarMonth />}
+              disabled={actionLoading}
+              onClick={async () => {
+                setReprogramError(null);
+                setReprogramMotivo('');
+                setReprogramInicio(toDatetimeLocalValue(estudio.turno_fecha_hora_inicio));
+                setReprogramFin(toDatetimeLocalValue(estudio.turno_fecha_hora_fin));
+                setReprogramRecursoId(estudio.turno_recurso_id ?? '');
+                try {
+                  const salas = await listRecursosEstudioAgenda();
+                  setReprogramRecursos(salas.filter((r) => r.activo).map((r) => ({ id: r.id, nombre: r.nombre })));
+                } catch {
+                  setReprogramRecursos([]);
+                }
+                setReprogramOpen(true);
+              }}
+            >
+              Reprogramar turno
+            </Button>
+          )}
+          {puedeMarcarRealizado && canMarcarRealizado(estudio) && (
             <Button
               variant="contained"
               size="small"
               disabled={actionLoading}
-              onClick={() => runAction(async () => { await marcarRealizadoEstudio(estudio.id); }, 'No se pudo marcar como realizado.')}
+              onClick={async () => {
+                void loadMedicos();
+                setProfesionalId(estudio.medico_solicitante || '');
+                setAnestesistaId(estudio.anestesista_previsto || '');
+                setDxPreoperatorio('');
+                setRealizarRecursoId(estudio.turno_recurso_id || '');
+                try {
+                  const salas = await listRecursosEstudioAgenda();
+                  setRealizarSalas(
+                    salas.filter((r) => r.activo).map((r) => ({ id: r.id, nombre: r.nombre }))
+                  );
+                } catch {
+                  setRealizarSalas([]);
+                }
+                setRealizarOpen(true);
+              }}
             >
               Marcar realizado
             </Button>
@@ -419,7 +524,22 @@ const EstudioComplementarioDetalle: React.FC = () => {
                 Validar estudio
               </Button>
             )}
-          {canEntregarEstudio(currentUser, estudio) && (
+          
+          {canCerrarCirugia(currentUser, estudio) && (
+            <Button
+              variant="contained"
+              size="small"
+              disabled={actionLoading}
+              onClick={() =>
+                runAction(async () => {
+                  await cerrarCirugiaEstudio(estudio.id);
+                }, 'No se pudo cerrar la cirugía.')
+              }
+            >
+              Cerrar cirugía
+            </Button>
+          )}
+{canEntregarEstudio(currentUser, estudio) && (
             <Button
               variant="contained"
               color="success"
@@ -746,6 +866,111 @@ const EstudioComplementarioDetalle: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={realizarOpen} onClose={() => setRealizarOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Registrar realización</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
+            Confirmá el profesional del alta. Sala opcional si no hay turno (crea Atencion+Registro).
+            Sin turno ni sala: solo indicación, sesión e informe.
+          </Typography>
+          <FormControl fullWidth required sx={{ mt: 1 }}>
+            <InputLabel id="prof-realizador-label">
+              {estudio.tipo_actividad === 'CIRUGIA' ? 'Cirujano' : 'Profesional responsable'}
+            </InputLabel>
+            <Select
+              labelId="prof-realizador-label"
+              label={estudio.tipo_actividad === 'CIRUGIA' ? 'Cirujano' : 'Profesional responsable'}
+              value={profesionalId}
+              onChange={(e) => setProfesionalId(e.target.value as number)}
+            >
+              {medicos.map((m) => (
+                <MenuItem key={m.id} value={m.id}>
+                  {`${m.apellido || ''}, ${m.nombre || ''}`.trim() || `Médico #${m.id}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {estudio.tipo_actividad === 'CIRUGIA' && (
+            <>
+              <FormControl fullWidth required sx={{ mt: 2 }}>
+                <InputLabel id="anest-label">Anestesista</InputLabel>
+                <Select
+                  labelId="anest-label"
+                  label="Anestesista"
+                  value={anestesistaId}
+                  onChange={(e) => setAnestesistaId(e.target.value as number)}
+                >
+                  {medicos.map((m) => (
+                    <MenuItem key={`a-${m.id}`} value={m.id}>
+                      {`${m.apellido || ''}, ${m.nombre || ''}`.trim() || `Médico #${m.id}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                required
+                multiline
+                minRows={2}
+                label="Diagnóstico preoperatorio"
+                value={dxPreoperatorio}
+                onChange={(e) => setDxPreoperatorio(e.target.value)}
+                sx={{ mt: 2 }}
+              />
+            </>
+          )}
+          {!estudio.turno_id && (
+            <FormControl fullWidth sx={{ mt: 2 }} required={estudio.tipo_actividad === 'CIRUGIA'}>
+              <InputLabel id="sala-realizar-label">
+                {estudio.tipo_actividad === 'CIRUGIA' ? 'Quirófano / hemodinamia' : 'Sala (opcional)'}
+              </InputLabel>
+              <Select
+                labelId="sala-realizar-label"
+                label={estudio.tipo_actividad === 'CIRUGIA' ? 'Quirófano / hemodinamia' : 'Sala (opcional)'}
+                value={realizarRecursoId}
+                onChange={(e) => setRealizarRecursoId(e.target.value as number | '')}
+              >
+                <MenuItem value="">Sin sala</MenuItem>
+                {realizarSalas.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>{s.nombre}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          {estudio.turno_id && (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
+              Tiene turno asignado: se usará la sala del turno para Atencion/Registro.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRealizarOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            disabled={!profesionalId || actionLoading || (estudio.tipo_actividad === 'CIRUGIA' && (!anestesistaId || !dxPreoperatorio.trim()))}
+            onClick={() =>
+              runAction(async () => {
+                await marcarRealizadoEstudio(estudio.id, {
+                  profesional_id: Number(profesionalId),
+                  ...(estudio.tipo_actividad === 'CIRUGIA'
+                    ? {
+                        anestesista_id: Number(anestesistaId),
+                        diagnostico_preoperatorio: dxPreoperatorio,
+                      }
+                    : {}),
+                  ...(realizarRecursoId && !estudio.turno_id
+                    ? { recurso_id: Number(realizarRecursoId) }
+                    : {}),
+                });
+                setRealizarOpen(false);
+              }, 'No se pudo marcar como realizado.')
+            }
+          >
+            Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={anularOpen} onClose={() => setAnularOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Anular estudio</DialogTitle>
         <DialogContent>
@@ -774,6 +999,88 @@ const EstudioComplementarioDetalle: React.FC = () => {
             }
           >
             Confirmar anulación
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={reprogramOpen} onClose={() => setReprogramOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Reprogramar turno</DialogTitle>
+        <DialogContent>
+          {reprogramError && (
+            <Alert severity="error" sx={{ mt: 1, mb: 1 }}>{reprogramError}</Alert>
+          )}
+          <FormControl fullWidth sx={{ mt: 1 }} required>
+            <InputLabel id="reprogram-sala-label">Sala</InputLabel>
+            <Select
+              labelId="reprogram-sala-label"
+              label="Sala"
+              value={reprogramRecursoId}
+              onChange={(e) => setReprogramRecursoId(e.target.value as number)}
+            >
+              {reprogramRecursos.map((r) => (
+                <MenuItem key={r.id} value={r.id}>{r.nombre}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Inicio *"
+            type="datetime-local"
+            value={reprogramInicio}
+            onChange={(e) => setReprogramInicio(e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            label="Fin *"
+            type="datetime-local"
+            value={reprogramFin}
+            onChange={(e) => setReprogramFin(e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            label="Motivo *"
+            value={reprogramMotivo}
+            onChange={(e) => setReprogramMotivo(e.target.value)}
+            fullWidth
+            multiline
+            minRows={2}
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReprogramOpen(false)}>Cerrar</Button>
+          <Button
+            variant="contained"
+            color="info"
+            disabled={
+              !reprogramRecursoId ||
+              !reprogramInicio ||
+              !reprogramFin ||
+              !reprogramMotivo.trim() ||
+              actionLoading
+            }
+            onClick={() =>
+              runAction(async () => {
+                setReprogramError(null);
+                try {
+                  await reprogramarTurnoEstudio(estudio.id, {
+                    recurso_id: Number(reprogramRecursoId),
+                    fecha_hora_inicio: fromDatetimeLocalValue(reprogramInicio),
+                    fecha_hora_fin: fromDatetimeLocalValue(reprogramFin),
+                    motivo: reprogramMotivo.trim(),
+                  });
+                  setReprogramOpen(false);
+                } catch (e) {
+                  setReprogramError(parseEstudiosApiError(e, 'No se pudo reprogramar el turno.'));
+                  throw e;
+                }
+              }, 'No se pudo reprogramar el turno.')
+            }
+          >
+            Confirmar reprogramación
           </Button>
         </DialogActions>
       </Dialog>

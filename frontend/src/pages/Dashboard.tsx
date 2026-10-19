@@ -102,7 +102,7 @@ const quickActions: QuickActionCard[] = [
     roles: ['paciente'],
   },
   {
-    title: 'Estudios complementarios',
+    title: 'Estudios y procedimientos',
     description: 'Ver estudios e informes disponibles',
     icon: <Folder />,
     path: '/estudios-complementarios',

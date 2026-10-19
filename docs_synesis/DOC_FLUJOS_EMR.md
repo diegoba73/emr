@@ -61,17 +61,22 @@
 
 Ver `reglas/documentos-e-imagenes.md`.
 
-## Flujo estudios complementarios (C6.4.1 [IMPLEMENTADO — solo backend])
+## Flujo estudios y procedimientos (C6.4 + Etapa A [IMPLEMENTADO])
 
-1. Crear `EstudioComplementario` (SOLICITADO) vinculado a paciente (+ opcional atención/consulta/solicitud EMR).
-2. `marcar-realizado` → REALIZADO; asociar archivos (`ArchivoMedico` del mismo paciente).
-3. Informe: tras `marcar-realizado`, crear borrador → `emitir` → INFORMADO → `validar` (admin) → VALIDADO → `entregar` → ENTREGADO (visible paciente). No crear/emitir/validar en SOLICITADO (C6.4.1-A).
-4. `anular` desde SOLICITADO/REALIZADO/INFORMADO con motivo.
-5. Rectificación (estudio VALIDADO/ENTREGADO): nuevo borrador no vigente → emitir (INFORMADO; desde ENTREGADO usa reapertura controlada C6.4.1-B) → validar (único vigente) → `entregar` si vuelve a ENTREGADO.
-6. **PATCH:** no cambia `paciente_id` ni `estado`.
-7. **PDF informe (C6.4.3):** tras validar y entregar, paciente (o clínico autorizado) descarga PDF vía `GET …/informes/{id}/download-pdf/` — nombre seguro, auditoría `estudio_informe_pdf_download`; constraint DB garantiza un solo informe vigente.
+> SoT diseño: `DOC_DISENO_ESTUDIOS_PROCEDIMIENTOS.md`. Cierres A0–A6. **LIMS intocable.** UI: «Estudios y procedimientos» (`/estudios-complementarios`).
 
-No LIMS. No PACS/visor. **Frontend C6.4.2 [IMPLEMENTADO]:** listado, detalle, acciones e informes en `/estudios-complementarios` (descarga PDF informe: endpoint backend listo; UI puede adoptar `download_pdf_url` en fase posterior).
+1. Crear `EstudioComplementario` (SOLICITADO, `tipo_actividad=ESTUDIO`); se crea `SesionActividad` `#1`. Altas proc/cirugía/multi **rechazadas**.
+2. Programar: `asignar-turno` / `agendar-turno` → turno en sala; sesión `#1` + espejo histórico `estudio.turno`; estado → CONFIRMADO. `sesion_id` opcional (mono = PK real de `#1`).
+3. `marcar-realizado` → REALIZADO (dual-write a sesión `#1`); asociar archivos (`ArchivoMedico` mismo paciente).
+4. Informe: borrador → `emitir` → INFORMADO → `validar` → VALIDADO → `entregar` → ENTREGADO (visible paciente).
+5. `anular` con motivo (mono); conserva vínculo histórico de turno en sesión/espejo.
+6. Bandejas listado (A5): pendiente programar / programados / documentación pendiente / pendiente entrega / finalizados / anulados / todos — filtro servidor `bandeja=` + `bandejas-resumen/`.
+7. **PATCH:** no cambia `paciente_id` ni `estado` ni campos A2 protegidos.
+8. **PDF informe:** `GET …/informes/{id}/download-pdf/`.
+
+**Aún no:** reprogramar/cancelar reserva de estudio (Etapa B); proc/cirugía operativos; multisesión UI/realización por sesión.
+
+No LIMS. No PACS/visor.
 
 ---
 

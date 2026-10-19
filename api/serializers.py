@@ -15,7 +15,13 @@ from turnos.models import (
     Turno, Recurso, Atencion, ConsultaAmbulatoria, EvolucionInternacion,
     RegistroProcedimiento, RegistroQuirurgico,
 )
-from catalogos.models import EstudioDiagnostico, ProcedimientoCatalogo
+from catalogos.models import (
+    CirugiaAbordaje,
+    CirugiaEspecialidad,
+    CirugiaProcedimiento,
+    EstudioDiagnostico,
+    ProcedimientoCatalogo,
+)
 from emr.models import SignosVitales, Documento
 
 
@@ -622,7 +628,35 @@ class ProcedimientoCatalogoSerializer(serializers.ModelSerializer):
     """Serializer para catálogo de procedimientos"""
     class Meta:
         model = ProcedimientoCatalogo
-        fields = ['id', 'nombre', 'descripcion', 'activo']
+        fields = [
+            'id',
+            'nombre',
+            'descripcion',
+            'activo',
+            'clasificacion_quirurgica',
+        ]
+
+
+class CirugiaEspecialidadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CirugiaEspecialidad
+        fields = ['id', 'nombre', 'activo', 'orden']
+
+
+class CirugiaProcedimientoSerializer(serializers.ModelSerializer):
+    especialidad_nombre = serializers.CharField(source='especialidad.nombre', read_only=True)
+
+    class Meta:
+        model = CirugiaProcedimiento
+        fields = ['id', 'especialidad', 'especialidad_nombre', 'nombre', 'activo']
+
+
+class CirugiaAbordajeSerializer(serializers.ModelSerializer):
+    procedimiento_nombre = serializers.CharField(source='procedimiento.nombre', read_only=True)
+
+    class Meta:
+        model = CirugiaAbordaje
+        fields = ['id', 'procedimiento', 'procedimiento_nombre', 'nombre', 'activo']
 
 
 class DocumentoSerializer(serializers.ModelSerializer):
@@ -1073,6 +1107,7 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
     consentimiento_informado = serializers.FileField(required=False, allow_null=True, write_only=True)
     consentimiento_informado_nombre = serializers.SerializerMethodField()
     consentimiento_informado_download_url = serializers.SerializerMethodField()
+    protocolo_protegido_por_modulo = serializers.SerializerMethodField()
 
     class Meta:
         model = RegistroQuirurgico
@@ -1093,12 +1128,14 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
             'consentimiento_informado',
             'consentimiento_informado_nombre',
             'consentimiento_informado_download_url',
+            'protocolo_protegido_por_modulo',
             'documentos_adjuntos',
             'documentos_adjuntos_ids',
         ]
         read_only_fields = [
             'consentimiento_informado_nombre',
             'consentimiento_informado_download_url',
+            'protocolo_protegido_por_modulo',
         ]
 
     def get_consentimiento_informado_nombre(self, obj):
@@ -1114,6 +1151,30 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
             f'/api/registros-quirurgicos/{obj.pk}/download-consentimiento-informado/'
         )
     
+
+    def get_protocolo_protegido_por_modulo(self, obj):
+        try:
+            from estudios.cirugia_realizacion import registro_quirurgico_vinculado_a_circuito_modulo
+            return registro_quirurgico_vinculado_a_circuito_modulo(obj)
+        except Exception:
+            return False
+
+    def _assert_protocolo_no_editable_si_protegido(self, instance, validated_data, initial_data):
+        from estudios.cirugia_realizacion import registro_quirurgico_vinculado_a_circuito_modulo
+        if instance is None:
+            return
+        if not registro_quirurgico_vinculado_a_circuito_modulo(instance):
+            return
+        if 'protocolo_quirurgico' in validated_data or 'protocolo_quirurgico' in (initial_data or {}):
+            raise serializers.ValidationError({
+                'protocolo_quirurgico': (
+                    'El protocolo canónico se edita solo desde el módulo de '
+                    'estudios/cirugía (informe versionado). No se admite edición '
+                    'directa de la proyección en RegistroQuirurgico.'
+                )
+            })
+        validated_data.pop('protocolo_quirurgico', None)
+
     def create(self, validated_data):
         anestesista_id = validated_data.pop('anestesista_id')
         documentos = validated_data.pop('documentos_adjuntos', [])
@@ -1124,6 +1185,9 @@ class RegistroQuirurgicoSerializer(serializers.ModelSerializer):
         return instance
     
     def update(self, instance, validated_data):
+        self._assert_protocolo_no_editable_si_protegido(
+            instance, validated_data, getattr(self, 'initial_data', {}) or {},
+        )
         anestesista_id = validated_data.pop('anestesista_id', None)
         if anestesista_id is not None:
             validated_data['anestesista_id'] = anestesista_id

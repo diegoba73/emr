@@ -106,7 +106,7 @@ const navItems: NavItem[] = [
   },
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   {
-    text: 'Estudios complementarios',
+    text: 'Estudios y procedimientos',
     icon: <Description />,
     path: '/estudios-complementarios',
     canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),
@@ -160,6 +160,7 @@ const catalogItems: NavItem[] = [
   { text: 'CIE-10', icon: <CatalogIcon />, path: '/catalogos/diagnosticos', canAccess: canAccessCatalogosClinicos },
   { text: 'Estudios / prácticas', icon: <CatalogIcon />, path: '/catalogos/estudios', canAccess: canAccessCatalogosClinicos },
   { text: 'Procedimientos', icon: <CatalogIcon />, path: '/catalogos/procedimientos', canAccess: canAccessCatalogosClinicos },
+  { text: 'Cirugías', icon: <CatalogIcon />, path: '/catalogos/cirugias', canAccess: canAccessCatalogosClinicos },
   { text: 'Medicamentos', icon: <CatalogIcon />, path: '/catalogos/medicamentos', canAccess: canAccessCatalogosClinicos },
   { text: 'Especialidades', icon: <CatalogIcon />, path: '/catalogos/especialidades', canAccess: canAccessCatalogosClinicos },
   { text: 'Tipos de dieta', icon: <CatalogIcon />, path: '/catalogos/tipos-dieta', canAccess: canAccessInternacion },

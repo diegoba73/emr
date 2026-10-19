@@ -14,10 +14,9 @@ _ALLOWED = frozenset({
     ('informar', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.INFORMADO),
     ('validar', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.VALIDADO),
     ('entregar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.ENTREGADO),
+    # B: anulación administrativa solo previa a realización (rectificar/informar intactos).
     ('anular', EstudioComplementario.Estado.SOLICITADO, EstudioComplementario.Estado.ANULADO),
     ('anular', EstudioComplementario.Estado.CONFIRMADO, EstudioComplementario.Estado.ANULADO),
-    ('anular', EstudioComplementario.Estado.REALIZADO, EstudioComplementario.Estado.ANULADO),
-    ('anular', EstudioComplementario.Estado.INFORMADO, EstudioComplementario.Estado.ANULADO),
     ('rectificar', EstudioComplementario.Estado.VALIDADO, EstudioComplementario.Estado.INFORMADO),
     ('informar', EstudioComplementario.Estado.ENTREGADO, EstudioComplementario.Estado.INFORMADO),
 })

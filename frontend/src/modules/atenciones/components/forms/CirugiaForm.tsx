@@ -48,6 +48,7 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
   });
   const [equipo, setEquipo] = useState<EquipoItem[]>([{ nombre: '', rol: '' }]);
   const [consentFile, setConsentFile] = useState<File | null>(null);
+  const protocoloProtegido = Boolean(registro?.protocolo_protegido_por_modulo);
 
   useEffect(() => {
     if (registro) {
@@ -152,9 +153,13 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     
-    // Validar campos requeridos
-    if (!formState.anestesista_id || !formState.diagnostico_preoperatorio || !formState.protocolo_quirurgico) {
+    // Validar campos requeridos (protocolo canónico del módulo no se edita aquí).
+    if (!formState.anestesista_id || !formState.diagnostico_preoperatorio) {
       alert('Por favor complete todos los campos requeridos');
+      return;
+    }
+    if (!protocoloProtegido && !formState.protocolo_quirurgico) {
+      alert('Por favor complete el protocolo quirúrgico');
       return;
     }
     
@@ -168,7 +173,9 @@ const CirugiaForm: React.FC<CirugiaFormProps> = ({ atencionId, registro, canEdit
     if (formState.diagnostico_postoperatorio) {
       formData.append('diagnostico_postoperatorio', formState.diagnostico_postoperatorio);
     }
-    formData.append('protocolo_quirurgico', formState.protocolo_quirurgico);
+    if (!protocoloProtegido) {
+      formData.append('protocolo_quirurgico', formState.protocolo_quirurgico);
+    }
     if (formState.hallazgos_operatorios) {
       formData.append('hallazgos_operatorios', formState.hallazgos_operatorios);
     }

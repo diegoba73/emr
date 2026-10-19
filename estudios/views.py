@@ -23,6 +23,8 @@ from .access import (
     usuario_puede_descargar_pdf_informe,
     usuario_puede_escribir_estudio,
     usuario_puede_entregar_estudio,
+    usuario_puede_cerrar_cirugia,
+    usuario_puede_marcar_realizado,
     usuario_puede_ver_estudio,
     usuario_puede_ver_estudio_clinico,
 )
@@ -38,7 +40,10 @@ from .serializers import (
     AnularEstudioSerializer,
     AgendarTurnoEstudioDesdeAgendaSerializer,
     AsignarTurnoEstudioSerializer,
+    MarcarRealizadoEstudioSerializer,
+    ReprogramarTurnoEstudioSerializer,
     ArchivoEstudioComplementarioSerializer,
+    CorreccionClasificacionSnapshotSerializer,
     CrearInformeSerializer,
     EstudioComplementarioDetailSerializer,
     EstudioComplementarioListSerializer,
@@ -73,9 +78,11 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
     queryset = EstudioComplementario.objects.select_related(
         'paciente',
         'tipo_estudio',
+        'procedimiento_catalogo',
         'atencion',
         'consulta_hc',
         'medico_solicitante',
+        'anestesista_previsto',
         'realizado_por',
         'turno',
         'turno__recurso',
@@ -83,12 +90,20 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, EstudioComplementarioPermission]
     authentication_classes = [JWTAuthentication, SessionAuthentication]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['paciente', 'estado', 'practica', 'atencion', 'consulta_hc']
+    filterset_fields = [
+        'paciente',
+        'estado',
+        'practica',
+        'atencion',
+        'consulta_hc',
+        'tipo_actividad',
+    ]
     search_fields = [
         'paciente__nombre',
         'paciente__apellido',
         'paciente__dni',
         'tipo_estudio__nombre',
+        'procedimiento_catalogo__nombre',
     ]
     ordering_fields = ['created_at', 'fecha_solicitud', 'fecha_realizacion']
     ordering = ['-created_at']
@@ -139,10 +154,27 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
 
         return qs.none()
 
+    def filter_queryset(self, queryset):
+        """Aplica search/filters y, en list, bandeja antes de paginar (A5)."""
+        qs = super().filter_queryset(queryset)
+        if getattr(self, 'action', None) == 'list':
+            from estudios.bandejas import aplicar_bandeja
+
+            qs = aplicar_bandeja(qs, self.request.query_params.get('bandeja'))
+        return qs
+
     def get_serializer_class(self):
         if self.action == 'list':
             return EstudioComplementarioListSerializer
         return EstudioComplementarioDetailSerializer
+
+    @action(detail=False, methods=['get'], url_path='bandejas-resumen')
+    def bandejas_resumen(self, request):
+        """Conteos por bandeja con los mismos permisos/search/práctica (sin filtro bandeja)."""
+        from estudios.bandejas import conteos_bandejas
+
+        qs = self.filter_queryset(self.get_queryset())
+        return Response(conteos_bandejas(qs))
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -228,16 +260,64 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         estudio.refresh_from_db()
         return Response(EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data)
 
+    @action(detail=True, methods=['post'], url_path='reprogramar-turno')
+    def reprogramar_turno(self, request, pk=None):
+        """B: reprogramar reserva desde Estudios y procedimientos."""
+        estudio = self.get_object()
+        if not usuario_puede_asignar_turno_estudio(request.user):
+            raise PermissionDenied('No tiene permiso para reprogramar turnos de estudio.')
+        if not usuario_puede_ver_estudio_clinico(request.user, estudio):
+            raise PermissionDenied()
+        ser = ReprogramarTurnoEstudioSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            services.reprogramar_turno_estudio(estudio, user=request.user, **ser.validated_data)
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        estudio.refresh_from_db()
+        return Response(EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='corregir-clasificacion-snapshot')
+    def corregir_clasificacion_snapshot(self, request, pk=None):
+        """A2b: admin corrige snapshot compatible; TX + auditoría atómicas."""
+        estudio = self.get_object()
+        ser = CorreccionClasificacionSnapshotSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            estudio = services.corregir_clasificacion_snapshot(
+                estudio,
+                clasificacion_quirurgica_snapshot=ser.validated_data[
+                    'clasificacion_quirurgica_snapshot'
+                ],
+                motivo=ser.validated_data['motivo'],
+                user=request.user,
+            )
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        out = EstudioComplementarioDetailSerializer(estudio, context={'request': request})
+        return Response(out.data)
+
     @action(detail=True, methods=['post'], url_path='marcar-realizado')
     def marcar_realizado(self, request, pk=None):
         estudio = self.get_object()
-        if not usuario_puede_escribir_estudio(request.user):
+        if not usuario_puede_marcar_realizado(request.user):
             raise PermissionDenied()
+        ser = MarcarRealizadoEstudioSerializer(data=request.data or {})
+        ser.is_valid(raise_exception=True)
         try:
-            services.marcar_realizado(estudio, user=request.user)
+            services.marcar_realizado(
+                estudio,
+                user=request.user,
+                **ser.validated_data,
+            )
         except DjangoValidationError as exc:
             return self._validation_error_response(exc)
-        return Response(EstudioComplementarioDetailSerializer(estudio).data)
+        except PermissionDenied:
+            raise
+        estudio.refresh_from_db()
+        return Response(
+            EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data
+        )
 
     @action(detail=True, methods=['post'], url_path='anular')
     def anular(self, request, pk=None):
@@ -245,14 +325,18 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         ser = AnularEstudioSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         try:
-            services.anular_estudio(
+            estudio = services.anular_estudio(
                 estudio,
                 user=request.user,
                 motivo=ser.validated_data['motivo_anulacion'],
             )
         except DjangoValidationError as exc:
             return self._validation_error_response(exc)
-        return Response(EstudioComplementarioDetailSerializer(estudio).data)
+        # Usar instancia retornada por el service (select_for_update rebind);
+        # sin esto la respuesta quedaba con estado/turno stale.
+        return Response(
+            EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data
+        )
 
     @action(detail=True, methods=['post'], url_path='entregar')
     def entregar(self, request, pk=None):
@@ -263,7 +347,27 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
             services.entregar_estudio(estudio, user=request.user)
         except DjangoValidationError as exc:
             return self._validation_error_response(exc)
-        return Response(EstudioComplementarioDetailSerializer(estudio).data)
+        estudio.refresh_from_db()
+        return Response(
+            EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data
+        )
+
+    @action(detail=True, methods=['post'], url_path='cerrar')
+    def cerrar(self, request, pk=None):
+        """D: cierre administrativo de CIRUGIA (gate protocolo validado en TX)."""
+        estudio = self.get_object()
+        if not usuario_puede_cerrar_cirugia(request.user, estudio):
+            raise PermissionDenied('No tiene permiso para cerrar esta cirugía.')
+        try:
+            services.cerrar_cirugia(estudio, user=request.user)
+        except DjangoValidationError as exc:
+            return self._validation_error_response(exc)
+        except PermissionDenied:
+            raise
+        estudio.refresh_from_db()
+        return Response(
+            EstudioComplementarioDetailSerializer(estudio, context={'request': request}).data
+        )
 
     @action(detail=True, methods=['post'], url_path='sugerir-informe')
     def sugerir_informe(self, request, pk=None):

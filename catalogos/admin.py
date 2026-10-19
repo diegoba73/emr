@@ -3,6 +3,9 @@ from .models import (
     DiagnosticoCIE10,
     Medicamento,
     ProcedimientoCatalogo,
+    CirugiaEspecialidad,
+    CirugiaProcedimiento,
+    CirugiaAbordaje,
     EstudioDiagnostico,
     CentroAtencion,
     CentroFisico,
@@ -29,10 +32,34 @@ class MedicamentoAdmin(admin.ModelAdmin):
 
 @admin.register(ProcedimientoCatalogo)
 class ProcedimientoCatalogoAdmin(admin.ModelAdmin):
-    list_display = ['nombre', 'activo']
-    list_filter = ['activo']
+    list_display = ['nombre', 'clasificacion_quirurgica', 'activo']
+    list_filter = ['clasificacion_quirurgica', 'activo']
     search_fields = ['nombre', 'descripcion']
     ordering = ['nombre']
+
+
+@admin.register(CirugiaEspecialidad)
+class CirugiaEspecialidadAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'orden', 'activo']
+    list_filter = ['activo']
+    search_fields = ['nombre']
+    ordering = ['orden', 'nombre']
+
+
+@admin.register(CirugiaProcedimiento)
+class CirugiaProcedimientoAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'especialidad', 'activo']
+    list_filter = ['especialidad', 'activo']
+    search_fields = ['nombre', 'especialidad__nombre']
+    ordering = ['especialidad__nombre', 'nombre']
+
+
+@admin.register(CirugiaAbordaje)
+class CirugiaAbordajeAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'procedimiento', 'activo']
+    list_filter = ['activo']
+    search_fields = ['nombre', 'procedimiento__nombre']
+    ordering = ['procedimiento__nombre', 'nombre']
 
 
 @admin.register(EstudioDiagnostico)

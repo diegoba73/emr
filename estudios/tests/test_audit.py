@@ -12,10 +12,10 @@ BASE = '/api/estudios-complementarios/'
 
 
 @pytest.mark.django_db
-def test_create_estudio_auditado(client, admin_user, paciente, tipo_estudio):
+def test_create_estudio_auditado(client, admin_user, paciente, tipo_estudio, medico):
     client.force_authenticate(user=admin_user)
     with capture_on_commit_callbacks(execute=True):
-        r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+        r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     assert r.status_code == 201
     evs = [
         e for e in AuditEvent.objects.filter(module='estudios').order_by('-id')[:20]

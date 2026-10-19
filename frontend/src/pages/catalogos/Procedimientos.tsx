@@ -51,6 +51,18 @@ const Procedimientos: React.FC = () => {
       fields={[
         { key: 'nombre', label: 'Nombre', type: 'text', required: true },
         { key: 'descripcion', label: 'Descripción', type: 'textarea' },
+        {
+          key: 'clasificacion_quirurgica',
+          label: 'Clasificación',
+          type: 'select',
+          required: true,
+          defaultValue: 'SIN_ASIGNAR',
+          options: [
+            { value: 'SIN_ASIGNAR', label: 'Sin asignar' },
+            { value: 'NO_QUIRURGICO', label: 'No quirúrgico' },
+            { value: 'QUIRURGICO', label: 'Quirúrgico' },
+          ],
+        },
         { key: 'activo', label: 'Activo' },
       ]}
     />

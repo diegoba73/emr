@@ -17,32 +17,33 @@ BASE = '/api/estudios-complementarios/'
 
 
 @pytest.mark.django_db
-def test_admin_crea_estudio(client, admin_user, paciente, tipo_estudio):
+def test_admin_crea_estudio(client, admin_user, paciente, tipo_estudio, medico):
     client.force_authenticate(user=admin_user)
     with capture_on_commit_callbacks(execute=True):
-        r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+        r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     assert r.status_code == 201
     assert r.data['estado'] == 'SOLICITADO'
+    assert r.data['medico_solicitante'] == medico.id
 
 
 @pytest.mark.django_db
 def test_medico_vinculado_crea(client, medico, paciente, tipo_estudio, atencion_vinculada):
     client.force_authenticate(user=medico.user)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     assert r.status_code == 201
 
 
 @pytest.mark.django_db
 def test_medico_ajeno_no_crea(client, medico_ajeno, paciente, tipo_estudio):
     client.force_authenticate(user=medico_ajeno.user)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico_ajeno), format='json')
     assert r.status_code in (403, 400)
 
 
 @pytest.mark.django_db
-def test_paciente_no_crea(client, paciente, tipo_estudio):
+def test_paciente_no_crea(client, paciente, tipo_estudio, medico):
     client.force_authenticate(user=paciente.user)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     assert r.status_code == 403
 
 
@@ -140,10 +141,13 @@ def test_turno_estudio_visible_en_agenda(
 
 
 @pytest.mark.django_db
-def test_secretaria_no_crea_estudio(client, secretaria, paciente, tipo_estudio):
+def test_secretaria_crea_estudio(client, secretaria, paciente, tipo_estudio, medico):
     client.force_authenticate(user=secretaria)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
-    assert r.status_code == 403
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
+    assert r.status_code == 201, r.content
+    assert r.data['paciente_id'] == paciente.id
+    assert r.data['estado'] == 'SOLICITADO'
+    assert r.data['medico_solicitante'] == medico.id
 
 
 @pytest.mark.django_db

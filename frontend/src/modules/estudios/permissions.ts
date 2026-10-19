@@ -11,7 +11,13 @@ function puedeOperarEstudios(user: User | null | undefined): boolean {
   if (user.is_superuser) return true;
   if (isOperadorLimsRole(normalizedRol(user))) return false;
   const rol = normalizedRol(user);
-  return rol === 'admin' || rol === 'medico' || isProfesionalEstudioRole(rol);
+  // Secretaría: operador habitual del módulo (alta/edición/doc/agenda).
+  return (
+    rol === 'admin' ||
+    rol === 'medico' ||
+    rol === 'secretaria' ||
+    isProfesionalEstudioRole(rol)
+  );
 }
 
 export function canAccessEstudiosModule(user: User | null | undefined): boolean {
@@ -41,19 +47,25 @@ export function canWriteEstudio(user: User | null | undefined): boolean {
   return puedeOperarEstudios(user);
 }
 
-/** Admin o profesional que marcó el estudio como realizado. */
+/** Registrar realización: roles con escritura del módulo (incluye secretaría). */
+export function canMarcarRealizadoUser(user: User | null | undefined): boolean {
+  return canWriteEstudio(user);
+}
+
+/** Admin, secretaría o profesional que marcó el estudio como realizado. */
 export function esRealizadorOAdmin(
   user: User | null | undefined,
   estudio: EstudioComplementario
 ): boolean {
   if (!user) return false;
-  if (user.is_superuser || normalizedRol(user) === 'admin') return true;
+  const rol = normalizedRol(user);
+  if (user.is_superuser || rol === 'admin' || rol === 'secretaria') return true;
   return Boolean(estudio.realizado_por && estudio.realizado_por === user.id);
 }
 
 /**
  * Editar archivos / informes / metadata.
- * Tras VALIDADO: solo realizador o admin. ENTREGADO/ANULADO: no.
+ * Tras VALIDADO: realizador, admin o secretaría. ENTREGADO/ANULADO: no.
  */
 export function canModificarContenidoEstudio(
   user: User | null | undefined,
@@ -72,7 +84,8 @@ export function canValidateInforme(
   estudio?: EstudioComplementario | null
 ): boolean {
   if (!user) return false;
-  if (user.is_superuser || normalizedRol(user) === 'admin') return true;
+  const rol = normalizedRol(user);
+  if (user.is_superuser || rol === 'admin' || rol === 'secretaria') return true;
   if (!estudio) return false;
   return Boolean(estudio.realizado_por && estudio.realizado_por === user.id);
 }
@@ -87,7 +100,7 @@ export function canDownloadArchivoEstudio(
   if (rol === 'paciente') {
     return estudio.estado === 'ENTREGADO';
   }
-  if (rol === 'secretaria' || rol === 'enfermeria') {
+  if (rol === 'enfermeria') {
     return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO';
   }
   return false;
@@ -108,7 +121,7 @@ export function canDownloadPdfInformeEstudio(
   if (rol === 'paciente') {
     return estudio.estado === 'ENTREGADO';
   }
-  if (rol === 'secretaria' || rol === 'enfermeria') {
+  if (rol === 'enfermeria') {
     return estudio.estado === 'VALIDADO' || estudio.estado === 'ENTREGADO';
   }
   return false;
@@ -166,7 +179,16 @@ export function canMarcarRealizado(estudio: EstudioComplementario): boolean {
 }
 
 export function canAnularEstudio(estudio: EstudioComplementario): boolean {
-  return ['SOLICITADO', 'CONFIRMADO', 'REALIZADO', 'INFORMADO'].includes(estudio.estado);
+  // B: anulación administrativa solo previa a realización.
+  return estudio.estado === 'SOLICITADO' || estudio.estado === 'CONFIRMADO';
+}
+
+export function canReprogramarTurnoEstudio(estudio: EstudioComplementario): boolean {
+  return (
+    estudio.estado === 'CONFIRMADO' &&
+    Boolean(estudio.turno_id) &&
+    (estudio.turno_estado === 'CONFIRMADO' || estudio.turno_estado === 'RESERVADO')
+  );
 }
 
 export function canEntregarEstudio(
@@ -174,9 +196,23 @@ export function canEntregarEstudio(
   estudio: EstudioComplementario
 ): boolean {
   if (estudio.estado !== 'VALIDADO') return false;
+  if (estudio.tipo_actividad === 'CIRUGIA' && !estudio.fecha_cierre) return false;
   if (canModificarContenidoEstudio(user, estudio)) return true;
   const rol = normalizedRol(user);
   return rol === 'secretaria' || rol === 'admin';
+}
+
+/** D: cierre administrativo — secretaría o escritura clínica; gate de protocolo en backend. */
+export function canCerrarCirugia(
+  user: User | null | undefined,
+  estudio: EstudioComplementario
+): boolean {
+  if (estudio.tipo_actividad !== 'CIRUGIA') return false;
+  if (estudio.estado !== 'VALIDADO') return false;
+  if (estudio.fecha_cierre) return false;
+  const rol = normalizedRol(user);
+  if (rol === 'admin' || rol === 'secretaria') return true;
+  return canModificarContenidoEstudio(user, estudio);
 }
 
 export function canAsociarArchivo(

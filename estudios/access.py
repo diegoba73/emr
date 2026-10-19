@@ -11,12 +11,17 @@ def _rol(user) -> str:
 
 
 def usuario_puede_escribir_estudio(user) -> bool:
+    """Operación completa del módulo estudios/proc/cirugía (alta, edición, doc).
+
+    Secretaría incluida: es el rol operativo habitual (pacientes, turnos, carga
+    documental) y los profesionales delegan estas funciones con frecuencia.
+    """
     if not user.is_authenticated:
         return False
     if user.is_superuser:
         return True
     rol = _rol(user)
-    return rol in {'admin', 'medico', *ROLES_ESTUDIO_COMPLEMENTARIO}
+    return rol in {'admin', 'medico', 'secretaria', *ROLES_ESTUDIO_COMPLEMENTARIO}
 
 
 def usuario_puede_asignar_turno_estudio(user) -> bool:
@@ -26,6 +31,15 @@ def usuario_puede_asignar_turno_estudio(user) -> bool:
     if user.is_superuser:
         return True
     return _rol(user) in {'admin', 'secretaria'}
+
+
+def usuario_puede_marcar_realizado(user) -> bool:
+    """Registrar realización: roles con escritura del módulo (incluye secretaría)."""
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return usuario_puede_escribir_estudio(user)
 
 
 def usuario_puede_ver_estudios_agenda(user) -> bool:
@@ -112,7 +126,9 @@ def usuario_puede_descargar_archivo_estudio(user, estudio) -> bool:
         return True
     if rol == 'laboratorio':
         return False
-    if rol in ('secretaria', 'enfermeria'):
+    if usuario_puede_escribir_estudio(user):
+        return usuario_puede_ver_estudio_clinico(user, estudio)
+    if rol == 'enfermeria':
         return estudio.estado in (estudio.Estado.VALIDADO, estudio.Estado.ENTREGADO)
     if rol == 'paciente':
         try:
@@ -131,7 +147,7 @@ def usuario_puede_crear_estudio(user, paciente) -> bool:
     if user.is_superuser:
         return True
     rol = _rol(user)
-    if rol == 'admin':
+    if rol in ('admin', 'secretaria'):
         return True
     if es_rol_estudio_complementario(rol):
         return True
@@ -154,7 +170,14 @@ def usuario_puede_descargar_pdf_informe(user, estudio, informe) -> bool:
         return True
     if rol == 'laboratorio':
         return False
-    if rol in ('secretaria', 'enfermeria'):
+    if usuario_puede_escribir_estudio(user):
+        if rol == 'medico':
+            try:
+                return medico_puede_acceder_paciente(user.medico, estudio.paciente)
+            except Exception:
+                return False
+        return True
+    if rol == 'enfermeria':
         return (
             estudio.estado in (estudio.Estado.VALIDADO, estudio.Estado.ENTREGADO)
             and informe.estado == informe.EstadoInforme.VALIDADO
@@ -170,27 +193,18 @@ def usuario_puede_descargar_pdf_informe(user, estudio, informe) -> bool:
             )
         except Exception:
             return False
-    if user.is_superuser or rol == 'admin':
-        return True
-    if es_rol_estudio_complementario(rol):
-        return True
-    if rol == 'medico':
-        try:
-            return medico_puede_acceder_paciente(user.medico, estudio.paciente)
-        except Exception:
-            return False
     return False
 
 
 def usuario_puede_validar_informe(user, estudio=None) -> bool:
     """
     Validar informe (y pasar estudio a VALIDADO):
-    - admin / superuser
+    - admin / superuser / secretaría (operador delegado del módulo)
     - profesional que realizó el estudio (``realizado_por``)
     """
     if not user.is_authenticated:
         return False
-    if user.is_superuser or _rol(user) == 'admin':
+    if user.is_superuser or _rol(user) in ('admin', 'secretaria'):
         return True
     if estudio is None:
         return False
@@ -200,7 +214,7 @@ def usuario_puede_validar_informe(user, estudio=None) -> bool:
 def usuario_puede_modificar_contenido_estudio(user, estudio) -> bool:
     """
     Editar metadatos, archivos e informes del estudio.
-    Tras VALIDADO: solo el realizador o admin.
+    Tras VALIDADO: realizador, admin o secretaría.
     ENTREGADO/ANULADO: no (la reapertura va por rectificación).
     """
     if not usuario_puede_escribir_estudio(user):
@@ -212,14 +226,14 @@ def usuario_puede_modificar_contenido_estudio(user, estudio) -> bool:
     if estudio.estado == estudio.Estado.ENTREGADO:
         return False
     if estudio.estado == estudio.Estado.VALIDADO:
-        if user.is_superuser or _rol(user) == 'admin':
+        if user.is_superuser or _rol(user) in ('admin', 'secretaria'):
             return True
         return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
     return True
 
 
 def usuario_puede_entregar_estudio(user, estudio) -> bool:
-    """Marcar ENTREGADO (visible al paciente): realizador/admin, o secretaría si VALIDADO."""
+    """Marcar ENTREGADO (visible al paciente): escritura del módulo si VALIDADO (+ gate cirugía)."""
     if not user.is_authenticated:
         return False
     if estudio.estado != estudio.Estado.VALIDADO:
@@ -233,9 +247,10 @@ def usuario_puede_entregar_estudio(user, estudio) -> bool:
 
 
 def usuario_es_realizador_o_admin(user, estudio) -> bool:
+    """Realizador, admin o secretaría (operador delegado para emitir/rectificar)."""
     if not user.is_authenticated:
         return False
-    if user.is_superuser or _rol(user) == 'admin':
+    if user.is_superuser or _rol(user) in ('admin', 'secretaria'):
         return True
     return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
 
@@ -250,3 +265,16 @@ def usuario_puede_enviar_pdf_informe(user, estudio, informe) -> bool:
         and informe.es_vigente
         and usuario_puede_descargar_pdf_informe(user, estudio, informe)
     )
+
+
+def usuario_puede_cerrar_cirugia(user, estudio=None) -> bool:
+    """D: cierre administrativo — roles con escritura del módulo (incluye secretaría).
+
+    El gate de protocolo validado vive en el service (TX), no en este permiso.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser:
+        return True
+    return usuario_puede_escribir_estudio(user)
+

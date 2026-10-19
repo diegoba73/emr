@@ -32,7 +32,7 @@ def test_medico_no_puede_patch_paciente_id_a_paciente_ajeno(
     client, medico, paciente, otro_paciente, tipo_estudio, atencion_vinculada,
 ):
     client.force_authenticate(user=medico.user)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     assert r.status_code == 201
     eid = r.data['id']
     r = client.patch(
@@ -187,7 +187,7 @@ def test_medico_realizador_puede_validar_informe(
     client, medico, paciente, tipo_estudio, atencion_vinculada,
 ):
     client.force_authenticate(user=medico.user)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     eid = r.data['id']
     _estudio_realizado(client, eid)
     estudio = EstudioComplementario.objects.get(pk=eid)
@@ -210,7 +210,7 @@ def test_medico_ajeno_no_puede_validar_informe(
     from turnos.models import Atencion, Turno
 
     client.force_authenticate(user=medico.user)
-    r = client.post(BASE, _payload_crear(paciente, tipo_estudio), format='json')
+    r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     eid = r.data['id']
     _estudio_realizado(client, eid)
     r = client.post(f'{BASE}{eid}/informes/', {'texto': 'X'}, format='json')

@@ -385,9 +385,11 @@ Pedir arquitectura + auditoría obligatoria si se toca:
 
 ### 6.6 Producción con órdenes vivas (compatibilidad)
 
-SoT: `reglas/produccion-servidor.md` → **Compatibilidad con órdenes y exámenes ya existentes**.
+SoT: `reglas/produccion-servidor.md` → **Compatibilidad con órdenes y exámenes ya existentes** y **Avisos obligatorios antes de rebuild / recreate**.
 
 Antes de implementar (y otra vez antes de sugerir deploy), el asistente debe preguntarse: *¿esto puede romper o cambiar el comportamiento de una orden/examen que ya existe en prod?*
+
+Antes de proponer `build --no-cache`, recreate de nginx/backend o downtime: **avisar tiempo estimado + si el sistema sigue usable**, y esperar OK explícito (salvo pedido explícito del usuario en ese mensaje).
 
 Si hay **posibilidad real** (validación más estricta, catálogo, tubos, estados, migraciones, seeds):
 

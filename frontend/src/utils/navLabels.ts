@@ -25,7 +25,9 @@ export function getAppSegmentTitle(pathname: string, user: User | null | undefin
   if (p.startsWith('/atenciones')) return isPacienteRole(user) ? 'Mis atenciones' : 'Atenciones Clínicas';
   if (p.startsWith('/archivos')) return isPacienteRole(user) ? 'Mis archivos' : 'Archivos';
   if (p.startsWith('/estudios-complementarios')) {
-    return isPacienteRole(user) ? 'Mis estudios complementarios' : 'Estudios complementarios';
+    return isPacienteRole(user)
+      ? 'Mis estudios y procedimientos'
+      : 'Estudios y procedimientos';
   }
   if (p.startsWith('/solicitudes/') && p !== '/solicitudes') {
     return isPacienteRole(user) ? 'Detalle de análisis' : 'Detalle de orden';

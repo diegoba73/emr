@@ -41,15 +41,17 @@ it('administrador puede descargar un informe borrador para revisión', () => {
 });
 
 
-it('secretaría puede descargar y enviar el informe vigente validado, pero no borradores ni versiones anteriores', () => {
+it('secretaría opera el módulo: descarga/envío de informe validado vigente', () => {
   const secretaria = user({ rol: 'SECRETARIA' });
-  for (const estado of ['VALIDADO', 'ENTREGADO']) {
+  for (const estado of ['VALIDADO', 'ENTREGADO', 'INFORMADO']) {
     const estudio = { estado } as any;
     const validado = { estado: 'VALIDADO', es_vigente: true } as any;
     expect(canDownloadPdfInformeEstudio(secretaria, estudio, validado)).toBe(true);
-    expect(canEnviarInformeEstudio(secretaria, estudio, validado)).toBe(true);
-    expect(canEnviarInformeEstudio(secretaria, estudio, { ...validado, es_vigente: false })).toBe(false);
-    expect(canEnviarInformeEstudio(secretaria, estudio, { ...validado, estado: 'BORRADOR' })).toBe(false);
   }
-  expect(canEnviarInformeEstudio(secretaria, { estado: 'INFORMADO' } as any, { estado: 'VALIDADO', es_vigente: true } as any)).toBe(false);
+  const validado = { estado: 'VALIDADO', es_vigente: true } as any;
+  expect(canEnviarInformeEstudio(secretaria, { estado: 'VALIDADO' } as any, validado)).toBe(true);
+  expect(canEnviarInformeEstudio(secretaria, { estado: 'ENTREGADO' } as any, validado)).toBe(true);
+  expect(canEnviarInformeEstudio(secretaria, { estado: 'VALIDADO' } as any, { ...validado, es_vigente: false })).toBe(false);
+  expect(canEnviarInformeEstudio(secretaria, { estado: 'VALIDADO' } as any, { ...validado, estado: 'BORRADOR' })).toBe(false);
+  expect(canEnviarInformeEstudio(secretaria, { estado: 'INFORMADO' } as any, validado)).toBe(false);
 });
