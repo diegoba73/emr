@@ -95,28 +95,39 @@ def _ventana_hoy(ahora=None):
     """
     Ventana del día operativo IQC en TZ local.
 
-    Corte default 08:00. Lun–vie: [corte, corte+24h).
-    Sábado/domingo (y lunes antes del corte): el control del viernes sigue
-    vigente → ventana [viernes 08:00, lunes 08:00).
+    Corte default 08:00. Control obligatorio solo **lunes** y **viernes**:
+    - Lun 08:00 → vie 08:00: vale ACEPTADA del lunes (cubre mar/mié/jue).
+    - Vie 08:00 → lun 08:00: vale ACEPTADA del viernes (cubre sáb/dom y
+      lunes antes del corte).
     """
     inicio_date = _fecha_corte_dia_operativo(ahora)
     hora_corte = _hora_inicio_dia_operativo()
     corte = time(hora_corte, 0, 0)
-    # Sábado=5, domingo=6 → rebobinar al viernes y extender hasta el lunes.
-    if inicio_date.weekday() >= 5:
-        inicio_date = inicio_date - timedelta(days=inicio_date.weekday() - 4)
+    wd = inicio_date.weekday()  # 0=lun … 6=dom
+
+    if wd == 0:
+        # Lunes: ventana hasta el viernes 08:00.
         start = timezone.make_aware(datetime.combine(inicio_date, corte))
-        end = start + timedelta(days=3)
-        return start, end
-    start = timezone.make_aware(datetime.combine(inicio_date, corte))
-    end = start + timedelta(days=1)
-    return start, end
+        return start, start + timedelta(days=4)
+    if wd in (1, 2, 3):
+        # Mar / mié / jue → hereda el lunes de esa semana.
+        lunes = inicio_date - timedelta(days=wd)
+        start = timezone.make_aware(datetime.combine(lunes, corte))
+        return start, start + timedelta(days=4)
+    if wd == 4:
+        # Viernes: ventana hasta el lunes 08:00.
+        start = timezone.make_aware(datetime.combine(inicio_date, corte))
+        return start, start + timedelta(days=3)
+    # Sábado / domingo → hereda el viernes.
+    viernes = inicio_date - timedelta(days=wd - 4)
+    start = timezone.make_aware(datetime.combine(viernes, corte))
+    return start, start + timedelta(days=3)
 
 
 def fecha_dia_operativo_iqc(ahora=None):
     """Fecha civil del inicio de la ventana IQC vigente (etiquetas del tablero).
 
-    En fin de semana es el viernes cuyo control sigue vigente.
+    Lunes–jueves: el lunes de control. Viernes–domingo: el viernes de control.
     """
     start, _ = _ventana_hoy(ahora)
     return timezone.localtime(start).date()

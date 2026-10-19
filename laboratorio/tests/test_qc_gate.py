@@ -425,62 +425,57 @@ class TestQcVentanaDiaOperativo(TestCase):
             (y, m, d, hh, mm),
         )
 
-    def test_ventana_antes_de_08_empieza_ayer(self):
-        ahora = self._aware(2026, 10, 7, 1, 0)  # martes 01:00
+    def test_ventana_antes_de_08_sigue_lunes(self):
+        # 2026-10-12 = lunes … 16 = viernes. Martes 01:00 → ventana lun→vie.
+        ahora = self._aware(2026, 10, 13, 1, 0)  # martes 01:00
         with patch("django.utils.timezone.now", return_value=ahora):
             start, end = _ventana_hoy()
-            self._assert_local(start, 2026, 10, 6, 8, 0)
-            self._assert_local(end, 2026, 10, 7, 8, 0)
-            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 6).date())
+            self._assert_local(start, 2026, 10, 12, 8, 0)
+            self._assert_local(end, 2026, 10, 16, 8, 0)
+            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 12).date())
 
-    def test_ventana_despues_de_08_empieza_hoy(self):
-        ahora = self._aware(2026, 10, 7, 9, 0)  # martes 09:00
+    def test_ventana_martes_despues_de_08_hereda_lunes(self):
+        ahora = self._aware(2026, 10, 13, 9, 0)  # martes 09:00
         with patch("django.utils.timezone.now", return_value=ahora):
             start, end = _ventana_hoy()
-            self._assert_local(start, 2026, 10, 7, 8, 0)
-            self._assert_local(end, 2026, 10, 8, 8, 0)
-            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 7).date())
+            self._assert_local(start, 2026, 10, 12, 8, 0)
+            self._assert_local(end, 2026, 10, 16, 8, 0)
+            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 12).date())
 
     def test_madrugada_acepta_corrida_rutina_anterior(self):
         # Lunes 10:00 rutina ACEPTADA; martes 01:00 guardia → OK
-        corrida_fecha = self._aware(2026, 10, 6, 10, 0)
+        corrida_fecha = self._aware(2026, 10, 12, 10, 0)
         CorridaQC.objects.create(
             lote_control=self.lote,
             equipo=self.equipo,
             fecha=corrida_fecha,
             estado=CorridaQC.Estado.ACEPTADA,
         )
-        ahora = self._aware(2026, 10, 7, 1, 0)
+        ahora = self._aware(2026, 10, 13, 1, 0)
         with patch("django.utils.timezone.now", return_value=ahora):
             validar_qc_para_cierre(self.solicitud)
 
     def test_madrugada_sin_corrida_previa_bloquea(self):
-        ahora = self._aware(2026, 10, 7, 1, 0)
+        ahora = self._aware(2026, 10, 13, 1, 0)
         with patch("django.utils.timezone.now", return_value=ahora):
             with self.assertRaises(QcGateError):
                 validar_qc_para_cierre(self.solicitud)
 
-    def test_manana_ya_no_acepta_solo_corrida_de_ayer(self):
-        # Lunes 10:00 ACEPTADA; martes 09:00 → ya no alcanza (día operativo nuevo)
+    def test_lunes_aceptada_cubre_martes_miercoles_jueves(self):
+        # Lunes 10:00 ACEPTADA libera mar/mié/jue (sin exigir control nuevo).
         CorridaQC.objects.create(
             lote_control=self.lote,
             equipo=self.equipo,
-            fecha=self._aware(2026, 10, 6, 10, 0),
+            fecha=self._aware(2026, 10, 12, 10, 0),
             estado=CorridaQC.Estado.ACEPTADA,
         )
-        ahora = self._aware(2026, 10, 7, 9, 0)
-        with patch("django.utils.timezone.now", return_value=ahora):
-            with self.assertRaises(QcGateError) as ctx:
+        for ahora in (
+            self._aware(2026, 10, 13, 9, 0),  # martes
+            self._aware(2026, 10, 14, 12, 0),  # miércoles
+            self._aware(2026, 10, 15, 16, 0),  # jueves
+        ):
+            with patch("django.utils.timezone.now", return_value=ahora):
                 validar_qc_para_cierre(self.solicitud)
-            self.assertIn("Sin corrida", str(ctx.exception))
-        CorridaQC.objects.create(
-            lote_control=self.lote,
-            equipo=self.equipo,
-            fecha=self._aware(2026, 10, 7, 8, 30),
-            estado=CorridaQC.Estado.ACEPTADA,
-        )
-        with patch("django.utils.timezone.now", return_value=ahora):
-            validar_qc_para_cierre(self.solicitud)
 
     def test_ventana_sabado_extiende_viernes_a_lunes(self):
         # 2026-10-09 = viernes, 10 = sáb, 11 = dom, 12 = lun
@@ -539,7 +534,7 @@ class TestQcVentanaDiaOperativo(TestCase):
         with patch("django.utils.timezone.now", return_value=ahora):
             start, end = _ventana_hoy()
             self._assert_local(start, 2026, 10, 12, 8, 0)
-            self._assert_local(end, 2026, 10, 13, 8, 0)
+            self._assert_local(end, 2026, 10, 16, 8, 0)  # hasta viernes
             with self.assertRaises(QcGateError) as ctx:
                 validar_qc_para_cierre(self.solicitud)
             self.assertIn("Sin corrida", str(ctx.exception))
@@ -552,7 +547,24 @@ class TestQcVentanaDiaOperativo(TestCase):
         with patch("django.utils.timezone.now", return_value=ahora):
             validar_qc_para_cierre(self.solicitud)
 
+    def test_viernes_desde_08_exige_control_nuevo_aunque_haya_lunes(self):
+        # Lunes ACEPTADA no alcanza el viernes 08:00 (ventana nueva).
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 12, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 16, 9, 0)  # viernes
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 16, 8, 0)
+            self._assert_local(end, 2026, 10, 19, 8, 0)
+            with self.assertRaises(QcGateError):
+                validar_qc_para_cierre(self.solicitud)
+
     def test_martes_no_hereda_control_del_viernes(self):
+        # Sin lunes: el viernes anterior no cubre el martes.
         CorridaQC.objects.create(
             lote_control=self.lote,
             equipo=self.equipo,

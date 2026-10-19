@@ -71,16 +71,19 @@ def resolver_procedencia_solicitud(solicitud: SolicitudExamen) -> dict[str, Any]
             or getattr(solicitud, "created_at", None)
             or timezone.now()
         )
-        internacion = (
-            Internacion.objects.filter(
-                paciente_id=solicitud.paciente_id,
-                activo=True,
-                fecha_ingreso__lte=fecha_ref,
+        if hasattr(solicitud, "_procedencia_internacion_prefetch"):
+            internacion = getattr(solicitud, "_procedencia_internacion_prefetch")
+        else:
+            internacion = (
+                Internacion.objects.filter(
+                    paciente_id=solicitud.paciente_id,
+                    activo=True,
+                    fecha_ingreso__lte=fecha_ref,
+                )
+                .select_related("cama__sector")
+                .order_by("-fecha_ingreso")
+                .first()
             )
-            .select_related("cama__sector")
-            .order_by("-fecha_ingreso")
-            .first()
-        )
         if internacion is not None:
             cama_obj = internacion.cama if internacion.cama_id else None
             sector_obj = getattr(cama_obj, "sector", None) if cama_obj is not None else None

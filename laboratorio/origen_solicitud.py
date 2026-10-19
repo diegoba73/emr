@@ -26,6 +26,9 @@ ORIGEN_CHOICES = [
 
 ORIGEN_LABELS = dict(ORIGEN_CHOICES)
 ORIGENES_EXTERNOS = frozenset({EXTERNO_CEHTA, EXTERNO_ICPL})
+ORIGENES_AMBULATORIO = frozenset(
+    {AMBULATORIO_CEHTA, AMBULATORIO_ICPL, EXTERNO_CEHTA, EXTERNO_ICPL}
+)
 
 # Migración desde valores legacy
 _LEGACY_MAP = {
@@ -37,6 +40,15 @@ _LEGACY_MAP = {
 
 def es_origen_ambulatorio_externo(codigo: str | None) -> bool:
     return (codigo or '') in ORIGENES_EXTERNOS
+
+
+def es_origen_ambulatorio(codigo: str | None) -> bool:
+    """Ambulatorio CEHTA/ICPL o receta externa presentada en CEHTA/ICPL."""
+    c = (codigo or '').strip()
+    if c in ORIGENES_AMBULATORIO:
+        return True
+    # Legacy EMR / EXTERNO_PAPEL → ambulatorio
+    return _LEGACY_MAP.get(c) in ORIGENES_AMBULATORIO
 
 
 def procedencia_display_externo(solicitud) -> str | None:

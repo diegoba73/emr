@@ -380,3 +380,51 @@ class TestOrdenGruposInforme(TestCase):
             grupos.index(clear_g),
             grupos.index(next(g for g in grupos if g.panel_codigo == "PAN_ORI")),
         )
+
+    def test_ambulatorio_unificado_sangre_soh_orina_completa(self):
+        """En una sola orden: sangre → SOH (MF) → orina completa al final."""
+        tm_fecal, _ = TipoMuestra.objects.get_or_create(
+            codigo="MATERIA_FECAL",
+            defaults={"nombre": "Materia fecal", "activo": True},
+        )
+        te_soh, _ = TipoExamen.objects.update_or_create(
+            codigo="SOH",
+            defaults={
+                "nombre": "Sangre oculta",
+                "tipo_muestra_requerida": tm_fecal,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            material_pedido="",
+            estado="EN_PROCESO",
+        )
+        sol.paneles.add(self.panel_hemo, self.panel_orina)
+        ResultadoExamen.objects.create(
+            solicitud=sol, tipo_examen=self.te_wbc, valor_obtenido="5"
+        )
+        ResultadoExamen.objects.create(
+            solicitud=sol, tipo_examen=te_soh, valor_obtenido="Negativo"
+        )
+        ResultadoExamen.objects.create(
+            solicitud=sol, tipo_examen=self.te_ph, valor_obtenido="6"
+        )
+
+        resultados = list(
+            sol.resultados.select_related("tipo_examen", "tipo_examen__tipo_muestra_requerida")
+        )
+        grupos = ordenar_grupos_por_defecto(construir_grupos_informe(sol, resultados))
+        self.assertGreaterEqual(len(grupos), 3)
+        idx_hemo = next(i for i, g in enumerate(grupos) if g.panel_codigo == PANEL_HEMOGRAMA)
+        idx_soh = next(
+            i
+            for i, g in enumerate(grupos)
+            if any((r.tipo_examen.codigo or "").upper() == "SOH" for r in g.resultados)
+        )
+        idx_ori = next(i for i, g in enumerate(grupos) if g.panel_codigo == "PAN_ORI")
+        self.assertLess(idx_hemo, idx_soh)
+        self.assertLess(idx_soh, idx_ori)
+        self.assertEqual(idx_ori, len(grupos) - 1)

@@ -19,6 +19,9 @@ from laboratorio.models import PanelExamen, SolicitudExamen, TipoExamen
 ESTADOS_ORDEN_TERMINALES = frozenset({"FINALIZADO", "CANCELADO"})
 ESTADOS_MICRO_TERMINALES = frozenset({"CANCELADO", "VALIDADO", "INFORMADO"})
 
+# En ambulatorio, estos materiales se unifican en una sola SolicitudExamen.
+MATERIALES_UNIFICABLES_AMBULATORIO = frozenset({"SANGRE", "ORINA", "MATERIA_FECAL"})
+
 MENSAJE_MATERIAL_ACTIVO = (
     "Ya existe una orden activa de {material} para ese día de extracción. "
     "Esperá a que el laboratorio la finalice, o programalo para otro día."

@@ -257,6 +257,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
     observaciones?: string;
     fecha_programada_toma: string;
     material_pedido: string;
+    materiales_unificados?: string[];
   }) => {
     persistDraft((prev) => ({
       ...prev,
@@ -420,6 +421,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         onClose={() => setLabOpen(false)}
         draftMode
         consultaHcId={consultaHcId}
+        origenInicial={usePendingDraft ? 'GUARDIA' : 'AMBULATORIO_ICPL'}
         onAddDraft={handleAddLabDraft}
         onAddDraftMicro={handleAddMicroDraft}
       />

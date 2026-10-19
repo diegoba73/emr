@@ -968,6 +968,10 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             paciente_tiene_orden_bloqueada,
         )
 
+        cache = self.context.get("pedido_adicional_by_id")
+        if isinstance(cache, dict) and obj.pk in cache:
+            return bool(cache[obj.pk])
+
         if not orden_esta_abierta(obj):
             return False
         return paciente_tiene_orden_bloqueada(
@@ -1026,7 +1030,13 @@ class _SolicitudExamenSafeListSerializer(serializers.ListSerializer):
     """Una fila inválida no debe tumbar el listado completo (500 en /solicitudes)."""
 
     def to_representation(self, data):
-        iterable = data.all() if hasattr(data, "all") else data
+        iterable = list(data.all() if hasattr(data, "all") else data)
+        try:
+            from laboratorio.listado_bandeja_prefetch import warm_listado_bandeja_context
+
+            warm_listado_bandeja_context(iterable, self.child.context)
+        except Exception:
+            logger.exception("warm_listado_bandeja_context falló; listado sin prefetch batch")
         out = []
         for item in iterable:
             try:
@@ -1341,6 +1351,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         forzar_nueva_orden no salta anti-dup.
         """
         from laboratorio.material_pedido_orden import (
+            MATERIALES_UNIFICABLES_AMBULATORIO,
             adquirir_locks_materiales,
             buscar_conflictos_materiales_clinicos,
             componentes_panel_por_material,
@@ -1349,6 +1360,7 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             normalizar_material_pedido,
             tipo_examen_compatible_con_material,
         )
+        from laboratorio.origen_solicitud import es_origen_ambulatorio
         from laboratorio.restricciones_frecuencia import (
             RestriccionFrecuenciaError,
             assert_puede_agregar_ensayos,
@@ -1397,8 +1409,9 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
 
         # Inferir / validar material_pedido.
         mat = normalizar_material_pedido(validated_data.get('material_pedido'))
+        mats_inf: set[str] = set()
+        unificado_ambulatorio = False
         if not mat:
-            mats_inf: set[str] = set()
             for tid in examenes_ids or []:
                 te = TipoExamen.objects.filter(pk=tid).select_related(
                     "tipo_muestra_requerida"
@@ -1416,15 +1429,32 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             if len(mats_inf) == 1:
                 mat = next(iter(mats_inf))
             elif len(mats_inf) > 1:
-                raise serializers.ValidationError(
-                    {
-                        'material_pedido': (
-                            'Indicá material_pedido: la selección incluye varios materiales. '
-                            'Preferí POST /lab/pedidos-completos/.'
-                        )
-                    }
+                origen_v = (
+                    normalizar_origen_solicitud(validated_data.get('origen_solicitud'))
+                    or validated_data.get('origen_solicitud')
+                    or ''
                 )
-        if not material_pedido_valido(mat) and not repeticion_control:
+                if (
+                    es_origen_ambulatorio(origen_v)
+                    and mats_inf.issubset(MATERIALES_UNIFICABLES_AMBULATORIO)
+                ):
+                    # Una orden ambulatoria con sangre/orina/MF: material vacío.
+                    mat = ""
+                    unificado_ambulatorio = True
+                else:
+                    raise serializers.ValidationError(
+                        {
+                            'material_pedido': (
+                                'Indicá material_pedido: la selección incluye varios materiales. '
+                                'Preferí POST /lab/pedidos-completos/.'
+                            )
+                        }
+                    )
+        if (
+            not material_pedido_valido(mat)
+            and not repeticion_control
+            and not unificado_ambulatorio
+        ):
             raise serializers.ValidationError(
                 {'material_pedido': 'material_pedido es obligatorio en altas nuevas.'}
             )
@@ -1449,10 +1479,11 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                     getattr(origen_parcial, 'material_pedido', None) or ""
                 )
                 mat = validated_data['material_pedido']
-        elif mat and fecha_toma is not None:
-            adquirir_locks_materiales(paciente.pk, {mat}, fecha_toma)
+        elif (mat or unificado_ambulatorio) and fecha_toma is not None:
+            mats_lock = {mat} if mat else set(mats_inf)
+            adquirir_locks_materiales(paciente.pk, mats_lock, fecha_toma)
             conflictos = buscar_conflictos_materiales_clinicos(
-                paciente.pk, fecha_toma, {mat}
+                paciente.pk, fecha_toma, mats_lock
             )
             if conflictos:
                 raise serializers.ValidationError(conflictos[0].mensaje)
@@ -1460,7 +1491,15 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
         # Tipos: paneles repartidos por material (sin expansión total).
         tipos_resueltos: set[int] = set()
         paneles_vincular: set[int] = set()
-        if mat:
+        if unificado_ambulatorio:
+            from laboratorio.pedidos_completos import _resolver_tipos_materiales_permitidos
+
+            tipos_resueltos, paneles_vincular, errores = _resolver_tipos_materiales_permitidos(
+                list(examenes_ids or []), list(paneles_ids or []), mats_inf
+            )
+            if errores:
+                raise serializers.ValidationError(errores[0])
+        elif mat:
             from laboratorio.pedidos_completos import _resolver_tipos_para_material
 
             tipos_resueltos, paneles_vincular, errores = _resolver_tipos_para_material(

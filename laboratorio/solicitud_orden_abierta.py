@@ -630,10 +630,40 @@ def agregar_examenes_a_solicitud(
 
     # Compatibilidad con material: legado permisivo; insumos de calculados
     # (p. ej. CREATI en orden de clearance/orina) siempre admitidos.
+    # Ambulatorio: SANGRE/ORINA/MATERIA_FECAL pueden coexistir en la misma orden.
     from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
-    from laboratorio.material_pedido_orden import tipo_examen_compatible_con_material
+    from laboratorio.material_pedido_orden import (
+        MATERIALES_UNIFICABLES_AMBULATORIO,
+        buscar_conflictos_materiales_clinicos,
+        inferir_materiales_de_solicitud,
+        muestra_codigo_a_material,
+        tipo_examen_compatible_con_material,
+    )
+    from laboratorio.origen_solicitud import es_origen_ambulatorio
 
     mat_orden = (getattr(sol, "material_pedido", None) or "").strip().upper()
+    origen_sol = getattr(sol, "origen_solicitud", None) or ""
+    ambulatorio = es_origen_ambulatorio(origen_sol)
+    vaciar_material_pedido = False
+
+    mats_nuevos: set[str] = set()
+    if tipos_nuevos:
+        for te in TipoExamen.objects.filter(pk__in=tipos_nuevos).select_related(
+            "tipo_muestra_requerida"
+        ):
+            tm = (
+                getattr(te.tipo_muestra_requerida, "codigo", None)
+                if te.tipo_muestra_requerida_id
+                else None
+            )
+            mapped = muestra_codigo_a_material(tm)
+            if mapped:
+                mats_nuevos.add(mapped)
+
+    mats_ya = set(inferir_materiales_de_solicitud(sol).materiales)
+    if mat_orden:
+        mats_ya.add(mat_orden)
+
     if tipos_nuevos and mat_orden:
         codigos_en_orden = {
             (c or "").strip().upper()
@@ -662,10 +692,30 @@ def agregar_examenes_a_solicitud(
                 continue
             incompatibles.append(codigo or str(te.pk))
         if incompatibles:
-            raise OrdenNoAbiertaError(
-                "Los exámenes no son compatibles con el material de la orden "
-                f"({mat_orden}): {', '.join(incompatibles[:8])}."
+            allow_bucket = (
+                ambulatorio
+                and mat_orden in MATERIALES_UNIFICABLES_AMBULATORIO
+                and mats_nuevos
+                and mats_nuevos.issubset(MATERIALES_UNIFICABLES_AMBULATORIO)
             )
+            if not allow_bucket:
+                raise OrdenNoAbiertaError(
+                    "Los exámenes no son compatibles con el material de la orden "
+                    f"({mat_orden}): {', '.join(incompatibles[:8])}."
+                )
+            vaciar_material_pedido = True
+
+    # Anti-dup: materiales nuevos no cubiertos por esta orden no deben existir en otra activa.
+    mats_extra = mats_nuevos - mats_ya
+    if mats_extra and sol.fecha_programada_toma is not None:
+        conflictos = buscar_conflictos_materiales_clinicos(
+            sol.paciente_id,
+            sol.fecha_programada_toma,
+            mats_extra,
+            exclude_solicitud_id=sol.pk,
+        )
+        if conflictos:
+            raise OrdenNoAbiertaError(conflictos[0].mensaje)
 
     assert_puede_agregar_ensayos(
         user,
@@ -707,6 +757,10 @@ def agregar_examenes_a_solicitud(
     if paneles_nuevos:
         actuales_p = set(sol.paneles.values_list("id", flat=True))
         sol.paneles.set(actuales_p | paneles_nuevos)
+
+    if vaciar_material_pedido and (getattr(sol, "material_pedido", None) or "").strip():
+        sol.material_pedido = ""
+        sol.save(update_fields=["material_pedido"])
 
     if not orden_esta_abierta(sol) and orden_tiene_muestras_activas(sol):
         _crear_tubos_faltantes_tras_agregar(sol, user=user)

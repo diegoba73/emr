@@ -16,6 +16,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from laboratorio.material_pedido_orden import (
+    MATERIALES_UNIFICABLES_AMBULATORIO,
     adquirir_locks_materiales,
     buscar_conflictos_materiales_clinicos,
     buscar_conflictos_micro,
@@ -27,7 +28,11 @@ from laboratorio.material_pedido_orden import (
 )
 from laboratorio.models import PanelExamen, ResultadoExamen, SolicitudExamen, TipoExamen
 from laboratorio.models_pedido_idempotencia import PedidoCompletoIdempotencia
-from laboratorio.origen_solicitud import inferir_origen_solicitud, normalizar_origen_solicitud
+from laboratorio.origen_solicitud import (
+    es_origen_ambulatorio,
+    inferir_origen_solicitud,
+    normalizar_origen_solicitud,
+)
 from laboratorio.panel_componentes_orden import ordenar_queryset_panel
 
 logger = logging.getLogger(__name__)
@@ -134,6 +139,165 @@ def _resolver_tipos_para_material(
     return tipos, paneles_ok, errores
 
 
+def _resolver_tipos_materiales_permitidos(
+    examenes_ids: list[int],
+    paneles_ids: list[int],
+    materiales: set[str],
+) -> tuple[set[int], set[int], list[str]]:
+    """
+    Tipos/paneles para una orden que cubre varios materiales (bucket ambulatorio).
+    Solo acepta componentes cuyo material mapeado está en ``materiales``.
+    """
+    mats = {normalizar_material_pedido(m) for m in materiales if m}
+    errores: list[str] = []
+    tipos: set[int] = set()
+    paneles_ok: set[int] = set()
+
+    for tid in examenes_ids or []:
+        try:
+            te = TipoExamen.objects.select_related("tipo_muestra_requerida").get(pk=int(tid))
+        except (TipoExamen.DoesNotExist, TypeError, ValueError):
+            errores.append(f"Examen inexistente: {tid}")
+            continue
+        tm = (
+            getattr(te.tipo_muestra_requerida, "codigo", None)
+            if te.tipo_muestra_requerida_id
+            else None
+        )
+        mapped = muestra_codigo_a_material(tm)
+        if mapped not in mats:
+            errores.append(
+                f"El examen {te.codigo or te.pk} no corresponde a los materiales "
+                f"{', '.join(sorted(mats))}."
+            )
+            continue
+        tipos.add(te.id)
+
+    for pid in paneles_ids or []:
+        try:
+            panel = PanelExamen.objects.prefetch_related(
+                "tipos_examen__tipo_muestra_requerida"
+            ).get(pk=int(pid))
+        except (PanelExamen.DoesNotExist, TypeError, ValueError):
+            errores.append(f"Panel inexistente: {pid}")
+            continue
+        por_mat = componentes_panel_por_material(panel)
+        comps: list[int] = []
+        for mat in mats:
+            comps.extend(por_mat.get(mat) or [])
+        if not comps and por_mat:
+            continue
+        if not comps and not por_mat:
+            errores.append(
+                f"El panel {panel.codigo or panel.pk} tiene componentes sin material mapeado."
+            )
+            continue
+        if not comps:
+            continue
+        paneles_ok.add(panel.id)
+        tipos.update(comps)
+
+    if tipos:
+        from laboratorio.calculos_derivados import INSUMOS_POR_CODIGO_CALCULADO
+        from laboratorio.catalogo_solicitud_papel import LEGACY_EXAMEN_A_PANEL
+
+        por_id = {
+            tid: (c or "").strip().upper()
+            for tid, c in TipoExamen.objects.filter(pk__in=tipos).values_list("id", "codigo")
+        }
+        for codigo_legacy, panel_codigo in list(LEGACY_EXAMEN_A_PANEL.items()):
+            if codigo_legacy not in por_id.values():
+                continue
+            try:
+                panel = PanelExamen.objects.get(codigo=panel_codigo, activo=True)
+            except PanelExamen.DoesNotExist:
+                continue
+            por_mat = componentes_panel_por_material(panel)
+            comps = []
+            for mat in mats:
+                comps.extend(por_mat.get(mat) or [])
+            if comps:
+                paneles_ok.add(panel.pk)
+                tipos.update(comps)
+            for tid, codigo in list(por_id.items()):
+                if codigo == codigo_legacy:
+                    tipos.discard(tid)
+
+        codigos = {
+            (c or "").strip().upper()
+            for c in TipoExamen.objects.filter(pk__in=tipos).values_list("codigo", flat=True)
+        }
+        for codigo in list(codigos):
+            for insumo in INSUMOS_POR_CODIGO_CALCULADO.get(codigo, ()):
+                code = (insumo or "").strip().upper()
+                if not code or code in codigos:
+                    continue
+                te = TipoExamen.objects.filter(codigo=code, activo=True).first()
+                if te:
+                    tipos.add(te.id)
+                    codigos.add(code)
+
+    return tipos, paneles_ok, errores
+
+
+def colapsar_solicitudes_lab_ambulatorio(
+    solicitudes_lab: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Une grupos SANGRE/ORINA/MATERIA_FECAL en un solo ítem si hay ≥2 materiales.
+    Otros materiales (LCR, etc.) quedan aparte. Un solo material del bucket: sin cambio.
+    """
+    uni: list[dict[str, Any]] = []
+    resto: list[dict[str, Any]] = []
+    for g in solicitudes_lab or []:
+        mat = normalizar_material_pedido(g.get("material_pedido"))
+        if mat in MATERIALES_UNIFICABLES_AMBULATORIO:
+            uni.append(g)
+        else:
+            resto.append(g)
+
+    mats_uni = {
+        normalizar_material_pedido(g.get("material_pedido"))
+        for g in uni
+        if normalizar_material_pedido(g.get("material_pedido"))
+    }
+    if len(mats_uni) < 2:
+        return list(solicitudes_lab or [])
+
+    examenes_ids: list[int] = []
+    paneles_ids: list[int] = []
+    obs_parts: list[str] = []
+    for g in uni:
+        examenes_ids.extend(int(x) for x in (g.get("examenes_ids") or []))
+        paneles_ids.extend(int(x) for x in (g.get("paneles_ids") or []))
+        o = (g.get("observaciones") or "").strip()
+        if o and o not in obs_parts:
+            obs_parts.append(o)
+
+    # Dedup preservando orden
+    seen_e: set[int] = set()
+    examenes_dedup: list[int] = []
+    for tid in examenes_ids:
+        if tid not in seen_e:
+            seen_e.add(tid)
+            examenes_dedup.append(tid)
+    seen_p: set[int] = set()
+    paneles_dedup: list[int] = []
+    for pid in paneles_ids:
+        if pid not in seen_p:
+            seen_p.add(pid)
+            paneles_dedup.append(pid)
+
+    merged: dict[str, Any] = {
+        "material_pedido": "",
+        "examenes_ids": examenes_dedup,
+        "paneles_ids": paneles_dedup,
+        "observaciones": " | ".join(obs_parts),
+        "_materiales_unificados": sorted(mats_uni),
+    }
+    return [merged] + resto
+
+
 def _crear_solicitud_material(
     *,
     paciente,
@@ -214,6 +378,106 @@ def _crear_solicitud_material(
     if tipos_creados:
         solicitud.tipos_examen.set(list(tipos_creados))
     return solicitud
+
+
+def _crear_solicitud_multi_material(
+    *,
+    paciente,
+    medico_interno,
+    medico_externo_nombre: str,
+    origen_solicitud: str,
+    consulta_hc,
+    fecha_programada_toma,
+    observaciones: str,
+    materiales: set[str],
+    examenes_ids: list[int],
+    paneles_ids: list[int],
+    obra_social_orden: str = "",
+    afiliado_orden: str = "",
+) -> SolicitudExamen:
+    """Orden ambulatoria unificada: material_pedido vacío; anti-dup por inferencia."""
+    from laboratorio.derivacion_service import defaults_derivacion_para_tipo
+    from laboratorio.examen_orina_micro import valor_inicial_resultado
+    from laboratorio.restricciones_frecuencia import (
+        RestriccionFrecuenciaError,
+        assert_puede_agregar_ensayos,
+    )
+
+    mats = {normalizar_material_pedido(m) for m in materiales if m}
+    if not mats:
+        raise ValidationError({"material_pedido": "Materiales unificados vacíos."})
+    if not mats.issubset(MATERIALES_UNIFICABLES_AMBULATORIO):
+        raise ValidationError(
+            {
+                "material_pedido": (
+                    "Solo SANGRE, ORINA y MATERIA_FECAL se unifican en ambulatorio."
+                )
+            }
+        )
+
+    tipos, paneles_ok, errores = _resolver_tipos_materiales_permitidos(
+        examenes_ids, paneles_ids, mats
+    )
+    if errores:
+        raise ValidationError({"detail": errores[0], "errores": errores})
+    if not tipos and not paneles_ok:
+        raise ValidationError(
+            {"detail": "No hay exámenes para los materiales unificados en este pedido."}
+        )
+
+    try:
+        assert_puede_agregar_ensayos(
+            None,
+            paciente.pk,
+            tipos,
+            origen_solicitud=origen_solicitud or "",
+        )
+    except RestriccionFrecuenciaError as exc:
+        raise ValidationError(str(exc)) from exc
+
+    solicitud = SolicitudExamen.objects.create(
+        paciente=paciente,
+        medico_interno=medico_interno,
+        medico_externo_nombre=(medico_externo_nombre or "").strip(),
+        origen_solicitud=origen_solicitud or "",
+        consulta_hc=consulta_hc,
+        fecha_programada_toma=fecha_programada_toma,
+        observaciones=observaciones or "",
+        material_pedido="",
+        obra_social_orden=obra_social_orden or "",
+        afiliado_orden=afiliado_orden or "",
+        estado="PENDIENTE",
+    )
+    if paneles_ok:
+        solicitud.paneles.set(list(paneles_ok))
+
+    tipos_creados: set[int] = set()
+    for tid in sorted(tipos):
+        try:
+            te = TipoExamen.objects.select_related("laboratorio_derivacion").get(pk=tid)
+        except TipoExamen.DoesNotExist:
+            continue
+        ResultadoExamen.objects.create(
+            solicitud=solicitud,
+            tipo_examen=te,
+            valor_obtenido=valor_inicial_resultado(te),
+            es_patologico=False,
+            **defaults_derivacion_para_tipo(te),
+        )
+        tipos_creados.add(tid)
+
+    if tipos_creados:
+        solicitud.tipos_examen.set(list(tipos_creados))
+    return solicitud
+
+
+def _materiales_de_grupo_lab(g: dict[str, Any]) -> set[str]:
+    """Materiales clínicos que cubre un ítem de solicitudes_lab (incl. unificado)."""
+    uni = g.get("_materiales_unificados") or g.get("materiales_unificados")
+    if uni:
+        return {normalizar_material_pedido(m) for m in uni if m}
+    mat = normalizar_material_pedido(g.get("material_pedido"))
+    return {mat} if mat else set()
 
 
 @transaction.atomic
@@ -335,15 +599,35 @@ def crear_pedido_completo(
                 paciente, obra_social=snap_os, numero_afiliado=snap_afil, marcar_principal=True
             )
 
+    # Ambulatorio: colapsar SANGRE+ORINA+MATERIA_FECAL en un solo grupo clínico.
+    if es_origen_ambulatorio(origen):
+        solicitudes_lab = colapsar_solicitudes_lab_ambulatorio(list(solicitudes_lab or []))
+
     # Validar y lockear todos los materiales clínicos + micro antes de crear.
     mats_clinicos: set[str] = set()
     for g in solicitudes_lab:
-        mat = normalizar_material_pedido(g.get("material_pedido"))
-        if not material_pedido_valido(mat):
-            raise ValidationError(
-                {"material_pedido": f"Material de pedido obligatorio/válido en cada grupo clínico."}
-            )
-        mats_clinicos.add(mat)
+        mats_g = _materiales_de_grupo_lab(g)
+        if not mats_g:
+            mat = normalizar_material_pedido(g.get("material_pedido"))
+            if not material_pedido_valido(mat):
+                raise ValidationError(
+                    {
+                        "material_pedido": (
+                            "Material de pedido obligatorio/válido en cada grupo clínico."
+                        )
+                    }
+                )
+            mats_g = {mat}
+        for mat in mats_g:
+            if not material_pedido_valido(mat):
+                raise ValidationError(
+                    {
+                        "material_pedido": (
+                            "Material de pedido obligatorio/válido en cada grupo clínico."
+                        )
+                    }
+                )
+            mats_clinicos.add(mat)
 
     mats_micro: set[str] = set()
     for g in estudios_micro:
@@ -374,9 +658,12 @@ def crear_pedido_completo(
 
     creadas_lab: list[SolicitudExamen] = []
     for g in solicitudes_lab:
+        mats_g = _materiales_de_grupo_lab(g)
         mat = normalizar_material_pedido(g.get("material_pedido"))
+        if not mats_g and mat:
+            mats_g = {mat}
         conflictos = buscar_conflictos_materiales_clinicos(
-            paciente.pk, fecha_programada_toma, {mat}
+            paciente.pk, fecha_programada_toma, mats_g
         )
         if conflictos:
             c0 = conflictos[0]
@@ -403,35 +690,56 @@ def crear_pedido_completo(
                     sol_exist.save(update_fields=["observaciones"])
                 creadas_lab.append(sol_exist)
             else:
+                mat_label = c0.material or mat or ",".join(sorted(mats_g))
                 raise ValidationError(
                     {
                         "detail": (
-                            f"Ya existe una orden de {mat} para ese día "
+                            f"Ya existe una orden de {mat_label} para ese día "
                             f"({sol_exist.numero or sol_exist.pk}) con etiquetas o en proceso. "
                             "Un pedido médico no puede crear otra ni agregar exámenes; "
                             "el laboratorio puede agregarlos a la orden existente, "
                             "o programalo para otro día."
                         ),
                         "solicitud_id": sol_exist.pk,
-                        "material": mat,
+                        "material": mat_label,
                     }
                 )
             continue
 
-        sol = _crear_solicitud_material(
-            paciente=paciente,
-            medico_interno=medico,
-            medico_externo_nombre=medico_externo_nombre,
-            origen_solicitud=origen,
-            consulta_hc=consulta_hc,
-            fecha_programada_toma=fecha_programada_toma,
-            observaciones=g.get("observaciones") or observaciones or "",
-            material_pedido=g["material_pedido"],
-            examenes_ids=list(g.get("examenes_ids") or []),
-            paneles_ids=list(g.get("paneles_ids") or []),
-            obra_social_orden=snap_os,
-            afiliado_orden=snap_afil,
-        )
+        if (
+            g.get("_materiales_unificados")
+            or g.get("materiales_unificados")
+            or (not mat and len(mats_g) > 1)
+        ):
+            sol = _crear_solicitud_multi_material(
+                paciente=paciente,
+                medico_interno=medico,
+                medico_externo_nombre=medico_externo_nombre,
+                origen_solicitud=origen,
+                consulta_hc=consulta_hc,
+                fecha_programada_toma=fecha_programada_toma,
+                observaciones=g.get("observaciones") or observaciones or "",
+                materiales=mats_g,
+                examenes_ids=list(g.get("examenes_ids") or []),
+                paneles_ids=list(g.get("paneles_ids") or []),
+                obra_social_orden=snap_os,
+                afiliado_orden=snap_afil,
+            )
+        else:
+            sol = _crear_solicitud_material(
+                paciente=paciente,
+                medico_interno=medico,
+                medico_externo_nombre=medico_externo_nombre,
+                origen_solicitud=origen,
+                consulta_hc=consulta_hc,
+                fecha_programada_toma=fecha_programada_toma,
+                observaciones=g.get("observaciones") or observaciones or "",
+                material_pedido=g["material_pedido"],
+                examenes_ids=list(g.get("examenes_ids") or []),
+                paneles_ids=list(g.get("paneles_ids") or []),
+                obra_social_orden=snap_os,
+                afiliado_orden=snap_afil,
+            )
         creadas_lab.append(sol)
 
     creados_micro = []

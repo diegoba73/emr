@@ -120,18 +120,23 @@ class TestPedidosCompletosRemediacion(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
-        self.assertEqual(len(r.data["solicitudes_ids"]), 2)
+        # Ambulatorio (origen inferido): sangre+orina → 1 orden unificada.
+        self.assertEqual(len(r.data["solicitudes_ids"]), 1)
         self.assertEqual(len(r.data["estudios_micro_ids"]), 1)
-        sols = list(SolicitudExamen.objects.filter(paciente=self.pac).order_by("id"))
-        self.assertEqual({s.material_pedido for s in sols}, {"SANGRE", "ORINA"})
+        sol = SolicitudExamen.objects.get(pk=r.data["solicitudes_ids"][0])
+        self.assertEqual(sol.material_pedido, "")
+        tipos = set(sol.resultados.values_list("tipo_examen_id", flat=True))
+        self.assertEqual(tipos, {self.glu.pk, self.orina_ex.pk})
         self.assertEqual(EstudioMicrobiologia.objects.filter(paciente=self.pac).count(), 1)
 
     def test_panel_mixto_repartido_sin_expansion_total(self):
+        """Guardia: panel multi-material sigue repartido en N órdenes."""
         self.client.force_authenticate(self.lab)
         r = self.client.post(
             "/api/lab/pedidos-completos/",
             {
                 "paciente_id": self.pac.pk,
+                "origen_solicitud": "GUARDIA",
                 "fecha_programada_toma": self.hoy.isoformat(),
                 "solicitudes_lab": [
                     {
@@ -159,6 +164,125 @@ class TestPedidosCompletosRemediacion(TestCase):
         self.assertEqual(tipos_o, {self.orina_ex.pk})
         self.assertTrue(sol_s.paneles.filter(pk=self.panel_mixto.pk).exists())
         self.assertTrue(sol_o.paneles.filter(pk=self.panel_mixto.pk).exists())
+
+    def test_ambulatorio_unifica_sangre_orina_mf(self):
+        tm_fecal, _ = TipoMuestra.objects.get_or_create(
+            codigo="MATERIA_FECAL", defaults={"nombre": "Materia fecal", "activo": True}
+        )
+        soh = TipoExamen.objects.create(
+            codigo=f"SOH{self.pac.dni[-4:]}",
+            nombre="Sangre oculta",
+            tipo_muestra_requerida=tm_fecal,
+            tipo_resultado="CUALITATIVO",
+            activo=True,
+        )
+        self.client.force_authenticate(self.lab)
+        r = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {"material_pedido": "SANGRE", "examenes_ids": [self.glu.pk]},
+                    {"material_pedido": "ORINA", "examenes_ids": [self.orina_ex.pk]},
+                    {"material_pedido": "MATERIA_FECAL", "examenes_ids": [soh.pk]},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(len(r.data["solicitudes_ids"]), 1)
+        sol = SolicitudExamen.objects.get(pk=r.data["solicitudes_ids"][0])
+        self.assertEqual(sol.material_pedido, "")
+        self.assertEqual(
+            set(sol.resultados.values_list("tipo_examen_id", flat=True)),
+            {self.glu.pk, self.orina_ex.pk, soh.pk},
+        )
+
+    def test_guardia_no_unifica_sangre_orina(self):
+        self.client.force_authenticate(self.lab)
+        r = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "GUARDIA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {"material_pedido": "SANGRE", "examenes_ids": [self.glu.pk]},
+                    {"material_pedido": "ORINA", "examenes_ids": [self.orina_ex.pk]},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(len(r.data["solicitudes_ids"]), 2)
+        mats = {
+            SolicitudExamen.objects.get(pk=i).material_pedido
+            for i in r.data["solicitudes_ids"]
+        }
+        self.assertEqual(mats, {"SANGRE", "ORINA"})
+
+    def test_agregar_orina_a_orden_sangre_ambulatoria(self):
+        self.client.force_authenticate(self.lab)
+        r1 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "AMBULATORIO_ICPL",
+                "material_pedido": "SANGRE",
+                "examenes_ids": [self.glu.pk],
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        sol_id = r1.data["id"]
+        r2 = self.client.post(
+            f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
+            {"examenes_ids": [self.orina_ex.pk]},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
+        sol = SolicitudExamen.objects.get(pk=sol_id)
+        self.assertEqual(sol.material_pedido, "")
+        self.assertEqual(
+            set(sol.resultados.values_list("tipo_examen_id", flat=True)),
+            {self.glu.pk, self.orina_ex.pk},
+        )
+
+    def test_agregar_orina_bloquea_si_ya_hay_orden_orina_activa(self):
+        self.client.force_authenticate(self.lab)
+        r_sangre = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "material_pedido": "SANGRE",
+                "examenes_ids": [self.glu.pk],
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(r_sangre.status_code, status.HTTP_201_CREATED, r_sangre.data)
+        r_orina = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "material_pedido": "ORINA",
+                "examenes_ids": [self.orina_ex.pk],
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(r_orina.status_code, status.HTTP_201_CREATED, r_orina.data)
+        r_add = self.client.post(
+            f"/api/lab/solicitudes/{r_sangre.data['id']}/agregar-examenes/",
+            {"examenes_ids": [self.orina_ex.pk]},
+            format="json",
+        )
+        self.assertEqual(r_add.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_anti_dup_sangre_hoy_bloquea_segunda(self):
         self.client.force_authenticate(self.lab)

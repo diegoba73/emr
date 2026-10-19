@@ -13,6 +13,26 @@ ssh -p 2223 server@emr.sytes.net
 - Imports o `manage.py` en producción: **en ese host** (vía SSH), no en contenedores locales.
 - Antes de escribir en la BD de prod: backup + `--dry-run` cuando el comando lo soporte.
 
+## Avisos obligatorios antes de rebuild / recreate
+
+Prod es de uso diario: **no proponer ni lanzar** comandos largos o que recrean servicios sin avisar antes en el chat y esperar OK explícito.
+
+Avisar siempre (con **tiempo estimado** y si el sistema sigue usable) cuando se trate de:
+
+| Acción | Impacto típico | ¿Sistema usable mientras tanto? |
+|--------|----------------|----------------------------------|
+| `docker compose build --no-cache nginx` (o rebuild frontend completo) | ~30–45+ min | Sí: contenedores actuales siguen hasta el `up` |
+| `build` backend/nginx con caché | minutos | Sí hasta el recreate |
+| `up --force-recreate` backend y/o nginx | breve corte (segundos–1–2 min) | Interrupción corta al recrear |
+| recreate de todo el stack / `down`+`up` | corte mayor | No |
+| migraciones en prod | suele ser rápido; riesgo de bloqueo si falla | Preferible ventana acordada |
+
+Regla del asistente:
+
+1. Decir en el chat: qué se va a hacer, cuánto puede tardar, si hay downtime.
+2. Ofrecer alternativa más corta si existe (hotfix sin `--no-cache`, solo backend, etc.).
+3. **No** pegar el comando de build/recreate “para que lo corran ya” sin ese aviso, salvo que el usuario lo pida explícitamente en ese mensaje.
+
 ## Aislamiento: no mezclar con la otra app
 
 En `emr.sytes.net` conviven dos sistemas. Al trabajar con **EMR-LIMS**, usar solo sus puertos. No tocar, reiniciar ni redeployar la otra aplicación.
@@ -61,3 +81,9 @@ Procedimiento del asistente: `DOC_PROTOCOLO_TRABAJO_ASISTENTE.md` §6.6.
 - Desplegar **backend + frontend juntos** (confirmación médica solo `POST /api/lab/pedidos-completos/`; create/agregar/micro granular médico → 403).
 - Reversión: no rehabilitar flush parcial médico; no borrar órdenes ya creadas por el atómico. Preferir hotfix forward o rollback BE+FE acoplado.
 - Smoke post-deploy: confirmación multi-material; médico create directo 403; lab/bio agregar-quitar en orden no finalizada; clearance con creatininemia en informe; hoy≠mañana; impresión guardia/consulta/internación/LIMS.
+
+### Ambulatorio unificado SANGRE/ORINA/MATERIA_FECAL (oct 2026)
+
+- Solo orígenes ambulatorio/externo: una orden real si el pedido mezcla ≥2 de esos materiales; guardia/internación siguen partiendo.
+- Órdenes históricas no se fusionan en batch; sí se pueden **ampliar** vía `agregar-examenes` (vacía `material_pedido`).
+- Desplegar BE+FE juntos. Smoke: ambulatorio sangre+orina(+MF) → 1 protocolo / 1 informe; guardia misma selección → 2–3 órdenes; agregar orina a sangre ambulatoria abierta; anti-dup si ya hay orina activa el mismo día.

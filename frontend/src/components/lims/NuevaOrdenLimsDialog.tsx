@@ -90,7 +90,10 @@ import {
   syncMicroItemsConMateriales,
 } from '../../utils/limsMaterialesMicro';
 import { mensajeBloqueoExamen, puedeOmitirRestriccionFrecuenciaEnsayos } from '../../utils/limsRestriccionesEnsayos';
-import { particionarSeleccionPorMateriales } from '../../utils/limsParticionMateriales';
+import {
+  agruparParaPedidoCompleto,
+  particionarSeleccionPorMateriales,
+} from '../../utils/limsParticionMateriales';
 
 export interface DraftMicroPayload {
   items: Array<{
@@ -126,6 +129,7 @@ export interface NuevaOrdenLimsDialogProps {
     observaciones?: string;
     fecha_programada_toma: string;
     material_pedido: string;
+    materiales_unificados?: string[];
   }) => void;
   onAddDraftMicro?: (payload: DraftMicroPayload) => void;
   /** Si se setea, agrega exámenes a esa orden abierta en lugar de crear una nueva. */
@@ -378,6 +382,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const origenParaRestricciones = agregarAOrdenId
     ? origenInicial || origenManual
     : origenManual;
+  // Agrupación multi-material (ambulatorio): draft/consulta usan origenInicial o manual.
+  const origenParaAgrupar = origenInicial || origenManual;
 
   useEffect(() => {
     if (!open || omiteRestriccionesEnsayos) {
@@ -694,10 +700,11 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       setError('Indicá el día de la extracción.');
       return;
     }
-    const groups = gruposLabPorMaterial();
+    const groups = agruparParaPedidoCompleto(gruposLabPorMaterial(), origenParaAgrupar);
     for (const g of groups) {
       const mat = (g.material.codigo || '').toUpperCase();
-      if (!mat || mat === '_') {
+      const uni = g.materialesUnificados;
+      if ((!mat || mat === '_') && !(uni && uni.length >= 2)) {
         setError('Seleccioná un material de pedido válido.');
         return;
       }
@@ -715,6 +722,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         observaciones: observaciones.trim() || undefined,
         fecha_programada_toma: fechaProgramadaToma,
         material_pedido: mat,
+        materiales_unificados: uni,
       });
     }
     for (const i of microItems) {
@@ -818,7 +826,10 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       return;
     }
 
-    const groups = gruposLabPorMaterial(extraExamenesIds);
+    const groups = agruparParaPedidoCompleto(
+      gruposLabPorMaterial(extraExamenesIds),
+      origenParaAgrupar
+    );
     const hasLab = groups.length > 0;
     const hasMicro = microItems.length > 0;
     if (!hasLab && !hasMicro) {
@@ -830,7 +841,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     try {
       const solicitudes_lab = groups.map((g) => {
         const mat = (g.material.codigo || '').toUpperCase();
-        if (!mat || mat === '_') {
+        const uni = g.materialesUnificados;
+        if ((!mat || mat === '_') && !(uni && uni.length >= 2)) {
           throw new Error('Seleccioná un material de pedido válido.');
         }
         return {
@@ -838,6 +850,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           examenes_ids: g.examenes_ids,
           paneles_ids: g.paneles_ids,
           observaciones: observaciones.trim() || undefined,
+          ...(uni && uni.length >= 2 ? { materiales_unificados: uni } : {}),
         };
       });
       const estudios_micro = microItems.map((i) => {

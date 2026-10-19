@@ -31,20 +31,27 @@
 ## Pedido multi-material (O6) — confirmación médica atómica [VIGENTE — oct 2026]
 
 1. **Único camino médico/secretaría:** `POST /api/lab/pedidos-completos/` (transacción atómica: N clínicas + M micros). Header opcional `Idempotency-Key`.
-2. **Anti-duplicado clínica:** paciente + `material_pedido` + `fecha_programada_toma` (activa ∉ `{FINALIZADO, CANCELADO}`). Legacy `material_pedido` vacío: se **infieren** materiales desde exámenes/paneles **sin mutar** la fila.
+2. **Anti-duplicado clínica:** paciente + material(es) + `fecha_programada_toma` (activa ∉ `{FINALIZADO, CANCELADO}`). Legacy / unificado `material_pedido` vacío: se **infieren** materiales desde exámenes/paneles **sin mutar** la fila (salvo al unificar vía agregar, que vacía el campo).
 3. **Anti-duplicado micro:** paciente + `material_pedido` + fecha (estudios ∉ `{CANCELADO, VALIDADO, INFORMADO}`). Clínica y micro del mismo material **pueden coexistir**.
-4. **Paneles multi-material:** se reparte por material; cada orden vincula el panel pero solo crea componentes de ese material (sin expansión total).
+4. **Paneles multi-material:** se reparte por material; cada orden vincula el panel pero solo crea componentes de ese material (sin expansión total). **Excepción ambulatorio:** ver § Ambulatorio unificado.
 5. **Médico/secretaría:** no `POST /lab/solicitudes/`, no `agregar-examenes`, no micro create/batch. Lab/bio/admin: create granular con anti-dup; **agregar/quitar** en cualquier estado no terminal (`PENDIENTE`…`LISTO_PARA_VALIDAR`).
 6. **Calculados multi-material (p. ej. clearance):** en la orden de orina/clearance se incluyen insumos de suero necesarios (`CREATI`) para cargar a mano, calcular e **informar** juntos.
 7. **Activación:** desplegar BE + FE juntos; no hay flush secuencial médico como fallback.
 8. **Estados generales UI:** Pendiente | En proceso (`EN_PROCESO`+`LISTO_PARA_VALIDAR`) | Informe parcial | Finalizado. Micro: FINAL prevalece sobre preliminar.
+
+### Ambulatorio unificado (SANGRE + ORINA + MATERIA_FECAL) [VIGENTE]
+
+- **Orígenes:** `AMBULATORIO_CEHTA`, `AMBULATORIO_ICPL`, `EXTERNO_CEHTA`, `EXTERNO_ICPL` (legacy `EMR` / `EXTERNO_PAPEL`).
+- **Creación:** cualquier combinación ≥2 de `{SANGRE, ORINA, MATERIA_FECAL}` → **una** `SolicitudExamen` con `material_pedido=""`. Otros materiales (LCR, etc.) siguen en órdenes aparte. Guardia / internación **sin cambio** (N órdenes por material).
+- **Agregar a órdenes existentes:** en ambulatorio, lab/bio puede agregar orina/MF (o sangre) del bucket a una orden del bucket; al mezclar se vacía `material_pedido`. Si ya hay otra orden activa del mismo material el mismo día → 400 (no batch-merge de órdenes ya partidas).
+- **Informe:** dentro de la orden unificada, orden por defecto sangre → materia fecal (p. ej. SOH) → orina (`PAN_ORI` última).
 
 ---
 
 ## Flujo de órdenes (`SolicitudExamen`)
 
 1. **Creación lab:** `POST` `lab/solicitudes` (solo `ROLES_LIMS_WRITE`). Confirmación médica: `POST lab/pedidos-completos/`.
-2. **Día de extracción (`fecha_programada_toma`) [VIGENTE]:** obligatorio al crear. Anti-dup por **material** (no una sola orden por día): sangre hoy + orina hoy OK; sangre hoy + sangre hoy → 400; sangre hoy + sangre mañana OK; tras `FINALIZADO` se puede repetir el material el mismo día. Cambio de fecha solo en `PENDIENTE` (revalida anti-dup).
+2. **Día de extracción (`fecha_programada_toma`) [VIGENTE]:** obligatorio al crear. Anti-dup por **material** (no una sola orden por día): sangre hoy + orina hoy OK en guardia/internación (2 órdenes); en **ambulatorio** sangre+orina(+MF) → **1 orden** unificada; sangre hoy + sangre hoy → 400; sangre hoy + sangre mañana OK; tras `FINALIZADO` se puede repetir el material el mismo día. Cambio de fecha solo en `PENDIENTE` (revalida anti-dup).
 3. **Serializer lectura:** `SolicitudExamenSerializer` expone `medico_display` (propiedad del modelo) como `CharField(read_only=True)` **sin** `source` redundante (compatible con DRF reciente).
 4. **Serializer escritura:** `SolicitudExamenCreateSerializer` recibe `paciente_id`, `medico_id` opcional, `medico_externo_nombre`, `origen_solicitud`, `examenes_ids`, `paneles_ids`, `material_pedido`, `fecha_programada_toma`, fechas/observaciones.
 5. **Número de protocolo:** generado en `save()` si vacío: `LAB-YYYY-XXXXX` secuencial compartido (lab clínico + microbiología) vía `LabProtocoloCounter` + `select_for_update`. Se valida la entidad **antes** de consumir el correlativo y ambos quedan en la misma transacción (no quemar números por `full_clean` fallido). Listados LIMS ordenan por `numero` **ascendente** (primero → último).

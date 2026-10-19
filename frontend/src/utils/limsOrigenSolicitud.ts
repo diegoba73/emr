@@ -33,6 +33,23 @@ export function esOrigenAmbulatorioExterno(
   return codigo === 'EXTERNO_CEHTA' || codigo === 'EXTERNO_ICPL';
 }
 
+/** Ambulatorio CEHTA/ICPL o receta externa (alineado a backend ``es_origen_ambulatorio``). */
+export function esOrigenAmbulatorio(
+  codigo: OrigenSolicitudLims | string | null | undefined
+): boolean {
+  const o = (codigo || '').toUpperCase();
+  if (
+    o === 'AMBULATORIO_CEHTA' ||
+    o === 'AMBULATORIO_ICPL' ||
+    o === 'EXTERNO_CEHTA' ||
+    o === 'EXTERNO_ICPL'
+  ) {
+    return true;
+  }
+  // Legacy
+  return o === 'EMR' || o === 'EXTERNO_PAPEL';
+}
+
 export function esOrigenInternacion(
   codigo: OrigenSolicitudLims | string | null | undefined
 ): boolean {

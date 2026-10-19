@@ -600,6 +600,8 @@ export interface CreatePedidoCompletoLimsPayload {
     examenes_ids?: number[];
     paneles_ids?: number[];
     observaciones?: string;
+    /** Ambulatorio unificado: SANGRE/ORINA/MATERIA_FECAL en una orden. */
+    materiales_unificados?: string[];
   }>;
   estudios_micro?: Array<{
     material_pedido: string;

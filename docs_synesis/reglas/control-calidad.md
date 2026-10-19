@@ -23,7 +23,14 @@ No es EQC, no es CAPA, no es ISO 15189 completo. Es el ciclo: registrar control 
 | `POST …/cargar-resultados/` | Sí | **No** (`permitir_override=False`) |
 | `POST …/validar/` (cierre `FINALIZADO`) | Sí | Solo **admin/superuser** + `confirmar_qc_override` + `motivo_qc_override` |
 
-Ventana temporal: **día operativo** en `America/Argentina/Buenos_Aires`, de **08:00 a 08:00** del día siguiente (`IQC_DIA_OPERATIVO_HORA`, default 8). Antes de las 08:00 sigue valiendo el control de la rutina anterior (p. ej. guardia a la 01:00 no exige IQC nuevo). A partir de las 08:00 hace falta ACEPTADA en la ventana nueva. **Fin de semana:** el control ACEPTADO del **viernes** cubre sábado, domingo y lunes antes de las 08:00 (ventana `[viernes 08:00, lunes 08:00)`); sáb/dom no exigen IQC nuevo. El lunes desde las 08:00 abre ventana nueva. Un rechazo en la ventana vigente anula si es la **última** corrida del nivel; un ACEPTADA posterior en la misma ventana **sí** vale. Fuente: `laboratorio/qc_service.py` `_ventana_hoy`.
+Ventana temporal en `America/Argentina/Buenos_Aires`, corte **08:00** (`IQC_DIA_OPERATIVO_HORA`, default 8). **Control obligatorio solo lunes y viernes** (desde las 08:00 de ese día):
+
+| Ventana | Cubre | Qué libera |
+|---------|-------|------------|
+| `[lunes 08:00, viernes 08:00)` | Lun (desde 08) + mar + mié + jue | ACEPTADA del **lunes** |
+| `[viernes 08:00, lunes 08:00)` | Vie (desde 08) + sáb + dom + lun madrugada | ACEPTADA del **viernes** |
+
+Mar/mié/jue y sáb/dom **no** exigen IQC nuevo: quedan liberados en OK con el pase del lunes o viernes correspondiente. Antes de las 08:00 del día de control sigue la ventana anterior (p. ej. lunes 01:00 = aún viernes). Un rechazo en la ventana vigente anula si es la **última** corrida del nivel; un ACEPTADA posterior en la misma ventana **sí** vale. Fuente: `laboratorio/qc_service.py` `_ventana_hoy`.
 
 ---
 

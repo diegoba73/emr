@@ -1,4 +1,7 @@
-import { particionarSeleccionPorMateriales } from './limsParticionMateriales';
+import {
+  agruparParaPedidoCompleto,
+  particionarSeleccionPorMateriales,
+} from './limsParticionMateriales';
 import type { LimsPanelExamen, LimsTipoExamen, MaterialPedidoLims } from '../types/lims';
 
 describe('particionarSeleccionPorMateriales', () => {
@@ -21,6 +24,12 @@ describe('particionarSeleccionPorMateriales', () => {
     nombre: 'LCR',
     tipo_muestra_codigos: ['LCR'],
     grilla_codigos: ['ASP_LCR', 'GLU_LCR'],
+  };
+  const mf: MaterialPedidoLims = {
+    codigo: 'MATERIA_FECAL',
+    nombre: 'Materia fecal',
+    tipo_muestra_codigos: ['MATERIA_FECAL'],
+    grilla_codigos: ['SOH'],
   };
 
   const examenes: LimsTipoExamen[] = [
@@ -83,5 +92,40 @@ describe('particionarSeleccionPorMateriales', () => {
       paneles,
     });
     expect(groups.map((g) => g.material.codigo)).toEqual(['LCR']);
+  });
+
+  it('ambulatorio unifica sangre+orina+MF y deja LCR aparte', () => {
+    const base = particionarSeleccionPorMateriales({
+      materialesOrden: [sangre, orina, mf, lcr],
+      selectedExamenesIds: new Set([1, 2, 3]),
+      selectedPanelesIds: new Set([100]),
+      examenes,
+      paneles,
+    });
+    // Forzar grupo MF vacío de exámenes: agregar panel orina ya está; MF sin selección
+    // no aparece. Simular tres del bucket + LCR:
+    const groups = [
+      { material: sangre, examenes_ids: [1], paneles_ids: [] as number[] },
+      { material: orina, examenes_ids: [] as number[], paneles_ids: [100] },
+      { material: mf, examenes_ids: [99], paneles_ids: [] as number[] },
+      { material: lcr, examenes_ids: [2, 3], paneles_ids: [] as number[] },
+    ];
+    const amb = agruparParaPedidoCompleto(groups, 'AMBULATORIO_CEHTA');
+    expect(amb).toHaveLength(2);
+    expect(amb[0].materialesUnificados).toEqual(['MATERIA_FECAL', 'ORINA', 'SANGRE']);
+    expect(amb[0].examenes_ids.sort()).toEqual([1, 99]);
+    expect(amb[0].paneles_ids).toEqual([100]);
+    expect(amb[1].material.codigo).toBe('LCR');
+
+    const guardia = agruparParaPedidoCompleto(groups, 'GUARDIA');
+    expect(guardia).toHaveLength(4);
+    expect(base.length).toBeGreaterThan(0);
+  });
+
+  it('ambulatorio con un solo material del bucket no colapsa', () => {
+    const groups = [
+      { material: sangre, examenes_ids: [1], paneles_ids: [] as number[] },
+    ];
+    expect(agruparParaPedidoCompleto(groups, 'AMBULATORIO_ICPL')).toEqual(groups);
   });
 });

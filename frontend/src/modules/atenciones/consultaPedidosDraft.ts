@@ -17,8 +17,10 @@ export interface DraftSolicitudLab {
   observaciones?: string;
   /** YYYY-MM-DD */
   fecha_programada_toma: string;
-  /** Código material (SANGRE, ORINA…). */
+  /** Código material (SANGRE, ORINA…). Vacío si ambulatorio unificado. */
   material_pedido: string;
+  /** Ambulatorio: materiales del bucket unidos en un solo pedido. */
+  materiales_unificados?: string[];
 }
 
 export interface DraftPedidoMicroItem {
@@ -71,6 +73,9 @@ function normalizeDraft(parsed: Partial<ConsultaPedidosDraft>): ConsultaPedidosD
         ...s,
         fecha_programada_toma: s.fecha_programada_toma || fallbackFecha,
         material_pedido: (s.material_pedido || '').toUpperCase(),
+        materiales_unificados: Array.isArray(s.materiales_unificados)
+          ? s.materiales_unificados.map((m) => (m || '').toUpperCase()).filter(Boolean)
+          : undefined,
       })
     ),
     solicitudesMicro: (Array.isArray(parsed.solicitudesMicro) ? parsed.solicitudesMicro : []).map(
@@ -235,7 +240,10 @@ export async function flushConsultaPedidosDrafts(
 
     const solicitudes_lab = draft.solicitudesLab.map((sol) => {
       const mat = (sol.material_pedido || '').toUpperCase();
-      if (!mat) {
+      const uni = (sol.materiales_unificados || [])
+        .map((m) => (m || '').toUpperCase())
+        .filter(Boolean);
+      if (!mat && uni.length < 2) {
         throw new Error('Cada pedido clínico debe tener material_pedido.');
       }
       return {
@@ -243,6 +251,7 @@ export async function flushConsultaPedidosDrafts(
         examenes_ids: sol.examenes_ids,
         paneles_ids: sol.paneles_ids,
         observaciones: sol.observaciones,
+        ...(uni.length >= 2 ? { materiales_unificados: uni } : {}),
       };
     });
 

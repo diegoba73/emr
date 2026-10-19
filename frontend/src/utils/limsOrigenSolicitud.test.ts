@@ -1,4 +1,5 @@
 import {
+  esOrigenAmbulatorio,
   esOrigenAmbulatorioExterno,
   formatOrigenProcedenciaCell,
   labelOrigenSolicitudLims,
@@ -36,6 +37,13 @@ describe('limsOrigenSolicitud', () => {
     expect(esOrigenAmbulatorioExterno('EXTERNO_CEHTA')).toBe(true);
     expect(esOrigenAmbulatorioExterno('EXTERNO_ICPL')).toBe(true);
     expect(esOrigenAmbulatorioExterno('AMBULATORIO_CEHTA')).toBe(false);
+  });
+
+  it('esOrigenAmbulatorio cubre CEHTA/ICPL y externos', () => {
+    expect(esOrigenAmbulatorio('AMBULATORIO_CEHTA')).toBe(true);
+    expect(esOrigenAmbulatorio('EXTERNO_ICPL')).toBe(true);
+    expect(esOrigenAmbulatorio('GUARDIA')).toBe(false);
+    expect(esOrigenAmbulatorio('INTERNACION_UCO')).toBe(false);
   });
 
   it('origenExigeBloqueoFrecuenciaEnsayos solo internación/guardia', () => {
