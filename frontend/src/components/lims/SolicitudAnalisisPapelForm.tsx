@@ -13,7 +13,7 @@ import type { LimsPanelExamen, LimsTipoExamen } from '../../types/lims';
 import {
   buildCatalogMaps,
   countPapelSelection,
-  EXAMENES_FUERA_DE_SOLICITUD,
+  esExamenExcluidoDeLabClinico,
   papelCodigosSet,
   resolvePapelItemId,
   resolvePapelItemLabel,
@@ -144,7 +144,7 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
     return examenes.filter((e) => {
       if (e.activo === false) return false;
       if (papelCodes.has(e.codigo)) return false;
-      if (EXAMENES_FUERA_DE_SOLICITUD.has(e.codigo)) return false;
+      if (esExamenExcluidoDeLabClinico(e)) return false;
       if (omitCodigos?.has(e.codigo)) return false;
       if (selectedExamenesIds.has(e.id)) return false;
       if (agregarSoloMuestras) {

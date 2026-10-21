@@ -253,6 +253,15 @@ class EstudioMicrobiologia(models.Model):
             "No sustituye un pedido de orina completa en lab. clínico."
         ),
     )
+    examen_fresco = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Examen en fresco",
+        help_text=(
+            "Cultivos genitales (p. ej. vaginal/uretral): examen microscópico en fresco "
+            "y micológico directo de la misma muestra. Solo se informa si hay datos."
+        ),
+    )
 
     fecha_inicio = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de inicio")
     fecha_cierre = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de cierre")

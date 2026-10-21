@@ -165,6 +165,16 @@ export function canDownloadInformeClinicoPdf(
   return e === 'FINALIZADO';
 }
 
+/**
+ * Quién puede elegir el médico solicitante en un pedido LIMS.
+ * Médico logueado: siempre él (campo bloqueado). Solo admin / laboratorio / bioquímico eligen.
+ */
+export function canSelectMedicoPedidoLims(user?: User | null): boolean {
+  if (!user) return false;
+  const r = normalizeRol(user);
+  return r === 'admin' || isOperadorLimsRole(r);
+}
+
 /** Operaciones de laboratorio sobre orden/muestra/resultados (admin + operadores). */
 export function canOperateLims(user: User | null): boolean {
   if (!user) return false;

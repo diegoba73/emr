@@ -84,13 +84,13 @@ export function agruparParaPedidoCompleto(
     }
   }
 
-  const matsUni = [
-    ...new Set(
+  const matsUni = Array.from(
+    new Set(
       uni
         .map((g) => (g.material.codigo || '').toUpperCase())
         .filter((m) => MATERIALES_UNIFICABLES_AMBULATORIO.has(m))
-    ),
-  ].sort();
+    )
+  ).sort();
 
   if (matsUni.length < 2) {
     return groups;

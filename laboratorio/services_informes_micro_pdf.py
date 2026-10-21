@@ -327,6 +327,51 @@ def _construir_story_micro(
                 )
             story.append(Spacer(1, 0.25 * cm))
 
+    # Examen microscópico directo (fresco / Gram / KOH / parasitológico)
+    from laboratorio.examen_fresco_micro import (
+        examen_fresco_tiene_datos,
+        estudio_admite_examen_fresco,
+        normalizar_examen_fresco,
+        seccion_tiene_datos,
+        secciones_examen_directo,
+        titulo_informe_examen_fresco,
+    )
+
+    if estudio_admite_examen_fresco(estudio):
+        raw_fresco = getattr(estudio, "examen_fresco", None)
+        if examen_fresco_tiene_datos(raw_fresco if isinstance(raw_fresco, dict) else None):
+            fresco = normalizar_examen_fresco(raw_fresco)
+            secciones = [
+                sec
+                for sec in secciones_examen_directo(estudio)
+                if seccion_tiene_datos(sec, fresco)
+            ]
+            if secciones:
+                story.append(
+                    Paragraph(titulo_informe_examen_fresco(estudio), styles["panel"])
+                )
+                story.append(Spacer(1, 0.08 * cm))
+                for sec in secciones:
+                    story.append(
+                        Paragraph(esc(sec["titulo_informe"]), styles["exam_title"])
+                    )
+                    # Gram / KOH: un solo campo texto → valor sin repetir el label.
+                    if sec["tecnica"] in ("gram", "koh") and len(sec["campos"]) == 1:
+                        codigo, _label = sec["campos"][0]
+                        val = (fresco.get(codigo) or "").strip()
+                        if val:
+                            story.append(Paragraph(esc(val), styles["exam_meta"]))
+                    else:
+                        for codigo, label in sec["campos"]:
+                            val = (fresco.get(codigo) or "").strip()
+                            if not val:
+                                continue
+                            story.append(
+                                Paragraph(esc(f"{label}: {val}"), styles["exam_meta"])
+                            )
+                    story.append(Spacer(1, 0.1 * cm))
+                story.append(Spacer(1, 0.15 * cm))
+
     # Sin desarrollo: no mostrar secciones AISLADOS ni ANTIBIOGRAMA.
     cultivo_sin_desarrollo = bool(lecturas) and all(
         (lec.crecimiento or "") == "SIN_DESARROLLO" for lec in lecturas

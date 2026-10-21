@@ -28,7 +28,7 @@ import type {
   TipoMuestraMicrobiologia,
 } from '../../types/lims';
 import {
-  EXAMENES_FUERA_DE_SOLICITUD,
+  esExamenExcluidoDeLabClinico,
   SOLICITUD_ANALISIS_PAPEL_ROWS,
 } from '../../modules/laboratorio/solicitudAnalisisPapelLayout';
 import { EXAMENES_CUBIERTOS_POR_PANEL } from '../../modules/laboratorio/solicitudAnalisisSelectionRules';
@@ -239,7 +239,7 @@ function buildSangreGrid(
         seen.add(p.codigo);
       } else {
         const e = examenes.find((x) => x.codigo === ref.codigo && x.activo !== false);
-        if (!e || EXAMENES_FUERA_DE_SOLICITUD.has(e.codigo)) return;
+        if (!e || esExamenExcluidoDeLabClinico(e)) return;
         items.push({ kind: 'examen', id: e.id, codigo: e.codigo, nombre: e.nombre });
         seen.add(e.codigo);
       }
@@ -280,7 +280,7 @@ function buildGrillaDesdeCodigos(
       return;
     }
     const e = examenes.find((x) => x.codigo === codigo && x.activo !== false);
-    if (e) {
+    if (e && !esExamenExcluidoDeLabClinico(e)) {
       items.push({ kind: 'examen', id: e.id, codigo: e.codigo, nombre: e.nombre });
     }
   });
@@ -297,12 +297,13 @@ function gridForMaterial(
   if (mat.grilla_codigos?.length) {
     return buildGrillaDesdeCodigos(mat.grilla_codigos, paneles, examenes);
   }
-  // Fallback: todos los exámenes de esas muestras
+  // Fallback: todos los exámenes de esas muestras (sin cultivos micro legados).
   const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
   return examenes
     .filter(
       (e) =>
         e.activo !== false &&
+        !esExamenExcluidoDeLabClinico(e) &&
         muestraSet.has((e.tipo_muestra_codigo || '').toUpperCase())
     )
     .map((e) => ({
@@ -473,7 +474,7 @@ export default function SolicitudAnalisisMaterialesForm({
     const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
     return examenes.filter((e) => {
       if (e.activo === false) return false;
-      if (EXAMENES_FUERA_DE_SOLICITUD.has(e.codigo)) return false;
+      if (esExamenExcluidoDeLabClinico(e)) return false;
       if (gridCodigos.has(e.codigo)) return false;
       if (selectedExamenesIds.has(e.id)) return false;
       const m = (e.tipo_muestra_codigo || '').toUpperCase();

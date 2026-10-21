@@ -655,6 +655,10 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     isinstance(getattr(instance, "examen_orina", None), dict)
                     and any(str(v or "").strip() for v in (instance.examen_orina or {}).values())
                 ),
+                "examen_fresco_presente": bool(
+                    isinstance(getattr(instance, "examen_fresco", None), dict)
+                    and any(str(v or "").strip() for v in (instance.examen_fresco or {}).values())
+                ),
                 "view": "EstudioMicrobiologiaViewSet.partial_update",
             },
         )

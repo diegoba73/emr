@@ -506,6 +506,8 @@ export interface EstudioMicrobiologia {
   observaciones?: string;
   examen_orina?: Record<string, string>;
   admite_examen_orina?: boolean;
+  examen_fresco?: Record<string, string>;
+  admite_examen_fresco?: boolean;
   /** YYYY-MM-DD — día previsto de extracción/recepción (el API lo envía siempre tras la migración). */
   fecha_programada_toma?: string;
   /** PRELIMINAR EMITIDO/VALIDADO vigente (equivalente a informe parcial clínico). */

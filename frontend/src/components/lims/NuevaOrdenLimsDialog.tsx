@@ -26,8 +26,9 @@ import toast from 'react-hot-toast';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
 import type { Medico } from '../../types';
-import { getCurrentMedicoId, shouldLockMedicoField } from '../../utils/turnoPermissions';
+import { getCurrentMedicoId } from '../../utils/turnoPermissions';
 import { canCreateMedico, isMedicoSoloAmbulatorio } from '../../utils/permissions';
+import { canSelectMedicoPedidoLims } from '../../utils/limsAccess';
 import { createMedico, getEspecialidades } from '../../services/apiService';
 import type { Especialidad } from '../../types';
 import {
@@ -213,7 +214,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const [origenManual, setOrigenManual] = useState<OrigenSolicitudLims>('AMBULATORIO_ICPL');
   const [medicoExterno, setMedicoExterno] = useState('');
   const [medicoExternoMode, setMedicoExternoMode] = useState(false);
-  const lockMedico = shouldLockMedicoField(currentUser);
+  /** Solo admin / laboratorio / bioquímico eligen médico; el resto (p. ej. médico) queda fijado. */
+  const canSelectMedico = canSelectMedicoPedidoLims(currentUser);
+  const lockMedico = !canSelectMedico;
   const [medicoInterno, setMedicoInterno] = useState<Medico | null>(null);
   const [medicoQuery, setMedicoQuery] = useState('');
   const [medicoOptions, setMedicoOptions] = useState<Medico[]>([]);
@@ -231,6 +234,10 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const puedeAltaMedico = canCreateMedico(currentUser);
   const usarMedicoExterno =
     medicoExternoMode || esOrigenAmbulatorioExterno(origenManual);
+  const resolveMedicoIdPedido = (): number | undefined => {
+    if (lockMedico) return getCurrentMedicoId(currentUser);
+    return medicoInterno?.id ?? medicoId ?? undefined;
+  };
 
   const {
     selectedPanelesIds,
@@ -799,9 +806,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       try {
         const orden = await createSolicitudExamenLims({
           paciente_id: paciente.id,
-          medico_id: usarMedicoExterno
-            ? undefined
-            : medicoId ?? medicoInterno?.id ?? undefined,
+          medico_id: usarMedicoExterno ? undefined : resolveMedicoIdPedido(),
           consulta_hc_id: consultaHcId,
           origen_solicitud: consultaHcId ? undefined : origenManual,
           medico_externo_nombre: usarMedicoExterno
@@ -874,9 +879,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       const result = await createPedidoCompletoLims(
         {
           paciente_id: paciente.id,
-          medico_id: usarMedicoExterno
-            ? undefined
-            : medicoId ?? medicoInterno?.id ?? undefined,
+          medico_id: usarMedicoExterno ? undefined : resolveMedicoIdPedido(),
           medico_externo_nombre: usarMedicoExterno
             ? medicoExterno.trim()
             : undefined,
@@ -1300,7 +1303,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                           placeholder="Apellido o matrícula"
                           helperText={
                             lockMedico
-                              ? 'Se asigna automáticamente a tu usuario médico.'
+                              ? 'Se asigna automáticamente al médico logueado (solo laboratorio, bioquímico o admin pueden cambiarlo).'
                               : 'Médico de la clínica que solicita el análisis.'
                           }
                         />

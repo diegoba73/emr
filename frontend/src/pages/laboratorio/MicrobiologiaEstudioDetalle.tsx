@@ -47,15 +47,27 @@ import AisladosIdentificacionPanel from '../../components/lims/micro/AisladosIde
 import AntibiogramaPanel from '../../components/lims/micro/AntibiogramaPanel';
 import InformesMicrobiologiaPanel from '../../components/lims/micro/InformesMicrobiologiaPanel';
 import EstudioMicroExamenOrinaTab from '../../components/lims/micro/EstudioMicroExamenOrinaTab';
+import EstudioMicroExamenFrescoTab from '../../components/lims/micro/EstudioMicroExamenFrescoTab';
 import EnviarInformeMicroDialog from '../../components/lims/EnviarInformeMicroDialog';
 import { MotivoDialog, useMotivoDialog } from '../../components/lims/micro/MotivoDialog';
 import { ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
 import { estudioAdmiteExamenOrina } from '../../utils/limsExamenOrinaMicro';
+import {
+  estudioAdmiteExamenFresco,
+  TITULO_APARTADO_UI,
+} from '../../utils/limsExamenFrescoMicro';
 import { todasLecturasSinDesarrollo } from '../../utils/limsMicroCultivoNegativo';
 
-type DetalleTab = 'resumen' | 'orina' | 'siembras' | 'aislados' | 'antibiograma' | 'informes';
+type DetalleTab =
+  | 'resumen'
+  | 'orina'
+  | 'fresco'
+  | 'siembras'
+  | 'aislados'
+  | 'antibiograma'
+  | 'informes';
 
 const MicrobiologiaEstudioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -94,6 +106,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
   const canMarcarInformado = canMarcarMicroEstudioInformado(currentUser, estudio?.estado);
   const modoPedidoPendiente = estudio?.estado === 'PENDIENTE';
   const admiteOrina = estudio ? estudioAdmiteExamenOrina(estudio) : false;
+  const admiteFresco = estudio ? estudioAdmiteExamenFresco(estudio) : false;
   const cultivoSinDesarrollo = todasLecturasSinDesarrollo(bundle.lecturas);
 
   const estudioId = Number(id);
@@ -104,6 +117,12 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       setTab('resumen');
     }
   }, [admiteOrina, tab]);
+
+  useEffect(() => {
+    if (!admiteFresco && tab === 'fresco') {
+      setTab('resumen');
+    }
+  }, [admiteFresco, tab]);
 
   const loadAll = useCallback(async () => {
     if (!allowed || Number.isNaN(estudioId)) {
@@ -414,6 +433,7 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       >
         <Tab value="resumen" label="Resumen" />
         {admiteOrina && <Tab value="orina" label="Tira y sedimento" />}
+        {admiteFresco && <Tab value="fresco" label={TITULO_APARTADO_UI} />}
         <Tab value="siembras" label="Siembras y lecturas" />
         <Tab value="aislados" label="Aislados" />
         <Tab value="antibiograma" label="Antibiograma" />
@@ -505,6 +525,13 @@ const MicrobiologiaEstudioDetalle: React.FC = () => {
       )}
       {tab === 'orina' && admiteOrina && (
         <EstudioMicroExamenOrinaTab
+          estudio={estudio}
+          canOperate={canOpEstudio}
+          onSaved={(fresh) => setEstudio(fresh)}
+        />
+      )}
+      {tab === 'fresco' && admiteFresco && (
+        <EstudioMicroExamenFrescoTab
           estudio={estudio}
           canOperate={canOpEstudio}
           onSaved={(fresh) => setEstudio(fresh)}

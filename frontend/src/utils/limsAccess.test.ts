@@ -16,6 +16,7 @@ import {
   canOperateMicroEstudioTecnico,
   canSeeInformeMicro,
   canSeeResultadosClinicos,
+  canSelectMedicoPedidoLims,
   canValidarOrdenLims,
   isMicroEstudioCerrado,
   isSecretariaEntregaLab,
@@ -41,6 +42,19 @@ const bioUser: User = {
   username: 'bio',
   rol: 'BIOQUIMICO',
 };
+
+describe('canSelectMedicoPedidoLims', () => {
+  it('permite admin, laboratorio y bioquímico', () => {
+    expect(canSelectMedicoPedidoLims({ ...labUser, rol: 'ADMIN' })).toBe(true);
+    expect(canSelectMedicoPedidoLims(labUser)).toBe(true);
+    expect(canSelectMedicoPedidoLims(bioUser)).toBe(true);
+  });
+
+  it('bloquea médico y secretaría', () => {
+    expect(canSelectMedicoPedidoLims({ ...labUser, rol: 'MEDICO' })).toBe(false);
+    expect(canSelectMedicoPedidoLims({ ...labUser, rol: 'SECRETARIA' })).toBe(false);
+  });
+});
 
 describe('isMicroEstudioCerrado', () => {
   it.each(['CANCELADO', 'VALIDADO', 'INFORMADO'] as const)(

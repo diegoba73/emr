@@ -119,6 +119,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     obra_social_efectiva = serializers.SerializerMethodField()
     afiliado_efectivo = serializers.SerializerMethodField()
     admite_examen_orina = serializers.SerializerMethodField()
+    admite_examen_fresco = serializers.SerializerMethodField()
     tiene_informe_preliminar = serializers.SerializerMethodField()
     tiene_informe_final = serializers.SerializerMethodField()
 
@@ -170,6 +171,8 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "material_pedido",
             "examen_orina",
             "admite_examen_orina",
+            "examen_fresco",
+            "admite_examen_fresco",
             "tiene_informe_preliminar",
             "tiene_informe_final",
             "fecha_inicio",
@@ -187,6 +190,11 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
         from laboratorio.examen_orina_micro import estudio_admite_examen_orina
 
         return estudio_admite_examen_orina(obj)
+
+    def get_admite_examen_fresco(self, obj):
+        from laboratorio.examen_fresco_micro import estudio_admite_examen_fresco
+
+        return estudio_admite_examen_fresco(obj)
 
     def _informes_flags(self, obj):
         """(tiene_preliminar, tiene_final) — usa prefetch si está disponible."""
@@ -216,8 +224,10 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         from laboratorio.examen_orina_micro import normalizar_examen_orina
+        from laboratorio.examen_fresco_micro import normalizar_examen_fresco
 
         data["examen_orina"] = normalizar_examen_orina(getattr(instance, "examen_orina", None))
+        data["examen_fresco"] = normalizar_examen_fresco(getattr(instance, "examen_fresco", None))
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
         from api.permissions import es_secretaria_entrega_lab
@@ -647,6 +657,7 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
     """
 
     examen_orina = serializers.JSONField(required=False)
+    examen_fresco = serializers.JSONField(required=False)
     paciente_id = serializers.IntegerField(required=False, write_only=True)
     medico_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
     medico_externo_nombre = serializers.CharField(required=False, allow_blank=True)
@@ -660,6 +671,7 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
             "tipo_estudio",
             "observaciones",
             "examen_orina",
+            "examen_fresco",
             "fecha_programada_toma",
             "paciente_id",
             "medico_id",
@@ -780,6 +792,26 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("examen_orina debe ser un objeto.")
         return normalizar_examen_orina(value)
 
+    def validate_examen_fresco(self, value):
+        from laboratorio.examen_fresco_micro import (
+            estudio_admite_examen_fresco,
+            normalizar_examen_fresco,
+        )
+
+        estudio = self.instance
+        if estudio is None:
+            raise serializers.ValidationError("Estudio requerido.")
+        if not estudio_admite_examen_fresco(estudio):
+            raise serializers.ValidationError(
+                "Este tipo de cultivo no admite examen microscópico directo "
+                "(fresco / Gram / KOH / parasitológico)."
+            )
+        if value is None:
+            return normalizar_examen_fresco({})
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("examen_fresco debe ser un objeto.")
+        return normalizar_examen_fresco(value)
+
     def update(self, instance, validated_data):
         paciente = validated_data.pop("_paciente", None)
         medico = validated_data.pop("_medico", serializers.empty)
@@ -812,6 +844,8 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
             instance.fecha_programada_toma = validated_data.pop("fecha_programada_toma")
         if "examen_orina" in validated_data:
             instance.examen_orina = validated_data.pop("examen_orina")
+        if "examen_fresco" in validated_data:
+            instance.examen_fresco = validated_data.pop("examen_fresco")
         if "tipo_estudio" in validated_data and cultivo is None:
             instance.tipo_estudio = validated_data.pop("tipo_estudio") or instance.tipo_estudio
 

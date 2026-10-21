@@ -227,6 +227,7 @@ export const updateEstudioMicrobiologia = (
     tipo_estudio?: string;
     observaciones?: string;
     examen_orina?: Record<string, string>;
+    examen_fresco?: Record<string, string>;
     fecha_programada_toma?: string;
     paciente_id?: number;
     medico_id?: number | null;

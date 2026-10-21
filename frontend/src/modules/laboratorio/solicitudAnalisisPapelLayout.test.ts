@@ -1,6 +1,8 @@
 import {
   SOLICITUD_ANALISIS_PAPEL_ROWS,
   buildCatalogMaps,
+  esExamenExcluidoDeLabClinico,
+  esExamenMicrobiologiaCatalogo,
   resolvePapelItemId,
 } from './solicitudAnalisisPapelLayout';
 
@@ -20,5 +22,36 @@ describe('solicitudAnalisisPapelLayout', () => {
     );
     expect(resolvePapelItemId({ kind: 'panel', codigo: 'PAN_HEMO' }, maps)).toBe(10);
     expect(resolvePapelItemId({ kind: 'examen', codigo: 'CPK' }, maps)).toBe(20);
+  });
+
+  it('excluye determinaciones de microbiología del pedido clínico', () => {
+    expect(
+      esExamenMicrobiologiaCatalogo({ codigo: 'OMCULT', nombre: 'Urocultivo' })
+    ).toBe(true);
+    expect(
+      esExamenMicrobiologiaCatalogo({
+        codigo: 'OPSCUL',
+        nombre: 'Urocultivo por punción de sonda',
+      })
+    ).toBe(true);
+    expect(
+      esExamenMicrobiologiaCatalogo({
+        codigo: 'HEMACUL1',
+        nombre: 'Hemocultivo automatizado - muestra 1',
+      })
+    ).toBe(true);
+    expect(
+      esExamenMicrobiologiaCatalogo({
+        codigo: 'ATBGGC1',
+        nombre: 'Antibiograma Gram y cultivo germenes comunes 1',
+      })
+    ).toBe(true);
+    expect(esExamenExcluidoDeLabClinico({ codigo: 'GLU', nombre: 'Glucemia' })).toBe(false);
+    expect(
+      esExamenExcluidoDeLabClinico({
+        codigo: 'MICROALB_24',
+        nombre: 'Microalbuminuria 24 hs',
+      })
+    ).toBe(false);
   });
 });

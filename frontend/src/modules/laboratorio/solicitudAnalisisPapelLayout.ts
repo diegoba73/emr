@@ -55,7 +55,18 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: e('GRUPO'), right: null },
 ];
 
-/** Siguen en el catálogo (órdenes ya pedidas) pero no se ofrecen en una solicitud nueva. */
+/** Cultivos / micro para sección de pedido (alineado a EstudioMicrobiologia). */
+export const MICRO_PEDIDO_CODIGOS = [
+  'UROCULTIVO',
+  'HEMOCULTIVO',
+  'COPROCULTIVO',
+  'CULTIVO_HERIDA',
+  'CULTIVO_RUTINA',
+  'HISOPADO',
+  'PUNCION',
+] as const;
+
+/** Siguen en el catálogo (órdenes ya pedidas) pero no se ofrecen en Lab. Clínico. */
 export const EXAMENES_FUERA_DE_SOLICITUD = new Set([
   'HCGB',
   'SANOC',
@@ -66,7 +77,55 @@ export const EXAMENES_FUERA_DE_SOLICITUD = new Set([
   'ENA_SSB',
   'ENA_RNP',
   'ENA_SM',
+  // Códigos de pedido micro (legado seed); el grueso del catálogo se filtra por nombre.
+  ...MICRO_PEDIDO_CODIGOS,
 ]);
+
+const MICRO_NOMBRE_NEEDLES = [
+  'cultivo',
+  'antibiograma',
+  'baar',
+  'micolog',
+  'micosis',
+  'espermocult',
+  'germenes comunes',
+] as const;
+
+function normalizarTextoCatalogo(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * TipoExamen del catálogo clínico que en realidad son pedido de microbiología
+ * (urocultivo OMCULT, hemocultivos, ATB, etc.). Se piden solo vía Microbiología.
+ */
+export function esExamenMicrobiologiaCatalogo(examen: {
+  codigo?: string | null;
+  nombre?: string | null;
+}): boolean {
+  const codigo = (examen.codigo || '').trim().toUpperCase();
+  if (codigo && (MICRO_PEDIDO_CODIGOS as readonly string[]).includes(codigo)) {
+    return true;
+  }
+  // Códigos LabWin/import con CUL (OMCULT, COPROCUL, HEMACUL1, …).
+  if (codigo.includes('CUL')) return true;
+  const nombre = normalizarTextoCatalogo(examen.nombre || '');
+  if (!nombre) return false;
+  return MICRO_NOMBRE_NEEDLES.some((n) => nombre.includes(n));
+}
+
+/** No ofrecer en grilla / “Agregar examen clínico” de Lab. Clínico. */
+export function esExamenExcluidoDeLabClinico(examen: {
+  codigo?: string | null;
+  nombre?: string | null;
+}): boolean {
+  const codigo = (examen.codigo || '').trim().toUpperCase();
+  if (codigo && EXAMENES_FUERA_DE_SOLICITUD.has(codigo)) return true;
+  return esExamenMicrobiologiaCatalogo(examen);
+}
 
 export interface CatalogMaps {
   panelesByCodigo: Map<string, { id: number; nombre: string }>;
@@ -132,15 +191,4 @@ export function papelCodigosSet(): Set<string> {
   }
   return s;
 }
-
-/** Cultivos / micro para sección de pedido (alineado a EstudioMicrobiologia). */
-export const MICRO_PEDIDO_CODIGOS = [
-  'UROCULTIVO',
-  'HEMOCULTIVO',
-  'COPROCULTIVO',
-  'CULTIVO_HERIDA',
-  'CULTIVO_RUTINA',
-  'HISOPADO',
-  'PUNCION',
-] as const;
 
