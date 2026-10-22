@@ -110,6 +110,7 @@ EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
         "CL_U24",
         "MICROALB_24",
         "RAC",
+        "TFG",
     }
 )
 
@@ -118,14 +119,25 @@ EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
 _EAB_ART = frozenset({"PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART"})
 _EAB_VEN = frozenset({"PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN"})
 _EAB_JERINGA_INDIVIDUAL = _EAB_ART | _EAB_VEN
-_HEPARINA_GASES = _EAB_JERINGA_INDIVIDUAL | frozenset(
+# Lactato / Ca iónico: misma jeringa EAB (art preferida; si no, ven).
+# Sin EAB en la orden → heparina propia (etiqueta SANGRE_HEPARINA).
+_CODIGOS_HEPARINA_COMPARTEN_EAB = frozenset(
     {"LACT", "LACPLA", "CA_ION", "CAIISE", "CAIE"}
+)
+# Alias legacy (imports / compat).
+_CODIGOS_LACTATO_COMPARTEN_EAB = frozenset({"LACT", "LACPLA"})
+_HEPARINA_SUELTOS = _CODIGOS_HEPARINA_COMPARTEN_EAB
+_HEPARINA_GASES = _EAB_JERINGA_INDIVIDUAL | _HEPARINA_SUELTOS
+_MUESTRAS_HEPARINA_SANGRE = frozenset(
+    {"SANGRE_HEPARINA", "SANGRE_HEPARINA_ART", "SANGRE_HEPARINA_VEN"}
 )
 
 # Química de rutina: mismo tubo suero que el resto de bioquímica
 _QUIMICA_RUTINA = frozenset(
     {
         "GLU",
+        "GLU_0",
+        "GLU120",
         "UREA",
         "CREATI",
         "COL_TOT",

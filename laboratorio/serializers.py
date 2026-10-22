@@ -565,6 +565,14 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         required=False,
         allow_blank=True,
     )
+    paciente_sexo = serializers.CharField(
+        source='paciente.sexo',
+        read_only=True,
+        allow_null=True,
+        required=False,
+        allow_blank=True,
+    )
+    paciente_edad = serializers.SerializerMethodField()
     medico_display = serializers.CharField(read_only=True)
     medico_interno_nombre = serializers.SerializerMethodField()
     medico_email = serializers.SerializerMethodField()
@@ -594,6 +602,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     obra_social_permite_validar = serializers.SerializerMethodField()
     obra_social_efectiva = serializers.SerializerMethodField()
     afiliado_efectivo = serializers.SerializerMethodField()
+    crea_u_dilucion_activa = serializers.SerializerMethodField()
     
     class Meta:
         model = SolicitudExamen
@@ -605,6 +614,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'paciente_dni',
             'paciente_email',
             'paciente_telefono',
+            'paciente_sexo',
+            'paciente_edad',
             'medico_interno',
             'medico_interno_nombre',
             'medico_externo_nombre',
@@ -630,6 +641,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'obra_social_efectiva',
             'afiliado_efectivo',
             'fecha_solicitud',
+            'crea_u_dilucion_activa',
             'fecha_programada_toma',
             'material_pedido',
             'fecha_toma_muestra',
@@ -661,6 +673,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'id',
             'numero',
             'fecha_solicitud',
+            'crea_u_dilucion_activa',
             'fecha_toma_muestra',
             'diagnostico',
             'estado',
@@ -679,6 +692,8 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'paciente_dni',
             'paciente_email',
             'paciente_telefono',
+            'paciente_sexo',
+            'paciente_edad',
             'medico_display',
             'medico_interno_nombre',
             'medico_email',
@@ -771,6 +786,12 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             data['resultados'] = []
             data['resultados_visibles'] = False
         return _ocultar_detalle_clinico_secretaria(data, user)
+
+    def get_paciente_edad(self, obj):
+        paciente = getattr(obj, "paciente", None)
+        if paciente is None:
+            return None
+        return getattr(paciente, "edad", None)
 
     def get_paciente_nombre(self, obj):
         return format_apellido_nombre(getattr(obj, 'paciente', None))
@@ -1024,6 +1045,11 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
         from laboratorio.obra_social import obra_social_efectiva
 
         return obra_social_efectiva(obj)[1]
+
+    def get_crea_u_dilucion_activa(self, obj):
+        from laboratorio.creatinuria_dilucion import aplica_dilucion_creatinuria
+
+        return aplica_dilucion_creatinuria(obj)
 
 
 class _SolicitudExamenSafeListSerializer(serializers.ListSerializer):

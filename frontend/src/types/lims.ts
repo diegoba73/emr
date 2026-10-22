@@ -204,6 +204,10 @@ export interface SolicitudExamenLims {
   paciente_dni?: string;
   paciente_email?: string | null;
   paciente_telefono?: string | null;
+  /** Sexo ficha paciente (M/F/O) — TFG CKD-EPI. */
+  paciente_sexo?: string | null;
+  /** Edad en años cumplidos — TFG CKD-EPI. */
+  paciente_edad?: number | null;
   medico_interno: number | null;
   medico_interno_nombre?: string | null;
   medico_externo_nombre?: string | null;
@@ -233,6 +237,11 @@ export interface SolicitudExamenLims {
   /** False si es ambulatoria y aún no está Autorizado. */
   obra_social_permite_validar?: boolean;
   fecha_solicitud: string;
+  /**
+   * Órdenes nuevas: CREA_U tipado = valor CM260; el backend multiplica ×20
+   * (orina diluida 1:20) para informe y derivados (RAC, clearance).
+   */
+  crea_u_dilucion_activa?: boolean;
   /** YYYY-MM-DD — día previsto de extracción (el API lo envía siempre tras la migración). */
   fecha_programada_toma?: string;
   /** Última fecha de toma física (max de Muestra.fecha_toma). */

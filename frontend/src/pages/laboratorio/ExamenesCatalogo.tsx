@@ -35,6 +35,7 @@ import type {
   MaterialPedidoLims,
   TipoExamenLimsWriteBody,
 } from '../../types/lims';
+import { esTipoMuestraSangrePedido } from '../../utils/limsMuestraSangre';
 import {
   createTipoExamenLims,
   listContenedoresLims,
@@ -148,7 +149,14 @@ const ExamenesCatalogo: React.FC = () => {
   const muestraIdsDelMaterial = useMemo(() => {
     if (!filtroMaterial) return null as number[] | null;
     const mat = materiales.find((m) => m.codigo === filtroMaterial);
-    if (!mat?.tipo_muestra_codigos?.length) return [];
+    if (!mat) return [];
+    // Sangre: familia sangre/suero/plasma (cualquier aditivo), no solo códigos canónicos.
+    if (mat.codigo === 'SANGRE' || mat.ui_preset === 'sangre') {
+      return tiposMuestra
+        .filter((t) => esTipoMuestraSangrePedido(t.codigo, t.nombre))
+        .map((t) => t.id);
+    }
+    if (!mat.tipo_muestra_codigos?.length) return [];
     const codes = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
     return tiposMuestra
       .filter((t) => codes.has((t.codigo || '').toUpperCase()))

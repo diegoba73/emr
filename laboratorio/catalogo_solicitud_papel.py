@@ -129,6 +129,7 @@ EXAMENES: list[ExamenDef] = [
     },
     {"codigo": "ELP_CONC", "nombre": "Conclusiones (proteinograma)", "muestra": "SUERO", "tipo_resultado": "TEXTO"},
     # —— Clearance / microalbuminuria / proteinuria 24 hs ——
+    # CREA_U: valor CM260 (orina 1:20) → ×20 en carga para órdenes nuevas (ver creatinuria_dilucion).
     {"codigo": "CREA_U", "nombre": "Creatininuria", "muestra": "ORINA", "tipo_resultado": "NUMERICO"},
     {"codigo": "DIUR", "nombre": "Diuresis", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
     {"codigo": "CLEAR_CREA", "nombre": "Clearance de creatinina", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
@@ -151,8 +152,31 @@ EXAMENES: list[ExamenDef] = [
     # —— Exámenes sueltos del formulario (no panel) ——
     {"codigo": "HBA1C", "nombre": "Hemoglobina glicosilada (HbA1c)", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO"},
     {"codigo": "GLU", "nombre": "Glucemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
+    # CTOG (panel): basal + 120 min; sin punto a 60 min
+    {
+        "codigo": "GLU_0",
+        "nombre": "Basal (0 min)",
+        "muestra": "SUERO",
+        "tipo_resultado": "NUMERICO",
+        "abreviatura": "Basal",
+    },
+    {
+        "codigo": "GLU120",
+        "nombre": "120 minutos",
+        "muestra": "SUERO",
+        "tipo_resultado": "NUMERICO",
+        "abreviatura": "120'",
+    },
     {"codigo": "UREA", "nombre": "Uremia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "CREATI", "nombre": "Creatininemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO", "abreviatura": "Cr"},
+    # TFG: CKD-EPI 2021 (creatinina); insumos CREATI + edad/sexo del paciente
+    {
+        "codigo": "TFG",
+        "nombre": "Filtrado glomerular (CKD-EPI)",
+        "muestra": "SUERO",
+        "tipo_resultado": "NUMERICO",
+        "abreviatura": "eGFR",
+    },
     {"codigo": "AU", "nombre": "Uricemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "CA", "nombre": "Calcemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "MG", "nombre": "Magnesemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
@@ -248,11 +272,27 @@ EXAMENES: list[ExamenDef] = [
 ]
 
 # Códigos legacy del seed demo que se reemplazan por panel + componentes
-LEGACY_CODIGOS_DESACTIVAR = frozenset({"HEMO", "COL", "HEM", "COA", "EAB_ART", "EAB_VEN", "ENA"})
+LEGACY_CODIGOS_DESACTIVAR = frozenset(
+    {
+        "HEMO",
+        "COL",
+        "HEM",
+        "COA",
+        "EAB_ART",
+        "EAB_VEN",
+        "ENA",
+        # CTOG/PTOG sueltos → panel PAN_CTOG (basal + 120); GLU60 no se informa
+        "CTOG",
+        "PTOG",
+        "GLU60",
+    }
+)
 
-# Pedido legacy ENA (un solo código) → panel con un resultado por antígeno
+# Pedido legacy ENA / CTOG (un solo código) → panel operativo
 LEGACY_EXAMEN_A_PANEL: dict[str, str] = {
     "ENA": "PAN_ENA",
+    "CTOG": "PAN_CTOG",
+    "PTOG": "PAN_CTOG",
 }
 
 # Componentes EAB (jeringas art/ven). FIO2 es compartido entre ambos paneles.
@@ -351,6 +391,11 @@ PANELES: list[PanelDef] = [
         "componentes": ["CREATI", "CREA_U", "DIUR", "CLEAR_CREA"],
     },
     {
+        "codigo": "PAN_CTOG",
+        "nombre": "Curva de tolerancia a la glucosa (CTOG)",
+        "componentes": ["GLU_0", "GLU120"],
+    },
+    {
         "codigo": "PAN_MALB24",
         "nombre": "Microalbuminuria 24 hs",
         "componentes": ["MICROALB", "DIUR", "MICROALB_24"],
@@ -384,7 +429,7 @@ PANELES: list[PanelDef] = [
 
 # Exámenes sueltos solicitables (aparecen en el papel fuera de paneles)
 EXAMENES_SUELTOS_PDF: list[str] = [
-    "HBA1C", "GLU", "UREA", "CREATI", "AU", "CA", "MG", "P", "CL", "CA_ION",
+    "HBA1C", "GLU", "UREA", "CREATI", "TFG", "AU", "CA", "MG", "P", "CL", "CA_ION",
     "PROT_T", "ALB", "INR", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
     "CPK", "CPK_MB", "TROP_I", "TROP_US", "MIOG", "PROBNP", "DDIM",
     "PROT_U_AZ", "LPA", "PSA", "TSH", "T3", "T4", "T4L",
@@ -436,8 +481,10 @@ ORDEN_PRESENTACION_PEDIDO: list[str] = [
     "PAN_HEMO",
     # Química CM260 sueltos (CPK y orinas fuera de este bloque)
     "GLU",
+    "PAN_CTOG",
     "UREA",
     "CREATI",
+    "TFG",
     # Clearance (mixto suero+orina): junto a creatininemia en informe/carga
     "PAN_CLEAR",
     "AU",

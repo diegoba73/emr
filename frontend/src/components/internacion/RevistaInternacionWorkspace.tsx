@@ -28,9 +28,11 @@ import {
   canDownloadInformeClinicoPdf,
   canDownloadInformeMicroPdf,
   canOpenDetalleOrdenLab,
+  canSelectMedicoPedidoLims,
   pathDetalleEstudioMicro,
   pathDetalleOrdenLab,
 } from '../../utils/limsAccess';
+import { getCurrentMedicoId } from '../../utils/turnoPermissions';
 import { labelEstadoOrdenLims, estadoOrdenColor } from '../../utils/limsEstadosOrden';
 import {
   estadoMicroGeneralColor,
@@ -248,7 +250,10 @@ const RevistaInternacionWorkspace: React.FC<RevistaInternacionWorkspaceProps> = 
         practica: selectedTipoEstudio.practica,
         tipo_estudio: selectedTipoEstudio.id > 0 ? selectedTipoEstudio.id : null,
         descripcion_clinica: estudioDesc.trim() || undefined,
-        medico_solicitante: medicoId,
+        // Médico logueado → él; lab/bio/admin eligen vía cama; secretaría sin vínculo → médico de la cama.
+        medico_solicitante: canSelectMedicoPedidoLims(currentUser)
+          ? medicoId
+          : getCurrentMedicoId(currentUser) ?? medicoId ?? null,
         origen: 'INTERNO',
       });
       toast.success('Estudio complementario solicitado.');

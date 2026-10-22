@@ -73,6 +73,11 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     examenes: ['CREATI', 'CREA_U', 'DIUR', 'CLEAR_CREA'],
   },
   {
+    codigo: 'PAN_CTOG',
+    nombre: 'Curva de tolerancia a la glucosa (CTOG)',
+    examenes: ['GLU_0', 'GLU120'],
+  },
+  {
     codigo: 'PAN_ORI',
     nombre: 'Orina completa',
     examenes: [

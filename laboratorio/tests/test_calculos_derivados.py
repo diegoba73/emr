@@ -17,6 +17,7 @@ from laboratorio.calculos_derivados import (
     calc_excrecion_por_litro_a_24h,
     calc_ldl_friedewald,
     calc_rac,
+    calc_tfg_ckd_epi_2021,
     codigos_insumos_de_calculados,
     codigos_insumos_de_overrideables,
     calcular_derivados,
@@ -214,6 +215,31 @@ class TestCalculosDerivados(TestCase):
         )
         self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB"]), ["CREA_U"])
         self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB", "CREA_U"]), [])
+
+    def test_tfg_ckd_epi_2021_basico(self):
+        # Mujer 50 a, Cr 1.0 → 69 mL/min/1.73 m² (CKD-EPI 2021)
+        self.assertEqual(
+            calc_tfg_ckd_epi_2021(Decimal("1.0"), 50, "F"),
+            Decimal("69"),
+        )
+        out = calcular_derivados(
+            {"CREATI": Decimal("1.0")},
+            edad_anos=50,
+            sexo="F",
+        )
+        self.assertEqual(out["TFG"][0], Decimal("69"))
+        self.assertEqual(out["TFG"][1], "69")
+
+    def test_tfg_sin_demografia_o_menor_no_calculable(self):
+        out = calcular_derivados({"CREATI": Decimal("1.0")})
+        self.assertEqual(out["TFG"][1], RESULTADO_NO_CALCULABLE)
+        self.assertIsNone(calc_tfg_ckd_epi_2021(Decimal("1.0"), 12, "M"))
+        self.assertIsNone(calc_tfg_ckd_epi_2021(Decimal("1.0"), 40, "O"))
+
+    def test_insumos_de_tfg(self):
+        self.assertEqual(codigos_insumos_de_calculados(["TFG"]), ["CREATI"])
+        self.assertEqual(codigos_insumos_de_calculados(["TFG", "CREATI"]), [])
+        self.assertTrue(es_codigo_calculado("TFG"))
 
     def test_insumos_de_clearance_y_orina24(self):
         self.assertEqual(

@@ -49,6 +49,7 @@ FORM_CLINICO_IZQ: list[tuple[str, str | None, str | None]] = [
     ("Hemograma", "panel", "PAN_HEMO"),
     ("Hemoglobina glicosilada (HbA1c)", "examen", "HBA1C"),
     ("Glucemia", "examen", "GLU"),
+    ("Curva de tolerancia a la glucosa (CTOG)", "panel", "PAN_CTOG"),
     ("Uremia", "examen", "UREA"),
     ("Creatininemia", "examen", "CREATI"),
     ("Uricemia", "examen", "AU"),

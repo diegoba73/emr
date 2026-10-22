@@ -81,6 +81,8 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   const [searchingMedicos, setSearchingMedicos] = useState(false);
   const medicoInputReason = useRef<'input' | 'selection' | 'clear'>('input');
   const [motivoConsulta, setMotivoConsulta] = useState('');
+  /** Conducta / tratamiento sugerido si el paciente no se interna. */
+  const [planManejo, setPlanManejo] = useState('');
   const [consultaHcId, setConsultaHcId] = useState<number | null>(null);
   const [preparingHc, setPreparingHc] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -115,6 +117,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     setSelectedPaciente(null);
     setPacienteInputValue('');
     setMotivoConsulta('');
+    setPlanManejo('');
     setConsultaHcId(null);
     if (medicoFromUserId && medicoFromUser) {
       setSelectedMedico(medicoFromUser);
@@ -134,6 +137,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     setSelectedPaciente(atencion.paciente ?? null);
     setPacienteInputValue(atencion.paciente ? formatPacienteLabel(atencion.paciente) : '');
     setMotivoConsulta(atencion.observaciones_generales ?? '');
+    setPlanManejo(atencion.consulta_ambulatoria?.plan_manejo ?? '');
     setConsultaHcId(atencion.consulta_hc_id ?? null);
     const med = atencion.medico_principal;
     if (med && typeof med === 'object') {
@@ -272,6 +276,14 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     const hcId = await apiService.ensureConsultaHc(targetAtencionId!);
     setConsultaHcId(hcId);
 
+    const planTrim = planManejo.trim();
+    const planActual = atencion?.consulta_ambulatoria?.plan_manejo ?? '';
+    if (isCreate || planTrim !== (planActual || '').trim()) {
+      await apiService.createConsultaAmbulatoria(targetAtencionId!, {
+        plan_manejo: planTrim || null,
+      });
+    }
+
     // No migrar/limpiar borrador hasta que el flush LIMS/estudios confirme.
     const { pedidosPapel } = await flushConsultaPedidosDrafts(
       {
@@ -331,6 +343,13 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   };
 
   const handleCerrarAtencion = async () => {
+    const derivada = Boolean(atencion?.derivada_a_internacion);
+    if (!derivada && !planManejo.trim()) {
+      toast.error(
+        'Indicá el plan o tratamiento sugerido al paciente (si no se interna) antes de cerrar.'
+      );
+      return;
+    }
     if (
       !window.confirm(
         '¿Cerrar esta atención de guardia? Podés seguir viendo los pedidos, pero no se podrán editar desde aquí.'
@@ -344,7 +363,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       if (isCreate || !id) {
         id = await persistAtencion();
       } else {
-        // Persistir motivo/pedidos pendientes antes de cerrar
+        // Persistir motivo/plan/pedidos pendientes antes de cerrar
         await persistAtencion();
       }
       await apiService.closeAtencion(id!);
@@ -478,6 +497,21 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
               fullWidth
               disabled={isReadOnly}
             />
+
+            {!atencion?.derivada_a_internacion && (
+              <TextField
+                label="Plan / tratamiento sugerido"
+                multiline
+                minRows={2}
+                value={planManejo}
+                onChange={(e) => setPlanManejo(e.target.value)}
+                fullWidth
+                disabled={isReadOnly}
+                required={!isReadOnly}
+                helperText="Conducta indicada por el médico tratante si el paciente no se interna (medicación, controles, signos de alarma, etc.). Obligatorio al cerrar la atención."
+                inputProps={{ 'aria-label': 'Plan o tratamiento sugerido' }}
+              />
+            )}
 
             <Divider />
 

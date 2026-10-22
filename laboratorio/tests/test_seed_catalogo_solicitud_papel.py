@@ -126,6 +126,14 @@ class TestSeedCatalogoSolicitudPapel:
         assert rac.modo_entrada == "CALCULADO"
         assert rac.requiere_muestra is False
 
+    def test_tfg_calculado_suelto(self):
+        call_command("seed_catalogo_solicitud_papel")
+        tfg = TipoExamen.objects.get(codigo="TFG")
+        assert tfg.modo_entrada == "CALCULADO"
+        assert tfg.requiere_muestra is False
+        assert tfg.tipo_contenedor_id is None
+        assert "TFG" in EXAMENES_SUELTOS_PDF
+
     def test_legacy_hemo_desactivado(self):
         from laboratorio.models import TipoMuestra
 

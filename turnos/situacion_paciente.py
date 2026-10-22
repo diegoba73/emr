@@ -9,8 +9,14 @@ Un paciente no puede tener en paralelo situaciones incompatibles:
 La transición guardia/ambulatoria → internación se permite cuando
 ``atencion_origen`` apunta a la atencion abierta que se está derivando;
 esa atencion se cierra al admitir.
+
+Las guardias ABIERTAS con más de ``GUARDIA_MAX_HORAS_ABIERTA`` horas se
+cierran automáticamente (comando + al validar situación del paciente) para
+no bloquear nuevas atenciones ni internaciones.
 """
 from __future__ import annotations
+
+from datetime import timedelta
 
 from django.utils import timezone
 
@@ -24,6 +30,9 @@ CONTEXTO_AMBULATORIA = "AMBULATORIA"
 CONTEXTO_GUARDIA = "GUARDIA"
 CONTEXTO_INTERNACION = "INTERNACION"
 CONTEXTOS_EXCLUSIVOS = (CONTEXTO_AMBULATORIA, CONTEXTO_GUARDIA)
+
+# Tope operativo: una guardia abierta más allá de esto se considera vencida.
+GUARDIA_MAX_HORAS_ABIERTA = 24
 
 
 def paciente_tiene_internacion_activa(paciente_id: int) -> bool:
@@ -49,6 +58,69 @@ def atenciones_ambulatoria_guardia_abiertas(
     return qs
 
 
+def cerrar_guardias_vencidas(
+    *,
+    horas: int = GUARDIA_MAX_HORAS_ABIERTA,
+    paciente_id: int | None = None,
+    exclude_atencion_id: int | None = None,
+    dry_run: bool = False,
+) -> list[int]:
+    """
+    Cierra guardias ABIERTAS cuya ``fecha_admision`` supera ``horas``.
+
+    No toca ambulatoria ni internación. Idempotente (ya FINALIZADA → no-op).
+    Returns:
+        IDs de atenciones cerradas (o que se cerrarían si ``dry_run``).
+    """
+    from turnos.models import Atencion
+
+    if horas < 1:
+        raise ValueError("horas debe ser >= 1")
+
+    limite = timezone.now() - timedelta(hours=horas)
+    qs = Atencion.objects.filter(
+        contexto_atencion=CONTEXTO_GUARDIA,
+        estado_clinico=Atencion.EstadoClinico.ABIERTA,
+        fecha_admision__lt=limite,
+    ).order_by("id")
+    if paciente_id is not None:
+        qs = qs.filter(paciente_id=paciente_id)
+    if exclude_atencion_id is not None:
+        qs = qs.exclude(pk=exclude_atencion_id)
+
+    ids: list[int] = []
+    for atencion in qs.iterator():
+        ids.append(atencion.pk)
+        if dry_run:
+            continue
+        before = None
+        try:
+            from auditoria.audit_service import safe_model_snapshot
+
+            before = safe_model_snapshot(atencion)
+        except Exception:
+            before = None
+        finalizar_atencion_por_derivacion(atencion)
+        try:
+            from auditoria.audit_service import log_update
+
+            log_update(
+                actor=None,
+                entity=atencion,
+                before=before,
+                module="turnos",
+                metadata={
+                    "action": "auto_cerrar_guardia_vencida",
+                    "horas": horas,
+                    "paciente_id": atencion.paciente_id,
+                },
+            )
+        except Exception:
+            # El cierre clínico no debe fallar por auditoría.
+            pass
+    return ids
+
+
 def assert_puede_iniciar_atencion_ambulatoria_o_guardia(
     paciente_id: int,
     contexto: str,
@@ -66,6 +138,9 @@ def assert_puede_iniciar_atencion_ambulatoria_o_guardia(
         raise ValueError(
             f"contexto inválido para exclusividad ambulatoria/guardia: {contexto}"
         )
+
+    # Liberar guardias stale del paciente antes de evaluar exclusividad.
+    cerrar_guardias_vencidas(paciente_id=paciente_id)
 
     if paciente_tiene_internacion_activa(paciente_id):
         raise SituacionPacienteConflictError(
@@ -106,6 +181,12 @@ def assert_puede_admitir_internacion(
     cuando ``atencion_origen_id`` apunta a esa atencion.
     """
     from turnos.models import Atencion
+
+    # Liberar guardias stale (no cerrar la que se está derivando como origen).
+    cerrar_guardias_vencidas(
+        paciente_id=paciente_id,
+        exclude_atencion_id=atencion_origen_id,
+    )
 
     if paciente_tiene_internacion_activa(paciente_id):
         from internacion.models import Internacion

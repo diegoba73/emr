@@ -34,6 +34,24 @@ import {
 import { EXAMENES_CUBIERTOS_POR_PANEL } from '../../modules/laboratorio/solicitudAnalisisSelectionRules';
 import type { MicroPedidoItem } from './SolicitudMicrobiologiaForm';
 import { sugerirMuestraPorCultivo } from '../../utils/limsMicroUx';
+import { esTipoMuestraSangrePedido } from '../../utils/limsMuestraSangre';
+
+function materialEsSangre(mat: MaterialPedidoLims): boolean {
+  return mat.ui_preset === 'sangre' || mat.codigo === 'SANGRE';
+}
+
+/** True si el examen pertenece al material de pedido (Sangre = familia sangre/suero/plasma). */
+function examenPerteneceAMaterial(
+  examen: LimsTipoExamen,
+  mat: MaterialPedidoLims
+): boolean {
+  const m = (examen.tipo_muestra_codigo || '').toUpperCase();
+  if (materialEsSangre(mat)) {
+    return esTipoMuestraSangrePedido(m, examen.tipo_muestra_nombre);
+  }
+  const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
+  return muestraSet.has(m);
+}
 
 const ORINA_GRILLA_CODIGOS: readonly string[] = [
   'PAN_ORI',
@@ -75,6 +93,7 @@ const MATERIALES_FALLBACK: MaterialPedidoLims[] = [
       'SUERO',
       'SANGRE_EDTA',
       'PLASMA_CITRATO',
+      'PLASMA_EDTA',
       'SANGRE_ERITRO',
       'SANGRE_CITRATO_VSG',
       'SANGRE_HEPARINA',
@@ -298,13 +317,12 @@ function gridForMaterial(
     return buildGrillaDesdeCodigos(mat.grilla_codigos, paneles, examenes);
   }
   // Fallback: todos los exámenes de esas muestras (sin cultivos micro legados).
-  const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
   return examenes
     .filter(
       (e) =>
         e.activo !== false &&
         !esExamenExcluidoDeLabClinico(e) &&
-        muestraSet.has((e.tipo_muestra_codigo || '').toUpperCase())
+        examenPerteneceAMaterial(e, mat)
     )
     .map((e) => ({
       kind: 'examen' as const,
@@ -320,15 +338,10 @@ export function idsDeMaterial(
   examenes: LimsTipoExamen[]
 ): { panelIds: number[]; examenIds: number[] } {
   const grid = gridForMaterial(mat, paneles, examenes);
-  const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
   const panelIds = grid.filter((g) => g.kind === 'panel').map((g) => g.id);
   const examenIdsFromGrid = grid.filter((g) => g.kind === 'examen').map((g) => g.id);
   const examenIdsExtra = examenes
-    .filter(
-      (e) =>
-        e.activo !== false &&
-        muestraSet.has((e.tipo_muestra_codigo || '').toUpperCase())
-    )
+    .filter((e) => e.activo !== false && examenPerteneceAMaterial(e, mat))
     .map((e) => e.id);
   // Paneles de la grilla (diferencial) también
   const panelIdsExtra = paneles
@@ -471,14 +484,13 @@ export default function SolicitudAnalisisMaterialesForm({
     const gridCodigos = new Set(
       gridForMaterial(mat, paneles, examenes).map((g) => g.codigo)
     );
-    const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
     return examenes.filter((e) => {
       if (e.activo === false) return false;
       if (esExamenExcluidoDeLabClinico(e)) return false;
       if (gridCodigos.has(e.codigo)) return false;
       if (selectedExamenesIds.has(e.id)) return false;
+      if (!examenPerteneceAMaterial(e, mat)) return false;
       const m = (e.tipo_muestra_codigo || '').toUpperCase();
-      if (!muestraSet.has(m)) return false;
       if (materialKey === 'ORINA' && orinaModalidad === 'azar' && m === 'ORINA_24_H') {
         return false;
       }
@@ -501,12 +513,11 @@ export default function SolicitudAnalisisMaterialesForm({
     const gridCodigos = new Set(
       gridForMaterial(mat, paneles, examenes).map((g) => g.codigo)
     );
-    const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
     return examenes.filter(
       (e) =>
         selectedExamenesIds.has(e.id) &&
         !gridCodigos.has(e.codigo) &&
-        muestraSet.has((e.tipo_muestra_codigo || '').toUpperCase())
+        examenPerteneceAMaterial(e, mat)
     );
   };
 

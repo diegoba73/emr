@@ -266,10 +266,12 @@ MATERIALES_PEDIDO: tuple[MaterialPedidoDef, ...] = (
         ui_preset="sangre",
         cultivo_micro="HEMOCULTIVO",
         muestra_micro="SANGRE",
+        # Canónicos; la API amplia con toda variante sangre/suero/plasma (ver as_api_list).
         tipo_muestra_codigos_extra=(
             "SUERO",
             "SANGRE_EDTA",
             "PLASMA_CITRATO",
+            "PLASMA_EDTA",
             "SANGRE_ERITRO",
             "SANGRE_CITRATO_VSG",
             "SANGRE_HEPARINA",
@@ -1095,9 +1097,28 @@ def material_por_codigo(codigo: str) -> MaterialPedidoDef | None:
 
 def as_api_list() -> list[dict[str, Any]]:
     """Serialización estable para GET materiales-pedido."""
+    from laboratorio.muestra_sangre_pedido import codigos_tipo_muestra_sangre_en_db
+
     rows: list[dict[str, Any]] = []
+    sangre_codigos: list[str] | None = None
     for mat in MATERIALES_PEDIDO:
         tipo_muestras = list(mat.tipo_muestra_codigos_extra) or [mat.codigo]
+        # Sangre: todas las variantes de sangre/suero/plasma en catálogo (no solo canónicos).
+        if mat.codigo == "SANGRE" or mat.ui_preset == "sangre":
+            if sangre_codigos is None:
+                from django.apps import apps
+
+                if apps.ready:
+                    try:
+                        sangre_codigos = codigos_tipo_muestra_sangre_en_db(
+                            solo_activos=True
+                        )
+                    except RuntimeError:
+                        # Tests sin mark django_db / sin conexión: lista canónica.
+                        sangre_codigos = list(tipo_muestras)
+                else:
+                    sangre_codigos = list(tipo_muestras)
+            tipo_muestras = sorted({*tipo_muestras, *(sangre_codigos or [])})
         rows.append(
             {
                 "codigo": mat.codigo,

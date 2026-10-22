@@ -113,8 +113,6 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
         "es_critico_nuevo": None,
     }
 
-    aplicar_valor_ticket_si_corresponde(resultado, tipo_examen, item)
-
     ticket_aplicado = aplicar_valor_ticket_si_corresponde(resultado, tipo_examen, item)
 
     if ticket_aplicado:
@@ -126,6 +124,12 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
             resultado.valor_numerico = _to_decimal(vn_raw)
         valor_numerico = resultado.valor_numerico
     else:
+        from laboratorio.creatinuria_dilucion import aplicar_dilucion_creatinuria_en_item
+
+        aplicar_dilucion_creatinuria_en_item(
+            tipo_examen, item, getattr(resultado, "solicitud", None)
+        )
+
         valor_texto = item.get("valor")
         if valor_texto is None:
             valor_texto = item.get("valor_obtenido")

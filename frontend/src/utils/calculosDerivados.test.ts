@@ -8,6 +8,7 @@ import {
   calcExcrecionPorLitroA24h,
   calcLdlFriedewald,
   calcRac,
+  calcTfgCkdEpi2021,
   calcularDerivados,
   esCodigoCalculado,
   formatAbsolutoMm3,
@@ -101,6 +102,20 @@ describe('calculosDerivados Corte A', () => {
     const out = calcularDerivados({ MICROALB: 30, CREA_U: 100 });
     expect(out.RAC?.numerico).toBe(30);
     expect(out.RAC?.informe).toBe('30');
+  });
+
+  it('TFG CKD-EPI 2021: mujer 50 a Cr 1.0 → 69', () => {
+    expect(calcTfgCkdEpi2021(1.0, 50, 'F')).toBe(69);
+    const out = calcularDerivados({ CREATI: 1.0 }, { edadAnos: 50, sexo: 'F' });
+    expect(out.TFG?.numerico).toBe(69);
+    expect(out.TFG?.informe).toBe('69');
+    expect(esCodigoCalculado('TFG')).toBe(true);
+  });
+
+  it('TFG sin demografía o menor de edad no calculable', () => {
+    expect(calcularDerivados({ CREATI: 1.0 }).TFG?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(calcTfgCkdEpi2021(1.0, 12, 'M')).toBeNull();
+    expect(calcTfgCkdEpi2021(1.0, 40, 'O')).toBeNull();
   });
 
   it('RAC incompleto o creatinuria cero no calculable', () => {

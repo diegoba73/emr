@@ -92,6 +92,9 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
 
     Tras migrar química a SUERO, un tubo HEPARINA/PLASMA_HEPARINA ya asociado
     sigue siendo aceptable para exámenes que exigen SUERO (órdenes vivas).
+
+    Lactato / Ca iónico pueden cargarse sobre jeringa EAB art/ven cuando
+    comparten etiqueta con gases (catálogo sigue en SANGRE_HEPARINA).
     """
     tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
     if tipo_req_id is None:
@@ -99,7 +102,14 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
     if muestra.tipo_muestra_id == tipo_req_id:
         return True
 
-    from laboratorio.tubos_catalogo import MUESTRA_ORINA, MUESTRA_ORINA_24H, SUERO, _ORINA_DUAL
+    from laboratorio.tubos_catalogo import (
+        MUESTRA_ORINA,
+        MUESTRA_ORINA_24H,
+        SUERO,
+        _CODIGOS_HEPARINA_COMPARTEN_EAB,
+        _MUESTRAS_HEPARINA_SANGRE,
+        _ORINA_DUAL,
+    )
 
     req = getattr(getattr(tipo_examen, "tipo_muestra_requerida", None), "codigo", None) or ""
     got = getattr(getattr(muestra, "tipo_muestra", None), "codigo", None) or ""
@@ -109,6 +119,13 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
         return True
 
     codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
+    if (
+        codigo in _CODIGOS_HEPARINA_COMPARTEN_EAB
+        and req_u in _MUESTRAS_HEPARINA_SANGRE
+        and got_u in _MUESTRAS_HEPARINA_SANGRE
+    ):
+        return True
+
     if codigo not in _ORINA_DUAL:
         return False
     pair = {MUESTRA_ORINA, MUESTRA_ORINA_24H}

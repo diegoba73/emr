@@ -111,6 +111,22 @@ def test_api_list_shape():
     lcr = next(r for r in rows if r["codigo"] == "LCR")
     assert "PAN_DIF_LCR" in lcr["grilla_codigos"]
     assert lcr["cultivo_micro_codigo"] == "LCR"
+    sangre = next(r for r in rows if r["codigo"] == "SANGRE")
+    assert "SUERO" in sangre["tipo_muestra_codigos"]
+    assert "PLASMA_EDTA" in sangre["tipo_muestra_codigos"]
+
+
+@pytest.mark.django_db
+def test_api_sangre_incluye_variantes_de_bd():
+    TipoMuestra.objects.get_or_create(
+        codigo="SANGRE_SECA_EN_PAPEL_FILTRO",
+        defaults={"nombre": "Sangre seca papel filtro", "activo": True},
+    )
+    rows = as_api_list()
+    sangre = next(r for r in rows if r["codigo"] == "SANGRE")
+    assert "SANGRE_SECA_EN_PAPEL_FILTRO" in sangre["tipo_muestra_codigos"]
+    assert "ORINA" not in sangre["tipo_muestra_codigos"]
+    assert "PLASMA_SEMINAL" not in sangre["tipo_muestra_codigos"]
 
 
 def test_tubo_esteril_para_muestra_lcr():

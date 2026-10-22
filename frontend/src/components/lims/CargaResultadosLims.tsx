@@ -49,6 +49,7 @@ import {
   applyAutofillVcmChcm,
   buildCargarResultadoPayload,
   buildValoresBorradorConclusion,
+  draftCreatinuriaDesdeResultado,
   draftRowClearsServerValue,
   draftRowHasValue,
   draftSysmexTicketFromResultado,
@@ -64,6 +65,12 @@ import {
   resultadoTieneValorGuardado,
   type DraftCargaRow,
 } from '../../utils/limsCargaMuestra';
+import {
+  clinicoDesdeEquipoCreatinuria,
+  esCreatininuria,
+  formatCreatinuriaNumero,
+  parseNumeroCarga,
+} from '../../utils/creatinuriaDilucion';
 import { countResultadosConValor, valorTextoDesdeResultado } from '../../utils/limsOrdenResultados';
 import { ordenPuedeCargarResultados } from '../../utils/limsEstadosOrden';
 import {
@@ -185,6 +192,15 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   validarDeshabilitadoMotivo,
 }) => {
   const resultados = orden.resultados || [];
+  const dilucionCreatinuria = Boolean(orden.crea_u_dilucion_activa);
+  const dilucionOpts = useMemo(
+    () => ({
+      dilucionCreatinuria,
+      edadAnos: orden.paciente_edad ?? null,
+      sexo: orden.paciente_sexo ?? null,
+    }),
+    [dilucionCreatinuria, orden.paciente_edad, orden.paciente_sexo]
+  );
   const [draft, setDraft] = useState<Record<number, DraftCargaRow>>({});
   const [observacionesOrden, setObservacionesOrden] = useState('');
   const [saving, setSaving] = useState(false);
@@ -316,13 +332,18 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           te?.unidad_default?.trim() ||
           getSysmexUnidad(codigo) ||
           '';
-        const valorNumericoStr =
-          r.valor_numerico !== null && r.valor_numerico !== undefined
+        const creaUDraft = draftCreatinuriaDesdeResultado(r, dilucionCreatinuria);
+        const usaDraftCreaU =
+          dilucionCreatinuria && esCreatininuria(codigo) && Boolean(creaUDraft.valor);
+        const valorNumericoStr = usaDraftCreaU
+          ? creaUDraft.valor_numerico
+          : r.valor_numerico !== null && r.valor_numerico !== undefined
             ? String(r.valor_numerico)
             : '';
         const built: DraftCargaRow = {
           // Texto/símbolos (valor_obtenido) mandan; numérico solo si no hay texto.
-          valor: valorTextoDesdeResultado(r),
+          // CREA_U con dilución: pantalla = CM260 (clínico ÷ 20).
+          valor: usaDraftCreaU ? creaUDraft.valor : valorTextoDesdeResultado(r),
           valor_sysmex: draftSysmexTicketFromResultado(r, te, codigo),
           valor_numerico: valorNumericoStr,
           unidad: unidadCatalogo,
@@ -415,12 +436,21 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         next,
         tiposExamenMap,
         indicesManualRef.current,
-        clearedIdsRef.current
+        clearedIdsRef.current,
+        dilucionOpts
       );
     });
     setObservacionesOrden(orden.observaciones ?? '');
     setSugerenciaMeta(null);
-  }, [analisisFingerprint, muestrasProcesables, tiposExamenMap, orden.observaciones, resultados]);
+  }, [
+    analisisFingerprint,
+    muestrasProcesables,
+    tiposExamenMap,
+    orden.observaciones,
+    resultados,
+    dilucionCreatinuria,
+    dilucionOpts,
+  ]);
 
   const progreso = useMemo(() => countResultadosConValor(orden), [orden]);
 
@@ -452,6 +482,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   tiposExamenMapRef.current = tiposExamenMap;
   const resultadosRef = useRef(resultados);
   resultadosRef.current = resultados;
+  const dilucionOptsRef = useRef(dilucionOpts);
+  dilucionOptsRef.current = dilucionOpts;
 
   const setRow = (id: number, patch: Partial<DraftCargaRow>) => {
     const r = resultadosRef.current.find((x) => x.id === id);
@@ -486,7 +518,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         next,
         tiposExamenMapRef.current,
         indicesManualRef.current,
-        clearedIdsRef.current
+        clearedIdsRef.current,
+        dilucionOptsRef.current
       );
     });
   };
@@ -516,7 +549,12 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   const handleSugerirConclusion = async () => {
     setSugeriendo(true);
     try {
-      const valores_borrador = buildValoresBorradorConclusion(resultados, draft, tiposExamenMap);
+      const valores_borrador = buildValoresBorradorConclusion(
+        resultados,
+        draft,
+        tiposExamenMap,
+        dilucionOpts
+      );
       if (Object.keys(valores_borrador).length === 0) {
         toast.error('Ingresá al menos un valor del hemograma para sugerir la conclusión.');
         return;
@@ -603,7 +641,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       if (clearedIdsRef.current.has(r.id) && resultadoTieneValorGuardado(r)) {
         return true;
       }
-      return resultadoDebeGuardarse(r, row, te);
+      return resultadoDebeGuardarse(r, row, te, dilucionOpts);
     });
 
     // Valores ya guardados, nada dirty: marcar INFORMADO_PARCIAL sin reenviar filas.
@@ -898,11 +936,16 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           return c === CODIGO_PROT_T;
         });
         if (protRow) {
-          const fracN = draftValorClinicoNumerico(r, draft, tiposExamenMap);
-          const protN = draftValorClinicoNumerico(protRow, draft, tiposExamenMap);
+          const fracN = draftValorClinicoNumerico(r, draft, tiposExamenMap, dilucionOpts);
+          const protN = draftValorClinicoNumerico(protRow, draft, tiposExamenMap, dilucionOpts);
           const pct = porcentajeFraccionElp(fracN, protN);
           const label = formatPctElp(pct);
           if (label) valorDisplayExtra = ` · ${label}`;
+        }
+      } else if (dilucionCreatinuria && esCreatininuria(codigoUpper)) {
+        const equipo = parseNumeroCarga(row.valor || row.valor_numerico);
+        if (equipo != null) {
+          valorDisplayExtra = ` · ×20 → ${formatCreatinuriaNumero(clinicoDesdeEquipoCreatinuria(equipo))} mg/dL`;
         }
       }
 
@@ -917,8 +960,8 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           return c === 'PROT_T';
         });
         if (rCa && rProt) {
-          const caN = draftValorClinicoNumerico(rCa, draft, tiposExamenMap);
-          const protN = draftValorClinicoNumerico(rProt, draft, tiposExamenMap);
+          const caN = draftValorClinicoNumerico(rCa, draft, tiposExamenMap, dilucionOpts);
+          const protN = draftValorClinicoNumerico(rProt, draft, tiposExamenMap, dilucionOpts);
           const est =
             caN != null && protN != null ? calcCaIonZeislerMmolL(caN, protN) : null;
           const actual = Number(row.valor_numerico || row.valor || '');
@@ -1054,7 +1097,18 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                   value={row.valor}
                   onChange={(ev) => setRow(r.id, { valor: ev.target.value, valor_numerico: '' })}
                   onKeyDown={handleEnterNext(valorFocusKey)}
-                  placeholder={esFormula ? 'Ej. 70 · Enter → siguiente' : 'Ej. 120 o Positivo · Enter → siguiente'}
+                  placeholder={
+                    dilucionCreatinuria && esCreatininuria(codigoUpper)
+                      ? 'Valor CM260 · Enter → siguiente'
+                      : esFormula
+                        ? 'Ej. 70 · Enter → siguiente'
+                        : 'Ej. 120 o Positivo · Enter → siguiente'
+                  }
+                  helperText={
+                    dilucionCreatinuria && esCreatininuria(codigoUpper)
+                      ? 'Orina 1:20 — se informa ×20'
+                      : undefined
+                  }
                   inputProps={{ 'data-carga-focus': valorFocusKey }}
                   InputProps={
                     esFormula

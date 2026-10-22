@@ -42,8 +42,10 @@ const MUESTRAS_SANGRE = new Set([
 export const ORDEN_PRESENTACION_PEDIDO: string[] = [
   'PAN_HEMO',
   'GLU',
+  'PAN_CTOG',
   'UREA',
   'CREATI',
+  'TFG',
   'PAN_CLEAR',
   'AU',
   'CA',

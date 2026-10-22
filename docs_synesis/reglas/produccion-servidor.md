@@ -21,17 +21,25 @@ Avisar siempre (con **tiempo estimado** y si el sistema sigue usable) cuando se 
 
 | Acción | Impacto típico | ¿Sistema usable mientras tanto? |
 |--------|----------------|----------------------------------|
-| `docker compose build --no-cache nginx` (o rebuild frontend completo) | ~30–45+ min | Sí: contenedores actuales siguen hasta el `up` |
-| `build` backend/nginx con caché | minutos | Sí hasta el recreate |
+| `docker compose build --no-cache nginx` (o rebuild frontend completo) | **30–90+ min** en este host; puede **colgarse** en `npm run build` | Sí: contenedores actuales siguen hasta el `up` |
+| `build` backend/nginx con caché | minutos a ~30–45+ (FE) | Sí hasta el recreate |
 | `up --force-recreate` backend y/o nginx | breve corte (segundos–1–2 min) | Interrupción corta al recrear |
 | recreate de todo el stack / `down`+`up` | corte mayor | No |
 | migraciones en prod | suele ser rápido; riesgo de bloqueo si falla | Preferible ventana acordada |
+| `docker builder prune` / limpiezas BuildKit | satura disco/I/O; parece “no para” | Sí, pero el server queda lento |
+
+### Preferencia operativa (oct 2026 — incidente rebuild FE)
+
+El host EMR tiene **poca RAM (~3 GB)** y swap: un `npm run build` dentro de Docker **no es un cambio “chico”** aunque el diff de código sea pequeño (CRA recompila todo el front). Ya ocurrió que el build pasara de **1 h** y quedara trabado; cortarlo asusta (SSH/prompt) pero **no tumba** los contenedores en aire.
 
 Regla del asistente:
 
 1. Decir en el chat: qué se va a hacer, cuánto puede tardar, si hay downtime.
-2. Ofrecer alternativa más corta si existe (hotfix sin `--no-cache`, solo backend, etc.).
+2. Ofrecer alternativa más corta si existe (hotfix sin `--no-cache`, solo backend, diferir FE, etc.).
 3. **No** pegar el comando de build/recreate “para que lo corran ya” sin ese aviso, salvo que el usuario lo pida explícitamente en ese mensaje.
+4. **No sugerir** rebuild de `nginx`/frontend en prod de pasada ni “para probar un cambio UI”: primero preguntar si quiere desplegar FE sabiendo el riesgo de build largo/colgado; si prefiere **seguir como está**, no insistir.
+5. Si un build se corta: indicar `Ctrl+C` en la terminal del build; **no** `pkill` a ciegas ni `builder prune` en pánico; confirmar con `ps` que no quede `npm`/`compose build` y que `emr_*` sigan `Up`.
+6. SSH prod (`-p 2223`): a veces pide **passphrase** de la clave; tras el MOTD la shell puede colgarse — probar comando remoto (`ssh … "echo OK"`) o `bash --noprofile --norc` antes de asumir que el server cayó.
 
 ## Aislamiento: no mezclar con la otra app
 

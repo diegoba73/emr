@@ -729,6 +729,20 @@ _ATENCION_CLINICAL_ACTIONS = frozenset({
 })
 
 
+def _medico_puede_acceder_atencion(medico, atencion) -> bool:
+    """Médico propio siempre; guardia compartida si el médico no es solo ambulatorio."""
+    if medico is None or atencion is None:
+        return False
+    if atencion.medico_principal_id == medico.id:
+        return True
+    from medicos.ambito import medico_es_solo_ambulatorio
+    from turnos.models import Atencion
+
+    if medico_es_solo_ambulatorio(medico):
+        return False
+    return atencion.contexto_atencion == Atencion.ContextoAtencion.GUARDIA
+
+
 def filter_atencion_queryset_for_user(user, queryset):
     """Filtra atenciones según rol (QA-ROLE-01). Usado por AtencionViewSet activo y legacy."""
     if _atencion_is_staff_or_admin(user):
@@ -738,7 +752,18 @@ def filter_atencion_queryset_for_user(user, queryset):
         return queryset
     medico = _atencion_user_medico(user)
     if medico is not None:
-        return queryset.filter(medico_principal=medico)
+        from django.db.models import Q
+        from medicos.ambito import medico_es_solo_ambulatorio
+        from turnos.models import Atencion
+
+        # Tablero de guardia compartido: el médico ve todas las GUARDIA
+        # (salvo ámbito solo ambulatorio). El resto sigue siendo solo propias.
+        if medico_es_solo_ambulatorio(medico):
+            return queryset.filter(medico_principal=medico)
+        return queryset.filter(
+            Q(medico_principal=medico)
+            | Q(contexto_atencion=Atencion.ContextoAtencion.GUARDIA)
+        )
     paciente = _atencion_user_paciente(user)
     if paciente is not None:
         return queryset.filter(paciente=paciente)
@@ -750,7 +775,8 @@ class AtencionPermission(permissions.BasePermission):
     Permisos para atenciones clínicas (QA-ROLE-01).
 
     - admin/staff/superuser: operación completa (destroy bloqueado en view).
-    - médico: lectura/escritura solo en atenciones donde es médico principal.
+    - médico: propias (lectura/escritura); además lectura de todas las GUARDIA
+      (tablero compartido) si el ámbito no es solo ambulatorio.
     - secretaría: lectura/escritura global (guardia: iniciar, pedidos, cerrar).
     - enfermería: solo lectura global (coordinación asistencial; sin mutación clínica).
     - paciente: solo lectura de propias atenciones.
@@ -824,13 +850,16 @@ class AtencionPermission(permissions.BasePermission):
 
         if role == 'medico':
             medico = _atencion_user_medico(user)
-            if medico is None or atencion.medico_principal_id != medico.id:
+            if not _medico_puede_acceder_atencion(medico, atencion):
                 return False
-            return action in (
-                _ATENCION_READ_ACTIONS
-                | _ATENCION_WRITE_ACTIONS
-                | _ATENCION_CLINICAL_ACTIONS
-            )
+            # Propias: lectura + mutación. Guardia ajena: solo lectura.
+            if medico is not None and atencion.medico_principal_id == medico.id:
+                return action in (
+                    _ATENCION_READ_ACTIONS
+                    | _ATENCION_WRITE_ACTIONS
+                    | _ATENCION_CLINICAL_ACTIONS
+                )
+            return action in _ATENCION_READ_ACTIONS
 
         return False
 

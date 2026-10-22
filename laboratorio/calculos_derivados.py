@@ -8,6 +8,7 @@ Perfil ferrico — se cargan FERR, UIBC (, FERRIT); CF, SAT_FE y TRANS se calcul
 Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA se calcula.
 Orinas 24 hs — concentración + DIUR → excreción (PROT_U_24, NA/K/CL_U24, MICROALB_24).
 RAC — se cargan MICROALB + CREA_U; RAC (mg/g) = (MICROALB / CREA_U) × 100.
+TFG — CREATI + edad/sexo del paciente; CKD-EPI 2021 (creatinina, sin raza).
 Calcio iónico — opcional Zeisler desde CA + PROT_T (mg/dL → mmol/L); sigue editable (equipo).
 """
 from __future__ import annotations
@@ -22,6 +23,8 @@ RESULTADO_NO_CALCULABLE = "No calculable con estos datos"
 MINUTOS_24H = Decimal("1440")
 # Factor clínico mg/dL → mmol/L para calcio iónico estimado.
 FACTOR_CA_MG_DL_A_MMOL_L = Decimal("4.008")
+# CKD-EPI 2021 creatinine (Inker et al.): adultos ≥18 años.
+CKD_EPI_2021_EDAD_MIN = 18
 CODIGOS_LIPIDO_MEDIDOS = frozenset({"COL_TOT", "HDL", "TG"})
 CODIGOS_LIPIDO_CALCULADOS = frozenset(
     {"LDL", "VLDL", "COL_NO_LDL", "COL_RESID", "RATIO_CT_HDL"}
@@ -35,6 +38,7 @@ CODIGOS_ORINA_24H_CALCULADOS = frozenset(
     {"PROT_U_24", "NA_U24", "K_U24", "CL_U24", "MICROALB_24"}
 )
 CODIGOS_RAC_CALCULADOS = frozenset({"RAC"})
+CODIGOS_TFG_CALCULADOS = frozenset({"TFG"})
 # Estimable por fórmula pero editable (valor de equipo / EAB). No es CALCULADO de catálogo.
 CODIGOS_OVERRIDEABLES_ESTIMADOS = frozenset({"CA_ION"})
 # Pedido suelto de CA_ION → incluir CA + PROT_T para estimar Zeisler en carga.
@@ -50,6 +54,7 @@ CODIGOS_CALCULADOS = (
     | CODIGOS_CLEARANCE_CALCULADOS
     | CODIGOS_ORINA_24H_CALCULADOS
     | CODIGOS_RAC_CALCULADOS
+    | CODIGOS_TFG_CALCULADOS
 )
 # Pedido suelto del calculado → asegurar insumos medidos.
 # Misma relación en informe: el calculado no se informa sin sus medidos en la orden.
@@ -58,6 +63,8 @@ INSUMOS_POR_CODIGO_CALCULADO: dict[str, tuple[str, ...]] = {
     "CLEAR_CREA": ("CREATI", "CREA_U", "DIUR"),
     # RAC (mg/g)
     "RAC": ("MICROALB", "CREA_U"),
+    # TFG / eGFR (CKD-EPI 2021); demografía desde ficha paciente
+    "TFG": ("CREATI",),
     # Orinas 24 hs
     "MICROALB_24": ("MICROALB", "DIUR"),
     "PROT_U_24": ("PROT_U_EQ", "DIUR"),
@@ -209,6 +216,40 @@ def calc_rac(microalb_mg_l: Decimal, crea_u_mg_dl: Decimal) -> Decimal | None:
     return _q((microalb_mg_l / crea_u_mg_dl) * Decimal(100), 1)
 
 
+def calc_tfg_ckd_epi_2021(
+    creati_mg_dl: Decimal, edad_anos: int, sexo: str
+) -> Decimal | None:
+    """
+    eGFR CKD-EPI 2021 (creatinina, sin factor de raza), mL/min/1.73 m².
+
+    Solo adultos (≥18). Sexo ``M``/``F``; otros → no calculable.
+    """
+    sexo_n = (sexo or "").strip().upper()
+    if sexo_n not in ("M", "F"):
+        return None
+    if edad_anos is None or edad_anos < CKD_EPI_2021_EDAD_MIN:
+        return None
+    if creati_mg_dl <= 0:
+        return None
+
+    if sexo_n == "F":
+        kappa = Decimal("0.7")
+        alpha = Decimal("-0.241")
+        sex_factor = Decimal("1.012")
+    else:
+        kappa = Decimal("0.9")
+        alpha = Decimal("-0.302")
+        sex_factor = Decimal("1")
+
+    ratio = creati_mg_dl / kappa
+    one = Decimal("1")
+    min_term = min(ratio, one) ** alpha
+    max_term = max(ratio, one) ** Decimal("-1.200")
+    age_term = Decimal("0.9938") ** int(edad_anos)
+    egfr = Decimal("142") * min_term * max_term * age_term * sex_factor
+    return _q(egfr, 0)
+
+
 def calc_ca_ion_zeisler_mg_dl(ca_mg_dl: Decimal, prot_g_dl: Decimal) -> Decimal | None:
     """Ca iónico estimado (mg/dL) por Zeisler desde calcio total y proteínas."""
     denom = prot_g_dl + Decimal("6.5")
@@ -241,7 +282,12 @@ def format_valor_formula_leuco_con_absoluto(pct_texto: str, absoluto: int) -> st
     return f"{con_pct}  ·  {format_absoluto_mm3(absoluto)}"
 
 
-def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[Decimal | None, str]]:
+def calcular_derivados(
+    valores: dict[str, Decimal | None],
+    *,
+    edad_anos: int | None = None,
+    sexo: str | None = None,
+) -> dict[str, tuple[Decimal | None, str]]:
     out: dict[str, tuple[Decimal | None, str]] = {}
 
     col = _dec(valores.get("COL_TOT"))
@@ -373,6 +419,18 @@ def calcular_derivados(valores: dict[str, Decimal | None]) -> dict[str, tuple[De
         # aplicar_* solo escribe si la orden tiene fila RAC.
         out["RAC"] = (None, RESULTADO_NO_CALCULABLE)
 
+    # TFG: creatininemia + demografía (edad/sexo) del paciente.
+    if creati is not None:
+        tfg = (
+            calc_tfg_ckd_epi_2021(creati, edad_anos, sexo)
+            if edad_anos is not None
+            else None
+        )
+        if tfg is not None:
+            out["TFG"] = (quantize_valor_numerico(tfg), _fmt(tfg, 0))
+        else:
+            out["TFG"] = (None, RESULTADO_NO_CALCULABLE)
+
     ca = _dec(valores.get("CA"))
     prot_t = _dec(valores.get("PROT_T"))
     if ca is not None and prot_t is not None:
@@ -455,7 +513,10 @@ def aplicar_calculos_derivados_solicitud(
             num = _dec(res.valor_obtenido)
         valores[codigo] = num
 
-    derivados_all = calcular_derivados(valores)
+    paciente = getattr(solicitud, "paciente", None)
+    edad_anos = getattr(paciente, "edad", None) if paciente is not None else None
+    sexo = getattr(paciente, "sexo", None) if paciente is not None else None
+    derivados_all = calcular_derivados(valores, edad_anos=edad_anos, sexo=sexo)
     if solo_calculados:
         derivados = {k: v for k, v in derivados_all.items() if k in CODIGOS_CALCULADOS}
     else:

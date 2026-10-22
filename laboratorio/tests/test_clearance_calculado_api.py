@@ -27,6 +27,9 @@ def clearance(db):
         origen_solicitud="AMBULATORIO_CEHTA",
     )
     sol.paneles.add(PanelExamen.objects.get(codigo="PAN_CLEAR"))
+    TipoExamen.objects.filter(codigo__in=("CREATI", "CREA_U", "DIUR")).update(
+        requiere_muestra=False
+    )
     rows = {
         codigo: ResultadoExamen.objects.create(
             solicitud=sol, tipo_examen=TipoExamen.objects.get(codigo=codigo)
@@ -60,8 +63,11 @@ def test_clear_crea_es_calculado_en_catalogo(clearance):
 @pytest.mark.django_db
 def test_cargar_medidos_calcula_clearance(clearance):
     sol, _actor, _client, rows = clearance
-    cargar(clearance, {"CREATI": "1.0", "CREA_U": "100", "DIUR": "1500"})
+    # CM260 5 → CREA_U clínico 100 → clearance 104.2
+    cargar(clearance, {"CREATI": "1.0", "CREA_U": "5", "DIUR": "1500"})
+    rows["CREA_U"].refresh_from_db()
     rows["CLEAR_CREA"].refresh_from_db()
+    assert rows["CREA_U"].valor_numerico == Decimal("100.0000")
     assert rows["CLEAR_CREA"].valor_numerico == Decimal("104.2")
     assert rows["CLEAR_CREA"].valor_obtenido == "104.2"
 
@@ -69,7 +75,7 @@ def test_cargar_medidos_calcula_clearance(clearance):
 @pytest.mark.django_db
 def test_cargar_incompleto_marca_no_calculable(clearance):
     sol, _actor, _client, rows = clearance
-    cargar(clearance, {"CREATI": "1.0", "CREA_U": "100"})
+    cargar(clearance, {"CREATI": "1.0", "CREA_U": "5"})
     rows["CLEAR_CREA"].refresh_from_db()
     assert rows["CLEAR_CREA"].valor_numerico is None
     assert rows["CLEAR_CREA"].valor_obtenido == RESULTADO_NO_CALCULABLE
@@ -78,7 +84,7 @@ def test_cargar_incompleto_marca_no_calculable(clearance):
 @pytest.mark.django_db
 def test_creatininemia_cero_no_calculable(clearance):
     sol, _actor, _client, rows = clearance
-    cargar(clearance, {"CREATI": "0", "CREA_U": "100", "DIUR": "1500"})
+    cargar(clearance, {"CREATI": "0", "CREA_U": "5", "DIUR": "1500"})
     rows["CLEAR_CREA"].refresh_from_db()
     assert rows["CLEAR_CREA"].valor_numerico is None
     assert rows["CLEAR_CREA"].valor_obtenido == RESULTADO_NO_CALCULABLE

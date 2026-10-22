@@ -30,6 +30,7 @@ from laboratorio.tubos_catalogo import (
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
     SUERO,
+    _CODIGOS_HEPARINA_COMPARTEN_EAB,
     _EAB_ART,
     _EAB_VEN,
     _FRASCO_ORINA,
@@ -212,6 +213,52 @@ def _resolver_bidon_y_muestra_24h():
     return bidon, muestra
 
 
+def _ancla_eab_en_orden(examenes) -> dict[str, Any]:
+    """
+    Primera jeringa EAB arterial / venosa de la orden (contenedor + muestra).
+
+    Lactato / Ca iónico se fusionan ahí para no imprimir etiqueta extra.
+    Preferencia: arterial; si no hay art, venosa.
+    """
+    art = None
+    ven = None
+    for ex in examenes:
+        codigo = (getattr(ex, "codigo", None) or "").strip().upper()
+        if codigo in _EAB_ART and art is None:
+            art = ex
+        elif codigo in _EAB_VEN and ven is None:
+            ven = ex
+        if art is not None and ven is not None:
+            break
+    return {"art": art, "ven": ven}
+
+
+def _remap_heparina_suelta_a_jeringa_eab(
+    codigo: str,
+    *,
+    tc_eff,
+    tm_id: int | None,
+    ancla_eab: dict[str, Any],
+) -> tuple[Any, int | None, str]:
+    """Si hay EAB, LACT/CA_ION comparten esa jeringa (sin etiqueta heparina extra)."""
+    c = (codigo or "").strip().upper()
+    if c not in _CODIGOS_HEPARINA_COMPARTEN_EAB:
+        return tc_eff, tm_id, ""
+    ancla = ancla_eab.get("art") or ancla_eab.get("ven")
+    if ancla is None:
+        return tc_eff, tm_id, ""
+    tc_ancla = getattr(ancla, "tipo_contenedor", None)
+    if tc_ancla is None or not getattr(tc_ancla, "activo", False):
+        return tc_eff, tm_id, ""
+    codigo_ancla = (getattr(ancla, "codigo", None) or "").strip().upper()
+    split = "EAB_ART" if codigo_ancla in _EAB_ART else "EAB_VEN"
+    return tc_ancla, getattr(ancla, "tipo_muestra_requerida_id", None), split
+
+
+# Alias legacy
+_remap_lactato_a_jeringa_eab = _remap_heparina_suelta_a_jeringa_eab
+
+
 def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenGrupo]:
     """
     Agrupa por (tipo_contenedor, tipo_muestra) efectivo y calcula tubos físicos.
@@ -247,6 +294,7 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
                 "Falta el tipo de contenedor BIDON_ORINA_24H en el catálogo."
             )
 
+    ancla_eab = _ancla_eab_en_orden(con_tubo)
     by_key: dict[tuple, list] = {}
     meta: dict[tuple, TuboOrdenGrupo] = {}
     for ex in con_tubo:
@@ -279,6 +327,12 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
             split = "EAB_VEN"
         else:
             split = ""
+            # LACT / CA_ION con EAB: misma jeringa (no etiqueta SANGRE_HEPARINA extra)
+            tc_eff, tm_id, split = _remap_heparina_suelta_a_jeringa_eab(
+                codigo, tc_eff=tc_eff, tm_id=tm_id, ancla_eab=ancla_eab
+            )
+            if not tc_eff.activo:
+                raise TubosOrdenError(f"El tipo de tubo {tc_eff.codigo} está inactivo.")
         key = (tc_eff.pk, tm_id, split)
         if key in meta:
             meta[key].examenes.append(ex.nombre)
@@ -378,6 +432,7 @@ def mapa_tipo_examen_a_clave_tubo(
     if requiere_24h:
         bidon, muestra_24h = _resolver_bidon_y_muestra_24h()
 
+    ancla_eab = _ancla_eab_en_orden(examenes)
     out: dict[int, tuple[int | None, int | None]] = {}
     for ex in examenes:
         tc = ex.tipo_contenedor
@@ -396,6 +451,9 @@ def mapa_tipo_examen_a_clave_tubo(
             ):
                 tc_eff = bidon
                 tm_id = muestra_24h.pk
+        tc_eff, tm_id, _split = _remap_heparina_suelta_a_jeringa_eab(
+            codigo, tc_eff=tc_eff, tm_id=tm_id, ancla_eab=ancla_eab
+        )
         if not tc_eff.activo:
             continue
         out[ex.pk] = (tc_eff.pk, tm_id)

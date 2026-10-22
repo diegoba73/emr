@@ -27,6 +27,10 @@ def rac_orden(db):
         origen_solicitud="AMBULATORIO_CEHTA",
     )
     sol.paneles.add(PanelExamen.objects.get(codigo="PAN_MALB_AZ"))
+    # Carga unitaria sin tubos: no exigir muestra física en medidos.
+    TipoExamen.objects.filter(codigo__in=("MICROALB", "CREA_U")).update(
+        requiere_muestra=False
+    )
     rows = {
         codigo: ResultadoExamen.objects.create(
             solicitud=sol, tipo_examen=TipoExamen.objects.get(codigo=codigo)
@@ -61,9 +65,11 @@ def test_rac_es_calculado_en_catalogo(rac_orden):
 @pytest.mark.django_db
 def test_cargar_medidos_calcula_rac(rac_orden):
     _sol, _actor, _client, rows = rac_orden
-    # (30 mg/L ÷ 100 mg/dL) × 100 = 30 mg/g
-    cargar(rac_orden, {"MICROALB": "30", "CREA_U": "100"})
+    # CM260 5 → CREA_U clínico 100; (30 mg/L ÷ 100 mg/dL) × 100 = 30 mg/g
+    cargar(rac_orden, {"MICROALB": "30", "CREA_U": "5"})
+    rows["CREA_U"].refresh_from_db()
     rows["RAC"].refresh_from_db()
+    assert rows["CREA_U"].valor_numerico == Decimal("100.0000")
     assert rows["RAC"].valor_numerico == Decimal("30.0")
     assert rows["RAC"].valor_obtenido == "30"
 

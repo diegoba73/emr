@@ -1,6 +1,6 @@
 /**
  * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs, RAC,
- * calcio iónico Zeisler).
+ * TFG CKD-EPI, calcio iónico Zeisler).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
@@ -12,6 +12,8 @@ export const FACTOR_TRANS_DESDE_TIBC = 0.8;
 export const MINUTOS_24H = 1440;
 /** Factor clínico mg/dL → mmol/L para calcio iónico estimado (Zeisler). */
 export const FACTOR_CA_MG_DL_A_MMOL_L = 4.008;
+/** CKD-EPI 2021: solo adultos. */
+export const CKD_EPI_2021_EDAD_MIN = 18;
 /** Estimable por fórmula pero editable (valor de equipo / EAB). */
 export const CODIGOS_OVERRIDEABLES_ESTIMADOS = new Set(['CA_ION']);
 
@@ -36,6 +38,7 @@ export const CODIGOS_CALCULADOS = new Set([
   'CL_U24',
   'MICROALB_24',
   'RAC',
+  'TFG',
 ]);
 
 export const FORMULA_LEUCO_CODIGOS = new Set([
@@ -130,6 +133,35 @@ export function calcRac(microalbMgL: number, creaUMgDl: number): number | null {
   return roundHalfUp((microalbMgL / creaUMgDl) * 100, 1);
 }
 
+/**
+ * eGFR CKD-EPI 2021 (creatinina, sin raza), mL/min/1.73 m².
+ * Adultos ≥18; sexo M/F.
+ */
+export function calcTfgCkdEpi2021(
+  creatiMgDl: number,
+  edadAnos: number,
+  sexo: string | null | undefined
+): number | null {
+  const sexoN = (sexo || '').trim().toUpperCase();
+  if (sexoN !== 'M' && sexoN !== 'F') return null;
+  if (!Number.isFinite(edadAnos) || edadAnos < CKD_EPI_2021_EDAD_MIN) return null;
+  if (!Number.isFinite(creatiMgDl) || creatiMgDl <= 0) return null;
+
+  const kappa = sexoN === 'F' ? 0.7 : 0.9;
+  const alpha = sexoN === 'F' ? -0.241 : -0.302;
+  const sexFactor = sexoN === 'F' ? 1.012 : 1;
+  const ratio = creatiMgDl / kappa;
+  const minTerm = Math.pow(Math.min(ratio, 1), alpha);
+  const maxTerm = Math.pow(Math.max(ratio, 1), -1.2);
+  const ageTerm = Math.pow(0.9938, Math.trunc(edadAnos));
+  return roundHalfUp(142 * minTerm * maxTerm * ageTerm * sexFactor, 0);
+}
+
+export type DerivadosContexto = {
+  edadAnos?: number | null;
+  sexo?: string | null;
+};
+
 /** Ca iónico estimado (mg/dL) por Zeisler: (6.25×CA − 0.375×PROT) / (PROT + 6.5). */
 export function calcCaIonZeislerMgDl(caMgDl: number, protGDl: number): number | null {
   const denom = protGDl + 6.5;
@@ -172,7 +204,8 @@ export type DerivadoValor = { numerico: number | null; informe: string };
 
 /** Calcula derivados a partir de un mapa codigo → valor clínico. */
 export function calcularDerivados(
-  valores: Record<string, number | null | undefined>
+  valores: Record<string, number | null | undefined>,
+  ctx?: DerivadosContexto
 ): Record<string, DerivadoValor> {
   const out: Record<string, DerivadoValor> = {};
   const col = valores.COL_TOT;
@@ -300,6 +333,19 @@ export function calcularDerivados(
     }
   } else if (microalb != null || creaU != null) {
     out.RAC = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  if (creati != null) {
+    const edad = ctx?.edadAnos;
+    const tfg =
+      edad != null && Number.isFinite(edad)
+        ? calcTfgCkdEpi2021(creati, edad, ctx?.sexo)
+        : null;
+    if (tfg != null) {
+      out.TFG = { numerico: tfg, informe: fmt(tfg, 0) };
+    } else {
+      out.TFG = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
   }
 
   const ca = valores.CA;

@@ -33,7 +33,7 @@ import { Atencion } from '../types';
 import GuardiaAtencionDialog, {
   GuardiaDialogMode,
 } from '../modules/guardia/components/GuardiaAtencionDialog';
-import { canOperateAtenciones } from '../utils/permissions';
+import { canOperateAtenciones, isStaffOrAdmin, normalizeRol } from '../utils/permissions';
 import { apiService } from '../services/api';
 
 const formatDateTime = (value?: string | null) => {
@@ -56,6 +56,14 @@ const GuardiaPage: React.FC = () => {
   const [closingId, setClosingId] = useState<number | null>(null);
 
   const canOperate = canOperateAtenciones(currentUser);
+  const myMedicoId = currentUser?.medico?.id ?? null;
+  const canMutateAtencion = (atencion: Atencion) => {
+    if (!canOperate) return false;
+    // Médico estándar: solo opera las propias; secretaría/admin/staff operan todas.
+    if (isStaffOrAdmin(currentUser) || normalizeRol(currentUser) !== 'medico') return true;
+    const ownerId = atencion.medico_principal?.id ?? atencion.medico_principal_id ?? null;
+    return myMedicoId != null && ownerId === myMedicoId;
+  };
   const atenciones = useMemo(() => data?.results ?? [], [data?.results]);
 
   const openDialog = (mode: GuardiaDialogMode, atencionId?: number) => {
@@ -232,7 +240,7 @@ const GuardiaPage: React.FC = () => {
                               <Visibility fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          {canOperate && atencion.estado_clinico === 'ABIERTA' && (
+                          {canMutateAtencion(atencion) && atencion.estado_clinico === 'ABIERTA' && (
                             <Tooltip title="Continuar atención">
                               <IconButton
                                 size="small"
@@ -242,7 +250,7 @@ const GuardiaPage: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                           )}
-                          {canOperate && atencion.estado_clinico === 'ABIERTA' && (
+                          {canMutateAtencion(atencion) && atencion.estado_clinico === 'ABIERTA' && (
                             <Tooltip title="Cerrar atención">
                               <span>
                                 <IconButton
@@ -259,7 +267,7 @@ const GuardiaPage: React.FC = () => {
                               </span>
                             </Tooltip>
                           )}
-                          {canOperate &&
+                          {canMutateAtencion(atencion) &&
                             !atencion.internacion_id &&
                             !atencion.derivada_a_internacion && (
                             <Tooltip title="Derivar a internación">

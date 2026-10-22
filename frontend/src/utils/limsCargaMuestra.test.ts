@@ -205,6 +205,32 @@ describe('limsCargaMuestra', () => {
     ).toEqual([1]);
   });
 
+  it('lactato acepta jeringa EAB arterial aunque el catálogo diga SANGRE_HEPARINA', () => {
+    const proc = [
+      {
+        ...muestra(1, 10, 'RECIBIDA'),
+        tipo_muestra_codigo: 'SANGRE_HEPARINA_ART',
+        tipo_contenedor: 50,
+      },
+    ] as MuestraTransaccional[];
+    expect(
+      muestrasCompatiblesParaTipo(proc, 99, 50, 'SANGRE_HEPARINA', 'LACT').map((m) => m.id)
+    ).toEqual([1]);
+  });
+
+  it('CA_ION acepta jeringa EAB arterial aunque el catálogo diga SANGRE_HEPARINA', () => {
+    const proc = [
+      {
+        ...muestra(1, 10, 'RECIBIDA'),
+        tipo_muestra_codigo: 'SANGRE_HEPARINA_ART',
+        tipo_contenedor: 50,
+      },
+    ] as MuestraTransaccional[];
+    expect(
+      muestrasCompatiblesParaTipo(proc, 99, 50, 'SANGRE_HEPARINA', 'CA_ION').map((m) => m.id)
+    ).toEqual([1]);
+  });
+
   it('dual CREA_U acepta bidón ORINA_24_H aunque el catálogo diga ORINA', () => {
     const proc = [
       {

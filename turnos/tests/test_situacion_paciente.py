@@ -14,9 +14,11 @@ from pacientes.models import Paciente
 from turnos.models import Atencion, Recurso, Turno
 from turnos.services import AtencionService, BusinessLogicError
 from turnos.situacion_paciente import (
+    GUARDIA_MAX_HORAS_ABIERTA,
     SituacionPacienteConflictError,
     assert_puede_admitir_internacion,
     assert_puede_iniciar_atencion_ambulatoria_o_guardia,
+    cerrar_guardias_vencidas,
 )
 
 
@@ -235,3 +237,79 @@ def test_atencion_clean_bloquea_guardia_si_internado(paciente, medico, cama_disp
     )
     with pytest.raises(ValidationError):
         atencion.full_clean()
+
+
+@pytest.mark.django_db
+def test_cerrar_guardias_vencidas_cierra_solo_mayores_a_24h(paciente, medico):
+    reciente = AtencionService.iniciar_atencion_guardia(
+        paciente_id=paciente.pk,
+        medico_id=medico.pk,
+        motivo_consulta="Reciente",
+    ).atencion
+
+    paciente_viejo = Paciente.objects.create(
+        dni=f"SIT-OLD-{unique_suffix()}",
+        nombre="Ana",
+        apellido="Vencida",
+    )
+    vieja = AtencionService.iniciar_atencion_guardia(
+        paciente_id=paciente_viejo.pk,
+        medico_id=medico.pk,
+        motivo_consulta="Vieja",
+    ).atencion
+    Atencion.objects.filter(pk=vieja.pk).update(
+        fecha_admision=timezone.now() - timedelta(hours=GUARDIA_MAX_HORAS_ABIERTA + 1)
+    )
+
+    cerrados = cerrar_guardias_vencidas()
+    assert vieja.pk in cerrados
+    assert reciente.pk not in cerrados
+
+    vieja.refresh_from_db()
+    reciente.refresh_from_db()
+    assert vieja.estado_clinico == Atencion.EstadoClinico.FINALIZADA
+    assert vieja.fecha_cierre is not None
+    assert reciente.estado_clinico == Atencion.EstadoClinico.ABIERTA
+
+
+@pytest.mark.django_db
+def test_guardia_vencida_deja_iniciar_nueva_al_validar_situacion(paciente, medico):
+    vieja = AtencionService.iniciar_atencion_guardia(
+        paciente_id=paciente.pk,
+        medico_id=medico.pk,
+    ).atencion
+    Atencion.objects.filter(pk=vieja.pk).update(
+        fecha_admision=timezone.now() - timedelta(hours=GUARDIA_MAX_HORAS_ABIERTA + 2)
+    )
+
+    # Al validar situación se cierra la vencida y permite una nueva guardia.
+    assert_puede_iniciar_atencion_ambulatoria_o_guardia(
+        paciente.pk, Atencion.ContextoAtencion.GUARDIA
+    )
+    vieja.refresh_from_db()
+    assert vieja.estado_clinico == Atencion.EstadoClinico.FINALIZADA
+
+    nueva = AtencionService.iniciar_atencion_guardia(
+        paciente_id=paciente.pk,
+        medico_id=medico.pk,
+        motivo_consulta="Nueva tras auto-cierre",
+    ).atencion
+    assert nueva.pk != vieja.pk
+    assert nueva.estado_clinico == Atencion.EstadoClinico.ABIERTA
+
+
+@pytest.mark.django_db
+def test_admitir_libera_paciente_si_guardia_vencida_sin_origen(
+    paciente, medico, cama_disponible
+):
+    vieja = AtencionService.iniciar_atencion_guardia(
+        paciente_id=paciente.pk,
+        medico_id=medico.pk,
+    ).atencion
+    Atencion.objects.filter(pk=vieja.pk).update(
+        fecha_admision=timezone.now() - timedelta(hours=GUARDIA_MAX_HORAS_ABIERTA + 3)
+    )
+
+    assert_puede_admitir_internacion(paciente.pk)
+    vieja.refresh_from_db()
+    assert vieja.estado_clinico == Atencion.EstadoClinico.FINALIZADA

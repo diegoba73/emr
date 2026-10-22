@@ -462,7 +462,7 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
     "ELP_CONC": _r(metodo=_M_ELP, ref="Según patrón electroforético"),
     # —— Clearance / microalbuminuria ——
     "CREA_U": _r(
-        metodo="Jaffé cinético",
+        metodo="Jaffé cinético (orina diluida 1:20; ×20 en LIMS)",
         unidad="mg/dL",
         ref="Según clearance",
     ),
@@ -535,6 +535,23 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         cmin="40",
         cmax="400",
     ),
+    "GLU_0": _r(
+        metodo=_M_ENZ,
+        unidad="mg/dL",
+        ref="70–99 mg/dL",
+        rmin="70",
+        rmax="99",
+        cmin="40",
+        cmax="400",
+    ),
+    "GLU120": _r(
+        metodo=_M_ENZ,
+        unidad="mg/dL",
+        ref="Menor de 140 mg/dL",
+        rmax="139",
+        cmin="40",
+        cmax="400",
+    ),
     "UREA": _r(
         metodo="Ureasa-GLDH",
         unidad="mg/dL",
@@ -548,6 +565,12 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         ref="0.6 - 1.2 mg/dL",
         rmin="0.6",
         rmax="1.2",
+    ),
+    "TFG": _r(
+        metodo="Calculado CKD-EPI 2021 (creatinina)",
+        unidad="mL/min/1.73 m²",
+        ref="≥ 60 mL/min/1.73 m²",
+        rmin="60",
     ),
     "AU": _r(
         metodo=_M_ENZ,

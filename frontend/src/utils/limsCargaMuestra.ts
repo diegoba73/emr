@@ -3,14 +3,27 @@
  * Sin logs de datos sensibles.
  */
 import type { CargarResultadoPayload, LimsTipoExamen, MuestraTransaccional, ResultadoExamenLims } from '../types/lims';
+import {
+  clinicoDesdeEquipoCreatinuria,
+  equipoDesdeClinicoCreatinuria,
+  esCreatininuria,
+  formatCreatinuriaNumero,
+  parseNumeroCarga,
+} from './creatinuriaDilucion';
 import { convertTicketEntry, entryFromStored, usesTicketEntry } from './entradaResultados';
 import { calcChcmGdl, calcHcmPg, calcVcmFl } from './hemogramaIndices';
 import {
   CODIGOS_CALCULADOS,
   calcularDerivados,
   esResultadoNoCalculable,
+  type DerivadosContexto,
 } from './calculosDerivados';
 import { getSysmexUnidad } from './sysmexHemograma';
+
+export type CargaDilucionOpts = {
+  /** Órdenes nuevas: CREA_U en pantalla = CM260; clínico = ×20. */
+  dilucionCreatinuria?: boolean;
+} & DerivadosContexto;
 
 /** FiO2 / derivados: figuran en panel pero no se asocian a tubo. */
 export function esExamenCalculadoSinMuestraObligatoria(
@@ -60,6 +73,20 @@ const ORINA_COMPAT = new Set(['ORINA', 'ORINA_24_H']);
 /** Química migró HEPARINA→SUERO; tubos vivos pueden seguir en plasma/sangre heparina. */
 const LEGACY_HEPARINA_PARA_SUERO = new Set(['PLASMA_HEPARINA', 'SANGRE_HEPARINA']);
 
+/** Lactato / Ca iónico comparten jeringa EAB: catálogo SANGRE_HEPARINA ↔ art/ven. */
+const CODIGOS_HEPARINA_COMPARTEN_EAB = new Set([
+  'LACT',
+  'LACPLA',
+  'CA_ION',
+  'CAIISE',
+  'CAIE',
+]);
+const MUESTRAS_HEPARINA_SANGRE = new Set([
+  'SANGRE_HEPARINA',
+  'SANGRE_HEPARINA_ART',
+  'SANGRE_HEPARINA_VEN',
+]);
+
 export function muestraTipoCompatibleConExamen(
   muestra: MuestraTransaccional,
   tipoMuestraRequeridaId?: number | null,
@@ -74,6 +101,14 @@ export function muestraTipoCompatibleConExamen(
   if (req && got && req === got) return true;
   if (req === 'SUERO' && LEGACY_HEPARINA_PARA_SUERO.has(got)) return true;
   const exam = (codigoExamen || '').trim().toUpperCase();
+  if (
+    exam &&
+    CODIGOS_HEPARINA_COMPARTEN_EAB.has(exam) &&
+    MUESTRAS_HEPARINA_SANGRE.has(req) &&
+    MUESTRAS_HEPARINA_SANGRE.has(got)
+  ) {
+    return true;
+  }
   if (exam && CODIGOS_ORINA_DUAL.has(exam) && ORINA_COMPAT.has(req) && ORINA_COMPAT.has(got)) {
     return true;
   }
@@ -230,7 +265,8 @@ export function draftRowValueChangedFromServer(
   r: Pick<ResultadoExamenLims, 'valor_obtenido' | 'valor_numerico' | 'tipo_examen_codigo'>,
   row: DraftCargaRow,
   te?: LimsTipoExamen | null,
-  codigo?: string | null
+  codigo?: string | null,
+  opts?: CargaDilucionOpts
 ): boolean {
   const safe = normalizeDraftRow(row);
   const c = te?.codigo ?? codigo ?? r.tipo_examen_codigo;
@@ -248,6 +284,13 @@ export function draftRowValueChangedFromServer(
       ? String(r.valor_numerico).trim()
       : '');
   const draftValor = safe.valor.trim() || safe.valor_numerico.trim();
+  if (opts?.dilucionCreatinuria && esCreatininuria(c) && serverValor) {
+    const clinico = parseNumeroCarga(serverValor);
+    if (clinico != null) {
+      const equipoServer = formatCreatinuriaNumero(equipoDesdeClinicoCreatinuria(clinico));
+      return !draftValoresEquivalentes(draftValor, equipoServer);
+    }
+  }
   return !draftValoresEquivalentes(draftValor, serverValor);
 }
 
@@ -255,12 +298,42 @@ export function draftRowValueChangedFromServer(
 export function resultadoDebeGuardarse(
   r: ResultadoExamenLims,
   row: DraftCargaRow,
-  te?: LimsTipoExamen | null
+  te?: LimsTipoExamen | null,
+  opts?: CargaDilucionOpts
 ): boolean {
   const codigo = r.tipo_examen_codigo ?? te?.codigo;
   if (draftRowClearsServerValue(r, row, te, codigo)) return true;
   if (!draftRowHasValue(row, te, codigo)) return false;
-  return draftRowValueChangedFromServer(r, row, te, codigo);
+  return draftRowValueChangedFromServer(r, row, te, codigo, opts);
+}
+
+/**
+ * Inicializa el borrador de CREA_U: con dilución activa muestra el valor CM260
+ * (clínico persistido ÷ 20).
+ */
+export function draftCreatinuriaDesdeResultado(
+  r: Pick<ResultadoExamenLims, 'valor_obtenido' | 'valor_numerico' | 'tipo_examen_codigo'>,
+  dilucionActiva: boolean
+): { valor: string; valor_numerico: string } {
+  const clinicoRaw =
+    r.valor_numerico != null && String(r.valor_numerico).trim() !== ''
+      ? String(r.valor_numerico)
+      : (r.valor_obtenido || '').trim();
+  if (!dilucionActiva || !esCreatininuria(r.tipo_examen_codigo) || !clinicoRaw) {
+    return {
+      valor: (r.valor_obtenido || '').trim() || clinicoRaw,
+      valor_numerico:
+        r.valor_numerico != null && String(r.valor_numerico).trim() !== ''
+          ? String(r.valor_numerico)
+          : '',
+    };
+  }
+  const clinico = parseNumeroCarga(clinicoRaw);
+  if (clinico == null) {
+    return { valor: clinicoRaw, valor_numerico: clinicoRaw };
+  }
+  const equipo = formatCreatinuriaNumero(equipoDesdeClinicoCreatinuria(clinico));
+  return { valor: equipo, valor_numerico: equipo };
 }
 
 /**
@@ -389,7 +462,8 @@ export function buildCargarResultadoPayload(
 export function buildValoresBorradorConclusion(
   resultados: ResultadoExamenLims[],
   draft: Record<number, DraftCargaRow>,
-  catalog: Map<number, LimsTipoExamen>
+  catalog: Map<number, LimsTipoExamen>,
+  opts?: CargaDilucionOpts
 ): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   for (const r of resultados) {
@@ -400,11 +474,19 @@ export function buildValoresBorradorConclusion(
     const row = draft[r.id];
     if (row && draftRowHasValue(row, te, r.tipo_examen_codigo)) {
       const payload = buildCargarResultadoPayload(r.id, row, te, r.tipo_examen_codigo);
-      if (payload.valor_numerico != null && payload.valor_numerico !== '') {
-        out[codigo] = payload.valor_numerico as string | number;
-      } else if (payload.valor?.trim()) {
-        out[codigo] = payload.valor.trim();
+      let raw: string | number | null | undefined = payload.valor_numerico;
+      if (raw == null || raw === '') {
+        raw = payload.valor?.trim() || null;
       }
+      if (raw == null || raw === '') continue;
+      if (opts?.dilucionCreatinuria && esCreatininuria(codigo)) {
+        const equipo = parseNumeroCarga(raw);
+        if (equipo != null) {
+          out[codigo] = clinicoDesdeEquipoCreatinuria(equipo);
+          continue;
+        }
+      }
+      out[codigo] = raw;
       continue;
     }
 
@@ -421,18 +503,25 @@ export function buildValoresBorradorConclusion(
 export function draftValorClinicoNumerico(
   r: ResultadoExamenLims,
   draft: Record<number, DraftCargaRow>,
-  catalog: Map<number, LimsTipoExamen>
+  catalog: Map<number, LimsTipoExamen>,
+  opts?: CargaDilucionOpts
 ): number | null {
   const te = catalog.get(r.tipo_examen);
+  const codigo = (r.tipo_examen_codigo || te?.codigo || '').trim().toUpperCase();
   const row = draft[r.id];
   if (row && draftRowHasValue(row, te, r.tipo_examen_codigo)) {
     const payload = buildCargarResultadoPayload(r.id, row, te, r.tipo_examen_codigo);
+    let n: number | null = null;
     if (payload.valor_numerico != null && payload.valor_numerico !== '') {
-      const n = Number(payload.valor_numerico);
-      return Number.isFinite(n) ? n : null;
+      n = Number(payload.valor_numerico);
+    } else {
+      n = Number(payload.valor);
     }
-    const n = Number(payload.valor);
-    return Number.isFinite(n) ? n : null;
+    if (!Number.isFinite(n)) return null;
+    if (opts?.dilucionCreatinuria && esCreatininuria(codigo)) {
+      return clinicoDesdeEquipoCreatinuria(n);
+    }
+    return n;
   }
   if (r.valor_numerico != null && String(r.valor_numerico).trim() !== '') {
     const n = Number(r.valor_numerico);
@@ -517,7 +606,8 @@ export function applyAutofillVcmChcm(
   draft: Record<number, DraftCargaRow>,
   catalog: Map<number, LimsTipoExamen>,
   manualIds: ReadonlySet<number>,
-  clearedIds: ReadonlySet<number> = new Set()
+  clearedIds: ReadonlySet<number> = new Set(),
+  opts?: CargaDilucionOpts
 ): Record<number, DraftCargaRow> {
   const byCodigo = new Map<string, ResultadoExamenLims>();
   for (const r of resultados) {
@@ -537,9 +627,9 @@ export function applyAutofillVcmChcm(
   const rChcm = byCodigo.get('CHCM');
 
   if (rHgb && rHto && rRbc) {
-    const hgb = draftValorClinicoNumerico(rHgb, next, catalog);
-    const hto = draftValorClinicoNumerico(rHto, next, catalog);
-    const rbc = draftValorClinicoNumerico(rRbc, next, catalog);
+    const hgb = draftValorClinicoNumerico(rHgb, next, catalog, opts);
+    const hto = draftValorClinicoNumerico(rHto, next, catalog, opts);
+    const rbc = draftValorClinicoNumerico(rRbc, next, catalog, opts);
     if (hgb != null && hto != null && rbc != null) {
       const vcm = calcVcmFl(hto, rbc);
       if (rVcm && vcm != null && !locked(rVcm.id)) {
@@ -563,9 +653,12 @@ export function applyAutofillVcmChcm(
       valores[codigo] = null;
       return;
     }
-    valores[codigo] = draftValorClinicoNumerico(r, next, catalog);
+    valores[codigo] = draftValorClinicoNumerico(r, next, catalog, opts);
   });
-  const derivados = calcularDerivados(valores);
+  const derivados = calcularDerivados(valores, {
+    edadAnos: opts?.edadAnos,
+    sexo: opts?.sexo,
+  });
   for (const [codigo, val] of Object.entries(derivados)) {
     const row = byCodigo.get(codigo);
     if (!row) continue;

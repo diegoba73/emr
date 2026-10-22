@@ -42,6 +42,7 @@ from laboratorio.orden_grupos_informe import (
     construir_grupos_informe,
 )
 from laboratorio.procedencia_display import resolver_procedencia_solicitud
+from laboratorio.ctog import PANEL_CTOG
 from laboratorio.proteinograma import PANEL_ELP
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
@@ -894,6 +895,17 @@ def construir_story_icpl(
                         grupo,
                         styles,
                         valores_por_codigo=vals_global,
+                        fechas_extraccion_por_resultado=fechas_ext_por_res,
+                    )
+                )
+                needs_suelto_header = True
+            elif es_perfil and grupo.panel_codigo == PANEL_CTOG:
+                from laboratorio.ctog_pdf import bloque_ctog
+
+                story.extend(
+                    bloque_ctog(
+                        grupo,
+                        styles,
                         fechas_extraccion_por_resultado=fechas_ext_por_res,
                     )
                 )

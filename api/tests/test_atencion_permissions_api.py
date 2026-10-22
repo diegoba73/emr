@@ -247,12 +247,49 @@ class TestAtencionPermissionsList:
         assert len(ids) == 1
 
     def test_medico_solo_propias(self, client, medico_a, medico_b, atencion_medico_a, atencion_medico_b):
+        """Fuera de guardia, el médico sigue viendo solo las propias."""
         client.force_authenticate(user=medico_a[0])
         response = client.get(reverse('atenciones-list'))
         assert response.status_code == status.HTTP_200_OK
         ids = {row['id'] for row in response.data['results']}
         assert atencion_medico_a.id in ids
         assert atencion_medico_b.id not in ids
+
+    def test_medico_ve_todas_las_guardias(
+        self, client, medico_a, medico_b, atencion_medico_a
+    ):
+        """Tablero compartido: el médico ve guardias ajenas además de las propias."""
+        _, med_b = medico_b
+        uid = _uid()
+        otro_pac = Paciente.objects.create(
+            user=User.objects.create_user(
+                username=f'pac_g_{uid}',
+                email=f'pac_g_{uid}@test.com',
+                password='x',
+                rol='paciente',
+            ),
+            dni=f'DNIG{uid}',
+            nombre='Guardia',
+            apellido='Ajena',
+            fecha_nacimiento='1992-01-01',
+        )
+        guardia_ajena = Atencion.objects.create(
+            paciente=otro_pac,
+            medico_principal=med_b,
+            tipo_atencion='GUARDIA',
+            tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
+            contexto_atencion=Atencion.ContextoAtencion.GUARDIA,
+            estado_clinico=Atencion.EstadoClinico.ABIERTA,
+        )
+        client.force_authenticate(user=medico_a[0])
+        response = client.get(
+            reverse('atenciones-list'),
+            {'contexto_atencion': 'GUARDIA'},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        ids = {row['id'] for row in response.data['results']}
+        assert guardia_ajena.id in ids
+        assert atencion_medico_a.id not in ids  # ambulatoria, no entra en filtro GUARDIA
 
     def test_admin_ve_todas(self, client, atencion_medico_a, atencion_medico_b):
         admin = _user('admin')
@@ -332,10 +369,38 @@ class TestAtencionPermissionsMutations:
     def test_medico_no_ve_ni_opera_ajena(
         self, client, medico_a, atencion_medico_b
     ):
+        """Atención ambulatoria ajena: sigue ocultá (404 por queryset)."""
         client.force_authenticate(user=medico_a[0])
         url = reverse('atenciones-detail', args=[atencion_medico_b.id])
         assert client.get(url).status_code == status.HTTP_404_NOT_FOUND
         assert client.patch(url, {'observaciones_generales': 'x'}, format='json').status_code == status.HTTP_404_NOT_FOUND
+
+    def test_medico_ve_pero_no_opera_guardia_ajena(self, client, medico_a, medico_b, paciente):
+        """Guardia compartida: otro médico puede ver, no editar ni cerrar."""
+        _, med_b = medico_b
+        guardia_ajena = Atencion.objects.create(
+            paciente=paciente,
+            medico_principal=med_b,
+            tipo_atencion='GUARDIA',
+            tipo_intervencion=Atencion.TipoIntervencion.CONSULTA,
+            contexto_atencion=Atencion.ContextoAtencion.GUARDIA,
+            estado_clinico=Atencion.EstadoClinico.ABIERTA,
+        )
+        client.force_authenticate(user=medico_a[0])
+        detail_url = reverse('atenciones-detail', args=[guardia_ajena.id])
+        assert client.get(detail_url).status_code == status.HTTP_200_OK
+        patch = client.patch(
+            detail_url,
+            {'observaciones_generales': 'continúa otro médico'},
+            format='json',
+        )
+        assert patch.status_code == status.HTTP_403_FORBIDDEN
+        cerrar = client.post(
+            reverse('atenciones-cerrar', args=[guardia_ajena.id]),
+            {},
+            format='json',
+        )
+        assert cerrar.status_code == status.HTTP_403_FORBIDDEN
 
     def test_medico_puede_cerrar_propia(self, client, medico_a, atencion_medico_a):
         client.force_authenticate(user=medico_a[0])

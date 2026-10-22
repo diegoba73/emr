@@ -97,7 +97,7 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 | Rol | list/retrieve | create/update/cerrar |
 |-----|---------------|----------------------|
 | admin/staff/superuser | Sí (global) | Sí |
-| médico | Propias (`medico_principal`) | Propias |
+| médico | Propias + **todas las GUARDIA** (tablero compartido; no aplica si ámbito solo ambulatorio) | Solo propias (guardia ajena: solo lectura) |
 | secretaría | Sí (global) | Sí (p. ej. Guardia + `iniciar-guardia` con `medico_id`) |
 | enfermería | Sí (global, solo lectura) | No |
 | paciente | Propias | No |

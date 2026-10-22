@@ -477,6 +477,184 @@ class TestResolverTubosOrden(TestCase):
         items = expandir_items_crear_muestras(sol, grupos)
         assert len(items) == 2
 
+    def test_lactato_con_eab_art_no_genera_etiqueta_extra(self):
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"ART{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_hep = TipoMuestra.objects.create(
+            codigo=f"HEP{self.suf}", nombre="Sangre heparina", activo=True
+        )
+        ph, _ = TipoExamen.objects.update_or_create(
+            codigo="PH_ART",
+            defaults={
+                "nombre": "pH (arterial)",
+                "tipo_muestra_requerida": tm_art,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        ph.tipo_muestra_requerida = tm_art
+        ph.tipo_contenedor = self.hep
+        ph.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        lact, _ = TipoExamen.objects.update_or_create(
+            codigo="LACT",
+            defaults={
+                "nombre": "Ácido láctico / Lactato",
+                "tipo_muestra_requerida": tm_hep,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        lact.tipo_muestra_requerida = tm_hep
+        lact.tipo_contenedor = self.hep
+        lact.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+
+        sol = self._solicitud(ph, lact)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].cantidad == 1
+        assert grupos[0].tipo_muestra_id == tm_art.pk
+        nombres = " ".join(grupos[0].examenes).lower()
+        assert "lact" in nombres or "láctico" in nombres or "lactico" in nombres
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 1
+
+    def test_lactato_con_eab_art_y_ven_dos_jeringas(self):
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"A2{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_ven = TipoMuestra.objects.create(
+            codigo=f"V2{self.suf}", nombre="Sangre heparina venosa", activo=True
+        )
+        tm_hep = TipoMuestra.objects.create(
+            codigo=f"H2{self.suf}", nombre="Sangre heparina", activo=True
+        )
+        comps = []
+        for codigo, tm, nombre in (
+            ("PH_ART", tm_art, "pH art"),
+            ("PH_VEN", tm_ven, "pH ven"),
+        ):
+            ex, _ = TipoExamen.objects.update_or_create(
+                codigo=codigo,
+                defaults={
+                    "nombre": nombre,
+                    "tipo_muestra_requerida": tm,
+                    "tipo_contenedor": self.hep,
+                    "precio": 1,
+                    "activo": True,
+                },
+            )
+            ex.tipo_muestra_requerida = tm
+            ex.tipo_contenedor = self.hep
+            ex.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+            comps.append(ex)
+        lact, _ = TipoExamen.objects.update_or_create(
+            codigo="LACT",
+            defaults={
+                "nombre": "Lactato",
+                "tipo_muestra_requerida": tm_hep,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        lact.tipo_muestra_requerida = tm_hep
+        lact.tipo_contenedor = self.hep
+        lact.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        comps.append(lact)
+
+        sol = self._solicitud(*comps)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 2
+        assert sum(g.cantidad for g in grupos) == 2
+        assert {g.tipo_muestra_id for g in grupos} == {tm_art.pk, tm_ven.pk}
+
+    def test_lactato_solo_sigue_heparina_propia(self):
+        tm_hep = TipoMuestra.objects.create(
+            codigo=f"H3{self.suf}", nombre="Sangre heparina", activo=True
+        )
+        lact, _ = TipoExamen.objects.update_or_create(
+            codigo="LACT",
+            defaults={
+                "nombre": "Lactato",
+                "tipo_muestra_requerida": tm_hep,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        lact.tipo_muestra_requerida = tm_hep
+        lact.tipo_contenedor = self.hep
+        lact.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        sol = self._solicitud(lact)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].tipo_muestra_id == tm_hep.pk
+
+    def test_ca_ion_con_eab_art_no_genera_etiqueta_extra(self):
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"A3{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_hep = TipoMuestra.objects.create(
+            codigo=f"H4{self.suf}", nombre="Sangre heparina", activo=True
+        )
+        ph, _ = TipoExamen.objects.update_or_create(
+            codigo="PH_ART",
+            defaults={
+                "nombre": "pH (arterial)",
+                "tipo_muestra_requerida": tm_art,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        ph.tipo_muestra_requerida = tm_art
+        ph.tipo_contenedor = self.hep
+        ph.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        ca, _ = TipoExamen.objects.update_or_create(
+            codigo="CA_ION",
+            defaults={
+                "nombre": "Calcio iónico",
+                "tipo_muestra_requerida": tm_hep,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        ca.tipo_muestra_requerida = tm_hep
+        ca.tipo_contenedor = self.hep
+        ca.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+
+        sol = self._solicitud(ph, ca)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].cantidad == 1
+        assert grupos[0].tipo_muestra_id == tm_art.pk
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 1
+
+    def test_ca_ion_solo_sigue_heparina_propia(self):
+        tm_hep = TipoMuestra.objects.create(
+            codigo=f"H5{self.suf}", nombre="Sangre heparina", activo=True
+        )
+        ca, _ = TipoExamen.objects.update_or_create(
+            codigo="CA_ION",
+            defaults={
+                "nombre": "Calcio iónico",
+                "tipo_muestra_requerida": tm_hep,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        ca.tipo_muestra_requerida = tm_hep
+        ca.tipo_contenedor = self.hep
+        ca.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        sol = self._solicitud(ca)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].tipo_muestra_id == tm_hep.pk
+
 
 @pytest.mark.django_db
 class TestTomarMuestraAutoTubosAPI(TestCase):

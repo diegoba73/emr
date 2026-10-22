@@ -26,6 +26,7 @@ export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: p('PAN_HEMO'), right: e('CPK') },
   { left: e('HBA1C'), right: e('CPK_MB') },
   { left: e('GLU'), right: e('TROP_I') },
+  { left: p('PAN_CTOG'), right: null },
   { left: e('UREA'), right: e('MIOG') },
   { left: e('CREATI'), right: e('TROP_US') },
   { left: e('AU'), right: e('PROBNP') },
