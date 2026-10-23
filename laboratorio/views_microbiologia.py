@@ -23,7 +23,11 @@ from api.permissions import (
     get_normalized_role,
     usuario_puede_operar_informe_micro,
 )
-from usuarios.roles import ROLES_LIMS_OPERATIVA_LIMITADA, ROLES_LIMS_WRITE
+from usuarios.roles import (
+    ROLES_LIMS_OPERATIVA_LIMITADA,
+    ROLES_LIMS_WRITE,
+    ROLES_SECRETARIA_ENTREGA_INFORME,
+)
 from auditoria.audit_service import log_create, log_update
 from auditoria.snapshot import safe_model_snapshot
 from laboratorio.microbiologia_estado import (
@@ -1782,7 +1786,7 @@ class InformeMicrobiologiaViewSet(viewsets.ModelViewSet):
                     estudio__medico_interno__user_id=user.pk,
                 )
                 qs = qs.filter(q_via_solicitud | q_directo).distinct()
-            elif role not in ("laboratorio", "enfermeria", "secretaria"):
+            elif role not in ("laboratorio", "enfermeria") and role not in ROLES_SECRETARIA_ENTREGA_INFORME:
                 return qs.none()
         return _apply_estudio_id_query_filter(qs, self.request)
 

@@ -4,12 +4,12 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 
 from api.permissions import get_normalized_role
-from usuarios.roles import ROLES_LIMS_OPERADOR
+from usuarios.roles import ROLES_LIMS_OPERADOR, ROLES_SECRETARIA_EMR
 
 from .models import Profesional
 from .serializers import ProfesionalLightSerializer, ProfesionalSerializer
 
-_ROLES_ESCRITURA = frozenset({'admin', 'secretaria', *ROLES_LIMS_OPERADOR})
+_ROLES_ESCRITURA = frozenset({'admin', *ROLES_SECRETARIA_EMR, *ROLES_LIMS_OPERADOR})
 
 
 class CanWriteProfesional(IsAuthenticated):

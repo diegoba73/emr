@@ -1,3 +1,4 @@
+from usuarios.roles import ROLES_SECRETARIA_ENTREGA_INFORME
 """
 ViewSets para la app laboratorio (LIMS).
 """
@@ -694,7 +695,10 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return queryset
         role = get_normalized_role(user)
-        if role in ('admin', 'laboratorio', 'bioquimico', 'secretaria', 'enfermeria', 'medico'):
+        if (
+            role in ('admin', 'laboratorio', 'bioquimico', 'enfermeria', 'medico')
+            or role in ROLES_SECRETARIA_ENTREGA_INFORME
+        ):
             return queryset
         if role == 'paciente':
             try:

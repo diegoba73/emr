@@ -143,7 +143,8 @@ const GestionUsuarios: React.FC = () => {
   const ROL_CHOICES = [
     { value: 'paciente', label: 'Paciente' },
     { value: 'medico', label: 'Médico' },
-    { value: 'secretaria', label: 'Secretaria' },
+    { value: 'secretaria', label: 'Secretaría' },
+    { value: 'secretaria_lab', label: 'Secretaría laboratorio' },
     { value: 'enfermeria', label: 'Enfermería' },
     { value: 'laboratorio', label: 'Laboratorio' },
     { value: 'bioquimico', label: 'Bioquímico' },

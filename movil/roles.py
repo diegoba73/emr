@@ -6,6 +6,7 @@ ROLES_MOVIL = frozenset({
     'paciente',
     'medico',
     'secretaria',
+    'secretaria_lab',
     'laboratorio',
     'bioquimico',
 })
@@ -16,6 +17,7 @@ ROLES_MOVIL_INFORMES = frozenset({
     'paciente',
     'medico',
     'secretaria',
+    'secretaria_lab',
     'laboratorio',
     'bioquimico',
 })

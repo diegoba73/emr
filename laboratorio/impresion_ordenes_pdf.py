@@ -37,7 +37,11 @@ from laboratorio.resena_pedido import (
     recortar_antecedentes,
     sugerir_resenas,
 )
-from laboratorio.talon_pedido_pdf import _fmt_medico, _fmt_paciente
+from laboratorio.talon_pedido_pdf import (
+    LINEAS_FORMULARIO_CON_PANEL,
+    _fmt_medico,
+    _fmt_paciente,
+)
 
 TIPO_LAB = "LAB_CLINICO"
 TIPO_MICRO = "MICROBIOLOGIA"
@@ -112,8 +116,7 @@ FORM_CLINICO_DER: list[tuple[str, str | None, str | None]] = [
 # Si el panel está pedido, estas casillas del papel también se marcan
 # (aunque el analito no figure suelto fuera del panel).
 _MARCAS_EXTRA_POR_PANEL: dict[str, frozenset[str]] = {
-    "PAN_IONO": frozenset({"CL"}),
-    "PAN_COAG": frozenset({"INR"}),
+    codigo: frozenset(extras) for codigo, extras in LINEAS_FORMULARIO_CON_PANEL.items()
 }
 
 # --- Formulario microbiología: (etiqueta, códigos de TipoCultivoMicrobiologia) ---

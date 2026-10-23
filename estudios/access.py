@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from archivos_medicos.access import medico_puede_acceder_paciente
-from usuarios.roles import ROLES_ESTUDIO_COMPLEMENTARIO, es_rol_estudio_complementario
+from usuarios.roles import (
+    ROLES_ESTUDIO_COMPLEMENTARIO,
+    ROLES_SECRETARIA_INSTITUCIONAL,
+    es_rol_estudio_complementario,
+)
 
 
 def _rol(user) -> str:
@@ -21,7 +25,7 @@ def usuario_puede_escribir_estudio(user) -> bool:
     if user.is_superuser:
         return True
     rol = _rol(user)
-    return rol in {'admin', 'medico', 'secretaria', *ROLES_ESTUDIO_COMPLEMENTARIO}
+    return rol in {'admin', 'medico', *ROLES_SECRETARIA_INSTITUCIONAL, *ROLES_ESTUDIO_COMPLEMENTARIO}
 
 
 def usuario_puede_asignar_turno_estudio(user) -> bool:
@@ -30,7 +34,7 @@ def usuario_puede_asignar_turno_estudio(user) -> bool:
         return False
     if user.is_superuser:
         return True
-    return _rol(user) in {'admin', 'secretaria'}
+    return _rol(user) in {'admin', *ROLES_SECRETARIA_INSTITUCIONAL}
 
 
 def usuario_puede_marcar_realizado(user) -> bool:
@@ -49,7 +53,7 @@ def usuario_puede_ver_estudios_agenda(user) -> bool:
     if user.is_superuser:
         return True
     rol = _rol(user)
-    return rol in {'admin', 'secretaria', 'enfermeria', 'medico', *ROLES_ESTUDIO_COMPLEMENTARIO}
+    return rol in {'admin', 'enfermeria', 'medico', *ROLES_SECRETARIA_INSTITUCIONAL, *ROLES_ESTUDIO_COMPLEMENTARIO}
 
 
 def usuario_puede_ver_estudio(user, estudio) -> bool:
@@ -62,7 +66,7 @@ def usuario_puede_ver_estudio(user, estudio) -> bool:
         return True
     if es_rol_estudio_complementario(rol):
         return True
-    if rol == 'secretaria':
+    if rol in ROLES_SECRETARIA_INSTITUCIONAL:
         return True
     if rol == 'enfermeria':
         return True
@@ -96,7 +100,7 @@ def usuario_puede_ver_estudio_clinico(user, estudio) -> bool:
         return True
     if es_rol_estudio_complementario(rol):
         return True
-    if rol == 'secretaria':
+    if rol in ROLES_SECRETARIA_INSTITUCIONAL:
         return True
     if rol == 'enfermeria':
         return True
@@ -147,7 +151,7 @@ def usuario_puede_crear_estudio(user, paciente) -> bool:
     if user.is_superuser:
         return True
     rol = _rol(user)
-    if rol in ('admin', 'secretaria'):
+    if rol == 'admin' or rol in ROLES_SECRETARIA_INSTITUCIONAL:
         return True
     if es_rol_estudio_complementario(rol):
         return True
@@ -204,7 +208,7 @@ def usuario_puede_validar_informe(user, estudio=None) -> bool:
     """
     if not user.is_authenticated:
         return False
-    if user.is_superuser or _rol(user) in ('admin', 'secretaria'):
+    if user.is_superuser or _rol(user) == 'admin' or _rol(user) in ROLES_SECRETARIA_INSTITUCIONAL:
         return True
     if estudio is None:
         return False
@@ -226,7 +230,7 @@ def usuario_puede_modificar_contenido_estudio(user, estudio) -> bool:
     if estudio.estado == estudio.Estado.ENTREGADO:
         return False
     if estudio.estado == estudio.Estado.VALIDADO:
-        if user.is_superuser or _rol(user) in ('admin', 'secretaria'):
+        if user.is_superuser or _rol(user) == 'admin' or _rol(user) in ROLES_SECRETARIA_INSTITUCIONAL:
             return True
         return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
     return True
@@ -241,7 +245,7 @@ def usuario_puede_entregar_estudio(user, estudio) -> bool:
     if not usuario_puede_ver_estudio_clinico(user, estudio):
         return False
     rol = _rol(user)
-    if user.is_superuser or rol in ('admin', 'secretaria'):
+    if user.is_superuser or rol == 'admin' or rol in ROLES_SECRETARIA_INSTITUCIONAL:
         return True
     return usuario_puede_modificar_contenido_estudio(user, estudio)
 
@@ -250,7 +254,7 @@ def usuario_es_realizador_o_admin(user, estudio) -> bool:
     """Realizador, admin o secretaría (operador delegado para emitir/rectificar)."""
     if not user.is_authenticated:
         return False
-    if user.is_superuser or _rol(user) in ('admin', 'secretaria'):
+    if user.is_superuser or _rol(user) == 'admin' or _rol(user) in ROLES_SECRETARIA_INSTITUCIONAL:
         return True
     return bool(estudio.realizado_por_id and estudio.realizado_por_id == user.id)
 
@@ -259,7 +263,7 @@ def usuario_puede_enviar_pdf_informe(user, estudio, informe) -> bool:
     """Distribuir el informe vigente validado, sin habilitar edición ni validación."""
     return (
         user.is_authenticated
-        and (user.is_superuser or _rol(user) in {'admin', 'secretaria', 'medico', *ROLES_ESTUDIO_COMPLEMENTARIO})
+        and (user.is_superuser or _rol(user) in {'admin', 'medico', *ROLES_SECRETARIA_INSTITUCIONAL, *ROLES_ESTUDIO_COMPLEMENTARIO})
         and estudio.estado in (estudio.Estado.VALIDADO, estudio.Estado.ENTREGADO)
         and informe.estado == informe.EstadoInforme.VALIDADO
         and informe.es_vigente

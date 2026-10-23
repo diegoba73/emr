@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from api.permissions import get_normalized_role
 from laboratorio.pedidos_completos import crear_pedido_completo
-from usuarios.roles import ROLES_LIMS_WRITE
+from usuarios.roles import ROLES_LIMS_WRITE, ROLES_SECRETARIA_LAB
 
 
 class PedidoCompletoCreateView(APIView):
@@ -24,7 +24,7 @@ class PedidoCompletoCreateView(APIView):
         if not request.user.is_superuser and role not in (
             *ROLES_LIMS_WRITE,
             "medico",
-            "secretaria",
+            *ROLES_SECRETARIA_LAB,
         ):
             return Response(
                 {"detail": "No tiene permiso para confirmar pedidos de laboratorio."},

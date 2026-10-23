@@ -1,6 +1,7 @@
 import os
 
 from rest_framework import serializers
+from usuarios.roles import ROLES_SECRETARIA_EMR
 from django.contrib.auth import get_user_model
 from pacientes.models import Paciente
 from pacientes.serializers import PacienteLightSerializer
@@ -229,7 +230,7 @@ class DisponibilidadMedicoSerializer(serializers.ModelSerializer):
         request = self.context['request']
         medico = attrs.get('medico', getattr(self.instance, 'medico', None))
         rol = str(getattr(request.user, 'rol', '')).strip().lower()
-        if not request.user.is_superuser and rol not in ('admin', 'secretaria'):
+        if not request.user.is_superuser and rol != 'admin' and rol not in ROLES_SECRETARIA_EMR:
             raise serializers.ValidationError('Solo secretaría o administración puede configurar la agenda.')
         inicio = attrs.get('hora_inicio', getattr(self.instance, 'hora_inicio', None))
         fin = attrs.get('hora_fin', getattr(self.instance, 'hora_fin', None))
@@ -271,7 +272,7 @@ class ExcepcionMedicoSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         user = self.context['request'].user
         medico = attrs.get('medico', getattr(self.instance, 'medico', None))
-        if not user.is_superuser and str(user.rol).strip().lower() not in ('admin', 'secretaria'):
+        if not user.is_superuser and str(user.rol).strip().lower() != 'admin' and str(user.rol).strip().lower() not in ROLES_SECRETARIA_EMR:
             raise serializers.ValidationError('Solo secretaría o administración puede configurar la agenda.')
         inicio = attrs.get('hora_inicio', getattr(self.instance, 'hora_inicio', None))
         fin = attrs.get('hora_fin', getattr(self.instance, 'hora_fin', None))

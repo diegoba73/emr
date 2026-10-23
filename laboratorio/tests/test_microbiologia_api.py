@@ -439,7 +439,7 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             username=f"sec_em_{self.suf}",
             email=f"sem{self.suf}@t.com",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         self.client.force_authenticate(sec)
         r = self.client.get("/api/lab/microbiologia/estudios/")
@@ -451,13 +451,14 @@ class TestEstudioMicrobiologiaAPI(TestCase):
         r2 = self.client.get(f"/api/lab/microbiologia/estudios/{data['id']}/")
         self.assertEqual(r2.status_code, status.HTTP_200_OK)
 
-    def test_secretaria_no_lista_detalle_tecnico_micro(self):
+    def test_secretaria_lab_lista_detalle_tecnico_micro(self):
+        """Secretaría lab tiene LIMS write: misma lectura técnica que laboratorio."""
         data = self._crear_estudio()
         sec = User.objects.create_user(
             username=f"sec_tec_{self.suf}",
             email=f"stec{self.suf}@t.com",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         self.client.force_authenticate(sec)
         for path in (
@@ -467,15 +468,15 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             "/api/lab/microbiologia/antibiogramas/",
         ):
             r = self.client.get(path)
-            self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, msg=path)
+            self.assertEqual(r.status_code, status.HTTP_200_OK, msg=path)
 
-    def test_secretaria_no_inicia_estudio(self):
+    def test_secretaria_lab_inicia_estudio(self):
         data = self._crear_estudio()
         sec = User.objects.create_user(
             username=f"sec_em2_{self.suf}",
             email=f"sem2{self.suf}@t.com",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         self.client.force_authenticate(sec)
         r = self.client.post(
@@ -483,7 +484,7 @@ class TestEstudioMicrobiologiaAPI(TestCase):
             {},
             format="json",
         )
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
 
     def test_medico_ve_su_estudio(self):
         data = self._crear_estudio()
@@ -1839,7 +1840,7 @@ class TestInformeMicrobiologiaAPI(TestCase):
             username=f"sec_inf_{self.suf}",
             email=f"sinf{self.suf}@t.com",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         self.client.force_authenticate(sec)
         r2 = self.client.get(f"/api/lab/microbiologia/informes/{iid}/")

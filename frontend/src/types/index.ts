@@ -28,7 +28,7 @@ export interface User extends BaseModel {
   first_name: string;
   last_name: string;
   nombre_completo?: string; // Nombre completo calculado (first_name + last_name)
-  rol: 'ADMIN' | 'SECRETARIA' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO' | 'BIOQUIMICO' | 'KINESIOLOGO' | 'RADIOLOGO' | 'ECOGRAFISTA' | 'FONOAUDIOLOGO';
+  rol: 'ADMIN' | 'SECRETARIA' | 'SECRETARIA_LAB' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO' | 'BIOQUIMICO' | 'KINESIOLOGO' | 'RADIOLOGO' | 'ECOGRAFISTA' | 'FONOAUDIOLOGO';
   telefono?: string;
   is_active: boolean;
   is_staff?: boolean;

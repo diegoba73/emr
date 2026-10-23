@@ -128,27 +128,32 @@ def _rank_presentacion_item(codigo: str, *, es_orina: bool, nombre: str) -> tupl
     return (1, 2, nombre, code)
 
 
+# Casillas sueltas del formulario papel que se marcan junto al panel.
+# Siguen siendo componentes (no expanden el panel), pero deben figurar en el
+# listado del pedido a firmar / talón (p. ej. Cloro con ionograma, R.I.N. con coag).
+LINEAS_FORMULARIO_CON_PANEL: dict[str, tuple[str, ...]] = {
+    "PAN_IONO": ("CL",),
+    "PAN_COAG": ("INR",),
+}
+
+
 def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
     """Paneles/perfiles como ítem único + exámenes sueltos (sin componentes del panel).
 
     Orden: ORDEN_PRESENTACION_PEDIDO; orinas al final (orina completa última).
-    Si hay tomas en horarios distintos, anota la F. extracción del material de cada ítem.
+    No anota fecha de extracción por ítem (va en cabecera del talón / pie del pedido).
+
+    Excepción: CL / INR se listan si está pedido su panel (casillas del formulario).
     """
-    from laboratorio.orden_cabecera import (
-        fecha_extraccion_de_tipo_examen_dt,
-        fechas_extraccion_distintas_en_orden,
-        formatear_fecha_extraccion,
-    )
     from laboratorio.orden_grupos_informe import PANELES_ORINA, CODIGOS_ORINA_SUELTOS, MUESTRAS_ORINA
 
-    # (nombre, codigo, es_orina, tipo_examen_ref)
-    items: list[tuple[str, str, bool, object | None]] = []
+    # (nombre, codigo, es_orina)
+    items: list[tuple[str, str, bool]] = []
     seen: set[str] = set()
-    muestras = list(solicitud.muestras.all())
-    anotar_ext = fechas_extraccion_distintas_en_orden(solicitud, muestras=muestras)
 
     paneles = list(solicitud.paneles.all().prefetch_related("tipos_examen"))
     componentes_panel: set[int] = set()
+    codigos_linea_formulario: set[str] = set()
     for panel in paneles:
         tipos_panel = list(panel.tipos_examen.all())
         componentes_panel.update(te.pk for te in tipos_panel)
@@ -156,12 +161,14 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
         n = (panel.nombre or panel.codigo or "").strip()
         if n and n not in seen:
             seen.add(n)
-            # Representante del panel para resolver tubo (hemograma/orina/química).
-            te_ref = tipos_panel[0] if tipos_panel else None
-            items.append((n, codigo, codigo in PANELES_ORINA, te_ref))
+            items.append((n, codigo, codigo in PANELES_ORINA))
+        for extra in LINEAS_FORMULARIO_CON_PANEL.get(codigo, ()):
+            codigos_linea_formulario.add(extra)
 
     for te in solicitud.tipos_examen.select_related("tipo_muestra_requerida").all():
-        if te.pk in componentes_panel:
+        codigo_te = (te.codigo or "").strip().upper()
+        # CL/INR: casilla del formulario aunque sean componente del panel pedido.
+        if te.pk in componentes_panel and codigo_te not in codigos_linea_formulario:
             continue
         n = (te.nombre or te.codigo or "").strip()
         if not n or n in seen:
@@ -174,7 +181,7 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
             else ""
         )
         es_orina = codigo in CODIGOS_ORINA_SUELTOS or muestra in MUESTRAS_ORINA
-        items.append((n, codigo, es_orina, te))
+        items.append((n, codigo, es_orina))
 
     if not items:
         for res in solicitud.resultados.select_related(
@@ -194,23 +201,10 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
                 else ""
             )
             es_orina = codigo in CODIGOS_ORINA_SUELTOS or muestra in MUESTRAS_ORINA
-            items.append((n, codigo, es_orina, te))
+            items.append((n, codigo, es_orina))
 
     items.sort(key=lambda it: _rank_presentacion_item(it[1], es_orina=it[2], nombre=it[0]))
-
-    out: list[str] = []
-    for nombre, _codigo, _orina, te_ref in items:
-        label = nombre
-        if anotar_ext and te_ref is not None:
-            ft = formatear_fecha_extraccion(
-                fecha_extraccion_de_tipo_examen_dt(
-                    te_ref, solicitud, muestras=muestras
-                )
-            )
-            if ft:
-                label = f"{nombre} · ext. {ft}"
-        out.append(label)
-    return out
+    return [nombre for nombre, _codigo, _orina in items]
 
 
 def _lugar_estudio_micro(estudio: EstudioMicrobiologia) -> str:
@@ -267,6 +261,8 @@ class TalonHalfData:
     tubo_label: str = ""
     fecha_solicitud: str = ""
     fecha_extraccion: str = ""
+    obra_social: str = ""
+    afiliado: str = ""
 
 
 def _draw_footer(c: canvas.Canvas) -> None:
@@ -366,6 +362,9 @@ def _draw_talon_pages(c: canvas.Canvas, data: TalonHalfData) -> None:
                 y -= line
 
             _campo("DNI", data.dni)
+            _campo("Obra social", data.obra_social or "—")
+            if (data.afiliado or "").strip():
+                _campo("N° afiliado", data.afiliado)
             _campo("Lugar", data.lugar)
             _campo("Médico", data.medico)
             _campo("F. solicitud", data.fecha_solicitud or "—")
@@ -447,6 +446,7 @@ def construir_talon_solicitud(solicitud: SolicitudExamen) -> TalonHalfData:
         )
         .get(pk=solicitud.pk)
     )
+    from laboratorio.obra_social import obra_social_efectiva
     from laboratorio.orden_cabecera import (
         fecha_extraccion_display,
         fecha_solicitud_display,
@@ -455,6 +455,7 @@ def construir_talon_solicitud(solicitud: SolicitudExamen) -> TalonHalfData:
     pac_nombre, dni = _fmt_paciente(sol.paciente)
     medico = _fmt_medico(sol.medico_interno)
     examenes = _examenes_solicitud(sol) or ["—"]
+    os_txt, afil_txt = obra_social_efectiva(sol)
     muestras = list(sol.muestras.all().order_by("pk"))
     primera = muestras[0] if muestras else None
     n_tubos = len(muestras)
@@ -476,6 +477,8 @@ def construir_talon_solicitud(solicitud: SolicitudExamen) -> TalonHalfData:
         tubo_label=tubo_label or ("Sin tubos generados aún" if not muestras else ""),
         fecha_solicitud=fecha_solicitud_display(sol),
         fecha_extraccion=fecha_extraccion_display(sol),
+        obra_social=os_txt,
+        afiliado=afil_txt,
     )
 
 
@@ -496,6 +499,7 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
             "consulta_hc__turno__recurso",
         ).get(pk=estudio.pk)
     )
+    from laboratorio.obra_social import obra_social_efectiva
     from laboratorio.orden_cabecera import formatear_fecha_extraccion
 
     pac_nombre, dni = _fmt_paciente(est.paciente)
@@ -506,6 +510,7 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
         or getattr(est, "fecha_programada_toma", None)
         or getattr(est, "created_at", None)
     )
+    os_txt, afil_txt = obra_social_efectiva(est)
     talon = TalonHalfData(
         titulo="Pedido microbiología — talón por orden",
         numero_pedido=est.numero or str(est.pk),
@@ -518,6 +523,8 @@ def generar_talon_estudio_micro_pdf_bytes(estudio: EstudioMicrobiologia) -> byte
         tubo_label="Cultivo",
         fecha_solicitud=fecha_sol or "—",
         fecha_extraccion=fecha_ext or "—",
+        obra_social=os_txt,
+        afiliado=afil_txt,
     )
     return _render_talones_pdf([talon])
 

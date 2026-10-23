@@ -3,6 +3,9 @@ import {
   isLecturaOperativaRole,
   isOperadorLimsRole,
   isProfesionalEstudioRole,
+  isSecretariaEmrRole,
+  isSecretariaInstitucionalRole,
+  isSecretariaLabRole,
 } from './roles';
 import {
   canAccessLimsModule,
@@ -28,6 +31,7 @@ export type NormalizedAppRole =
   | 'admin'
   | 'medico'
   | 'secretaria'
+  | 'secretaria_lab'
   | 'enfermeria'
   | 'laboratorio'
   | 'bioquimico'
@@ -38,7 +42,15 @@ export type NormalizedAppRole =
   | 'paciente'
   | 'sin_rol';
 
-export { isProfesionalEstudioRole, isLecturaOperativaRole, isOperadorLimsRole } from './roles';
+export {
+  isProfesionalEstudioRole,
+  isLecturaOperativaRole,
+  isOperadorLimsRole,
+  isSecretariaEmrRole,
+  isSecretariaInstitucionalRole,
+  isSecretariaLabRole,
+  isSecretariaEntregaInformeRole,
+} from './roles';
 
 /** Rol operador LIMS (puede tener `is_staff` para Django admin sin acceso EMR PHI). */
 export function isLaboratorioRole(user: User | null | undefined): boolean {
@@ -67,7 +79,7 @@ function hasPacientesLecturaGlobal(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'secretaria' || rol === 'enfermeria' || isLecturaOperativaRole(rol);
+  return rol === 'medico' || isSecretariaEmrRole(rol) || rol === 'enfermeria' || isLecturaOperativaRole(rol);
 }
 
 /** Lista / módulo pacientes (médico, operativos y roles administrativos; no paciente). */
@@ -84,7 +96,7 @@ export function canCreatePaciente(user: User | null | undefined): boolean {
   const rol = normalizeRol(user);
   if (isOperadorLimsRole(rol)) return true;
   if (isLecturaOperativaRole(rol)) return false;
-  return rol === 'secretaria' || rol === 'medico';
+  return isSecretariaEmrRole(rol) || rol === 'medico';
 }
 
 /** Listado / gestión de médicos: admin, secretaría y operadores LIMS. */
@@ -94,7 +106,7 @@ export function canAccessMedicos(user: User | null | undefined): boolean {
   const rol = normalizeRol(user);
   if (isOperadorLimsRole(rol)) return true;
   if (user.is_staff && !isLaboratorioRole(user)) return true;
-  return rol === 'secretaria';
+  return isSecretariaEmrRole(rol);
 }
 
 /** Alta/edición de ficha médico (sin DELETE para lab/bio; API lo restringe). */
@@ -111,22 +123,23 @@ export function canAccessPaciente360(user: User | null | undefined): boolean {
   return rol === 'medico' || rol === 'paciente';
 }
 
-/** Solicitudes genéricas EMR (PERM-01): laboratorio/bioquímico usan LIMS. */
+/** Solicitudes genéricas EMR (PERM-01): laboratorio/bioquímico/secretaria_lab usan LIMS. */
 export function canAccessSolicitudes(user: User | null | undefined): boolean {
   if (!user) return false;
-  // Portal clínico /solicitudes: no para operadores LIMS (ya tienen Laboratorio LIMS).
-  if (isLaboratorioRole(user)) return false;
+  // Portal clínico /solicitudes: no para operadores LIMS ni secretaría lab (menú LIMS).
+  if (isLaboratorioRole(user) || isSecretariaLabRole(normalizeRol(user))) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'enfermeria' || rol === 'medico' || rol === 'paciente';
+  // Secretaría institucional: portal clínico para ver/entregar informes liberados.
+  return isSecretariaInstitucionalRole(rol) || rol === 'enfermeria' || rol === 'medico' || rol === 'paciente';
 }
 
-/** Archivos médicos: lectura para admin, médico, secretaría, enfermería y paciente. */
+/** Archivos médicos: lectura para admin, médico, secretaría institucional, enfermería y paciente. */
 export function canAccessArchivosMedicos(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return ['medico', 'secretaria', 'enfermeria', 'paciente'].includes(rol);
+  return rol === 'medico' || isSecretariaInstitucionalRole(rol) || rol === 'enfermeria' || rol === 'paciente';
 }
 
 /** Crear/editar archivo médico (CanWriteArchivoMedico). Paciente: solo lectura. */
@@ -141,8 +154,10 @@ export function canUpdatePacienteDemographics(user: User | null | undefined): bo
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  return rol === 'secretaria' || rol === 'medico';
+  return isSecretariaEmrRole(rol) || rol === 'medico';
 }
+
+/** Eliminación física de pacientes: solo admin/superuser (duplicados sin historia). */
 
 /** Descarga de archivo (misma política de módulo; objeto validado en backend). */
 export function canDownloadArchivoMedico(user: User | null | undefined): boolean {
@@ -177,7 +192,7 @@ export function canAccessAtenciones(user: User | null | undefined): boolean {
 }
 
 /**
- * Guardia: médico (no solo ambulatorio), enfermería (lectura), secretaría (operación)
+ * Guardia: médico (no solo ambulatorio), enfermería (lectura), ambas secretarías
  * y admin/staff. Secretaría no abre el módulo /atenciones genérico.
  */
 export function canAccessGuardia(user: User | null | undefined): boolean {
@@ -185,18 +200,18 @@ export function canAccessGuardia(user: User | null | undefined): boolean {
   if (isMedicoSoloAmbulatorio(user)) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria';
+  return rol === 'medico' || rol === 'enfermeria' || isSecretariaEmrRole(rol);
 }
 
 /**
- * Mutaciones clínicas en atenciones/guardia: admin/staff, médico y secretaría
+ * Mutaciones clínicas en atenciones/guardia: admin/staff, médico y ambas secretarías
  * (objeto y alcance validados en backend).
  */
 export function canOperateAtenciones(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'secretaria';
+  return rol === 'medico' || isSecretariaEmrRole(rol);
 }
 
 /** Catálogos clínicos (CIE-10, estudios, etc.): lectura admin/médico (sin secretaría/enfermería/LIMS). */
@@ -230,14 +245,14 @@ export function canAccessBiDashboard(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'bioquimico';
 }
 
-/** Panel de internación: médico (completo), enfermería, kinesiólogo, admin y secretaría. */
+/** Panel de internación: médico (completo), enfermería, kinesiólogo, admin y ambas secretarías. */
 export function canAccessInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'enfermeria' || rol === 'secretaria' || rol === 'kinesiologo';
+  return rol === 'medico' || rol === 'enfermeria' || isSecretariaEmrRole(rol) || rol === 'kinesiologo';
 }
 
 /** Infraestructura de camas/sectores: sin secretaría. */
@@ -322,6 +337,27 @@ export function canAccessPortalHistoria(user: User | null | undefined): boolean 
 
 export { isPacienteRole } from './navLabels';
 
-export function canManageHorarios(user: User | null | undefined): boolean {
-  return Boolean(user?.is_superuser) || ['admin', 'secretaria'].includes(normalizeRol(user ?? null));
+
+/** Estadísticas LIMS (volúmenes / %): admin, bioquímico, secretaría lab. */
+export function canAccessEstadisticasLims(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const rol = normalizeRol(user);
+  return rol === 'admin' || rol === 'bioquimico' || isSecretariaLabRole(rol);
 }
+
+export function canManageHorarios(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  const rol = normalizeRol(user);
+  return rol === 'admin' || isSecretariaInstitucionalRole(rol);
+}
+
+/** Tablero de recepción del día (secretaria, médico, admin, enfermería). */
+
+/**
+ * @deprecated La cola del médico se unificó en `/recepcion`.
+ * Se mantiene por compatibilidad de imports/tests; siempre false.
+ */
+
+/** CRUD puestos/reglas de recepción. */

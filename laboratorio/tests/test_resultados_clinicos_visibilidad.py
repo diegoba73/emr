@@ -50,7 +50,7 @@ class TestResultadosClinicosVisibilidad:
             username=f"sec_rv_{self.suf}",
             email=f"srv{self.suf}@test.invalid",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         self.tm = TipoMuestra.objects.create(
             codigo=f"TMR{self.suf[:6]}",

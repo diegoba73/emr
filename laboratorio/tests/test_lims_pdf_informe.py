@@ -162,7 +162,7 @@ class TestLimsPdfInforme(TestCase):
             username=f"sec_par_pdf_{self.suf}",
             email=f"spar{self.suf}@test.invalid",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         for user in (self.lab, self.med_user, sec):
             self.client.force_authenticate(user)
@@ -209,7 +209,7 @@ class TestLimsPdfInforme(TestCase):
             username=f"sec_pdf_{self.suf}",
             email=f"spdf{self.suf}@test.invalid",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         enf = User.objects.create_user(
             username=f"enf_pdf_{self.suf}",
@@ -235,16 +235,17 @@ class TestLimsPdfInforme(TestCase):
     def test_secretaria_puede_descargar_pdf_si_finalizado(self):
         self.sol.estado = "FINALIZADO"
         self.sol.save(update_fields=["estado"])
-        sec = User.objects.create_user(
-            username=f"sec_ok_pdf_{self.suf}",
-            email=f"sok{self.suf}@test.invalid",
-            password="x",
-            rol="secretaria",
-        )
-        self.client.force_authenticate(sec)
-        r = self.client.get(self._url())
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertTrue(r.content.startswith(b"%PDF"))
+        for rol, tag in (("secretaria_lab", "lab"), ("secretaria", "inst")):
+            sec = User.objects.create_user(
+                username=f"sec_ok_pdf_{tag}_{self.suf}",
+                email=f"sok{tag}{self.suf}@test.invalid",
+                password="x",
+                rol=rol,
+            )
+            self.client.force_authenticate(sec)
+            r = self.client.get(self._url())
+            self.assertEqual(r.status_code, status.HTTP_200_OK, rol)
+            self.assertTrue(r.content.startswith(b"%PDF"), rol)
 
     def test_medico_sin_orden_validada_no_descarga_informe_pdf_ajeno(self):
         otro_med = Medico.objects.create(
@@ -332,7 +333,7 @@ class TestLimsPdfInforme(TestCase):
             username=f"sec2_pdf_{self.suf}",
             email=f"s2pdf{self.suf}@test.invalid",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         audit_antes = AuditEvent.objects.filter(
             metadata__accion="lims_informe_pdf_download",

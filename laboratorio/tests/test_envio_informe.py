@@ -275,30 +275,35 @@ class TestEnvioInformeAPI(APITestCase):
 
     @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
     def test_secretaria_envia_informe_finalizado(self, mock_send):
-        sec = User.objects.create_user(
-            username="sec_env",
-            email="sec.env@test.com",
-            password="x",
-            rol="secretaria",
-        )
-        sol = self._sol_finalizada()
-        self.client.force_authenticate(user=sec)
-        r = self.client.post(
-            f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
-            {"email": True, "whatsapp": False},
-            format="json",
-            HTTP_HOST="localhost:8000",
-        )
-        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
-        self.assertTrue(r.json()["envio"]["email_enviado"])
-        mock_send.assert_called_once()
+        for rol, uname in (
+            ("secretaria_lab", "sec_env_lab"),
+            ("secretaria", "sec_env_inst"),
+        ):
+            mock_send.reset_mock()
+            sec = User.objects.create_user(
+                username=uname,
+                email=f"{uname}@test.com",
+                password="x",
+                rol=rol,
+            )
+            sol = self._sol_finalizada()
+            self.client.force_authenticate(user=sec)
+            r = self.client.post(
+                f"/api/lab/solicitudes/{sol.id}/enviar-informe/",
+                {"email": True, "whatsapp": False},
+                format="json",
+                HTTP_HOST="localhost:8000",
+            )
+            self.assertEqual(r.status_code, status.HTTP_200_OK, f"{rol}: {r.data}")
+            self.assertTrue(r.json()["envio"]["email_enviado"], rol)
+            mock_send.assert_called_once()
 
     def test_secretaria_no_envia_si_no_finalizado(self):
         sec = User.objects.create_user(
             username="sec_env2",
             email="sec.env2@test.com",
             password="x",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente,

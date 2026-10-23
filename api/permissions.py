@@ -11,6 +11,9 @@ from usuarios.roles import (
     ROLES_LIMS_OPERATIVA_LIMITADA,
     ROLES_LIMS_VALIDAR,
     ROLES_LIMS_WRITE,
+    ROLES_SECRETARIA_EMR,
+    ROLES_SECRETARIA_ENTREGA_INFORME,
+    ROLES_SECRETARIA_LAB,
     ROLES_SIN_BYPASS_EMR_STAFF,
 )
 
@@ -101,7 +104,11 @@ def usuario_puede_ver_solicitud_lims(user, solicitud) -> bool:
     if role in ROLES_LIMS_WRITE:
         return True
 
-    if role in ROLES_LIMS_OPERATIVA_LIMITADA or role == 'medico':
+    if (
+        role in ROLES_LIMS_OPERATIVA_LIMITADA
+        or role in ROLES_SECRETARIA_ENTREGA_INFORME
+        or role == 'medico'
+    ):
         return True
 
     if role == 'paciente':
@@ -127,7 +134,11 @@ def usuario_puede_ver_estudio_micro(user, estudio) -> bool:
     role = get_normalized_role(user)
     if role in ROLES_LIMS_WRITE:
         return True
-    if role in ROLES_LIMS_OPERATIVA_LIMITADA or role == 'medico':
+    if (
+        role in ROLES_LIMS_OPERATIVA_LIMITADA
+        or role in ROLES_SECRETARIA_ENTREGA_INFORME
+        or role == 'medico'
+    ):
         return True
     return False
 
@@ -153,7 +164,7 @@ ROLES_INFORME_PARCIAL = frozenset({
     'admin',
     *ROLES_LIMS_OPERADOR,
     'medico',
-    'secretaria',
+    *ROLES_SECRETARIA_LAB,
 })
 
 
@@ -176,7 +187,12 @@ def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
         role = get_normalized_role(user)
         if role in ROLES_LIMS_WRITE:
             return True
-        if role in (*ROLES_LIMS_OPERATIVA_LIMITADA, 'medico', 'paciente'):
+        if role in (
+            *ROLES_LIMS_OPERATIVA_LIMITADA,
+            *ROLES_SECRETARIA_ENTREGA_INFORME,
+            'medico',
+            'paciente',
+        ):
             return True
         return False
     if estado == 'INFORMADO_PARCIAL':
@@ -185,7 +201,7 @@ def usuario_puede_descargar_informe_lims(user, solicitud) -> bool:
 
 
 def usuario_puede_enviar_informe_lims(user, solicitud) -> bool:
-    """Enviar PDF: FINALIZADO (LIMS + secretaría) o INFORMADO_PARCIAL (roles parcial)."""
+    """Enviar PDF: FINALIZADO (LIMS + ambas secretarías) o INFORMADO_PARCIAL (lab/roles parcial)."""
     if not usuario_puede_ver_solicitud_lims(user, solicitud):
         return False
     estado = getattr(solicitud, 'estado', None)
@@ -195,7 +211,7 @@ def usuario_puede_enviar_informe_lims(user, solicitud) -> bool:
         role = get_normalized_role(user)
         if role in ROLES_LIMS_WRITE:
             return True
-        return role == 'secretaria'
+        return role in ROLES_SECRETARIA_ENTREGA_INFORME
     if estado == 'INFORMADO_PARCIAL':
         return _rol_informe_parcial(user)
     return False
@@ -233,7 +249,7 @@ def usuario_puede_ver_contenido_informe_micro(user, informe) -> bool:
     tipo = getattr(informe, 'tipo', None)
 
     if estado == 'VALIDADO' and tipo == 'FINAL':
-        return role in ('laboratorio', 'enfermeria', 'medico', 'secretaria')
+        return role in ('laboratorio', 'enfermeria', 'medico', *ROLES_SECRETARIA_LAB)
 
     if (
         tipo == 'PRELIMINAR'
@@ -262,7 +278,12 @@ def usuario_puede_descargar_informe_micro(user, estudio) -> bool:
         return True
     role = get_normalized_role(user)
 
-    if role not in (*ROLES_LIMS_WRITE, *ROLES_LIMS_OPERATIVA_LIMITADA, 'medico'):
+    if role not in (
+        *ROLES_LIMS_WRITE,
+        *ROLES_LIMS_OPERATIVA_LIMITADA,
+        *ROLES_SECRETARIA_ENTREGA_INFORME,
+        'medico',
+    ):
         return False
 
     from laboratorio.models_microbiologia import InformeMicrobiologia
@@ -288,7 +309,7 @@ def usuario_puede_descargar_informe_micro(user, estudio) -> bool:
 
 
 def usuario_puede_enviar_informe_micro(user, estudio) -> bool:
-    """Envío micro: FINAL VALIDADO (LIMS+secretaría) o PRELIMINAR EMITIDO (roles parcial)."""
+    """Envío micro: FINAL VALIDADO (LIMS+ambas secretarías) o PRELIMINAR EMITIDO (lab/parcial)."""
     if not user or not getattr(user, 'is_authenticated', False):
         return False
     if user.is_superuser:
@@ -302,7 +323,7 @@ def usuario_puede_enviar_informe_micro(user, estudio) -> bool:
         tipo='FINAL',
         estado='VALIDADO',
     ).exists():
-        return role in (*ROLES_LIMS_WRITE, 'secretaria')
+        return role in (*ROLES_LIMS_WRITE, *ROLES_SECRETARIA_ENTREGA_INFORME)
 
     if InformeMicrobiologia.objects.filter(
         estudio_id=estudio.pk,
@@ -318,7 +339,7 @@ _LIMS_SOLICITUD_READ_ROLES = frozenset({
     'admin',
     *ROLES_LIMS_OPERADOR,
     'medico',
-    'secretaria',
+    *ROLES_SECRETARIA_ENTREGA_INFORME,
     'enfermeria',
     'paciente',
 })
@@ -348,17 +369,17 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'agregar_examenes':
             # Lab/bio/admin: amplia. Médico/secretaría: solo PENDIENTE sin etiquetas
             # (enforce en agregar_examenes_a_solicitud).
-            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
+            return role in (*ROLES_LIMS_WRITE, 'medico', *ROLES_SECRETARIA_LAB)
         if action == 'quitar_examenes':
             return role in ROLES_LIMS_WRITE
         if action == 'orden_abierta':
-            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria', 'enfermeria')
+            return role in (*ROLES_LIMS_WRITE, 'medico', *ROLES_SECRETARIA_LAB, 'enfermeria')
         if action == 'restricciones_ensayos':
-            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
+            return role in (*ROLES_LIMS_WRITE, 'medico', *ROLES_SECRETARIA_LAB)
         if action == 'alertas_frecuencia':
             return role in ROLES_LIMS_WRITE
         if action == 'repeticion_control':
-            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
+            return role in (*ROLES_LIMS_WRITE, 'medico', *ROLES_SECRETARIA_LAB)
         if action == 'marcar_derivacion':
             return role in ROLES_LIMS_WRITE
         if action in ('retrieve', 'update', 'partial_update', 'destroy'):
@@ -374,14 +395,14 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'tomar_muestra':
             return role in ROLES_LIMS_WRITE
         if action == 'enviar_informe':
-            # Definitivo: LIMS+secretaría. Parcial: también médico (object permission filtra).
-            return role in (*ROLES_LIMS_WRITE, 'secretaria', 'medico')
+            # Definitivo: LIMS + ambas secretarías. Parcial: también médico (object permission filtra).
+            return role in (*ROLES_LIMS_WRITE, *ROLES_SECRETARIA_ENTREGA_INFORME, 'medico')
         if action in ('finalizar', 'validar', 'desvalidar'):
             return role in ROLES_LIMS_VALIDAR
         if action == 'cancelar':
             return role in ROLES_LIMS_WRITE
         if action == 'tubos_preview':
-            return role in (*ROLES_LIMS_WRITE, 'medico', 'secretaria')
+            return role in (*ROLES_LIMS_WRITE, 'medico', *ROLES_SECRETARIA_LAB)
         if action == 'etiqueta':
             return role in ROLES_LIMS_WRITE
         if action == 'etiquetas_muestras':
@@ -434,7 +455,7 @@ class LimsSolicitudExamenPermission(permissions.BasePermission):
         if action == 'agregar_examenes':
             if role in ROLES_LIMS_WRITE:
                 return True
-            if role in ('medico', 'secretaria'):
+            if role == 'medico' or role in ROLES_SECRETARIA_LAB:
                 return usuario_puede_ver_solicitud_lims(request.user, obj)
             return False
 
@@ -501,16 +522,21 @@ class IsSecretariaOrAdmin(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         
-        # Verificar si el usuario está en el grupo Secretarias o es secretaria
-        return (request.user.groups.filter(name='Secretarias').exists() or 
-                get_normalized_role(request.user) in ('secretaria', 'admin'))
+        # Verificar si el usuario está en el grupo Secretarias o es secretaría EMR
+        role = get_normalized_role(request.user)
+        return (
+            request.user.groups.filter(name='Secretarias').exists()
+            or role == 'admin'
+            or role in ROLES_SECRETARIA_EMR
+        )
 
 class CanManageAgendaMedica(permissions.BasePermission):
-    """Configuración de horarios y excepciones: secretaría o administración."""
+    """Configuración de horarios y excepciones: secretaría EMR o administración."""
     def has_permission(self, request, view):
         user = request.user
+        role = get_normalized_role(user)
         return bool(user.is_authenticated and (
-            user.is_superuser or get_normalized_role(user) in ('secretaria', 'admin')
+            user.is_superuser or role == 'admin' or role in ROLES_SECRETARIA_EMR
         ))
 
 
@@ -545,7 +571,7 @@ class ProcedimientoCatalogoPermission(permissions.BasePermission):
                 return True
             return rol in (
                 'medico',
-                'secretaria',
+                *ROLES_SECRETARIA_LAB,
                 'enfermeria',
                 *ROLES_ESTUDIO_COMPLEMENTARIO,
             ) or request.user.groups.filter(name='Médicos').exists()
@@ -567,7 +593,7 @@ class CirugiaCatalogoPermission(permissions.BasePermission):
                 return True
             return rol in (
                 'medico',
-                'secretaria',
+                *ROLES_SECRETARIA_LAB,
                 'enfermeria',
                 *ROLES_ESTUDIO_COMPLEMENTARIO,
             )
@@ -748,7 +774,7 @@ def filter_atencion_queryset_for_user(user, queryset):
     if _atencion_is_staff_or_admin(user):
         return queryset
     role = get_normalized_role(user)
-    if role in ('enfermeria', 'secretaria'):
+    if role == 'enfermeria' or role in ROLES_SECRETARIA_EMR:
         return queryset
     medico = _atencion_user_medico(user)
     if medico is not None:
@@ -802,7 +828,7 @@ class AtencionPermission(permissions.BasePermission):
             return action in _ATENCION_READ_ACTIONS
         if role == 'paciente':
             return action in _ATENCION_READ_ACTIONS
-        if role == 'secretaria':
+        if role in ROLES_SECRETARIA_EMR:
             return action in (
                 _ATENCION_READ_ACTIONS
                 | _ATENCION_WRITE_ACTIONS
@@ -835,7 +861,7 @@ class AtencionPermission(permissions.BasePermission):
         if role == 'enfermeria':
             return action in _ATENCION_READ_ACTIONS
 
-        if role == 'secretaria':
+        if role in ROLES_SECRETARIA_EMR:
             return action in (
                 _ATENCION_READ_ACTIONS
                 | _ATENCION_WRITE_ACTIONS
@@ -905,7 +931,7 @@ class IsMedicoOrSecretariaOrAdmin(permissions.BasePermission):
         
         # Verificar si el usuario tiene rol apropiado (normalizar para soportar may/min)
         user_rol = (request.user.rol or '').lower()
-        return user_rol in ['medico', 'secretaria', 'admin']
+        return user_rol in ('medico', 'admin', *ROLES_SECRETARIA_EMR)
 
 class CanManageTurnos(permissions.BasePermission):
     """
@@ -927,12 +953,13 @@ class CanManageTurnos(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         
-        # Secretarias y admins pueden gestionar todos los turnos
-        if request.user.rol in ['secretaria', 'admin']:
+        # Secretarías EMR y admins pueden gestionar todos los turnos
+        role = get_normalized_role(request.user)
+        if role == 'admin' or role in ROLES_SECRETARIA_EMR:
             return True
         
         # Médicos solo pueden gestionar sus propios turnos
-        if request.user.rol == 'medico' and hasattr(obj, 'medico') and obj.medico:
+        if role == 'medico' and hasattr(obj, 'medico') and obj.medico:
             if obj.medico.user:
                 return obj.medico.user == request.user
             return False
@@ -945,7 +972,7 @@ class IsEMRClinician(permissions.BasePermission):
     Permite acceso de escritura a personal clínico EMR: médicos, secretaría y administración.
     No incluye el operador LIMS (rol `laboratorio`); ese acceso se define en permisos LIMS.
     """
-    allowed_roles = {'medico', 'secretaria', 'admin'}
+    allowed_roles = {'medico', 'admin', *ROLES_SECRETARIA_EMR}
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -1058,7 +1085,7 @@ class LimsCodigoPermission(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         role = get_normalized_role(request.user)
-        if role in ROLES_LIMS_OPERADOR or role == "admin":
+        if role in ROLES_LIMS_WRITE:
             return True
         if role == "medico":
             action = getattr(view, "action", None)
@@ -1148,9 +1175,8 @@ class LimsMuestraTransaccionalPermission(permissions.BasePermission):
             if solicitud is None:
                 return False
             return usuario_puede_ver_solicitud_lims(request.user, solicitud)
-        if role in ROLES_LIMS_OPERADOR:
-            return True
-        if role == "admin":
+        # Incluye secretaria_lab (ROLES_LIMS_WRITE), no solo operador técnico.
+        if role in ROLES_LIMS_WRITE:
             return True
         return False
 
@@ -1203,13 +1229,18 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         role = get_normalized_role(request.user)
-        if role not in (*ROLES_LIMS_WRITE, "medico", *ROLES_LIMS_OPERATIVA_LIMITADA):
+        if role not in (
+            *ROLES_LIMS_WRITE,
+            "medico",
+            *ROLES_LIMS_OPERATIVA_LIMITADA,
+            *ROLES_SECRETARIA_ENTREGA_INFORME,
+        ):
             return False
         action = getattr(view, "action", None)
-        if role == "secretaria":
+        if role in ROLES_SECRETARIA_ENTREGA_INFORME:
             if type(view).__name__ != "EstudioMicrobiologiaViewSet":
                 return False
-            # Pedido micro médico: solo pedidos-completos. Secretaría: lectura + informe.
+            # Pedido micro médico: solo pedidos-completos. Secretaría: lectura + informe liberado.
             return action in (
                 "list",
                 "retrieve",
@@ -1243,11 +1274,16 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
         ):
             return role in ROLES_LIMS_WRITE
         if action == "enviar_informe":
-            # Definitivo: LIMS + secretaría. Preliminar: también médico (object permission filtra).
-            return role in (*ROLES_LIMS_WRITE, "secretaria", "medico")
+            # Definitivo: LIMS + ambas secretarías. Preliminar: también médico (object permission filtra).
+            return role in (*ROLES_LIMS_WRITE, *ROLES_SECRETARIA_ENTREGA_INFORME, "medico")
         if action == "informe_pdf":
-            # Operadores + médico + secretaría/enfermería; object permission define el documento.
-            return role in (*ROLES_LIMS_WRITE, "medico", *ROLES_LIMS_OPERATIVA_LIMITADA)
+            # Operadores + médico + secretarías/enfermería; object permission define el documento.
+            return role in (
+                *ROLES_LIMS_WRITE,
+                "medico",
+                *ROLES_LIMS_OPERATIVA_LIMITADA,
+                *ROLES_SECRETARIA_ENTREGA_INFORME,
+            )
         if action in ("informe_entrega", "informe_entrega_por_token"):
             # Público con token; el método no exige auth.
             return True
@@ -1282,11 +1318,13 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
                 return False
             return usuario_puede_enviar_informe_micro(request.user, estudio)
 
-        if role == "admin":
+        if role in ROLES_LIMS_WRITE:
             return True
-        if role in ROLES_LIMS_OPERADOR:
-            return True
-        if role in ROLES_LIMS_OPERATIVA_LIMITADA or role == "medico":
+        if (
+            role in ROLES_LIMS_OPERATIVA_LIMITADA
+            or role in ROLES_SECRETARIA_ENTREGA_INFORME
+            or role == "medico"
+        ):
             if action not in ("retrieve", "list", "por_codigo", "informe_pdf", "enviar_informe"):
                 return False
             return True
@@ -1300,11 +1338,16 @@ class LimsMicrobiologiaInformePermission(permissions.BasePermission):
     - bioquímico / admin: crear, completar (emitir), anular, validar y eliminar; ven todo.
     - laboratorio / médico / enfermería: solo list/retrieve de informes
       **VALIDADO**; no ven borradores ni emitidos pendientes.
-    - secretaría: lectura de informes validados y PDF/envío sobre el estudio.
+    - secretaría (institucional y lab): lectura de informes validados y PDF/envío sobre el estudio.
     - paciente / anónimo: sin acceso.
     """
 
-    _read_roles = frozenset({*ROLES_LIMS_WRITE, "medico", "enfermeria", "secretaria"})
+    _read_roles = frozenset({
+        *ROLES_LIMS_WRITE,
+        "medico",
+        "enfermeria",
+        *ROLES_SECRETARIA_ENTREGA_INFORME,
+    })
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -1407,20 +1450,22 @@ class CanUpdatePacienteDemographics(permissions.BasePermission):
         return True
     
     def has_object_permission(self, request, view, obj):
-        # Admin, secretaría o staff EMR autorizado
+        # Admin, secretaría EMR o staff EMR autorizado
+        role = get_normalized_role(request.user)
         if (
             emr_staff_or_admin_global(request.user)
-            or request.user.rol in ['admin', 'secretaria']
+            or role == 'admin'
+            or role in ROLES_SECRETARIA_EMR
         ):
             return True
         
         # Médicos pueden leer y actualizar datos demográficos de CUALQUIER paciente
-        if request.user.rol == 'medico':
+        if role == 'medico':
             if request.method in ('GET', 'PATCH', 'PUT', 'HEAD', 'OPTIONS'):
                 return True
         
         # Pacientes: solo lectura de su ficha demográfica
-        if request.user.rol == 'paciente':
+        if role == 'paciente':
             return False
         
         # Para otras operaciones, usar la lógica por defecto

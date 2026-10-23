@@ -15,6 +15,15 @@ from laboratorio.views import (
     PanelExamenViewSet,
 )
 from laboratorio.views_analytics import AnalitosAnalyticsView
+from laboratorio.views_estadisticas import (
+    EstadisticasExportCsvView,
+    EstadisticasPorEstadoView,
+    EstadisticasPorExamenView,
+    EstadisticasPorObraSocialView,
+    EstadisticasPorOrigenView,
+    EstadisticasResumenView,
+    EstadisticasSeriesView,
+)
 from laboratorio.views_filtros_avanzados import (
     FiltrosAvanzadosExcelView,
     FiltrosAvanzadosPreviewView,
@@ -424,6 +433,41 @@ urlpatterns = [
         'lab/analytics/analitos/',
         AnalitosAnalyticsView.as_view(),
         name='lab-analytics-analitos',
+    ),
+    path(
+        'lab/estadisticas/resumen/',
+        EstadisticasResumenView.as_view(),
+        name='lab-estadisticas-resumen',
+    ),
+    path(
+        'lab/estadisticas/series/',
+        EstadisticasSeriesView.as_view(),
+        name='lab-estadisticas-series',
+    ),
+    path(
+        'lab/estadisticas/por-examen/',
+        EstadisticasPorExamenView.as_view(),
+        name='lab-estadisticas-por-examen',
+    ),
+    path(
+        'lab/estadisticas/por-obra-social/',
+        EstadisticasPorObraSocialView.as_view(),
+        name='lab-estadisticas-por-obra-social',
+    ),
+    path(
+        'lab/estadisticas/por-origen/',
+        EstadisticasPorOrigenView.as_view(),
+        name='lab-estadisticas-por-origen',
+    ),
+    path(
+        'lab/estadisticas/por-estado/',
+        EstadisticasPorEstadoView.as_view(),
+        name='lab-estadisticas-por-estado',
+    ),
+    path(
+        'lab/estadisticas/export.csv',
+        EstadisticasExportCsvView.as_view(),
+        name='lab-estadisticas-export-csv',
     ),
     path(
         'lab/filtros-avanzados/preview/',

@@ -504,7 +504,7 @@ class Command(BaseCommand):
             'secretaria123',
             {
                 'email': 'secretaria1@example.com',
-                'rol': 'secretaria',
+                'rol': 'secretaria_lab',
                 'first_name': 'Laura',
                 'last_name': 'Secretaria',
                 'is_staff': False,
@@ -529,7 +529,7 @@ class Command(BaseCommand):
         self.stdout.write('  - laboratorio1 / laboratorio123 (Operador laboratorio / LIMS)')
         self.stdout.write('  - bioquimico1 / bioquimico123 (Bioquímico — valida y libera informes)')
         self.stdout.write('  - enfermeria1 / enfermeria123 (Enfermería)')
-        self.stdout.write('  - secretaria1 / secretaria123 (Secretaría)')
+        self.stdout.write('  - secretaria1 / secretaria123 (Secretaría laboratorio)')
         self.stdout.write(self.style.WARNING('\nDatos QA sintéticos:'))
         self.stdout.write(f'  - Paciente ajeno DNI {QA_PACIENTE_AJENO_DNI}')
         self.stdout.write(f'  - Turno demo ({QA_TURNO_MOTIVO})')

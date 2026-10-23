@@ -12,6 +12,7 @@ Reglas de negocio aplicadas:
   falla la auditoría; cubierto por tests en ``pacientes/tests/test_audit.py``).
 """
 import logging
+from usuarios.roles import ROLES_SECRETARIA_EMR
 
 from django.db.models import Case, IntegerField, Prefetch, Q, When
 from django_filters.rest_framework import DjangoFilterBackend

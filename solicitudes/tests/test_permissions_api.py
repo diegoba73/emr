@@ -44,7 +44,7 @@ def user_admin(db):
 @pytest.fixture
 def user_secretaria(db):
     return User.objects.create_user(
-        username='sec_sol', password='x', rol='secretaria', is_staff=True
+        username='sec_sol', password='x', rol='secretaria_lab', is_staff=True
     )
 
 

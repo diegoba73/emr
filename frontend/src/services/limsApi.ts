@@ -419,6 +419,126 @@ export async function getAnalyticsAnalitos(params?: {
   return data;
 }
 
+export type EstadisticasGranularidad = 'dia' | 'mes' | 'anio';
+
+export interface EstadisticasFiltros {
+  desde?: string;
+  hasta?: string;
+  granularidad?: EstadisticasGranularidad;
+  estado?: string;
+  origen?: string;
+  obra_social?: string;
+  codigo?: string;
+  dimension?: string;
+}
+
+export interface EstadisticasResumen {
+  desde: string;
+  hasta: string;
+  total_ordenes: number;
+  total_examenes: number;
+  por_estado: { estado: string; cantidad: number; porcentaje: number }[];
+  top_examenes: { codigo: string; nombre: string; cantidad: number; porcentaje: number }[];
+  top_obras_sociales: { obra_social: string; cantidad: number; porcentaje: number }[];
+}
+
+export interface EstadisticasSeries {
+  desde: string;
+  hasta: string;
+  granularidad: EstadisticasGranularidad;
+  puntos: { periodo: string; ordenes: number; examenes: number }[];
+}
+
+export interface EstadisticasTabla<T> {
+  desde: string;
+  hasta: string;
+  total: number;
+  items: T[];
+}
+
+function estadisticasParams(params?: EstadisticasFiltros) {
+  return {
+    desde: params?.desde,
+    hasta: params?.hasta,
+    granularidad: params?.granularidad,
+    estado: params?.estado || undefined,
+    origen: params?.origen || undefined,
+    obra_social: params?.obra_social || undefined,
+    codigo: params?.codigo || undefined,
+    dimension: params?.dimension || undefined,
+  };
+}
+
+export async function getEstadisticasResumen(
+  params?: EstadisticasFiltros
+): Promise<EstadisticasResumen> {
+  const { data } = await apiClient.get<EstadisticasResumen>(`${LAB}/estadisticas/resumen/`, {
+    params: estadisticasParams(params),
+  });
+  return data;
+}
+
+export async function getEstadisticasSeries(
+  params?: EstadisticasFiltros
+): Promise<EstadisticasSeries> {
+  const { data } = await apiClient.get<EstadisticasSeries>(`${LAB}/estadisticas/series/`, {
+    params: estadisticasParams(params),
+  });
+  return data;
+}
+
+export async function getEstadisticasPorExamen(
+  params?: EstadisticasFiltros
+): Promise<EstadisticasTabla<{ codigo: string; nombre: string; cantidad: number; porcentaje: number }>> {
+  const { data } = await apiClient.get(`${LAB}/estadisticas/por-examen/`, {
+    params: estadisticasParams(params),
+  });
+  return data;
+}
+
+export async function getEstadisticasPorObraSocial(
+  params?: EstadisticasFiltros
+): Promise<EstadisticasTabla<{ obra_social: string; cantidad: number; porcentaje: number }>> {
+  const { data } = await apiClient.get(`${LAB}/estadisticas/por-obra-social/`, {
+    params: estadisticasParams(params),
+  });
+  return data;
+}
+
+export async function getEstadisticasPorOrigen(
+  params?: EstadisticasFiltros
+): Promise<
+  EstadisticasTabla<{ origen: string; label: string; cantidad: number; porcentaje: number }>
+> {
+  const { data } = await apiClient.get(`${LAB}/estadisticas/por-origen/`, {
+    params: estadisticasParams(params),
+  });
+  return data;
+}
+
+export async function getEstadisticasPorEstado(
+  params?: EstadisticasFiltros
+): Promise<EstadisticasTabla<{ estado: string; cantidad: number; porcentaje: number }>> {
+  const { data } = await apiClient.get(`${LAB}/estadisticas/por-estado/`, {
+    params: estadisticasParams(params),
+  });
+  return data;
+}
+
+/** Descarga CSV de agregados (sin PHI). */
+export async function downloadEstadisticasCsv(params?: EstadisticasFiltros): Promise<void> {
+  const { data } = await apiClient.get(`${LAB}/estadisticas/export.csv`, {
+    params: estadisticasParams(params),
+    responseType: 'blob',
+  });
+  const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/csv' });
+  const dim = params?.dimension || 'examen';
+  triggerBlobDownload(
+    blob,
+    `estadisticas_lims_${dim}_${params?.desde || 'desde'}_${params?.hasta || 'hasta'}.csv`
+  );
+}
+
 export type FiltrosAvanzadosModo = 'all' | 'any';
 
 export interface FiltrosAvanzadosPreview {

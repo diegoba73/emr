@@ -97,7 +97,7 @@ class SolicitudViewSet(viewsets.ModelViewSet):
 
         role = get_normalized_role(user)
 
-        if role == 'secretaria':
+        if role in ROLES_SECRETARIA_LAB:
             return queryset
 
         if role == 'medico':

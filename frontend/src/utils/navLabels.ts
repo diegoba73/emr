@@ -39,6 +39,7 @@ export function getAppSegmentTitle(pathname: string, user: User | null | undefin
   if (p.startsWith('/perfil')) return 'Mi perfil';
   if (p.startsWith('/catalogos')) return 'Catálogos';
   if (p.startsWith('/auditoria')) return 'Auditoría';
+  if (p.startsWith('/laboratorio/estadisticas')) return 'Estadísticas';
   if (p.startsWith('/laboratorio')) return 'Laboratorio';
   if (p.startsWith('/bi') || p.startsWith('/indicadores')) return 'Indicadores';
   if (p.startsWith('/portal/turnos')) return 'Mis turnos';

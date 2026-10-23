@@ -1,3 +1,4 @@
+from usuarios.roles import ROLES_SECRETARIA_EMR
 import logging
 import os
 from datetime import timedelta
@@ -78,7 +79,7 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         rol = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or rol in ('admin', 'secretaria', 'enfermeria'):
+        if user.is_superuser or rol == 'admin' or rol == 'enfermeria' or rol in ROLES_SECRETARIA_EMR:
             return queryset
 
         if rol == 'laboratorio':
@@ -192,7 +193,7 @@ class ArchivoMedicoViewSet(viewsets.ModelViewSet):
 
     def _tiene_permiso_lectura(self, user, archivo):
         rol = str(getattr(user, 'rol', '') or '').lower()
-        if user.is_superuser or rol in ('admin', 'secretaria', 'enfermeria'):
+        if user.is_superuser or rol == 'admin' or rol == 'enfermeria' or rol in ROLES_SECRETARIA_EMR:
             return True
         if rol == 'laboratorio':
             return False

@@ -32,6 +32,7 @@ import {
   Analytics as QcIcon,
   DeviceHub as InstrumentosIcon,
   Insights as BiIcon,
+  Assessment as EstadisticasIcon,
   BarChart as AnalyticsIcon,
   FilterAlt as FilterAltIcon,
   Timeline as PortalTimelineIcon,
@@ -47,6 +48,7 @@ import {
   canAccessAtenciones,
   canAccessAuditoria,
   canAccessBiDashboard,
+  canAccessEstadisticasLims,
   canAccessCatalogosClinicos,
   canAccessGuardia,
   canAccessMedicos,
@@ -60,6 +62,8 @@ import {
   canAccessInternacion,
   isLaboratorioRole,
   isPacienteRole,
+  isSecretariaLabRole,
+  normalizeRol,
 } from '../../utils/permissions';
 import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
 import {
@@ -112,6 +116,7 @@ const navItems: NavItem[] = [
     canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),
   },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
+  { text: 'Estadísticas', icon: <EstadisticasIcon />, path: '/laboratorio/estadisticas', canAccess: canAccessEstadisticasLims },
   { text: 'Indicadores', icon: <BiIcon />, path: '/bi', canAccess: canAccessBiDashboard },
   {
     text: 'Filtros avanzados',
@@ -191,9 +196,11 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
   const { currentUser } = useData();
 
   const primary = filterByRole(isPacienteRole(currentUser) ? portalItems : navItems, currentUser);
-  // Operadores LIMS: sin Administración ni catálogos clínicos EMR (sí Catálogos LIMS).
-  const adminItems = isLaboratorioRole(currentUser) ? [] : filterByRole(adminOnly, currentUser);
-  const catalogNav = isLaboratorioRole(currentUser) ? [] : filterByRole(catalogItems, currentUser);
+  // Operadores LIMS / secretaría lab: sin Administración ni catálogos clínicos EMR (sí Catálogos LIMS).
+  const limsFocusedNav =
+    isLaboratorioRole(currentUser) || isSecretariaLabRole(normalizeRol(currentUser));
+  const adminItems = limsFocusedNav ? [] : filterByRole(adminOnly, currentUser);
+  const catalogNav = limsFocusedNav ? [] : filterByRole(catalogItems, currentUser);
   const labNav = isPacienteRole(currentUser) ? [] : filterByRole(labItems, currentUser);
   const labCatalogNav = isPacienteRole(currentUser) ? [] : filterByRole(labCatalogItems, currentUser);
 

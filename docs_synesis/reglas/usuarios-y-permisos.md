@@ -19,7 +19,6 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 |-----|-------------------|
 | `admin` | Administración, validación LIMS (`validar`), override IQC de cierre |
 | `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
-| `secretaria` | Agenda, pacientes, gestión turnos; **Guardia** (iniciar/continuar/cerrar, pedidos lab/micro/estudios como médico); **operación completa** del módulo Estudios y procedimientos (alta/edición/realización/informes/emitir/validar/rectificar/cerrar/entregar); lectura LIMS; envío de informe en `FINALIZADO` |
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
 | `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO` |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
@@ -43,20 +42,21 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 
 | Capacidad | Roles típicos |
 |-----------|----------------|
-| Leer catálogo LIMS | admin, laboratorio, bioquímico, medico, secretaria, enfermeria (`ROLES_LIMS_CATALOG_READ`) |
-| Crear pedidos LIMS / micro / estudios (p. ej. desde Guardia) | admin, laboratorio, bioquímico, medico, **secretaria** |
-| Crear/cargar resultados / QC / quitar ensayos | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`) |
+| Leer catálogo LIMS | admin, laboratorio, bioquímico, medico, **secretaria_lab**, enfermeria (`ROLES_LIMS_CATALOG_READ`) |
+| Crear pedidos LIMS / micro / estudios (p. ej. desde Guardia) | admin, laboratorio, bioquímico, medico, **secretaria_lab** |
+| Crear/cargar resultados / QC / quitar ensayos | admin, laboratorio, bioquímico, **secretaria_lab** (`ROLES_LIMS_WRITE`) |
 | Agregar ensayos a orden | `ROLES_LIMS_WRITE` + médico |
-| Editar cabecera de orden LIMS (`PATCH` paciente/médico/origen/fechas/obs.) | admin, laboratorio, bioquímico (`ROLES_LIMS_WRITE`); **bloqueado** si `FINALIZADO` |
-| Etiqueta ZPL 40×23 (preview `etiqueta-zpl` / `imprimir-etiqueta` / `confirmar`) | `ROLES_LIMS_WRITE` (admin, laboratorio, bioquímico) + superuser; **no** médico |
+| Editar cabecera de orden LIMS (`PATCH` paciente/médico/origen/fechas/obs.) | `ROLES_LIMS_WRITE`; **bloqueado** si `FINALIZADO` |
+| Etiqueta ZPL 40×23 (preview `etiqueta-zpl` / `imprimir-etiqueta` / `confirmar`) | `ROLES_LIMS_WRITE` + superuser; **no** médico |
 | Etiqueta ZPL micro (mismos actions bajo `microbiologia/estudios`) | Igual que lab clínico (`ROLES_LIMS_WRITE`); **no** médico |
-| Listado sidebar Microbiología (`/laboratorio/microbiologia/estudios`) | admin, laboratorio, bioquímico (todos los estados); **médico** ve solo `VALIDADO`/`INFORMADO` y puede **pedir** estudio; sin catálogos ni ops técnicas |
+| Listado sidebar Microbiología (`/laboratorio/microbiologia/estudios`) | admin, laboratorio, bioquímico, secretaria_lab (todos los estados); **médico** ve solo `VALIDADO`/`INFORMADO` y puede **pedir** estudio; sin catálogos ni ops técnicas |
 | Validar orden LIMS | admin, bioquímico (`ROLES_LIMS_VALIDAR`) |
 | Override IQC al cerrar | admin / superuser + motivo |
 | Alta de pacientes | admin, secretaría, médico, laboratorio, bioquímico (`_ROLES_ALTA_PACIENTE`); sin PATCH demográfico para lab/bio |
+| Eliminar pacientes (API) | solo admin/superuser; bloqueado si hay historia clínica asociada (`pacientes.eliminacion`) |
 | Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
 | Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
-| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaria, admin/staff; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1) |
+| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaría institucional / admin/staff (UI); API `ROLES_SECRETARIA_EMR` incluye ambas secretarías; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1) |
 | Cerrar atención | medico, enfermeria, admin |
 | Catálogo quirúrgico jerárquico (`cirugia-especialidades` / `-procedimientos` / `-abordajes`) | Lectura: operadores del módulo Estudios (médico, secretaría, admin, …). **Escritura solo admin/superuser** (`CirugiaCatalogoPermission`). UI admin: `/catalogos/cirugias`. No LIMS. |
 | Catálogo procedimientos plano (`procedimientos-catalogo`) | Lectura: operadores del módulo (incl. secretaría) vía `ProcedimientoCatalogoPermission`. Escritura: médico/admin. Necesario para alta de PROCEDIMIENTO. |
@@ -82,8 +82,6 @@ Flujo: buscar paciente → contexto (guardia / ambulatorio / internado) → favo
 Se configura en **Médicos** (web) o Admin Django. No es un rol Django distinto: sigue siendo `rol=medico`.
 
 El backend rechaza contextos/orígenes de guardia e internación y el acceso a APIs de internación / `iniciar-guardia` cuando el médico es solo ambulatorio.
-
-**Guardia compartida:** médicos con ámbito `COMPLETO` **ven** todas las atenciones de contexto `GUARDIA`; mutar (continuar/cerrar/derivar/pedidos) solo las propias. Fuera de guardia, el alcance sigue siendo `medico_principal`.
 
 **Frecuencia / cobertura ensayos:** médico (y roles no LIMS-write) no pueden pedir fuera de política: PROBNP (31 días), PSA/VITD (1/año calendario), TSH/T3/T4/T4L (2/año calendario + ≥2 meses por analito), T4 si obra social SEROS. **admin / laboratorio / bioquímico** pueden agregar cualquiera (`laboratorio/restricciones_frecuencia.py`).
 

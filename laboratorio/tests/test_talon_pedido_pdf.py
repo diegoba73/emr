@@ -130,6 +130,45 @@ class TestTalonPedidoClinicoApi(TestCase):
         pdf = generar_talon_solicitud_pdf_bytes(self.sol)
         self.assertTrue(pdf.startswith(b"%PDF"))
 
+    def test_talon_incluye_obra_social(self):
+        from laboratorio.talon_pedido_pdf import construir_talon_solicitud
+
+        self.paciente.obra_social = "OSDE"
+        self.paciente.numero_afiliado = "99/1"
+        self.paciente.save(update_fields=["obra_social", "numero_afiliado"])
+        data = construir_talon_solicitud(self.sol)
+        self.assertEqual(data.obra_social, "OSDE")
+        self.assertEqual(data.afiliado, "99/1")
+
+    def test_examenes_solicitud_no_anota_fecha_por_item(self):
+        from datetime import timedelta
+
+        from laboratorio.talon_pedido_pdf import _examenes_solicitud
+
+        m1 = crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=self.lab,
+            view="t",
+        )
+        m2 = crear_muestra(
+            solicitud=self.sol,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=None,
+            observaciones="",
+            actor=self.lab,
+            view="t",
+        )
+        t1 = timezone.now() - timedelta(hours=3)
+        t2 = timezone.now() - timedelta(hours=1)
+        type(m1).objects.filter(pk=m1.pk).update(fecha_toma=t1)
+        type(m2).objects.filter(pk=m2.pk).update(fecha_toma=t2)
+        listado = _examenes_solicitud(self.sol)
+        self.assertTrue(listado)
+        self.assertFalse(any("· ext." in (x or "") for x in listado))
+
     def test_talon_dos_muestras_una_pagina_por_orden(self):
         """Dos tubos → 1 página (un talón por orden, no por tubo)."""
         from laboratorio.talon_pedido_pdf import generar_talon_solicitud_pdf_bytes

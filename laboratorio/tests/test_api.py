@@ -653,7 +653,7 @@ class TestLimsAuthorization(APITestCase):
             username='sec_lims',
             email='sec@test.com',
             password='x',
-            rol='secretaria',
+            rol='secretaria_lab',
         )
         enf = User.objects.create_user(
             username='enf_lims',
@@ -681,7 +681,7 @@ class TestLimsAuthorization(APITestCase):
         assert self.sol_medico.id in ids2
 
     def test_secretaria_y_enfermeria_leen_resultados_de_orden_ajena(self):
-        for rol in ('secretaria', 'enfermeria'):
+        for rol in ('secretaria_lab', 'enfermeria'):
             user = User.objects.create_user(username=f'resultados_{rol}', password='x', rol=rol)
             self.client.force_authenticate(user=user)
             response = self.client.get(f'/api/lab/solicitudes/{self.sol_medico.pk}/')
@@ -694,7 +694,7 @@ class TestLimsAuthorization(APITestCase):
             username='sec_cat',
             email='sec-cat@test.com',
             password='x',
-            rol='secretaria',
+            rol='secretaria_lab',
         )
         enf = User.objects.create_user(
             username='enf_cat',

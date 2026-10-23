@@ -19,6 +19,7 @@ from api.permissions import (
     IsInternacionHcMedico,
     IsInternacionStaff,
 )
+from usuarios.roles import ROLES_SECRETARIA_EMR
 from api.serializers import AtencionSerializer
 
 logger = logging.getLogger(__name__)
@@ -186,7 +187,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
         action = getattr(self, 'action', None)
         # Excepción acotada: secretaría solo puede corregir la dieta por PATCH.
         if (action == 'partial_update'
-                and str(getattr(self.request.user, 'rol', '')).strip().lower() == 'secretaria'
+                and str(getattr(self.request.user, 'rol', '')).strip().lower() in ROLES_SECRETARIA_EMR
                 and set(self.request.data).issubset({'tipo_dieta_id', 'dieta_texto'})
                 and set(self.request.data)):
             return [IsAuthenticated(), IsInternacionStaff()]
@@ -205,7 +206,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsInternacionClinica()]
 
     def update(self, request, *args, **kwargs):
-        if str(getattr(request.user, 'rol', '')).strip().lower() == 'secretaria':
+        if str(getattr(request.user, 'rol', '')).strip().lower() in ROLES_SECRETARIA_EMR:
             keys = set(request.data)
             if request.method != 'PATCH' or not keys or not keys.issubset({'tipo_dieta_id', 'dieta_texto'}):
                 raise PermissionDenied('Secretaría solo puede editar el tipo de dieta.')

@@ -16,11 +16,28 @@ ROLES_LIMS_OPERADOR = frozenset({
     'bioquimico',
 })
 
+# Secretaría institucional (EMR agenda/recepción/guardia) vs secretaría laboratorio.
+ROLES_SECRETARIA_INSTITUCIONAL = frozenset({
+    'secretaria',
+})
+
+# Secretaría de laboratorio: menú LIMS + Estadísticas; permisos = secretaría EMR + LIMS write.
+ROLES_SECRETARIA_LAB = frozenset({
+    'secretaria_lab',
+})
+
+# Ambas secretarías: pacientes/médicos/profesionales y capacidades EMR compartidas en API.
+ROLES_SECRETARIA_EMR = frozenset({
+    *ROLES_SECRETARIA_INSTITUCIONAL,
+    *ROLES_SECRETARIA_LAB,
+})
+
 # Escritura operativa LIMS (toma, carga, recepción, catálogos editables).
-# Incluye técnico y bioquímico: el bioquímico hace todo lo del laboratorio.
+# Incluye técnico, bioquímico y secretaría lab (sin validar).
 ROLES_LIMS_WRITE = frozenset({
     'admin',
     *ROLES_LIMS_OPERADOR,
+    *ROLES_SECRETARIA_LAB,
 })
 
 # Liberación clínica de resultados / informe (Fase A).
@@ -28,6 +45,11 @@ ROLES_LIMS_WRITE = frozenset({
 ROLES_LIMS_VALIDAR = frozenset({
     'admin',
     'bioquimico',
+})
+
+# Ambas secretarías: ver/bajar/enviar informes LIMS/micro cuando están liberados (FINALIZADO / VALIDADO).
+ROLES_SECRETARIA_ENTREGA_INFORME = frozenset({
+    *ROLES_SECRETARIA_EMR,
 })
 
 # Lectura operativa de pacientes y agenda (sin acceso clínico EMR completo).
@@ -46,15 +68,12 @@ ROLES_LIMS_CATALOG_READ = frozenset({
     'admin',
     *ROLES_LIMS_OPERADOR,
     'medico',
-    'secretaria',
+    *ROLES_SECRETARIA_LAB,
     'enfermeria',
 })
 
-# Secretaría/enfermería: lectura de órdenes LIMS en todos los estados.
-# Secretaría: sin valores clínicos ni detalle técnico; solo envío/PDF si validado.
-# PDF / envío del informe: solo FINALIZADO / VALIDADO.
+# Enfermería: lectura operativa limitada de órdenes LIMS (secretaría lab ya es LIMS write).
 ROLES_LIMS_OPERATIVA_LIMITADA = frozenset({
-    'secretaria',
     'enfermeria',
 })
 
@@ -75,7 +94,7 @@ ROLES_INTERNACION = frozenset({
     'admin',
     'medico',
     'enfermeria',
-    'secretaria',
+    *ROLES_SECRETARIA_EMR,
     'kinesiologo',
 })
 
@@ -110,6 +129,13 @@ ROLES_INTERNACION_ALTA = frozenset({
     'medico',
 })
 
+# Estadísticas LIMS (volúmenes / % por período).
+ROLES_ESTADISTICAS_LIMS = frozenset({
+    'admin',
+    'bioquimico',
+    *ROLES_SECRETARIA_LAB,
+})
+
 
 def normalize_rol(user_or_str) -> str:
     if hasattr(user_or_str, 'rol'):
@@ -139,3 +165,19 @@ def puede_escribir_lims(user_or_str) -> bool:
 
 def puede_validar_lims(user_or_str) -> bool:
     return normalize_rol(user_or_str) in ROLES_LIMS_VALIDAR
+
+
+def es_secretaria_emr(user_or_str) -> bool:
+    return normalize_rol(user_or_str) in ROLES_SECRETARIA_EMR
+
+
+def es_secretaria_institucional(user_or_str) -> bool:
+    return normalize_rol(user_or_str) in ROLES_SECRETARIA_INSTITUCIONAL
+
+
+def es_secretaria_lab(user_or_str) -> bool:
+    return normalize_rol(user_or_str) in ROLES_SECRETARIA_LAB
+
+
+def puede_ver_estadisticas_lims(user_or_str) -> bool:
+    return normalize_rol(user_or_str) in ROLES_ESTADISTICAS_LIMS

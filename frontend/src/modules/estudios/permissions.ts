@@ -1,6 +1,11 @@
 import type { User } from '../../types';
 import type { EstudioComplementario, InformeEstudioComplementario } from '../../types/estudios';
-import { isOperadorLimsRole, isProfesionalEstudioRole } from '../../utils/roles';
+import {
+  isOperadorLimsRole,
+  isProfesionalEstudioRole,
+  isSecretariaInstitucionalRole,
+  isSecretariaLabRole,
+} from '../../utils/roles';
 
 function normalizedRol(user: User | null | undefined): string {
   return (user?.rol || '').toLowerCase();
@@ -9,28 +14,28 @@ function normalizedRol(user: User | null | undefined): string {
 function puedeOperarEstudios(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
-  if (isOperadorLimsRole(normalizedRol(user))) return false;
+  if (isOperadorLimsRole(normalizedRol(user)) || isSecretariaLabRole(normalizedRol(user))) return false;
   const rol = normalizedRol(user);
-  // Secretaría: operador habitual del módulo (alta/edición/doc/agenda).
+  // Secretaría institucional: operador habitual del módulo (alta/edición/doc/agenda).
   return (
     rol === 'admin' ||
     rol === 'medico' ||
-    rol === 'secretaria' ||
+    isSecretariaInstitucionalRole(rol) ||
     isProfesionalEstudioRole(rol)
   );
 }
 
 export function canAccessEstudiosModule(user: User | null | undefined): boolean {
   if (!user) return false;
-  // Laboratorio/bioquímico no usan este módulo: trabajan en LIMS.
+  // Laboratorio/bioquímico/secretaria_lab no usan este módulo: trabajan en LIMS.
   if (user.is_superuser) return true;
-  if (isOperadorLimsRole(normalizedRol(user))) return false;
+  if (isOperadorLimsRole(normalizedRol(user)) || isSecretariaLabRole(normalizedRol(user))) return false;
   const rol = normalizedRol(user);
   return (
     rol === 'admin' ||
     rol === 'medico' ||
     rol === 'paciente' ||
-    rol === 'secretaria' ||
+    isSecretariaInstitucionalRole(rol) ||
     rol === 'enfermeria' ||
     isProfesionalEstudioRole(rol)
   );
@@ -40,7 +45,7 @@ export function canAsignarTurnoEstudio(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const rol = normalizedRol(user);
-  return rol === 'admin' || rol === 'secretaria';
+  return rol === 'admin' || isSecretariaInstitucionalRole(rol);
 }
 
 export function canWriteEstudio(user: User | null | undefined): boolean {
@@ -52,14 +57,16 @@ export function canMarcarRealizadoUser(user: User | null | undefined): boolean {
   return canWriteEstudio(user);
 }
 
-/** Admin, secretaría o profesional que marcó el estudio como realizado. */
+/** Admin, secretaría, médico o profesional que marcó el estudio como realizado. */
 export function esRealizadorOAdmin(
   user: User | null | undefined,
   estudio: EstudioComplementario
 ): boolean {
   if (!user) return false;
   const rol = normalizedRol(user);
-  if (user.is_superuser || rol === 'admin' || rol === 'secretaria') return true;
+  if (user.is_superuser || rol === 'admin' || isSecretariaInstitucionalRole(rol) || rol === 'medico') {
+    return true;
+  }
   return Boolean(estudio.realizado_por && estudio.realizado_por === user.id);
 }
 
@@ -85,7 +92,9 @@ export function canValidateInforme(
 ): boolean {
   if (!user) return false;
   const rol = normalizedRol(user);
-  if (user.is_superuser || rol === 'admin' || rol === 'secretaria') return true;
+  if (user.is_superuser || rol === 'admin' || isSecretariaInstitucionalRole(rol) || rol === 'medico') {
+    return true;
+  }
   if (!estudio) return false;
   return Boolean(estudio.realizado_por && estudio.realizado_por === user.id);
 }
@@ -199,7 +208,7 @@ export function canEntregarEstudio(
   if (estudio.tipo_actividad === 'CIRUGIA' && !estudio.fecha_cierre) return false;
   if (canModificarContenidoEstudio(user, estudio)) return true;
   const rol = normalizedRol(user);
-  return rol === 'secretaria' || rol === 'admin';
+  return isSecretariaInstitucionalRole(rol) || rol === 'admin';
 }
 
 /** D: cierre administrativo — secretaría o escritura clínica; gate de protocolo en backend. */
@@ -211,7 +220,7 @@ export function canCerrarCirugia(
   if (estudio.estado !== 'VALIDADO') return false;
   if (estudio.fecha_cierre) return false;
   const rol = normalizedRol(user);
-  if (rol === 'admin' || rol === 'secretaria') return true;
+  if (rol === 'admin' || isSecretariaInstitucionalRole(rol)) return true;
   return canModificarContenidoEstudio(user, estudio);
 }
 
@@ -246,7 +255,7 @@ export function canQuitarArchivoEstudio(
 export function canEnviarInformeEstudio(
   user: User | null | undefined, estudio: EstudioComplementario, informe: InformeEstudioComplementario
 ): boolean {
-  return Boolean(user && (user.is_superuser || normalizedRol(user) === 'secretaria' || canWriteEstudio(user)) &&
+  return Boolean(user && (user.is_superuser || isSecretariaInstitucionalRole(normalizedRol(user)) || canWriteEstudio(user)) &&
     ['VALIDADO', 'ENTREGADO'].includes(estudio.estado) && informe.es_vigente && informe.estado === 'VALIDADO' &&
     canDownloadPdfInformeEstudio(user, estudio, informe));
 }

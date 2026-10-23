@@ -9,6 +9,7 @@ class User(AbstractUser):
         ('paciente', 'Paciente'),
         ('medico', 'Médico'),
         ('secretaria', 'Secretaria'),
+        ('secretaria_lab', 'Secretaria laboratorio'),
         ('enfermeria', 'Enfermería'),
         ('laboratorio', 'Laboratorio'),
         ('bioquimico', 'Bioquímico'),
@@ -48,7 +49,13 @@ class User(AbstractUser):
     
     @property
     def es_secretaria(self):
-        return self.rol == 'secretaria'
+        from usuarios.roles import es_secretaria_emr
+        return es_secretaria_emr(self.rol)
+
+    @property
+    def es_secretaria_lab(self):
+        from usuarios.roles import es_secretaria_lab
+        return es_secretaria_lab(self.rol)
     
     @property
     def es_admin(self):
@@ -65,12 +72,13 @@ class User(AbstractUser):
     
     def puede_ver_todos_los_turnos(self):
         """Determina si el usuario puede ver todos los turnos"""
-        from usuarios.roles import es_agenda_turnos_lectura
-        return self.rol in ['secretaria', 'admin'] or es_agenda_turnos_lectura(self.rol)
+        from usuarios.roles import ROLES_SECRETARIA_EMR, es_agenda_turnos_lectura
+        return self.rol in ROLES_SECRETARIA_EMR or self.rol == 'admin' or es_agenda_turnos_lectura(self.rol)
     
     def puede_gestionar_turnos(self):
         """Determina si el usuario puede gestionar turnos"""
-        return self.rol in ['secretaria', 'admin', 'medico']
+        from usuarios.roles import ROLES_SECRETARIA_EMR
+        return self.rol in ROLES_SECRETARIA_EMR or self.rol in ('admin', 'medico')
     
     def puede_ver_historia_clinica(self):
         """Determina si el usuario puede ver historias clínicas"""

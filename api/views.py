@@ -35,6 +35,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.csrf import csrf_exempt
 import logging
 from usuarios.models import UserProfile
+from usuarios.roles import ROLES_SECRETARIA_EMR
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +274,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
         
         # Aplicar filtros por rol según DOC_REGLAS_NEGOCIO.md
         # Admin, Secretaria y Enfermería ven todos los pacientes
-        if user_rol in ['admin', 'secretaria', 'enfermeria'] or user.is_superuser:
+        if user_rol in ['admin', 'enfermeria', *ROLES_SECRETARIA_EMR] or user.is_superuser:
             # No aplicar filtros adicionales, ya se aplicó búsqueda si existe
             pass
         
@@ -402,7 +403,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
         paciente = serializer.instance
         
         # Admin y Secretaria pueden actualizar cualquier paciente
-        if user.rol in ['admin', 'secretaria'] or user.is_superuser:
+        if user.rol in ['admin', *ROLES_SECRETARIA_EMR] or user.is_superuser:
             serializer.save()
             return
         
@@ -540,7 +541,7 @@ class MedicoViewSet(viewsets.ModelViewSet):
         print(f"📊 Total médicos en BD: {queryset.count()}")
         
         # Admin, Secretaria y Enfermería ven todos los médicos
-        if user_rol in ['admin', 'secretaria', 'enfermeria'] or user.is_superuser:
+        if user_rol in ['admin', 'enfermeria', *ROLES_SECRETARIA_EMR] or user.is_superuser:
             print(f"✅ Usuario {user.username} tiene acceso a TODOS los médicos")
             return queryset
         
@@ -777,7 +778,7 @@ class ConsultaViewSet(viewsets.ModelViewSet):
         user_rol = (user.rol or '').lower() if hasattr(user, 'rol') else ''
         
         # Admin, Secretaria y Enfermería ven todas las consultas
-        if user_rol in ['admin', 'secretaria', 'enfermeria'] or user.is_superuser:
+        if user_rol in ['admin', 'enfermeria', *ROLES_SECRETARIA_EMR] or user.is_superuser:
             return queryset
         
         # Médico ve solo sus consultas (donde es el médico responsable)
@@ -1010,7 +1011,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
         role = str(getattr(user, 'rol', '') or '').lower()
         
         # Admin y Secretaria ven todos los turnos
-        if role in ['admin', 'secretaria'] or user.is_superuser:
+        if role in ['admin', *ROLES_SECRETARIA_EMR] or user.is_superuser:
             return queryset
         
         # Médico ve SOLO sus propios turnos
@@ -1148,7 +1149,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 serializer.save(paciente=user.paciente)
             elif role == 'medico' and hasattr(user, 'medico'):
                 serializer.save(medico=user.medico)
-            elif role in ['admin', 'secretaria'] or user.is_superuser:
+            elif role in ['admin', *ROLES_SECRETARIA_EMR] or user.is_superuser:
                 serializer.save()
             else:
                 raise PermissionDenied("No tiene permisos para crear turnos")
@@ -1174,7 +1175,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
             elif role == 'medico':
                 if turno_original.medico != user.medico:
                     raise PermissionDenied("No puede actualizar turnos de otros médicos")
-            elif role not in ['admin', 'secretaria'] and not user.is_superuser:
+            elif role not in ['admin', *ROLES_SECRETARIA_EMR] and not user.is_superuser:
                 raise PermissionDenied("No tiene permisos para actualizar turnos")
         except PermissionDenied:
             raise
@@ -1289,7 +1290,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
             # Médico solo puede eliminar sus propios turnos
             if instance.medico != user.medico:
                 raise PermissionDenied("No puede eliminar turnos de otros médicos")
-        elif user.rol in ['admin', 'secretaria']:
+        elif user.rol in ['admin', *ROLES_SECRETARIA_EMR]:
             # Admin y Secretaria pueden eliminar cualquier turno
             pass
         
@@ -1395,7 +1396,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 return Response({'error': f'Error obteniendo pacientes: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         
-        elif role in ['admin', 'secretaria'] or user.is_superuser:
+        elif role in ['admin', *ROLES_SECRETARIA_EMR] or user.is_superuser:
             # Secretaria/Admin ve todos los pacientes con sus turnos
             pacientes = Paciente.objects.all()[:100]  # Limitar para no sobrecargar
             
@@ -1437,7 +1438,7 @@ class TurnoViewSet(viewsets.ModelViewSet):
             # Paciente solo puede reservar para sí mismo
             if str(turno.paciente_id) != str(paciente_id):
                 return Response({'error': 'Solo puede reservar turnos para sí mismo'}, status=403)
-        elif user.rol not in ['admin', 'secretaria']:
+        elif user.rol not in ['admin', *ROLES_SECRETARIA_EMR]:
             return Response({'error': 'No tiene permisos para reservar turnos'}, status=403)
         
         turno.paciente_id = paciente_id
@@ -2609,7 +2610,7 @@ class ConsultaAmbulatoriaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or role in ['admin', 'secretaria']:
+        if user.is_superuser or role in ['admin', *ROLES_SECRETARIA_EMR]:
             return queryset
         if role == 'medico':
             try:
@@ -2696,7 +2697,7 @@ class RegistroProcedimientoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or role in ['admin', 'secretaria']:
+        if user.is_superuser or role in ['admin', *ROLES_SECRETARIA_EMR]:
             return queryset
         if role == 'medico':
             try:
@@ -2745,7 +2746,7 @@ class RegistroQuirurgicoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or role in ['admin', 'secretaria']:
+        if user.is_superuser or role in ['admin', *ROLES_SECRETARIA_EMR]:
             return queryset
         if role == 'medico':
             try:
@@ -3042,7 +3043,7 @@ class SignosVitalesViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = str(getattr(user, 'rol', '') or '').lower()
 
-        if user.is_superuser or role in ['admin', 'secretaria', 'enfermeria']:
+        if user.is_superuser or role in ['admin', 'enfermeria', *ROLES_SECRETARIA_EMR]:
             pass
         elif role == 'medico':
             try:
@@ -3091,6 +3092,7 @@ class SignosVitalesViewSet(viewsets.ModelViewSet):
             'enfermeria': SignosVitales.RolRegistrador.ENFERMERIA,
             'admin': SignosVitales.RolRegistrador.ADMINISTRATIVO,
             'secretaria': SignosVitales.RolRegistrador.ADMINISTRATIVO,
+            'secretaria_lab': SignosVitales.RolRegistrador.ADMINISTRATIVO,
         }
         extras = {}
         if 'rol_registrador' not in serializer.validated_data:

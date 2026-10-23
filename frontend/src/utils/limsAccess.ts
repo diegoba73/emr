@@ -1,5 +1,11 @@
 import { User } from '../types';
-import { isOperadorLimsRole, puedeValidarLimsRole } from './roles';
+import {
+  isOperadorLimsRole,
+  isSecretariaEntregaInformeRole,
+  isSecretariaLabRole,
+  puedeEscribirLimsRole,
+  puedeValidarLimsRole,
+} from './roles';
 
 export type NormalizedRol = string;
 
@@ -9,14 +15,14 @@ export function normalizeRol(user: User | null): NormalizedRol {
 
 /**
  * Módulo LIMS (sidebar «Laboratorio (LIMS)» y rutas /laboratorio/*).
- * Admin, laboratorio (técnico) y bioquímico.
- * Médicos/secretaría usan el portal clínico «Laboratorio» (/solicitudes).
+ * Admin, laboratorio, bioquímico y secretaría lab.
+ * Médicos/secretaría institucional usan el portal clínico «Laboratorio» (/solicitudes).
  */
 export function canAccessLimsModule(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || isOperadorLimsRole(r);
+  return r === 'admin' || isOperadorLimsRole(r) || isSecretariaLabRole(r);
 }
 
 /**
@@ -69,7 +75,7 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
   const r = normalizeRol(user);
   return (
     r === 'admin' ||
-    r === 'secretaria' ||
+    isSecretariaEntregaInformeRole(r) ||
     r === 'medico' ||
     r === 'paciente' ||
     r === 'enfermeria'
@@ -78,13 +84,13 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
 
 /**
  * Filtros avanzados / listados de estudio (cohorte por exámenes + Excel).
- * Lab/bioquímico/admin y médico.
+ * Lab/bioquímico/secretaria_lab/admin y médico.
  */
 export function canAccessFiltrosAvanzados(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'admin' || r === 'medico' || isOperadorLimsRole(r);
+  return r === 'medico' || canAccessLimsModule(user);
 }
 
 /**
@@ -137,7 +143,7 @@ function rolInformeParcial(user: User | null): boolean {
   return (
     r === 'admin' ||
     r === 'medico' ||
-    r === 'secretaria' ||
+    isSecretariaLabRole(r) ||
     isOperadorLimsRole(r)
   );
 }
@@ -158,7 +164,7 @@ export function canDownloadInformeClinicoPdf(
     r === 'admin' ||
     r === 'medico' ||
     r === 'paciente' ||
-    r === 'secretaria' ||
+    isSecretariaEntregaInformeRole(r) ||
     r === 'enfermeria';
   if (!roleOk) return false;
   if (e == null) return true;
@@ -167,20 +173,18 @@ export function canDownloadInformeClinicoPdf(
 
 /**
  * Quién puede elegir el médico solicitante en un pedido LIMS.
- * Médico logueado: siempre él (campo bloqueado). Solo admin / laboratorio / bioquímico eligen.
+ * Médico logueado: siempre él (campo bloqueado). Admin / lab / bio / secretaría lab eligen.
  */
 export function canSelectMedicoPedidoLims(user?: User | null): boolean {
   if (!user) return false;
-  const r = normalizeRol(user);
-  return r === 'admin' || isOperadorLimsRole(r);
+  return puedeEscribirLimsRole(normalizeRol(user));
 }
 
-/** Operaciones de laboratorio sobre orden/muestra/resultados (admin + operadores). */
+/** Operaciones de laboratorio sobre orden/muestra/resultados (admin + operadores + secretaría lab). */
 export function canOperateLims(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
-  const r = normalizeRol(user);
-  return r === 'admin' || isOperadorLimsRole(r);
+  return puedeEscribirLimsRole(normalizeRol(user));
 }
 
 /** Enviar informe: FINALIZADO (LIMS+secretaría) o INFORMADO_PARCIAL (roles parcial). */
@@ -195,7 +199,8 @@ export function canEnviarInformeLims(
     return rolInformeParcial(user);
   }
   const r = normalizeRol(user);
-  const roleOk = r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
+  const roleOk =
+    r === 'admin' || isSecretariaEntregaInformeRole(r) || isOperadorLimsRole(r);
   if (!roleOk) return false;
   if (e == null) return true;
   return e === 'FINALIZADO';
@@ -249,13 +254,12 @@ export function canAccessMicrobiologiaListado(user: User | null): boolean {
 export function canAccessMicrobiologiaLectura(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
+  if (canAccessLimsModule(user)) return true;
   const r = normalizeRol(user);
   return (
-    r === 'admin' ||
     r === 'medico' ||
-    r === 'secretaria' ||
-    r === 'enfermeria' ||
-    isOperadorLimsRole(r)
+    isSecretariaEntregaInformeRole(r) ||
+    r === 'enfermeria'
   );
 }
 
@@ -361,7 +365,7 @@ export function canEnviarInformeMicro(
   const e = estadoEstudio == null ? null : String(estadoEstudio).toUpperCase();
   if (opts?.tieneFinalValidado || e === 'VALIDADO' || e === 'INFORMADO') {
     const r = normalizeRol(user);
-    return r === 'admin' || r === 'secretaria' || isOperadorLimsRole(r);
+    return r === 'admin' || isSecretariaEntregaInformeRole(r) || isOperadorLimsRole(r);
   }
   if (opts?.tienePreliminarEmitido) {
     return rolInformeParcial(user);

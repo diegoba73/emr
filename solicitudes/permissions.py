@@ -5,6 +5,7 @@ from __future__ import annotations
 from rest_framework import permissions
 
 from api.permissions import get_normalized_role
+from usuarios.roles import ROLES_SECRETARIA_LAB
 
 
 def user_medico(user):
@@ -88,7 +89,7 @@ class SolicitudPermission(permissions.BasePermission):
             return False
 
         if action in _READ_ACTIONS:
-            return role in ('admin', 'secretaria', 'medico', 'paciente')
+            return role in ('admin', 'medico', 'paciente') or role in ROLES_SECRETARIA_LAB
 
         if action == 'create':
             return role in ('admin', 'medico')
@@ -114,7 +115,7 @@ class SolicitudPermission(permissions.BasePermission):
         role = get_normalized_role(user)
         action = getattr(view, 'action', None)
 
-        if role == 'secretaria':
+        if role in ROLES_SECRETARIA_LAB:
             return action in _READ_ACTIONS
 
         if role == 'medico':

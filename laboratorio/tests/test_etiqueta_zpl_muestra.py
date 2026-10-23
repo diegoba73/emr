@@ -306,7 +306,7 @@ class TestEtiquetaMuestraApi(TestCase):
             username=f"sec_ez_{self.suf}",
             email=f"sez2{self.suf}@t.com",
             password="pass12345",
-            rol="secretaria",
+            rol="secretaria_lab",
         )
         self.enf = User.objects.create_user(
             username=f"enf_ez_{self.suf}",
@@ -438,7 +438,7 @@ class TestEtiquetaMuestraApi(TestCase):
     def test_preview_y_permisos(self):
         m = self._muestra_lista()
         url = f"/api/lab/muestras-transaccionales/{m.pk}/etiqueta-zpl/"
-        for user in (self.lab, self.admin, self.su):
+        for user in (self.lab, self.admin, self.su, self.sec):
             self.client.force_authenticate(user)
             r = self.client.get(url)
             self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
@@ -448,7 +448,7 @@ class TestEtiquetaMuestraApi(TestCase):
             self.assertIn("^PW320", body["zpl"])
             self.assertEqual(body["profile"], "3nstar_ldt114_203_40x23")
 
-        for user in (self.med, self.sec, self.enf, self.pac_u):
+        for user in (self.med, self.enf, self.pac_u):
             self.client.force_authenticate(user)
             r = self.client.get(url)
             self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)

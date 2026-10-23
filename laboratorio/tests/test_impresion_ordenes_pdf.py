@@ -226,6 +226,11 @@ class TestImpresionOrdenes(TestCase):
         self.assertIn("CL", ped.marcados)
         self.assertIn("PAN_COAG", ped.marcados)
         self.assertIn("INR", ped.marcados)
+        # Listado a firmar: casillas del formulario junto al panel.
+        self.assertTrue(any("Ionograma" in s for s in ped.solicitados))
+        self.assertTrue(any("Cloro" in s for s in ped.solicitados))
+        self.assertTrue(any("Coagulograma" in s for s in ped.solicitados))
+        self.assertTrue(any("R.I.N" in s or "INR" in s or "RIN" in s.upper() for s in ped.solicitados))
 
     def test_pedido_micro_mapea_cultivos_y_cultivo_de(self):
         ped = construir_pedido_micro([self.uro, self.hemoc, self.uretral])

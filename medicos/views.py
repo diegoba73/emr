@@ -12,7 +12,7 @@ from rest_framework.response import Response
 
 from api.permissions import get_normalized_role
 from api.serializers import MedicoLightSerializer, MedicoSerializer
-from usuarios.roles import ROLES_LIMS_OPERADOR
+from usuarios.roles import ROLES_LIMS_OPERADOR, ROLES_SECRETARIA_EMR
 
 from .models import Especialidad, Medico
 from .serializers import EspecialidadSerializer
@@ -20,7 +20,7 @@ from .serializers import EspecialidadSerializer
 _ROLES_ESCRITURA_MEDICO = frozenset(
     {
         "admin",
-        "secretaria",
+        *ROLES_SECRETARIA_EMR,
         *ROLES_LIMS_OPERADOR,
     }
 )
@@ -137,7 +137,7 @@ class MedicoViewSet(viewsets.ModelViewSet):
 
         roles_ven_todos = {
             "admin",
-            "secretaria",
+            *ROLES_SECRETARIA_EMR,
             "enfermeria",
             "laboratorio",
             "bioquimico",

@@ -56,6 +56,7 @@ import MicrobiologiaCatalogos from './pages/laboratorio/MicrobiologiaCatalogos';
 import InventarioPage from './pages/laboratorio/inventario/InventarioPage';
 import QcHubPage from './pages/laboratorio/qc/QcHubPage';
 import AnalyticsAnalitosPage from './pages/laboratorio/AnalyticsAnalitosPage';
+import EstadisticasPage from './pages/laboratorio/EstadisticasPage';
 import FiltrosAvanzadosPage from './pages/laboratorio/FiltrosAvanzadosPage';
 import InstrumentosPage from './pages/laboratorio/InstrumentosPage';
 import PatientDashboard from './components/patient360/PatientDashboard';
@@ -72,6 +73,7 @@ import {
   canAccessAtenciones,
   canAccessAuditoria,
   canAccessBiDashboard,
+  canAccessEstadisticasLims,
   canAccessCatalogosClinicos,
   canAccessGuardia,
   canAccessMedicos,
@@ -813,6 +815,19 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessLimsModule}
               >
                 <AnalyticsAnalitosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/laboratorio/estadisticas"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessEstadisticasLims}
+              >
+                <EstadisticasPage />
               </ProtectedRoute>
             }
           />
