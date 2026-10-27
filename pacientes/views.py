@@ -5,14 +5,14 @@ Reglas de negocio aplicadas:
 - ``Paciente`` es la fuente de verdad de los datos personales del paciente.
 - La ficha es información sensible: el listado y la búsqueda están filtrados
   por rol y nunca relajan permisos vía query params.
-- DELETE físico está bloqueado en este viewset; un futuro bloque introducirá
-  soft-delete con auditoría dedicada.
+- DELETE físico deshabilitado (MethodNotAllowed). Soft-delete / fusión sigue
+  como objetivo futuro. Prevención de duplicados al alta vía
+  ``candidatos-duplicado``.
 - Las altas y modificaciones quedan auditadas vía ``auditoria.audit_service``
   cuando el módulo está disponible (best-effort, no bloquea la operación si
   falla la auditoría; cubierto por tests en ``pacientes/tests/test_audit.py``).
 """
 import logging
-from usuarios.roles import ROLES_SECRETARIA_EMR
 
 from django.db.models import Case, IntegerField, Prefetch, Q, When
 from django_filters.rest_framework import DjangoFilterBackend
@@ -22,22 +22,24 @@ from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .afiliaciones import sync_paciente_desde_principal
+from .duplicados import clasificar_candidatos, tiene_bloqueo_dni
 from .models import Paciente, PacienteAfiliacion
 from .serializers import (
     PacienteAfiliacionSerializer,
     PacienteLightSerializer,
     PacienteSerializer,
 )
-from .afiliaciones import sync_paciente_desde_principal
 
 logger = logging.getLogger(__name__)
 
 
 try:  # Auditoría opcional: el viewset no debe romperse si el módulo falta.
-    from auditoria.audit_service import log_create, log_update
+    from auditoria.audit_service import log_create, log_delete, log_update
     from auditoria.snapshot import safe_model_snapshot
 except Exception:  # pragma: no cover - defensa por si la app no está cargada
     log_create = None
+    log_delete = None
     log_update = None
 
     def safe_model_snapshot(_instance):  # type: ignore[misc]
@@ -46,13 +48,13 @@ except Exception:  # pragma: no cover - defensa por si la app no está cargada
 
 _AUDIT_AVAILABLE = log_create is not None and log_update is not None
 
-from usuarios.roles import ROLES_LECTURA_OPERATIVA
+from usuarios.roles import ROLES_LECTURA_OPERATIVA, ROLES_SECRETARIA_EMR
 
-_ROLES_LECTURA_GLOBAL = frozenset({"admin", "medico", "secretaria", "enfermeria"})
-_ROLES_EDICION_PACIENTE = frozenset({"admin", "secretaria", "medico"})
+_ROLES_LECTURA_GLOBAL = frozenset({"admin", "medico", "enfermeria", *ROLES_SECRETARIA_EMR})
+_ROLES_EDICION_PACIENTE = frozenset({"admin", "medico", *ROLES_SECRETARIA_EMR})
 # Alta: mismos editores + operadores LIMS (ficha mínima para pedidos).
 _ROLES_ALTA_PACIENTE = frozenset(
-    {"admin", "secretaria", "medico", "laboratorio", "bioquimico"}
+    {"admin", "medico", "laboratorio", "bioquimico", *ROLES_SECRETARIA_EMR}
 )
 
 
@@ -102,7 +104,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     def get_serializer_class(self):
-        if self.action in ("list", "buscar"):
+        if self.action in ("list", "buscar", "candidatos_duplicado"):
             return PacienteLightSerializer
         if self.action in (
             "afiliaciones",
@@ -308,6 +310,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return
         raise PermissionDenied("No tiene permiso para editar datos del paciente.")
 
+
     def _deny_si_no_puede_alta_paciente(self) -> None:
         user = self.request.user
         if getattr(user, "is_superuser", False):
@@ -373,6 +376,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
                 )
             except Exception:
                 logger.exception("Audit log_update failed for Paciente %s", instance.pk)
+
 
     def destroy(self, request, *args, **kwargs):
         """DELETE físico bloqueado para todos los roles.
@@ -447,6 +451,58 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="candidatos-duplicado")
+    def candidatos_duplicado(self, request):
+        """Candidatos a ficha duplicada para prevención al alta (sin fusionar).
+
+        Query params opcionales: ``dni``, ``nombre``, ``apellido``,
+        ``fecha_nacimiento``, ``exclude_id``.
+
+        - Match ``dni``: mismo DNI (bloqueo duro de alta).
+        - Match ``identidad``: mismo nombre+apellido+fecha (aviso; no bloquea API).
+        """
+        dni = (request.query_params.get("dni") or "").strip()
+        nombre = (request.query_params.get("nombre") or "").strip()
+        apellido = (request.query_params.get("apellido") or "").strip()
+        fecha_nacimiento = (request.query_params.get("fecha_nacimiento") or "").strip()
+        exclude_raw = (request.query_params.get("exclude_id") or "").strip()
+        exclude_id = int(exclude_raw) if exclude_raw.isdigit() else None
+
+        if not dni and not (nombre and apellido and fecha_nacimiento):
+            return Response(
+                {
+                    "error": (
+                        'Indicá "dni" o la terna "nombre", "apellido" y '
+                        '"fecha_nacimiento".'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        queryset = self._queryset_busqueda_operativa(super().get_queryset())
+        clasificados = clasificar_candidatos(
+            queryset,
+            dni=dni or None,
+            nombre=nombre or None,
+            apellido=apellido or None,
+            fecha_nacimiento=fecha_nacimiento or None,
+            exclude_id=exclude_id,
+            limit=10,
+        )
+        light = PacienteLightSerializer(
+            [item["paciente"] for item in clasificados], many=True
+        ).data
+        resultados = []
+        for item, paciente_data in zip(clasificados, light):
+            resultados.append({"match": item["match"], "paciente": paciente_data})
+
+        return Response(
+            {
+                "bloquea_alta": tiene_bloqueo_dni(clasificados),
+                "resultados": resultados,
+            }
+        )
 
     @action(detail=True, methods=["get"], url_path="timeline")
     def timeline(self, request, pk=None):

@@ -12,7 +12,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from .authentication import AutenticacionMovil, RolMovil, token_hash
 from .models import SesionMovil, DispositivoPush
-from .roles import ROLES_MOVIL, ROLES_MOVIL_PEDIR_LAB, ROLES_MOVIL_TURNOS
+from .roles import ROLES_MOVIL, ROLES_MOVIL_INFORMES, ROLES_MOVIL_PEDIR_LAB, ROLES_MOVIL_TURNOS
 from pacientes.services import ensure_paciente_linked_to_user
 from medicos.views import MedicoViewSet
 from turnos.views import TurnoViewSet, _safe_audit
@@ -38,7 +38,7 @@ def perfil(user):
         'contextos_lab_permitidos': list(contextos_lab_permitidos(medico)) if medico else [],
         'contextos_lab': contextos_lab_para_api(medico) if medico else [],
         'puede_turnos': rol in ROLES_MOVIL_TURNOS,
-        'puede_informes': True,
+        'puede_informes': rol in ROLES_MOVIL_INFORMES,
         'puede_validar_informes': rol == 'bioquimico',
         'puede_pedir_lab': rol in ROLES_MOVIL_PEDIR_LAB and medico is not None,
         'puede_guardia': rol == 'medico' and medico is not None and ambito != 'AMBULATORIO',
@@ -105,6 +105,74 @@ class PushMovil(BaseMovil):
     def delete(self, request):
         DispositivoPush.objects.filter(sesion=request.auth).update(activo=False)
         return Response(status=204)
+
+
+class LlamadoActivoMovil(BaseMovil):
+    """
+    Polling LAN para aviso de llamado (TV/médico) sin depender de Expo Push.
+    Útil en Expo Go / redes locales: la app vibra al detectar estado LLAMADO.
+    POST: «Ya voy» → EN_ATENCION (sale del destacado en TV).
+    """
+
+    def _llegada_llamado_hoy(self, request):
+        from recepcion.models import LlegadaRecepcion
+
+        if str(request.user.rol).lower() != 'paciente':
+            return None, None
+        paciente = ensure_paciente_linked_to_user(request.user)
+        if not paciente:
+            return None, None
+        hoy = timezone.localdate()
+        llegada = (
+            LlegadaRecepcion.objects.filter(
+                paciente_id=paciente.pk,
+                fecha=hoy,
+                estado_flujo=LlegadaRecepcion.EstadoFlujo.LLAMADO,
+            )
+            .select_related('destino_recurso')
+            .order_by('-llamado_en', '-id')
+            .first()
+        )
+        return paciente, llegada
+
+    def get(self, request):
+        from recepcion.services import nombre_publico_paciente
+
+        paciente, llegada = self._llegada_llamado_hoy(request)
+        if not llegada:
+            return Response({'activo': False})
+        destino = llegada.destino_label or (
+            llegada.destino_recurso.nombre if llegada.destino_recurso_id else 'consultorio'
+        )
+        return Response(
+            {
+                'activo': True,
+                'llegada_id': llegada.pk,
+                'destino': destino,
+                'llamado_en': llegada.llamado_en,
+                'numero_orden_dia': llegada.numero_orden_dia,
+                'codigo_llamado': llegada.codigo_llamado or '',
+                'paciente': nombre_publico_paciente(paciente),
+                'tipo': 'llamado_medico',
+            }
+        )
+
+    def post(self, request):
+        """Paciente confirma el llamado («Ya voy»)."""
+        from recepcion import services as recepcion_services
+
+        _paciente, llegada = self._llegada_llamado_hoy(request)
+        if not llegada:
+            return Response({'ok': True, 'activo': False})
+        llegada = recepcion_services.paciente_ya_voy(llegada)
+        return Response(
+            {
+                'ok': True,
+                'activo': False,
+                'estado_flujo': llegada.estado_flujo,
+                'codigo_llamado': llegada.codigo_llamado or '',
+            }
+        )
 
 
 class TurnoMovilSerializer(serializers.ModelSerializer):

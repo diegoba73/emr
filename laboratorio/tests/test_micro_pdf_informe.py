@@ -41,6 +41,11 @@ class TestInformeEntregaTokenMicro:
         tok = crear_token_entrega_informe_micro(99)
         assert verificar_token_entrega_informe_micro(tok) == 99
 
+    def test_token_micro_sin_max_age(self):
+        """Los tokens firmados micro no se rechazan por antigüedad."""
+        tok = crear_token_entrega_informe_micro(7)
+        assert verificar_token_entrega_informe_micro(tok) == 7
+
 
 @pytest.mark.django_db
 class TestMicroPdfInforme(TestCase):

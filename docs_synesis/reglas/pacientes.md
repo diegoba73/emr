@@ -32,8 +32,8 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Laboratorio y bioquímico: listado/búsqueda global y **alta** de pacientes; sin PATCH de demografía. | **[IMPLEMENTADO]** `_ROLES_ALTA_PACIENTE` (`laboratorio`, `bioquimico`) |
 | Paciente solo ve su ficha vía queryset activo. | **[IMPLEMENTADO]** |
 | Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
-| DELETE físico API bloqueado (405). | **[IMPLEMENTADO]** |
-| DELETE físico Django Admin bloqueado (`has_delete_permission=False`, sin `delete_selected`). | **[IMPLEMENTADO]** C3 |
+| DELETE físico API: solo `admin`/superuser; 409 si hay historia clínica (órdenes, turnos, atenciones, etc.); afiliaciones sí se borran con la ficha. | **[IMPLEMENTADO]** |
+| DELETE físico Django Admin bloqueado (`has_delete_permission=False`, sin `delete_selected`); usar API/UI admin. | **[IMPLEMENTADO]** C3 |
 | Auditoría CREATE/UPDATE en POST/PATCH/PUT (`log_create` / `log_update`). | **[IMPLEMENTADO]** — tests en `pacientes/tests/test_audit.py` |
 | Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
 | `creado_por` / `modificado_por` en modelo (API activa los setea; read-only en serializer). | **[IMPLEMENTADO]** C5 |
@@ -51,6 +51,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Deprecar / eliminar serializer duplicado en `api/serializers.py`. | **[DEUDA]** |
 | Backfill opcional de `creado_por` / `modificado_por` en datos históricos. | **[DEUDA]** |
 | Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
+| Prevención al alta: mensaje claro DNI duplicado + `GET /api/pacientes/candidatos-duplicado/` (DNI exacto bloquea; identidad nombre+apellido+fecha avisa). UI alta principal y LIMS. | **[IMPLEMENTADO]** |
 | Soft delete / desactivación (`activo=False`) / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
 | Multi-afiliación OS (`PacienteAfiliacion`) + snapshot en órdenes nuevas (`obra_social_orden`). Órdenes viejas: fallback a ficha. Catálogo formal / reglas / pagos: fase posterior. | **[IMPLEMENTADO]** fase 1 |
@@ -70,7 +71,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 
 | Riesgo | Etiqueta |
 |--------|----------|
-| Duplicados por carga manual o CSV sin validación. | **[DEUDA]** |
+| Duplicados por carga manual (mitigado en UI/API al alta; CSV/import sigue aparte). | **[DEUDA]** parcial |
 | `get_queryset` manual diverge de clase de permiso documentada. | **[DEUDA]** |
 | Borrado vía shell/ORM directo (fuera API/Admin). | **[DEUDA]** solo política operativa |
 
@@ -98,7 +99,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 - [x] `?all=true` en turnos no escala médico; médico sin ficha Medico vacío (C5.7.1) — `turnos/tests/test_api.py`.
 - [ ] Auditoría fail-closed (fase posterior).
 - [ ] Revisar comandos `pacientes/management/` (no versionados) antes de cualquier commit.
-- [ ] Alinear mensajes de error de DNI duplicado con frontend.
+- [x] Alinear mensajes de error de DNI duplicado con frontend + candidatos al alta.
 
 ---
 

@@ -19,8 +19,8 @@ export const BANDEJA_OPTIONS: { key: BandejaEstudioKey; label: string }[] = [
   { key: 'anulados', label: 'Anulados' },
 ];
 
-export const MODULO_ESTUDIOS_LABEL = 'Estudios y procedimientos';
-export const MODULO_ESTUDIOS_LABEL_PACIENTE = 'Mis estudios y procedimientos';
+export const MODULO_ESTUDIOS_LABEL = 'Programación de turnos';
+export const MODULO_ESTUDIOS_LABEL_PACIENTE = 'Mis turnos programados';
 
 export type BandejasResumen = Record<BandejaEstudioKey, number>;
 

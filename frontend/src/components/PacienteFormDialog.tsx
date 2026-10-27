@@ -1,20 +1,28 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
+  Stack,
   Typography,
 } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { pacientesService } from '../services/pacientes';
 import type { Paciente } from '../types';
-import { createPaciente, updatePaciente } from '../services/apiService';
+import {
+  createPaciente,
+  getCandidatosDuplicadoPaciente,
+  updatePaciente,
+  type PacienteDuplicadoCandidato,
+} from '../services/apiService';
 import { getSafeApiErrorMessage } from '../utils/apiError';
 import PacienteDemographicsForm, {
   emptyPacienteFormValues,
@@ -67,12 +75,21 @@ function formToPayload(values: PacienteDemographicsFormValues): Record<string, s
   return payload;
 }
 
+function labelCandidato(p: Paciente): string {
+  const nombre = `${p.apellido || ''} ${p.nombre || ''}`.trim() || `Paciente #${p.id}`;
+  const dni = p.dni ? `DNI ${p.dni}` : 'sin DNI';
+  const fnac = p.fecha_nacimiento ? String(p.fecha_nacimiento).slice(0, 10) : 'sin fecha';
+  return `${nombre} — ${dni} — ${fnac} (ID ${p.id})`;
+}
+
 export interface PacienteFormDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
   paciente?: Paciente | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  /** Si hay duplicado y el usuario elige la ficha existente. */
+  onUseExisting?: (paciente: Paciente) => void;
 }
 
 const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
@@ -81,17 +98,25 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
   paciente,
   onClose,
   onSaved,
+  onUseExisting,
 }) => {
   const [values, setValues] = useState<PacienteDemographicsFormValues>(emptyPacienteFormValues());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsReady, setDetailsReady] = useState(false);
+  const [dupLoading, setDupLoading] = useState(false);
+  const [candidatos, setCandidatos] = useState<PacienteDuplicadoCandidato[]>([]);
+  const [bloqueaAlta, setBloqueaAlta] = useState(false);
+  const [confirmDistinct, setConfirmDistinct] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setError('');
+    setCandidatos([]);
+    setBloqueaAlta(false);
+    setConfirmDistinct(false);
     setDetailsReady(mode === 'create');
     setValues(emptyPacienteFormValues());
     setLoadingDetails(mode === 'edit');
@@ -108,9 +133,77 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
     return () => { cancelled = true; };
   }, [open, mode, paciente]);
 
+  useEffect(() => {
+    if (!open || mode !== 'create') return;
+
+    const dni = values.dni.trim();
+    const nombre = values.nombre.trim();
+    const apellido = values.apellido.trim();
+    const fecha_nacimiento = values.fecha_nacimiento.trim();
+    const canCheckDni = dni.length >= 3;
+    const canCheckIdentidad = Boolean(nombre && apellido && fecha_nacimiento);
+    if (!canCheckDni && !canCheckIdentidad) {
+      setCandidatos([]);
+      setBloqueaAlta(false);
+      setConfirmDistinct(false);
+      setDupLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setDupLoading(true);
+      void getCandidatosDuplicadoPaciente({
+        ...(canCheckDni ? { dni } : {}),
+        ...(canCheckIdentidad ? { nombre, apellido, fecha_nacimiento } : {}),
+      })
+        .then((res) => {
+          if (cancelled) return;
+          setCandidatos(res.resultados || []);
+          setBloqueaAlta(Boolean(res.bloquea_alta));
+          setConfirmDistinct(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // No bloquear el alta si falla el chequeo preventivo; el POST sigue validando DNI.
+          setCandidatos([]);
+          setBloqueaAlta(false);
+        })
+        .finally(() => {
+          if (!cancelled) setDupLoading(false);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    open,
+    mode,
+    values.dni,
+    values.nombre,
+    values.apellido,
+    values.fecha_nacimiento,
+  ]);
+
   const handlePrincipalChange = useCallback((obra_social: string, numero_afiliado: string) => {
     setValues((prev) => ({ ...prev, obra_social, numero_afiliado }));
   }, []);
+
+  const hasIdentidadOnly = useMemo(
+    () => !bloqueaAlta && candidatos.some((c) => c.match === 'identidad'),
+    [bloqueaAlta, candidatos],
+  );
+
+  const createBlocked = mode === 'create' && (bloqueaAlta || (hasIdentidadOnly && !confirmDistinct));
+
+  const handleUseExisting = (p: Paciente) => {
+    if (onUseExisting) {
+      onUseExisting(p);
+    }
+    onClose();
+  };
 
   const handleSave = async () => {
     if (!detailsReady || loadingDetails) return;
@@ -121,6 +214,14 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
     }
     if (!values.nombre.trim() || !values.apellido.trim() || !values.dni.trim()) {
       setError('Nombre, apellido y DNI son obligatorios');
+      return;
+    }
+    if (createBlocked) {
+      setError(
+        bloqueaAlta
+          ? 'Ya existe un paciente con este DNI. Usá la ficha existente.'
+          : 'Hay posibles duplicados. Confirmá que es otra persona o usá la ficha existente.',
+      );
       return;
     }
     setSaving(true);
@@ -158,6 +259,57 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
             {error}
           </Alert>
         )}
+        {mode === 'create' && candidatos.length > 0 && (
+          <Alert
+            severity={bloqueaAlta ? 'error' : 'warning'}
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              {bloqueaAlta
+                ? 'Ya existe un paciente con este DNI. No se puede crear otra ficha.'
+                : 'Posible duplicado: mismo nombre, apellido y fecha de nacimiento.'}
+            </Typography>
+            <Stack spacing={1}>
+              {candidatos.map(({ match, paciente: p }) => (
+                <Box
+                  key={p.id}
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Typography variant="body2">
+                    {labelCandidato(p)}
+                    {match === 'dni' ? ' · DNI coincidente' : ' · Identidad coincidente'}
+                  </Typography>
+                  <Button size="small" variant="outlined" onClick={() => handleUseExisting(p)} disabled={saving}>
+                    Usar esta ficha
+                  </Button>
+                </Box>
+              ))}
+            </Stack>
+            {hasIdentidadOnly && (
+              <FormControlLabel
+                sx={{ mt: 1 }}
+                control={
+                  <Checkbox
+                    checked={confirmDistinct}
+                    onChange={(e) => setConfirmDistinct(e.target.checked)}
+                  />
+                }
+                label="Confirmo que es otra persona (no es un duplicado)"
+              />
+            )}
+          </Alert>
+        )}
+        {mode === 'create' && dupLoading && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Buscando posibles duplicados…
+          </Typography>
+        )}
         {mode === 'edit' && paciente && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             {paciente.nombre} {paciente.apellido} — ID {paciente.id}
@@ -188,7 +340,11 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
         <Button onClick={onClose} disabled={saving}>
           Cancelar
         </Button>
-        <Button variant="contained" disabled={saving || loadingDetails || !detailsReady} onClick={handleSave}>
+        <Button
+          variant="contained"
+          disabled={saving || loadingDetails || !detailsReady || createBlocked || dupLoading}
+          onClick={handleSave}
+        >
           {saving ? 'Guardando…' : mode === 'create' ? 'Crear Paciente' : 'Guardar Cambios'}
         </Button>
       </DialogActions>

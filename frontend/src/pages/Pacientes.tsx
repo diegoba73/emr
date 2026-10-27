@@ -331,6 +331,10 @@ const Pacientes: React.FC = () => {
         paciente={editingPaciente}
         onClose={() => setFormOpen(false)}
         onSaved={handleSaved}
+        onUseExisting={(p) => {
+          setFormOpen(false);
+          openPatient360(p);
+        }}
       />
     </Box>
   );

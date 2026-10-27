@@ -90,7 +90,7 @@ function pathFromDrfNext(nextUrl: string): string {
 export async function getPaginatedAll<T>(
   initialPath: string,
   params?: Record<string, string | number | undefined>,
-  options?: { maxPages?: number }
+  options?: { maxPages?: number; signal?: AbortSignal }
 ): Promise<T[]> {
   const qs = new URLSearchParams();
   if (params) {
@@ -103,13 +103,16 @@ export async function getPaginatedAll<T>(
   const out: T[] = [];
   const seen = new Set<string>();
   const maxPages = options?.maxPages ?? 8;
+  const signal = options?.signal;
   while (path && seen.size < maxPages) {
+    if (signal?.aborted) break;
     if (seen.has(path)) break;
     seen.add(path);
     let res;
     try {
-      res = await apiClient.get<Paginated<T> | T[]>(path);
+      res = await apiClient.get<Paginated<T> | T[]>(path, { signal });
     } catch (err) {
+      if (signal?.aborted) throw err;
       if (out.length) break;
       throw err;
     }
@@ -132,7 +135,7 @@ export async function getPaginatedAll<T>(
 
 // --- Solicitudes LIMS ---
 
-export async function listSolicitudesExamen(params?: {
+export type ListSolicitudesParams = {
   estado?: string;
   numero?: string;
   paciente?: number;
@@ -149,19 +152,40 @@ export async function listSolicitudesExamen(params?: {
   fecha_programada_toma?: string;
   /** hoy = extracciones de hoy o vencidas; programadas = futuras. */
   vista_extraccion?: 'hoy' | 'programadas';
-  /** Sin día: órdenes abiertas (no PENDIENTE / FINALIZADO). */
-  cola?: 'trabajo';
+  /** trabajo = EN_PROCESO…; abiertas = todo excepto FINALIZADO/CANCELADO. */
+  cola?: 'trabajo' | 'abiertas';
   /** Restringe a protocolos LAB-{anio}-… */
   anio?: number;
-}): Promise<SolicitudExamenLims[]> {
+};
+
+export async function listSolicitudesExamen(
+  params?: ListSolicitudesParams,
+  signal?: AbortSignal
+): Promise<SolicitudExamenLims[]> {
   return getPaginatedAll<SolicitudExamenLims>(
     `${LAB}/solicitudes/`,
     {
       ...params,
       page_size: 100,
     },
-    { maxPages: params?.numero ? 1 : 20 }
+    { maxPages: params?.numero ? 1 : 20, signal }
   );
+}
+
+/** Count paginado (page_size=1) sin traer el listado completo. */
+export async function countSolicitudesExamen(
+  params?: ListSolicitudesParams,
+  signal?: AbortSignal
+): Promise<number> {
+  const { data } = await apiClient.get<Paginated<SolicitudExamenLims> | SolicitudExamenLims[]>(
+    `${LAB}/solicitudes/`,
+    {
+      params: { ...params, page_size: 1 },
+      signal,
+    }
+  );
+  if (Array.isArray(data)) return data.length;
+  return typeof data?.count === 'number' ? data.count : (data?.results?.length ?? 0);
 }
 
 export async function getSolicitudExamen(id: number): Promise<SolicitudExamenLims> {

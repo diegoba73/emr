@@ -31,6 +31,31 @@ class TestInformeEntregaToken:
         tok = crear_token_entrega_informe(42)
         assert verificar_token_entrega_informe(tok) == 42
 
+    def test_token_opaco_no_caduca_ni_rota_al_reutilizar(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from laboratorio.informe_entrega_token import asignar_token_entrega
+
+        paciente = Paciente.objects.create(
+            dni="999000111", nombre="Tok", apellido="Perm"
+        )
+        sol = SolicitudExamen.objects.create(
+            paciente=paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="FINALIZADO",
+        )
+        tok = asignar_token_entrega(sol, renovar=True)
+        sol.informe_entrega_token_expira = timezone.now() - timedelta(days=30)
+        sol.save(update_fields=["informe_entrega_token", "informe_entrega_token_expira"])
+
+        assert verificar_token_entrega_informe(tok) == sol.pk
+
+        tok2 = asignar_token_entrega(sol, renovar=False)
+        assert tok2 == tok
+        assert sol.informe_entrega_token_expira is None
+
 
 class TestResolverBaseUrlPublica:
     def test_settings_precede_request_host(self, settings, monkeypatch):

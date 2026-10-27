@@ -67,6 +67,29 @@ export const getPacientes = async (): Promise<Paciente[]> => {
   }
 };
 
+export type PacienteDuplicadoMatch = 'dni' | 'identidad';
+
+export interface PacienteDuplicadoCandidato {
+  match: PacienteDuplicadoMatch;
+  paciente: Paciente;
+}
+
+export interface PacienteDuplicadoCheckResponse {
+  bloquea_alta: boolean;
+  resultados: PacienteDuplicadoCandidato[];
+}
+
+export const getCandidatosDuplicadoPaciente = async (params: {
+  dni?: string;
+  nombre?: string;
+  apellido?: string;
+  fecha_nacimiento?: string;
+  exclude_id?: number;
+}): Promise<PacienteDuplicadoCheckResponse> => {
+  const response = await api.get('/pacientes/candidatos-duplicado/', { params });
+  return response.data as PacienteDuplicadoCheckResponse;
+};
+
 export const createPaciente = async (pacienteData: Partial<Paciente>): Promise<Paciente> => {
   try {
     const response = await api.post('/pacientes/', pacienteData);

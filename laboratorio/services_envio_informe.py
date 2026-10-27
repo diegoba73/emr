@@ -316,7 +316,8 @@ def enviar_informe_solicitud(
 
     base_url = resolver_base_url_publica(public_base_url=public_base_url)
     if base_url:
-        asignar_token_entrega(solicitud, renovar=True)
+        # Reutilizar token si existe: el enlace compartido no debe rotar ni caducar.
+        asignar_token_entrega(solicitud, renovar=False)
         enlace_descarga = construir_url_entrega_informe(base_url, solicitud)
     else:
         enlace_descarga = None

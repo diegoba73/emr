@@ -4,10 +4,15 @@ Mantiene a ``Paciente`` como fuente de verdad de los datos personales del
 paciente. No mueve campos hacia ``User`` ni hacia ``UserProfile``.
 """
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 
 from .models import Paciente, PacienteAfiliacion
 from .texto import normalizar_texto_paciente
 from .afiliaciones import sync_principal_desde_paciente_fields
+
+_DNI_UNIQUE_MSG = (
+    "Ya existe un paciente con este DNI. Usá la ficha existente en lugar de crear otra."
+)
 
 
 def _normalize_name(value):
@@ -125,6 +130,17 @@ class PacienteSerializer(serializers.ModelSerializer):
             "modificado_por",
             "afiliaciones",
         ]
+        extra_kwargs = {
+            "dni": {
+                "validators": [
+                    UniqueValidator(
+                        queryset=Paciente.objects.all(),
+                        message=_DNI_UNIQUE_MSG,
+                    )
+                ],
+                "error_messages": {"unique": _DNI_UNIQUE_MSG},
+            }
+        }
 
     def get_creado_por(self, obj):
         if obj.creado_por_id is None:
@@ -154,7 +170,7 @@ class PacienteSerializer(serializers.ModelSerializer):
     def validate_dni(self, value):
         # Validación mínima y conservadora: rechaza cadenas vacías o solo
         # whitespace. No impone formato específico (DNI/pasaporte/cuit) para no
-        # romper datos preexistentes.
+        # romper datos preexistentes. Unicidad: UniqueValidator (mensaje ES).
         if value is None:
             raise serializers.ValidationError("El DNI es obligatorio.")
         text = str(value).strip()

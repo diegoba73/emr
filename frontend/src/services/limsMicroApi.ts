@@ -47,7 +47,7 @@ export const updateMedioCultivo = (id: number, body: Partial<MedioCultivo>) =>
   apiClient.patch<MedioCultivo>(`${MICRO}/medios/${id}/`, body).then((r) => r.data);
 
 // --- Estudios ---
-export const listEstudiosMicrobiologia = (params?: {
+export type ListEstudiosMicroParams = {
   search?: string;
   /** Protocolo exacto (LAB-YYYY-NNNNN). */
   numero?: string;
@@ -64,9 +64,15 @@ export const listEstudiosMicrobiologia = (params?: {
   esperando_recepcion?: boolean;
   fecha_programada_toma?: string;
   vista_extraccion?: 'hoy' | 'programadas';
-  cola?: 'trabajo';
+  /** trabajo = cola operativa; abiertas = sin VALIDADO/INFORMADO/CANCELADO. */
+  cola?: 'trabajo' | 'abiertas';
   anio?: number;
-}) => {
+};
+
+export const listEstudiosMicrobiologia = (
+  params?: ListEstudiosMicroParams,
+  signal?: AbortSignal
+) => {
   const q: Record<string, string | number | undefined> = { page_size: 100 };
   if (params?.search) q.search = params.search;
   if (params?.numero) q.numero = params.numero;
@@ -82,8 +88,22 @@ export const listEstudiosMicrobiologia = (params?: {
   if (params?.cola) q.cola = params.cola;
   if (params?.anio != null) q.anio = params.anio;
   const maxPages = params?.numero ? 1 : 20;
-  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages });
+  return getPaginatedAll<EstudioMicrobiologia>(`${MICRO}/estudios/`, q, { maxPages, signal });
 };
+
+export async function countEstudiosMicrobiologia(
+  params?: ListEstudiosMicroParams,
+  signal?: AbortSignal
+): Promise<number> {
+  const { data } = await apiClient.get<
+    { count?: number; results?: EstudioMicrobiologia[] } | EstudioMicrobiologia[]
+  >(`${MICRO}/estudios/`, {
+    params: { ...params, page_size: 1 },
+    signal,
+  });
+  if (Array.isArray(data)) return data.length;
+  return typeof data?.count === 'number' ? data.count : (data?.results?.length ?? 0);
+}
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);
 

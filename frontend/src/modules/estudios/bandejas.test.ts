@@ -15,7 +15,7 @@ describe('bandejas A5', () => {
   });
 
   it('nombre de módulo visible', () => {
-    expect(MODULO_ESTUDIOS_LABEL).toBe('Estudios y procedimientos');
+    expect(MODULO_ESTUDIOS_LABEL).toBe('Programación de turnos');
   });
 
   it('resumen vacío tiene las mismas claves', () => {

@@ -78,13 +78,14 @@ def test_login_rejects_other_roles(rol):
     get_user_model().objects.create_user(username='role',password='test-password',rol=rol)
     assert APIClient().post('/api/movil/login/',{'username':'role','password':'test-password'}).status_code in (401,403)
 
-@pytest.mark.parametrize('rol',['secretaria','laboratorio','bioquimico'])
+@pytest.mark.parametrize('rol',['secretaria','secretaria_lab','laboratorio','bioquimico'])
 def test_login_accepts_staff_clinical_roles(rol):
     cache.clear()
     get_user_model().objects.create_user(username=f'ok-{rol}',password='test-password',rol=rol)
     r = APIClient().post('/api/movil/login/',{'username':f'ok-{rol}','password':'test-password'},format='json')
     assert r.status_code == 200, r.data
     assert r.data['user']['rol'] == rol
+    # Informes LIMS: ambas secretarías + lab/bio.
     assert r.data['user']['puede_informes'] is True
 
 def test_push_registration_reports_service_disabled(data,settings):
@@ -182,3 +183,29 @@ def test_public_institution_identity(settings):
     assert r.data=={'code':'CLINICA-B','name':'Clínica B'}
     settings.MOBILE_INSTITUTION_CODE=''
     assert APIClient().get('/api/movil/institucion/').status_code==503
+
+def test_llamado_activo_polling(data):
+    from recepcion.models import LlegadaRecepcion, PuestoRecepcion
+    c, u, _d, t, *_ = data
+    assert c.get('/api/movil/llamado-activo/').data['activo'] is False
+    puesto, _ = PuestoRecepcion.objects.get_or_create(
+        codigo='test-puesto',
+        defaults={'nombre': 'Puesto test', 'activo': True, 'orden': 1},
+    )
+    LlegadaRecepcion.objects.create(
+        paciente=t.paciente,
+        puesto=puesto,
+        turno=t,
+        tipo_actividad='CONSULTA',
+        estado_flujo='LLAMADO',
+        fecha=timezone.localdate(),
+        checkin_en=timezone.now(),
+        llamado_en=timezone.now(),
+        destino_label='Consultorio 1',
+        numero_orden_dia=1,
+    )
+    r = c.get('/api/movil/llamado-activo/')
+    assert r.status_code == 200
+    assert r.data['activo'] is True
+    assert r.data['destino'] == 'Consultorio 1'
+    assert r.data['tipo'] == 'llamado_medico'

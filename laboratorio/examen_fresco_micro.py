@@ -120,8 +120,9 @@ CULTIVO_A_SECCIONES: dict[str, tuple[SeccionTecnica, ...]] = {
     "LIQUIDO_SINOVIAL": _secciones(
         ("fresco", CAMPOS_FRESCO_LIQUIDO), ("gram", CAMPOS_GRAM)
     ),
-    # Gram (sin fresco): esputo, heridas, faríngeo, hemocultivo.
+    # Gram (sin fresco): esputo, aspirado traqueal, heridas, faríngeo, hemocultivo.
     "ESPUTO": _secciones(("gram", CAMPOS_GRAM)),
+    "ASPIRADO_TRAQUEAL_BRONQUIAL": _secciones(("gram", CAMPOS_GRAM)),
     "HERIDA_ABSCESO": _secciones(("gram", CAMPOS_GRAM)),
     "PIEL_PARTES_BLANDAS": _secciones(("gram", CAMPOS_GRAM)),
     "NASOFARINGEO": _secciones(("gram", CAMPOS_GRAM)),

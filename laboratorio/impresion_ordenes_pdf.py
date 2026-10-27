@@ -186,6 +186,8 @@ class DatosPedidoPapel:
     sexo: str = ""
     edad: int | None = None
     antecedentes: str = ""
+    # Solo se completa para atención de guardia (obra social / elevación).
+    atencion: str = ""
 
 
 @dataclass
@@ -318,6 +320,32 @@ def _fecha_extraccion_estudio(estudio: EstudioMicrobiologia) -> datetime | date 
     return None
 
 
+def _atencion_para_impresion(obj) -> str:
+    """
+    Texto de atención para el pedido papel.
+
+    Solo se imprime cuando el pedido es de GUARDIA (necesario al elevar a obra social).
+    """
+    from laboratorio.origen_solicitud import GUARDIA, _consulta_es_guardia
+
+    origen = (getattr(obj, "origen_solicitud", None) or "").strip()
+    if origen == GUARDIA:
+        return "GUARDIA"
+
+    sol = getattr(obj, "solicitud", None)
+    if sol is not None:
+        origen_sol = (getattr(sol, "origen_solicitud", None) or "").strip()
+        if origen_sol == GUARDIA:
+            return "GUARDIA"
+
+    consulta = getattr(obj, "consulta_hc", None)
+    if consulta is None and sol is not None:
+        consulta = getattr(sol, "consulta_hc", None)
+    if _consulta_es_guardia(consulta):
+        return "GUARDIA"
+    return ""
+
+
 def _datos_cabecera(obj, *, medico_externo: str = "") -> DatosPedidoPapel:
     paciente = getattr(obj, "paciente", None)
     nombre, dni = _fmt_paciente(paciente)
@@ -336,6 +364,7 @@ def _datos_cabecera(obj, *, medico_externo: str = "") -> DatosPedidoPapel:
         sexo=(getattr(paciente, "sexo", None) or "").strip().upper(),
         edad=getattr(paciente, "edad", None) if paciente is not None else None,
         antecedentes=(getattr(paciente, "antecedentes_personales", None) or "").strip(),
+        atencion=_atencion_para_impresion(obj),
     )
 
 
@@ -694,6 +723,15 @@ def _pie_firma(c: rl_canvas.Canvas, top_mm: float, medico: str, fecha: str) -> N
         c.setFillColor(COLOR_TEXTO)
 
 
+def _dibujar_atencion_si_guardia(
+    c: rl_canvas.Canvas, d: DatosPedidoPapel, *, x: float, top_mm: float, max_x: float
+) -> None:
+    """Imprime Atención: GUARDIA solo cuando corresponde (obra social)."""
+    if not (d.atencion or "").strip():
+        return
+    _campo(c, x, top_mm, "Atención:", d.atencion, max_x)
+
+
 def _dibujar_pedido_clinico(c: rl_canvas.Canvas, ped: PedidoClinicoPapel) -> None:
     """Lista solo lo solicitado; reserva Observaciones + Firma/Fecha abajo."""
     d = ped.datos
@@ -703,7 +741,9 @@ def _dibujar_pedido_clinico(c: rl_canvas.Canvas, ped: PedidoClinicoPapel) -> Non
     _campo(c, col2, 33, "DNI:", d.dni, DERECHA_X)
     _campo(c, MARGEN_X, 45, "Obra Social:", d.obra_social, col2 - 2 * mm)
     _campo(c, col2, 45, "N°Afiliado:", d.afiliado, DERECHA_X)
-    _campo(c, MARGEN_X, 51, "Diagnóstico:", d.diagnostico, DERECHA_X)
+    dx_max = col2 - 2 * mm if (d.atencion or "").strip() else DERECHA_X
+    _campo(c, MARGEN_X, 51, "Diagnóstico:", d.diagnostico, dx_max)
+    _dibujar_atencion_si_guardia(c, d, x=col2, top_mm=51, max_x=DERECHA_X)
 
     # Zonas fijas (mm desde arriba): lista → observaciones → firma.
     firma_top = 268.0
@@ -771,7 +811,11 @@ def _dibujar_pedido_micro(c: rl_canvas.Canvas, ped: PedidoMicroPapel) -> None:
     _campo(c, col2, 36, "DNI:", d.dni, col3 - 2 * mm)
     _campo(c, col3, 36, "N° Afiliado:", d.afiliado, DERECHA_X)
     _campo(c, MARGEN_X, 49, "Obra Social:", d.obra_social, col2 - 2 * mm)
-    _campo(c, col2, 49, "Diagnóstico:", d.diagnostico, DERECHA_X)
+    if (d.atencion or "").strip():
+        _campo(c, col2, 49, "Diagnóstico:", d.diagnostico, col3 - 2 * mm)
+        _dibujar_atencion_si_guardia(c, d, x=col3, top_mm=49, max_x=DERECHA_X)
+    else:
+        _campo(c, col2, 49, "Diagnóstico:", d.diagnostico, DERECHA_X)
     _campo(c, MARGEN_X, 63, "Tratamiento iniciado: Si / No", "", DERECHA_X)
     _campo(c, MARGEN_X, 77, "Antibióticos:", "", DERECHA_X)
 
@@ -905,6 +949,8 @@ def _dibujar_probnp_solicitud(c: rl_canvas.Canvas, d: DatosPedidoPapel) -> None:
     _campo_adj(c, 92, "Nombre y apellido:", d.paciente)
     _campo_adj(c, 105, "DNI:", d.dni)
     _campo_adj(c, 118, "OS:", d.obra_social)
+    if (d.atencion or "").strip():
+        _campo_adj(c, 129, "Atención:", d.atencion)
     c.setFont(FONT_B, 19)
     c.drawCentredString(PAGE_W / 2, _y(142), "SOLICITO proBNP")
     _firma_y_sello_adj(c, 182)
@@ -918,6 +964,8 @@ def _dibujar_probnp_justificacion(c: rl_canvas.Canvas, d: DatosPedidoPapel) -> N
     _campo_adj(c, 86, "Nombre y apellido:", d.paciente)
     _campo_adj(c, 99, "DNI:", d.dni)
     _campo_adj(c, 112, "OS:", d.obra_social)
+    if (d.atencion or "").strip():
+        _campo_adj(c, 122, "Atención:", d.atencion)
 
     y = _y(129)
     piezas = [("Paciente ", ""), ("femenina", "F"), ("/", ""), ("masculino", "M"),
@@ -966,7 +1014,9 @@ def _dibujar_resena(c: rl_canvas.Canvas, ped: PedidoClinicoPapel, texto: str) ->
     _campo(c, col2, 38, "DNI:", d.dni, DERECHA_X)
     _campo(c, MARGEN_X, 50, "Obra Social:", d.obra_social, col2 - 2 * mm)
     _campo(c, col2, 50, "N°Afiliado:", d.afiliado, DERECHA_X)
-    _campo(c, MARGEN_X, 62, "Diagnóstico:", d.diagnostico, DERECHA_X)
+    dx_max = col2 - 2 * mm if (d.atencion or "").strip() else DERECHA_X
+    _campo(c, MARGEN_X, 62, "Diagnóstico:", d.diagnostico, dx_max)
+    _dibujar_atencion_si_guardia(c, d, x=col2, top_mm=62, max_x=DERECHA_X)
 
     c.setFillColor(COLOR_TEXTO)
     c.setFont(FONT, 11.5)

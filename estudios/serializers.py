@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from rest_framework import serializers
+from usuarios.roles import ROLES_SECRETARIA_INSTITUCIONAL
 
 from archivos_medicos.models import ArchivoMedico
 from catalogos.models import CirugiaAbordaje, CirugiaEspecialidad, CirugiaProcedimiento
@@ -614,7 +615,7 @@ class InformeEstudioComplementarioSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
         rol = str(getattr(user, 'rol', '') or '').lower() if user else ''
-        if rol in ('secretaria', 'enfermeria'):
+        if rol == 'enfermeria' or rol in ROLES_SECRETARIA_INSTITUCIONAL:
             validado = (
                 instance.estado == InformeEstudioComplementario.EstadoInforme.VALIDADO
                 and instance.es_vigente

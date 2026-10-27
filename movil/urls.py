@@ -1,5 +1,14 @@
 from django.urls import path
-from .views import InstitucionMovil, LoginMovil, MiPerfil, LogoutMovil, PushMovil, TurnosMovil, MedicosMovil
+from .views import (
+    InstitucionMovil,
+    LoginMovil,
+    MiPerfil,
+    LogoutMovil,
+    PushMovil,
+    LlamadoActivoMovil,
+    TurnosMovil,
+    MedicosMovil,
+)
 from .views_informes import (
     InformesMovil,
     InformeMovilDetalle,
@@ -23,6 +32,7 @@ urlpatterns = [
     path('me/', MiPerfil.as_view()),
     path('logout/', LogoutMovil.as_view()),
     path('push/', PushMovil.as_view()),
+    path('llamado-activo/', LlamadoActivoMovil.as_view()),
     path('medicos/', MedicosMovil.as_view({'get': 'list'})),
     path('medicos/<int:pk>/slots/', MedicosMovil.as_view({'get': 'slots'})),
     path('turnos/', TurnosMovil.as_view({'get': 'list'})),

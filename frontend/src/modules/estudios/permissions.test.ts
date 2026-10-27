@@ -15,7 +15,7 @@ const user = (partial: Partial<User>): User =>
   }) as User;
 
 describe('canAccessEstudiosModule', () => {
-  it('permite médico, secretaría, enfermería, paciente y admin', () => {
+  it('permite médico, secretaría institucional, enfermería, paciente y admin', () => {
     expect(canAccessEstudiosModule(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canAccessEstudiosModule(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canAccessEstudiosModule(user({ rol: 'ENFERMERIA' }))).toBe(true);
@@ -23,7 +23,8 @@ describe('canAccessEstudiosModule', () => {
     expect(canAccessEstudiosModule(user({ rol: 'ADMIN' }))).toBe(true);
   });
 
-  it('bloquea laboratorio y bioquímico (usan LIMS)', () => {
+  it('bloquea secretaría laboratorio, laboratorio y bioquímico', () => {
+    expect(canAccessEstudiosModule(user({ rol: 'SECRETARIA_LAB' }))).toBe(false);
     expect(canAccessEstudiosModule(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canAccessEstudiosModule(user({ rol: 'BIOQUIMICO' }))).toBe(false);
     expect(canAccessEstudiosModule(user({ rol: 'BIOQUIMICO', is_staff: true }))).toBe(false);
@@ -41,7 +42,7 @@ it('administrador puede descargar un informe borrador para revisión', () => {
 });
 
 
-it('secretaría opera el módulo: descarga/envío de informe validado vigente', () => {
+it('secretaría institucional opera el módulo: descarga/envío de informe validado vigente', () => {
   const secretaria = user({ rol: 'SECRETARIA' });
   for (const estado of ['VALIDADO', 'ENTREGADO', 'INFORMADO']) {
     const estudio = { estado } as any;

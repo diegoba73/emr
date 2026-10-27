@@ -251,10 +251,37 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
   );
   const focusOrder = useMemo(() => buildCargaFocusOrder(grupos, tiposExamenMap), [grupos, tiposExamenMap]);
   const guardarBtnRef = useRef<HTMLButtonElement>(null);
+  const validarBtnRef = useRef<HTMLButtonElement>(null);
+  /** Tras guardar (o Enter en Guardar), saltar a Validar si la orden queda lista. */
+  const pendingFocusValidarRef = useRef(false);
   const [focusedSysmexKey, setFocusedSysmexKey] = useState<string | null>(null);
   const indicesManualRef = useRef<Set<number>>(new Set());
   /** Filas que el operador vació a propósito (no rellenar con Zeisler/autofill). */
   const clearedIdsRef = useRef<Set<number>>(new Set());
+
+  const flushFocusValidar = useCallback(() => {
+    if (!pendingFocusValidarRef.current) return;
+    if (!mostrarValidar) return;
+    if (validarDeshabilitado) {
+      pendingFocusValidarRef.current = false;
+      return;
+    }
+    if (validando || saving) return;
+    pendingFocusValidarRef.current = false;
+    requestAnimationFrame(() => {
+      validarBtnRef.current?.focus();
+    });
+  }, [mostrarValidar, validarDeshabilitado, validando, saving]);
+
+  /** Marca foco pendiente; si el botón ya está montado y habilitado, enfoca ya. */
+  const requestFocusValidar = useCallback(() => {
+    pendingFocusValidarRef.current = true;
+    flushFocusValidar();
+  }, [flushFocusValidar]);
+
+  useEffect(() => {
+    flushFocusValidar();
+  }, [flushFocusValidar, orden.estado]);
 
   const formulaProgress = useMemo(
     () =>
@@ -620,6 +647,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       toast.success(
         'Los resultados de la orden ya están completos, ya se pueden validar.'
       );
+      if (orden.estado === 'LISTO_PARA_VALIDAR') {
+        requestFocusValidar();
+      }
       return;
     }
     // Ya hay valores pero nada dirty: no mostrar error engañoso de “ingresá un valor”.
@@ -659,6 +689,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         toast.success(
           'Los resultados de la orden ya están completos, ya se pueden validar.'
         );
+        if (orden.estado === 'LISTO_PARA_VALIDAR') {
+          requestFocusValidar();
+        }
         return;
       }
       setSaving(true);
@@ -676,6 +709,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           );
         } else {
           toast.success('Avance guardado');
+        }
+        if (updated.estado === 'LISTO_PARA_VALIDAR') {
+          requestFocusValidar();
         }
         onGuardado(updated);
       } catch (e) {
@@ -739,6 +775,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         toast.success(
           'Los resultados de la orden ya están completos, ya se pueden validar.'
         );
+        if (orden.estado === 'LISTO_PARA_VALIDAR') {
+          requestFocusValidar();
+        }
         return;
       }
       const hayValorGuardado = resultados.some((r) => resultadoTieneValorGuardado(r));
@@ -802,6 +841,9 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         );
       } else {
         toast.success('Avance guardado');
+      }
+      if (updated.estado === 'LISTO_PARA_VALIDAR') {
+        requestFocusValidar();
       }
       for (const r of filasPayload) {
         clearedIdsRef.current.delete(r.id);
@@ -1453,10 +1495,22 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
               <Tooltip title={validarDeshabilitado ? validarDeshabilitadoMotivo || '' : ''}>
                 <span>
                   <Button
+                    ref={validarBtnRef}
                     variant="contained"
                     color="success"
                     disabled={saving || validando || validarDeshabilitado}
                     onClick={() => void onValidar()}
+                    onKeyDown={(ev) => {
+                      if (
+                        ev.key === 'Enter' &&
+                        !saving &&
+                        !validando &&
+                        !validarDeshabilitado
+                      ) {
+                        ev.preventDefault();
+                        void onValidar();
+                      }
+                    }}
                   >
                     {validando ? 'Validando…' : 'Validar y liberar'}
                   </Button>

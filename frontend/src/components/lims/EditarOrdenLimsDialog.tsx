@@ -440,6 +440,41 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                 setNuevoPacienteSaving(true);
                 setNuevoPacienteError('');
                 try {
+                  const dup = await apiService.getCandidatosDuplicadoPaciente({
+                    dni,
+                    nombre,
+                    apellido,
+                    fecha_nacimiento,
+                  });
+                  if (dup.bloquea_alta && dup.resultados[0]?.paciente) {
+                    const existing = dup.resultados[0].paciente;
+                    setPaciente(existing);
+                    setPacienteQuery(formatPacienteLabel(existing));
+                    setPacienteOptions((prev) =>
+                      prev.some((p) => p.id === existing.id) ? prev : [existing, ...prev]
+                    );
+                    setOpenNuevoPaciente(false);
+                    toast.success('Ya existía un paciente con ese DNI; se usó la ficha existente.');
+                    return;
+                  }
+                  if (dup.resultados.some((r) => r.match === 'identidad')) {
+                    const ok = window.confirm(
+                      'Hay un paciente con el mismo nombre, apellido y fecha de nacimiento. ¿Crear igual otra ficha?',
+                    );
+                    if (!ok) {
+                      const existing = dup.resultados[0]?.paciente;
+                      if (existing) {
+                        setPaciente(existing);
+                        setPacienteQuery(formatPacienteLabel(existing));
+                        setPacienteOptions((prev) =>
+                          prev.some((p) => p.id === existing.id) ? prev : [existing, ...prev]
+                        );
+                        setOpenNuevoPaciente(false);
+                        toast.success('Se usó la ficha existente.');
+                      }
+                      return;
+                    }
+                  }
                   const created = await apiService.createPaciente({
                     apellido,
                     nombre,

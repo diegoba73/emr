@@ -34,10 +34,11 @@ def test_medico_vinculado_crea(client, medico, paciente, tipo_estudio, atencion_
 
 
 @pytest.mark.django_db
-def test_medico_ajeno_no_crea(client, medico_ajeno, paciente, tipo_estudio):
+def test_medico_puede_crear_sin_vinculo_previo(client, medico_ajeno, paciente, tipo_estudio):
+    """Médico opera el módulo como secretaría: no exige vínculo clínico previo."""
     client.force_authenticate(user=medico_ajeno.user)
     r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico_ajeno), format='json')
-    assert r.status_code in (403, 400)
+    assert r.status_code == 201
 
 
 @pytest.mark.django_db

@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from .models import (
     TipoMuestra,
@@ -653,6 +654,52 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             metadata={"view": "SolicitudExamenViewSet.perform_destroy"},
         )
 
+
+    def filter_queryset(self, queryset):
+        """Búsqueda listado optimizada (DNI / prefijos) sin OR amplio de SearchFilter."""
+        search = (self.request.query_params.get("search") or "").strip()
+        if search and getattr(self, "action", None) == "list":
+            queryset = self._busqueda_listado_rapida(queryset, search)
+            for backend_cls in self.filter_backends:
+                if backend_cls is filters.SearchFilter:
+                    continue
+                queryset = backend_cls().filter_queryset(self.request, queryset, self)
+            return queryset
+        return super().filter_queryset(queryset)
+
+    @staticmethod
+    def _busqueda_listado_rapida(queryset, search: str):
+        """
+        Preferir predicados index-friendly:
+        - documento (dígitos) → dni__istartswith
+        - un token → apellido/nombre/dni prefix + numero icontains
+        - varios tokens → apellido+nombre
+        """
+        raw = (search or "").strip()
+        if not raw:
+            return queryset
+        digits = "".join(c for c in raw if c.isdigit())
+        # DNI / documento (mayoría dígitos)
+        if digits and len(digits) >= 4 and sum(c.isdigit() for c in raw) >= max(1, len(raw) - 2):
+            return queryset.filter(paciente__dni__istartswith=digits)
+
+        parts = raw.split()
+        if len(parts) >= 2:
+            a, b = parts[0], parts[1]
+            return queryset.filter(
+                Q(paciente__apellido__istartswith=a, paciente__nombre__istartswith=b)
+                | Q(paciente__apellido__istartswith=b, paciente__nombre__istartswith=a)
+                | Q(numero__icontains=raw)
+            )
+
+        token = parts[0]
+        return queryset.filter(
+            Q(paciente__apellido__istartswith=token)
+            | Q(paciente__nombre__istartswith=token)
+            | Q(paciente__dni__istartswith=token)
+            | Q(numero__icontains=token)
+        )
+
     def get_queryset(self):
         """
         Lectura por rol.
@@ -664,6 +711,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         - fecha: Filtro por fecha de solicitud (creación)
         - fecha_muestra: Órdenes con muestra tomada ese día (excluye PENDIENTE)
         - cola=trabajo: EN_PROCESO / INFORMADO_PARCIAL / LISTO_PARA_VALIDAR (sin día)
+        - cola=abiertas: excluye FINALIZADO y CANCELADO (sin día)
         """
         listado = getattr(self, 'action', None) == 'list'
         if listado:
@@ -686,6 +734,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         else:
             queryset = super().get_queryset()
         queryset = self._restringir_solicitudes_por_rol(queryset)
+        queryset = self._restringir_solicitudes_por_sede(queryset)
         return self._aplicar_filtros_listado(queryset)
 
     def _restringir_solicitudes_por_rol(self, queryset):
@@ -707,17 +756,29 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 return queryset.none()
         return queryset.none()
 
+    def _restringir_solicitudes_por_sede(self, queryset):
+        from usuarios.sedes import filtro_origen_lims, sedes_efectivas
+
+        origenes = filtro_origen_lims(sedes_efectivas(self.request.user))
+        if origenes is None:
+            return queryset
+        return queryset.filter(origen_solicitud__in=origenes)
+
     def _aplicar_filtros_listado(self, queryset):
         numero = self.request.query_params.get('numero')
         if numero:
             queryset = queryset.filter(numero=numero)
 
-        # Cola de trabajo: abiertas (no PENDIENTE ni FINALIZADO), sin filtrar por día.
+        # Colas sin filtrar por día.
         cola = (self.request.query_params.get('cola') or '').strip().lower()
         if cola in ('trabajo', 'pendientes_carga', 'pendientes'):
+            # Abiertas con muestra en curso (no PENDIENTE ni FINALIZADO).
             queryset = queryset.filter(
                 estado__in=('EN_PROCESO', 'INFORMADO_PARCIAL', 'LISTO_PARA_VALIDAR')
             )
+        elif cola in ('abiertas', 'sin_finalizar'):
+            # Todo lo no cerrado (incluye PENDIENTE).
+            queryset = queryset.exclude(estado__in=('FINALIZADO', 'CANCELADO'))
 
         anio = (self.request.query_params.get('anio') or '').strip()
         if anio:
@@ -1313,7 +1374,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             solicitud = SolicitudExamen.objects.select_related('paciente').get(pk=solicitud_id)
         except InformeEntregaTokenError:
             return Response(
-                {'error': 'Enlace de informe inválido o expirado.'},
+                {'error': 'Enlace de informe inválido.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
         except SolicitudExamen.DoesNotExist:

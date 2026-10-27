@@ -69,6 +69,7 @@ const CULTIVO_A_SECCIONES: Record<string, readonly SeccionExamenDirecto[]> = {
   LIQUIDO_PERITONEAL: [sec('fresco', CAMPOS_FRESCO_LIQUIDO), sec('gram', CAMPOS_GRAM)],
   LIQUIDO_SINOVIAL: [sec('fresco', CAMPOS_FRESCO_LIQUIDO), sec('gram', CAMPOS_GRAM)],
   ESPUTO: [sec('gram', CAMPOS_GRAM)],
+  ASPIRADO_TRAQUEAL_BRONQUIAL: [sec('gram', CAMPOS_GRAM)],
   HERIDA_ABSCESO: [sec('gram', CAMPOS_GRAM)],
   PIEL_PARTES_BLANDAS: [sec('gram', CAMPOS_GRAM)],
   NASOFARINGEO: [sec('gram', CAMPOS_GRAM)],

@@ -33,7 +33,7 @@ def test_laboratorio_sin_acceso(client, db, estudio_solicitado):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("rol", ["secretaria", "enfermeria", "admin"])
+@pytest.mark.parametrize("rol", ["secretaria", "enfermeria", "admin", "medico"])
 def test_lectura_estudio_sin_vinculo(client, estudio_solicitado, rol):
     from usuarios.models import User
     user = User.objects.create_user(username=f"estudio_global_{rol}", password="x", rol=rol)

@@ -202,13 +202,10 @@ def test_medico_realizador_puede_validar_informe(
 
 
 @pytest.mark.django_db
-def test_medico_ajeno_no_puede_validar_informe(
-    client, medico, medico_ajeno, paciente, tipo_estudio, atencion_vinculada, recurso,
+def test_medico_puede_validar_y_cargar_aunque_no_sea_realizador(
+    client, medico, medico_ajeno, paciente, tipo_estudio, atencion_vinculada,
 ):
-    from django.utils import timezone
-    from datetime import timedelta
-    from turnos.models import Atencion, Turno
-
+    """Médico = operación completa del módulo (como secretaría), no solo realizador."""
     client.force_authenticate(user=medico.user)
     r = client.post(BASE, _payload_crear(paciente, tipo_estudio, medico), format='json')
     eid = r.data['id']
@@ -217,40 +214,18 @@ def test_medico_ajeno_no_puede_validar_informe(
     iid = r.data['id']
     client.post(f'{BASE}{eid}/informes/{iid}/emitir/')
 
-    # Vínculo clínico para que el médico ajeno vea el estudio pero no sea realizador
-    turno = Turno.objects.create(
-        paciente=paciente,
-        medico=medico_ajeno,
-        recurso=recurso,
-        fecha_hora_inicio=timezone.now(),
-        fecha_hora_fin=timezone.now() + timedelta(minutes=30),
-        estado='CONFIRMADO',
-    )
-    Atencion.objects.create(
-        turno=turno,
-        paciente=paciente,
-        medico_principal=medico_ajeno,
-        tipo_atencion='CONSULTORIO',
-        tipo_intervencion='CONSULTA',
-        estado_clinico='ABIERTA',
-    )
-
     client.force_authenticate(user=medico_ajeno.user)
-    r = client.post(f'{BASE}{eid}/informes/{iid}/validar/')
-    assert r.status_code == 403
-
-    client.force_authenticate(user=medico.user)
     r = client.post(f'{BASE}{eid}/informes/{iid}/validar/')
     assert r.status_code == 200
 
     content = SimpleUploadedFile('x.pdf', b'%PDF-1.4', content_type='application/pdf')
-    client.force_authenticate(user=medico_ajeno.user)
+    # Tras VALIDADO, médico (como secretaría) sigue pudiendo operar contenido.
     r = client.post(
         f'{BASE}{eid}/subir-archivo/',
         {'archivo': content, 'titulo': 'X', 'tipo_archivo': 'PDF'},
         format='multipart',
     )
-    assert r.status_code == 403
+    assert r.status_code in (200, 201)
 
 
 @pytest.mark.django_db

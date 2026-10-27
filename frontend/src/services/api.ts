@@ -357,6 +357,20 @@ class ApiService {
     }
   }
 
+  async getCandidatosDuplicadoPaciente(params: {
+    dni?: string;
+    nombre?: string;
+    apellido?: string;
+    fecha_nacimiento?: string;
+    exclude_id?: number;
+  }): Promise<{
+    bloquea_alta: boolean;
+    resultados: Array<{ match: 'dni' | 'identidad'; paciente: Paciente }>;
+  }> {
+    const response = await this.api.get('/pacientes/candidatos-duplicado/', { params });
+    return response.data;
+  }
+
   // Médicos
   async getMedicos(): Promise<ApiResponse<Medico>> {
     const response: AxiosResponse<ApiResponse<Medico>> = await this.api.get('/medicos/');

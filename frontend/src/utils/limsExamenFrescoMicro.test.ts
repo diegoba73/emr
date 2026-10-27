@@ -34,6 +34,9 @@ describe('limsExamenFrescoMicro', () => {
     expect(seccionesExamenDirecto({ tipo_estudio: 'ESPUTO' }).map((s) => s.tecnica)).toEqual([
       'gram',
     ]);
+    expect(
+      seccionesExamenDirecto({ tipo_estudio: 'ASPIRADO_TRAQUEAL_BRONQUIAL' }).map((s) => s.tecnica)
+    ).toEqual(['gram']);
     expect(seccionesExamenDirecto({ tipo_estudio: 'LCR' }).map((s) => s.tecnica)).toEqual([
       'fresco',
       'gram',

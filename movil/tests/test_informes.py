@@ -65,7 +65,7 @@ def test_paciente_ve_solo_sus_informes_finalizados():
 
 
 def test_secretaria_no_lista_parcial():
-    c, _ = _login('secretaria', 'sec-inf')
+    c, _ = _login('secretaria_lab', 'sec-inf')
     p = Paciente.objects.create(nombre='Pac', apellido='Sec', dni='INF-3')
     sol = _orden(p, 'INFORMADO_PARCIAL')
     listed = c.get('/api/movil/informes/')

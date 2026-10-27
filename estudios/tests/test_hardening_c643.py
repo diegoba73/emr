@@ -128,7 +128,7 @@ def test_medico_vinculado_descarga_pdf_informe(
 
 
 @pytest.mark.django_db
-def test_medico_ajeno_no_descarga_pdf_informe(
+def test_medico_sin_vinculo_descarga_pdf_informe(
     client, medico_ajeno, estudio_solicitado, admin_user,
 ):
     client.force_authenticate(user=admin_user)
@@ -138,7 +138,7 @@ def test_medico_ajeno_no_descarga_pdf_informe(
     _adjuntar_pdf(informe)
     client.force_authenticate(user=medico_ajeno.user)
     r = client.get(f'{BASE}{eid}/informes/{iid}/download-pdf/')
-    assert r.status_code in (403, 404)
+    assert r.status_code == 200
 
 
 @pytest.mark.django_db

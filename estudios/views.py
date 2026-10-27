@@ -13,8 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from archivos_medicos.access import paciente_ids_vinculados_a_medico
-from usuarios.roles import ROLES_ESTUDIO_COMPLEMENTARIO
+from usuarios.roles import ROLES_ESTUDIO_COMPLEMENTARIO, ROLES_SECRETARIA_INSTITUCIONAL
 
 from .access import (
     usuario_puede_asignar_turno_estudio,
@@ -127,7 +126,8 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         if rol in ROLES_ESTUDIO_COMPLEMENTARIO:
             return qs
 
-        if rol == 'secretaria':
+        if rol == 'medico' or rol in ROLES_SECRETARIA_INSTITUCIONAL:
+            # Médico: misma cola institucional que secretaría (cargar/operar cualquier estudio).
             return qs
 
         if rol == 'enfermeria':
@@ -135,13 +135,6 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
 
         if rol == 'laboratorio':
             return qs.none()
-
-        if rol == 'medico':
-            try:
-                ids = paciente_ids_vinculados_a_medico(user.medico)
-                return qs.filter(paciente_id__in=ids)
-            except Exception:
-                return qs.none()
 
         if rol == 'paciente':
             try:

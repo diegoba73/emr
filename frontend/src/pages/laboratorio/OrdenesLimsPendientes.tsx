@@ -92,8 +92,8 @@ const OrdenesLimsPendientes: React.FC = () => {
     [searchParams, setSearchParams]
   );
 
-  const load = useCallback(async () => {
-    if (!allowed) return;
+  const load = useCallback(async (): Promise<PendientePedidoRow[] | null> => {
+    if (!allowed) return [];
     setLoading(true);
     try {
       const labs = await listSolicitudesExamen({
@@ -113,13 +113,24 @@ const OrdenesLimsPendientes: React.FC = () => {
         ...labs.map(mapLabToPendiente),
         ...micros.map(mapMicroToPendiente),
       ]);
-      setRows(await attachIqcStatusToRows(merged));
+      const nextRows = await attachIqcStatusToRows(merged);
+      setRows(nextRows);
+      return nextRows;
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes));
+      return null;
     } finally {
       setLoading(false);
     }
   }, [allowed, vistaExtraccion]);
+
+  /** Tras imprimir etiquetas: quedarse en «Sin etiquetas» si aún hay; si no, pasar a recepción. */
+  const afterEtiquetasImpresas = useCallback(async () => {
+    const nextRows = await load();
+    if (nextRows && !nextRows.some((r) => r.sin_etiquetas)) {
+      goTab('esperando_recepcion');
+    }
+  }, [load, goTab]);
 
   useEffect(() => {
     load();
@@ -327,10 +338,7 @@ const OrdenesLimsPendientes: React.FC = () => {
           onClose={() => setOrdenEtiquetas(null)}
           onSuccess={() => {
             // No cerrar: dejar el diálogo abierto para «Imprimir talón».
-            void (async () => {
-              await load();
-              goTab('esperando_recepcion');
-            })();
+            void afterEtiquetasImpresas();
           }}
         />
       )}
@@ -359,8 +367,7 @@ const OrdenesLimsPendientes: React.FC = () => {
           onClose={() => setMicroImprimir(null)}
           onEtiquetasOk={async () => {
             // No cerrar: dejar «Imprimir talón» disponible (Cerrar desmonta el diálogo).
-            await load();
-            goTab('esperando_recepcion');
+            await afterEtiquetasImpresas();
           }}
         />
       )}

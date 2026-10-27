@@ -34,24 +34,15 @@ import {
 import { EXAMENES_CUBIERTOS_POR_PANEL } from '../../modules/laboratorio/solicitudAnalisisSelectionRules';
 import type { MicroPedidoItem } from './SolicitudMicrobiologiaForm';
 import { sugerirMuestraPorCultivo } from '../../utils/limsMicroUx';
-import { esTipoMuestraSangrePedido } from '../../utils/limsMuestraSangre';
-
-function materialEsSangre(mat: MaterialPedidoLims): boolean {
-  return mat.ui_preset === 'sangre' || mat.codigo === 'SANGRE';
-}
-
-/** True si el examen pertenece al material de pedido (Sangre = familia sangre/suero/plasma). */
-function examenPerteneceAMaterial(
-  examen: LimsTipoExamen,
-  mat: MaterialPedidoLims
-): boolean {
-  const m = (examen.tipo_muestra_codigo || '').toUpperCase();
-  if (materialEsSangre(mat)) {
-    return esTipoMuestraSangrePedido(m, examen.tipo_muestra_nombre);
-  }
-  const muestraSet = new Set(mat.tipo_muestra_codigos.map((c) => c.toUpperCase()));
-  return muestraSet.has(m);
-}
+import {
+  agregarCatalogOptionsForMaterial,
+  chipsAgregadosCatalogForMaterial,
+  examenPerteneceAMaterial,
+  modalidadDeCodigoOrina,
+  panelPerteneceAMaterial,
+  type CatalogAddItem,
+  type OrinaModalidad,
+} from '../../utils/limsCatalogoPedidoMaterial';
 
 const ORINA_GRILLA_CODIGOS: readonly string[] = [
   'PAN_ORI',
@@ -64,13 +55,6 @@ const ORINA_GRILLA_CODIGOS: readonly string[] = [
   'PAN_MALB_AZ',
 ];
 
-const ORINA_AZAR_CODIGOS = new Set(['PAN_IONO_U', 'PROT_U_AZ', 'PAN_MALB_AZ']);
-const ORINA_24H_CODIGOS = new Set([
-  'PAN_CLEAR',
-  'PAN_IONO_U24',
-  'PAN_PROT24',
-  'PAN_MALB24',
-]);
 const ORINA_EN_PAPEL = new Set(ORINA_GRILLA_CODIGOS);
 
 /** Códigos que se muestran al abrir el selector sin tipear (Sangre es el default). */
@@ -166,14 +150,6 @@ const MATERIALES_FALLBACK: MaterialPedidoLims[] = [
 const filterMaterialesBase = createFilterOptions<MaterialPedidoLims>({
   stringify: (m) => `${m.codigo} ${m.nombre}`,
 });
-
-type OrinaModalidad = 'azar' | '24h' | null;
-
-function modalidadDeCodigoOrina(codigo: string): OrinaModalidad {
-  if (ORINA_AZAR_CODIGOS.has(codigo)) return 'azar';
-  if (ORINA_24H_CODIGOS.has(codigo)) return '24h';
-  return null;
-}
 
 type CatalogItem = {
   kind: 'panel' | 'examen';
@@ -343,12 +319,14 @@ export function idsDeMaterial(
   const examenIdsExtra = examenes
     .filter((e) => e.activo !== false && examenPerteneceAMaterial(e, mat))
     .map((e) => e.id);
-  // Paneles de la grilla (diferencial) también
+  // Paneles de grilla_codigos + paneles del catálogo cuyos componentes son de este material
+  // (p. ej. agregados vía «Agregar examen clínico»).
   const panelIdsExtra = paneles
     .filter(
       (p) =>
         p.activo !== false &&
-        (mat.grilla_codigos || []).includes(p.codigo)
+        ((mat.grilla_codigos || []).includes(p.codigo) ||
+          panelPerteneceAMaterial(p, mat, examenes))
     )
     .map((p) => p.id);
   return {
@@ -428,7 +406,7 @@ export default function SolicitudAnalisisMaterialesForm({
       if (mod === '24h') h24 = true;
       const m = (e.tipo_muestra_codigo || '').toUpperCase();
       if (m === 'ORINA_24_H') h24 = true;
-      else if (m === 'ORINA' && !ORINA_24H_CODIGOS.has(e.codigo)) azar = true;
+      else if (m === 'ORINA' && mod !== '24h') azar = true;
     });
     if (azar && !h24) return 'azar';
     if (h24 && !azar) return '24h';
@@ -478,47 +456,37 @@ export default function SolicitudAnalisisMaterialesForm({
     setMaterialInput((prev) => ({ ...prev, [id]: '' }));
   };
 
-  const agregarOpciones = (materialKey: string): LimsTipoExamen[] => {
+  const agregarOpciones = (materialKey: string): CatalogAddItem[] => {
     const mat = findMat(materialKey);
     if (!mat) return [];
     const gridCodigos = new Set(
       gridForMaterial(mat, paneles, examenes).map((g) => g.codigo)
     );
-    return examenes.filter((e) => {
-      if (e.activo === false) return false;
-      if (esExamenExcluidoDeLabClinico(e)) return false;
-      if (gridCodigos.has(e.codigo)) return false;
-      if (selectedExamenesIds.has(e.id)) return false;
-      if (!examenPerteneceAMaterial(e, mat)) return false;
-      const m = (e.tipo_muestra_codigo || '').toUpperCase();
-      if (materialKey === 'ORINA' && orinaModalidad === 'azar' && m === 'ORINA_24_H') {
-        return false;
-      }
-      if (materialKey === 'ORINA' && orinaModalidad === '24h' && m === 'ORINA') {
-        return false;
-      }
-      if (materialKey === 'ORINA' && orinaModalidad === 'azar') {
-        if (modalidadDeCodigoOrina(e.codigo) === '24h') return false;
-      }
-      if (materialKey === 'ORINA' && orinaModalidad === '24h') {
-        if (modalidadDeCodigoOrina(e.codigo) === 'azar') return false;
-      }
-      return true;
+    return agregarCatalogOptionsForMaterial({
+      mat,
+      examenes,
+      paneles,
+      gridCodigos,
+      selectedExamenesIds,
+      selectedPanelesIds,
+      orinaModalidad,
     });
   };
 
-  const chipsAgregados = (materialKey: string): LimsTipoExamen[] => {
+  const chipsAgregados = (materialKey: string): CatalogAddItem[] => {
     const mat = findMat(materialKey);
     if (!mat) return [];
     const gridCodigos = new Set(
       gridForMaterial(mat, paneles, examenes).map((g) => g.codigo)
     );
-    return examenes.filter(
-      (e) =>
-        selectedExamenesIds.has(e.id) &&
-        !gridCodigos.has(e.codigo) &&
-        examenPerteneceAMaterial(e, mat)
-    );
+    return chipsAgregadosCatalogForMaterial({
+      mat,
+      examenes,
+      paneles,
+      gridCodigos,
+      selectedExamenesIds,
+      selectedPanelesIds,
+    });
   };
 
   const totalClinico = selectedPanelesIds.size + selectedExamenesIds.size;
@@ -786,13 +754,20 @@ export default function SolicitudAnalisisMaterialesForm({
                         sx={{ mb: 1 }}
                       >
                         {block.materialKey === 'ORINA'
-                          ? 'Determinaciones de orina que no están en la grilla frecuente.'
-                          : `Buscá en el catálogo análisis de ${matDef?.nombre || 'este material'}.`}
+                          ? 'Exámenes o paneles de orina que no están en la grilla frecuente.'
+                          : `Buscá en el catálogo exámenes o paneles de ${matDef?.nombre || 'este material'}.`}
                       </Typography>
                       <Autocomplete
                         size="small"
                         options={agregarOpts}
-                        getOptionLabel={(o) => `${o.codigo} — ${o.nombre}`}
+                        getOptionLabel={(o) =>
+                          o.kind === 'panel'
+                            ? `Panel · ${o.codigo} — ${o.nombre}`
+                            : `${o.codigo} — ${o.nombre}`
+                        }
+                        isOptionEqualToValue={(a, b) =>
+                          a.kind === b.kind && a.id === b.id
+                        }
                         inputValue={agregarInput[block.id] || ''}
                         onInputChange={(_e, v) =>
                           setAgregarInput((prev) => ({ ...prev, [block.id]: v }))
@@ -801,7 +776,8 @@ export default function SolicitudAnalisisMaterialesForm({
                         disabled={disabled}
                         onChange={(_e, value) => {
                           if (!value) return;
-                          onToggleExamen(value.id);
+                          if (value.kind === 'panel') onTogglePanel(value.id);
+                          else onToggleExamen(value.id);
                           setAgregarInput((prev) => ({ ...prev, [block.id]: '' }));
                         }}
                         renderInput={(params) => (
@@ -825,12 +801,21 @@ export default function SolicitudAnalisisMaterialesForm({
                           spacing={0.5}
                           sx={{ mt: 1 }}
                         >
-                          {chips.map((ex) => (
+                          {chips.map((item) => (
                             <Chip
-                              key={ex.id}
+                              key={`${item.kind}-${item.id}`}
                               size="small"
-                              label={ex.codigo}
-                              onDelete={disabled ? undefined : () => onToggleExamen(ex.id)}
+                              label={
+                                item.kind === 'panel' ? `Panel · ${item.codigo}` : item.codigo
+                              }
+                              onDelete={
+                                disabled
+                                  ? undefined
+                                  : () =>
+                                      item.kind === 'panel'
+                                        ? onTogglePanel(item.id)
+                                        : onToggleExamen(item.id)
+                              }
                             />
                           ))}
                         </Stack>

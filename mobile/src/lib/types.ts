@@ -2,6 +2,7 @@ export type RolMovil =
   | 'paciente'
   | 'medico'
   | 'secretaria'
+  | 'secretaria_lab'
   | 'laboratorio'
   | 'bioquimico';
 

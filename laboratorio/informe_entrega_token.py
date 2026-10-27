@@ -1,49 +1,47 @@
-"""Token de entrega pública del PDF de informe LIMS (opaco en BD + compat. firmado)."""
+"""Token de entrega pública del PDF de informe LIMS (opaco en BD + compat. firmado).
+
+Los enlaces no caducan: el token permanece válido mientras exista en BD (química)
+o mientras no cambie SECRET_KEY (firmados / microbiología).
+"""
 from __future__ import annotations
 
 import secrets
-from datetime import timedelta
 
 from django.core import signing
-from django.utils import timezone
 
 from laboratorio.models import SolicitudExamen
 
 _SALT = "lims-informe-entrega-v1"
 _SALT_MICRO = "lims-micro-informe-entrega-v1"
-_MAX_AGE_SECONDS = 72 * 3600  # 72 h
-_TOKEN_VIDA = timedelta(hours=72)
 
 
 class InformeEntregaTokenError(ValueError):
-    """Token inválido o expirado."""
+    """Token inválido."""
 
 
 def asignar_token_entrega(solicitud: SolicitudExamen, *, renovar: bool = False) -> str:
     """
     Asigna un token URL-safe en la solicitud (sin guardar).
-    Con ``renovar=True`` siempre emite uno nuevo válido por 72 h.
+    Los tokens no caducan. Con ``renovar=False`` reutiliza el existente si hay.
+    Con ``renovar=True`` emite uno nuevo (invalida el enlace anterior).
     """
-    now = timezone.now()
-    if (
-        not renovar
-        and solicitud.informe_entrega_token
-        and solicitud.informe_entrega_token_expira
-        and solicitud.informe_entrega_token_expira > now
-    ):
+    if not renovar and solicitud.informe_entrega_token:
+        # Limpiar expiración legada (72 h) para dejar el enlace permanente.
+        if solicitud.informe_entrega_token_expira is not None:
+            solicitud.informe_entrega_token_expira = None
         return solicitud.informe_entrega_token
 
     token = secrets.token_urlsafe(32)
     solicitud.informe_entrega_token = token
-    solicitud.informe_entrega_token_expira = now + _TOKEN_VIDA
+    solicitud.informe_entrega_token_expira = None
     return token
 
 
 def _verificar_token_firmado_legacy(token: str) -> int:
     try:
-        data = signing.loads(token, salt=_SALT, max_age=_MAX_AGE_SECONDS)
+        data = signing.loads(token, salt=_SALT)
     except signing.BadSignature as exc:
-        raise InformeEntregaTokenError("Enlace de informe inválido o expirado.") from exc
+        raise InformeEntregaTokenError("Enlace de informe inválido.") from exc
     sid = data.get("sid")
     if not sid:
         raise InformeEntregaTokenError("Enlace de informe inválido.")
@@ -54,13 +52,12 @@ def _verificar_token_almacenado(token: str) -> int:
     solicitud_id = (
         SolicitudExamen.objects.filter(
             informe_entrega_token=token,
-            informe_entrega_token_expira__gt=timezone.now(),
         )
         .values_list("pk", flat=True)
         .first()
     )
     if not solicitud_id:
-        raise InformeEntregaTokenError("Enlace de informe inválido o expirado.")
+        raise InformeEntregaTokenError("Enlace de informe inválido.")
     return int(solicitud_id)
 
 
@@ -87,7 +84,7 @@ def construir_url_entrega_informe(base_url: str, solicitud: SolicitudExamen) -> 
     """URL de descarga sin query string: WhatsApp no autolinkea `?t=` en el chat."""
     base = (base_url or "").rstrip("/")
     token = solicitud.informe_entrega_token or asignar_token_entrega(
-        solicitud, renovar=True
+        solicitud, renovar=False
     )
     return f"{base}{ruta_informe_entrega()}{token}/"
 
@@ -108,9 +105,9 @@ def verificar_token_entrega_informe_micro(token: str) -> int:
     if not token:
         raise InformeEntregaTokenError("Enlace de informe inválido.")
     try:
-        data = signing.loads(token, salt=_SALT_MICRO, max_age=_MAX_AGE_SECONDS)
+        data = signing.loads(token, salt=_SALT_MICRO)
     except signing.BadSignature as exc:
-        raise InformeEntregaTokenError("Enlace de informe inválido o expirado.") from exc
+        raise InformeEntregaTokenError("Enlace de informe inválido.") from exc
     mid = data.get("mid")
     if not mid:
         raise InformeEntregaTokenError("Enlace de informe inválido.")

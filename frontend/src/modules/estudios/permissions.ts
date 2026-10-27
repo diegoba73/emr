@@ -45,7 +45,7 @@ export function canAsignarTurnoEstudio(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const rol = normalizedRol(user);
-  return rol === 'admin' || isSecretariaInstitucionalRole(rol);
+  return rol === 'admin' || isSecretariaInstitucionalRole(rol) || rol === 'medico';
 }
 
 export function canWriteEstudio(user: User | null | undefined): boolean {

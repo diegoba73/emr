@@ -283,6 +283,46 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             return EstudioMicrobiologiaPartialUpdateSerializer
         return EstudioMicrobiologiaSerializer
 
+
+    def filter_queryset(self, queryset):
+        """Búsqueda listado: DNI/prefijos sin OR amplio de SearchFilter."""
+        search = (self.request.query_params.get("search") or "").strip()
+        if search and getattr(self, "action", None) == "list":
+            queryset = self._busqueda_listado_rapida(queryset, search)
+            for backend_cls in self.filter_backends:
+                if backend_cls is filters.SearchFilter:
+                    continue
+                queryset = backend_cls().filter_queryset(self.request, queryset, self)
+            return queryset
+        return super().filter_queryset(queryset)
+
+    @staticmethod
+    def _busqueda_listado_rapida(queryset, search: str):
+        raw = (search or "").strip()
+        if not raw:
+            return queryset
+        digits = "".join(c for c in raw if c.isdigit())
+        if digits and len(digits) >= 4 and sum(c.isdigit() for c in raw) >= max(1, len(raw) - 2):
+            return queryset.filter(paciente__dni__istartswith=digits)
+        parts = raw.split()
+        if len(parts) >= 2:
+            a, b = parts[0], parts[1]
+            return queryset.filter(
+                Q(paciente__apellido__istartswith=a, paciente__nombre__istartswith=b)
+                | Q(paciente__apellido__istartswith=b, paciente__nombre__istartswith=a)
+                | Q(numero__icontains=raw)
+                | Q(solicitud__numero__icontains=raw)
+            )
+        token = parts[0]
+        return queryset.filter(
+            Q(paciente__apellido__istartswith=token)
+            | Q(paciente__nombre__istartswith=token)
+            | Q(paciente__dni__istartswith=token)
+            | Q(numero__icontains=token)
+            | Q(solicitud__numero__icontains=token)
+            | Q(codigo_barra__icontains=token)
+        )
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
@@ -334,6 +374,8 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     "LISTO_PARA_VALIDAR",
                 )
             )
+        elif cola in ("abiertas", "sin_finalizar"):
+            qs = qs.exclude(estado__in=("VALIDADO", "INFORMADO", "CANCELADO"))
 
         anio = (self.request.query_params.get("anio") or "").strip()
         if anio:
@@ -938,7 +980,7 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             )
         except InformeEntregaTokenError:
             return Response(
-                {"error": "Enlace de informe inválido o expirado."},
+                {"error": "Enlace de informe inválido."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         except EstudioMicrobiologia.DoesNotExist:

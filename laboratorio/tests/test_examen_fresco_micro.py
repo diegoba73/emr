@@ -79,6 +79,10 @@ class TestExamenFrescoMicro(TestCase):
             ["gram"],
         )
         self.assertEqual(
+            [s["tecnica"] for s in secciones_examen_directo("ASPIRADO_TRAQUEAL_BRONQUIAL")],
+            ["gram"],
+        )
+        self.assertEqual(
             [s["tecnica"] for s in secciones_examen_directo(self.estudio_lcr)],
             ["fresco", "gram"],
         )

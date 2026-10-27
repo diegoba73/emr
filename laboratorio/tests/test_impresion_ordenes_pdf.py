@@ -458,3 +458,28 @@ class TestImpresionOrdenes(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
         self.assertTrue(r.content.startswith(b"%PDF"))
+
+    def test_pedido_guardia_incluye_atencion_en_cabecera(self):
+        """Pedidos de GUARDIA llevan Atención: GUARDIA (elevación a obra social)."""
+        from laboratorio.impresion_ordenes_pdf import _atencion_para_impresion
+
+        self.assertEqual(_atencion_para_impresion(self.sol), "")
+        ped_amb = construir_pedido_clinico(self.sol)
+        self.assertEqual(ped_amb.datos.atencion, "")
+
+        sol_g = SolicitudExamen.objects.create(
+            paciente=self.paciente2,
+            medico_interno=self.medico,
+            origen_solicitud="GUARDIA",
+            estado="EN_PROCESO",
+        )
+        sol_g.tipos_examen.add(self.glu)
+        self.assertEqual(_atencion_para_impresion(sol_g), "GUARDIA")
+        ped = construir_pedido_clinico(sol_g)
+        self.assertEqual(ped.datos.atencion, "GUARDIA")
+
+        pdf, n = generar_pedidos_papel_pdf_bytes(
+            parsear_items(self._items(("LAB_CLINICO", sol_g.pk)))
+        )
+        self.assertEqual(n, 1)
+        self.assertTrue(pdf.startswith(b"%PDF"))
