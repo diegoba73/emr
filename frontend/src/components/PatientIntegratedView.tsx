@@ -66,6 +66,7 @@ import { downloadInformeMicroPdf, listEstudiosMicrobiologia } from '../services/
 import type { EstudioMicrobiologia, ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
 import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
+import { formatFechaDisplay } from '../utils/dateFieldFormat';
 import {
   canDownloadInformeClinicoPdf,
   canDownloadInformeMicroPdf,
@@ -306,10 +307,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
     }
   };
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES');
-  };
+  const formatDate = (dateString: string | undefined) => formatFechaDisplay(dateString);
 
   // Funciones para edición
   const handleEditToggle = () => {

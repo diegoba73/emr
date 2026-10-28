@@ -31,6 +31,7 @@ import SearchAndFilters from '../components/SearchAndFilters';
 import PacienteFormDialog from '../components/PacienteFormDialog';
 import { canCreatePaciente, canUpdatePacienteDemographics } from '../utils/permissions';
 import { apiService } from '../services/api';
+import { formatFechaDisplay } from '../utils/dateFieldFormat';
 
 const Pacientes: React.FC = () => {
   const { currentUser, loadPacientes } = useData();
@@ -127,10 +128,7 @@ const Pacientes: React.FC = () => {
     void loadPacientes();
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES');
-  };
+  const formatDate = (dateString: string) => formatFechaDisplay(dateString);
 
   const getSexoColor = (sexo: string | undefined) => {
     return sexo === 'M' ? 'primary' : 'secondary';
