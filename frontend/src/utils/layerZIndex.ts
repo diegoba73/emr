@@ -29,7 +29,8 @@ export const clinicalDrawerDialogContentSx = {
 
 /** Diálogo clínico con lista larga: contenido con scroll y acciones fijas abajo. */
 export const scrollableClinicalDialogPaperSx = {
-  maxHeight: 'min(92vh, 920px)',
+  maxHeight: 'min(96vh, 1080px)',
+  width: '100%',
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',

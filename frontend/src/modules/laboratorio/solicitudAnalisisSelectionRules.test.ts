@@ -32,7 +32,7 @@ describe('solicitudAnalisisSelectionRules', () => {
 });
 
 describe('solicitudAnalisisPapelLayout — ítems nuevos', () => {
-  it('incluye CL bajo ionograma, INR bajo coagulograma y pruebas bajo LDH', () => {
+  it('incluye CL bajo ionograma, INR bajo coagulograma y serologías en columna derecha', () => {
     const codes = papelCodigosSet();
     for (const c of [
       'CL',
@@ -42,16 +42,24 @@ describe('solicitudAnalisisPapelLayout — ítems nuevos', () => {
       'HIVAC',
       'VDRL',
       'GRUPO',
+      'PAN_ORI',
     ]) {
       expect(codes.has(c)).toBe(true);
     }
-    const flat = SOLICITUD_ANALISIS_PAPEL_ROWS.flatMap((r) =>
-      [r.left, r.right].filter(Boolean).map((i) => i!.codigo)
-    );
-    expect(flat.indexOf('CL')).toBeGreaterThan(flat.indexOf('PAN_IONO'));
-    expect(flat.indexOf('INR')).toBeGreaterThan(flat.indexOf('PAN_COAG'));
-    expect(flat.indexOf('HBVAGS')).toBeGreaterThan(flat.indexOf('LDH'));
-    expect(flat.indexOf('VDRL')).toBe(flat.indexOf('HIVAC') + 1);
+    const left = SOLICITUD_ANALISIS_PAPEL_ROWS.map((r) => r.left?.codigo).filter(
+      Boolean
+    ) as string[];
+    const right = SOLICITUD_ANALISIS_PAPEL_ROWS.map((r) => r.right?.codigo).filter(
+      Boolean
+    ) as string[];
+    expect(left.indexOf('CL')).toBeGreaterThan(left.indexOf('PAN_IONO'));
+    expect(left.indexOf('INR')).toBeGreaterThan(left.indexOf('PAN_COAG'));
+    expect(left[left.length - 1]).toBe('LDH');
+    expect(right.slice(0, 5)).toEqual(['CPK', 'CPK_MB', 'MIOG', 'TROP_I', 'TROP_US']);
+    expect(right.indexOf('VDRL')).toBeLessThan(right.indexOf('HBVAGS'));
+    expect(right.indexOf('HBVAGS')).toBeLessThan(right.indexOf('HCVG'));
+    expect(right.indexOf('HCVG')).toBeLessThan(right.indexOf('HIVAC'));
+    expect(right[right.length - 1]).toBe('LACT');
     expect(codes.has('HCGB')).toBe(false);
     expect(codes.has('SANOC')).toBe(false);
     expect(codes.has('ASTO')).toBe(false);

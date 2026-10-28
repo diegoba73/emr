@@ -1172,7 +1172,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         Últimos N valores previos por analito de la orden (antes de guardar).
 
         Pensado para la grilla de carga: mismo paciente + mismo tipo_examen.
-        Query param ``n`` (default 10, máx. 20).
+        Query param ``n`` (default 10, máx. 50).
         """
         solicitud = self.get_object()
         from api.permissions import usuario_puede_ver_resultados_lims

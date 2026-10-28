@@ -243,8 +243,8 @@ const SolicitudAnalisisPapelForm: React.FC<SolicitudAnalisisPapelFormProps> = ({
           border: 1,
           borderColor: 'divider',
           borderRadius: 1,
-          maxHeight: { xs: '36vh', sm: '40vh' },
-          minHeight: 180,
+          maxHeight: { xs: '42vh', sm: '52vh' },
+          minHeight: 220,
           overflowY: 'auto',
           overscrollBehavior: 'contain',
         }}

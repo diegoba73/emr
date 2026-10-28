@@ -111,6 +111,15 @@ class TestResultadoExamenClinico:
         assert res.valor_obtenido == "Negativo"
         assert res.valor_numerico is None
 
+    def test_menor_que_infiere_limite_sin_cambiar_texto(self, setup):
+        """``<0.1`` se informa así; el número de trabajo es el límite."""
+        te, res = setup
+        aplicar_carga_estructurada(res, te, {"valor": "<0.1"})
+        res.save()
+        res.refresh_from_db()
+        assert res.valor_obtenido == "<0.1"
+        assert res.valor_numerico == Decimal("0.1")
+
     def test_valor_numerico_y_snapshot(self, setup):
         te, res = setup
         aplicar_carga_estructurada(

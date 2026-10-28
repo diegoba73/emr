@@ -7,12 +7,16 @@ import {
 } from './solicitudAnalisisPapelLayout';
 
 describe('solicitudAnalisisPapelLayout', () => {
-  it('tiene filas en dos columnas', () => {
-    expect(SOLICITUD_ANALISIS_PAPEL_ROWS.length).toBeGreaterThan(20);
+  it('tiene filas en dos columnas con orden operativo de Sangre', () => {
+    expect(SOLICITUD_ANALISIS_PAPEL_ROWS.length).toBe(25);
     const withLeft = SOLICITUD_ANALISIS_PAPEL_ROWS.filter((r) => r.left).length;
     const withRight = SOLICITUD_ANALISIS_PAPEL_ROWS.filter((r) => r.right).length;
-    expect(withLeft).toBeGreaterThan(10);
-    expect(withRight).toBeGreaterThan(10);
+    expect(withLeft).toBe(25);
+    expect(withRight).toBe(25);
+    expect(SOLICITUD_ANALISIS_PAPEL_ROWS[0].left?.codigo).toBe('PAN_HEMO');
+    expect(SOLICITUD_ANALISIS_PAPEL_ROWS[0].right?.codigo).toBe('CPK');
+    expect(SOLICITUD_ANALISIS_PAPEL_ROWS[24].left?.codigo).toBe('LDH');
+    expect(SOLICITUD_ANALISIS_PAPEL_ROWS[24].right?.codigo).toBe('LACT');
   });
 
   it('resuelve ids de catálogo por código', () => {

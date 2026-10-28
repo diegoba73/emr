@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -28,20 +28,12 @@ jest.mock('../hooks', () => ({
     isError: false,
     error: null,
   }),
-  useAtencionesQuery: () => ({ data: { results: [] } }),
 }));
 
 jest.mock('./forms/ConsultaAmbulatoriaForm', () => ({
   __esModule: true,
   default: ({ canEdit }: { canEdit: boolean }) => (
     <div data-testid="consulta-form">{canEdit ? 'EDIT-ENABLED' : 'EDIT-DISABLED'}</div>
-  ),
-}));
-
-jest.mock('./DocumentosAdjuntos', () => ({
-  __esModule: true,
-  default: ({ canEdit }: { canEdit: boolean; atencionId: number; pacienteId: number }) => (
-    <div data-testid="archivos-panel">{canEdit ? 'UPLOAD-ENABLED' : 'UPLOAD-DISABLED'}</div>
   ),
 }));
 
@@ -93,35 +85,23 @@ describe('AtencionDetailDrawer — permisos QA-ROLE-01', () => {
     renderDrawer(mockUser({ rol: 'ENFERMERIA' }), false);
 
     expect(screen.getByText('Detalle de la Atención')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Archivos/i }));
-    expect(screen.getByTestId('archivos-panel')).toHaveTextContent('UPLOAD-DISABLED');
-
-    fireEvent.click(screen.getByRole('tab', { name: /Detalle clínico/i }));
+    expect(screen.queryByRole('tab', { name: /Resumen/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Archivos/i })).not.toBeInTheDocument();
     expect(screen.getByTestId('consulta-form')).toHaveTextContent('EDIT-DISABLED');
   });
 
   it('paciente ve el drawer propio en solo lectura', () => {
     renderDrawer(mockUser({ rol: 'PACIENTE' }), false);
-
-    fireEvent.click(screen.getByRole('tab', { name: /Archivos/i }));
-    expect(within(screen.getByTestId('archivos-panel')).getByText('UPLOAD-DISABLED')).toBeInTheDocument();
+    expect(screen.getByTestId('consulta-form')).toHaveTextContent('EDIT-DISABLED');
   });
 
   it('médico ve controles de edición', () => {
     renderDrawer(mockUser({ rol: 'MEDICO' }));
-
-    fireEvent.click(screen.getByRole('tab', { name: /Archivos/i }));
-    expect(screen.getByTestId('archivos-panel')).toHaveTextContent('UPLOAD-ENABLED');
-
-    fireEvent.click(screen.getByRole('tab', { name: /Detalle clínico/i }));
     expect(screen.getByTestId('consulta-form')).toHaveTextContent('EDIT-ENABLED');
   });
 
   it('admin ve controles de edición', () => {
     renderDrawer(mockUser({ rol: 'ADMIN' }));
-
-    fireEvent.click(screen.getByRole('tab', { name: /Detalle clínico/i }));
     expect(screen.getByTestId('consulta-form')).toHaveTextContent('EDIT-ENABLED');
   });
 });

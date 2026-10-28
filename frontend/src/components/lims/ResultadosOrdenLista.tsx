@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
+  Button,
   Paper,
   Table,
   TableBody,
@@ -8,8 +9,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
 import type { ResultadoExamenLims, SolicitudExamenLims } from '../../types/lims';
 import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
 import { PANEL_HEMOGRAMA } from '../../utils/limsOrdenInforme';
@@ -21,6 +24,7 @@ import {
 } from '../../utils/calculosDerivados';
 import ResultadoEstadoBadge from './ResultadoEstadoBadge';
 import ResultadoRangoInfo from './ResultadoRangoInfo';
+import TendenciaAnalitoDialog from './TendenciaAnalitoDialog';
 
 export interface ResultadosOrdenListaProps {
   resultados: ResultadoExamenLims[];
@@ -63,11 +67,13 @@ function ResultadoRow({
   modo,
   resultados,
   ordenFinalizada,
+  onVerTendencia,
 }: {
   r: ResultadoExamenLims;
   modo: 'laboratorio' | 'clinico';
   resultados: ResultadoExamenLims[];
   ordenFinalizada: boolean;
+  onVerTendencia: (r: ResultadoExamenLims, valorDisplay: string) => void;
 }) {
   const { texto: valorRaw, pctIncluidoEnValor } = valorConAbsolutoFormula(r, resultados);
   const clinico = modo === 'clinico';
@@ -80,9 +86,11 @@ function ResultadoRow({
     pctIncluidoEnValor && (unidadRaw === '%' || unidadRaw.toLowerCase() === 'porcentaje')
       ? ''
       : unidadRaw;
+  const puedeVerTendencia = Boolean(r.solicitud && r.tipo_examen);
+  const nombreAnalito = String(r.tipo_examen_nombre || r.tipo_examen || 'Analito');
+
   return (
     <TableRow
-      key={r.id}
       sx={
         !ocultarValorClinico && r.es_critico
           ? { bgcolor: 'error.light', '& .MuiTableCell-root': { color: 'error.contrastText' } }
@@ -102,19 +110,37 @@ function ResultadoRow({
         ) : null}
       </TableCell>
       <TableCell sx={{ py: clinico ? 0.75 : undefined, whiteSpace: 'nowrap' }}>
-        <Typography
-          variant="body2"
-          fontWeight={valor ? 700 : 400}
-          component="span"
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
-          {valor || '—'}
-        </Typography>
-        {valor && unidad ? (
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
-            {unidad}
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+          <Typography
+            variant="body2"
+            fontWeight={valor ? 700 : 400}
+            component="span"
+            sx={{ fontVariantNumeric: 'tabular-nums' }}
+          >
+            {valor || '—'}
           </Typography>
-        ) : null}
+          {valor && unidad ? (
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
+              {unidad}
+            </Typography>
+          ) : null}
+          {puedeVerTendencia && (
+            <Tooltip title="Ver tendencia histórica">
+              <Button
+                size="small"
+                variant="outlined"
+                color="primary"
+                disableRipple
+                startIcon={<ShowChartIcon fontSize="small" />}
+                aria-label={`Ver tendencia de ${nombreAnalito}`}
+                onClick={() => onVerTendencia(r, valor)}
+                sx={{ ml: 0.75, minWidth: 0, px: 1, py: 0.15, textTransform: 'none' }}
+              >
+                Gráfico
+              </Button>
+            </Tooltip>
+          )}
+        </Box>
       </TableCell>
       {!clinico && <TableCell>{unidad || '—'}</TableCell>}
       <TableCell sx={{ py: clinico ? 0.75 : undefined }}>
@@ -146,6 +172,11 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
   modo = 'laboratorio',
   estadoOrden = null,
 }) => {
+  const [tendencia, setTendencia] = useState<{
+    r: ResultadoExamenLims;
+    valorDisplay: string;
+  } | null>(null);
+
   const grupos = useMemo(
     () => (orden ? groupResultadosPorPanel(orden, resultados) : [{ key: 'all', titulo: '', resultados }]),
     [orden, resultados]
@@ -162,6 +193,9 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
       </Typography>
     );
   }
+
+  const rTend = tendencia?.r;
+  const valorTend = tendencia?.valorDisplay ?? '';
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: clinico ? 1.5 : 2 }}>
@@ -223,6 +257,7 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
                       modo={modo}
                       resultados={resultados}
                       ordenFinalizada={ordenFinalizada}
+                      onVerTendencia={(res, valorDisplay) => setTendencia({ r: res, valorDisplay })}
                     />
                   ))}
                 </TableBody>
@@ -251,6 +286,28 @@ const ResultadosOrdenLista: React.FC<ResultadosOrdenListaProps> = ({
           </Typography>
         </Box>
       )}
+      {rTend && rTend.solicitud && rTend.tipo_examen ? (
+        <TendenciaAnalitoDialog
+          open
+          onClose={() => setTendencia(null)}
+          solicitudId={rTend.solicitud}
+          tipoExamenId={rTend.tipo_examen}
+          tipoExamenNombre={String(rTend.tipo_examen_nombre || rTend.tipo_examen || 'Analito')}
+          tipoExamenCodigo={rTend.tipo_examen_codigo}
+          actual={
+            valorTend
+              ? {
+                  valor: valorTend,
+                  valor_numerico: rTend.valor_numerico,
+                  unidad: rTend.unidad ?? null,
+                  fecha: rTend.fecha_validacion || rTend.muestra_fecha_toma || null,
+                  rango_min: rTend.rango_min_snapshot,
+                  rango_max: rTend.rango_max_snapshot,
+                }
+              : null
+          }
+        />
+      ) : null}
     </Box>
   );
 };

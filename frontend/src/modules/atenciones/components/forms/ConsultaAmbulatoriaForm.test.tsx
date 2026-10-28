@@ -10,7 +10,8 @@ const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }
 const mockMutateAsync = jest.fn().mockResolvedValue({ id: 1 });
 const mockCloseAsync = jest.fn().mockResolvedValue({ id: 1 });
 
-let mockAtencion: Record<string, unknown> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockAtencion: any = {
   id: 1,
   estado_clinico: 'ABIERTA',
   fecha_cierre: null,
@@ -26,6 +27,22 @@ jest.mock('../../hooks', () => ({
   useSaveConsultaAmbulatoriaMutation: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
   useCloseAtencionMutation: () => ({ mutateAsync: mockCloseAsync, isPending: false }),
 }));
+
+jest.mock('../AtencionPedidosSection', () => {
+  const R = require('react');
+  return {
+    __esModule: true,
+    default: () => R.createElement('div', { 'data-testid': 'pedidos-section' }, 'Pedidos mock'),
+  };
+});
+
+jest.mock('../../../../components/clinical/SignosVitalesPanel', () => {
+  const R = require('react');
+  return {
+    __esModule: true,
+    default: () => R.createElement('div', { 'data-testid': 'signos-vitales' }, 'Signos mock'),
+  };
+});
 
 function renderForm(props: Partial<React.ComponentProps<typeof ConsultaAmbulatoriaForm>> = {}) {
   return render(
@@ -50,12 +67,11 @@ describe('ConsultaAmbulatoriaForm', () => {
     };
   });
 
-  it('muestra pestañas SOAP', () => {
+  it('muestra solo Detalle clínico y Pedidos y resultados', () => {
     renderForm();
-    expect(screen.getByRole('tab', { name: /Anamnesis/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Examen físico/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Diagnóstico/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Detalle clínico/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Pedidos y resultados/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^Anamnesis$/i })).not.toBeInTheDocument();
   });
 
   it('permite editar cuando existe consulta vacía creada al iniciar atención', async () => {
@@ -124,7 +140,8 @@ describe('ConsultaAmbulatoriaForm', () => {
     renderForm();
 
     expect(screen.getByLabelText(/Anamnesis/i)).toHaveValue('Dolor precordial de 2 horas');
-    expect(screen.getByRole('tab', { name: /Examen físico/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Examen físico/i)).toHaveValue('Ruidos cardíacos normales');
+    expect(screen.getByRole('tab', { name: /Detalle clínico/i })).toBeInTheDocument();
   });
 
   it('no deja que un borrador vacío pise datos del servidor', () => {

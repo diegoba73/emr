@@ -286,7 +286,7 @@ export async function getAnalisisLongitudinal(id: number): Promise<AnalisisLongi
   return data;
 }
 
-/** Últimos N valores previos por analito (antes de guardar). Default n=10. */
+/** Últimos N valores previos por analito. Default n=10, máx. 50 en backend. */
 export async function getHistorialAnalitos(
   id: number,
   n = 10

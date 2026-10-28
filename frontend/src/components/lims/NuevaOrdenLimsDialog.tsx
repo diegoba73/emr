@@ -1033,7 +1033,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       <Dialog
         open={open}
         onClose={saving ? undefined : onClose}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
         disableScrollLock={clinicalDrawerDialogProps.disableScrollLock}
         slotProps={{
@@ -1046,7 +1046,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
           },
         }}
       >
-        <DialogTitle sx={{ flexShrink: 0 }}>
+        <DialogTitle sx={{ flexShrink: 0, py: 2, px: 3 }}>
           {draftMode
             ? 'Solicitar análisis de laboratorio'
             : agregarAOrdenId
@@ -1055,8 +1055,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                 ? 'Repetición / control (mismo día)'
                 : 'Nueva orden de laboratorio'}
         </DialogTitle>
-        <DialogContent dividers sx={scrollableClinicalDialogContentSx}>
-          <Stack spacing={2} sx={{ mt: 0.5 }}>
+        <DialogContent dividers sx={{ ...scrollableClinicalDialogContentSx, px: 3, py: 2.5 }}>
+          <Stack spacing={2.5} sx={{ mt: 0.5 }}>
             {error && <Alert severity="error">{error}</Alert>}
             {agregarAOrdenId ? (
               <Alert severity="info" sx={{ py: 0.5 }}>
@@ -1113,7 +1113,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               <UltimosResultadosPaciente
                 pacienteId={pacienteIdHistorial}
                 compact
-                defaultExpanded
+                defaultExpanded={false}
                 backPath={pacienteFichaAnalisisPath(pacienteIdHistorial)}
                 backLabel="← Volver a la ficha"
               />

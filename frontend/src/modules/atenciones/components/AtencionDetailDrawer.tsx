@@ -17,11 +17,7 @@ import { Close, LocalHospital, AssignmentTurnedIn, TransferWithinAStation } from
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Atencion, User } from '../../../types';
-import {
-  useAtencionQuery,
-  useAtencionesQuery,
-} from '../hooks';
-import DocumentosAdjuntos from './DocumentosAdjuntos';
+import { useAtencionQuery } from '../hooks';
 import ConsultaAmbulatoriaForm from './forms/ConsultaAmbulatoriaForm';
 import EvolucionInternacionForm from './forms/EvolucionInternacionForm';
 import AtencionPedidosSection from './AtencionPedidosSection';
@@ -69,43 +65,6 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
-  
-  // OPTIMIZACIÓN: Solo buscar consulta previa si es necesario (cuando hay registro_procedimiento y no hay consulta_ambulatoria)
-  const necesitaConsultaPrevia = data?.registro_procedimiento && !data?.consulta_ambulatoria && data?.paciente?.id;
-  
-  // Buscar consulta ambulatoria previa del mismo paciente (solo si es necesario)
-  const consultaPreviaQuery = useAtencionesQuery({
-    tipo_intervencion: 'CONSULTA',
-    search: necesitaConsultaPrevia && data?.paciente?.id 
-      ? `${data.paciente.nombre || ''} ${data.paciente.apellido || ''}`.trim() || undefined
-      : undefined,
-  }, {
-    enabled: Boolean(necesitaConsultaPrevia), // OPTIMIZACIÓN: Solo ejecutar si es necesario
-  });
-  
-  // Obtener la última consulta ambulatoria del paciente (si existe)
-  const consultaPrevia = useMemo(() => {
-    if (!data?.paciente?.id || !consultaPreviaQuery.data?.results) return null;
-    
-    // Filtrar atenciones del mismo paciente que tengan consulta_ambulatoria y sean anteriores
-    const atencionesPaciente = consultaPreviaQuery.data.results.filter((atencion: Atencion) => {
-      return (
-        atencion.paciente.id === data.paciente.id &&
-        atencion.id !== data.id && // Excluir la atención actual
-        atencion.consulta_ambulatoria && // Que tenga consulta ambulatoria
-        new Date(atencion.fecha_admision) < new Date(data.fecha_admision) // Anterior a la fecha actual
-      );
-    });
-    
-    // Ordenar por fecha descendente y tomar la más reciente
-    if (atencionesPaciente.length > 0) {
-      return atencionesPaciente.sort((a: Atencion, b: Atencion) => 
-        new Date(b.fecha_admision).getTime() - new Date(a.fecha_admision).getTime()
-      )[0];
-    }
-    
-    return null;
-  }, [data, consultaPreviaQuery.data]);
   
   // Escuchar cambios en la atención para invalidar turnos cuando se guarda un registro
   const prevRegistroIds = React.useRef<{
@@ -161,34 +120,19 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
     [data?.contexto_atencion],
   );
 
-  const showPedidosTab = useMemo(
-    () =>
-      data?.tipo_intervencion === 'CONSULTA' || isInternacion || isGuardia,
-    [data?.tipo_intervencion, isInternacion, isGuardia],
-  );
-
-  const tabIndices = useMemo(
-    () => ({
-      resumen: 0,
-      archivos: 1,
-      pedidos: showPedidosTab ? 2 : null,
-      detalle: showPedidosTab ? 3 : 2,
-    }),
-    [showPedidosTab],
-  );
+  // Solo internación usa solapas del drawer (evolución + pedidos).
+  // CONSULTA: el formulario trae Detalle clínico | Pedidos y resultados.
+  const showDrawerTabs = isInternacion;
 
   useEffect(() => {
     if (!open) return;
-    if (initialTab === 'pedidos' && tabIndices.pedidos !== null) {
-      setTabValue(tabIndices.pedidos);
-      return;
-    }
-    if (initialTab === 'detalle' || forceEdit) {
-      setTabValue(tabIndices.detalle);
+    // Internación: 0 = evolución, 1 = pedidos
+    if (showDrawerTabs && initialTab === 'pedidos') {
+      setTabValue(1);
       return;
     }
     setTabValue(0);
-  }, [atencionId, open, forceEdit, initialTab, tabIndices.detalle, tabIndices.pedidos]);
+  }, [atencionId, open, initialTab, showDrawerTabs]);
 
   const showTabPanel = (index: number) => ({
     display: tabValue === index ? 'block' : 'none',
@@ -225,6 +169,7 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
             atencionId={atencion.id}
             canEdit={canEditClinical}
             forceEdit={forceEdit}
+            initialTab={initialTab === 'pedidos' ? 'pedidos' : 'detalle'}
             onSaveSuccess={handleSaveSuccess}
           />
         );
@@ -481,284 +426,37 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
             )}
           </Grid>
 
-          <Tabs
-            value={tabValue}
-            onChange={(_event, newValue) => setTabValue(newValue)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ mb: 2 }}
-          >
-            <Tab label="Resumen" />
-            <Tab label="Archivos" />
-            {showPedidosTab ? <Tab label="Pedidos y resultados" /> : null}
-            <Tab label={isInternacion ? 'Evolución clínica' : 'Detalle clínico'} />
-          </Tabs>
-
-          <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }}>
-            <Box sx={showTabPanel(tabIndices.resumen)}>
-              <Stack spacing={3}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Información general
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Verifica la información del episodio clínico. Utiliza las pestañas superiores para cargar registros específicos y adjuntar documentación respaldatoria.
-                </Typography>
-
-                {/* Diagnóstico y Tratamiento según el tipo de intervención */}
-                {data.consulta_ambulatoria && (
-                  <Stack spacing={2}>
-                    <Divider />
-                    <Typography variant="subtitle2" fontWeight={600} color="primary">
-                      Diagnóstico y Tratamiento
-                    </Typography>
-                    
-                    {data.consulta_ambulatoria.diagnostico_presuntivo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Diagnóstico presuntivo
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.consulta_ambulatoria.diagnostico_presuntivo}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {data.consulta_ambulatoria.diagnostico_definitivo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Diagnóstico definitivo
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontWeight: 500 }}>
-                          {data.consulta_ambulatoria.diagnostico_definitivo}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {data.consulta_ambulatoria.plan_manejo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Plan de manejo / Tratamiento
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.consulta_ambulatoria.plan_manejo}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {data.consulta_ambulatoria.medicacion_actual && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Medicación actual
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.consulta_ambulatoria.medicacion_actual}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {data.consulta_ambulatoria.alergias && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Alergias
-                        </Typography>
-                        <Typography variant="body2" color="error" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.consulta_ambulatoria.alergias}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Stack>
-                )}
-
-                {data.registro_quirurgico && (
-                  <Stack spacing={2}>
-                    <Divider />
-                    <Typography variant="subtitle2" fontWeight={600} color="primary">
-                      Diagnóstico y Protocolo Quirúrgico
-                    </Typography>
-                    
-                    {data.registro_quirurgico.diagnostico_preoperatorio && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Diagnóstico preoperatorio
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.registro_quirurgico.diagnostico_preoperatorio}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {data.registro_quirurgico.diagnostico_postoperatorio && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Diagnóstico postoperatorio
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontWeight: 500 }}>
-                          {data.registro_quirurgico.diagnostico_postoperatorio}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {data.registro_quirurgico.protocolo_quirurgico && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Protocolo quirúrgico / Tratamiento
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.registro_quirurgico.protocolo_quirurgico}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Stack>
-                )}
-
-                {data.registro_procedimiento && consultaPrevia?.consulta_ambulatoria && (
-                  <Stack spacing={2}>
-                    <Divider />
-                    <Typography variant="subtitle2" fontWeight={600} color="primary">
-                      Diagnóstico y Tratamiento
-                    </Typography>
-                    
-                    {consultaPrevia.consulta_ambulatoria.diagnostico_presuntivo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Diagnóstico presuntivo
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {consultaPrevia.consulta_ambulatoria.diagnostico_presuntivo}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {consultaPrevia.consulta_ambulatoria.diagnostico_definitivo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Diagnóstico definitivo
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontWeight: 500 }}>
-                          {consultaPrevia.consulta_ambulatoria.diagnostico_definitivo}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {consultaPrevia.consulta_ambulatoria.plan_manejo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Plan de manejo / Tratamiento
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {consultaPrevia.consulta_ambulatoria.plan_manejo}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {consultaPrevia.consulta_ambulatoria.medicacion_actual && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Medicación actual
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {consultaPrevia.consulta_ambulatoria.medicacion_actual}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Stack>
-                )}
-
-                {data.evolucion_internacion && (
-                  <Stack spacing={2}>
-                    <Divider />
-                    <Typography variant="subtitle2" fontWeight={600} color="warning.main">
-                      Evolución de internación
-                      {data.evolucion_internacion.tipo_evolucion_display
-                        ? ` — ${data.evolucion_internacion.tipo_evolucion_display}`
-                        : ''}
-                    </Typography>
-                    {data.evolucion_internacion.subjetivo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Subjetivo
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.evolucion_internacion.subjetivo}
-                        </Typography>
-                      </Box>
-                    )}
-                    {data.evolucion_internacion.objetivo && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Objetivo
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.evolucion_internacion.objetivo}
-                        </Typography>
-                      </Box>
-                    )}
-                    {data.evolucion_internacion.analisis && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Análisis
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.evolucion_internacion.analisis}
-                        </Typography>
-                      </Box>
-                    )}
-                    {data.evolucion_internacion.plan && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                          Plan
-                        </Typography>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {data.evolucion_internacion.plan}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Stack>
-                )}
-
-                {/* Mensaje si no hay registros clínicos */}
-                {!data.consulta_ambulatoria &&
-                  !data.registro_quirurgico &&
-                  !data.registro_procedimiento &&
-                  !data.evolucion_internacion && (
-                  <Box sx={{ py: 2, textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {isInternacion
-                        ? 'No hay evolución cargada. Utilizá la pestaña "Evolución clínica" para documentar la internación.'
-                        : 'No hay registros clínicos disponibles. Utiliza la pestaña "Detalle clínico" para cargar la información correspondiente.'}
-                    </Typography>
-                  </Box>
-                )}
-              </Stack>
-            </Box>
-
-            <Box sx={showTabPanel(tabIndices.archivos)}>
-              {data.paciente?.id && (
-              <DocumentosAdjuntos
-                key={`archivos-${data.id}-${data.consulta_hc_id ?? 'sin-hc'}`}
-                atencionId={data.id}
-                pacienteId={data.paciente.id}
-                consultaHcId={data.consulta_hc_id}
-                canEdit={canEditClinical}
-              />
-              )}
-            </Box>
-
-            {showPedidosTab && tabIndices.pedidos !== null && data.id && (
-              <Box sx={showTabPanel(tabIndices.pedidos)}>
-                <AtencionPedidosSection
-                  atencionId={data.id}
-                  canEdit={canEditClinical}
-                  variant="full"
-                  pacienteId={data.paciente?.id}
-                />
+          {showDrawerTabs ? (
+            <>
+              <Tabs
+                value={tabValue}
+                onChange={(_event, newValue) => setTabValue(newValue)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ mb: 2 }}
+              >
+                <Tab label="Detalle clínico" />
+                <Tab label="Pedidos y resultados" />
+              </Tabs>
+              <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }}>
+                <Box sx={showTabPanel(0)}>{renderDetalle(data)}</Box>
+                <Box sx={showTabPanel(1)}>
+                  {data.id && (
+                    <AtencionPedidosSection
+                      atencionId={data.id}
+                      canEdit={canEditClinical}
+                      variant="full"
+                      pacienteId={data.paciente?.id}
+                    />
+                  )}
+                </Box>
               </Box>
-            )}
-
-            <Box sx={showTabPanel(tabIndices.detalle)}>
+            </>
+          ) : (
+            <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }}>
               {renderDetalle(data)}
             </Box>
-          </Box>
+          )}
         </Box>
       )}
     </Drawer>

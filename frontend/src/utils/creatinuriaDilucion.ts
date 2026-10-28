@@ -3,6 +3,8 @@
  * En órdenes nuevas el backend multiplica ×20; el operador tipea el valor del equipo.
  */
 
+import { numeroParaCalculo } from './valorOperador';
+
 export const CODIGO_CREATINURIA = 'CREA_U';
 export const FACTOR_DILUCION_CREATINURIA = 20;
 
@@ -30,7 +32,5 @@ export function clinicoDesdeEquipoCreatinuria(equipo: number): number {
 }
 
 export function parseNumeroCarga(raw: string | number | null | undefined): number | null {
-  if (raw === null || raw === undefined || raw === '') return null;
-  const n = Number(String(raw).trim().replace(',', '.'));
-  return Number.isFinite(n) ? n : null;
+  return numeroParaCalculo(raw);
 }

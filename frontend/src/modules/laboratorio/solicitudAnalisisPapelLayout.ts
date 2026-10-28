@@ -18,43 +18,50 @@ export interface PapelFormRow {
 const p = (codigo: string): PapelItemRef => ({ kind: 'panel', codigo });
 const e = (codigo: string): PapelItemRef => ({ kind: 'examen', codigo });
 
-/** Filas alineadas al PDF institucional (columna izquierda | derecha).
- * Solo layout del formulario de pedido. El orden del talón / carga de resultados
- * está en `ORDEN_PRESENTACION_PEDIDO` (`limsOrdenInforme.ts` / backend).
+/** Filas de Lab. Clínico — material Sangre (columna izquierda | derecha).
+ * Orden operativo de carga de pedidos (todos los sectores). Orina vive en su
+ * material / grilla propia. El orden del talón / carga de resultados está en
+ * `ORDEN_PRESENTACION_PEDIDO` (`limsOrdenInforme.ts` / backend).
  */
 export const SOLICITUD_ANALISIS_PAPEL_ROWS: PapelFormRow[] = [
   { left: p('PAN_HEMO'), right: e('CPK') },
   { left: e('HBA1C'), right: e('CPK_MB') },
-  { left: e('GLU'), right: e('TROP_I') },
-  { left: p('PAN_CTOG'), right: null },
-  { left: e('UREA'), right: e('MIOG') },
-  { left: e('CREATI'), right: e('TROP_US') },
-  { left: e('AU'), right: e('PROBNP') },
-  { left: e('CA'), right: e('DDIM') },
-  { left: e('MG'), right: p('PAN_ORI') },
-  { left: e('P'), right: p('PAN_CLEAR') },
-  { left: p('PAN_FERR'), right: p('PAN_IONO_U24') },
-  { left: p('PAN_IONO'), right: p('PAN_IONO_U') },
-  { left: e('CL'), right: p('PAN_PROT24') },
-  { left: e('CA_ION'), right: e('PROT_U_AZ') },
-  { left: p('PAN_LIP'), right: p('PAN_MALB24') },
-  { left: p('PAN_HEP'), right: p('PAN_MALB_AZ') },
-  { left: e('PROT_T'), right: p('PAN_ELP') },
-  { left: e('ALB'), right: e('LPA') },
-  { left: p('PAN_COAG'), right: e('PSA') },
-  { left: e('INR'), right: e('TSH') },
-  { left: e('VSG'), right: e('T3') },
-  { left: e('PCR_US'), right: e('T4') },
-  { left: e('AMIL'), right: e('T4L') },
-  { left: e('LIP'), right: e('B12') },
-  { left: e('GGT'), right: e('VITD') },
-  { left: e('LDH'), right: p('PAN_EAB_ART') },
-  { left: e('HBVAGS'), right: p('PAN_EAB_VEN') },
-  { left: e('HCVG'), right: e('LACT') },
-  { left: e('HIVAC'), right: null },
-  { left: e('VDRL'), right: null },
-  { left: e('GRUPO'), right: null },
+  { left: e('GLU'), right: e('MIOG') },
+  { left: p('PAN_CTOG'), right: e('TROP_I') },
+  { left: e('UREA'), right: e('TROP_US') },
+  { left: e('CREATI'), right: e('PROBNP') },
+  { left: e('AU'), right: e('DDIM') },
+  { left: p('PAN_HEP'), right: e('LPA') },
+  { left: p('PAN_LIP'), right: p('PAN_ELP') },
+  { left: p('PAN_IONO'), right: e('PSA') },
+  { left: e('CL'), right: e('TSH') },
+  { left: e('CA_ION'), right: e('T3') },
+  { left: e('MG'), right: e('T4') },
+  { left: e('CA'), right: e('T4L') },
+  { left: e('P'), right: e('B12') },
+  { left: p('PAN_COAG'), right: e('VITD') },
+  { left: e('INR'), right: p('PAN_FERR') },
+  { left: e('PROT_T'), right: e('VDRL') },
+  { left: e('ALB'), right: e('HBVAGS') },
+  { left: e('VSG'), right: e('HCVG') },
+  { left: e('PCR_US'), right: e('HIVAC') },
+  { left: e('AMIL'), right: e('GRUPO') },
+  { left: e('LIP'), right: p('PAN_EAB_ART') },
+  { left: e('GGT'), right: p('PAN_EAB_VEN') },
+  { left: e('LDH'), right: e('LACT') },
 ];
+
+/** Códigos de orina del formulario papel (material Orina; no van en grilla Sangre). */
+export const ORINA_SOLICITUD_PAPEL_CODIGOS = [
+  'PAN_ORI',
+  'PAN_CLEAR',
+  'PAN_IONO_U',
+  'PAN_IONO_U24',
+  'PAN_PROT24',
+  'PROT_U_AZ',
+  'PAN_MALB24',
+  'PAN_MALB_AZ',
+] as const;
 
 /** Cultivos / micro para sección de pedido (alineado a EstudioMicrobiologia). */
 export const MICRO_PEDIDO_CODIGOS = [
@@ -183,12 +190,15 @@ export function countPapelSelection(
   return panelesIds.size + examenesIds.size;
 }
 
-/** Códigos del formulario papel (examenes + paneles). */
+/** Códigos del formulario papel (sangre + orina frecuentes). */
 export function papelCodigosSet(): Set<string> {
   const s = new Set<string>();
   for (const row of SOLICITUD_ANALISIS_PAPEL_ROWS) {
     if (row.left) s.add(row.left.codigo);
     if (row.right) s.add(row.right.codigo);
+  }
+  for (const codigo of ORINA_SOLICITUD_PAPEL_CODIGOS) {
+    s.add(codigo);
   }
   return s;
 }

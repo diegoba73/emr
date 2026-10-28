@@ -151,6 +151,17 @@ def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> 
             # anterior ya no representa ese resultado ni debe alimentar derivados.
             resultado.valor_numerico = None
 
+        # Inferir número desde "<0.1" / ">20" si quedó vacío (FE viejo o solo texto).
+        # No toca "Positivo"/texto libre; no reescribe filas que no pasan por carga.
+        if resultado.valor_numerico is None:
+            from laboratorio.valor_operador import parse_valor_con_operador
+
+            parsed = parse_valor_con_operador(resultado.valor_obtenido)
+            if parsed.operador is not None and parsed.numero is not None:
+                resultado.valor_numerico = quantize_valor_numerico(parsed.numero)
+
+        valor_numerico = resultado.valor_numerico
+
     unidad_payload = item.get("unidad")
     if unidad_payload is not None and str(unidad_payload).strip():
         resultado.unidad = str(unidad_payload).strip()

@@ -19,6 +19,7 @@ import {
   type DerivadosContexto,
 } from './calculosDerivados';
 import { getSysmexUnidad } from './sysmexHemograma';
+import { numeroParaCalculo, parseValorConOperador } from './valorOperador';
 
 export type CargaDilucionOpts = {
   /** Órdenes nuevas: CREA_U en pantalla = CM260; clínico = ×20. */
@@ -206,8 +207,8 @@ export function validateCargaResultadosMuestra(
 export function parseValorNumerico(raw: string): number | string | undefined {
   const t = raw.trim();
   if (!t) return undefined;
-  const n = Number(t);
-  if (!Number.isNaN(n)) return n;
+  const parsed = parseValorConOperador(t);
+  if (parsed.numero != null) return parsed.numero;
   return t;
 }
 
@@ -514,10 +515,10 @@ export function draftValorClinicoNumerico(
     let n: number | null = null;
     if (payload.valor_numerico != null && payload.valor_numerico !== '') {
       n = Number(payload.valor_numerico);
-    } else {
-      n = Number(payload.valor);
+      if (!Number.isFinite(n)) n = null;
     }
-    if (!Number.isFinite(n)) return null;
+    if (n == null) n = numeroParaCalculo(payload.valor);
+    if (n == null) return null;
     if (opts?.dilucionCreatinuria && esCreatininuria(codigo)) {
       return clinicoDesdeEquipoCreatinuria(n);
     }
@@ -525,10 +526,9 @@ export function draftValorClinicoNumerico(
   }
   if (r.valor_numerico != null && String(r.valor_numerico).trim() !== '') {
     const n = Number(r.valor_numerico);
-    return Number.isFinite(n) ? n : null;
+    if (Number.isFinite(n)) return n;
   }
-  const n = Number((r.valor_obtenido || '').trim());
-  return Number.isFinite(n) ? n : null;
+  return numeroParaCalculo((r.valor_obtenido || '').trim());
 }
 
 function patchIndiceTicket(

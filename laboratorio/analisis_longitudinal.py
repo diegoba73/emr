@@ -198,7 +198,7 @@ def historial_analitos_solicitud(
     """
     Previa a guardar: últimos N valores por cada tipo_examen de la orden.
     """
-    limit = max(1, min(int(limit or 10), 20))
+    limit = max(1, min(int(limit or 10), 50))
     resultados = list(
         ResultadoExamen.objects.filter(solicitud=solicitud).select_related("tipo_examen")
     )

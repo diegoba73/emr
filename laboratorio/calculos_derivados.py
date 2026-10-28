@@ -92,8 +92,14 @@ FACTOR_TRANS_DESDE_TIBC = Decimal("0.8")
 
 
 def _dec(value: Any) -> Decimal | None:
+    """Parsea número; acepta ``<0.1`` / ``>20`` usando el límite como valor de trabajo."""
     if value is None or value == "":
         return None
+    from laboratorio.valor_operador import numero_para_calculo
+
+    num = numero_para_calculo(value)
+    if num is not None:
+        return num
     try:
         return Decimal(str(value))
     except Exception:

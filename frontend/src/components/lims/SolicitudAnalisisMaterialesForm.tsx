@@ -29,7 +29,9 @@ import type {
 } from '../../types/lims';
 import {
   esExamenExcluidoDeLabClinico,
+  ORINA_SOLICITUD_PAPEL_CODIGOS,
   SOLICITUD_ANALISIS_PAPEL_ROWS,
+  type PapelItemRef,
 } from '../../modules/laboratorio/solicitudAnalisisPapelLayout';
 import { EXAMENES_CUBIERTOS_POR_PANEL } from '../../modules/laboratorio/solicitudAnalisisSelectionRules';
 import type { MicroPedidoItem } from './SolicitudMicrobiologiaForm';
@@ -44,18 +46,9 @@ import {
   type OrinaModalidad,
 } from '../../utils/limsCatalogoPedidoMaterial';
 
-const ORINA_GRILLA_CODIGOS: readonly string[] = [
-  'PAN_ORI',
-  'PAN_CLEAR',
-  'PAN_IONO_U',
-  'PAN_IONO_U24',
-  'PAN_PROT24',
-  'PROT_U_AZ',
-  'PAN_MALB24',
-  'PAN_MALB_AZ',
-];
+const ORINA_GRILLA_CODIGOS: readonly string[] = ORINA_SOLICITUD_PAPEL_CODIGOS;
 
-const ORINA_EN_PAPEL = new Set(ORINA_GRILLA_CODIGOS);
+const ORINA_EN_PAPEL = new Set<string>(ORINA_GRILLA_CODIGOS);
 
 /** Códigos que se muestran al abrir el selector sin tipear (Sangre es el default). */
 const MATERIALES_FRECUENTES_FALLBACK = [
@@ -158,6 +151,8 @@ type CatalogItem = {
   nombre: string;
 };
 
+type CatalogGridRow = { left: CatalogItem | null; right: CatalogItem | null };
+
 interface MaterialBlock {
   id: string;
   materialKey: string;
@@ -218,28 +213,49 @@ function newBlockId(): string {
   return `mat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function resolvePapelCatalogItem(
+  ref: PapelItemRef | null | undefined,
+  paneles: LimsPanelExamen[],
+  examenes: LimsTipoExamen[],
+  seen: Set<string>
+): CatalogItem | null {
+  if (!ref || ORINA_EN_PAPEL.has(ref.codigo) || seen.has(ref.codigo)) return null;
+  if (ref.kind === 'panel') {
+    const p = paneles.find((x) => x.codigo === ref.codigo && x.activo !== false);
+    if (!p) return null;
+    seen.add(p.codigo);
+    return { kind: 'panel', id: p.id, codigo: p.codigo, nombre: p.nombre };
+  }
+  const e = examenes.find((x) => x.codigo === ref.codigo && x.activo !== false);
+  if (!e || esExamenExcluidoDeLabClinico(e)) return null;
+  seen.add(e.codigo);
+  return { kind: 'examen', id: e.id, codigo: e.codigo, nombre: e.nombre };
+}
+
+/** Filas con columnas izquierda/derecha reales (no relleno flat i%2). */
+function buildSangreRows(
+  paneles: LimsPanelExamen[],
+  examenes: LimsTipoExamen[]
+): CatalogGridRow[] {
+  const seen = new Set<string>();
+  const rows: CatalogGridRow[] = [];
+  for (const row of SOLICITUD_ANALISIS_PAPEL_ROWS) {
+    const left = resolvePapelCatalogItem(row.left, paneles, examenes, seen);
+    const right = resolvePapelCatalogItem(row.right, paneles, examenes, seen);
+    if (left || right) rows.push({ left, right });
+  }
+  return rows;
+}
+
 function buildSangreGrid(
   paneles: LimsPanelExamen[],
   examenes: LimsTipoExamen[]
 ): CatalogItem[] {
   const items: CatalogItem[] = [];
-  const seen = new Set<string>();
-  SOLICITUD_ANALISIS_PAPEL_ROWS.forEach((row) => {
-    [row.left, row.right].forEach((ref) => {
-      if (!ref || ORINA_EN_PAPEL.has(ref.codigo) || seen.has(ref.codigo)) return;
-      if (ref.kind === 'panel') {
-        const p = paneles.find((x) => x.codigo === ref.codigo && x.activo !== false);
-        if (!p) return;
-        items.push({ kind: 'panel', id: p.id, codigo: p.codigo, nombre: p.nombre });
-        seen.add(p.codigo);
-      } else {
-        const e = examenes.find((x) => x.codigo === ref.codigo && x.activo !== false);
-        if (!e || esExamenExcluidoDeLabClinico(e)) return;
-        items.push({ kind: 'examen', id: e.id, codigo: e.codigo, nombre: e.nombre });
-        seen.add(e.codigo);
-      }
-    });
-  });
+  for (const row of buildSangreRows(paneles, examenes)) {
+    if (row.left) items.push(row.left);
+    if (row.right) items.push(row.right);
+  }
   return items;
 }
 
@@ -537,7 +553,7 @@ export default function SolicitudAnalisisMaterialesForm({
   } as const;
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2.5}>
       <Typography variant="body2" color="text.secondary">
         Por cada material pedís Lab. Clínico y, si aplica, Microbiología en la misma tarjeta.
         Por defecto Sangre; al abrir el selector aparecen los frecuentes y el resto se busca tipando.
@@ -546,6 +562,8 @@ export default function SolicitudAnalisisMaterialesForm({
       {blocks.map((block, index) => {
         const matDef = findMat(block.materialKey);
         const grid = matDef ? gridForMaterial(matDef, paneles, examenes) : [];
+        const sangreRows =
+          matDef?.ui_preset === 'sangre' ? buildSangreRows(paneles, examenes) : null;
         const opcionesMaterial = materiales.filter(
           (m) => m.codigo === block.materialKey || !materialesUsados.has(m.codigo)
         );
@@ -564,12 +582,12 @@ export default function SolicitudAnalisisMaterialesForm({
         );
 
         return (
-          <Paper key={block.id} variant="outlined" sx={{ p: 2 }}>
+          <Paper key={block.id} variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Stack
               direction="row"
               alignItems="center"
               justifyContent="space-between"
-              sx={{ mb: 1.5 }}
+              sx={{ mb: 2 }}
             >
               <Typography variant="subtitle1" fontWeight={600}>
                 Material {index + 1}
@@ -587,7 +605,7 @@ export default function SolicitudAnalisisMaterialesForm({
 
             <Autocomplete
               size="small"
-              sx={{ mb: 2, maxWidth: 520 }}
+              sx={{ mb: 2.5, maxWidth: 560 }}
               options={opcionesMaterial}
               value={matDef || null}
               disabled={disabled}
@@ -651,14 +669,14 @@ export default function SolicitudAnalisisMaterialesForm({
                       es de microbiología, no de tubo.
                     </Typography>
                   ) : null}
-                  {grid.length > 0 && (
+                  {(sangreRows ? sangreRows.length > 0 : grid.length > 0) && (
                     <>
                       {block.materialKey === 'ORINA' && orinaModalidad && (
                         <Typography
                           variant="caption"
                           color="text.secondary"
                           display="block"
-                          sx={{ mb: 1 }}
+                          sx={{ mb: 1.25 }}
                         >
                           {orinaModalidad === '24h'
                             ? 'Seleccionaste orina 24 hs: las de al azar quedan bloqueadas. Orina completa sigue disponible.'
@@ -673,72 +691,181 @@ export default function SolicitudAnalisisMaterialesForm({
                           border: 1,
                           borderColor: 'divider',
                           borderRadius: 1,
-                          mb: 1.5,
-                          maxHeight: { xs: '28vh', sm: '32vh' },
+                          mb: 2,
+                          maxHeight: { xs: '42vh', sm: '52vh' },
+                          minHeight: { sm: 280 },
                           overflowY: 'auto',
+                          overscrollBehavior: 'contain',
                         }}
                       >
-                        {grid.map((item, i) => {
-                          let checked =
-                            item.kind === 'panel'
-                              ? selectedPanelesIds.has(item.id)
-                              : selectedExamenesIds.has(item.id);
-                          let itemDisabled = disabled;
-                          if (item.kind === 'examen') {
-                            const panelQueCubre = EXAMENES_CUBIERTOS_POR_PANEL[item.codigo];
-                            if (panelQueCubre) {
-                              const panId = panelIdByCodigo.get(panelQueCubre);
-                              if (panId != null && selectedPanelesIds.has(panId)) {
-                                checked = true;
-                                itemDisabled = true;
+                        {sangreRows
+                          ? sangreRows.map((row, index) => {
+                              const renderCell = (
+                                item: CatalogItem | null,
+                                side: 'left' | 'right'
+                              ) => {
+                                if (!item) {
+                                  return (
+                                    <Box
+                                      key={`empty-${side}-${index}`}
+                                      sx={{
+                                        px: 1.25,
+                                        py: 0.85,
+                                        minHeight: 44,
+                                        borderBottom:
+                                          index < sangreRows.length - 1 ? 1 : 0,
+                                        borderColor: 'divider',
+                                        borderLeft: {
+                                          sm: side === 'right' ? 1 : 0,
+                                        },
+                                      }}
+                                    />
+                                  );
+                                }
+                                let checked =
+                                  item.kind === 'panel'
+                                    ? selectedPanelesIds.has(item.id)
+                                    : selectedExamenesIds.has(item.id);
+                                let itemDisabled = disabled;
+                                if (item.kind === 'examen') {
+                                  const panelQueCubre =
+                                    EXAMENES_CUBIERTOS_POR_PANEL[item.codigo];
+                                  if (panelQueCubre) {
+                                    const panId = panelIdByCodigo.get(panelQueCubre);
+                                    if (panId != null && selectedPanelesIds.has(panId)) {
+                                      checked = true;
+                                      itemDisabled = true;
+                                    }
+                                  }
+                                }
+                                const onToggle =
+                                  item.kind === 'panel' ? onTogglePanel : onToggleExamen;
+                                return (
+                                  <Box
+                                    key={`${item.kind}-${item.id}`}
+                                    sx={{
+                                      px: 1.25,
+                                      py: 0.85,
+                                      borderBottom:
+                                        index < sangreRows.length - 1 ? 1 : 0,
+                                      borderColor: 'divider',
+                                      borderLeft: {
+                                        sm: side === 'right' ? 1 : 0,
+                                      },
+                                    }}
+                                  >
+                                    <FormControlLabel
+                                      sx={{
+                                        alignItems: 'flex-start',
+                                        m: 0,
+                                        width: '100%',
+                                      }}
+                                      control={
+                                        <Checkbox
+                                          size="small"
+                                          checked={checked}
+                                          disabled={itemDisabled}
+                                          onChange={() => onToggle(item.id)}
+                                          sx={{ pt: 0.35 }}
+                                        />
+                                      }
+                                      label={
+                                        <Typography
+                                          variant="body2"
+                                          sx={{ lineHeight: 1.4 }}
+                                        >
+                                          {item.nombre}{' '}
+                                          <Typography
+                                            component="span"
+                                            variant="caption"
+                                            color="text.secondary"
+                                          >
+                                            ({item.codigo})
+                                          </Typography>
+                                        </Typography>
+                                      }
+                                    />
+                                  </Box>
+                                );
+                              };
+                              return (
+                                <React.Fragment key={`sangre-row-${index}`}>
+                                  {renderCell(row.left, 'left')}
+                                  {renderCell(row.right, 'right')}
+                                </React.Fragment>
+                              );
+                            })
+                          : grid.map((item, i) => {
+                              let checked =
+                                item.kind === 'panel'
+                                  ? selectedPanelesIds.has(item.id)
+                                  : selectedExamenesIds.has(item.id);
+                              let itemDisabled = disabled;
+                              if (item.kind === 'examen') {
+                                const panelQueCubre =
+                                  EXAMENES_CUBIERTOS_POR_PANEL[item.codigo];
+                                if (panelQueCubre) {
+                                  const panId = panelIdByCodigo.get(panelQueCubre);
+                                  if (panId != null && selectedPanelesIds.has(panId)) {
+                                    checked = true;
+                                    itemDisabled = true;
+                                  }
+                                }
                               }
-                            }
-                          }
-                          if (block.materialKey === 'ORINA' && !checked) {
-                            const mod = modalidadDeCodigoOrina(item.codigo);
-                            if (orinaModalidad === '24h' && mod === 'azar') itemDisabled = true;
-                            if (orinaModalidad === 'azar' && mod === '24h') itemDisabled = true;
-                          }
-                          const onToggle =
-                            item.kind === 'panel' ? onTogglePanel : onToggleExamen;
-                          return (
-                            <Box
-                              key={`${item.kind}-${item.id}`}
-                              sx={{
-                                px: 1,
-                                py: 0.5,
-                                borderBottom: 1,
-                                borderColor: 'divider',
-                                borderLeft: { sm: i % 2 === 1 ? 1 : 0 },
-                              }}
-                            >
-                              <FormControlLabel
-                                sx={{ alignItems: 'flex-start', m: 0, width: '100%' }}
-                                control={
-                                  <Checkbox
-                                    size="small"
-                                    checked={checked}
-                                    disabled={itemDisabled}
-                                    onChange={() => onToggle(item.id)}
-                                    sx={{ pt: 0.5 }}
+                              if (block.materialKey === 'ORINA' && !checked) {
+                                const mod = modalidadDeCodigoOrina(item.codigo);
+                                if (orinaModalidad === '24h' && mod === 'azar')
+                                  itemDisabled = true;
+                                if (orinaModalidad === 'azar' && mod === '24h')
+                                  itemDisabled = true;
+                              }
+                              const onToggle =
+                                item.kind === 'panel' ? onTogglePanel : onToggleExamen;
+                              return (
+                                <Box
+                                  key={`${item.kind}-${item.id}`}
+                                  sx={{
+                                    px: 1.25,
+                                    py: 0.85,
+                                    borderBottom: 1,
+                                    borderColor: 'divider',
+                                    borderLeft: { sm: i % 2 === 1 ? 1 : 0 },
+                                  }}
+                                >
+                                  <FormControlLabel
+                                    sx={{
+                                      alignItems: 'flex-start',
+                                      m: 0,
+                                      width: '100%',
+                                    }}
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={checked}
+                                        disabled={itemDisabled}
+                                        onChange={() => onToggle(item.id)}
+                                        sx={{ pt: 0.35 }}
+                                      />
+                                    }
+                                    label={
+                                      <Typography
+                                        variant="body2"
+                                        sx={{ lineHeight: 1.4 }}
+                                      >
+                                        {item.nombre}{' '}
+                                        <Typography
+                                          component="span"
+                                          variant="caption"
+                                          color="text.secondary"
+                                        >
+                                          ({item.codigo})
+                                        </Typography>
+                                      </Typography>
+                                    }
                                   />
-                                }
-                                label={
-                                  <Typography variant="body2" sx={{ lineHeight: 1.35 }}>
-                                    {item.nombre}{' '}
-                                    <Typography
-                                      component="span"
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
-                                      ({item.codigo})
-                                    </Typography>
-                                  </Typography>
-                                }
-                              />
-                            </Box>
-                          );
-                        })}
+                                </Box>
+                              );
+                            })}
                       </Box>
                     </>
                   )}

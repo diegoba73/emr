@@ -373,3 +373,7 @@ class TestAnalisisLongitudinalAPI(APITestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(r.data["limit"], 2)
         self.assertEqual(len(r.data["analitos"][0]["previos"]), 2)
+
+        r_cap = self.client.get(f"/api/lab/solicitudes/{sol.pk}/historial-analitos/?n=99")
+        self.assertEqual(r_cap.status_code, status.HTTP_200_OK)
+        self.assertEqual(r_cap.data["limit"], 50)

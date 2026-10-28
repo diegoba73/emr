@@ -22,6 +22,8 @@ interface ConsultaAmbulatoriaFormProps {
   canEdit: boolean;
   forceEdit?: boolean;
   onSaveSuccess?: () => void;
+  /** Pestaña inicial: detalle clínico (0) o pedidos y resultados (1). */
+  initialTab?: 'detalle' | 'pedidos';
 }
 
 type ConsultaFormState = {
@@ -114,19 +116,23 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
   atencionId,
   canEdit,
   onSaveSuccess,
+  initialTab = 'detalle',
 }) => {
   const { data: atencion, isLoading, isFetching } = useAtencionQuery(atencionId);
   const [consulta, setConsulta] = useState<ConsultaAmbulatoriaRecord | null>(null);
   const initializedRef = useRef(false);
   const skipDraftPersistRef = useRef(false);
-  const [tab, setTab] = useState(0);
-
+  const [tab, setTab] = useState(initialTab === 'pedidos' ? 1 : 0);
   const [formState, setFormState] = useState<ConsultaFormState>({ ...EMPTY_FORM });
   const saveMutation = useSaveConsultaAmbulatoriaMutation();
   const closeMutation = useCloseAtencionMutation();
   const draftKey = `consulta-amb-borrador-${atencionId}`;
   const formStateRef = useRef(formState);
   formStateRef.current = formState;
+
+  useEffect(() => {
+    setTab(initialTab === 'pedidos' ? 1 : 0);
+  }, [atencionId, initialTab]);
 
   const readDraft = useCallback((): Partial<ConsultaFormState> | null => {
     try {
@@ -371,20 +377,6 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
         </Alert>
       )}
 
-      <AtencionPedidosSection
-        atencionId={atencionId}
-        canEdit={canSave}
-        pacienteId={
-          (
-            atencion?.paciente && typeof atencion.paciente === 'object'
-              ? atencion.paciente.id
-              : typeof atencion?.paciente === 'number'
-                ? atencion.paciente
-                : atencion?.paciente_id
-          ) ?? undefined
-        }
-      />
-
       <Tabs
         value={tab}
         onChange={(_e, v) => setTab(v)}
@@ -392,10 +384,8 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
         scrollButtons="auto"
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 0 }}
       >
-        <Tab label="Anamnesis" id="ca-tab-0" aria-controls="ca-panel-0" />
-        <Tab label="Examen físico" id="ca-tab-1" aria-controls="ca-panel-1" />
-        <Tab label="Diagnóstico" id="ca-tab-2" aria-controls="ca-panel-2" />
-        <Tab label="Plan" id="ca-tab-3" aria-controls="ca-panel-3" />
+        <Tab label="Detalle clínico" id="ca-tab-0" aria-controls="ca-panel-0" />
+        <Tab label="Pedidos y resultados" id="ca-tab-1" aria-controls="ca-panel-1" />
       </Tabs>
 
       <ConsultaFormTabPanel value={tab} index={0}>
@@ -404,30 +394,34 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
           {textField('antecedentes_relevantes', 'Antecedentes relevantes', 2)}
           {textField('alergias', 'Alergias', 2)}
           {textField('medicacion_actual', 'Medicación actual', 2)}
-        </Stack>
-      </ConsultaFormTabPanel>
-
-      <ConsultaFormTabPanel value={tab} index={1}>
-        <Stack spacing={2}>
           <SignosVitalesPanel
             atencionId={atencionId}
             canEdit={canSave}
             initialItems={atencion?.signos_vitales}
           />
           {textField('examen_fisico', 'Examen físico *', 4)}
-        </Stack>
-      </ConsultaFormTabPanel>
-
-      <ConsultaFormTabPanel value={tab} index={2}>
-        <Stack spacing={2}>
           {textField('diagnostico_presuntivo', 'Diagnóstico presuntivo', 3)}
           {textField('diagnostico_definitivo', 'Diagnóstico definitivo', 2)}
           {textField('observaciones_medicas', 'Observaciones médicas', 2)}
+          {textField('plan_manejo', 'Plan de manejo *', 3)}
         </Stack>
       </ConsultaFormTabPanel>
 
-      <ConsultaFormTabPanel value={tab} index={3}>
-        <Stack spacing={2}>{textField('plan_manejo', 'Plan de manejo *', 3)}</Stack>
+      <ConsultaFormTabPanel value={tab} index={1}>
+        <AtencionPedidosSection
+          atencionId={atencionId}
+          canEdit={canSave}
+          variant="full"
+          pacienteId={
+            (
+              atencion?.paciente && typeof atencion.paciente === 'object'
+                ? atencion.paciente.id
+                : typeof atencion?.paciente === 'number'
+                  ? atencion.paciente
+                  : atencion?.paciente_id
+            ) ?? undefined
+          }
+        />
       </ConsultaFormTabPanel>
 
       {canSave && (
