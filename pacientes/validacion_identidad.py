@@ -8,9 +8,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# Al menos una letra unicode (no dígito ni signo).
-_LETRA = re.compile(r"[^\W\d_]", re.UNICODE)
+_SOLO_LETRAS = re.compile(r"^[^\W\d_]+$", re.UNICODE)
 _SOLO_DIGITOS = re.compile(r"^\d+$")
+# Solo letras unicode y espacios entre palabras (sin puntos, guiones, dígitos).
+_NOMBRE_PERMITIDO = re.compile(r"^[^\W\d_]+(?:\s+[^\W\d_]+)*$", re.UNICODE)
 
 # Placeholders frecuentes de carga de prueba / “para salir del paso”.
 # Solo placeholders cortos / obvios. No listar DNI de 7–8 dígitos “bonitos”
@@ -42,8 +43,9 @@ def _as_text(value: Any) -> str:
 
 def mensaje_nombre_invalido(campo: str = "nombre") -> str:
     return (
-        f"El {campo} no parece válido. Usá un nombre real "
-        "(no puntos, guiones ni símbolos solos)."
+        f"El {campo} debe ser completo, solo letras y espacios "
+        f"(ej. DIEGO o DIEGO ARMANDO). No uses puntos, abreviaturas "
+        f"ni letras sueltas."
     )
 
 
@@ -56,12 +58,24 @@ def mensaje_dni_dudoso() -> str:
 
 
 def nombre_o_apellido_valido(value: Any) -> bool:
-    """True si hay ≥2 letras (unicode). Rechaza ``.``, ``...``, ``-``, ``111``."""
+    """Nombre/apellido completo: solo letras y espacios; cada palabra ≥2 letras.
+
+    Acepta ``DIEGO``, ``DIEGO ARMANDO``, ``BAULDE``, ``DE LA CRUZ``.
+    Rechaza ``.``, ``d.d.``, ``D``, guiones, dígitos y cualquier símbolo.
+    """
     text = _as_text(value)
     if not text:
         return False
-    letras = _LETRA.findall(text)
-    return len(letras) >= 2
+    # Colapsar espacios internos para validar forma canónica.
+    compact = " ".join(text.split())
+    if not _NOMBRE_PERMITIDO.match(compact):
+        return False
+    for palabra in compact.split(" "):
+        if len(palabra) < 2:
+            return False
+        if not _SOLO_LETRAS.match(palabra):
+            return False
+    return True
 
 
 def dni_dudoso(value: Any) -> bool:

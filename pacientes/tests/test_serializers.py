@@ -109,6 +109,13 @@ class TestPacienteSerializerIdentidadDudosa:
         assert not serializer.is_valid()
         assert "nombre" in serializer.errors
 
+    def test_create_rechaza_nombre_abreviado_con_puntos(self):
+        serializer = PacienteSerializer(
+            data=_payload_create(dni="30111223", nombre="d.d.", apellido="Perez")
+        )
+        assert not serializer.is_valid()
+        assert "nombre" in serializer.errors
+
     def test_create_rechaza_dni_11111(self):
         serializer = PacienteSerializer(data=_payload_create(dni="11111"))
         assert not serializer.is_valid()

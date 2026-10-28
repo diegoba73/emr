@@ -52,7 +52,7 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Backfill opcional de `creado_por` / `modificado_por` en datos históricos. | **[DEUDA]** |
 | Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
 | Prevención al alta: mensaje claro DNI duplicado + `GET /api/pacientes/candidatos-duplicado/` (DNI exacto bloquea; identidad nombre+apellido+fecha avisa). UI alta principal y LIMS. | **[IMPLEMENTADO]** |
-| Alta/edición API rechaza nombre/apellido sin ≥2 letras (p. ej. `.`) y DNI dudoso (muy corto, dígitos iguales, placeholders `11111`/`12345`). No reescribe legacy hasta que se edite ese campo. | **[IMPLEMENTADO]** |
+| Alta/edición API: nombre/apellido solo letras+espacios, cada palabra ≥2 letras (ej. `DIEGO ARMANDO` / `BAULDE`); rechaza puntos, símbolos, abreviaturas (`d.d.`) y letras sueltas. DNI dudoso (muy corto, dígitos iguales, placeholders `11111`/`12345`). No reescribe legacy hasta editar ese campo. | **[IMPLEMENTADO]** |
 | Soft delete / desactivación (`activo=False`) / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
 | Multi-afiliación OS (`PacienteAfiliacion`) + snapshot en órdenes nuevas (`obra_social_orden`). Órdenes viejas: fallback a ficha. Catálogo formal / reglas / pagos: fase posterior. | **[IMPLEMENTADO]** fase 1 |
