@@ -757,7 +757,11 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         return queryset.none()
 
     def _restringir_solicitudes_por_sede(self, queryset):
-        from usuarios.sedes import filtro_origen_lims, sedes_efectivas
+        # Módulo opcional (WIP sedes): sin él no filtrar, no tumbar detalle/listado.
+        try:
+            from usuarios.sedes import filtro_origen_lims, sedes_efectivas
+        except ImportError:
+            return queryset
 
         origenes = filtro_origen_lims(sedes_efectivas(self.request.user))
         if origenes is None:
