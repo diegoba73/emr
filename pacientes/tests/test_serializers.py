@@ -91,13 +91,57 @@ class TestPacienteSerializerNormalizacion:
         serializer = PacienteSerializer(
             data={
                 "dni": "   ",
-                "nombre": "X",
-                "apellido": "Y",
+                "nombre": "Ana",
+                "apellido": "Lopez",
                 "fecha_nacimiento": date(2000, 1, 1),
             }
         )
         assert not serializer.is_valid()
         assert "dni" in serializer.errors
+
+
+@pytest.mark.django_db
+class TestPacienteSerializerIdentidadDudosa:
+    def test_create_rechaza_nombre_punto(self):
+        serializer = PacienteSerializer(
+            data=_payload_create(dni="30111222", nombre=".", apellido="Perez")
+        )
+        assert not serializer.is_valid()
+        assert "nombre" in serializer.errors
+
+    def test_create_rechaza_dni_11111(self):
+        serializer = PacienteSerializer(data=_payload_create(dni="11111"))
+        assert not serializer.is_valid()
+        assert "dni" in serializer.errors
+
+    def test_create_rechaza_dni_todos_iguales(self):
+        serializer = PacienteSerializer(data=_payload_create(dni="00000000"))
+        assert not serializer.is_valid()
+        assert "dni" in serializer.errors
+
+    def test_partial_update_rechaza_apellido_basura(self):
+        paciente = Paciente.objects.create(
+            dni="30111333", nombre="Ana", apellido="Lopez"
+        )
+        serializer = PacienteSerializer(
+            paciente, data={"apellido": "..."}, partial=True
+        )
+        assert not serializer.is_valid()
+        assert "apellido" in serializer.errors
+
+    def test_partial_update_rechaza_dni_placeholder(self):
+        paciente = Paciente.objects.create(
+            dni="30111444", nombre="Ana", apellido="Lopez"
+        )
+        serializer = PacienteSerializer(
+            paciente, data={"dni": "11111"}, partial=True
+        )
+        assert not serializer.is_valid()
+        assert "dni" in serializer.errors
+
+    def test_create_dni_real_ocho_digitos_ok(self):
+        serializer = PacienteSerializer(data=_payload_create(dni="30111555"))
+        assert serializer.is_valid(), serializer.errors
 
 
 @pytest.mark.django_db

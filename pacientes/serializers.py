@@ -9,6 +9,12 @@ from rest_framework.validators import UniqueValidator
 from .models import Paciente, PacienteAfiliacion
 from .texto import normalizar_texto_paciente
 from .afiliaciones import sync_principal_desde_paciente_fields
+from .validacion_identidad import (
+    dni_dudoso,
+    mensaje_dni_dudoso,
+    mensaje_nombre_invalido,
+    nombre_o_apellido_valido,
+)
 
 _DNI_UNIQUE_MSG = (
     "Ya existe un paciente con este DNI. Usá la ficha existente en lugar de crear otra."
@@ -153,10 +159,20 @@ class PacienteSerializer(serializers.ModelSerializer):
         return obj.modificado_por.username
 
     def validate_nombre(self, value):
-        return _normalize_name(value)
+        normalized = _normalize_name(value)
+        if normalized is None or (isinstance(normalized, str) and not normalized.strip()):
+            return normalized
+        if not nombre_o_apellido_valido(normalized):
+            raise serializers.ValidationError(mensaje_nombre_invalido("nombre"))
+        return normalized
 
     def validate_apellido(self, value):
-        return _normalize_name(value)
+        normalized = _normalize_name(value)
+        if normalized is None or (isinstance(normalized, str) and not normalized.strip()):
+            return normalized
+        if not nombre_o_apellido_valido(normalized):
+            raise serializers.ValidationError(mensaje_nombre_invalido("apellido"))
+        return normalized
 
     def validate_direccion(self, value):
         return normalizar_texto_paciente(value)
@@ -168,14 +184,16 @@ class PacienteSerializer(serializers.ModelSerializer):
         return normalizar_texto_paciente(value)
 
     def validate_dni(self, value):
-        # Validación mínima y conservadora: rechaza cadenas vacías o solo
-        # whitespace. No impone formato específico (DNI/pasaporte/cuit) para no
-        # romper datos preexistentes. Unicidad: UniqueValidator (mensaje ES).
+        # Rechaza vacío y placeholders obvios (11111, todos iguales, muy corto).
+        # No impone un único formato (DNI/pasaporte) para no romper docs reales.
+        # Unicidad: UniqueValidator (mensaje ES).
         if value is None:
             raise serializers.ValidationError("El DNI es obligatorio.")
         text = str(value).strip()
         if not text:
             raise serializers.ValidationError("El DNI no puede estar vacío.")
+        if dni_dudoso(text):
+            raise serializers.ValidationError(mensaje_dni_dudoso())
         return text
 
     def validate(self, attrs):
@@ -187,10 +205,14 @@ class PacienteSerializer(serializers.ModelSerializer):
         nombre = attrs.get("nombre")
         if nombre is None or (isinstance(nombre, str) and not nombre.strip()):
             errors["nombre"] = "El nombre es obligatorio al crear un paciente."
+        elif not nombre_o_apellido_valido(nombre):
+            errors["nombre"] = mensaje_nombre_invalido("nombre")
 
         apellido = attrs.get("apellido")
         if apellido is None or (isinstance(apellido, str) and not apellido.strip()):
             errors["apellido"] = "El apellido es obligatorio al crear un paciente."
+        elif not nombre_o_apellido_valido(apellido):
+            errors["apellido"] = mensaje_nombre_invalido("apellido")
 
         if attrs.get("fecha_nacimiento") is None:
             errors["fecha_nacimiento"] = (
