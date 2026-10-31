@@ -8,7 +8,7 @@ Reglas por defecto:
   orina completa, etc.) van al **final** del informe.
 - **Clearance (`PAN_CLEAR`)** no es bloque orina puro: incluye creatininemia (suero)
   y se ordena con la presentación (junto a CREATI), para que al informar el
-  clearance figuren juntos CREATI + CREA_U + DIUR + CLEAR_CREA.
+  clearance figuren juntos CREATI + CREA_U + DIUR + CREA_U24 + CLEAR_CREA.
 - Dentro del bloque orina, **orina completa (PAN_ORI)** va siempre al final.
 - Materiales de pedido (LCR, líquidos, etc.): físicos → celulares → químicos
   (`rank_presentacion_codigo_material`). Sangre/orina usan las reglas de arriba.
@@ -39,6 +39,12 @@ PANELES_ORINA = frozenset(
         "PAN_MALB_AZ",
         "PAN_MALB24",
         "PAN_PROT24",
+        "PAN_CA_U24",
+        "PAN_MG_U24",
+        "PAN_P_U24",
+        "PAN_AU_U24",
+        "PAN_UREA_U24",
+        "PAN_CREA_U24",
     }
 )
 CODIGOS_ORINA_SUELTOS = frozenset({"PROT_U_AZ"})

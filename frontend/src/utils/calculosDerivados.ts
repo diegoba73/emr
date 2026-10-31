@@ -37,9 +37,36 @@ export const CODIGOS_CALCULADOS = new Set([
   'K_U24',
   'CL_U24',
   'MICROALB_24',
+  'CA_U24',
+  'MG_U24',
+  'P_U24',
+  'AU_U24',
+  'UREA_U24',
+  'CREA_U24',
   'RAC',
   'TFG',
 ]);
+
+/** Medido (mg/dL) → calculado (mg/24 hs): conc × DIUR / 100. */
+export const EXCRECION_MG_DL_A_24H: ReadonlyArray<readonly [string, string]> = [
+  ['PROT_U_EQ', 'PROT_U_24'],
+  ['CA_U', 'CA_U24'],
+  ['MG_U', 'MG_U24'],
+  ['P_U', 'P_U24'],
+  ['AU_U', 'AU_U24'],
+  ['UREA_U', 'UREA_U24'],
+  ['CREA_U', 'CREA_U24'],
+];
+
+/** Medido (por L / mEq/L) → calculado (/24 hs): conc × DIUR / 1000. */
+export const EXCRECION_POR_LITRO_A_24H: ReadonlyArray<
+  readonly [string, string, number]
+> = [
+  ['NA_U', 'NA_U24', 0],
+  ['K_U', 'K_U24', 0],
+  ['CL_U', 'CL_U24', 0],
+  ['MICROALB', 'MICROALB_24', 1],
+];
 
 export const FORMULA_LEUCO_CODIGOS = new Set([
   'NEUT_CAY',
@@ -282,26 +309,10 @@ export function calcularDerivados(
     out.CLEAR_CREA = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
-  const protEq = valores.PROT_U_EQ;
-  if (protEq != null && diur != null) {
-    const prot24 = calcExcrecionMgDlA24h(protEq, diur);
-    if (prot24 != null) {
-      out.PROT_U_24 = { numerico: prot24, informe: fmt(prot24, 0) };
-    } else {
-      out.PROT_U_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
-    }
-  } else if (protEq != null) {
-    out.PROT_U_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
-  }
-
-  for (const [medido, calculado] of [
-    ['NA_U', 'NA_U24'],
-    ['K_U', 'K_U24'],
-    ['CL_U', 'CL_U24'],
-  ] as const) {
+  for (const [medido, calculado] of EXCRECION_MG_DL_A_24H) {
     const conc = valores[medido];
     if (conc != null && diur != null) {
-      const exc = calcExcrecionPorLitroA24h(conc, diur, 0);
+      const exc = calcExcrecionMgDlA24h(conc, diur);
       if (exc != null) {
         out[calculado] = { numerico: exc, informe: fmt(exc, 0) };
       } else {
@@ -312,18 +323,21 @@ export function calcularDerivados(
     }
   }
 
-  const microalb = valores.MICROALB;
-  if (microalb != null && diur != null) {
-    const malb24 = calcExcrecionPorLitroA24h(microalb, diur, 1);
-    if (malb24 != null) {
-      out.MICROALB_24 = { numerico: malb24, informe: fmt(malb24, 1) };
-    } else {
-      out.MICROALB_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  for (const [medido, calculado, places] of EXCRECION_POR_LITRO_A_24H) {
+    const conc = valores[medido];
+    if (conc != null && diur != null) {
+      const exc = calcExcrecionPorLitroA24h(conc, diur, places);
+      if (exc != null) {
+        out[calculado] = { numerico: exc, informe: fmt(exc, places) };
+      } else {
+        out[calculado] = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+      }
+    } else if (conc != null) {
+      out[calculado] = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
     }
-  } else if (microalb != null) {
-    out.MICROALB_24 = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
+  const microalb = valores.MICROALB;
   if (microalb != null && creaU != null) {
     const rac = calcRac(microalb, creaU);
     if (rac != null) {

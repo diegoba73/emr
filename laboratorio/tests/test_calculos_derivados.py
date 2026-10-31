@@ -155,6 +155,26 @@ class TestCalculosDerivados(TestCase):
         self.assertEqual(out["PROT_U_24"][0], Decimal("1200"))
         self.assertEqual(out["PROT_U_24"][1], "1200")
 
+    def test_quimica_orina_24h_mg_dl(self):
+        # Mismo factor que proteinuria: conc mg/dL × DIUR / 100
+        out = calcular_derivados(
+            {
+                "CA_U": Decimal("10"),
+                "MG_U": Decimal("5"),
+                "P_U": Decimal("40"),
+                "AU_U": Decimal("30"),
+                "UREA_U": Decimal("800"),
+                "CREA_U": Decimal("100"),
+                "DIUR": Decimal("1500"),
+            }
+        )
+        self.assertEqual(out["CA_U24"][1], "150")
+        self.assertEqual(out["MG_U24"][1], "75")
+        self.assertEqual(out["P_U24"][1], "600")
+        self.assertEqual(out["AU_U24"][1], "450")
+        self.assertEqual(out["UREA_U24"][1], "12000")
+        self.assertEqual(out["CREA_U24"][1], "1500")
+
     def test_ionograma_y_microalb_24h(self):
         # 100 mmol/L × 1500 / 1000 = 150 mmol/24 hs
         self.assertEqual(
@@ -253,6 +273,10 @@ class TestCalculosDerivados(TestCase):
         self.assertEqual(
             set(codigos_insumos_de_calculados(["PROT_U_24", "NA_U24"])),
             {"PROT_U_EQ", "DIUR", "NA_U"},
+        )
+        self.assertEqual(
+            set(codigos_insumos_de_calculados(["CA_U24", "CREA_U24"])),
+            {"CA_U", "DIUR", "CREA_U"},
         )
         self.assertEqual(
             set(codigos_insumos_de_calculados(["LDL", "BIL_I", "CF"])),

@@ -72,7 +72,7 @@ describe('calculosDerivados Corte A', () => {
     ).toBe(RESULTADO_NO_CALCULABLE);
   });
 
-  it('orina 24 hs: proteinuria / ionograma / microalbúmina', () => {
+  it('orina 24 hs: proteinuria / ionograma / microalbúmina / química', () => {
     expect(calcExcrecionMgDlA24h(80, 1500)).toBe(1200);
     expect(calcExcrecionPorLitroA24h(100, 1500)).toBe(150);
     const out = calcularDerivados({
@@ -81,6 +81,8 @@ describe('calculosDerivados Corte A', () => {
       K_U: 40,
       CL_U: 90,
       MICROALB: 20,
+      CA_U: 10,
+      CREA_U: 100,
       DIUR: 1500,
     });
     expect(out.PROT_U_24?.numerico).toBe(1200);
@@ -88,6 +90,8 @@ describe('calculosDerivados Corte A', () => {
     expect(out.K_U24?.numerico).toBe(60);
     expect(out.CL_U24?.numerico).toBe(135);
     expect(out.MICROALB_24?.numerico).toBe(30);
+    expect(out.CA_U24?.numerico).toBe(150);
+    expect(out.CREA_U24?.numerico).toBe(1500);
   });
 
   it('orina 24 hs sin diuresis marca no calculable', () => {

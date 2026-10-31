@@ -18,6 +18,12 @@ PANELES_RIESGO = (
     "PAN_MALB24",
     "PAN_CLEAR",
     "PAN_PROT24",
+    "PAN_CA_U24",
+    "PAN_MG_U24",
+    "PAN_P_U24",
+    "PAN_AU_U24",
+    "PAN_UREA_U24",
+    "PAN_CREA_U24",
 )
 
 # Marcadores casi exclusivos de cada panel de riesgo (no se piden sueltos en la práctica).
@@ -26,6 +32,12 @@ FIRMAS_POR_PANEL: dict[str, frozenset[str]] = {
     "PAN_MALB24": frozenset({"MICROALB_24"}),
     "PAN_CLEAR": frozenset({"CLEAR_CREA"}),
     "PAN_PROT24": frozenset({"PROT_U_24"}),
+    "PAN_CA_U24": frozenset({"CA_U24"}),
+    "PAN_MG_U24": frozenset({"MG_U24"}),
+    "PAN_P_U24": frozenset({"P_U24"}),
+    "PAN_AU_U24": frozenset({"AU_U24"}),
+    "PAN_UREA_U24": frozenset({"UREA_U24"}),
+    "PAN_CREA_U24": frozenset({"CREA_U24"}),
 }
 
 # Pedidos típicos que disparaban el bug; no marcarlos como arrastre a borrar.

@@ -70,7 +70,7 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
   {
     codigo: 'PAN_CLEAR',
     nombre: 'Clearance de creatinina',
-    examenes: ['CREATI', 'CREA_U', 'DIUR', 'CLEAR_CREA'],
+    examenes: ['CREATI', 'CREA_U', 'DIUR', 'CREA_U24', 'CLEAR_CREA'],
   },
   {
     codigo: 'PAN_CTOG',
@@ -105,6 +105,36 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
     codigo: 'PAN_PROT24',
     nombre: 'Proteinuria 24 hs',
     examenes: ['PROT_U_EQ', 'DIUR', 'PROT_U_24'],
+  },
+  {
+    codigo: 'PAN_CA_U24',
+    nombre: 'Calciuria 24 hs',
+    examenes: ['CA_U', 'DIUR', 'CA_U24'],
+  },
+  {
+    codigo: 'PAN_MG_U24',
+    nombre: 'Magnesuria 24 hs',
+    examenes: ['MG_U', 'DIUR', 'MG_U24'],
+  },
+  {
+    codigo: 'PAN_P_U24',
+    nombre: 'Fosfaturia 24 hs',
+    examenes: ['P_U', 'DIUR', 'P_U24'],
+  },
+  {
+    codigo: 'PAN_AU_U24',
+    nombre: 'Uricuria 24 hs',
+    examenes: ['AU_U', 'DIUR', 'AU_U24'],
+  },
+  {
+    codigo: 'PAN_UREA_U24',
+    nombre: 'Urea urinaria 24 hs',
+    examenes: ['UREA_U', 'DIUR', 'UREA_U24'],
+  },
+  {
+    codigo: 'PAN_CREA_U24',
+    nombre: 'Creatininuria 24 hs',
+    examenes: ['CREA_U', 'DIUR', 'CREA_U24'],
   },
   {
     codigo: 'PAN_ENA',

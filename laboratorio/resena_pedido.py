@@ -20,7 +20,10 @@ CODIGOS_SIN_RESENA: frozenset[str] = frozenset({
     "PAN_COAG", "INR", "VSG", "PCR_US", "AMIL", "LIP", "GGT", "LDH",
     "CPK", "CPK_MB", "TROP_I", "MIOG", "TROP_US", "PROBNP",
     "PAN_ORI", "PAN_CLEAR", "PAN_IONO_U24", "PAN_IONO_U", "PAN_PROT24",
-    "PROT_U_AZ", "PAN_MALB24", "PAN_MALB_AZ", "PAN_EAB_ART", "PAN_EAB_VEN",
+    "PROT_U_AZ", "PAN_MALB24", "PAN_MALB_AZ",
+    "PAN_CA_U24", "PAN_MG_U24", "PAN_P_U24", "PAN_AU_U24", "PAN_UREA_U24",
+    "PAN_CREA_U24",
+    "PAN_EAB_ART", "PAN_EAB_VEN",
     "LACT",
 })
 # Nota: DDIM (Dímero D) NO está en el listado básico: la obra social suele

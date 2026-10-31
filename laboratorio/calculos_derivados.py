@@ -5,8 +5,9 @@ Perfil lipidico — se cargan COL_TOT, HDL, TG; el resto se calcula.
 Hepatograma — BIL_I = BIL_T - BIL_D.
 Hemograma — VCM, HCM, CHCM (y absolutos de formula leucocitaria).
 Perfil ferrico — se cargan FERR, UIBC (, FERRIT); CF, SAT_FE y TRANS se calculan.
-Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA se calcula.
-Orinas 24 hs — concentración + DIUR → excreción (PROT_U_24, NA/K/CL_U24, MICROALB_24).
+Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA y CREA_U24 se calculan.
+Orinas 24 hs — concentración + DIUR → excreción
+(PROT_U_24, NA/K/CL_U24, MICROALB_24, CA/MG/P/AU/UREA_U24, CREA_U24).
 RAC — se cargan MICROALB + CREA_U; RAC (mg/g) = (MICROALB / CREA_U) × 100.
 TFG — CREATI + edad/sexo del paciente; CKD-EPI 2021 (creatinina, sin raza).
 Calcio iónico — opcional Zeisler desde CA + PROT_T (mg/dL → mmol/L); sigue editable (equipo).
@@ -34,8 +35,38 @@ CODIGOS_HEMO_INDICES = frozenset({"VCM", "HCM", "CHCM"})
 # TIBC = FERR + UIBC; saturación = FERR/TIBC×100; transferrina ≈ TIBC×0.8
 CODIGOS_FERRICO_CALCULADOS = frozenset({"CF", "SAT_FE", "TRANS"})
 CODIGOS_CLEARANCE_CALCULADOS = frozenset({"CLEAR_CREA"})
+# Conc. mg/dL (o mEq/L / mg/L) + DIUR → excreción /24 hs.
 CODIGOS_ORINA_24H_CALCULADOS = frozenset(
-    {"PROT_U_24", "NA_U24", "K_U24", "CL_U24", "MICROALB_24"}
+    {
+        "PROT_U_24",
+        "NA_U24",
+        "K_U24",
+        "CL_U24",
+        "MICROALB_24",
+        "CA_U24",
+        "MG_U24",
+        "P_U24",
+        "AU_U24",
+        "UREA_U24",
+        "CREA_U24",
+    }
+)
+# Medido (mg/dL) → calculado (mg/24 hs): conc × DIUR / 100.
+EXCRECION_MG_DL_A_24H: tuple[tuple[str, str], ...] = (
+    ("PROT_U_EQ", "PROT_U_24"),
+    ("CA_U", "CA_U24"),
+    ("MG_U", "MG_U24"),
+    ("P_U", "P_U24"),
+    ("AU_U", "AU_U24"),
+    ("UREA_U", "UREA_U24"),
+    ("CREA_U", "CREA_U24"),
+)
+# Medido (por L / mEq/L) → calculado (/24 hs): conc × DIUR / 1000.
+EXCRECION_POR_LITRO_A_24H: tuple[tuple[str, str, int], ...] = (
+    ("NA_U", "NA_U24", 0),
+    ("K_U", "K_U24", 0),
+    ("CL_U", "CL_U24", 0),
+    ("MICROALB", "MICROALB_24", 1),
 )
 CODIGOS_RAC_CALCULADOS = frozenset({"RAC"})
 CODIGOS_TFG_CALCULADOS = frozenset({"TFG"})
@@ -71,6 +102,12 @@ INSUMOS_POR_CODIGO_CALCULADO: dict[str, tuple[str, ...]] = {
     "NA_U24": ("NA_U", "DIUR"),
     "K_U24": ("K_U", "DIUR"),
     "CL_U24": ("CL_U", "DIUR"),
+    "CA_U24": ("CA_U", "DIUR"),
+    "MG_U24": ("MG_U", "DIUR"),
+    "P_U24": ("P_U", "DIUR"),
+    "AU_U24": ("AU_U", "DIUR"),
+    "UREA_U24": ("UREA_U", "DIUR"),
+    "CREA_U24": ("CREA_U", "DIUR"),
     # Perfil lipídico
     "LDL": ("COL_TOT", "HDL", "TG"),
     "VLDL": ("TG",),
@@ -379,24 +416,10 @@ def calcular_derivados(
         # Falta alguno de los medidos de clearance (sin contar DIUR solo).
         out["CLEAR_CREA"] = (None, RESULTADO_NO_CALCULABLE)
 
-    prot_eq = _dec(valores.get("PROT_U_EQ"))
-    if prot_eq is not None and diur is not None:
-        prot24 = calc_excrecion_mg_dl_a_24h(prot_eq, diur)
-        if prot24 is not None:
-            out["PROT_U_24"] = (quantize_valor_numerico(prot24), _fmt(prot24, 0))
-        else:
-            out["PROT_U_24"] = (None, RESULTADO_NO_CALCULABLE)
-    elif prot_eq is not None:
-        out["PROT_U_24"] = (None, RESULTADO_NO_CALCULABLE)
-
-    for medido, calculado in (
-        ("NA_U", "NA_U24"),
-        ("K_U", "K_U24"),
-        ("CL_U", "CL_U24"),
-    ):
+    for medido, calculado in EXCRECION_MG_DL_A_24H:
         conc = _dec(valores.get(medido))
         if conc is not None and diur is not None:
-            exc = calc_excrecion_por_litro_a_24h(conc, diur, places=0)
+            exc = calc_excrecion_mg_dl_a_24h(conc, diur)
             if exc is not None:
                 out[calculado] = (quantize_valor_numerico(exc), _fmt(exc, 0))
             else:
@@ -404,16 +427,18 @@ def calcular_derivados(
         elif conc is not None:
             out[calculado] = (None, RESULTADO_NO_CALCULABLE)
 
-    microalb = _dec(valores.get("MICROALB"))
-    if microalb is not None and diur is not None:
-        malb24 = calc_excrecion_por_litro_a_24h(microalb, diur, places=1)
-        if malb24 is not None:
-            out["MICROALB_24"] = (quantize_valor_numerico(malb24), _fmt(malb24, 1))
-        else:
-            out["MICROALB_24"] = (None, RESULTADO_NO_CALCULABLE)
-    elif microalb is not None:
-        out["MICROALB_24"] = (None, RESULTADO_NO_CALCULABLE)
+    for medido, calculado, places in EXCRECION_POR_LITRO_A_24H:
+        conc = _dec(valores.get(medido))
+        if conc is not None and diur is not None:
+            exc = calc_excrecion_por_litro_a_24h(conc, diur, places=places)
+            if exc is not None:
+                out[calculado] = (quantize_valor_numerico(exc), _fmt(exc, places))
+            else:
+                out[calculado] = (None, RESULTADO_NO_CALCULABLE)
+        elif conc is not None:
+            out[calculado] = (None, RESULTADO_NO_CALCULABLE)
 
+    microalb = _dec(valores.get("MICROALB"))
     # RAC usa MICROALB + CREA_U (crea_u ya leído arriba para clearance).
     if microalb is not None and crea_u is not None:
         rac = calc_rac(microalb, crea_u)

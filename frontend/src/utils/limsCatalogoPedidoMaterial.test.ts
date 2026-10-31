@@ -1,6 +1,7 @@
 import {
   agregarCatalogOptionsForMaterial,
   chipsAgregadosCatalogForMaterial,
+  codigosCubiertosPorGrilla,
   panelPerteneceAMaterial,
 } from './limsCatalogoPedidoMaterial';
 import type { LimsPanelExamen, LimsTipoExamen, MaterialPedidoLims } from '../types/lims';
@@ -153,6 +154,113 @@ describe('agregarCatalogOptionsForMaterial', () => {
       orinaModalidad: null,
     });
     expect(opts.some((o) => o.codigo === 'METFRA')).toBe(false);
+  });
+
+  it('omite componentes e IACA de paneles ya en grilla (uricuria/calcio 24h)', () => {
+    const auU: LimsTipoExamen = {
+      id: 10,
+      codigo: 'AU_U',
+      nombre: 'Ácido úrico urinario (concentración)',
+      tipo_muestra_requerida: 30,
+      tipo_muestra_codigo: 'ORINA_24_H',
+      activo: true,
+    };
+    const auU24: LimsTipoExamen = {
+      id: 11,
+      codigo: 'AU_U24',
+      nombre: 'Uricuria 24 hs',
+      tipo_muestra_requerida: 30,
+      tipo_muestra_codigo: 'ORINA_24_H',
+      modo_entrada: 'CALCULADO',
+      activo: true,
+    };
+    const diur: LimsTipoExamen = {
+      id: 12,
+      codigo: 'DIUR',
+      nombre: 'Diuresis 24 hs',
+      tipo_muestra_requerida: 30,
+      tipo_muestra_codigo: 'ORINA_24_H',
+      activo: true,
+    };
+    const uri24: LimsTipoExamen = {
+      id: 13,
+      codigo: 'URI24',
+      nombre: 'Acido Urico',
+      tipo_muestra_requerida: 30,
+      tipo_muestra_codigo: 'ORINA_24_H',
+      panel_equivalente: 'PAN_AU_U24',
+      activo: true,
+    };
+    const suelto: LimsTipoExamen = {
+      id: 14,
+      codigo: 'OXA_U',
+      nombre: 'Oxalato urinario',
+      tipo_muestra_requerida: 30,
+      tipo_muestra_codigo: 'ORINA_24_H',
+      activo: true,
+    };
+    const panAu: LimsPanelExamen = {
+      id: 300,
+      codigo: 'PAN_AU_U24',
+      nombre: 'Uricuria 24 hs',
+      tipos_examen: [10, 12, 11],
+      activo: true,
+    };
+    const examenesOrina = [...examenes, auU, auU24, diur, uri24, suelto];
+    const opts = agregarCatalogOptionsForMaterial({
+      mat: orina,
+      examenes: examenesOrina,
+      paneles: [panAu],
+      gridCodigos: new Set(['PAN_AU_U24']),
+      selectedExamenesIds: new Set(),
+      selectedPanelesIds: new Set(),
+      orinaModalidad: '24h',
+    });
+    const codes = opts.map((o) => o.codigo);
+    expect(codes).not.toContain('AU_U');
+    expect(codes).not.toContain('AU_U24');
+    expect(codes).not.toContain('DIUR');
+    expect(codes).not.toContain('URI24');
+    expect(codes).not.toContain('PAN_AU_U24');
+    expect(codes).toContain('OXA_U');
+  });
+});
+
+describe('codigosCubiertosPorGrilla', () => {
+  it('incluye componentes del panel de grilla', () => {
+    const comps: LimsTipoExamen[] = [
+      {
+        id: 1,
+        codigo: 'CA_U',
+        nombre: 'Ca u',
+        tipo_muestra_requerida: 1,
+        tipo_muestra_codigo: 'ORINA_24_H',
+        activo: true,
+      },
+      {
+        id: 2,
+        codigo: 'CA_U24',
+        nombre: 'Ca 24',
+        tipo_muestra_requerida: 1,
+        tipo_muestra_codigo: 'ORINA_24_H',
+        activo: true,
+      },
+    ];
+    const pan: LimsPanelExamen = {
+      id: 1,
+      codigo: 'PAN_CA_U24',
+      nombre: 'Calciuria 24 hs',
+      tipos_examen: [1, 2],
+      activo: true,
+    };
+    const covered = codigosCubiertosPorGrilla(
+      new Set(['PAN_CA_U24']),
+      [pan],
+      comps
+    );
+    expect(covered.has('PAN_CA_U24')).toBe(true);
+    expect(covered.has('CA_U')).toBe(true);
+    expect(covered.has('CA_U24')).toBe(true);
   });
 });
 

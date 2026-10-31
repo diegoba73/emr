@@ -30,6 +30,12 @@ _PANELES_ASEGURAR = frozenset(
         "PAN_IONO_U24",
         "PAN_MALB24",
         "PAN_MALB_AZ",
+        "PAN_CA_U24",
+        "PAN_MG_U24",
+        "PAN_P_U24",
+        "PAN_AU_U24",
+        "PAN_UREA_U24",
+        "PAN_CREA_U24",
         "PAN_ENA",
     }
 )

@@ -61,6 +61,12 @@ export const ORINA_SOLICITUD_PAPEL_CODIGOS = [
   'PROT_U_AZ',
   'PAN_MALB24',
   'PAN_MALB_AZ',
+  'PAN_CA_U24',
+  'PAN_MG_U24',
+  'PAN_P_U24',
+  'PAN_AU_U24',
+  'PAN_UREA_U24',
+  'PAN_CREA_U24',
 ] as const;
 
 /** Cultivos / micro para sección de pedido (alineado a EstudioMicrobiologia). */
@@ -76,7 +82,6 @@ export const MICRO_PEDIDO_CODIGOS = [
 
 /** Siguen en el catálogo (órdenes ya pedidas) pero no se ofrecen en Lab. Clínico. */
 export const EXAMENES_FUERA_DE_SOLICITUD = new Set([
-  'HCGB',
   'SANOC',
   'ASTO',
   'ENA',

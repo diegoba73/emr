@@ -28,6 +28,12 @@ IACA_PRODUCTO_A_PANEL: dict[str, str] = {
     "CREAC24": "PAN_CLEAR",
     "PROTT24": "PAN_PROT24",
     "ALB24": "PAN_MALB24",
+    "CA24": "PAN_CA_U24",
+    "MG24": "PAN_MG_U24",
+    "FOSFO24": "PAN_P_U24",
+    "URI24": "PAN_AU_U24",
+    "UREA24": "PAN_UREA_U24",
+    "CREA24": "PAN_CREA_U24",
     "EABA": "PAN_EAB_ART",
     "EABV": "PAN_EAB_VEN",
 }

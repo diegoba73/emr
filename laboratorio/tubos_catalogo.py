@@ -109,6 +109,12 @@ EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
         "K_U24",
         "CL_U24",
         "MICROALB_24",
+        "CA_U24",
+        "MG_U24",
+        "P_U24",
+        "AU_U24",
+        "UREA_U24",
+        "CREA_U24",
         "RAC",
         "TFG",
     }
@@ -203,13 +209,37 @@ _ORINA_24H = frozenset(
         "NA_U24",
         "K_U24",
         "CL_U24",
+        "CA_U",
+        "CA_U24",
+        "MG_U",
+        "MG_U24",
+        "P_U",
+        "P_U24",
+        "AU_U",
+        "AU_U24",
+        "UREA_U",
+        "UREA_U24",
+        "CREA_U24",
     }
 )
 
 # Códigos duales: frasco (al azar) o bidón (si la orden pide panel/contexto 24 hs)
 _ORINA_DUAL = frozenset({"NA_U", "K_U", "CL_U", "CREA_U", "MICROALB"})
 
-PANELES_ORINA_24H = frozenset({"PAN_IONO_U24", "PAN_CLEAR", "PAN_MALB24", "PAN_PROT24"})
+PANELES_ORINA_24H = frozenset(
+    {
+        "PAN_IONO_U24",
+        "PAN_CLEAR",
+        "PAN_MALB24",
+        "PAN_PROT24",
+        "PAN_CA_U24",
+        "PAN_MG_U24",
+        "PAN_P_U24",
+        "PAN_AU_U24",
+        "PAN_UREA_U24",
+        "PAN_CREA_U24",
+    }
+)
 
 MUESTRA_CANONICA_POR_ANALITO: dict[str, str] = {
     **{c: "SANGRE_EDTA" for c in _EDTA},

@@ -149,6 +149,18 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "CL_U24", "nombre": "Cloro urinario 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Cl u 24h"},
     # Proteinuria: concentración del equipo (mg/dL) → PROT_U_24 calculado (mg/24 hs)
     {"codigo": "PROT_U_EQ", "nombre": "Proteinuria (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO"},
+    # Química / minerales orina 24 hs: conc. equipo (mg/dL) + DIUR → mg/24 hs
+    {"codigo": "CA_U", "nombre": "Calcio urinario (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Ca u"},
+    {"codigo": "CA_U24", "nombre": "Calciuria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Ca u 24h"},
+    {"codigo": "MG_U", "nombre": "Magnesio urinario (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Mg u"},
+    {"codigo": "MG_U24", "nombre": "Magnesuria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Mg u 24h"},
+    {"codigo": "P_U", "nombre": "Fósforo urinario (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "P u"},
+    {"codigo": "P_U24", "nombre": "Fosfaturia 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "P u 24h"},
+    {"codigo": "AU_U", "nombre": "Ácido úrico urinario (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "AU u"},
+    {"codigo": "AU_U24", "nombre": "Uricuria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "AU u 24h"},
+    {"codigo": "UREA_U", "nombre": "Urea urinaria (concentración)", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Urea u"},
+    {"codigo": "UREA_U24", "nombre": "Urea urinaria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Urea u 24h"},
+    {"codigo": "CREA_U24", "nombre": "Creatininuria 24 hs", "muestra": "ORINA_24_H", "tipo_resultado": "NUMERICO", "abreviatura": "Cr u 24h"},
     # —— Exámenes sueltos del formulario (no panel) ——
     {"codigo": "HBA1C", "nombre": "Hemoglobina glicosilada (HbA1c)", "muestra": "SANGRE_EDTA", "tipo_resultado": "NUMERICO"},
     {"codigo": "GLU", "nombre": "Glucemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
@@ -388,7 +400,7 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_CLEAR",
         "nombre": "Clearance de creatinina",
-        "componentes": ["CREATI", "CREA_U", "DIUR", "CLEAR_CREA"],
+        "componentes": ["CREATI", "CREA_U", "DIUR", "CREA_U24", "CLEAR_CREA"],
     },
     {
         "codigo": "PAN_CTOG",
@@ -409,6 +421,36 @@ PANELES: list[PanelDef] = [
         "codigo": "PAN_PROT24",
         "nombre": "Proteinuria 24 hs",
         "componentes": ["PROT_U_EQ", "DIUR", "PROT_U_24"],
+    },
+    {
+        "codigo": "PAN_CA_U24",
+        "nombre": "Calciuria 24 hs",
+        "componentes": ["CA_U", "DIUR", "CA_U24"],
+    },
+    {
+        "codigo": "PAN_MG_U24",
+        "nombre": "Magnesuria 24 hs",
+        "componentes": ["MG_U", "DIUR", "MG_U24"],
+    },
+    {
+        "codigo": "PAN_P_U24",
+        "nombre": "Fosfaturia 24 hs",
+        "componentes": ["P_U", "DIUR", "P_U24"],
+    },
+    {
+        "codigo": "PAN_AU_U24",
+        "nombre": "Uricuria 24 hs",
+        "componentes": ["AU_U", "DIUR", "AU_U24"],
+    },
+    {
+        "codigo": "PAN_UREA_U24",
+        "nombre": "Urea urinaria 24 hs",
+        "componentes": ["UREA_U", "DIUR", "UREA_U24"],
+    },
+    {
+        "codigo": "PAN_CREA_U24",
+        "nombre": "Creatininuria 24 hs",
+        "componentes": ["CREA_U", "DIUR", "CREA_U24"],
     },
     {
         "codigo": "PAN_EAB_ART",

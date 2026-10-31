@@ -72,8 +72,9 @@ class TestSeedCatalogoSolicitudPapel:
         assert clear_crea.requiere_muestra is False
         assert clear_crea.tipo_contenedor_id is None
         assert [te.codigo for te in ordenar_queryset_panel(clear)] == [
-            "CREATI", "CREA_U", "DIUR", "CLEAR_CREA",
+            "CREATI", "CREA_U", "DIUR", "CREA_U24", "CLEAR_CREA",
         ]
+        assert TipoExamen.objects.get(codigo="CREA_U24").modo_entrada == "CALCULADO"
 
     def test_orina_completa_incluye_glucosa_tira(self):
         call_command("seed_catalogo_solicitud_papel")
@@ -115,6 +116,21 @@ class TestSeedCatalogoSolicitudPapel:
         assert TipoExamen.objects.get(codigo="PROT_U_24").modo_entrada == "CALCULADO"
         assert TipoExamen.objects.get(codigo="MICROALB_24").modo_entrada == "CALCULADO"
         assert "PROT_U_24" not in EXAMENES_SUELTOS_PDF
+        for panel, medido, calculado in (
+            ("PAN_CA_U24", "CA_U", "CA_U24"),
+            ("PAN_MG_U24", "MG_U", "MG_U24"),
+            ("PAN_P_U24", "P_U", "P_U24"),
+            ("PAN_AU_U24", "AU_U", "AU_U24"),
+            ("PAN_UREA_U24", "UREA_U", "UREA_U24"),
+            ("PAN_CREA_U24", "CREA_U", "CREA_U24"),
+        ):
+            pan = PanelExamen.objects.get(codigo=panel)
+            assert [te.codigo for te in ordenar_queryset_panel(pan)] == [
+                medido, "DIUR", calculado,
+            ]
+            assert TipoExamen.objects.get(codigo=calculado).modo_entrada == "CALCULADO"
+            assert TipoExamen.objects.get(codigo=medido).unidad_default == "mg/dL"
+            assert TipoExamen.objects.get(codigo=calculado).unidad_default == "mg/24 hs"
 
     def test_panel_malb_azar_incluye_rac_calculado(self):
         call_command("seed_catalogo_solicitud_papel")

@@ -29,12 +29,23 @@ CODIGOS_ORINA_FANTASMA = frozenset(
         "CL_U24",
         "DIUR",
         "CREA_U",
+        "CREA_U24",
         "CLEAR_CREA",
         "MICROALB",
         "MICROALB_24",
         "PROT_U_EQ",
         "PROT_U_24",
         "PROT_U_AZ",
+        "CA_U",
+        "CA_U24",
+        "MG_U",
+        "MG_U24",
+        "P_U",
+        "P_U24",
+        "AU_U",
+        "AU_U24",
+        "UREA_U",
+        "UREA_U24",
     }
 )
 

@@ -16,6 +16,12 @@ export const PANELES_ORINA = new Set([
   'PAN_MALB_AZ',
   'PAN_MALB24',
   'PAN_PROT24',
+  'PAN_CA_U24',
+  'PAN_MG_U24',
+  'PAN_P_U24',
+  'PAN_AU_U24',
+  'PAN_UREA_U24',
+  'PAN_CREA_U24',
 ]);
 
 const CODIGOS_ORINA_SUELTOS = new Set(['PROT_U_AZ']);

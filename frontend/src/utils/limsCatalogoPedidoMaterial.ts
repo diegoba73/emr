@@ -25,6 +25,12 @@ const ORINA_24H_CODIGOS = new Set([
   'PAN_IONO_U24',
   'PAN_PROT24',
   'PAN_MALB24',
+  'PAN_CA_U24',
+  'PAN_MG_U24',
+  'PAN_P_U24',
+  'PAN_AU_U24',
+  'PAN_UREA_U24',
+  'PAN_CREA_U24',
 ]);
 
 export function materialEsSangre(mat: MaterialPedidoLims): boolean {
@@ -126,6 +132,35 @@ export function panelPasaFiltroOrina(
   return comps.some((e) => examenPasaFiltroOrina(e, materialKey, orinaModalidad));
 }
 
+/**
+ * Códigos que no deben ofrecerse en «Agregar» porque ya están en la grilla
+ * frecuente: el propio código de grilla, componentes de paneles de grilla
+ * (p. ej. AU_U24 si está PAN_AU_U24) y productos IACA con panel_equivalente
+ * en grilla (p. ej. URI24 → PAN_AU_U24).
+ */
+export function codigosCubiertosPorGrilla(
+  gridCodigos: Set<string>,
+  paneles: LimsPanelExamen[],
+  examenes: LimsTipoExamen[],
+  examenesById?: Map<number, LimsTipoExamen>
+): Set<string> {
+  const byId = examenesById ?? examenesByIdMap(examenes);
+  const cubiertos = new Set(gridCodigos);
+  for (const p of paneles) {
+    if (!gridCodigos.has(p.codigo)) continue;
+    for (const e of componentesPanelActivos(p, byId)) {
+      cubiertos.add(e.codigo);
+    }
+  }
+  for (const e of examenes) {
+    const panEq = (e.panel_equivalente || '').trim().toUpperCase();
+    if (panEq && gridCodigos.has(panEq)) {
+      cubiertos.add(e.codigo);
+    }
+  }
+  return cubiertos;
+}
+
 export function agregarCatalogOptionsForMaterial(opts: {
   mat: MaterialPedidoLims;
   examenes: LimsTipoExamen[];
@@ -146,12 +181,18 @@ export function agregarCatalogOptionsForMaterial(opts: {
   } = opts;
   const materialKey = mat.codigo;
   const byId = examenesByIdMap(examenes);
+  const ocultosPorGrilla = codigosCubiertosPorGrilla(
+    gridCodigos,
+    paneles,
+    examenes,
+    byId
+  );
   const items: CatalogAddItem[] = [];
 
   for (const e of examenes) {
     if (e.activo === false) continue;
     if (esExamenExcluidoDeLabClinico(e)) continue;
-    if (gridCodigos.has(e.codigo)) continue;
+    if (ocultosPorGrilla.has(e.codigo)) continue;
     if (selectedExamenesIds.has(e.id)) continue;
     if (!examenPerteneceAMaterial(e, mat)) continue;
     if (!examenPasaFiltroOrina(e, materialKey, orinaModalidad)) continue;

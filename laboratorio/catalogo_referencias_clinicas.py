@@ -518,6 +518,71 @@ REFERENCIAS_POR_CODIGO: dict[str, ReferenciaClinicaDef] = {
         unidad="mg/dL",
         ref="Según proteinuria 24 hs",
     ),
+    "CA_U": _r(
+        metodo="Colorimétrico (Arsenazo III)",
+        unidad="mg/dL",
+        ref="Según calciuria 24 hs",
+    ),
+    "CA_U24": _r(
+        metodo="Calculado (conc. × diuresis / 100)",
+        unidad="mg/24 hs",
+        ref="100 - 300 mg/24 hs",
+        rmin="100",
+        rmax="300",
+    ),
+    "MG_U": _r(
+        metodo="Colorimétrico",
+        unidad="mg/dL",
+        ref="Según magnesuria 24 hs",
+    ),
+    "MG_U24": _r(
+        metodo="Calculado (conc. × diuresis / 100)",
+        unidad="mg/24 hs",
+        ref="73 - 122 mg/24 hs",
+        rmin="73",
+        rmax="122",
+    ),
+    "P_U": _r(
+        metodo="Colorimétrico (molibdato)",
+        unidad="mg/dL",
+        ref="Según fosfaturia 24 hs",
+    ),
+    "P_U24": _r(
+        metodo="Calculado (conc. × diuresis / 100)",
+        unidad="mg/24 hs",
+        ref="400 - 1300 mg/24 hs",
+        rmin="400",
+        rmax="1300",
+    ),
+    "AU_U": _r(
+        metodo=_M_ENZ,
+        unidad="mg/dL",
+        ref="Según uricuria 24 hs",
+    ),
+    "AU_U24": _r(
+        metodo="Calculado (conc. × diuresis / 100)",
+        unidad="mg/24 hs",
+        ref="250 - 750 mg/24 hs",
+        rmin="250",
+        rmax="750",
+    ),
+    "UREA_U": _r(
+        metodo="Ureasa-GLDH",
+        unidad="mg/dL",
+        ref="Según urea urinaria 24 hs",
+    ),
+    "UREA_U24": _r(
+        metodo="Calculado (conc. × diuresis / 100)",
+        unidad="mg/24 hs",
+        ref="Según dieta / diuresis",
+    ),
+    "CREA_U24": _r(
+        metodo="Calculado (conc. × diuresis / 100)",
+        unidad="mg/24 hs",
+        ref="800 - 2000 mg/24 hs",
+        rmin="800",
+        rmax="2000",
+    ),
     # —— Exámenes sueltos ——
     "HBA1C": _r(
         metodo="Cromatografía de intercambio iónico / HPLC",

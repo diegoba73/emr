@@ -41,6 +41,9 @@ def orina24(db):
         "CL_U24",
         "MICROALB_24",
     )
+    TipoExamen.objects.filter(
+        codigo__in=("PROT_U_EQ", "NA_U", "K_U", "CL_U", "MICROALB", "DIUR")
+    ).update(requiere_muestra=False)
     rows = {
         codigo: ResultadoExamen.objects.create(
             solicitud=sol, tipo_examen=TipoExamen.objects.get(codigo=codigo)
