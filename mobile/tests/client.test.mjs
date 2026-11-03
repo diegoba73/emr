@@ -65,6 +65,22 @@ test('local HTTP requires explicit opt-in and only accepts private IPv4',async()
   await assert.rejects(createClient(base,()=>null,()=>{},fetcher,true)('/me/'),ApiError);
  }
 });
+const {deriveKioscoAnuncioUrlFromApi,resolveKioscoAnuncioUrl}=await source('../src/lib/kiosco.ts');
+test('kiosco anuncio URL derives from LAN API and honors backend value',()=>{
+ assert.equal(
+  deriveKioscoAnuncioUrlFromApi('http://192.168.1.94:8000/api/movil'),
+  'http://192.168.1.94:3000/kiosco-recepcion'
+ );
+ assert.equal(deriveKioscoAnuncioUrlFromApi('https://emr.example.com:8080/api/movil'),'');
+ assert.equal(
+  resolveKioscoAnuncioUrl('http://10.0.0.5:3000/kiosco-recepcion'),
+  'http://10.0.0.5:3000/kiosco-recepcion'
+ );
+ assert.equal(
+  resolveKioscoAnuncioUrl('http://10.0.0.5:3000'),
+  'http://10.0.0.5:3000/kiosco-recepcion'
+ );
+});
 const {parseClinics,findClinic}=await source('../src/lib/clinics.ts');
 test('clinic codes resolve only registered HTTPS endpoints',()=>{
  const list=parseClinics(JSON.stringify([{code:'ICPL',name:'ICPL',apiUrl:'https://clinic.test/api/movil/'}]));

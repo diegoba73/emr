@@ -60,6 +60,8 @@ import {
   canAccessPortalTurnos,
   canAccessSolicitudes,
   canAccessInternacion,
+  canAccessRecepcion,
+  canConfigRecepcion,
   isLaboratorioRole,
   isPacienteRole,
   isSecretariaLabRole,
@@ -98,7 +100,23 @@ const navItems: NavItem[] = [
   { text: 'Médicos', icon: <PeopleIcon />, path: '/medicos', canAccess: canAccessMedicos },
   { text: 'Profesionales', icon: <PeopleIcon />, path: '/profesionales', canAccess: canAccessMedicos },
   { text: 'Horarios de atención', icon: <CalendarIcon />, path: '/horarios-medicos', canAccess: canManageHorarios },
-  { text: 'Turnos', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
+  { text: 'Calendario', icon: <CalendarIcon />, path: '/turnos', canAccess: canAccessTurnosAgenda },
+  {
+    text: 'Recepción',
+    icon: <CalendarIcon />,
+    path: '/recepcion',
+    canAccess: canAccessRecepcion,
+    resolveLabel: (u) =>
+      isLaboratorioRole(u) || isSecretariaLabRole(normalizeRol(u))
+        ? 'Cola extracciones'
+        : 'Recepción',
+  },
+  {
+    text: 'Recepción (config)',
+    icon: <CalendarIcon />,
+    path: '/recepcion/config',
+    canAccess: canConfigRecepcion,
+  },
   { text: 'Guardia', icon: <EmergencyIcon />, path: '/guardia', canAccess: canAccessGuardia },
   { text: 'Internación', icon: <LocalHospital />, path: '/internacion', canAccess: canAccessInternacion },
   {
@@ -110,7 +128,7 @@ const navItems: NavItem[] = [
   },
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   {
-    text: 'Estudios y procedimientos',
+    text: 'Programación de turnos',
     icon: <Description />,
     path: '/estudios-complementarios',
     canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),

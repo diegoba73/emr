@@ -9,6 +9,7 @@ from .views import (
     TurnosMovil,
     MedicosMovil,
 )
+from .views_recepcion import AnuncioLabMovil, EstoyEnSalaMovil, RecepcionHoyMovil
 from .views_informes import (
     InformesMovil,
     InformeMovilDetalle,
@@ -33,6 +34,9 @@ urlpatterns = [
     path('logout/', LogoutMovil.as_view()),
     path('push/', PushMovil.as_view()),
     path('llamado-activo/', LlamadoActivoMovil.as_view()),
+    path('recepcion/hoy/', RecepcionHoyMovil.as_view()),
+    path('recepcion/estoy-en-sala/', EstoyEnSalaMovil.as_view()),
+    path('recepcion/anuncio-lab/', AnuncioLabMovil.as_view()),
     path('medicos/', MedicosMovil.as_view({'get': 'list'})),
     path('medicos/<int:pk>/slots/', MedicosMovil.as_view({'get': 'slots'})),
     path('turnos/', TurnosMovil.as_view({'get': 'list'})),

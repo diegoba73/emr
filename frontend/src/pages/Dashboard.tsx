@@ -36,7 +36,7 @@ interface QuickActionCard {
 
 const quickActions: QuickActionCard[] = [
   {
-    title: 'Nuevo Turno',
+    title: 'Nuevo turno',
     description: 'Crear un nuevo turno médico',
     icon: <Add />,
     path: '/turnos?action=create',
@@ -49,10 +49,10 @@ const quickActions: QuickActionCard[] = [
     icon: <Search />,
     path: '/pacientes',
     color: '#764ba2',
-    roles: ['medico', 'admin', 'secretaria', 'enfermeria'],
+    roles: ['medico', 'admin', 'secretaria', 'secretaria_lab', 'enfermeria'],
   },
   {
-    title: 'Ver Agenda',
+    title: 'Ver calendario',
     description: 'Ver calendario de turnos',
     icon: <CalendarToday />,
     path: '/turnos',
@@ -75,7 +75,7 @@ const quickActions: QuickActionCard[] = [
     icon: <Science />,
     path: '/laboratorio/pendientes?action=nueva',
     color: '#3182ce',
-    roles: ['laboratorio', 'admin'],
+    roles: ['laboratorio', 'secretaria_lab', 'admin'],
   },
   {
     title: 'Recepción muestras',
@@ -83,7 +83,7 @@ const quickActions: QuickActionCard[] = [
     icon: <Inventory />,
     path: '/laboratorio/muestras/recepcion',
     color: '#2b6cb0',
-    roles: ['laboratorio', 'admin'],
+    roles: ['laboratorio', 'secretaria_lab', 'admin'],
   },
   {
     title: 'Atenciones Clínicas',
@@ -102,8 +102,8 @@ const quickActions: QuickActionCard[] = [
     roles: ['paciente'],
   },
   {
-    title: 'Estudios y procedimientos',
-    description: 'Ver estudios e informes disponibles',
+    title: 'Programación de turnos',
+    description: 'Ver turnos e informes programados',
     icon: <Folder />,
     path: '/estudios-complementarios',
     color: '#38b2ac',
@@ -123,7 +123,23 @@ const quickActions: QuickActionCard[] = [
     icon: <Hotel />,
     path: '/internacion',
     color: '#9f7aea',
-    roles: ['medico', 'admin', 'enfermeria', 'secretaria', 'kinesiologo'],
+    roles: ['medico', 'admin', 'enfermeria', 'secretaria', 'secretaria_lab', 'kinesiologo'],
+  },
+  {
+    title: 'Estadísticas',
+    description: 'Volúmenes y métricas de laboratorio',
+    icon: <Insights />,
+    path: '/laboratorio/estadisticas',
+    color: '#dd6b20',
+    roles: ['secretaria_lab', 'bioquimico', 'admin'],
+  },
+  {
+    title: 'Guardia',
+    description: 'Atenciones de guardia',
+    icon: <LocalHospital />,
+    path: '/guardia',
+    color: '#e53e3e',
+    roles: ['secretaria_lab'],
   },
   {
     title: 'Indicadores de calidad',
@@ -182,7 +198,7 @@ const Dashboard: React.FC = () => {
     const role = (currentUser.rol || '').toUpperCase();
     if (role === 'MEDICO') return 'Dr.';
     if (role === 'ADMIN') return 'Admin.';
-    if (role === 'SECRETARIA') return 'Srta.';
+    if (role === 'SECRETARIA' || role === 'SECRETARIA_LAB') return 'Srta.';
     if (role === 'ENFERMERIA') return 'Enf.';
     if (role === 'LABORATORIO') return 'Lab.';
     return 'Sr./Sra.';

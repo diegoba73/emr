@@ -19,6 +19,22 @@ Separar **identidad de acceso** (quién entra al sistema) de **autoridad clínic
 |-----|-------------------|
 | `admin` | Administración, validación LIMS (`validar`), override IQC de cierre |
 | `medico` | Listado global de pacientes para agendar, EMR clínico y lectura global de órdenes LIMS; puede **agregar** ensayos (no quitar) |
+| `secretaria` | Secretaría **institucional** (EMR). Menú: Inicio, Pacientes, Médicos, Profesionales, Calendario, Programación de turnos (Estudios), Horarios de atención, Recepción, Guardia, Internación, Laboratorio clínico (informes liberados), Archivos. **Sin** menú LIMS ni Estadísticas. |
+| `secretaria_lab` | Secretaría **laboratorio**. Menú: Inicio, Pacientes, Médicos, Profesionales, **Guardia**, **Internación**, **Estadísticas LIMS**, menú LIMS completo (como `laboratorio`). Permisos: capacidades EMR de secretaría (`ROLES_SECRETARIA_EMR`) **más** escritura LIMS (`ROLES_LIMS_WRITE`, sin `validar`). **Sin** agenda/recepción/estudios/archivos/portal clínico. |
+
+### Sedes CEHTA / ICPL **[IMPLEMENTADO]**
+
+No hay roles `secretaria_cehta` / `secretaria_icpl`. El aislamiento es por **`User.sedes`** (y `Medico.sedes`):
+
+| Campo | Comportamiento |
+|-------|----------------|
+| `User.sedes` vacío | Sin filtro (ve ambas) — retrocompat |
+| `['CEHTA']` | Solo datos CEHTA; **sin** Guardia ni Internación |
+| `['ICPL']` | Solo datos ICPL; con Guardia e Internación |
+| Ambas | Unión de datos y capacidades |
+| Admin / superuser | Sin filtro de sede |
+
+Filtra: recursos, turnos (vía `recurso.ubicacion`), médicos (solape de `sedes`), puestos/llegadas de recepción, orígenes LIMS. **No** filtra pacientes. SoT: `usuarios/sedes.py`.
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
 | `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO` |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
@@ -57,6 +73,7 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
 | Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
 | Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaría institucional / admin/staff (UI); API `ROLES_SECRETARIA_EMR` incluye ambas secretarías; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1) |
+| Módulo Estudios / Programación de turnos | secretaría **institucional**, médico, admin, enfermería (lectura), profesionales de estudio — **no** `secretaria_lab` |
 | Cerrar atención | medico, enfermeria, admin |
 | Catálogo quirúrgico jerárquico (`cirugia-especialidades` / `-procedimientos` / `-abordajes`) | Lectura: operadores del módulo Estudios (médico, secretaría, admin, …). **Escritura solo admin/superuser** (`CirugiaCatalogoPermission`). UI admin: `/catalogos/cirugias`. No LIMS. |
 | Catálogo procedimientos plano (`procedimientos-catalogo`) | Lectura: operadores del módulo (incl. secretaría) vía `ProcedimientoCatalogoPermission`. Escritura: médico/admin. Necesario para alta de PROCEDIMIENTO. |

@@ -627,6 +627,7 @@ class IsInternacionStaff(permissions.BasePermission):
     """Acceso operativo a internación: médico, enfermería, admin y secretaría.
 
     Médicos con ámbito solo ambulatorio no acceden al módulo de internación.
+    Sedes: CEHTA no tiene capacidad internación (ICPL sí).
     """
 
     def has_permission(self, request, view):
@@ -635,7 +636,10 @@ class IsInternacionStaff(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         from medicos.ambito import user_medico_es_solo_ambulatorio
+        from usuarios.sedes import usuario_tiene_capacidad
         if user_medico_es_solo_ambulatorio(request.user):
+            return False
+        if not usuario_tiene_capacidad(request.user, 'internacion'):
             return False
         return get_normalized_role(request.user) in ROLES_INTERNACION
 
@@ -775,6 +779,11 @@ def filter_atencion_queryset_for_user(user, queryset):
         return queryset
     role = get_normalized_role(user)
     if role == 'enfermeria' or role in ROLES_SECRETARIA_EMR:
+        from usuarios.sedes import usuario_tiene_capacidad
+        from turnos.models import Atencion
+
+        if not usuario_tiene_capacidad(user, 'guardia'):
+            return queryset.exclude(contexto_atencion=Atencion.ContextoAtencion.GUARDIA)
         return queryset
     medico = _atencion_user_medico(user)
     if medico is not None:
@@ -829,6 +838,12 @@ class AtencionPermission(permissions.BasePermission):
         if role == 'paciente':
             return action in _ATENCION_READ_ACTIONS
         if role in ROLES_SECRETARIA_EMR:
+            from usuarios.sedes import usuario_tiene_capacidad
+
+            if action == 'iniciar_guardia' and not usuario_tiene_capacidad(user, 'guardia'):
+                return False
+            if not usuario_tiene_capacidad(user, 'guardia') and action in _ATENCION_CLINICAL_ACTIONS:
+                return False
             return action in (
                 _ATENCION_READ_ACTIONS
                 | _ATENCION_WRITE_ACTIONS
@@ -836,7 +851,11 @@ class AtencionPermission(permissions.BasePermission):
             )
         if role == 'medico':
             from medicos.ambito import user_medico_es_solo_ambulatorio
-            if action == 'iniciar_guardia' and user_medico_es_solo_ambulatorio(user):
+            from usuarios.sedes import usuario_tiene_capacidad
+            if action == 'iniciar_guardia' and (
+                user_medico_es_solo_ambulatorio(user)
+                or not usuario_tiene_capacidad(user, 'guardia')
+            ):
                 return False
             return action in (
                 _ATENCION_READ_ACTIONS

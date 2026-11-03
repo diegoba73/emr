@@ -26,9 +26,18 @@ class DispositivoPush(models.Model):
 
 
 class RecordatorioTurno(models.Model):
+    class Tipo(models.TextChoices):
+        ASISTENCIA = 'ASISTENCIA', 'Confirmar asistencia'
+        CONFIRMAR_TURNO = 'CONFIRMAR_TURNO', 'Confirmar turno'
+
     turno = models.ForeignKey('turnos.Turno', on_delete=models.CASCADE)
     dispositivo = models.ForeignKey(DispositivoPush, on_delete=models.CASCADE)
     fecha_turno = models.DateTimeField()
+    tipo = models.CharField(
+        max_length=20,
+        choices=Tipo.choices,
+        default=Tipo.ASISTENCIA,
+    )
     estado = models.CharField(max_length=15, default='PENDIENTE', choices=[
         ('PENDIENTE', 'Pendiente'), ('ACEPTADO', 'Aceptado por Expo'),
         ('ENTREGADO', 'Aceptado por FCM/APNs'), ('ERROR', 'Error'), ('OMITIDO', 'Omitido')])
@@ -39,7 +48,12 @@ class RecordatorioTurno(models.Model):
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['turno', 'dispositivo', 'fecha_turno'], name='recordatorio_turno_dispositivo_fecha')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['turno', 'dispositivo', 'fecha_turno', 'tipo'],
+                name='recordatorio_turno_dispositivo_fecha_tipo',
+            )
+        ]
 
 
 class PaqueteLabContexto(models.Model):

@@ -21,6 +21,7 @@ import {
   Alert,
   Chip,
   CircularProgress,
+  Autocomplete,
 } from '@mui/material';
 import {
   Add,
@@ -60,6 +61,7 @@ const Medicos: React.FC = () => {
     matricula: '',
     especialidad_id: '',
     ambito_atencion: 'COMPLETO' as 'COMPLETO' | 'AMBULATORIO',
+    sedes: [] as Array<'CEHTA' | 'ICPL'>,
     telefono: '',
     email: '',
   });
@@ -152,6 +154,7 @@ const Medicos: React.FC = () => {
         matricula: medico.matricula || '',
         especialidad_id: resolveEspecialidadId(medico),
         ambito_atencion: medico.ambito_atencion === 'AMBULATORIO' ? 'AMBULATORIO' : 'COMPLETO',
+        sedes: (medico.sedes || []).filter((s): s is 'CEHTA' | 'ICPL' => s === 'CEHTA' || s === 'ICPL'),
         telefono: medico.telefono || '',
         email: medico.email || '',
       });
@@ -163,6 +166,7 @@ const Medicos: React.FC = () => {
         matricula: '',
         especialidad_id: '',
         ambito_atencion: 'COMPLETO',
+        sedes: [],
         telefono: '',
         email: '',
       });
@@ -187,6 +191,7 @@ const Medicos: React.FC = () => {
         apellido: formData.apellido,
         matricula: formData.matricula,
         ambito_atencion: formData.ambito_atencion,
+        sedes: formData.sedes,
         telefono: formData.telefono || null,
         email: formData.email || null,
         // null explícito permite quitar especialidad; omitir undefined no la limpia.
@@ -430,6 +435,19 @@ const Medicos: React.FC = () => {
               <MenuItem value="COMPLETO">Completo (ambulatorio, guardia e internación)</MenuItem>
               <MenuItem value="AMBULATORIO">Solo ambulatorio</MenuItem>
             </TextField>
+            <Autocomplete
+              multiple
+              options={['CEHTA', 'ICPL'] as const}
+              value={formData.sedes}
+              onChange={(_e, value) => setFormData({ ...formData, sedes: [...value] })}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Sedes"
+                  helperText="Vacío = visible en todas. Define en qué clínica atiende."
+                />
+              )}
+            />
             <TextField
               label="Teléfono"
               value={formData.telefono}

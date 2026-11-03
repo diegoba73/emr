@@ -14,6 +14,7 @@ from django.utils.dateparse import parse_datetime
 from auditoria.audit_service import log_update
 from auditoria.snapshot import safe_model_snapshot
 from api.permissions import emr_staff_or_admin_global
+from usuarios.roles import ROLES_SECRETARIA_EMR
 from medicos.models import Medico
 
 from .access import medico_es_dueno_turno
@@ -43,7 +44,7 @@ def _rol_usuario(user) -> str:
 def puede_gestionar_turnos_global(user) -> bool:
     if emr_staff_or_admin_global(user):
         return True
-    return _rol_usuario(user) in {'admin', 'secretaria'}
+    return _rol_usuario(user) == 'admin' or _rol_usuario(user) in ROLES_SECRETARIA_EMR
 
 
 def turno_tiene_atencion_clinica(turno: Turno) -> bool:
@@ -52,8 +53,15 @@ def turno_tiene_atencion_clinica(turno: Turno) -> bool:
 
 
 def puede_confirmar_turno(user, turno: Turno) -> bool:
-    """Solo secretaría/admin: el paciente reserva; secretaría confirma."""
-    return puede_gestionar_turnos_global(user)
+    """Secretaría/admin, o el paciente dueño del turno (RESERVADO→CONFIRMADO)."""
+    if puede_gestionar_turnos_global(user):
+        return True
+    if _rol_usuario(user) != 'paciente':
+        return False
+    from pacientes.services import ensure_paciente_linked_to_user
+
+    paciente = ensure_paciente_linked_to_user(user)
+    return bool(paciente and turno.paciente_id == paciente.pk)
 
 
 def puede_cancelar_turno(user, turno: Turno) -> bool:
@@ -74,7 +82,7 @@ def puede_marcar_realizado_turno(user, turno: Turno) -> bool:
 def puede_iniciar_atencion_turno(user, turno: Turno) -> bool:
     """C5.10.1: flujo clínico real — médico propio o admin/staff; no secretaría ni paciente."""
     rol = _rol_usuario(user)
-    if rol in {'enfermeria', 'laboratorio', 'paciente', 'secretaria'}:
+    if rol in {'enfermeria', 'laboratorio', 'paciente'} or rol in ROLES_SECRETARIA_EMR:
         return False
     if emr_staff_or_admin_global(user):
         return True

@@ -1,5 +1,5 @@
 import type { User } from '../types';
-import { normalizeRol } from './permissions';
+import { normalizeRol } from './limsAccess';
 
 export function isPacienteRole(user: User | null | undefined): boolean {
   return normalizeRol(user ?? null) === 'paciente';
@@ -21,13 +21,15 @@ export function getAppSegmentTitle(pathname: string, user: User | null | undefin
   if (p.startsWith('/paciente/')) return isPacienteRole(user) ? 'Mi ficha' : 'Paciente 360';
   if (p.startsWith('/dashboard')) return getHomeNavLabel();
   if (p.startsWith('/pacientes')) return 'Pacientes';
-  if (p.startsWith('/turnos')) return 'Turnos';
+  if (p.startsWith('/turnos')) return 'Calendario';
+  if (p.startsWith('/recepcion/config')) return 'Recepción (config)';
+  if (p.startsWith('/recepcion')) return 'Recepción';
   if (p.startsWith('/atenciones')) return isPacienteRole(user) ? 'Mis atenciones' : 'Atenciones Clínicas';
   if (p.startsWith('/archivos')) return isPacienteRole(user) ? 'Mis archivos' : 'Archivos';
   if (p.startsWith('/estudios-complementarios')) {
     return isPacienteRole(user)
-      ? 'Mis estudios y procedimientos'
-      : 'Estudios y procedimientos';
+      ? 'Mis turnos programados'
+      : 'Programación de turnos';
   }
   if (p.startsWith('/solicitudes/') && p !== '/solicitudes') {
     return isPacienteRole(user) ? 'Detalle de análisis' : 'Detalle de orden';

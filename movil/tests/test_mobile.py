@@ -24,7 +24,7 @@ def data():
     m = Medico.objects.create(user=d, nombre='Medico', apellido='Uno', matricula='MOB-1')
     start = timezone.now() + timedelta(hours=23)
     t = Turno.objects.create(paciente=p, medico=m, fecha_hora_inicio=start,
-        fecha_hora_fin=start+timedelta(minutes=20), estado='RESERVADO')
+        fecha_hora_fin=start+timedelta(minutes=20), estado='CONFIRMADO')
     c = APIClient()
     r = c.post('/api/movil/login/', {'username':u.username,'password':'test-password'}, format='json')
     assert r.status_code == 200, r.data
@@ -52,7 +52,7 @@ def test_attendance_is_idempotent_and_separate(data):
     url=f'/api/movil/turnos/{t.pk}/asistencia/'
     r=c.post(url);assert r.status_code==200,r.data
     t.refresh_from_db();first=t.asistencia_confirmada_en
-    assert first and t.estado=='RESERVADO'
+    assert first and t.estado=='CONFIRMADO'
     assert c.post(url).status_code==200
     t.refresh_from_db();assert first==t.asistencia_confirmada_en
     t.fecha_hora_inicio+=timedelta(days=1);t.fecha_hora_fin+=timedelta(days=1);t.save()
@@ -105,9 +105,13 @@ def test_reminder_deduplicated_and_private(data,settings):
         assert enviar_pendientes()==0
         payload=send.call_args.kwargs['json']
         assert payload['title']==f'SYNESIS movil · {settings.MOBILE_INSTITUTION_NAME}'
-        assert payload['data']=={'turno_id':t.pk,'institucion':settings.MOBILE_INSTITUTION_CODE}
+        assert payload['data']=={
+            'turno_id': t.pk,
+            'institucion': settings.MOBILE_INSTITUTION_CODE,
+            'tipo': 'asistencia',
+        }
         assert 'Privado' not in str(payload)
-    t.refresh_from_db();assert t.estado=='RESERVADO'
+    t.refresh_from_db();assert t.estado=='CONFIRMADO'
 
 @pytest.mark.parametrize('change',['cancel','attendance','reschedule','logout'])
 def test_stale_reminders_never_sent(data,settings,change):
@@ -150,7 +154,10 @@ def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
     r=c.post('/api/movil/turnos/reservar-horario/',{'horario_id':h.pk,'inicio':start.isoformat()},format='json')
     assert r.status_code==201,r.data
     pk=r.data['id']
+    assert r.data['estado']=='RESERVADO'
     assert 'prioridad' not in r.data and 'recurso' not in r.data
+    assert c.post(f'/api/movil/turnos/{pk}/confirmar/').status_code==200
+    assert Turno.objects.get(pk=pk).estado=='CONFIRMADO'
     assert c.post(f'/api/movil/turnos/{pk}/asistencia/').status_code==200
     # Reprogramar/cancelar desde la app: solo secretaría (gestión de agenda).
     r=c.post(f'/api/movil/turnos/{pk}/reprogramar-horario/',{'horario_id':h.pk,'inicio':(start+timedelta(minutes=20)).isoformat(),'motivo':'Cambio de horario'},format='json')
@@ -159,7 +166,7 @@ def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
     updated=Turno.objects.get(pk=pk)
     assert updated.asistencia_confirmada_en is not None
     assert updated.fecha_hora_inicio==start
-    assert updated.estado=='RESERVADO'
+    assert updated.estado=='CONFIRMADO'
 
 def test_transient_push_error_retries_later(data,settings):
     import requests
@@ -175,12 +182,15 @@ def test_future_outside_window_not_prepared(data):
     t.fecha_hora_inicio+=timedelta(hours=2);t.fecha_hora_fin+=timedelta(hours=2);t.save()
     assert preparar_recordatorios()==0
 
-def test_public_institution_identity(settings):
+def test_public_institution_identity(settings, monkeypatch):
     settings.MOBILE_INSTITUTION_CODE='CLINICA-B'
     settings.MOBILE_INSTITUTION_NAME='Clínica B'
+    monkeypatch.setenv('EMR_KIOSCO_LAN_ORIGIN', 'http://192.168.1.94:3000')
     r=APIClient().get('/api/movil/institucion/')
     assert r.status_code==200
-    assert r.data=={'code':'CLINICA-B','name':'Clínica B'}
+    assert r.data['code']=='CLINICA-B'
+    assert r.data['name']=='Clínica B'
+    assert r.data['kiosco_anuncio_url']=='http://192.168.1.94:3000/kiosco-recepcion'
     settings.MOBILE_INSTITUTION_CODE=''
     assert APIClient().get('/api/movil/institucion/').status_code==503
 
@@ -209,3 +219,69 @@ def test_llamado_activo_polling(data):
     assert r.data['activo'] is True
     assert r.data['destino'] == 'Consultorio 1'
     assert r.data['tipo'] == 'llamado_medico'
+
+
+def test_reserva_hoy_nace_confirmado(data):
+    from datetime import datetime, time
+    from medicos.models import DisponibilidadMedico
+    c,_,_,t,_,_,_=data
+    t.estado='CANCELADO';t.save(update_fields=['estado'])
+    day=timezone.localdate()
+    start=timezone.make_aware(datetime.combine(day,time(16)))
+    if start <= timezone.now():
+        start = timezone.now() + timedelta(hours=1)
+    h=DisponibilidadMedico.objects.create(
+        medico=t.medico,dia_semana=start.weekday(),hora_inicio=time(0),hora_fin=time(23,59)
+    )
+    r=c.post('/api/movil/turnos/reservar-horario/',{'horario_id':h.pk,'inicio':start.isoformat()},format='json')
+    assert r.status_code==201,r.data
+    assert r.data['estado']=='CONFIRMADO'
+
+
+def test_push_confirmacion_turno_lejos(data,settings):
+    from movil.recordatorios import preparar_recordatorios_confirmacion
+    settings.MOBILE_PUSH_ENABLED=True
+    _,_,_,t,_,_,_=data
+    t.estado='RESERVADO'
+    t.fecha_hora_inicio=timezone.now()+timedelta(days=5)
+    t.fecha_hora_fin=t.fecha_hora_inicio+timedelta(minutes=20)
+    t.save()
+    assert preparar_recordatorios_confirmacion()==1
+    with patch('movil.recordatorios.requests.post',return_value=Mock(json=lambda:{'data':{'status':'ok','id':'ticket-c'}})) as send:
+        assert enviar_pendientes()==1
+        assert send.call_args.kwargs['json']['data']['tipo']=='confirmar_turno'
+
+
+def test_estoy_en_sala_y_lab(data):
+    from recepcion.models import PuestoRecepcion
+    from recepcion.services import CODIGO_PUESTO_1, CODIGO_SALA_EXTRACCION
+    c,_,_,t,_,_,_=data
+    PuestoRecepcion.objects.get_or_create(
+        codigo=CODIGO_PUESTO_1,
+        defaults={'nombre':'Puesto 1','etiqueta_paciente':'Puesto 1','activo':True,'orden':1},
+    )
+    PuestoRecepcion.objects.get_or_create(
+        codigo=CODIGO_SALA_EXTRACCION,
+        defaults={'nombre':'Sala extracción','etiqueta_paciente':'Sala de extracción','activo':True,'orden':99},
+    )
+    # Turno del fixture no es hoy → no puedo estoy en sala.
+    hoy = c.get('/api/movil/recepcion/hoy/')
+    assert hoy.status_code==200
+    assert hoy.data['puedo_estoy_en_sala'] is False
+    # Mover turno a hoy.
+    start = timezone.now()+timedelta(hours=2)
+    t.fecha_hora_inicio=start
+    t.fecha_hora_fin=start+timedelta(minutes=20)
+    t.estado='CONFIRMADO'
+    t.save()
+    hoy = c.get('/api/movil/recepcion/hoy/')
+    assert hoy.data['puedo_estoy_en_sala'] is True
+    r = c.post('/api/movil/recepcion/estoy-en-sala/',{},format='json')
+    assert r.status_code==200,r.data
+    assert r.data['codigo_llamado']
+    hoy2 = c.get('/api/movil/recepcion/hoy/')
+    assert hoy2.data['puedo_estoy_en_sala'] is False
+    assert hoy2.data['estoy_en_sala']['codigo_llamado']==r.data['codigo_llamado']
+    lab = c.post('/api/movil/recepcion/anuncio-lab/',{},format='json')
+    assert lab.status_code==200,lab.data
+    assert (lab.data.get('codigo_llamado') or '').startswith('L')

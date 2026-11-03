@@ -44,9 +44,8 @@ async function fetchRecursosByTipo(tipo: string): Promise<Recurso[]> {
   return items;
 }
 
-/** Salas activas aptas para turnos de estudios complementarios. */
-export async function listRecursosEstudioAgenda(): Promise<Recurso[]> {
-  const batches = await Promise.all(TIPOS_RECURSO_ESTUDIO.map((t) => fetchRecursosByTipo(t)));
+async function listRecursosActivosPorTipos(tipos: readonly string[]): Promise<Recurso[]> {
+  const batches = await Promise.all(tipos.map((t) => fetchRecursosByTipo(t)));
   const byId = new Map<number, Recurso>();
   for (const batch of batches) {
     for (const r of batch) {
@@ -58,6 +57,21 @@ export async function listRecursosEstudioAgenda(): Promise<Recurso[]> {
   return Array.from(byId.values()).sort((a, b) =>
     a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
   );
+}
+
+/** Salas activas aptas para turnos de estudios complementarios. */
+export async function listRecursosEstudioAgenda(): Promise<Recurso[]> {
+  return listRecursosActivosPorTipos(TIPOS_RECURSO_ESTUDIO);
+}
+
+/** Salas + quirófanos para agendar procedimiento / cirugía. */
+export async function listRecursosProcCirugiaAgenda(): Promise<Recurso[]> {
+  return listRecursosActivosPorTipos([...TIPOS_RECURSO_ESTUDIO, 'QUIROFANO']);
+}
+
+/** Recursos de extracciones / toma de muestra. */
+export async function listRecursosExtracciones(): Promise<Recurso[]> {
+  return listRecursosActivosPorTipos(['EXTRACCIONES']);
 }
 
 export { TIPOS_RECURSO_ESTUDIO };

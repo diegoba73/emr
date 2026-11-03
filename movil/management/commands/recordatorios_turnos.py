@@ -4,7 +4,10 @@ from movil.recordatorios import preparar_recordatorios, enviar_pendientes, consu
 
 
 class Command(BaseCommand):
-    help = 'Procesa recordatorios de turnos a 24 horas. Ejecutar periódicamente (cada 5 minutos).'
+    help = (
+        'Procesa recordatorios móviles: confirmación de turno (RESERVADO lejanos) '
+        'y asistencia (~24 hs, CONFIRMADO). Ejecutar periódicamente (cada 5 minutos).'
+    )
 
     def handle(self, *args, **options):
         if not settings.MOBILE_PUSH_ENABLED:

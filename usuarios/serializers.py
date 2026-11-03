@@ -26,6 +26,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': self.user.first_name,
             'last_name': self.user.last_name,
             'rol': self.user.rol,
+            'sedes': list(getattr(self.user, 'sedes', None) or []),
             'is_active': self.user.is_active,
             'is_staff': self.user.is_staff,
             'is_superuser': self.user.is_superuser,
@@ -71,7 +72,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'rol', 'telefono', 'is_active', 'is_staff', 'is_superuser',
+            'rol', 'telefono', 'sedes', 'is_active', 'is_staff', 'is_superuser',
             'password', 'password_confirm', 'date_joined', 'last_login',
             'medico_id', 'paciente_id', 'medico_data', 'paciente_data'
         ]
@@ -98,6 +99,18 @@ class UserSerializer(serializers.ModelSerializer):
     def _is_actor_superuser(self) -> bool:
         actor = self._request_user()
         return bool(actor and getattr(actor, 'is_authenticated', False) and getattr(actor, 'is_superuser', False))
+
+    def validate_sedes(self, value):
+        from usuarios.sedes import SEDES, normalize_sedes
+
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)):
+            raise serializers.ValidationError('Debe ser una lista de sedes.')
+        bad = [s for s in value if str(s).strip().upper() not in SEDES]
+        if bad:
+            raise serializers.ValidationError(f'Sedes inválidas: {bad}. Use CEHTA y/o ICPL.')
+        return normalize_sedes(value)
 
     def _value_changes(self, attrs: dict, field: str, target_value) -> bool:
         """``True`` si el set explícito de ``field`` cambia respecto a la instancia.

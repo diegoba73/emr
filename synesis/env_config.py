@@ -214,15 +214,19 @@ def validate_production_secret_key(secret_key: str) -> None:
 
 
 def resolve_allowed_hosts(debug: bool) -> list[str]:
+    from .lan_env import merge_unique, parse_lan_ips
+
     hosts = parse_csv_env('DJANGO_ALLOWED_HOSTS')
     if debug:
-        return hosts if hosts else list(DEV_ALLOWED_HOSTS)
-    if not hosts:
+        hosts = hosts if hosts else list(DEV_ALLOWED_HOSTS)
+    elif not hosts:
         raise ImproperlyConfigured(
             'DJANGO_ALLOWED_HOSTS debe definirse cuando DJANGO_DEBUG=False.'
         )
-    validate_production_allowed_hosts(hosts)
-    return hosts
+    else:
+        validate_production_allowed_hosts(hosts)
+    # IPs de la clínica (recepción / kiosco / tablets en Wi‑Fi)
+    return merge_unique(list(hosts), parse_lan_ips())
 
 
 def validate_production_allowed_hosts(allowed_hosts: list[str]) -> None:
@@ -233,16 +237,18 @@ def validate_production_allowed_hosts(allowed_hosts: list[str]) -> None:
 
 
 def resolve_cors(debug: bool) -> tuple[bool, list[str]]:
+    from .lan_env import lan_csrf_and_cors_origins, merge_unique
+
     if debug:
         origins = parse_csv_env('DJANGO_CORS_ALLOWED_ORIGINS', default=DEV_CORS_ORIGINS)
-        return True, origins
+        return True, merge_unique(list(origins), lan_csrf_and_cors_origins())
     if env_bool('DJANGO_CORS_ALLOW_ALL_ORIGINS', default=False):
         raise ImproperlyConfigured(
             'DJANGO_CORS_ALLOW_ALL_ORIGINS no está permitido cuando DJANGO_DEBUG=False.'
         )
     origins = parse_csv_env('DJANGO_CORS_ALLOWED_ORIGINS')
     validate_production_cors(False, origins)
-    return False, origins
+    return False, merge_unique(list(origins), lan_csrf_and_cors_origins())
 
 
 def validate_production_cors(cors_allow_all: bool, cors_allowed_origins: list[str]) -> None:
@@ -257,14 +263,18 @@ def validate_production_cors(cors_allow_all: bool, cors_allowed_origins: list[st
 
 
 def resolve_csrf_trusted_origins(debug: bool) -> list[str]:
+    from .lan_env import lan_csrf_and_cors_origins, merge_unique
+
     origins = parse_csv_env('DJANGO_CSRF_TRUSTED_ORIGINS')
     if debug:
-        return origins if origins else list(DEV_CSRF_ORIGINS)
-    if not origins:
-        raise ImproperlyConfigured(
-            'DJANGO_CSRF_TRUSTED_ORIGINS debe definirse cuando DJANGO_DEBUG=False.'
-        )
-    return origins
+        base = origins if origins else list(DEV_CSRF_ORIGINS)
+    else:
+        if not origins:
+            raise ImproperlyConfigured(
+                'DJANGO_CSRF_TRUSTED_ORIGINS debe definirse cuando DJANGO_DEBUG=False.'
+            )
+        base = origins
+    return merge_unique(list(base), lan_csrf_and_cors_origins())
 
 
 def resolve_drf_renderers(debug: bool) -> list[str]:

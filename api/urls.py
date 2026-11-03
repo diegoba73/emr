@@ -528,6 +528,9 @@ urlpatterns = [
 
     # Estudios complementarios EMR (C6.4.1 — sin LIMS/PACS)
     path('estudios-complementarios/', include('estudios.urls')),
+
+    # Recepción / sala de espera (puestos, reglas, tablero, kiosco, pantalla)
+    path('recepcion/', include('recepcion.urls')),
     
     # Ruta para internación (sectores, camas, internaciones)
     path('internacion/', include('internacion.urls')),

@@ -53,6 +53,7 @@ import { canAsignarTurnoEstudio } from '../modules/estudios/permissions';
 import { getEstudioComplementario } from '../services/estudiosComplementariosApi';
 import { AGENDAR_ESTUDIO_QUERY } from '../utils/agendarEstudioNavigation';
 import type { EstudioComplementario } from '../types/estudios';
+import CalendarioDiaLista from '../components/turnos/CalendarioDiaLista';
 // Los tipos locales de `react-big-calendar` en este proyecto no incluyen props
 // como `min/max/scrollToTime` (aunque la librería sí las soporta). Casteamos el
 // componente para mantener comportamiento sin ensuciar el resto del archivo.
@@ -761,7 +762,7 @@ const Turnos: React.FC = () => {
       <div className="container">
         {/* Header */}
         <div className="turnos-header">
-				<h1>📅 Turnos</h1>
+				<h1>📅 Calendario</h1>
 			</div>
 
       {/* Search and Filters */}
@@ -836,6 +837,7 @@ const Turnos: React.FC = () => {
               <MenuItem value="SALA_PROCEDIMIENTO">Salas de estudio</MenuItem>
               <MenuItem value="SALA_HEMODINAMIA">Hemodinamia</MenuItem>
               <MenuItem value="QUIROFANO">Quirófano</MenuItem>
+              <MenuItem value="EXTRACCIONES">Extracciones</MenuItem>
             </Select>
           </FormControl>
 
@@ -1003,7 +1005,7 @@ const Turnos: React.FC = () => {
 				</Box>
 			)}
 
-			{currentView === 'day' && puedeAgendarEnCalendario && (
+			{currentView === 'week' && puedeAgendarEnCalendario && (
 				<Box
 					role="note"
 					sx={{
@@ -1027,25 +1029,40 @@ const Turnos: React.FC = () => {
 						sx={{ fontWeight: 600, borderStyle: 'dashed' }}
 					/>
 					<Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 200 }}>
-						Los turnos quedan en el <strong>lado izquierdo</strong> (la franja punteada no los tapa).
-						Se muestran <strong>todos</strong> apilados para <strong>editar</strong>. La{' '}
-						<strong>franja</strong> a la derecha es para <strong>agendar otro</strong>. En{' '}
-						<strong>semana</strong>, si hay varios a la misma hora solo verás <strong>+N</strong> y la
-						franja.
+						En <strong>semana</strong>, si hay varios a la misma hora solo verás <strong>+N</strong> (abrí
+						el día). La vista <strong>Día</strong> muestra la lista completa con paciente, médico y tipo.
 					</Typography>
 				</Box>
 			)}
 
-			{/* Calendario Interactivo */}
+			{/* Calendario Interactivo / lista día */}
+			{currentView === 'day' ? (
+				<Box sx={{ mt: 2 }}>
+					<CalendarioDiaLista
+						date={currentDate}
+						turnos={filteredTurnos}
+						onNavigate={setCurrentDate}
+						onChangeView={setCurrentView}
+						onSelectTurno={(t) => {
+							setEditingTurno(t);
+							setShowModal(true);
+						}}
+						canCreate={puedeAgendarEnCalendario}
+						onNuevoTurno={() => {
+							setEditingTurno(null);
+							setSelectedDateTime(currentDate);
+							setShowModal(true);
+						}}
+					/>
+				</Box>
+			) : (
 			<Box
 				sx={{
 					mt: 2,
-					/* Vista día: más alto para que cada franja horaria sea claramente legible */
-					height: currentView === 'day' ? { xs: '75vh', md: 'min(88vh, 960px)' } : '720px',
-					minHeight: currentView === 'day' ? 640 : undefined,
+					height: '720px',
 				}}
-				className={`turnos-rbc-shell${currentView === 'day' ? ' turnos-rbc--day' : ''}${
-					currentView === 'day' || currentView === 'week' ? ' turnos-rbc--time' : ''
+				className={`turnos-rbc-shell${
+					currentView === 'week' ? ' turnos-rbc--time' : ''
 				}`}
 			>
 				<BigCalendar
@@ -1083,6 +1100,7 @@ const Turnos: React.FC = () => {
 					culture="es"
 				/>
 			</Box>
+			)}
 
 			{/* Modal Turno */}
 			<TurnoDrawer

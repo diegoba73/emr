@@ -74,11 +74,14 @@ interface UserFormData {
   last_name: string;
   telefono: string;
   rol: string;
+  sedes: Array<'CEHTA' | 'ICPL'>;
   password: string;
   password_confirm: string;
   is_active: boolean;
   is_staff: boolean;
 }
+
+const SEDE_OPTIONS: Array<'CEHTA' | 'ICPL'> = ['CEHTA', 'ICPL'];
 
 const GestionUsuarios: React.FC = () => {
   const { currentUser } = useData();
@@ -96,6 +99,7 @@ const GestionUsuarios: React.FC = () => {
     last_name: '',
     telefono: '',
     rol: 'paciente',
+    sedes: [],
     password: '',
     password_confirm: '',
     is_active: true,
@@ -281,6 +285,7 @@ const GestionUsuarios: React.FC = () => {
         last_name: user.last_name || '',
         telefono: user.telefono || '',
         rol: (user.rol || 'paciente').toLowerCase(),
+        sedes: (user.sedes || []).filter((s): s is 'CEHTA' | 'ICPL' => s === 'CEHTA' || s === 'ICPL'),
         password: '',
         password_confirm: '',
         is_active: user.is_active ?? true,
@@ -295,6 +300,7 @@ const GestionUsuarios: React.FC = () => {
         last_name: '',
         telefono: '',
         rol: 'paciente',
+        sedes: [],
         password: '',
         password_confirm: '',
         is_active: true,
@@ -373,6 +379,7 @@ const GestionUsuarios: React.FC = () => {
         last_name: formData.last_name,
         telefono: formData.telefono,
         rol: formData.rol,
+        sedes: formData.sedes,
         is_active: formData.is_active,
         is_staff: formData.is_staff,
       };
@@ -715,6 +722,19 @@ const GestionUsuarios: React.FC = () => {
                 </MenuItem>
               ))}
             </TextField>
+            <Autocomplete
+              multiple
+              options={SEDE_OPTIONS}
+              value={formData.sedes}
+              onChange={(_e, value) => setFormData({ ...formData, sedes: value })}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Sedes"
+                  helperText="Vacío = ambas (sin filtro). CEHTA no incluye Guardia/Internación."
+                />
+              )}
+            />
             
             {/* Sección para asociar con médico */}
             {formData.rol === 'medico' && !editingUser && (

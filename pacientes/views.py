@@ -378,6 +378,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
                 logger.exception("Audit log_update failed for Paciente %s", instance.pk)
 
 
+
     def destroy(self, request, *args, **kwargs):
         """DELETE físico bloqueado para todos los roles.
 

@@ -4,8 +4,9 @@
  */
 import axios, { AxiosInstance } from 'axios';
 import { getCSRFToken } from '../utils/csrf';
+import { resolveApiBaseUrl } from './apiBaseUrl';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = resolveApiBaseUrl();
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -13,6 +14,15 @@ export const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+});
+
+// Si el SPA se abrió por IP LAN, re-apuntar el API a esa misma IP (sin Internet).
+apiClient.interceptors.request.use((config) => {
+  const live = resolveApiBaseUrl();
+  if (live && config.baseURL !== live) {
+    config.baseURL = live;
+  }
+  return config;
 });
 
 // Interceptor: agregar CSRF token a peticiones no seguras
@@ -51,7 +61,18 @@ apiClient.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
     if (status === 401) {
-      window.location.href = '/login';
+      const path = window.location?.pathname || '';
+      const publicPaths = [
+        '/login',
+        '/register',
+        '/pantalla-sala',
+        '/kiosco-recepcion',
+        '/espera',
+        '/demo',
+      ];
+      if (!publicPaths.some((p) => path.startsWith(p))) {
+        window.location.href = '/login';
+      }
     } else if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') {
       console.warn('Error de red: el servidor backend no está disponible.');
     }

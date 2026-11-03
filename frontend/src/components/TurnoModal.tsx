@@ -48,6 +48,7 @@ import { isTurnoEstudio, listRecursosEstudioAgenda } from '../utils/recursosEstu
 import { getTurnoAgendaKind, TURNO_KIND_META } from '../utils/turnoKind';
 import { Link as RouterLink } from 'react-router-dom';
 import AgendaTipoSelector, { type AgendaTipo } from './turnos/AgendaTipoSelector';
+import ProgramacionTurnoForm from './turnos/ProgramacionTurnoForm';
 import { asignarTurnoEstudio, agendarTurnoEstudioDesdeAgenda, listTiposEstudioComplementario } from '../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import { canAsignarTurnoEstudio } from '../modules/estudios/permissions';
@@ -1192,6 +1193,19 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               Cargando datos desde el servidor...
             </Typography>
           </Box>
+        ) : !editingTurno && !lockEstudioSelection ? (
+          <Box sx={{ mt: 1, pb: 2 }}>
+            <ProgramacionTurnoForm
+              allowConsulta
+              initialTipo={initialAgendaTipo === 'estudio' ? 'ESTUDIO' : 'CONSULTA'}
+              onCancel={onClose}
+              onSuccess={() => {
+                onSuccess?.();
+                onClose();
+              }}
+              submitLabel="Crear"
+            />
+          </Box>
         ) : (
         <Box id="turno-form" component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
           {!editingTurno && !lockEstudioSelection && (
@@ -1212,7 +1226,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               <RouterLink
                 to={`/estudios-complementarios/${editingTurno.estudio_complementario.id}`}
               >
-                Estudios complementarios
+                Programación de turnos
               </RouterLink>
               .
             </Alert>

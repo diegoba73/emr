@@ -33,7 +33,7 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 
 | Acción API | Desde | Hacia / efecto |
 |------------|-------|----------------|
-| `confirmar` | `RESERVADO` | `CONFIRMADO` |
+| `confirmar` | `RESERVADO` | `CONFIRMADO` (secretaría/admin, o paciente dueño vía app/portal) |
 | `cancelar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | `CANCELADO` |
 | `reprogramar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | conserva estado; cambia fechas/médico/recurso |
 | `marcar-realizado` | `CONFIRMADO` (médico); `RESERVADO`/`CONFIRMADO` (admin/secretaría) | `REALIZADO` |

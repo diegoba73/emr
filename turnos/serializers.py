@@ -287,7 +287,11 @@ class TurnoSerializer(serializers.ModelSerializer):
             'id': ec.id,
             'estado': ec.estado,
             'practica': ec.practica,
+            'tipo_actividad': getattr(ec, 'tipo_actividad', None) or 'ESTUDIO',
             'tipo_estudio_nombre': tipo_nombre,
+            'procedimiento_catalogo_nombre': getattr(
+                getattr(ec, 'procedimiento_catalogo', None), 'nombre', None
+            ),
             'medico_solicitante_id': med_sol_id,
         }
 

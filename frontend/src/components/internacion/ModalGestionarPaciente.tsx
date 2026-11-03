@@ -32,7 +32,9 @@ import { darAltaInternacion, getInternacion, getInternaciones, updateInternacion
 import { getTiposDieta, getRevistaInternacionContexto, type RevistaInternacionContexto } from '../../services/internacion';
 import { apiService } from '../../services/api';
 import { useData } from '../../contexts/DataContext';
-import { canDarAltaInternacion, canOperateInternacionClinica, canWriteHcMedico, canWriteHcEnfermeria, canWriteHcKinesiologia, getDefaultInternacionModalTab } from '../../utils/permissions';
+import { canDarAltaInternacion, canOperateInternacionClinica, canWriteHcMedico, canWriteHcEnfermeria, canWriteHcKinesiologia, getDefaultInternacionModalTab,
+  isSecretariaEmrRole,
+} from '../../utils/permissions';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { origenLimsDesdeSectorInternacion } from '../../utils/limsOrigenSolicitud';
 import AtencionDetailDrawer from '../../modules/atenciones/components/AtencionDetailDrawer';
@@ -626,7 +628,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   }
 
   const internacionData = cama.internacion_actual;
-  const soloDieta = currentUser?.rol?.trim().toLowerCase() === 'secretaria';
+  const soloDieta = isSecretariaEmrRole(currentUser?.rol);
   const canOperateClinica = canOperateInternacionClinica(currentUser);
   const canWriteSoap = canWriteHcMedico(currentUser);
   const canWriteEnfermeria = canWriteHcEnfermeria(currentUser);

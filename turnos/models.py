@@ -29,6 +29,7 @@ class Recurso(TimestampedModel):
         SALA_PROCEDIMIENTO = 'SALA_PROCEDIMIENTO', 'Sala de Procedimiento/Estudio'
         SALA_HEMODINAMIA = 'SALA_HEMODINAMIA', 'Sala de Hemodinamia'
         QUIROFANO = 'QUIROFANO', 'Quirófano'
+        EXTRACCIONES = 'EXTRACCIONES', 'Extracciones / toma de muestra'
 
     nombre = models.CharField(max_length=100, unique=True)
     ubicacion = models.CharField(max_length=10, choices=Ubicacion.choices)

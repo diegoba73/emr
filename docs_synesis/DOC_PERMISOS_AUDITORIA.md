@@ -34,6 +34,7 @@ Definidos en `usuarios.User.ROL_CHOICES`:
 - **Estadísticas LIMS** (`GET /api/lab/estadisticas/*`): `ROLES_ESTADISTICAS_LIMS` = `admin` / `bioquimico` / `secretaria_lab` (+ superuser). Distinto de Indicadores BI (`/bi`, solo bioquímico).
 - **Entrega de informes liberados** (PDF/envío LIMS `FINALIZADO` y micro `VALIDADO`): `ROLES_SECRETARIA_ENTREGA_INFORME` = `secretaria` + `secretaria_lab` (+ LIMS write / admin). Informes parciales: `secretaria_lab` (vía LIMS write) y roles LIMS.
 - **Menú FE**: `secretaria` = EMR institucional (agenda/estudios/portal clínico); `secretaria_lab` = compartido (pacientes/médicos/profesionales) + Guardia + Internación + Estadísticas + LIMS (misma operación que `laboratorio`, sin validar).
+- **Sedes** (`User.sedes` / `Medico.sedes`, `usuarios/sedes.py`): vacío = sin filtro; CEHTA sin Guardia/Internación; ICPL con ambas. Filtra agenda/recursos/médicos/recepción/orígenes LIMS; no pacientes.
 
 - **`laboratorio`:** operador del LIMS nativo (app `laboratorio`). **No** está en `IsEMRClinician` (personal clínico EMR general); el acceso LIMS va por `LimsCatalogReadPermission` / `LimsSolicitudExamenPermission` y `laboratorio/views.py`.
 - **`bioquimico`:** operador LIMS **más** `validar` (`ROLES_LIMS_VALIDAR`). Matriz: `reglas/usuarios-y-permisos.md`. No copiar aquí.

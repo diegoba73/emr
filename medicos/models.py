@@ -1,8 +1,12 @@
+from datetime import time
+
+from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.conf import settings
 from django.utils import timezone
-from datetime import time
+
+from usuarios.sedes import SEDE_CHOICES
 
 # Modelo para las Especialidades Médicas
 class Especialidad(models.Model):
@@ -73,6 +77,15 @@ class Medico(models.Model):
     # Si hay user, el serializer puede sincronizar; la lectura prioriza estos campos y cae al user.
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
     telefono = models.CharField(max_length=50, blank=True, null=True, verbose_name="Teléfono")
+
+    # Sedes donde atiende. Vacío = visible en todas (retrocompat).
+    sedes = ArrayField(
+        models.CharField(max_length=10, choices=SEDE_CHOICES),
+        default=list,
+        blank=True,
+        verbose_name='Sedes',
+        help_text='CEHTA y/o ICPL. Vacío = visible en todas las sedes.',
+    )
 
     # Campos adicionales para futura integración con IA (ej. áreas de interés, datos de rendimiento)
     areas_interes_ia = models.TextField(blank=True, null=True, verbose_name="Áreas de Interés para IA (Ej. Patologías específicas)")

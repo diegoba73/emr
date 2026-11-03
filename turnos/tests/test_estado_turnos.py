@@ -92,7 +92,7 @@ class TestConfirmarTurno(APITestCase):
         r = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
         assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
 
-    def test_paciente_no_puede_confirmar(self):
+    def test_paciente_puede_confirmar_propio(self):
         user = User.objects.create_user(
             username='te_conf_pac', email='te_conf_pac@test.com', password='x', rol='paciente',
         )
@@ -101,7 +101,9 @@ class TestConfirmarTurno(APITestCase):
         turno = self._turno_reservado(self.medico_a, 4)
         self.client.force_authenticate(user=user)
         r = self.client.post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
-        assert r.status_code == status.HTTP_403_FORBIDDEN
+        assert r.status_code == status.HTTP_200_OK
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.CONFIRMADO
 
     def test_enfermeria_no_puede_confirmar(self):
         enf = User.objects.create_user(

@@ -1793,6 +1793,7 @@ def _build_current_user_payload(user):
         'last_name': user.last_name,
         'rol': user.rol,
         'telefono': user.telefono,
+        'sedes': list(getattr(user, 'sedes', None) or []),
         'is_active': user.is_active,
         'is_staff': user.is_staff,
         'is_superuser': user.is_superuser,

@@ -28,6 +28,8 @@ cp .env.example .env
 - API: http://localhost:8000
 - Admin: http://localhost:8000/admin/
 
+Recepción / kiosco en Wi‑Fi de la clínica (sin Internet): configurá `EMR_LAN_IPS` + `EMR_KIOSCO_LAN_ORIGIN` en `.env` — ver [`docs/recepcion-lan.md`](recepcion-lan.md).
+
 ## Recuperar datos desde backup
 
 Si tenés un dump en `~/backups_synesis/` (p. ej. del 22/jun/2026):
@@ -79,7 +81,7 @@ bash scripts/backup_postgres_local.sh   # backup manual
 |---------|------------|-----|
 | `admin` | `admin123` | superuser |
 | `medico1` | `medico123` | médico |
-| `secretaria1` | `secretaria123` | secretaría |
+| `secretaria1` | `secretaria123` | secretaría laboratorio (`secretaria_lab`) |
 | `laboratorio1` | `laboratorio123` | laboratorio |
 | `enfermeria1` | `enfermeria123` | enfermería |
 | `paciente1` | `paciente123` | paciente (portal) |

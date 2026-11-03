@@ -70,14 +70,14 @@ describe('Sidebar Atenciones Clínicas (/atenciones)', () => {
     expect(screen.queryByText('Atenciones Clínicas')).not.toBeInTheDocument();
   });
 
-  it('no muestra Turnos para laboratorio', () => {
+  it('no muestra Calendario para laboratorio', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'LABORATORIO' }) });
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.queryByText('Turnos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendario')).not.toBeInTheDocument();
   });
 });
 
@@ -129,7 +129,7 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
     expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
     // Portal clínico (duplicado de LIMS) y estudios: fuera del menú principal.
     expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Estudios complementarios')).not.toBeInTheDocument();
+    expect(screen.queryByText('Programación de turnos')).not.toBeInTheDocument();
   });
 
   it('muestra enlaces LIMS', () => {
@@ -145,13 +145,13 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
     expect(screen.getByText('Exámenes')).toBeInTheDocument();
   });
 
-  it('no muestra Turnos ni agenda', () => {
+  it('no muestra Calendario ni agenda', () => {
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
-    expect(screen.queryByText('Turnos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendario')).not.toBeInTheDocument();
   });
 });
 
@@ -161,14 +161,15 @@ describe('Sidebar bioquímico: sin Laboratorio clínico ni Estudios', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'BIOQUIMICO', is_staff: true }) });
   });
 
-  it('ve Pacientes y LIMS; oculta Estudios, Laboratorio clínico, Administración y catálogos clínicos', () => {
+  it('ve Pacientes, LIMS y Estadísticas; oculta Estudios, Laboratorio clínico, Administración y catálogos clínicos', () => {
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
     expect(screen.getByText('Pacientes')).toBeInTheDocument();
-    expect(screen.queryByText('Estudios complementarios')).not.toBeInTheDocument();
+    expect(screen.getByText('Estadísticas')).toBeInTheDocument();
+    expect(screen.queryByText('Programación de turnos')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
     expect(screen.queryByText('Administración')).not.toBeInTheDocument();
     expect(screen.queryByText('Catálogos clínicos')).not.toBeInTheDocument();
@@ -182,7 +183,7 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
     jest.clearAllMocks();
   });
 
-  it('médico ve Laboratorio clínico y no el bloque LIMS', () => {
+  it('médico ve Laboratorio clínico; Microbiología LIMS pero no Órdenes/Pendientes', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'MEDICO' }) });
     render(
       <MemoryRouter>
@@ -190,21 +191,54 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('Laboratorio')).toBeInTheDocument();
-    expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
+    expect(screen.getByText('Microbiología')).toBeInTheDocument();
     expect(screen.queryByText('Órdenes LIMS')).not.toBeInTheDocument();
     expect(screen.queryByText('Pendientes')).not.toBeInTheDocument();
   });
 
-  it('secretaría ve Laboratorio clínico y no el bloque LIMS', () => {
+  it('secretaría institucional ve EMR + Laboratorio clínico; no LIMS ni Estadísticas', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'SECRETARIA' }) });
     render(
       <MemoryRouter>
         <SidebarContent />
       </MemoryRouter>
     );
+    expect(screen.getByText('Pacientes')).toBeInTheDocument();
+    expect(screen.getByText('Calendario')).toBeInTheDocument();
+    expect(screen.getByText('Programación de turnos')).toBeInTheDocument();
+    expect(screen.getByText('Horarios de atención')).toBeInTheDocument();
+    expect(screen.getByText('Recepción')).toBeInTheDocument();
+    expect(screen.getByText('Guardia')).toBeInTheDocument();
+    expect(screen.getByText('Internación')).toBeInTheDocument();
     expect(screen.getByText('Laboratorio')).toBeInTheDocument();
+    expect(screen.getByText('Archivos')).toBeInTheDocument();
     expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
     expect(screen.queryByText('Órdenes LIMS')).not.toBeInTheDocument();
+    expect(screen.queryByText('Estadísticas')).not.toBeInTheDocument();
+  });
+
+  it('secretaría laboratorio ve compartido + Guardia/Internación + Estadísticas + LIMS', () => {
+    useData.mockReturnValue({ currentUser: mockUser({ rol: 'SECRETARIA_LAB' }) });
+    render(
+      <MemoryRouter>
+        <SidebarContent />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Pacientes')).toBeInTheDocument();
+    expect(screen.getByText('Médicos')).toBeInTheDocument();
+    expect(screen.getByText('Profesionales')).toBeInTheDocument();
+    expect(screen.getByText('Guardia')).toBeInTheDocument();
+    expect(screen.getByText('Internación')).toBeInTheDocument();
+    expect(screen.getByText('Estadísticas')).toBeInTheDocument();
+    expect(screen.getByText('Laboratorio (LIMS)')).toBeInTheDocument();
+    expect(screen.getByText('Órdenes LIMS')).toBeInTheDocument();
+    expect(screen.getByText('Catálogos LIMS')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendario')).not.toBeInTheDocument();
+    expect(screen.queryByText('Programación de turnos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Horarios de atención')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recepción')).not.toBeInTheDocument();
+    expect(screen.queryByText('Archivos')).not.toBeInTheDocument();
   });
 
   it('enfermería ve Laboratorio clínico y no el bloque LIMS', () => {
@@ -224,8 +258,8 @@ describe('orden del menú principal', () => {
   it('muestra el orden institucional para administrador', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'ADMIN' }) });
     render(<MemoryRouter><SidebarContent /></MemoryRouter>);
-    const labels = ['Inicio', 'Pacientes', 'Médicos', 'Profesionales', 'Turnos', 'Guardia', 'Internación',
-      'Laboratorio', 'Atenciones Clínicas', 'Estudios complementarios', 'Archivos'];
+    const labels = ['Inicio', 'Pacientes', 'Médicos', 'Profesionales', 'Calendario', 'Recepción', 'Guardia', 'Internación',
+      'Laboratorio', 'Atenciones Clínicas', 'Programación de turnos', 'Archivos'];
     const nodes = labels.map((label) => screen.getByText(label));
     for (let i = 1; i < nodes.length; i++) {
       expect(nodes[i - 1].compareDocumentPosition(nodes[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

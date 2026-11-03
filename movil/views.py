@@ -279,4 +279,15 @@ class InstitucionMovil(APIView):
     def get(self, request):
         if not settings.MOBILE_INSTITUTION_CODE or not settings.MOBILE_INSTITUTION_NAME:
             return Response({'detail': 'Institución móvil no configurada.'}, status=503)
-        return Response({'code': settings.MOBILE_INSTITUTION_CODE, 'name': settings.MOBILE_INSTITUTION_NAME})
+        from recepcion.kiosco_origen import resolver_origen_espera_kiosco
+
+        origen = (resolver_origen_espera_kiosco(request).get('espera_origin') or '').rstrip('/')
+        kiosco_anuncio_url = f'{origen}/kiosco-recepcion' if origen else ''
+        return Response(
+            {
+                'code': settings.MOBILE_INSTITUTION_CODE,
+                'name': settings.MOBILE_INSTITUTION_NAME,
+                # Mismo anuncio que el QR impreso; la app lo abre en el navegador del celular.
+                'kiosco_anuncio_url': kiosco_anuncio_url,
+            }
+        )

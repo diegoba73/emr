@@ -45,9 +45,10 @@ from usuarios.roles import (
     ROLES_AGENDA_TURNOS_LECTURA,
     ROLES_ESTUDIO_COMPLEMENTARIO,
     ROLES_LIMS_OPERADOR,
+    ROLES_SECRETARIA_EMR,
 )
 
-_ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'secretaria', 'enfermeria'}) | ROLES_AGENDA_TURNOS_LECTURA
+_ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'enfermeria', *ROLES_SECRETARIA_EMR}) | ROLES_AGENDA_TURNOS_LECTURA
 _TIPOS_RECURSO_ESTUDIO_TURNOS = ('SALA_PROCEDIMIENTO', 'SALA_HEMODINAMIA')
 
 
@@ -66,7 +67,7 @@ def _puede_gestionar_turnos_global(user) -> bool:
     """Crear/modificar turnos en agenda institucional (no incluye enfermería en C5.8.1)."""
     if emr_staff_or_admin_global(user):
         return True
-    return _rol_usuario(user) in {'admin', 'secretaria'}
+    return _rol_usuario(user) == 'admin' or _rol_usuario(user) in ROLES_SECRETARIA_EMR
 
 
 def _es_enfermeria(user) -> bool:
@@ -110,6 +111,15 @@ class RecursoViewSet(viewsets.ModelViewSet):
     filterset_fields = ['ubicacion', 'tipo_recurso', 'activo']
     search_fields = ['nombre']
     ordering = ['nombre']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        from usuarios.sedes import sedes_efectivas
+
+        sedes = sedes_efectivas(self.request.user)
+        if sedes is not None:
+            qs = qs.filter(ubicacion__in=sedes)
+        return qs
 
     def get_permissions(self):
         """Solo Admin puede escribir o dar de baja; el resto, sólo leer."""
@@ -214,6 +224,11 @@ class TurnoViewSet(viewsets.ModelViewSet):
         user_rol = (user.rol or '').lower()
 
         if _puede_ver_agenda_global_turnos(user):
+            from usuarios.sedes import sedes_efectivas
+
+            sedes = sedes_efectivas(user)
+            if sedes is not None:
+                queryset = queryset.filter(recurso__ubicacion__in=sedes)
             return queryset
 
         if user_rol == 'medico':
@@ -291,9 +306,11 @@ class TurnoViewSet(viewsets.ModelViewSet):
             slot = duracion_de(horario.medico)
             validar_reserva(horario.medico, inicio, inicio + slot, horario.recurso,
                             exigir_horario=True, horario_id=horario.pk)
+            from turnos.paciente_reserva import estado_inicial_reserva_paciente
+            estado_inicial = estado_inicial_reserva_paciente(inicio)
             turno = Turno.objects.create(paciente=paciente, medico=horario.medico,
                 recurso=horario.recurso, fecha_hora_inicio=inicio, fecha_hora_fin=inicio+slot,
-                estado=Turno.Estado.RESERVADO, motivo_reserva=datos.validated_data.get('motivo', ''))
+                estado=estado_inicial, motivo_reserva=datos.validated_data.get('motivo', ''))
             _safe_audit(log_create, actor=request.user, entity=turno, module='turnos',
                         metadata={'view': 'TurnoViewSet.reservar_horario'})
         return Response(self.get_serializer(turno).data, status=201)
@@ -332,6 +349,15 @@ class TurnoViewSet(viewsets.ModelViewSet):
             )
         if not _puede_gestionar_turnos_global(user):
             raise PermissionDenied('No tiene permiso para crear turnos.')
+
+        from usuarios.sedes import sedes_efectivas
+
+        sedes = sedes_efectivas(user)
+        recurso = serializer.validated_data.get('recurso')
+        if sedes is not None and recurso is not None and recurso.ubicacion not in sedes:
+            raise ValidationError({
+                'recurso_id': f'El recurso pertenece a {recurso.ubicacion}; su usuario solo opera en {", ".join(sedes)}.',
+            })
 
         with transaction.atomic():
             self._validar_agenda(serializer)

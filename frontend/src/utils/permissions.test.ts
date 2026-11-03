@@ -19,6 +19,7 @@ import {
   canCreatePaciente,
   canCreateMedico,
   canAccessMedicos,
+  canDeletePaciente,
   canUpdatePacienteDemographics,
   canDownloadArchivoMedico,
   canWriteArchivoMedico,
@@ -117,6 +118,19 @@ describe('canUpdatePacienteDemographics', () => {
   });
 });
 
+describe('canDeletePaciente', () => {
+  it('permite admin y superuser', () => {
+    expect(canDeletePaciente(user({ rol: 'ADMIN' }))).toBe(true);
+    expect(canDeletePaciente(user({ rol: 'SECRETARIA', is_superuser: true }))).toBe(true);
+  });
+
+  it('bloquea secretaría, médico y paciente', () => {
+    expect(canDeletePaciente(user({ rol: 'SECRETARIA' }))).toBe(false);
+    expect(canDeletePaciente(user({ rol: 'MEDICO' }))).toBe(false);
+    expect(canDeletePaciente(user({ rol: 'PACIENTE' }))).toBe(false);
+  });
+});
+
 describe('canAccessSolicitudes', () => {
   it('permite admin, secretaría, enfermería, médico y paciente', () => {
     expect(canAccessSolicitudes(user({ rol: 'ADMIN' }))).toBe(true);
@@ -167,10 +181,11 @@ describe('LIMS permissions (re-export)', () => {
   const enf = user({ rol: 'ENFERMERIA' });
   const adm = user({ rol: 'ADMIN', is_superuser: true });
 
-  it('LIMS rutas: admin, laboratorio y bioquímico', () => {
+  it('LIMS rutas: admin, laboratorio, bioquímico y secretaría lab', () => {
     expect(canAccessLims(adm)).toBe(true);
     expect(canAccessLims(lab)).toBe(true);
     expect(canAccessLims(user({ rol: 'BIOQUIMICO' }))).toBe(true);
+    expect(canAccessLims(user({ rol: 'SECRETARIA_LAB' }))).toBe(true);
     expect(canAccessLims(med)).toBe(false);
     expect(canAccessLims(pac)).toBe(false);
     expect(canAccessLims(sec)).toBe(false);

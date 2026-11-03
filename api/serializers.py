@@ -76,6 +76,7 @@ class MedicoLightSerializer(serializers.ModelSerializer):
             'duracion_slot_min',
             'email',
             'telefono',
+            'sedes',
         ]
         read_only_fields = fields
 
@@ -120,6 +121,7 @@ class MedicoSerializer(serializers.ModelSerializer):
             'areas_interes_ia',
             'email',
             'telefono',
+            'sedes',
             'fecha_registro',
             'ultima_actualizacion',
         ]

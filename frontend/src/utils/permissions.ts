@@ -2,11 +2,11 @@ import type { User } from '../types';
 import {
   isLecturaOperativaRole,
   isOperadorLimsRole,
-  isProfesionalEstudioRole,
   isSecretariaEmrRole,
   isSecretariaInstitucionalRole,
   isSecretariaLabRole,
 } from './roles';
+import { userHasCapacidad } from './sedes';
 import {
   canAccessLimsModule,
   canAccessMicrobiologia,
@@ -158,6 +158,11 @@ export function canUpdatePacienteDemographics(user: User | null | undefined): bo
 }
 
 /** Eliminación física de pacientes: solo admin/superuser (duplicados sin historia). */
+export function canDeletePaciente(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  return normalizeRol(user) === 'admin';
+}
 
 /** Descarga de archivo (misma política de módulo; objeto validado en backend). */
 export function canDownloadArchivoMedico(user: User | null | undefined): boolean {
@@ -193,11 +198,12 @@ export function canAccessAtenciones(user: User | null | undefined): boolean {
 
 /**
  * Guardia: médico (no solo ambulatorio), enfermería (lectura), ambas secretarías
- * y admin/staff. Secretaría no abre el módulo /atenciones genérico.
+ * y admin/staff. Requiere capacidad de sede (CEHTA no tiene guardia).
  */
 export function canAccessGuardia(user: User | null | undefined): boolean {
   if (!user) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
+  if (!userHasCapacidad(user, 'guardia')) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria' || isSecretariaEmrRole(rol);
@@ -245,12 +251,15 @@ export function canAccessBiDashboard(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'bioquimico';
 }
 
-/** Panel de internación: médico (completo), enfermería, kinesiólogo, admin y ambas secretarías. */
+/** Panel de internación: médico (completo), enfermería, kinesiólogo, admin y ambas secretarías.
+ * Requiere capacidad de sede (CEHTA no tiene internación).
+ */
 export function canAccessInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
+  if (!userHasCapacidad(user, 'internacion')) return false;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria' || isSecretariaEmrRole(rol) || rol === 'kinesiologo';
 }
@@ -353,11 +362,32 @@ export function canManageHorarios(user: User | null | undefined): boolean {
   return rol === 'admin' || isSecretariaInstitucionalRole(rol);
 }
 
-/** Tablero de recepción del día (secretaria, médico, admin, enfermería). */
+/** Tablero de recepción del día (secretaria, médico, lab cola L, admin, enfermería). */
+export function canAccessRecepcion(user: User | null | undefined): boolean {
+  if (!user) return false;
+  const rol = normalizeRol(user);
+  // Laboratorio / secretaria_lab: solo cola L (extracciones) en el mismo tablero.
+  if (isSecretariaLabRole(rol) || isLaboratorioRole(user)) return true;
+  if (user.is_superuser || user.is_staff) return true;
+  return (
+    rol === 'admin' ||
+    rol === 'enfermeria' ||
+    rol === 'medico' ||
+    isSecretariaInstitucionalRole(rol)
+  );
+}
 
 /**
  * @deprecated La cola del médico se unificó en `/recepcion`.
  * Se mantiene por compatibilidad de imports/tests; siempre false.
  */
+export function canAccessMedicoCola(_user: User | null | undefined): boolean {
+  return false;
+}
 
 /** CRUD puestos/reglas de recepción. */
+export function canConfigRecepcion(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  return normalizeRol(user) === 'admin';
+}

@@ -39,6 +39,12 @@ export const TURNO_KIND_META: Record<TurnoAgendaKind, TurnoKindMeta> = {
 type TurnoKindInput = Pick<Turno, 'estudio_complementario' | 'recurso' | 'motivo_reserva' | 'medico'>;
 
 export function getTurnoAgendaKind(turno: TurnoKindInput): TurnoAgendaKind {
+  const tipoActividad = (
+    turno.estudio_complementario as { tipo_actividad?: string | null } | null | undefined
+  )?.tipo_actividad;
+  if (tipoActividad === 'CIRUGIA') return 'cirugia';
+  if (tipoActividad === 'PROCEDIMIENTO') return 'procedimiento';
+  if (tipoActividad === 'ESTUDIO') return 'estudio';
   if (isTurnoEstudio(turno)) return 'estudio';
   const tipo = turno.recurso?.tipo_recurso;
   if (tipo === 'CONSULTORIO') return 'consulta';

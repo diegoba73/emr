@@ -22,6 +22,7 @@ const TIPO_RECURSO_OPTIONS = [
   { value: 'SALA_PROCEDIMIENTO', label: 'Sala de Procedimiento/Estudio' },
   { value: 'SALA_HEMODINAMIA', label: 'Sala de Hemodinamia' },
   { value: 'QUIROFANO', label: 'Quirófano' },
+  { value: 'EXTRACCIONES', label: 'Extracciones / toma de muestra' },
 ];
 
 const Recursos: React.FC = () => {

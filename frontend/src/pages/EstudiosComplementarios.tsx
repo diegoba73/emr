@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -7,7 +7,6 @@ import {
   Chip,
   CircularProgress,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
@@ -24,17 +23,13 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { Add, CalendarMonth, Clear, Visibility } from '@mui/icons-material';
+import { Add, Clear, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { withNavBack } from '../utils/navBack';
-import AsyncAutocomplete from '../components/common/AsyncAutocomplete';
 import { useData } from '../contexts/DataContext';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import {
-  ESTADO_CHIP_COLOR,
-  ESTADO_LABELS,
   PRACTICA_OPTIONS,
-  ORIGEN_OPTIONS,
   labelPractica,
   practicaOptionsFromTipos,
 } from '../modules/estudios/constants';
@@ -48,95 +43,86 @@ import {
 } from '../modules/estudios/bandejas';
 import {
   canAccessEstudiosModule,
-  canAsignarTurnoEstudio,
   canWriteEstudio,
 } from '../modules/estudios/permissions';
 import {
-  createEstudioComplementario,
   getBandejasResumenEstudios,
   listEstudiosComplementarios,
   listTiposEstudioComplementario,
 } from '../services/estudiosComplementariosApi';
+import { apiClient } from '../services/apiClient';
+import ProgramacionTurnoForm from '../components/turnos/ProgramacionTurnoForm';
+import type { EstudioComplementario, TipoEstudioComplementario } from '../types/estudios';
+import type { Turno } from '../types';
 import {
-  getCirugiaAbordajes,
-  getCirugiaEspecialidades,
-  getCirugiaProcedimientos,
-} from '../services/apiService';
-import { turnosAgendarEstudioPath } from '../utils/agendarEstudioNavigation';
-import type {
-  CirugiaAbordajeCatalogo,
-  CirugiaEspecialidadCatalogo,
-  CirugiaProcedimientoCatalogo,
-  CreateEstudioComplementarioPayload,
-  EstudioComplementario,
-  EstudioPractica,
-  TipoEstudioComplementario,
-} from '../types/estudios';
-import { Medico, Paciente } from '../types';
-import { formatPacienteLabel, formatPacienteNombre } from '../utils/pacienteFormat';
+  fechaLocalHoy,
+  kindLabel,
+  mergeProgramacionRows,
+  type ProgramacionTipoFiltro,
+} from '../utils/programacionTurnosRows';
+import { canCreateTurno } from '../utils/turnoPermissions';
 
-function labelMedico(m: Medico): string {
-  const ap = (m.apellido || '').trim();
-  const no = (m.nombre || '').trim();
-  if (ap && no) return `${ap}, ${no}`;
-  return ap || no || `Médico #${m.id}`;
+type TurnosPagePayload = Turno[] | { results?: Turno[]; next?: string | null };
+
+function nextTurnosPath(nextUrl: string): string | null {
+  try {
+    const parsed = new URL(nextUrl, apiClient.defaults.baseURL || undefined);
+    return parsed.pathname.replace(/^\/api/, '') + parsed.search;
+  } catch {
+    return null;
+  }
 }
 
-function labelCirugiaIndicacion(row: EstudioComplementario): string {
-  const parts = [
-    row.cirugia_especialidad_snapshot || row.cirugia_especialidad_nombre,
-    row.cirugia_procedimiento_snapshot || row.cirugia_procedimiento_nombre,
-    row.cirugia_abordaje_snapshot || row.cirugia_abordaje_nombre,
-  ].filter(Boolean);
-  if (parts.length) return parts.join(' · ');
-  return row.procedimiento_catalogo_nombre || 'Cirugía';
+async function fetchTurnosRango(desde: string, hasta: string): Promise<Turno[]> {
+  const rows: Turno[] = [];
+  let path: string | null = `/turnos/?start=${encodeURIComponent(desde)}&end=${encodeURIComponent(
+    hasta + 'T23:59:59'
+  )}&page_size=100`;
+  const seen = new Set<string>();
+  while (path && seen.size < 8) {
+    if (seen.has(path)) break;
+    seen.add(path);
+    const pagePath: string = path;
+    const { data } = (await apiClient.get(pagePath)) as { data: TurnosPagePayload };
+    if (Array.isArray(data)) {
+      rows.push(...data);
+      break;
+    }
+    if (data.results?.length) rows.push(...data.results);
+    if (!data.next) {
+      path = null;
+      break;
+    }
+    path = nextTurnosPath(String(data.next));
+  }
+  return rows;
 }
 
 const EstudiosComplementarios: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, pacientes, loadPacientes, medicos, loadMedicos } = useData();
+  const { currentUser } = useData();
   const [estudios, setEstudios] = useState<EstudioComplementario[]>([]);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
   const [tipos, setTipos] = useState<TipoEstudioComplementario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroBandeja, setFiltroBandeja] = useState<BandejaEstudioKey>('todos');
   const [conteos, setConteos] = useState<BandejasResumen>(emptyBandejasResumen);
   const [filtroPractica, setFiltroPractica] = useState<string>('');
-  const [filtroTipoActividad, setFiltroTipoActividad] = useState<string>('');
+  const [filtroTipoActividad, setFiltroTipoActividad] = useState<ProgramacionTipoFiltro>('');
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
   const [busquedaPacienteDebounced, setBusquedaPacienteDebounced] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(() => fechaLocalHoy());
+  const [fechaHasta, setFechaHasta] = useState(() => fechaLocalHoy());
   const [createOpen, setCreateOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [procSeleccionado, setProcSeleccionado] = useState<{
-    id: number;
-    nombre: string;
-    clasificacion_quirurgica?: string;
-  } | null>(null);
-  const [cirEspOptions, setCirEspOptions] = useState<CirugiaEspecialidadCatalogo[]>([]);
-  const [cirProcOptions, setCirProcOptions] = useState<CirugiaProcedimientoCatalogo[]>([]);
-  const [cirAbrOptions, setCirAbrOptions] = useState<CirugiaAbordajeCatalogo[]>([]);
-  const [form, setForm] = useState<CreateEstudioComplementarioPayload>({
-    paciente_id: 0,
-    practica: '',
-    tipo_actividad: 'ESTUDIO',
-    medico_solicitante: null,
-    anestesista_previsto: null,
-    origen: 'INTERNO',
-    descripcion_clinica: '',
-    centro_realizador: '',
-  });
   const initialLoadDone = useRef(false);
   const practicaOptions = practicaOptionsFromTipos(tipos);
 
-  const writeAccess = canWriteEstudio(currentUser);
-  const puedeAsignarTurno = canAsignarTurnoEstudio(currentUser);
+  const writeAccess = canWriteEstudio(currentUser) || canCreateTurno(currentUser);
   const rol = (currentUser?.rol || '').toLowerCase();
   const tituloModulo =
     rol === 'paciente' ? MODULO_ESTUDIOS_LABEL_PACIENTE : MODULO_ESTUDIOS_LABEL;
-
-  const irAgendarEnCalendario = (estudio: EstudioComplementario) => {
-    navigate(turnosAgendarEstudioPath(estudio.id));
-  };
+  const mostrarBandejas = filtroTipoActividad !== 'CONSULTA';
 
   const load = useCallback(async () => {
     if (!initialLoadDone.current) setLoading(true);
@@ -144,28 +130,49 @@ const EstudiosComplementarios: React.FC = () => {
     try {
       const baseParams: Record<string, string | number> = {};
       if (filtroPractica) baseParams.practica = filtroPractica;
-      if (filtroTipoActividad) baseParams.tipo_actividad = filtroTipoActividad;
+      if (filtroTipoActividad && filtroTipoActividad !== 'CONSULTA') {
+        baseParams.tipo_actividad = filtroTipoActividad;
+      }
       if (busquedaPacienteDebounced.trim()) {
         baseParams.search = busquedaPacienteDebounced.trim();
       }
       const listParams = {
         ...baseParams,
-        ...(filtroBandeja !== 'todos' ? { bandeja: filtroBandeja } : {}),
+        ...(filtroBandeja !== 'todos' && mostrarBandejas ? { bandeja: filtroBandeja } : {}),
       };
-      const [data, resumen] = await Promise.all([
-        listEstudiosComplementarios(listParams),
-        getBandejasResumenEstudios(baseParams),
+
+      const loadEstudios = filtroTipoActividad !== 'CONSULTA';
+      const [dataEstudios, resumen, dataTurnos] = await Promise.all([
+        loadEstudios
+          ? listEstudiosComplementarios(listParams)
+          : Promise.resolve([] as EstudioComplementario[]),
+        loadEstudios
+          ? getBandejasResumenEstudios(baseParams)
+          : Promise.resolve({} as Record<string, number>),
+        fetchTurnosRango(fechaDesde || '2000-01-01', fechaHasta || '2100-12-31').catch(
+          () => [] as Turno[]
+        ),
       ]);
-      setEstudios(data);
+      setEstudios(dataEstudios);
       setConteos({ ...emptyBandejasResumen(), ...resumen });
+      setTurnos(dataTurnos);
     } catch (e) {
-      setError(parseEstudiosApiError(e, 'No se pudieron cargar los estudios.'));
+      setError(parseEstudiosApiError(e, 'No se pudo cargar la programación.'));
       setEstudios([]);
+      setTurnos([]);
     } finally {
       initialLoadDone.current = true;
       setLoading(false);
     }
-  }, [filtroBandeja, filtroPractica, filtroTipoActividad, busquedaPacienteDebounced]);
+  }, [
+    filtroBandeja,
+    filtroPractica,
+    filtroTipoActividad,
+    busquedaPacienteDebounced,
+    fechaDesde,
+    fechaHasta,
+    mostrarBandejas,
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -184,30 +191,7 @@ const EstudiosComplementarios: React.FC = () => {
     void listTiposEstudioComplementario()
       .then(setTipos)
       .catch(() => setTipos([]));
-    void getCirugiaEspecialidades(true)
-      .then((rows) => setCirEspOptions(rows as CirugiaEspecialidadCatalogo[]))
-      .catch(() => setCirEspOptions([]));
   }, [currentUser]);
-
-  useEffect(() => {
-    if (!form.cirugia_especialidad) {
-      setCirProcOptions([]);
-      return;
-    }
-    void getCirugiaProcedimientos(form.cirugia_especialidad, true)
-      .then((rows) => setCirProcOptions(rows as CirugiaProcedimientoCatalogo[]))
-      .catch(() => setCirProcOptions([]));
-  }, [form.cirugia_especialidad]);
-
-  useEffect(() => {
-    if (!form.cirugia_procedimiento) {
-      setCirAbrOptions([]);
-      return;
-    }
-    void getCirugiaAbordajes(form.cirugia_procedimiento, true)
-      .then((rows) => setCirAbrOptions(rows as CirugiaAbordajeCatalogo[]))
-      .catch(() => setCirAbrOptions([]));
-  }, [form.cirugia_procedimiento]);
 
   useEffect(() => {
     if (!canAccessEstudiosModule(currentUser)) return;
@@ -224,122 +208,67 @@ const EstudiosComplementarios: React.FC = () => {
     };
   }, [currentUser, load]);
 
-  useEffect(() => {
-    if (writeAccess) {
-      loadPacientes();
-      loadMedicos();
+  const rows = useMemo(() => {
+    let merged = mergeProgramacionRows(turnos, estudios, filtroTipoActividad);
+    if (busquedaPacienteDebounced.trim()) {
+      const q = busquedaPacienteDebounced.trim().toLowerCase();
+      merged = merged.filter((r) => r.pacienteNombre.toLowerCase().includes(q));
     }
-  }, [writeAccess, loadPacientes, loadMedicos]);
-
-  const pacienteNombre = useCallback(
-    (row: EstudioComplementario) => {
-      if (row.paciente_nombre) return row.paciente_nombre;
-      const p = pacientes.find((item) => item.id === row.paciente_id);
-      return p ? formatPacienteNombre(p) : `Paciente #${row.paciente_id}`;
-    },
-    [pacientes]
-  );
+    if (filtroPractica) {
+      const practLabel = labelPractica(filtroPractica, practicaOptions).toLowerCase();
+      merged = merged.filter(
+        (r) =>
+          r.kind !== 'CONSULTA' &&
+          (r.prestacion.toLowerCase().includes(practLabel) ||
+            r.prestacion.toLowerCase().includes(filtroPractica.toLowerCase()))
+      );
+    }
+    if (fechaDesde) {
+      const desdeMs = new Date(`${fechaDesde}T00:00:00`).getTime();
+      merged = merged.filter((r) => {
+        if (!r.fechaInicio) return filtroTipoActividad !== 'CONSULTA';
+        return new Date(r.fechaInicio).getTime() >= desdeMs;
+      });
+    }
+    if (fechaHasta) {
+      const hastaMs = new Date(`${fechaHasta}T23:59:59`).getTime();
+      merged = merged.filter((r) => {
+        if (!r.fechaInicio) return filtroTipoActividad !== 'CONSULTA';
+        return new Date(r.fechaInicio).getTime() <= hastaMs;
+      });
+    }
+    return merged;
+  }, [
+    turnos,
+    estudios,
+    filtroTipoActividad,
+    busquedaPacienteDebounced,
+    filtroPractica,
+    practicaOptions,
+    fechaDesde,
+    fechaHasta,
+  ]);
 
   const puedeFiltrarPorPaciente = rol !== 'paciente';
 
-  const openCreate = () => {
-    const defaultPacienteId =
-      rol === 'paciente' && currentUser?.paciente?.id ? currentUser.paciente.id : 0;
-    const defaultPractica = practicaOptions[0]?.value || PRACTICA_OPTIONS[0]?.value || '';
-    const defaultTipo = tipos.find((t) => (t.practica || t.codigo) === defaultPractica);
-    setForm({
-      paciente_id: defaultPacienteId,
-      practica: defaultPractica,
-      tipo_estudio: defaultTipo?.id,
-      tipo_actividad: 'ESTUDIO',
-      procedimiento_catalogo: null,
-      cirugia_especialidad: null,
-      cirugia_procedimiento: null,
-      cirugia_abordaje: null,
-      medico_solicitante: null,
-      anestesista_previsto: null,
-      origen: 'INTERNO',
-      descripcion_clinica: '',
-      centro_realizador: '',
-    });
-    setProcSeleccionado(null);
-    setCreateOpen(true);
+  const setHoy = () => {
+    const hoy = fechaLocalHoy();
+    setFechaDesde(hoy);
+    setFechaHasta(hoy);
   };
 
-  const handleCreate = async () => {
-    if (!form.paciente_id) {
-      setError('Seleccione un paciente.');
-      return;
-    }
-    const esProc = form.tipo_actividad === 'PROCEDIMIENTO';
-    const esCir = form.tipo_actividad === 'CIRUGIA';
-    if (!form.medico_solicitante) {
-      setError(
-        esCir
-          ? 'Seleccioná el cirujano.'
-          : 'Seleccioná el profesional que realiza el estudio o procedimiento.'
-      );
-      return;
-    }
-    if (esCir && !form.anestesista_previsto) {
-      setError('Seleccioná el anestesista.');
-      return;
-    }
-    if (esProc && !form.procedimiento_catalogo) {
-      setError('Seleccioná un procedimiento del catálogo (no quirúrgico).');
-      return;
-    }
-    if (esCir && (!form.cirugia_especialidad || !form.cirugia_procedimiento)) {
-      setError('Seleccioná especialidad y procedimiento quirúrgico.');
-      return;
-    }
-    if (!esProc && !esCir && !form.practica && !form.tipo_estudio) {
-      setError('Seleccioná una práctica.');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const payload: CreateEstudioComplementarioPayload = esProc
-        ? {
-            paciente_id: form.paciente_id,
-            tipo_actividad: 'PROCEDIMIENTO',
-            procedimiento_catalogo: form.procedimiento_catalogo,
-            medico_solicitante: form.medico_solicitante,
-            origen: form.origen,
-            descripcion_clinica: form.descripcion_clinica,
-            centro_realizador: form.centro_realizador,
-          }
-        : esCir
-          ? {
-              paciente_id: form.paciente_id,
-              tipo_actividad: 'CIRUGIA',
-              cirugia_especialidad: form.cirugia_especialidad,
-              cirugia_procedimiento: form.cirugia_procedimiento,
-              cirugia_abordaje: form.cirugia_abordaje || null,
-              medico_solicitante: form.medico_solicitante,
-              anestesista_previsto: form.anestesista_previsto,
-              origen: form.origen,
-              descripcion_clinica: form.descripcion_clinica,
-              centro_realizador: form.centro_realizador,
-            }
-        : {
-            ...form,
-            tipo_actividad: 'ESTUDIO',
-            procedimiento_catalogo: null,
-            anestesista_previsto: null,
-            medico_solicitante: form.medico_solicitante,
-          };
-      const created = await createEstudioComplementario(payload);
-      setCreateOpen(false);
+  const openCreate = () => setCreateOpen(true);
+
+  const irDetalle = (row: (typeof rows)[0]) => {
+    if (row.estudioId) {
       navigate(
-        `/estudios-complementarios/${created.id}`,
+        `/estudios-complementarios/${row.estudioId}`,
         withNavBack('/estudios-complementarios', '← Volver al listado')
       );
-    } catch (e) {
-      setError(parseEstudiosApiError(e, 'No se pudo crear el estudio.'));
-    } finally {
-      setSaving(false);
+      return;
+    }
+    if (row.turnoId) {
+      navigate(`/turnos?turno=${row.turnoId}`);
     }
   };
 
@@ -357,7 +286,8 @@ const EstudiosComplementarios: React.FC = () => {
         {tituloModulo}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Imagenología e informes clínicos por paciente (sin visor PACS).
+        Lista de consultas, estudios, procedimientos y cirugías con turno. Usá el calendario para la
+        vista visual.
       </Typography>
 
       {error && (
@@ -367,22 +297,24 @@ const EstudiosComplementarios: React.FC = () => {
       )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-          {BANDEJA_OPTIONS.map((opt) => {
-            const count = conteos[opt.key] ?? 0;
-            const selected = filtroBandeja === opt.key;
-            return (
-              <Chip
-                key={opt.key}
-                label={`${opt.label} (${count})`}
-                color={selected ? 'primary' : 'default'}
-                variant={selected ? 'filled' : 'outlined'}
-                onClick={() => setFiltroBandeja(opt.key)}
-                clickable
-              />
-            );
-          })}
-        </Box>
+        {mostrarBandejas && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            {BANDEJA_OPTIONS.map((opt) => {
+              const count = conteos[opt.key] ?? 0;
+              const selected = filtroBandeja === opt.key;
+              return (
+                <Chip
+                  key={opt.key}
+                  label={`${opt.label} (${count})`}
+                  color={selected ? 'primary' : 'default'}
+                  variant={selected ? 'filled' : 'outlined'}
+                  onClick={() => setFiltroBandeja(opt.key)}
+                  clickable
+                />
+              );
+            })}
+          </Box>
+        )}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           {puedeFiltrarPorPaciente && (
             <>
@@ -392,15 +324,11 @@ const EstudiosComplementarios: React.FC = () => {
                 placeholder="Nombre, apellido o DNI"
                 value={busquedaPaciente}
                 onChange={(e) => setBusquedaPaciente(e.target.value)}
-                sx={{ minWidth: 280 }}
+                sx={{ minWidth: 240 }}
               />
               {busquedaPaciente && (
-                <Button
-                  size="small"
-                  startIcon={<Clear />}
-                  onClick={() => setBusquedaPaciente('')}
-                >
-                  Limpiar paciente
+                <Button size="small" startIcon={<Clear />} onClick={() => setBusquedaPaciente('')}>
+                  Limpiar
                 </Button>
               )}
             </>
@@ -410,9 +338,13 @@ const EstudiosComplementarios: React.FC = () => {
             <Select
               label="Tipo"
               value={filtroTipoActividad}
-              onChange={(e) => setFiltroTipoActividad(e.target.value)}
+              onChange={(e) => {
+                setFiltroTipoActividad(e.target.value as ProgramacionTipoFiltro);
+                if (e.target.value === 'CONSULTA') setFiltroBandeja('todos');
+              }}
             >
               <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="CONSULTA">Consulta médica</MenuItem>
               <MenuItem value="ESTUDIO">Estudios</MenuItem>
               <MenuItem value="PROCEDIMIENTO">Procedimientos</MenuItem>
               <MenuItem value="CIRUGIA">Cirugías</MenuItem>
@@ -420,22 +352,47 @@ const EstudiosComplementarios: React.FC = () => {
           </FormControl>
           <Autocomplete
             size="small"
-            sx={{ minWidth: 260 }}
-            options={practicaOptions}
-            value={practicaOptions.find((m) => m.value === filtroPractica) || null}
+            sx={{ minWidth: 240 }}
+            options={practicaOptions.length ? practicaOptions : PRACTICA_OPTIONS}
+            value={
+              (practicaOptions.length ? practicaOptions : PRACTICA_OPTIONS).find(
+                (m) => m.value === filtroPractica
+              ) || null
+            }
             onChange={(_e, opt) => setFiltroPractica(opt?.value || '')}
             getOptionLabel={(o) => o.label}
             isOptionEqualToValue={(a, b) => a.value === b.value}
             renderInput={(params) => (
-              <TextField {...params} label="Práctica" placeholder="Buscar práctica…" />
+              <TextField {...params} label="Prestación / práctica" placeholder="Buscar…" />
             )}
           />
+          <TextField
+            size="small"
+            label="Desde"
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ width: 150 }}
+          />
+          <TextField
+            size="small"
+            label="Hasta"
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ width: 150 }}
+          />
+          <Button variant="outlined" onClick={setHoy}>
+            Hoy
+          </Button>
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
           {writeAccess && (
             <Button variant="contained" startIcon={<Add />} onClick={openCreate}>
-              Nueva solicitud
+              Nuevo turno
             </Button>
           )}
         </Box>
@@ -445,120 +402,63 @@ const EstudiosComplementarios: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
-      ) : estudios.length === 0 ? (
-        <Alert severity="info">No hay estudios para los filtros seleccionados.</Alert>
+      ) : rows.length === 0 ? (
+        <Alert severity="info">No hay ítems para los filtros seleccionados.</Alert>
       ) : (
         <TableContainer component={Paper}>
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>ID</TableCell>
+                <TableCell>Fecha / hora</TableCell>
                 {rol !== 'paciente' && <TableCell>Paciente</TableCell>}
-                <TableCell>Actividad</TableCell>
-                <TableCell>Tipo / práctica</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Prestación</TableCell>
+                <TableCell>Profesional</TableCell>
                 <TableCell>Estado</TableCell>
-                <TableCell>Turno</TableCell>
-                <TableCell>F. solicitud</TableCell>
-                <TableCell>F. realización</TableCell>
-                <TableCell>Centro</TableCell>
                 <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {estudios.map((row) => (
-                <TableRow
-                  key={row.id}
-                  hover
-                  sx={{ cursor: row.estado === 'SOLICITADO' && puedeAsignarTurno ? 'pointer' : undefined }}
-                  onClick={() => {
-                    if (row.estado === 'SOLICITADO' && puedeAsignarTurno) {
-                      irAgendarEnCalendario(row);
-                    }
-                  }}
-                >
-                  <TableCell>{row.id}</TableCell>
-                  {rol !== 'paciente' && (
-                    <TableCell>{pacienteNombre(row)}</TableCell>
-                  )}
+              {rows.map((row) => (
+                <TableRow key={row.key} hover>
+                  <TableCell>
+                    {row.fechaInicio
+                      ? new Date(row.fechaInicio).toLocaleString('es-AR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : '—'}
+                  </TableCell>
+                  {rol !== 'paciente' && <TableCell>{row.pacienteNombre}</TableCell>}
                   <TableCell>
                     <Chip
                       size="small"
                       variant="outlined"
-                      label={row.tipo_actividad === 'CIRUGIA' ? 'Cirugía' : row.tipo_actividad === 'PROCEDIMIENTO' ? 'Procedimiento' : 'Estudio'}
+                      color={
+                        row.kind === 'CONSULTA'
+                          ? 'primary'
+                          : row.kind === 'CIRUGIA'
+                            ? 'error'
+                            : row.kind === 'PROCEDIMIENTO'
+                              ? 'warning'
+                              : 'info'
+                      }
+                      label={kindLabel(row.kind)}
                     />
                   </TableCell>
+                  <TableCell>{row.prestacion}</TableCell>
+                  <TableCell>{row.medicoNombre}</TableCell>
                   <TableCell>
-                    {row.tipo_actividad === 'CIRUGIA'
-                      ? labelCirugiaIndicacion(row)
-                      : row.tipo_actividad === 'PROCEDIMIENTO'
-                        ? (row.procedimiento_catalogo_nombre || 'Procedimiento')
-                        : row.tipo_estudio_nombre || '—'}
-                    {row.tipo_actividad === 'ESTUDIO' && (
-                      <Typography variant="caption" display="block" color="text.secondary">
-                        {labelPractica(row.practica, practicaOptions)}
-                      </Typography>
-                    )}
+                    <Chip size="small" label={row.estadoLabel} />
                   </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={ESTADO_LABELS[row.estado]}
-                      color={ESTADO_CHIP_COLOR[row.estado]}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {row.turno_fecha_hora_inicio ? (
-                      <>
-                        {new Date(row.turno_fecha_hora_inicio).toLocaleString()}
-                        {row.turno_recurso_nombre ? (
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            {row.turno_recurso_nombre}
-                          </Typography>
-                        ) : null}
-                      </>
-                    ) : row.estado === 'SOLICITADO' && puedeAsignarTurno ? (
-                      <Typography variant="body2" color="primary">
-                        Clic para elegir horario en calendario
-                      </Typography>
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {row.fecha_solicitud
-                      ? new Date(row.fecha_solicitud).toLocaleString()
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {row.fecha_realizacion
-                      ? new Date(row.fecha_realizacion).toLocaleString()
-                      : '—'}
-                  </TableCell>
-                  <TableCell>{row.centro_realizador || '—'}</TableCell>
                   <TableCell align="right">
-                    {row.estado === 'SOLICITADO' && puedeAsignarTurno && (
-                      <Button
-                        size="small"
-                        startIcon={<CalendarMonth />}
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          irAgendarEnCalendario(row);
-                        }}
-                        sx={{ mr: 1 }}
-                      >
-                        Turno
-                      </Button>
-                    )}
                     <Button
                       size="small"
                       startIcon={<Visibility />}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        navigate(
-                          `/estudios-complementarios/${row.id}`,
-                          withNavBack('/estudios-complementarios', '← Volver al listado')
-                        );
-                      }}
+                      onClick={() => irDetalle(row)}
                     >
                       Ver
                     </Button>
@@ -570,218 +470,27 @@ const EstudiosComplementarios: React.FC = () => {
         </TableContainer>
       )}
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Nueva solicitud — Estudios y procedimientos</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            {rol !== 'paciente' ? (
-              <AsyncAutocomplete<Paciente>
-                label="Paciente *"
-                endpoint="/pacientes/"
-                value={pacientes.find((p) => p.id === form.paciente_id) || null}
-                onChange={(p) => setForm((f) => ({ ...f, paciente_id: p?.id || 0 }))}
-                getOptionLabel={formatPacienteLabel}
-              />
-            ) : (
-              <TextField
-                label="Paciente"
-                value={formatPacienteLabel(
-                  pacientes.find((p) => p.id === form.paciente_id) || undefined
-                )}
-                disabled
-                fullWidth
-              />
-            )}
-            <FormControl fullWidth>
-              <InputLabel>Tipo de actividad</InputLabel>
-              <Select
-                label="Tipo de actividad"
-                value={form.tipo_actividad || 'ESTUDIO'}
-                onChange={(e) => {
-                  setForm((f) => ({
-                    ...f,
-                    tipo_actividad: e.target.value as 'ESTUDIO' | 'PROCEDIMIENTO' | 'CIRUGIA',
-                    procedimiento_catalogo: null,
-                    cirugia_especialidad: null,
-                    cirugia_procedimiento: null,
-                    cirugia_abordaje: null,
-                    anestesista_previsto: null,
-                  }));
-                  setProcSeleccionado(null);
-                }}
-              >
-                <MenuItem value="ESTUDIO">Estudio</MenuItem>
-                <MenuItem value="PROCEDIMIENTO">Procedimiento (no quirúrgico)</MenuItem>
-                <MenuItem value="CIRUGIA">Cirugía</MenuItem>
-              </Select>
-            </FormControl>
-            <Autocomplete
-              options={medicos}
-              value={medicos.find((m) => m.id === form.medico_solicitante) || null}
-              onChange={(_e, opt) =>
-                setForm((f) => ({ ...f, medico_solicitante: opt?.id || null }))
-              }
-              getOptionLabel={labelMedico}
-              isOptionEqualToValue={(a, b) => a.id === b.id}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label={
-                    form.tipo_actividad === 'CIRUGIA'
-                      ? 'Cirujano *'
-                      : 'Profesional que lo realiza *'
-                  }
-                  required
-                />
-              )}
-            />
-            {form.tipo_actividad === 'CIRUGIA' && (
-              <Autocomplete
-                options={medicos}
-                value={medicos.find((m) => m.id === form.anestesista_previsto) || null}
-                onChange={(_e, opt) =>
-                  setForm((f) => ({ ...f, anestesista_previsto: opt?.id || null }))
-                }
-                getOptionLabel={labelMedico}
-                isOptionEqualToValue={(a, b) => a.id === b.id}
-                renderInput={(params) => (
-                  <TextField {...params} label="Anestesista *" required />
-                )}
-              />
-            )}
-            {form.tipo_actividad === 'PROCEDIMIENTO' ? (
-              <AsyncAutocomplete<{ id: number; nombre: string; clasificacion_quirurgica?: string }>
-                label="Procedimiento *"
-                endpoint="/procedimientos-catalogo/"
-                value={procSeleccionado}
-                onChange={(opt) => {
-                  if (opt && opt.clasificacion_quirurgica === 'QUIRURGICO') {
-                    setError('Ese ítem es quirúrgico; usá el alta Cirugía.');
-                    setProcSeleccionado(null);
-                    setForm((f) => ({ ...f, procedimiento_catalogo: null }));
-                    return;
-                  }
-                  setProcSeleccionado(opt);
-                  setForm((f) => ({ ...f, procedimiento_catalogo: opt?.id || null }));
-                }}
-                getOptionLabel={(o) => o.nombre}
-                required
-                minSearchLength={2}
-                placeholder="Buscar procedimiento…"
-              />
-            ) : form.tipo_actividad === 'CIRUGIA' ? (
-              <>
-                <Autocomplete
-                  options={cirEspOptions}
-                  value={cirEspOptions.find((e) => e.id === form.cirugia_especialidad) || null}
-                  onChange={(_e, opt) =>
-                    setForm((f) => ({
-                      ...f,
-                      cirugia_especialidad: opt?.id || null,
-                      cirugia_procedimiento: null,
-                      cirugia_abordaje: null,
-                    }))
-                  }
-                  getOptionLabel={(o) => o.nombre}
-                  isOptionEqualToValue={(a, b) => a.id === b.id}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Especialidad quirúrgica *" required />
-                  )}
-                />
-                <Autocomplete
-                  options={cirProcOptions}
-                  disabled={!form.cirugia_especialidad}
-                  value={cirProcOptions.find((p) => p.id === form.cirugia_procedimiento) || null}
-                  onChange={(_e, opt) =>
-                    setForm((f) => ({
-                      ...f,
-                      cirugia_procedimiento: opt?.id || null,
-                      cirugia_abordaje: null,
-                    }))
-                  }
-                  getOptionLabel={(o) => o.nombre}
-                  isOptionEqualToValue={(a, b) => a.id === b.id}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Procedimiento quirúrgico *" required />
-                  )}
-                />
-                <Autocomplete
-                  options={cirAbrOptions}
-                  disabled={!form.cirugia_procedimiento}
-                  value={cirAbrOptions.find((a) => a.id === form.cirugia_abordaje) || null}
-                  onChange={(_e, opt) =>
-                    setForm((f) => ({ ...f, cirugia_abordaje: opt?.id || null }))
-                  }
-                  getOptionLabel={(o) => o.nombre}
-                  isOptionEqualToValue={(a, b) => a.id === b.id}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Abordaje (opcional)" />
-                  )}
-                />
-              </>
-            ) : (
-            <Autocomplete
-              options={practicaOptions}
-              value={practicaOptions.find((m) => m.value === form.practica) || null}
-              onChange={(_e, opt) => {
-                const practica = (opt?.value || '') as EstudioPractica;
-                const tipo = tipos.find((t) => (t.practica || t.codigo) === practica);
-                setForm((f) => ({
-                  ...f,
-                  practica,
-                  tipo_estudio: tipo?.id,
-                }));
-              }}
-              getOptionLabel={(o) => o.label}
-              isOptionEqualToValue={(a, b) => a.value === b.value}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Práctica *"
-                  required
-                  placeholder="Buscar práctica…"
-                />
-              )}
-            />
-            )}
-            <FormControl fullWidth>
-              <InputLabel>Origen</InputLabel>
-              <Select
-                label="Origen"
-                value={form.origen || 'INTERNO'}
-                onChange={(e) => setForm((f) => ({ ...f, origen: e.target.value }))}
-              >
-                {ORIGEN_OPTIONS.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Centro realizador"
-              value={form.centro_realizador || ''}
-              onChange={(e) => setForm((f) => ({ ...f, centro_realizador: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label="Descripción clínica"
-              value={form.descripcion_clinica || ''}
-              onChange={(e) => setForm((f) => ({ ...f, descripcion_clinica: e.target.value }))}
-              multiline
-              minRows={2}
-              fullWidth
-            />
-          </Box>
+      <Dialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+      >
+        <DialogTitle>Nuevo turno / solicitud</DialogTitle>
+        <DialogContent dividers>
+          <ProgramacionTurnoForm
+            allowConsulta
+            initialTipo="CONSULTA"
+            onCancel={() => setCreateOpen(false)}
+            onSuccess={() => {
+              setCreateOpen(false);
+              void load();
+            }}
+            submitLabel="Crear"
+          />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={saving}>
-            {saving ? 'Guardando…' : 'Crear'}
-          </Button>
-        </DialogActions>
       </Dialog>
-
     </Box>
   );
 };

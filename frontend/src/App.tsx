@@ -1,5 +1,15 @@
 import HorariosMedicos from './pages/HorariosMedicos';
-import { canManageHorarios } from './utils/permissions';
+import {
+  canAccessRecepcion,
+  canConfigRecepcion,
+  canManageHorarios,
+} from './utils/permissions';
+import RecepcionTablero from './pages/RecepcionTablero';
+import RecepcionConfig from './pages/RecepcionConfig';
+import QrAnuncioImprimible from './pages/QrAnuncioImprimible';
+import PantallaSala from './pages/PantallaSala';
+import KioscoRecepcion from './pages/KioscoRecepcion';
+import EsperaPaciente from './pages/EsperaPaciente';
 import React, { useMemo } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
@@ -190,6 +200,9 @@ const AppContent: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/demo" element={<DemoLanding />} />
+        <Route path="/pantalla-sala" element={<PantallaSala />} />
+        <Route path="/kiosco-recepcion" element={<KioscoRecepcion />} />
+        <Route path="/espera/:token" element={<EsperaPaciente />} />
 
         {/* Rutas protegidas con layout (sidebar + header) */}
         <Route
@@ -334,6 +347,46 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessTurnosAgenda}
               >
                 <Turnos />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/medico/cola" element={<Navigate to="/recepcion" replace />} />
+          <Route
+            path="/recepcion"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessRecepcion}
+              >
+                <RecepcionTablero />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recepcion/config"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canConfigRecepcion}
+              >
+                <RecepcionConfig />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recepcion/qr-anuncio"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAccessRecepcion}
+              >
+                <QrAnuncioImprimible />
               </ProtectedRoute>
             }
           />

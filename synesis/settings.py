@@ -109,6 +109,7 @@ INSTALLED_APPS = [
     'internacion',
     'solicitudes',
     'estudios',
+    'recepcion',
 ]
 
 MIDDLEWARE = [

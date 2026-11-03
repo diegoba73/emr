@@ -299,7 +299,7 @@ class TestSecretariaEstudiosSoloLectura(APITestCase):
             medico_solicitante=cls.medico,
         )
 
-    def test_secretaria_lista_estudios(self):
+    def test_secretaria_institucional_lista_estudios(self):
         sec = User.objects.create_user(
             username='te_sec_list',
             email='te_sec_list@test.com',
@@ -312,12 +312,23 @@ class TestSecretariaEstudiosSoloLectura(APITestCase):
         ids = {row['id'] for row in r.data.get('results', r.data)}
         assert self.estudio.id in ids
 
-    def test_secretaria_no_crea_estudio(self):
+    def test_secretaria_lab_no_lista_estudios(self):
+        sec = User.objects.create_user(
+            username='te_seclab_list',
+            email='te_seclab_list@test.com',
+            password='x',
+            rol='secretaria_lab',
+        )
+        self.client.force_authenticate(user=sec)
+        r = self.client.get('/api/estudios-complementarios/')
+        assert r.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_secretaria_lab_no_crea_estudio(self):
         sec = User.objects.create_user(
             username='te_sec_crea',
             email='te_sec_crea@test.com',
             password='x',
-            rol='secretaria',
+            rol='secretaria_lab',
         )
         self.client.force_authenticate(user=sec)
         r = self.client.post(
@@ -332,17 +343,17 @@ class TestSecretariaEstudiosSoloLectura(APITestCase):
         )
         assert r.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_secretaria_no_patch_estudio(self):
+    def test_secretaria_lab_no_patch_estudio(self):
         sec = User.objects.create_user(
             username='te_sec_patch',
             email='te_sec_patch@test.com',
             password='x',
-            rol='secretaria',
+            rol='secretaria_lab',
         )
         self.client.force_authenticate(user=sec)
         r = self.client.patch(
             f'/api/estudios-complementarios/{self.estudio.id}/',
-            {'descripcion_clinica': 'Intento secretaría'},
+            {'descripcion_clinica': 'Intento secretaría lab'},
             format='json',
         )
         assert r.status_code == status.HTTP_403_FORBIDDEN

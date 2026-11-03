@@ -1,5 +1,9 @@
-from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+
+from usuarios.sedes import SEDE_CHOICES
+
 
 class User(AbstractUser):
     """
@@ -22,6 +26,14 @@ class User(AbstractUser):
     
     rol = models.CharField(max_length=20, choices=ROL_CHOICES, default='paciente')
     telefono = models.CharField(max_length=25, blank=True, null=True)
+    # Vacío = sin restricción de sede (retrocompat). CEHTA / ICPL.
+    sedes = ArrayField(
+        models.CharField(max_length=10, choices=SEDE_CHOICES),
+        default=list,
+        blank=True,
+        verbose_name='Sedes',
+        help_text='CEHTA y/o ICPL. Vacío = acceso a ambas (sin filtro).',
+    )
     
     # Campos de verificación
     email_verificado = models.BooleanField(default=False)

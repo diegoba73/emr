@@ -30,6 +30,8 @@ export interface User extends BaseModel {
   nombre_completo?: string; // Nombre completo calculado (first_name + last_name)
   rol: 'ADMIN' | 'SECRETARIA' | 'SECRETARIA_LAB' | 'MEDICO' | 'PACIENTE' | 'ENFERMERIA' | 'LABORATORIO' | 'BIOQUIMICO' | 'KINESIOLOGO' | 'RADIOLOGO' | 'ECOGRAFISTA' | 'FONOAUDIOLOGO';
   telefono?: string;
+  /** CEHTA / ICPL. Vacío = sin filtro de sede. */
+  sedes?: Array<'CEHTA' | 'ICPL'>;
   is_active: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
@@ -106,6 +108,7 @@ export interface Paciente extends BaseModel {
 
 // Médicos
 export interface Medico extends BaseModel {
+  sedes?: Array<'CEHTA' | 'ICPL'>;
   nombre: string;
   apellido: string;
   matricula: string;
@@ -331,7 +334,8 @@ export interface Recurso extends BaseModel {
     | 'GUARDIA'
     | 'SALA_PROCEDIMIENTO'
     | 'SALA_HEMODINAMIA'
-    | 'QUIROFANO';
+    | 'QUIROFANO'
+    | 'EXTRACCIONES';
   tipo_recurso_display?: string;
   activo: boolean;
 }
@@ -553,7 +557,9 @@ export interface Turno extends BaseModel {
     id: number;
     estado: string;
     practica?: string;
+    tipo_actividad?: string | null;
     tipo_estudio_nombre?: string | null;
+    procedimiento_catalogo_nombre?: string | null;
     medico_solicitante_id?: number | null;
   } | null;
 }

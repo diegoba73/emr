@@ -37,6 +37,26 @@ export interface Turno {
   tipo: 'CONSULTA' | 'ESTUDIO';
 }
 
+export interface AnuncioRecepcion {
+  ok: boolean;
+  modo: string;
+  mensaje: string;
+  llegada_id: number;
+  turno_id?: number | null;
+  codigo_llamado: string;
+  numero_orden_dia?: number | null;
+  tipo_actividad: string;
+  puesto?: string;
+  estado_flujo?: string;
+}
+
+export interface RecepcionHoy {
+  turno_hoy_id: number | null;
+  puedo_estoy_en_sala: boolean;
+  estoy_en_sala: AnuncioRecepcion | null;
+  lab: AnuncioRecepcion | null;
+}
+
 export interface Medico {
   id: number;
   nombre: string;
