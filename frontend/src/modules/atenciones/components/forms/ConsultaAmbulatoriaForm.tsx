@@ -9,6 +9,8 @@ import {
   Tabs,
   Tab,
   Alert,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import { ConsultaAmbulatoriaRecord } from '../../../../types';
 import toast from 'react-hot-toast';
@@ -16,6 +18,7 @@ import AtencionPedidosSection from '../AtencionPedidosSection';
 import { useSaveConsultaAmbulatoriaMutation, useAtencionQuery, useCloseAtencionMutation } from '../../hooks';
 import { flushConsultaPedidosDrafts } from '../../consultaPedidosDraft';
 import SignosVitalesPanel from '../../../../components/clinical/SignosVitalesPanel';
+import { establecerProblemaPrincipal } from '../../../../services/pacienteProblemas';
 
 interface ConsultaAmbulatoriaFormProps {
   atencionId: number;
@@ -124,6 +127,7 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
   const skipDraftPersistRef = useRef(false);
   const [tab, setTab] = useState(initialTab === 'pedidos' ? 1 : 0);
   const [formState, setFormState] = useState<ConsultaFormState>({ ...EMPTY_FORM });
+  const [syncProblemaPrincipal, setSyncProblemaPrincipal] = useState(false);
   const saveMutation = useSaveConsultaAmbulatoriaMutation();
   const closeMutation = useCloseAtencionMutation();
   const draftKey = `consulta-amb-borrador-${atencionId}`;
@@ -294,6 +298,26 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
           ? atencion.medico_principal.id
           : atencion?.medico_principal_id;
 
+      if (syncProblemaPrincipal && pacienteId) {
+        const dxTexto = (
+          payload.diagnostico_definitivo ||
+          payload.diagnostico_presuntivo ||
+          ''
+        ).trim();
+        if (dxTexto) {
+          try {
+            await establecerProblemaPrincipal(pacienteId, {
+              texto: dxTexto,
+              notas: 'Desde consulta ambulatoria',
+            });
+          } catch {
+            toast.error(
+              'La consulta se guardó, pero no se pudo actualizar el diagnóstico principal del paciente.'
+            );
+          }
+        }
+      }
+
       if (consultaHcId && pacienteId) {
         try {
           await flushConsultaPedidosDrafts({
@@ -402,6 +426,17 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
           {textField('examen_fisico', 'Examen físico *', 4)}
           {textField('diagnostico_presuntivo', 'Diagnóstico presuntivo', 3)}
           {textField('diagnostico_definitivo', 'Diagnóstico definitivo', 2)}
+          {canSave && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={syncProblemaPrincipal}
+                  onChange={(e) => setSyncProblemaPrincipal(e.target.checked)}
+                />
+              }
+              label="Actualizar problema principal del paciente (pedidos / OS)"
+            />
+          )}
           {textField('observaciones_medicas', 'Observaciones médicas', 2)}
           {textField('plan_manejo', 'Plan de manejo *', 3)}
         </Stack>

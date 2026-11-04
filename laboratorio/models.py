@@ -455,6 +455,22 @@ class SolicitudExamen(models.Model):
         verbose_name="N° afiliado (orden)",
         help_text="Afiliado registrado al crear el pedido. Vacío → fallback a la ficha del paciente.",
     )
+    # Snapshot de diagnóstico al crear el pedido (lista de problemas / principal).
+    diagnostico_orden = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="Diagnóstico (orden)",
+        help_text="Dx congelado al crear el pedido. Vacío en órdenes legacy → cascada histórica.",
+    )
+    diagnostico_cie_orden = models.ForeignKey(
+        "catalogos.DiagnosticoCIE10",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="solicitudes_examen_dx",
+        verbose_name="CIE-10 (orden)",
+    )
 
     # Fechas
     fecha_solicitud = models.DateTimeField(

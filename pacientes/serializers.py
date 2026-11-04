@@ -6,7 +6,9 @@ paciente. No mueve campos hacia ``User`` ni hacia ``UserProfile``.
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from .models import Paciente, PacienteAfiliacion
+from catalogos.models import DiagnosticoCIE10
+
+from .models import Paciente, PacienteAfiliacion, ProblemaClinico
 from .texto import normalizar_texto_paciente
 from .afiliaciones import sync_principal_desde_paciente_fields
 from .validacion_identidad import (
@@ -48,6 +50,65 @@ class PacienteAfiliacionSerializer(serializers.ModelSerializer):
 
     def validate_numero_afiliado(self, value):
         return normalizar_texto_paciente(value) or ""
+
+
+class ProblemaClinicoSerializer(serializers.ModelSerializer):
+    diagnostico_cie_id = serializers.PrimaryKeyRelatedField(
+        source="diagnostico_cie",
+        queryset=DiagnosticoCIE10.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+    diagnostico_cie_codigo = serializers.CharField(
+        source="diagnostico_cie.codigo", read_only=True, allow_null=True
+    )
+    diagnostico_cie_descripcion = serializers.CharField(
+        source="diagnostico_cie.descripcion", read_only=True, allow_null=True
+    )
+    display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProblemaClinico
+        fields = [
+            "id",
+            "texto",
+            "diagnostico_cie_id",
+            "diagnostico_cie_codigo",
+            "diagnostico_cie_descripcion",
+            "display",
+            "estado",
+            "es_principal",
+            "notas",
+            "creado_en",
+            "actualizado_en",
+            "resuelto_en",
+        ]
+        read_only_fields = [
+            "id",
+            "diagnostico_cie_codigo",
+            "diagnostico_cie_descripcion",
+            "display",
+            "creado_en",
+            "actualizado_en",
+            "resuelto_en",
+        ]
+
+    def get_display(self, obj):
+        return obj.display_texto()
+
+    def validate_texto(self, value):
+        text = " ".join((value or "").split()).strip()
+        if not text:
+            raise serializers.ValidationError("El diagnóstico / problema es obligatorio.")
+        return text
+
+    def validate_estado(self, value):
+        if value and value not in {
+            ProblemaClinico.ESTADO_ACTIVO,
+            ProblemaClinico.ESTADO_RESUELTO,
+        }:
+            raise serializers.ValidationError("Estado inválido.")
+        return value
 
 
 class PacienteLightSerializer(serializers.ModelSerializer):

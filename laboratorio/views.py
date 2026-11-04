@@ -983,6 +983,65 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(solicitud)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['patch'], url_path='diagnostico-orden')
+    def diagnostico_orden(self, request, pk=None):
+        """Corrección auditada del snapshot de diagnóstico de la orden (no evoluciona al paciente)."""
+        from auditoria.audit_service import log_update
+        from auditoria.snapshot import safe_model_snapshot
+
+        user = request.user
+        rol = (getattr(user, 'rol', '') or '').lower()
+        if not (
+            getattr(user, 'is_superuser', False)
+            or rol in ('admin', 'medico', 'bioquimico')
+        ):
+            return Response(
+                {'detail': 'No tiene permiso para corregir el diagnóstico de la orden.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        solicitud = self.get_object()
+        texto = ' '.join(str(request.data.get('diagnostico_orden') or '').split()).strip()
+        motivo = ' '.join(str(request.data.get('motivo') or '').split()).strip()
+        if not texto:
+            return Response(
+                {'detail': 'diagnostico_orden es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not motivo:
+            return Response(
+                {'detail': 'motivo es obligatorio para auditar la corrección.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        before = safe_model_snapshot(solicitud)
+        solicitud.diagnostico_orden = texto
+        cie_id = request.data.get('diagnostico_cie_orden_id', None)
+        update_fields = ['diagnostico_orden']
+        if cie_id is not None:
+            if cie_id in ('', None):
+                solicitud.diagnostico_cie_orden_id = None
+            else:
+                solicitud.diagnostico_cie_orden_id = int(cie_id)
+            update_fields.append('diagnostico_cie_orden')
+        solicitud.save(update_fields=update_fields)
+        try:
+            log_update(
+                actor=user,
+                entity=solicitud,
+                before=before,
+                module='laboratorio',
+                metadata={
+                    'view': 'SolicitudExamenViewSet.diagnostico_orden',
+                    'motivo': motivo[:500],
+                    'action': 'corregir_diagnostico_orden',
+                },
+            )
+        except Exception:
+            logger.exception('audit diagnostico_orden solicitud=%s', solicitud.pk)
+        serializer = self.get_serializer(solicitud)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='finalizar')
     def finalizar(self, request, pk=None):
         """Alias de validar: liberación clínica (bioquímico / admin)."""

@@ -65,8 +65,22 @@ def puede_confirmar_turno(user, turno: Turno) -> bool:
 
 
 def puede_cancelar_turno(user, turno: Turno) -> bool:
-    """Gestión de agenda: solo secretaría/admin."""
-    return puede_gestionar_turnos_global(user)
+    """Secretaría/admin, o el paciente dueño del turno (futuro RESERVADO/CONFIRMADO)."""
+    if puede_gestionar_turnos_global(user):
+        return True
+    if _rol_usuario(user) != 'paciente':
+        return False
+    from pacientes.services import ensure_paciente_linked_to_user
+
+    paciente = ensure_paciente_linked_to_user(user)
+    if not paciente or turno.paciente_id != paciente.pk:
+        return False
+    from django.utils import timezone
+
+    return (
+        turno.estado in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO)
+        and turno.fecha_hora_inicio > timezone.now()
+    )
 
 
 def puede_reprogramar_turno(user, turno: Turno) -> bool:

@@ -49,16 +49,25 @@ La TV (`/pantalla-sala`) y el push al llamar muestran ese destino.
 3. Queda en cola de **recepción** o **laboratorio** con su código (ej. `S02`, `T03`, `L01`).
 4. **L**: el usuario **laboratorio** llama y cierra (no secretaría).
 5. **T/S/E/P**: cada secretaria configura su **cobertura** (puesto físico + tipos) y llama; el
-   destino en TV es su puesto. Si está OK admin, **Check-in médico** → cola del médico.
+   destino en TV es su puesto. Si está OK admin, **Pasar a médico** → cola del médico.
 6. El **médico** llama (T/E/P): push en la app + mitad derecha de la TV hasta «Ya voy» o **En atención**.
 
-El anuncio (QR o app) **no** es el check-in al médico.
+El anuncio (QR o app) **no** es el registro al médico. Secretaría registra llegada / pasa a médico;
+el médico llama después.
 
 ### Confirmación de turnos (app)
 
 - Reserva para **hoy o mañana** → nace `CONFIRMADO`.
-- Reserva a **más de 1 día** → nace `RESERVADO`; el paciente confirma desde la app (push).
-- Cerca del día (~24 hs) → push de **asistencia** (`asistencia_confirmada_en`).
+- Reserva a **más de 1 día** → nace `RESERVADO`; el paciente **confirma el turno** desde la app (push).
+- Cerca del día (~24 hs) → push de **asistencia** («Voy a asistir» / `asistencia_confirmada_en`).
+- El día del turno → **Estoy en sala** (anuncio a recepción; no es la confirmación de asistencia).
+- El paciente puede **cancelar** su turno futuro desde la app (libera el horario).
+
+### App — consultas y estudios
+
+- **Consultas pasadas**: resumen (fecha, médico, tipo) sin notas clínicas.
+- **Estudios**: paciente solo `ENTREGADO` + PDF vigente; médico `VALIDADO`/`ENTREGADO`.
+- Informes LIMS siguen en **Informes de laboratorio**.
 
 Guía de prueba local: [`recepcion-flujo-medico-local.md`](recepcion-flujo-medico-local.md).  
 LAN: [`recepcion-lan.md`](recepcion-lan.md).

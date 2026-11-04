@@ -999,10 +999,17 @@ export const createInternacion = async (data: {
   }
 };
 
-export const darAltaInternacion = async (id: number, fecha_alta?: string): Promise<InternacionCama> => {
+export const darAltaInternacion = async (
+  id: number,
+  fecha_alta?: string,
+  diagnostico_egreso?: string
+): Promise<InternacionCama> => {
   try {
     const response = await api.post(`/internacion/internaciones/${id}/alta/`, {
-      fecha_alta: fecha_alta || null
+      fecha_alta: fecha_alta || null,
+      ...(diagnostico_egreso != null && diagnostico_egreso !== ''
+        ? { diagnostico_egreso }
+        : {}),
     });
     return response.data;
   } catch (error) {

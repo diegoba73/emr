@@ -24,11 +24,13 @@ from rest_framework.response import Response
 
 from .afiliaciones import sync_paciente_desde_principal
 from .duplicados import clasificar_candidatos, tiene_bloqueo_dni
-from .models import Paciente, PacienteAfiliacion
+from .models import Paciente, PacienteAfiliacion, ProblemaClinico
+from .problemas import actualizar_problema, crear_problema, establecer_principal_desde_texto
 from .serializers import (
     PacienteAfiliacionSerializer,
     PacienteLightSerializer,
     PacienteSerializer,
+    ProblemaClinicoSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,17 @@ _ROLES_EDICION_PACIENTE = frozenset({"admin", "medico", *ROLES_SECRETARIA_EMR})
 # Alta: mismos editores + operadores LIMS (ficha mínima para pedidos).
 _ROLES_ALTA_PACIENTE = frozenset(
     {"admin", "medico", "laboratorio", "bioquimico", *ROLES_SECRETARIA_EMR}
+)
+# Diagnóstico unificado: solo médico/admin (juicio clínico).
+_ROLES_PROBLEMAS_CLINICOS = frozenset({"admin", "medico"})
+_ACCIONES_PROBLEMAS = frozenset(
+    {
+        "problemas_clinicos",
+        "crear_problema_clinico",
+        "actualizar_problema_clinico",
+        "resolver_problema_clinico",
+        "establecer_problema_principal",
+    }
 )
 
 
@@ -113,6 +126,8 @@ class PacienteViewSet(viewsets.ModelViewSet):
             "eliminar_afiliacion",
         ):
             return PacienteAfiliacionSerializer
+        if self.action in _ACCIONES_PROBLEMAS:
+            return ProblemaClinicoSerializer
         return PacienteSerializer
 
     def _deny_si_no_puede_gestionar_afiliaciones(self) -> None:
@@ -124,6 +139,24 @@ class PacienteViewSet(viewsets.ModelViewSet):
         if rol in _ROLES_ALTA_PACIENTE:
             return
         raise PermissionDenied("No tiene permiso para gestionar afiliaciones.")
+
+    def _deny_si_no_puede_gestionar_problemas(self) -> None:
+        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return
+        if _user_rol(user) in _ROLES_PROBLEMAS_CLINICOS:
+            return
+        raise PermissionDenied("No tiene permiso para gestionar diagnósticos clínicos.")
+
+    def _problema_del_paciente(self, paciente_pk: int, problema_pk: int) -> ProblemaClinico:
+        try:
+            return ProblemaClinico.objects.select_related("diagnostico_cie").get(
+                pk=problema_pk, paciente_id=paciente_pk
+            )
+        except ProblemaClinico.DoesNotExist as exc:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Problema clínico no encontrado.") from exc
 
     def _afiliacion_del_paciente(self, paciente_pk: int, afiliacion_pk: int) -> PacienteAfiliacion:
         try:
@@ -224,6 +257,161 @@ class PacienteViewSet(viewsets.ModelViewSet):
         sync_paciente_desde_principal(paciente)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=["get"], url_path="problemas-clinicos")
+    def problemas_clinicos(self, request, pk=None):
+        paciente = self.get_object()
+        qs = (
+            paciente.problemas_clinicos.select_related("diagnostico_cie")
+            .all()
+            .order_by("-es_principal", "-actualizado_en", "id")
+        )
+        estado = (request.query_params.get("estado") or "").strip().upper()
+        if estado in {ProblemaClinico.ESTADO_ACTIVO, ProblemaClinico.ESTADO_RESUELTO}:
+            qs = qs.filter(estado=estado)
+        return Response(ProblemaClinicoSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="problemas-clinicos/establecer-principal")
+    def establecer_problema_principal(self, request, pk=None):
+        """Crea o actualiza el principal activo con el texto dado (sin duplicar)."""
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_problemas()
+        paciente = self.get_object()
+        texto = " ".join(str(request.data.get("texto") or "").split()).strip()
+        notas = " ".join(str(request.data.get("notas") or "").split()).strip()
+        cie_id = request.data.get("diagnostico_cie_id", None)
+        cie = None
+        if cie_id not in (None, ""):
+            from catalogos.models import DiagnosticoCIE10
+
+            try:
+                cie = DiagnosticoCIE10.objects.get(pk=int(cie_id))
+            except (DiagnosticoCIE10.DoesNotExist, TypeError, ValueError):
+                return Response(
+                    {"detail": "diagnostico_cie_id inválido."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            problema = establecer_principal_desde_texto(
+                paciente,
+                texto=texto,
+                diagnostico_cie=cie,
+                actor=request.user,
+                notas=notas,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if _AUDIT_AVAILABLE:
+            try:
+                log_create(
+                    actor=request.user,
+                    entity=problema,
+                    module="pacientes",
+                    metadata={"view": "PacienteViewSet.establecer_problema_principal"},
+                )
+            except Exception:
+                logger.exception("audit establecer_problema_principal")
+        return Response(ProblemaClinicoSerializer(problema).data)
+
+    @action(detail=True, methods=["post"], url_path="problemas-clinicos/crear")
+    def crear_problema_clinico(self, request, pk=None):
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_problemas()
+        paciente = self.get_object()
+        ser = ProblemaClinicoSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            problema = crear_problema(
+                paciente,
+                texto=ser.validated_data["texto"],
+                diagnostico_cie=ser.validated_data.get("diagnostico_cie"),
+                es_principal=bool(ser.validated_data.get("es_principal", False)),
+                notas=ser.validated_data.get("notas") or "",
+                actor=request.user,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if _AUDIT_AVAILABLE:
+            try:
+                log_create(
+                    actor=request.user,
+                    entity=problema,
+                    module="pacientes",
+                    metadata={"view": "PacienteViewSet.crear_problema_clinico"},
+                )
+            except Exception:
+                logger.exception("audit crear_problema_clinico")
+        return Response(
+            ProblemaClinicoSerializer(problema).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path=r"problemas-clinicos/(?P<problema_id>[0-9]+)",
+    )
+    def actualizar_problema_clinico(self, request, pk=None, problema_id=None):
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_problemas()
+        paciente = self.get_object()
+        problema = self._problema_del_paciente(paciente.pk, int(problema_id))
+        before = safe_model_snapshot(problema) if _AUDIT_AVAILABLE else None
+        ser = ProblemaClinicoSerializer(problema, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        vd = ser.validated_data
+        try:
+            problema = actualizar_problema(
+                problema,
+                texto=vd.get("texto"),
+                diagnostico_cie=vd["diagnostico_cie"] if "diagnostico_cie" in vd else ...,
+                es_principal=vd.get("es_principal"),
+                estado=vd.get("estado"),
+                notas=vd.get("notas"),
+                actor=request.user,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if _AUDIT_AVAILABLE and before is not None:
+            try:
+                log_update(
+                    actor=request.user,
+                    entity=problema,
+                    before=before,
+                    module="pacientes",
+                    metadata={"view": "PacienteViewSet.actualizar_problema_clinico"},
+                )
+            except Exception:
+                logger.exception("audit actualizar_problema_clinico")
+        return Response(ProblemaClinicoSerializer(problema).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"problemas-clinicos/(?P<problema_id>[0-9]+)/resolver",
+    )
+    def resolver_problema_clinico(self, request, pk=None, problema_id=None):
+        self._deny_paciente_mutations()
+        self._deny_si_no_puede_gestionar_problemas()
+        paciente = self.get_object()
+        problema = self._problema_del_paciente(paciente.pk, int(problema_id))
+        before = safe_model_snapshot(problema) if _AUDIT_AVAILABLE else None
+        problema = actualizar_problema(
+            problema,
+            estado=ProblemaClinico.ESTADO_RESUELTO,
+            actor=request.user,
+        )
+        if _AUDIT_AVAILABLE and before is not None:
+            try:
+                log_update(
+                    actor=request.user,
+                    entity=problema,
+                    before=before,
+                    module="pacientes",
+                    metadata={"view": "PacienteViewSet.resolver_problema_clinico"},
+                )
+            except Exception:
+                logger.exception("audit resolver_problema_clinico")
+        return Response(ProblemaClinicoSerializer(problema).data)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
@@ -242,7 +430,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
                 "actualizar_afiliacion",
                 "eliminar_afiliacion",
             }
-        )
+        ) | _ACCIONES_PROBLEMAS
 
         if _user_tiene_lectura_global(user):
             base_queryset = queryset

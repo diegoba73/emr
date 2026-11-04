@@ -306,9 +306,24 @@ def _diagnostico_consulta(consulta) -> str:
 
 
 def _diagnostico_paciente(paciente) -> str:
+    """Legacy: antecedentes solo como fallback histórico (órdenes sin snapshot)."""
     if paciente is None:
         return ""
     return (getattr(paciente, "antecedentes_personales", None) or "").strip()
+
+
+def _diagnostico_snapshot_orden(solicitud: Any) -> str:
+    snap = (getattr(solicitud, "diagnostico_orden", None) or "").strip()
+    if snap:
+        return snap
+    cie = getattr(solicitud, "diagnostico_cie_orden", None)
+    if cie is not None:
+        codigo = (getattr(cie, "codigo", None) or "").strip()
+        desc = (getattr(cie, "descripcion", None) or "").strip()
+        if codigo and desc:
+            return f"{codigo} - {desc}"
+        return codigo or desc
+    return ""
 
 
 def _motivo_guardia_texto(texto: str | None) -> str:
@@ -359,10 +374,15 @@ def diagnostico_orden_display(solicitud: Any) -> str:
     """
     Diagnóstico para cabecera / carga de resultados / pedidos impresos.
 
-    Internación → cama/internación activa (CIE, texto ingreso o motivo).
-    Guardia → motivo cargado en la atención / consulta.
-    Ambulatorio / resto → consulta HC; si no hay, antecedentes del paciente.
+    1. Snapshot ``diagnostico_orden`` (congelado al crear) si existe.
+    2. Legacy (órdenes sin snapshot):
+       Internación → cama/internación activa; Guardia → motivo;
+       Ambulatorio → consulta HC; si no, antecedentes del paciente.
     """
+    snap = _diagnostico_snapshot_orden(solicitud)
+    if snap:
+        return snap
+
     from laboratorio.procedencia_display import resolver_procedencia_solicitud
 
     procedencia = resolver_procedencia_solicitud(solicitud)

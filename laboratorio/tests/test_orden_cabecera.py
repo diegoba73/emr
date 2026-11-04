@@ -167,6 +167,19 @@ class TestOrdenCabecera(TestCase):
         self.assertNotIn("sangre", lineas[0].lower().split(":", 1)[0])
 
     def test_diagnostico_ambulatorio_antecedentes(self):
+        """Legacy sin snapshot: cae a antecedentes personales."""
+        self.assertEqual(diagnostico_orden_display(self.sol), "HTA crónica")
+
+    def test_diagnostico_snapshot_prevalece(self):
+        from pacientes.problemas import crear_problema
+
+        crear_problema(self.paciente, texto="DBT2 control")
+        self.sol.diagnostico_orden = "Neumonía congela"
+        self.sol.save(update_fields=["diagnostico_orden"])
+        self.assertEqual(diagnostico_orden_display(self.sol), "Neumonía congela")
+        # Sin snapshot, el principal vigente no se lee en vivo (1B).
+        self.sol.diagnostico_orden = ""
+        self.sol.save(update_fields=["diagnostico_orden"])
         self.assertEqual(diagnostico_orden_display(self.sol), "HTA crónica")
 
     def test_diagnostico_internacion_desde_cama(self):

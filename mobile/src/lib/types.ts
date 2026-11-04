@@ -87,6 +87,39 @@ export interface InformeResumen {
   puede_informar_parcial: boolean;
 }
 
+export interface ConsultaResumen {
+  id: number;
+  fecha: string | null;
+  medico_nombre: string;
+  tipo_intervencion: string;
+  tipo_intervencion_display: string;
+  contexto_atencion: string;
+  contexto_display: string;
+  estado_clinico: string;
+}
+
+export interface EstudioInformeResumen {
+  id: number;
+  titulo: string;
+  estado: string;
+  estado_display?: string;
+  version?: number;
+  es_vigente?: boolean;
+  puede_descargar_pdf: boolean;
+}
+
+export interface EstudioResumen {
+  id: number;
+  paciente_nombre: string;
+  paciente_dni: string;
+  tipo_nombre: string;
+  tipo_actividad: string;
+  estado: string;
+  estado_display: string;
+  fecha_solicitud: string | null;
+  informes: EstudioInformeResumen[];
+}
+
 export interface ResultadoMovil {
   id: number;
   tipo_examen: number;

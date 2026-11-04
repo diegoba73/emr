@@ -25,7 +25,8 @@ import type { EstudioMicrobiologia, EstadoSolicitudLims, SolicitudExamenLims } f
 import { getInternaciones } from '../../services/apiService';
 import PatientIntegratedView from '../PatientIntegratedView';
 import PacienteFormDialog from '../PacienteFormDialog';
-import { canUpdatePacienteDemographics } from '../../utils/permissions';
+import { canEditProblemasClinicos, canUpdatePacienteDemographics } from '../../utils/permissions';
+import ProblemasClinicosPanel from './ProblemasClinicosPanel';
 import { pacienteFichaAnalisisPath, withNavBack } from '../../utils/navBack';
 import { estadoOrdenColor, labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
 import {
@@ -239,6 +240,7 @@ const PatientDashboard: React.FC = () => {
   const alergias = (paciente.alergias || '').trim();
   const riesgo = [paciente.grupo_sanguineo, paciente.antecedentes].filter(Boolean).join(' · ');
   const canEditDemographics = canUpdatePacienteDemographics(currentUser);
+  const canEditDx = canEditProblemasClinicos(currentUser);
 
   return (
     <Box className="fade-in" data-demo="page-paciente-360">
@@ -345,6 +347,7 @@ const PatientDashboard: React.FC = () => {
         </Box>
         <Box>
           <Stack spacing={2} sx={{ height: '100%' }}>
+            <ProblemasClinicosPanel pacienteId={pid} canEdit={canEditDx} />
             <InfoCard title="Últimos signos vitales" dense>
               {atenciones.some((a) => a.ultimo_signo_vital || (a.signos_vitales && a.signos_vitales.length > 0)) ? (
                 <List dense disablePadding>

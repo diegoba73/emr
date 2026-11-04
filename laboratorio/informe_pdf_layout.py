@@ -1044,3 +1044,44 @@ def estilos_informe_icpl() -> dict[str, ParagraphStyle]:
 
 def escape_texto_informe(text: str) -> str:
     return _escape(text)
+
+
+# Superíndices Unicode fuera de WinAnsi (Helvetica) → tofu/cuadrados negros en PDF.
+_SUPERINDICES_PDF = {
+    "⁰": "0",
+    "¹": "1",
+    "²": "2",
+    "³": "3",
+    "⁴": "4",
+    "⁵": "5",
+    "⁶": "6",
+    "⁷": "7",
+    "⁸": "8",
+    "⁹": "9",
+    "⁺": "+",
+    "⁻": "-",
+}
+
+
+def escape_texto_informe_con_superindices(text: str) -> str:
+    """
+    Escape XML/HTML para Paragraph + convierte superíndices Unicode a <super>
+    (Helvetica/WinAnsi no tiene ⁴/⁵; sin esto el PDF muestra cuadrados negros).
+    También normaliza ≥/≤ y guiones tipográficos a ASCII seguro.
+    """
+    s = str(text or "")
+    s = (
+        s.replace("≥", ">=")
+        .replace("≤", "<=")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+    escaped = _escape(s)
+    parts: list[str] = []
+    for ch in escaped:
+        digito = _SUPERINDICES_PDF.get(ch)
+        if digito is not None:
+            parts.append(f"<super>{digito}</super>")
+        else:
+            parts.append(ch)
+    return "".join(parts)

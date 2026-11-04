@@ -22,6 +22,7 @@ import {
   getCurrentMedicoId,
   shouldLockMedicoField,
 } from '../../utils/turnoPermissions';
+import { listProblemasClinicos } from '../../services/pacienteProblemas';
 
 interface ModalIngresarPacienteProps {
   open: boolean;
@@ -112,6 +113,27 @@ const ModalIngresarPaciente: React.FC<ModalIngresarPacienteProps> = ({
       setDiagnosticoTextoLibre(prefill.motivoIngreso);
     }
   }, [open, prefill]);
+
+  // Prefill diagnóstico desde problema principal vigente del paciente.
+  useEffect(() => {
+    if (!open || !selectedPaciente?.id) return;
+    if (diagnosticoTextoLibre.trim() || selectedDiagnostico) return;
+    let active = true;
+    listProblemasClinicos(selectedPaciente.id, { estado: 'ACTIVO' })
+      .then((items) => {
+        if (!active) return;
+        const principal = items.find((p) => p.es_principal) || items[0];
+        if (principal?.texto) {
+          setDiagnosticoTextoLibre(principal.texto);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, selectedPaciente?.id]);
 
   useEffect(() => {
     if (!open) return;

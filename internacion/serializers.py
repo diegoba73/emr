@@ -101,6 +101,7 @@ class InternacionSerializer(serializers.ModelSerializer):
             'diagnostico_cie',
             'diagnostico_cie_id',
             'diagnostico_ingreso',
+            'diagnostico_egreso',
             'tipo_dieta',
             'tipo_dieta_id',
             'dieta_texto',

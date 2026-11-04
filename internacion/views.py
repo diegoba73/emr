@@ -335,6 +335,7 @@ class InternacionViewSet(viewsets.ModelViewSet):
         """
         Acción personalizada para dar de alta a un paciente.
         POST /api/internaciones/{id}/alta/
+        Body opcional: fecha_alta, diagnostico_egreso (obligatorio si no hay ingreso/CIE).
         """
         internacion = self.get_object()
         
@@ -349,10 +350,50 @@ class InternacionViewSet(viewsets.ModelViewSet):
         fecha_alta = request.data.get('fecha_alta')
         if not fecha_alta:
             fecha_alta = timezone.now()
-        
-        # Actualizar internación (el save() del modelo actualizará el estado de la cama)
+
+        dx_egreso = " ".join(
+            str(request.data.get("diagnostico_egreso") or "").split()
+        ).strip()
+        if not dx_egreso:
+            dx_egreso = (internacion.diagnostico_ingreso or "").strip()
+        if not dx_egreso and internacion.diagnostico_cie_id:
+            cie = internacion.diagnostico_cie
+            if cie is not None:
+                codigo = (cie.codigo or "").strip()
+                desc = (cie.descripcion or "").strip()
+                dx_egreso = f"{codigo} - {desc}".strip(" -")
+        if not dx_egreso:
+            return Response(
+                {
+                    "error": "Indique el diagnóstico de egreso (texto) para dar el alta.",
+                    "diagnostico_egreso": "Requerido.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        internacion.diagnostico_egreso = dx_egreso
         internacion.fecha_alta = fecha_alta
         internacion.save()
+
+        # Continuar ambulatorio post-alta con el dx de egreso como principal.
+        try:
+            from pacientes.problemas import establecer_principal_desde_texto
+
+            establecer_principal_desde_texto(
+                internacion.paciente,
+                texto=dx_egreso,
+                diagnostico_cie=internacion.diagnostico_cie,
+                actor=request.user,
+                notas="Desde alta de internación",
+            )
+        except Exception:
+            # No bloquear el alta si falla el sync de problemas; queda el egreso en internación.
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "No se pudo actualizar problema principal al alta internacion=%s",
+                internacion.pk,
+            )
         
         serializer = self.get_serializer(internacion)
         return Response(serializer.data)

@@ -159,14 +159,14 @@ def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
     assert c.post(f'/api/movil/turnos/{pk}/confirmar/').status_code==200
     assert Turno.objects.get(pk=pk).estado=='CONFIRMADO'
     assert c.post(f'/api/movil/turnos/{pk}/asistencia/').status_code==200
-    # Reprogramar/cancelar desde la app: solo secretaría (gestión de agenda).
+    # Reprogramar desde la app: solo secretaría. Cancelar: el paciente sí puede.
     r=c.post(f'/api/movil/turnos/{pk}/reprogramar-horario/',{'horario_id':h.pk,'inicio':(start+timedelta(minutes=20)).isoformat(),'motivo':'Cambio de horario'},format='json')
     assert r.status_code==403
-    assert c.post(f'/api/movil/turnos/{pk}/cancelar/',{'motivo':'No puedo asistir'},format='json').status_code==403
+    assert c.post(f'/api/movil/turnos/{pk}/cancelar/',{'motivo':'No puedo asistir'},format='json').status_code==200
     updated=Turno.objects.get(pk=pk)
     assert updated.asistencia_confirmada_en is not None
     assert updated.fecha_hora_inicio==start
-    assert updated.estado=='CONFIRMADO'
+    assert updated.estado=='CANCELADO'
 
 def test_transient_push_error_retries_later(data,settings):
     import requests

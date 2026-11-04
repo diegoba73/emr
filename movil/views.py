@@ -233,6 +233,32 @@ class TurnosMovil(TurnoViewSet):
                     module='turnos', metadata={'accion': 'confirmar_asistencia_paciente'})
         return Response(self.get_serializer(turno).data)
 
+    def cancelar(self, request, pk=None):
+        """Cancela el turno (paciente: propio futuro; secretaría vía API web)."""
+        from turnos import turno_estado
+
+        motivo = ''
+        try:
+            motivo = request.data.get('motivo', '')
+        except Exception:
+            motivo = ''
+        if str(request.user.rol).lower() == 'paciente' and not str(motivo or '').strip():
+            motivo = 'Cancelado por el paciente desde la app'
+        with transaction.atomic():
+            turno = self._get_turno_locked_for_estado_action(pk)
+            if not turno_estado.puede_cancelar_turno(request.user, turno):
+                raise PermissionDenied('No tiene permiso para cancelar este turno.')
+            try:
+                outcome = turno_estado.cancelar_turno(
+                    turno,
+                    actor=request.user,
+                    motivo=motivo,
+                    view_name='TurnosMovil.cancelar',
+                )
+            except turno_estado.TurnoEstadoTransitionError as exc:
+                raise ValidationError({'detail': str(exc)}) from exc
+        return self._estado_action_response(outcome)
+
     def reprogramar_horario(self, request, pk=None):
         from medicos.models import DisponibilidadMedico
         from medicos.agenda import validar_reserva, duracion_de

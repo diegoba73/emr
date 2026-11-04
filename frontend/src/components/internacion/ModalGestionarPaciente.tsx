@@ -67,6 +67,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [confirmAlta, setConfirmAlta] = useState(false);
+  const [diagnosticoEgreso, setDiagnosticoEgreso] = useState('');
   const [selectedAtencionId, setSelectedAtencionId] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [tab, setTab] = useState(0);
@@ -554,7 +555,19 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     if (!internacion) return;
 
     if (!confirmAlta) {
+      const prefillDx =
+        diagnosticoEgreso.trim() ||
+        internacion.diagnostico_ingreso ||
+        editedData.diagnostico_ingreso ||
+        '';
+      setDiagnosticoEgreso(prefillDx);
       setConfirmAlta(true);
+      return;
+    }
+
+    const dx = diagnosticoEgreso.trim();
+    if (!dx && !internacion.diagnostico_cie_id) {
+      setError('Indicá el diagnóstico de egreso para dar el alta.');
       return;
     }
 
@@ -562,12 +575,12 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
     setError(null);
 
     try {
-      await darAltaInternacion(internacion.id);
+      await darAltaInternacion(internacion.id, undefined, dx || undefined);
       // El backend ya actualiza:
       // - fecha_alta = ahora
       // - activo = False
       // - cama.estado = 'LIMPIEZA'
-      // Todos estos datos quedan registrados en la base de datos para historial
+      // - problema clínico principal del paciente = dx egreso
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -697,9 +710,22 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
             )}
 
             {confirmAlta && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                ¿Está seguro que desea dar de alta a este paciente? La cama pasará a estado "Limpieza" y todos los datos quedarán registrados en el historial.
-              </Alert>
+              <Box sx={{ mb: 2 }}>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  ¿Está seguro que desea dar de alta a este paciente? La cama pasará a estado
+                  &quot;Limpieza&quot;. El diagnóstico de egreso queda como principal del paciente
+                  (pedidos / OS posteriores).
+                </Alert>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Diagnóstico de egreso"
+                  value={diagnosticoEgreso}
+                  onChange={(e) => setDiagnosticoEgreso(e.target.value)}
+                  required
+                  helperText="Obligatorio. Se sincroniza a la lista de problemas del paciente."
+                />
+              </Box>
             )}
 
             {diagnosticoVisible && (

@@ -157,6 +157,13 @@ export function canUpdatePacienteDemographics(user: User | null | undefined): bo
   return isSecretariaEmrRole(rol) || rol === 'medico';
 }
 
+/** Diagnósticos / problemas clínicos: médico y admin. */
+export function canEditProblemasClinicos(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  return normalizeRol(user) === 'medico';
+}
+
 /** Eliminación física de pacientes: solo admin/superuser (duplicados sin historia). */
 export function canDeletePaciente(user: User | null | undefined): boolean {
   if (!user) return false;

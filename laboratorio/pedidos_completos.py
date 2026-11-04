@@ -344,6 +344,9 @@ def _crear_solicitud_material(
     except RestriccionFrecuenciaError as exc:
         raise ValidationError(str(exc)) from exc
 
+    from pacientes.problemas import diagnostico_vigente_snapshot
+
+    dx_txt, dx_cie_id = diagnostico_vigente_snapshot(paciente.pk)
     solicitud = SolicitudExamen.objects.create(
         paciente=paciente,
         medico_interno=medico_interno,
@@ -355,6 +358,8 @@ def _crear_solicitud_material(
         material_pedido=mat,
         obra_social_orden=obra_social_orden or "",
         afiliado_orden=afiliado_orden or "",
+        diagnostico_orden=dx_txt or "",
+        diagnostico_cie_orden_id=dx_cie_id,
         estado="PENDIENTE",
     )
     if paneles_ok:
@@ -435,6 +440,9 @@ def _crear_solicitud_multi_material(
     except RestriccionFrecuenciaError as exc:
         raise ValidationError(str(exc)) from exc
 
+    from pacientes.problemas import diagnostico_vigente_snapshot
+
+    dx_txt, dx_cie_id = diagnostico_vigente_snapshot(paciente.pk)
     solicitud = SolicitudExamen.objects.create(
         paciente=paciente,
         medico_interno=medico_interno,
@@ -446,6 +454,8 @@ def _crear_solicitud_multi_material(
         material_pedido="",
         obra_social_orden=obra_social_orden or "",
         afiliado_orden=afiliado_orden or "",
+        diagnostico_orden=dx_txt or "",
+        diagnostico_cie_orden_id=dx_cie_id,
         estado="PENDIENTE",
     )
     if paneles_ok:

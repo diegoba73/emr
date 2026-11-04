@@ -6,7 +6,7 @@
 2. **App:** **Estoy en sala** (turno consulta/estudio de hoy) o **Anunciarme al laboratorio**.
 3. Queda en **cola de recepción** o laboratorio (TV / área correspondiente).
 4. **L**: usuario laboratorio en `/recepcion` → **Llamar** / Atendido.
-5. **T/S/E/P**: secretaría en `/recepcion` gestiona; con turno y OK admin → **Check-in médico** (pasa a cola del médico).
+5. **T/S/E/P**: secretaría en `/recepcion` gestiona; con turno y OK admin → **Pasar a médico** (pasa a cola del médico).
 6. Médico: **Llamar** (app + TV mitad derecha) → paciente **Ya voy** o médico **En atención** (abre consulta). Al guardar la consulta → **Atendido**.
 
 ## Web — producción CEHTA / ICPL (mismo EMR)
@@ -89,7 +89,7 @@ npx expo start --lan --port 8081
 0. Si cambió la Wi‑Fi: `powershell -File scripts\sync_lan_ip.ps1`
 1. Imprimir QR desde `/recepcion/qr-anuncio`.
 2. Anunciar por QR (puesto 1 o lab) → aparece en TV con código.
-3. App: **Estoy en sala** con turno hoy → cola recepción; secretaría hace Check-in médico.
+3. App: **Estoy en sala** con turno hoy → cola recepción; secretaría hace **Pasar a médico**.
 4. Médico Llamar → TV mitad médico + app.
 5. Ya voy o En atención → sale del destacado TV; rellamar si hace falta.
 6. App o QR: anuncio L → laboratorio (**Cola extracciones**) llama a Sala de extracción.

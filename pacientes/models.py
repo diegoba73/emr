@@ -182,3 +182,97 @@ class PacienteAfiliacion(models.Model):
         self.obra_social = normalizar_texto_paciente(self.obra_social) or ""
         self.numero_afiliado = normalizar_texto_paciente(self.numero_afiliado) or ""
         super().save(*args, **kwargs)
+
+
+class ProblemaClinico(models.Model):
+    """Problema / diagnóstico clínico del paciente (lista de problemas).
+
+    A lo sumo un problema ``ACTIVO`` con ``es_principal=True`` por paciente.
+    Ese principal alimenta el snapshot de diagnóstico en órdenes LIMS nuevas.
+    La evolución A→B es opcional: puede permanecer en A indefinidamente.
+    """
+
+    ESTADO_ACTIVO = "ACTIVO"
+    ESTADO_RESUELTO = "RESUELTO"
+    ESTADO_CHOICES = [
+        (ESTADO_ACTIVO, "Activo"),
+        (ESTADO_RESUELTO, "Resuelto"),
+    ]
+
+    paciente = models.ForeignKey(
+        Paciente,
+        on_delete=models.CASCADE,
+        related_name="problemas_clinicos",
+        verbose_name="Paciente",
+    )
+    texto = models.CharField(max_length=500, verbose_name="Diagnóstico / problema")
+    diagnostico_cie = models.ForeignKey(
+        "catalogos.DiagnosticoCIE10",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="problemas_clinicos",
+        verbose_name="CIE-10",
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default=ESTADO_ACTIVO,
+        verbose_name="Estado",
+    )
+    es_principal = models.BooleanField(default=False, verbose_name="Principal")
+    notas = models.TextField(blank=True, default="", verbose_name="Notas")
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="problemas_clinicos_creados",
+        verbose_name="Creado por",
+    )
+    modificado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="problemas_clinicos_modificados",
+        verbose_name="Modificado por",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True, verbose_name="Creado en")
+    actualizado_en = models.DateTimeField(auto_now=True, verbose_name="Actualizado en")
+    resuelto_en = models.DateTimeField(null=True, blank=True, verbose_name="Resuelto en")
+
+    class Meta:
+        verbose_name = "Problema clínico"
+        verbose_name_plural = "Problemas clínicos"
+        ordering = ["-es_principal", "-actualizado_en", "id"]
+        indexes = [
+            models.Index(
+                fields=["paciente", "estado"],
+                name="pac_prob_pac_est_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["paciente"],
+                condition=models.Q(es_principal=True, estado="ACTIVO"),
+                name="pac_prob_una_principal_activa",
+            ),
+        ]
+
+    def __str__(self):
+        marca = " *" if self.es_principal else ""
+        return f"{self.texto[:60]}{marca} ({self.estado})"
+
+    def display_texto(self) -> str:
+        cie = self.diagnostico_cie
+        if cie is not None:
+            codigo = (cie.codigo or "").strip()
+            desc = (cie.descripcion or "").strip()
+            if codigo and desc:
+                return f"{codigo} - {desc}"
+            if codigo:
+                return codigo
+            if desc:
+                return desc
+        return (self.texto or "").strip()

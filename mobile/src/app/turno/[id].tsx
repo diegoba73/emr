@@ -133,15 +133,15 @@ export default function Detail() {
 
             {activo && user?.rol === 'paciente' && turno.estado === 'RESERVADO' && (
               <Action
-                title="Confirmar turno"
+                title="Confirmar este turno"
                 disabled={busy}
                 onPress={() =>
                   Alert.alert(
-                    'Confirmar turno',
-                    '¿Confirmás que vas a asistir en esta fecha? Si no podés, contactá a secretaría para liberar el horario.',
+                    'Confirmar este turno',
+                    'Esto confirma la reserva en la agenda. Después, cerca del día, te pediremos confirmar que vas a asistir. Si no podés, cancelá desde acá o contactá a secretaría.',
                     [
                       { text: 'Volver', style: 'cancel' },
-                      { text: 'Sí, confirmo', onPress: () => void confirmarTurno() },
+                      { text: 'Sí, confirmo el turno', onPress: () => void confirmarTurno() },
                     ]
                   )
                 }
@@ -153,13 +153,17 @@ export default function Detail() {
               turno.estado === 'CONFIRMADO' &&
               !turno.asistencia_confirmada_en && (
                 <Action
-                  title="Confirmar mi asistencia"
+                  title="Voy a asistir"
                   disabled={busy}
                   onPress={() =>
-                    Alert.alert('Confirmar asistencia', '¿Vas a asistir a este turno?', [
-                      { text: 'Volver', style: 'cancel' },
-                      { text: 'Sí, voy a asistir', onPress: () => void confirmarAsistencia() },
-                    ])
+                    Alert.alert(
+                      'Confirmar asistencia',
+                      '¿Confirmás que vas a venir a este turno? (No es el anuncio de llegada: eso es «Estoy en sala» el día del turno.)',
+                      [
+                        { text: 'Volver', style: 'cancel' },
+                        { text: 'Sí, voy a asistir', onPress: () => void confirmarAsistencia() },
+                      ]
+                    )
                   }
                 />
               )}
@@ -182,11 +186,37 @@ export default function Detail() {
                 </Card>
               )}
 
-            {activo && (
+            {activo && user?.rol === 'paciente' && (
+              <Action
+                title="Cancelar turno"
+                secondary
+                disabled={busy}
+                onPress={() =>
+                  Alert.alert(
+                    'Cancelar turno',
+                    '¿Cancelás este turno? El horario queda libre. Si necesitás otro día, después podés reservar de nuevo o contactar a secretaría.',
+                    [
+                      { text: 'Volver', style: 'cancel' },
+                      {
+                        text: 'Sí, cancelar',
+                        style: 'destructive',
+                        onPress: () =>
+                          void run(async () => {
+                            await api(`/turnos/${id}/cancelar/`, 'POST', {
+                              motivo: 'Cancelado por el paciente desde la app',
+                            });
+                            Alert.alert('Listo', 'Turno cancelado.');
+                            router.replace('/');
+                          }, 'No se pudo cancelar el turno.'),
+                      },
+                    ]
+                  )
+                }
+              />
+            )}
+            {activo && user?.rol === 'medico' && (
               <Card>
-                <Body>
-                  Para cancelar o cambiar de día el turno, contactá a secretaría.
-                </Body>
+                <Body>Para cancelar o cambiar de día, pedile a secretaría.</Body>
               </Card>
             )}
           </>

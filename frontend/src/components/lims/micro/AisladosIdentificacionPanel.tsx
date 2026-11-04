@@ -50,13 +50,18 @@ import { todasLecturasSinDesarrollo } from '../../../utils/limsMicroCultivoNegat
 import { AisladoEstadoBadge } from './MicroBadges';
 import { MotivoDialog, useMotivoDialog } from './MotivoDialog';
 
-const SIGNIFICANCIAS: SignificanciaAislado[] = [
-  'NO_DEFINIDA',
-  'CONTAMINANTE',
-  'FLORA_HABITUAL',
-  'SIGNIFICATIVO',
-  'CRITICO',
+const SIGNIFICANCIAS: { value: SignificanciaAislado; label: string }[] = [
+  { value: 'NO_DEFINIDA', label: 'No definida' },
+  { value: 'CONTAMINANTE', label: 'Contaminante' },
+  { value: 'FLORA_HABITUAL', label: 'Flora habitual' },
+  { value: 'SIGNIFICATIVO', label: 'Significativo' },
+  { value: 'CRITICO', label: 'Crítico' },
 ];
+
+function labelSignificancia(value: string | undefined | null): string {
+  const found = SIGNIFICANCIAS.find((s) => s.value === value);
+  return found?.label || value || '—';
+}
 
 export interface AisladosIdentificacionPanelProps {
   estudioId: number;
@@ -470,7 +475,7 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
                     </TableCell>
                     <TableCell>{nombreMicroDeAislado(a)}</TableCell>
                     <TableCell>{ident?.metodo || '—'}</TableCell>
-                    <TableCell>{a.significancia}</TableCell>
+                    <TableCell>{labelSignificancia(a.significancia)}</TableCell>
                     <TableCell>{a.requiere_antibiograma ? 'Sí' : 'No'}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {canOperate && a.estado !== 'DESCARTADO' && (
@@ -545,8 +550,8 @@ const AisladosIdentificacionPanel: React.FC<AisladosIdentificacionPanelProps> = 
                 }
               >
                 {SIGNIFICANCIAS.map((s) => (
-                  <MenuItem key={s} value={s}>
-                    {s}
+                  <MenuItem key={s.value} value={s.value}>
+                    {s.label}
                   </MenuItem>
                 ))}
               </Select>

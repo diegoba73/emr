@@ -101,7 +101,7 @@ const TIPO_CHIP_COBERTURA: { value: string; label: string }[] = [
   { value: 'CIRUGIA', label: 'Cirugía' },
 ];
 
-/** Check-in hecho + turno con médico → el llamado es del médico, no de secretaría. */
+/** Registro en recepción hecho + turno con médico → el llamado es del médico, no de secretaría. */
 function esColaDelMedico(l: LlegadaRecepcion): boolean {
   if (!l.turno || !l.medico_nombre) return false;
   if (['EN_ESPERA', 'EN_ATENCION'].includes(l.estado_flujo)) return true;
@@ -247,7 +247,7 @@ const RecepcionTablero: React.FC = () => {
       await checkinTurnoRecepcion(t.turno_id, puestoId || t.puesto_sugerido_id);
       await load();
     } catch (e) {
-      setError(getSafeClinicalActionMessage(e, 'No se pudo hacer check-in.'));
+      setError(getSafeClinicalActionMessage(e, 'No se pudo registrar la llegada.'));
     } finally {
       setBusyId(null);
     }
@@ -303,7 +303,7 @@ const RecepcionTablero: React.FC = () => {
   const pendientes = tablero?.turnos_pendientes_checkin || [];
   const enCursoAll = llegadas.filter((l) => {
     if (soyMedico) {
-      // Solo tras check-in de secretaría (cola clínica / llamado a consultorio).
+      // Solo tras registro de secretaría (cola clínica / llamado a consultorio).
       if (['EN_ESPERA', 'EN_ATENCION'].includes(l.estado_flujo)) return true;
       return l.estado_flujo === 'LLAMADO' && (l.zona_llamado || '') === 'MEDICO';
     }
@@ -392,7 +392,7 @@ const RecepcionTablero: React.FC = () => {
             disabled={busy}
             onClick={() => void onAccion(l, 'derivar-espera')}
           >
-            Check-in médico
+            Pasar a médico
           </Button>
         )}
         {((soyMedico &&
@@ -626,7 +626,7 @@ const RecepcionTablero: React.FC = () => {
       <Alert severity="info" sx={{ mb: 2 }}>
         {soyMedico ? (
           <>
-            Pacientes con check-in administrativo (cola médica). <strong>Llamar</strong> avisa en la
+            Pacientes ya registrados en recepción (cola médica). <strong>Llamar</strong> avisa en la
             app y en la TV; <strong>En atención</strong> inicia la consulta (o el paciente toca «Ya
             voy»).
           </>
@@ -638,9 +638,9 @@ const RecepcionTablero: React.FC = () => {
           </>
         ) : (
           <>
-            El paciente se anuncia por QR. La cola se filtra por los tipos de tu cobertura. Cuando
-            esté OK administrativamente, usá <strong>Check-in médico</strong> para pasarlo a la cola
-            del médico.
+            El paciente se anuncia por QR o app. La cola se filtra por los tipos de tu cobertura.
+            Cuando esté OK administrativamente, usá <strong>Pasar a médico</strong> para enviarlo a
+            la cola del médico.
           </>
         )}
       </Alert>
@@ -701,7 +701,7 @@ const RecepcionTablero: React.FC = () => {
       ) : (
         <>
           <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-            1. Turnos de hoy sin check-in ({pendientes.length})
+            1. Turnos de hoy sin registro en recepción ({pendientes.length})
           </Typography>
           <TableContainer component={Paper} sx={{ mb: 3 }}>
             <Table size="small">
@@ -720,7 +720,7 @@ const RecepcionTablero: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={6}>
                       <Typography color="text.secondary">
-                        No hay turnos pendientes de check-in.
+                        No hay turnos pendientes de registro.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -755,7 +755,7 @@ const RecepcionTablero: React.FC = () => {
                       <TableCell align="right">
                         {soyMedico ? (
                           <Typography variant="caption" color="text.secondary">
-                            Esperando check-in de recepción
+                            Esperando registro de recepción
                           </Typography>
                         ) : (
                           <Button
@@ -764,7 +764,7 @@ const RecepcionTablero: React.FC = () => {
                             disabled={busyId === `t-${t.turno_id}`}
                             onClick={() => void onCheckin(t)}
                           >
-                            Check-in
+                            Registrar llegada
                           </Button>
                         )}
                       </TableCell>
@@ -776,7 +776,7 @@ const RecepcionTablero: React.FC = () => {
           </TableContainer>
 
           <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-            2. Con check-in / en curso ({enCurso.length})
+            2. En recepción / en curso ({enCurso.length})
           </Typography>
           {renderTablaEnCurso(enCurso)}
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Paciente, PacienteAfiliacion
+from .models import Paciente, PacienteAfiliacion, ProblemaClinico
 
 
 @admin.register(Paciente)
@@ -84,7 +84,15 @@ class PacienteAfiliacionInline(admin.TabularInline):
     fields = ("obra_social", "numero_afiliado", "es_principal", "activo")
 
 
-PacienteAdmin.inlines = [PacienteAfiliacionInline]
+class ProblemaClinicoInline(admin.TabularInline):
+    model = ProblemaClinico
+    extra = 0
+    fields = ("texto", "diagnostico_cie", "estado", "es_principal", "notas")
+    readonly_fields = ()
+    show_change_link = True
+
+
+PacienteAdmin.inlines = [PacienteAfiliacionInline, ProblemaClinicoInline]
 
 
 @admin.register(PacienteAfiliacion)
@@ -92,3 +100,11 @@ class PacienteAfiliacionAdmin(admin.ModelAdmin):
     list_display = ("paciente", "obra_social", "numero_afiliado", "es_principal", "activo")
     list_filter = ("es_principal", "activo")
     search_fields = ("obra_social", "numero_afiliado", "paciente__dni", "paciente__apellido")
+
+
+@admin.register(ProblemaClinico)
+class ProblemaClinicoAdmin(admin.ModelAdmin):
+    list_display = ("paciente", "texto", "estado", "es_principal", "actualizado_en")
+    list_filter = ("estado", "es_principal")
+    search_fields = ("texto", "paciente__dni", "paciente__apellido")
+    raw_id_fields = ("paciente", "diagnostico_cie", "creado_por", "modificado_por")

@@ -125,6 +125,12 @@ class Internacion(models.Model):
         verbose_name="Diagnóstico CIE-10"
     )
     diagnostico_ingreso = models.TextField(null=True, blank=True, verbose_name="Diagnóstico de Ingreso (texto libre)")
+    diagnostico_egreso = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Diagnóstico de Egreso (texto libre)",
+        help_text="Al alta pasa a ser el problema clínico principal del paciente.",
+    )
     tipo_dieta = models.ForeignKey(
         TipoDieta,
         on_delete=models.SET_NULL,

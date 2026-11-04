@@ -1587,6 +1587,16 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             validated_data["obra_social_orden"] = snap_os
             validated_data["afiliado_orden"] = snap_afil
 
+        # Snapshot de diagnóstico vigente (lista de problemas / principal).
+        if not (validated_data.get("diagnostico_orden") or "").strip():
+            from pacientes.problemas import diagnostico_vigente_snapshot
+
+            dx_txt, dx_cie_id = diagnostico_vigente_snapshot(paciente.pk)
+            if dx_txt:
+                validated_data["diagnostico_orden"] = dx_txt
+            if dx_cie_id and not validated_data.get("diagnostico_cie_orden_id"):
+                validated_data["diagnostico_cie_orden_id"] = dx_cie_id
+
         solicitud = SolicitudExamen.objects.create(**validated_data)
         solicitud._orden_merged = False
 

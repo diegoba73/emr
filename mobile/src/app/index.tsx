@@ -120,6 +120,12 @@ export default function Home() {
       </View>
 
       <Action title="Informes de laboratorio" onPress={() => router.push('/informes')} />
+      {(user?.rol === 'paciente' || user?.rol === 'medico') && (
+        <Action title="Estudios" onPress={() => router.push('/estudios')} />
+      )}
+      {user?.rol === 'paciente' && (
+        <Action title="Consultas pasadas" onPress={() => router.push('/consultas')} />
+      )}
       {user?.puede_pedir_lab && (
         <Action title="Pedir laboratorio" onPress={() => router.push('/lab')} />
       )}
@@ -127,7 +133,7 @@ export default function Home() {
       {user?.rol === 'paciente' && (
         <Card>
           <Body>
-            Cuando llegues a la clínica: anunciate acá. Secretaría te llama para el check-in
+            Cuando llegues a la clínica: anunciate acá. Secretaría te llama para el registro
             administrativo; el médico te llama después.
           </Body>
           {recepcionHoy?.estoy_en_sala ? (

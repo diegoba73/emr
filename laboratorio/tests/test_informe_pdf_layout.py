@@ -12,6 +12,7 @@ from reportlab.platypus import PageBreak
 from laboratorio.informe_pdf_layout import (
     agrupar_resultados_por_panel,
     construir_story_icpl,
+    escape_texto_informe_con_superindices,
     generar_pdf_icpl_bytes,
     _grupo_es_solo_probnp,
     _metodo_texto,
@@ -329,4 +330,22 @@ class TestInformePdfProbnpHojaPropia(TestCase):
         self.assertFalse(isinstance(story[-1], PageBreak))
         # Tras el único PageBreak no debe haber otro salto antes del cierre.
         self.assertFalse(any(isinstance(x, PageBreak) for x in story[breaks[0] + 1 :]))
+
+
+class TestEscapeTextoInformeSuperindices(TestCase):
+    """Helvetica no tiene ⁴/⁵; el escape debe usar <super> para el PDF."""
+
+    def test_recuento_urocultivo_tipico(self):
+        out = escape_texto_informe_con_superindices("10⁴–10⁵ UFC/ml")
+        self.assertEqual(out, "10<super>4</super>-10<super>5</super> UFC/ml")
+        self.assertNotIn("⁴", out)
+        self.assertNotIn("⁵", out)
+
+    def test_mayor_igual_y_superindice(self):
+        out = escape_texto_informe_con_superindices("≥10⁵ UFC/ml")
+        self.assertEqual(out, "&gt;=10<super>5</super> UFC/ml")
+
+    def test_menor_con_superindice_latin1(self):
+        out = escape_texto_informe_con_superindices("<10³ UFC/ml")
+        self.assertEqual(out, "&lt;10<super>3</super> UFC/ml")
 

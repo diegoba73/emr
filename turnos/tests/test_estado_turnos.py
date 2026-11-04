@@ -237,7 +237,7 @@ class TestCancelarTurno(APITestCase):
         )
         assert r.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_paciente_propio_no_puede_cancelar(self):
+    def test_paciente_propio_puede_cancelar(self):
         user = User.objects.create_user(
             username='te_can_pac', email='te_can_pac@test.com', password='x', rol='paciente',
         )
@@ -250,7 +250,9 @@ class TestCancelarTurno(APITestCase):
             {'motivo': 'No puedo asistir'},
             format='json',
         )
-        assert r.status_code == status.HTTP_403_FORBIDDEN
+        assert r.status_code == status.HTTP_200_OK, r.data
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.CANCELADO
 
     def test_medico_ajeno_no_puede_cancelar(self):
         medico_b = Medico.objects.create(
@@ -728,7 +730,7 @@ class TestLaboratorioCancelarTurno(APITestCase):
             {'motivo': 'Intento lab'},
             format='json',
         )
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code == status.HTTP_403_FORBIDDEN
         turno.refresh_from_db()
         assert turno.estado == Turno.Estado.RESERVADO
 
@@ -1595,7 +1597,7 @@ class TestIniciarAtencionTurno(APITestCase):
         turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 10)
         self.client.force_authenticate(user=lab)
         r = self.client.post(f'/api/turnos/{turno.id}/iniciar-atencion/', {}, format='json')
-        assert r.status_code == status.HTTP_404_NOT_FOUND
+        assert r.status_code == status.HTTP_403_FORBIDDEN
 
     def test_admin_staff_puede_iniciar(self):
         admin = User.objects.create_user(

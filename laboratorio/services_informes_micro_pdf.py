@@ -16,7 +16,7 @@ from reportlab.lib import colors
 
 from auditoria.audit_service import log_event
 from laboratorio.informe_pdf_layout import (
-    escape_texto_informe,
+    escape_texto_informe_con_superindices,
     estilos_informe_icpl,
     formatear_edad_paciente,
     formatear_fecha_larga,
@@ -178,7 +178,8 @@ def _construir_story_micro(
     informe: InformeMicrobiologia,
 ) -> list[Any]:
     styles = estilos_informe_icpl()
-    esc = escape_texto_informe
+    # Helvetica: escape XML + superíndices Unicode (10⁴/10⁵ UFC/ml) → <super>.
+    esc = escape_texto_informe_con_superindices
     story: list[Any] = []
 
     es_preliminar = getattr(informe, "tipo", None) == "PRELIMINAR"
@@ -396,12 +397,20 @@ def _construir_story_micro(
                 micro_lbl = "—"
                 if micro is not None:
                     micro_lbl = f"{micro.codigo} — {micro.nombre}".strip(" —")
+                partes_aislado = [
+                    f"Aislado #{a.pk}",
+                    a.get_estado_display() or a.estado or "—",
+                    micro_lbl,
+                ]
+                # NO_DEFINIDA = default sin clasificar; no ensuciar el informe clínico.
+                sig = (a.significancia or "").strip()
+                if sig and sig != "NO_DEFINIDA":
+                    partes_aislado.append(
+                        f"Significancia: {a.get_significancia_display()}"
+                    )
                 story.append(
                     Paragraph(
-                        esc(
-                            f"Aislado #{a.pk} · {a.estado} · {micro_lbl} · "
-                            f"Significancia: {a.significancia or '—'}"
-                        ),
+                        esc(" · ".join(partes_aislado)),
                         styles["exam_meta"],
                     )
                 )
