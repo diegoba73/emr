@@ -87,7 +87,7 @@ class TestRolesEstudioComplementario:
         items = r.data.get('results', r.data)
         assert len(items) >= 1
 
-    def test_radiologo_crea_estudio(self, client, radiologo, paciente, tipo_estudio):
+    def test_radiologo_crea_estudio(self, client, radiologo, paciente, tipo_estudio, medico):
         client.force_authenticate(user=radiologo)
         payload = {
             'paciente_id': paciente.id,
@@ -95,6 +95,7 @@ class TestRolesEstudioComplementario:
             'practica': tipo_estudio.practica,
             'origen': 'INTERNO',
             'descripcion_clinica': 'Control',
+            'medico_solicitante': medico.id,
         }
         r = client.post(BASE, payload, format='json')
         assert r.status_code == 201, r.data

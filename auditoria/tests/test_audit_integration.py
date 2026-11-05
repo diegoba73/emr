@@ -50,15 +50,19 @@ def test_turno_create_and_update_generates_audit_events():
     assert ev.actor_id == admin.id
     assert ev.request_id
 
-    # confirmar vía acción (C5.9.2: PATCH estado bloqueado)
+    # Secretaría/admin crea en CONFIRMADO; UPDATE vía cancelar (C5.9.2: PATCH estado bloqueado).
     with capture_on_commit_callbacks(execute=True):
-        r2 = client.post(f"/api/turnos/{turno_id}/confirmar/", {}, format="json")
+        r2 = client.post(
+            f"/api/turnos/{turno_id}/cancelar/",
+            {"motivo": "Auditoría integración"},
+            format="json",
+        )
     assert r2.status_code == 200
     ev2 = AuditEvent.objects.filter(entity_type="turnos.Turno", entity_id=str(turno_id), action="UPDATE").order_by("-id").first()
     assert ev2 is not None
     assert ev2.before_state is not None
     assert ev2.after_state is not None
-    assert ev2.metadata.get("accion") == "confirmar_turno"
+    assert ev2.metadata.get("accion") == "cancelar_turno"
 
 
 @pytest.mark.django_db

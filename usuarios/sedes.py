@@ -113,6 +113,7 @@ def medico_visible_para_sedes(medico_sedes, user_sedes: Optional[Sequence[str]])
 
 def q_medico_en_sedes(user_sedes: Optional[Sequence[str]]):
     """Q para filtrar Medico por solapamiento de sedes (Postgres ArrayField)."""
+    from django.db import connection
     from django.db.models import Q
 
     if user_sedes is None:
@@ -121,4 +122,29 @@ def q_medico_en_sedes(user_sedes: Optional[Sequence[str]]):
     if not norm:
         return Q()
     # vacío en médico = visible; overlap con sedes del usuario
-    return Q(sedes=[]) | Q(sedes__overlap=list(norm))
+    if connection.vendor == 'postgresql':
+        return Q(sedes=[]) | Q(sedes__overlap=list(norm))
+    # SQLite (CI): ArrayField lookups (overlap/contains) no existen.
+    # El filtro real se aplica en ``filtrar_medicos_por_sedes`` con Cast a texto.
+    return Q()
+
+
+def filtrar_medicos_por_sedes(queryset, user_sedes: Optional[Sequence[str]]):
+    """Aplica aislamiento por sedes sobre un queryset de Medico (Postgres o SQLite CI)."""
+    from django.db import connection
+    from django.db.models import Q, TextField
+    from django.db.models.functions import Cast
+
+    if user_sedes is None:
+        return queryset
+    norm = normalize_sedes(user_sedes)
+    if not norm:
+        return queryset
+    if connection.vendor == 'postgresql':
+        return queryset.filter(Q(sedes=[]) | Q(sedes__overlap=list(norm)))
+    # CI SQLite: columna text con JSON; Cast fuerza lookups de CharField.
+    qs = queryset.annotate(_sedes_json=Cast('sedes', TextField()))
+    q = Q(_sedes_json='[]') | Q(_sedes_json='') | Q(_sedes_json__isnull=True)
+    for sede in norm:
+        q |= Q(_sedes_json__contains=f'"{sede}"')
+    return qs.filter(q)

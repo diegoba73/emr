@@ -162,11 +162,11 @@ class MedicoViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             base_queryset = base_queryset.defer("areas_interes_ia")
 
-        from usuarios.sedes import q_medico_en_sedes, sedes_efectivas
+        from usuarios.sedes import filtrar_medicos_por_sedes, sedes_efectivas
 
         sedes = sedes_efectivas(user)
         if sedes is not None:
-            base_queryset = base_queryset.filter(q_medico_en_sedes(sedes))
+            base_queryset = filtrar_medicos_por_sedes(base_queryset, sedes)
 
         return base_queryset
 

@@ -238,6 +238,71 @@ DATABASES = {
     }
 }
 
+# CI Smoke usa SQLite: ArrayField (User/Medico.sedes) no es nativo ahí.
+# Parche mínimo solo fuera de Postgres; prod no entra en este branch.
+if 'sqlite' in str(DATABASES['default'].get('ENGINE', '')):
+    import json
+
+    from django.contrib.postgres.fields import ArrayField
+    from django.db.backends.sqlite3.schema import DatabaseSchemaEditor
+
+    _array_db_type = ArrayField.db_type
+    _array_get_placeholder = ArrayField.get_placeholder
+    _array_get_db_prep_value = ArrayField.get_db_prep_value
+    _array_get_db_prep_save = ArrayField.get_db_prep_save
+    _sqlite_quote_value = DatabaseSchemaEditor.quote_value
+
+    def _array_db_type_sqlite(self, connection):
+        if connection.vendor != 'postgresql':
+            return 'text'
+        return _array_db_type(self, connection)
+
+    def _array_get_placeholder_sqlite(self, value, compiler, connection):
+        if connection.vendor != 'postgresql':
+            return '%s'
+        return _array_get_placeholder(self, value, compiler, connection)
+
+    def _array_get_db_prep_value_sqlite(self, value, connection, prepared=False):
+        if connection.vendor != 'postgresql':
+            if value is None:
+                return None
+            return json.dumps(list(value))
+        return _array_get_db_prep_value(self, value, connection, prepared=prepared)
+
+    def _array_get_db_prep_save_sqlite(self, value, connection):
+        if connection.vendor != 'postgresql':
+            if value is None:
+                default = self.get_default()
+                value = default() if callable(default) else default
+            if value is None:
+                return None
+            return json.dumps(list(value))
+        return _array_get_db_prep_save(self, value, connection)
+
+    def _array_from_db_value_sqlite(self, value, expression, connection):
+        # Postgres: psycopg ya entrega list; no alterar.
+        if connection.vendor == 'postgresql':
+            return value
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if value == '':
+            return []
+        return json.loads(value)
+
+    def _sqlite_quote_value_lists(self, value):
+        if isinstance(value, (list, tuple)):
+            value = json.dumps(list(value))
+        return _sqlite_quote_value(self, value)
+
+    ArrayField.db_type = _array_db_type_sqlite
+    ArrayField.get_placeholder = _array_get_placeholder_sqlite
+    ArrayField.get_db_prep_value = _array_get_db_prep_value_sqlite
+    ArrayField.get_db_prep_save = _array_get_db_prep_save_sqlite
+    ArrayField.from_db_value = _array_from_db_value_sqlite
+    DatabaseSchemaEditor.quote_value = _sqlite_quote_value_lists
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
