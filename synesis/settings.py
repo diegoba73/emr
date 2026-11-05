@@ -240,6 +240,7 @@ DATABASES = {
 
 # CI Smoke usa SQLite: ArrayField (User/Medico.sedes) no es nativo ahí.
 # Parche mínimo solo fuera de Postgres; prod no entra en este branch.
+# Django 6.0: get_placeholder → str; 6.1+: get_placeholder_sql → (sql, params).
 if 'sqlite' in str(DATABASES['default'].get('ENGINE', '')):
     import json
 
@@ -247,10 +248,16 @@ if 'sqlite' in str(DATABASES['default'].get('ENGINE', '')):
     from django.db.backends.sqlite3.schema import DatabaseSchemaEditor
 
     _array_db_type = ArrayField.db_type
-    _array_get_placeholder = ArrayField.get_placeholder
     _array_get_db_prep_value = ArrayField.get_db_prep_value
     _array_get_db_prep_save = ArrayField.get_db_prep_save
     _sqlite_quote_value = DatabaseSchemaEditor.quote_value
+    _placeholder_attr = (
+        'get_placeholder'
+        if hasattr(ArrayField, 'get_placeholder')
+        else 'get_placeholder_sql'
+    )
+    _array_get_placeholder = getattr(ArrayField, _placeholder_attr)
+    _placeholder_returns_tuple = _placeholder_attr == 'get_placeholder_sql'
 
     def _array_db_type_sqlite(self, connection):
         if connection.vendor != 'postgresql':
@@ -259,6 +266,8 @@ if 'sqlite' in str(DATABASES['default'].get('ENGINE', '')):
 
     def _array_get_placeholder_sqlite(self, value, compiler, connection):
         if connection.vendor != 'postgresql':
+            if _placeholder_returns_tuple:
+                return '%s', (value,)
             return '%s'
         return _array_get_placeholder(self, value, compiler, connection)
 
@@ -297,7 +306,7 @@ if 'sqlite' in str(DATABASES['default'].get('ENGINE', '')):
         return _sqlite_quote_value(self, value)
 
     ArrayField.db_type = _array_db_type_sqlite
-    ArrayField.get_placeholder = _array_get_placeholder_sqlite
+    setattr(ArrayField, _placeholder_attr, _array_get_placeholder_sqlite)
     ArrayField.get_db_prep_value = _array_get_db_prep_value_sqlite
     ArrayField.get_db_prep_save = _array_get_db_prep_save_sqlite
     ArrayField.from_db_value = _array_from_db_value_sqlite
