@@ -150,7 +150,8 @@ describe('canDownloadInformeLimsPdf / canEnviarInformeLims', () => {
     expect(canEnviarInformeLims(bioUser, 'INFORMADO_PARCIAL')).toBe(true);
     expect(canEnviarInformeLims(secUser, 'EN_PROCESO')).toBe(false);
     expect(canEnviarInformeLims(secUser, 'FINALIZADO')).toBe(true);
-    expect(canEnviarInformeLims(secUser, 'INFORMADO_PARCIAL')).toBe(true);
+    // Secretaría común no es rol de parcial (sí secretaria_lab / médico / LIMS).
+    expect(canEnviarInformeLims(secUser, 'INFORMADO_PARCIAL')).toBe(false);
     expect(canEnviarInformeLims(enfUser, 'FINALIZADO')).toBe(false);
     expect(canEnviarInformeLims(enfUser, 'INFORMADO_PARCIAL')).toBe(false);
   });
@@ -250,7 +251,8 @@ describe('canSeeResultadosClinicos / canDownloadInformeClinicoPdf', () => {
     expect(isSecretariaEntregaLab(medUser)).toBe(false);
 
     expect(canDownloadInformeClinicoPdf(medUser, 'INFORMADO_PARCIAL')).toBe(true);
-    expect(canDownloadInformeClinicoPdf(secUser, 'INFORMADO_PARCIAL')).toBe(true);
+    // Secretaría común: PDF definitivo sí; parcial no.
+    expect(canDownloadInformeClinicoPdf(secUser, 'INFORMADO_PARCIAL')).toBe(false);
     expect(canDownloadInformeClinicoPdf(medUser, 'FINALIZADO')).toBe(true);
     expect(canDownloadInformeClinicoPdf(secUser, 'FINALIZADO')).toBe(true);
     expect(canDownloadInformeClinicoPdf(enfUser, 'INFORMADO_PARCIAL')).toBe(false);

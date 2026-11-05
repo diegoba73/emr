@@ -24,7 +24,9 @@ describe('paginación del catálogo detrás del proxy', () => {
       const rows = await listTiposExamenLims({ activo: true });
 
       expect(get).toHaveBeenNthCalledWith(
-        2, '/lab/examenes/?activo=true&page=2&page_size=2000'
+        2,
+        '/lab/examenes/?activo=true&page=2&page_size=2000',
+        expect.anything()
       );
       expect(rows.map((row) => row.codigo)).toEqual(['CREATI', 'AU']);
     }

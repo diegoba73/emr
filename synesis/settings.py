@@ -89,6 +89,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Requerido por ArrayField (User/Medico.sedes); CI smoke usa SQLite y falla el check sin esto.
+    'django.contrib.postgres',
     'rest_framework',
     'corsheaders',
     'django_filters',
