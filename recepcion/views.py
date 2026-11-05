@@ -260,10 +260,13 @@ class LlegadaRecepcionViewSet(viewsets.ModelViewSet):
         turno_id = request.data.get('turno_id')
         if not turno_id:
             raise ValidationError({'turno_id': 'Requerido.'})
-        hoy = timezone.localdate()
+        try:
+            turno_id = int(turno_id)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({'turno_id': 'Inválido.'}) from exc
         llegada = (
             LlegadaRecepcion.objects.select_related('turno', 'turno__medico')
-            .filter(turno_id=turno_id, fecha=hoy)
+            .filter(turno_id=turno_id, fecha=timezone.localdate())
             .exclude(
                 estado_flujo__in=[
                     LlegadaRecepcion.EstadoFlujo.CANCELADO,
@@ -278,12 +281,13 @@ class LlegadaRecepcionViewSet(viewsets.ModelViewSet):
         if es_medico_recepcion(request.user) and not getattr(request.user, 'is_superuser', False):
             if not medico_puede_ver_llegada(request.user, llegada):
                 raise ValidationError({'detalle': 'No podés marcar atendido este turno.'})
-        if llegada.estado_flujo != LlegadaRecepcion.EstadoFlujo.ATENDIDO:
+        ya_atendido = llegada.estado_flujo == LlegadaRecepcion.EstadoFlujo.ATENDIDO
+        if not ya_atendido:
             llegada = services.marcar_atendido(llegada)
         return Response(
             {
                 'ok': True,
-                'actualizado': True,
+                'actualizado': not ya_atendido,
                 'llegada': LlegadaRecepcionSerializer(llegada).data,
             }
         )

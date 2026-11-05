@@ -2495,7 +2495,7 @@ class AtencionViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def cerrar_atencion(self, request, pk=None):
-        """Cerrar una atención"""
+        """Cerrar una atención y propagar ATENDIDO a la llegada de recepción (si hay)."""
         atencion = self.get_object()
         
         if atencion.fecha_cierre:
@@ -2507,6 +2507,20 @@ class AtencionViewSet(viewsets.ModelViewSet):
         atencion.fecha_cierre = timezone.now()
         atencion.estado_clinico = Atencion.EstadoClinico.FINALIZADA
         atencion.save(update_fields=['fecha_cierre', 'estado_clinico', 'updated_at'])
+
+        # Sala de espera: sin botón extra; el cierre clínico cierra la llegada.
+        turno_id = getattr(atencion, 'turno_id', None)
+        if turno_id:
+            try:
+                from recepcion.services import marcar_atendido_por_turno_id
+
+                marcar_atendido_por_turno_id(int(turno_id))
+            except Exception:
+                logger.exception(
+                    'No se pudo marcar llegada ATENDIDO al cerrar atención %s (turno %s)',
+                    atencion.pk,
+                    turno_id,
+                )
         
         serializer = self.get_serializer(atencion)
         return Response(serializer.data)

@@ -143,6 +143,18 @@ def test_tubo_esteril_para_muestra_esputo():
     assert tubo_codigo_para_examen("X", "ESPUTO") == FRASCO_ESTERIL
 
 
+def test_tubo_esteril_para_flujo_vaginal():
+    """FVD/FVDCUL y muestras genitales no deben caer al default SUERO."""
+    assert tubo_codigo_para_examen("FVD", "VAGINAL") == FRASCO_ESTERIL
+    assert tubo_codigo_para_examen("FVDCUL", "VAGINAL") == FRASCO_ESTERIL
+    assert tubo_codigo_para_examen("X", "URETRAL") == FRASCO_ESTERIL
+    assert tubo_codigo_para_examen("X", "HISOP_NAS") == FRASCO_ESTERIL
+    assert (
+        tubo_codigo_para_examen("X", None, muestra_nombre="Flujo vaginal")
+        == FRASCO_ESTERIL
+    )
+
+
 @pytest.mark.django_db
 def test_seed_materiales_pedido_idempotente():
     call_command("seed_materiales_pedido")

@@ -713,7 +713,7 @@ class TestOrdenUnicaAbierta(TestCase):
 
 
 class TestRepeticionControl(TestCase):
-    """2ª orden mismo día solo con ensayos informados de INFORMADO_PARCIAL."""
+    """INFORMADO_PARCIAL libera anti-dup; repetición/control sigue acotada a informados."""
 
     def setUp(self):
         self.suf = uuid.uuid4().hex[:8]
@@ -837,8 +837,57 @@ class TestRepeticionControl(TestCase):
             ).exists()
         )
 
-    def test_create_sin_flag_sigue_bloqueado(self):
-        self._create_parcial_con_trop_informada()
+    def test_create_sin_flag_ok_si_parcial(self):
+        """INFORMADO_PARCIAL libera anti-dup: create normal (sin repetición) OK."""
+        origen = self._create_parcial_con_trop_informada()
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
+                "examenes_ids": [self.urea.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertNotEqual(r.data["id"], origen.id)
+        self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 2)
+
+    def test_create_bloquea_si_en_proceso(self):
+        SolicitudExamen.objects.create(
+            paciente=self.pac,
+            estado="EN_PROCESO",
+            origen_solicitud="AMBULATORIO_CEHTA",
+            fecha_programada_toma=self.hoy,
+            material_pedido="SANGRE",
+        )
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.id,
+                "material_pedido": "SANGRE",
+                "examenes_ids": [self.trop.id],
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+            HTTP_HOST="localhost",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        detail = r.data if isinstance(r.data, str) else str(r.data)
+        self.assertIn("activa", detail.lower())
+
+    def test_create_bloquea_si_listo_para_validar(self):
+        SolicitudExamen.objects.create(
+            paciente=self.pac,
+            estado="LISTO_PARA_VALIDAR",
+            origen_solicitud="AMBULATORIO_CEHTA",
+            fecha_programada_toma=self.hoy,
+            material_pedido="SANGRE",
+        )
         r = self.client.post(
             "/api/lab/solicitudes/",
             {

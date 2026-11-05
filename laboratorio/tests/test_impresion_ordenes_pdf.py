@@ -13,8 +13,10 @@ from laboratorio.impresion_ordenes_pdf import (
     FORM_MICRO_DER,
     ImpresionOrdenesError,
     MICRO_CULTIVO_DE,
+    MarcadorPrevioJustif,
     construir_pedido_clinico,
     construir_pedido_micro,
+    construir_texto_justificacion_probnp,
     generar_listado_ordenes_dia_pdf_bytes,
     generar_pedidos_papel_pdf_bytes,
     parsear_items,
@@ -393,6 +395,32 @@ class TestImpresionOrdenes(TestCase):
         self.assertEqual(pedidos, 1)
         # Pedido solo en la 1ª hoja; los 2 de proBNP juntos en la 2ª.
         self.assertEqual(_paginas(pdf), 2)
+
+    def test_justificacion_probnp_mismo_dx_varia_por_perfil_labs(self):
+        """Mismo diagnóstico + labs distintos → textos distintos; sin valores impresos."""
+        dx = "Insuficiencia cardíaca descompensada"
+        t_alto = construir_texto_justificacion_probnp(
+            diagnostico=dx,
+            marcadores=[MarcadorPrevioJustif(codigo="PROBNP", alterado=True)],
+        )
+        t_dano = construir_texto_justificacion_probnp(
+            diagnostico=dx,
+            marcadores=[MarcadorPrevioJustif(codigo="TROP_US", alterado=True)],
+        )
+        t_ok = construir_texto_justificacion_probnp(
+            diagnostico=dx,
+            marcadores=[MarcadorPrevioJustif(codigo="PROBNP", alterado=False)],
+        )
+        self.assertNotEqual(t_alto, t_dano)
+        self.assertNotEqual(t_alto, t_ok)
+        self.assertIn(dx, t_alto)
+        self.assertIn(dx, t_dano)
+        self.assertIn("péptido natriurético", t_alto.lower())
+        self.assertIn("daño miocárdico", t_dano.lower())
+        self.assertIn("dentro de rango", t_ok.lower())
+        for texto in (t_alto, t_dano, t_ok):
+            self.assertNotRegex(texto, r"\d+\s*(pg|ng|U)/")
+            self.assertNotIn("Controles previos:", texto)
 
     def test_dimero_d_requiere_resena(self):
         tm = self.glu.tipo_muestra_requerida

@@ -131,7 +131,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - No cargar ni mutar resultados de una orden **`FINALIZADO`** sin desvalidar antes. Estados cargables: `EN_PROCESO`, `INFORMADO_PARCIAL`, `LISTO_PARA_VALIDAR`. Reapertura: `POST …/desvalidar/` (bioquímico/admin, motivo) → `LISTO_PARA_VALIDAR`.
 - **[HISTÓRICO]** no hay action pública de cancelar la **orden**; `CANCELADO` no es estado de `SolicitudExamen`. Cancelar **muestra** o **estudio micro** son entidades distintas.
 - Al crear: M2M a tipos y paneles; se generan `ResultadoExamen` por tipo (panel expande sin duplicar tipo).
-- **Una orden activa por paciente y día de extracción [VIGENTE]:** `fecha_programada_toma` obligatorio. No puede haber dos `SolicitudExamen` no `FINALIZADO` el mismo día (PENDIENTE / EN_PROCESO / parcial / a validar). PENDIENTE sin etiquetas del mismo día → merge. Hoy y mañana son días distintos. Tras `FINALIZADO` se puede otra el mismo día.
+- **Una orden activa por paciente y día de extracción [VIGENTE]:** `fecha_programada_toma` obligatorio. No puede haber dos `SolicitudExamen` bloqueantes el mismo día/material (`PENDIENTE` / `EN_PROCESO` / `LISTO_PARA_VALIDAR`). `INFORMADO_PARCIAL` y `FINALIZADO` liberan el cupo anti-dup. PENDIENTE sin etiquetas del mismo día → merge. Hoy y mañana son días distintos. Tras `FINALIZADO` o `INFORMADO_PARCIAL` se puede otra el mismo día.
 - **Orden de presentación talón / resultados [VIGENTE]:** `ORDEN_PRESENTACION_PEDIDO` (Hemograma → química CM260 suelta con GLU/UREA/CREATI/AU primero → Hepatograma → Lipídico → Ionograma → cardíacos → resto → orinas, orina completa última). Paneles sin expandir componentes. Distinto del layout del formulario papel. Detalle: `DOC_FLUJOS_LIMS.md`.
 
 ---

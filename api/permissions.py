@@ -624,9 +624,10 @@ class IsMedicoOrEnfermeriaOrAdmin(permissions.BasePermission):
 
 
 class IsInternacionStaff(permissions.BasePermission):
-    """Acceso operativo a internación: médico, enfermería, admin y secretaría.
+    """Lectura/listado de internación: médico, enfermería, admin, secretaría, kine y LIMS.
 
-    Médicos con ámbito solo ambulatorio no acceden al módulo de internación.
+    Escritura (ingreso/alta/infra) va por IsInternacionClinica / IsInternacionAlta.
+    Médicos con ámbito solo ambulatorio no acceden.
     Sedes: CEHTA no tiene capacidad internación (ICPL sí).
     """
 

@@ -125,13 +125,13 @@ def _mensaje_whatsapp_paciente(solicitud: SolicitudExamen, enlace_descarga: str 
     es_parcial = getattr(solicitud, "estado", None) == "INFORMADO_PARCIAL"
     if es_parcial:
         intro = (
-            f"Hola, le informamos un INFORME PARCIAL de laboratorio de su orden {numero}. "
-            f"Aún faltan determinaciones; no es el informe definitivo."
+            f"Hola, le enviamos el INFORME PARCIAL de laboratorio con los resultados "
+            f"de su orden {numero}. Aún faltan determinaciones; no es el informe definitivo."
         )
     else:
         intro = (
-            f"Hola, le informamos que los resultados de laboratorio de su orden {numero} "
-            f"ya están disponibles."
+            f"Hola, le enviamos el informe de laboratorio con los resultados "
+            f"de su orden {numero}."
         )
     return _mensaje_whatsapp_con_enlace(
         intro, enlace_descarga, "Puede solicitarlo en la institución."
@@ -144,12 +144,17 @@ def _mensaje_whatsapp_medico(solicitud: SolicitudExamen, enlace_descarga: str | 
     if solicitud.paciente_id:
         paciente_nombre = getattr(solicitud.paciente, "nombre_completo", "") or ""
     es_parcial = getattr(solicitud, "estado", None) == "INFORMADO_PARCIAL"
-    tipo = "INFORME PARCIAL" if es_parcial else "resultados"
-    intro = (
-        f"Hola, {tipo} de laboratorio de la orden {numero}"
-        + (f" del paciente {paciente_nombre}" if paciente_nombre else "")
-        + (" (aún incompleto)." if es_parcial else " ya están disponibles.")
-    )
+    del_paciente = f" del paciente {paciente_nombre}" if paciente_nombre else ""
+    if es_parcial:
+        intro = (
+            f"Hola, le enviamos el INFORME PARCIAL de laboratorio con los resultados "
+            f"de la orden {numero}{del_paciente}. Aún incompleto; no es el informe definitivo."
+        )
+    else:
+        intro = (
+            f"Hola, le enviamos el informe de laboratorio con los resultados "
+            f"de la orden {numero}{del_paciente}."
+        )
     return _mensaje_whatsapp_con_enlace(
         intro, enlace_descarga, "Puede consultarlo en el sistema."
     )

@@ -292,9 +292,19 @@ describe('canAccessInternacion', () => {
     expect(canAccessInternacion(user({ rol: 'KINESIOLOGO' }))).toBe(true);
   });
 
-  it('bloquea paciente, laboratorio, anónimo y médico solo ambulatorio', () => {
+  it('permite operadores LIMS (laboratorio/bioquímico) en lectura, sin escritura clínica', () => {
+    const lab = user({ rol: 'LABORATORIO' });
+    const bio = user({ rol: 'BIOQUIMICO' });
+    expect(canAccessInternacion(lab)).toBe(true);
+    expect(canAccessInternacion(bio)).toBe(true);
+    expect(canOperateInternacionClinica(lab)).toBe(false);
+    expect(canOperateInternacionClinica(bio)).toBe(false);
+    expect(canManageInternacionInfra(lab)).toBe(false);
+    expect(canDarAltaInternacion(lab)).toBe(false);
+  });
+
+  it('bloquea paciente, anónimo y médico solo ambulatorio', () => {
     expect(canAccessInternacion(user({ rol: 'PACIENTE' }))).toBe(false);
-    expect(canAccessInternacion(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canAccessInternacion(null)).toBe(false);
     expect(
       canAccessInternacion(

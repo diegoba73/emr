@@ -17,6 +17,11 @@ from laboratorio.models import PanelExamen, SolicitudExamen, TipoExamen
 
 
 ESTADOS_ORDEN_TERMINALES = frozenset({"FINALIZADO", "CANCELADO"})
+# Liberan el cupo anti-dup (misma paciente/día/material). INFORMADO_PARCIAL
+# no es terminal del FSM: solo deja de bloquear el alta de otra orden.
+ESTADOS_ORDEN_NO_BLOQUEAN_NUEVA = frozenset(
+    {"FINALIZADO", "CANCELADO", "INFORMADO_PARCIAL"}
+)
 ESTADOS_MICRO_TERMINALES = frozenset({"CANCELADO", "VALIDADO", "INFORMADO"})
 
 # En ambulatorio, estos materiales se unifican en una sola SolicitudExamen.
@@ -24,7 +29,8 @@ MATERIALES_UNIFICABLES_AMBULATORIO = frozenset({"SANGRE", "ORINA", "MATERIA_FECA
 
 MENSAJE_MATERIAL_ACTIVO = (
     "Ya existe una orden activa de {material} para ese día de extracción. "
-    "Esperá a que el laboratorio la finalice, o programalo para otro día."
+    "Esperá a que el laboratorio la finalice o la informe parcialmente, "
+    "o programalo para otro día."
 )
 
 MENSAJE_MICRO_ACTIVO = (
@@ -170,7 +176,7 @@ def ordenes_activas_mismo_dia(paciente_id: int, fecha_programada_toma):
             paciente_id=paciente_id,
             fecha_programada_toma=fecha_programada_toma,
         )
-        .exclude(estado__in=ESTADOS_ORDEN_TERMINALES)
+        .exclude(estado__in=ESTADOS_ORDEN_NO_BLOQUEAN_NUEVA)
         .prefetch_related("tipos_examen__tipo_muestra_requerida", "paneles__tipos_examen__tipo_muestra_requerida")
     )
 

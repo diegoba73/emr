@@ -89,13 +89,14 @@ ROLES_SIN_BYPASS_EMR_STAFF = frozenset({
     *ROLES_ESTUDIO_COMPLEMENTARIO,
 })
 
-# Internación: lectura (incluye kinesiólogo: ve HC, no admite ni da alta).
+# Internación: lectura (incluye kinesiólogo y operadores LIMS: ven camas, no admiten ni dan alta).
 ROLES_INTERNACION = frozenset({
     'admin',
     'medico',
     'enfermeria',
     *ROLES_SECRETARIA_EMR,
     'kinesiologo',
+    *ROLES_LIMS_OPERADOR,
 })
 
 # Carga de hojas médicas de internación (indicaciones, medicación, ingreso HC, SOAP).

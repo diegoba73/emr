@@ -263,6 +263,47 @@ def es_muestra_orina_24h(muestra_codigo: str | None, muestra_nombre: str | None 
     return "24" in raw
 
 
+# Alineado a ExamenesCatalogo (muestrasFrascoEsteril / hisopo-secreción).
+# Códigos de TipoMuestra que no deben caer al default SUERO.
+MUESTRAS_FRASCO_ESTERIL = frozenset(
+    {
+        "LCR",
+        "ESPUTO",
+        "VAGINAL",
+        "URETRAL",
+        "ENDOCERVICAL",
+        "EXUDADO_GENITAL",
+        "EXUDADO_VAGINAL",
+        "EXUDADO_URETRAL",
+    }
+)
+
+
+def es_muestra_frasco_esteril(
+    muestra_codigo: str | None, muestra_nombre: str | None = None
+) -> bool:
+    """True si la muestra exige frasco/tubo estéril (no EDTA/suero)."""
+    m = (muestra_codigo or "").upper().strip()
+    if m in MUESTRAS_FRASCO_ESTERIL:
+        return True
+    if m.startswith(("HISOP", "SEC_", "EXUDADO_")):
+        return True
+    raw = f"{muestra_codigo or ''} {muestra_nombre or ''}".upper()
+    raw = raw.replace("Á", "A").replace("É", "E").replace("Í", "I").replace("Ó", "O").replace("Ú", "U")
+    if not raw.strip():
+        return False
+    needles = (
+        "VAGINAL",
+        "URETRAL",
+        "ENDOCERVICAL",
+        "HISOP",
+        "EXUDADO",
+        "SECRECION",
+        "FLUJO",
+    )
+    return any(n in raw for n in needles)
+
+
 def _tubo_por_muestra(muestra_codigo: str | None, muestra_nombre: str | None = None) -> str | None:
     """Infere tubo desde el tipo de muestra (material IACA)."""
     raw = f"{muestra_codigo or ''} {muestra_nombre or ''}".upper()
@@ -274,6 +315,9 @@ def _tubo_por_muestra(muestra_codigo: str | None, muestra_nombre: str | None = N
     # Orina 24 hs → bidón (antes que frasco genérico)
     if es_muestra_orina_24h(muestra_codigo, muestra_nombre):
         return BIDON_ORINA_24H
+
+    if es_muestra_frasco_esteril(muestra_codigo, muestra_nombre):
+        return FRASCO_ESTERIL
 
     if "ORINA" in raw or raw.strip() in {"ORINA"}:
         return FRASCO_ORINA
@@ -343,6 +387,9 @@ def tubo_codigo_para_examen(
     if m_up == "LCR" or c.endswith("_LCR"):
         return FRASCO_ESTERIL
     if m_up == "ESPUTO" or c.endswith("_ESP"):
+        return FRASCO_ESTERIL
+    # Vaginal / uretral / hisopos / secreciones (p. ej. FVD, FVDCUL).
+    if es_muestra_frasco_esteril(muestra, muestra_nombre):
         return FRASCO_ESTERIL
     if m_up and m_up in todas_muestras_clinicas():
         return CONTENEDOR_ESTERIL

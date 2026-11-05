@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -9,6 +9,7 @@ const theme = createTheme();
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const mockMutateAsync = jest.fn().mockResolvedValue({ id: 1 });
 const mockCloseAsync = jest.fn().mockResolvedValue({ id: 1 });
+const mockMarcarAtendido = jest.fn().mockResolvedValue({ ok: true, actualizado: true });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockAtencion: any = {
@@ -26,6 +27,18 @@ jest.mock('../../hooks', () => ({
   }),
   useSaveConsultaAmbulatoriaMutation: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
   useCloseAtencionMutation: () => ({ mutateAsync: mockCloseAsync, isPending: false }),
+}));
+
+jest.mock('../../../../services/recepcionApi', () => ({
+  marcarAtendidoPorTurno: (...args: unknown[]) => mockMarcarAtendido(...args),
+}));
+
+jest.mock('../../../../services/pacienteProblemas', () => ({
+  establecerProblemaPrincipal: jest.fn().mockResolvedValue({}),
+}));
+
+jest.mock('../../consultaPedidosDraft', () => ({
+  flushConsultaPedidosDrafts: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../AtencionPedidosSection', () => {
@@ -58,6 +71,7 @@ describe('ConsultaAmbulatoriaForm', () => {
   beforeEach(() => {
     mockMutateAsync.mockClear();
     mockCloseAsync.mockClear();
+    mockMarcarAtendido.mockClear();
     sessionStorage.clear();
     mockAtencion = {
       id: 1,
@@ -173,5 +187,40 @@ describe('ConsultaAmbulatoriaForm', () => {
     renderForm();
 
     expect(screen.getByLabelText(/Anamnesis/i)).toHaveValue('Contenido persistido en BD');
+  });
+
+  it('al guardar y cerrar marca la llegada del turno como atendida', async () => {
+    mockAtencion = {
+      id: 1,
+      estado_clinico: 'ABIERTA',
+      fecha_cierre: null,
+      turno_id: 42,
+      consulta_ambulatoria: { id: 99 },
+    };
+    mockMutateAsync.mockResolvedValue({
+      id: 99,
+      atencion_id: 1,
+      anamnesis: 'Motivo de consulta',
+      examen_fisico: 'Examen ok',
+      plan_manejo: 'Alta',
+    });
+
+    const { container } = renderForm();
+
+    fireEvent.change(screen.getByLabelText(/Anamnesis/i), {
+      target: { value: 'Motivo de consulta' },
+    });
+    fireEvent.change(screen.getByLabelText(/Examen físico/i), {
+      target: { value: 'Examen ok' },
+    });
+    fireEvent.change(screen.getByLabelText(/Plan de manejo/i), {
+      target: { value: 'Alta' },
+    });
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => {
+      expect(mockCloseAsync).toHaveBeenCalledWith(1);
+    });
+    expect(mockMarcarAtendido).toHaveBeenCalledWith(42);
   });
 });

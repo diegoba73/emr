@@ -205,6 +205,8 @@ class PedidoClinicoPapel:
     solicitados: list[str] = field(default_factory=list)
     solicitud_id: int | None = None
     resena_examenes: list[tuple[str, str]] = field(default_factory=list)
+    # Texto del formulario de justificación Pro-BNP (dx + labs previos).
+    justificacion_probnp: str = ""
 
     @property
     def incluye_probnp(self) -> bool:
@@ -415,6 +417,14 @@ def construir_pedido_clinico(
             n = _nombre_item(te)
             if n and n not in otros:
                 otros.append(n)
+    justificacion = ""
+    if "PROBNP" in marcados and sol.paciente_id:
+        justificacion = construir_texto_justificacion_probnp(
+            diagnostico=datos.diagnostico,
+            marcadores=marcadores_previos_para_justificacion_probnp(
+                sol.paciente_id, excluir_solicitud_id=sol.pk
+            ),
+        )
     return PedidoClinicoPapel(
         datos=datos,
         marcados=marcados,
@@ -422,6 +432,7 @@ def construir_pedido_clinico(
         solicitados=_examenes_solicitud(sol),
         solicitud_id=sol.pk,
         resena_examenes=examenes_que_requieren_resena(sol, componentes_basicos=componentes_basicos),
+        justificacion_probnp=justificacion,
     )
 
 
@@ -906,6 +917,177 @@ TEXTO_PROBNP_JUSTIFICACION = (
     "Ingresa a internación con signos de congestión al examen físico. Ante la sospecha "
     "de Insuficiencia Cardíaca Descompensada se solicita PRO BNP"
 )
+# Analitos previos usados solo para clasificar el perfil (no se imprimen valores).
+CODIGOS_MARCADORES_PROBNP_JUSTIF = (
+    "PROBNP",
+    "TROP_US",
+    "TROP_I",
+    "CPK_MB",
+    "CPK",
+    "MIOG",
+)
+_CODIGOS_DANIO_MIOCARDICO = frozenset({"TROP_US", "TROP_I", "MIOG"})
+_CODIGOS_ENZIMAS = frozenset({"CPK", "CPK_MB"})
+
+
+@dataclass(frozen=True)
+class MarcadorPrevioJustif:
+    codigo: str
+    alterado: bool
+
+
+def _marcador_previo_esta_alterado(res) -> bool:
+    """True si el resultado previo se considera patológico/fuera de rango."""
+    if getattr(res, "es_patologico", False):
+        return True
+    if getattr(res, "es_critico", False):
+        return True
+    from decimal import Decimal, InvalidOperation
+
+    from laboratorio.catalogo_referencias_clinicas import REFERENCIAS_POR_CODIGO
+
+    codigo = (getattr(getattr(res, "tipo_examen", None), "codigo", None) or "").strip().upper()
+    ref = REFERENCIAS_POR_CODIGO.get(codigo) or {}
+    rmax = ref.get("rango_max")
+    if rmax is None:
+        return False
+    raw = res.valor_numerico
+    if raw is None:
+        try:
+            raw = Decimal(str(res.valor_obtenido).replace(",", ".").strip())
+        except (InvalidOperation, AttributeError, TypeError, ValueError):
+            return False
+    try:
+        return Decimal(str(raw)) > Decimal(str(rmax))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+
+
+def marcadores_previos_para_justificacion_probnp(
+    paciente_id: int, *, excluir_solicitud_id: int | None = None
+) -> list[MarcadorPrevioJustif]:
+    """
+    Último valor informado por marcador cardíaco relevante del paciente.
+    Solo para evaluación interna (alterado / no); no se imprime el valor.
+    """
+    from laboratorio.analisis_longitudinal import ESTADOS_HISTORIAL_VALIDOS
+    from laboratorio.models import ResultadoExamen
+
+    qs = (
+        ResultadoExamen.objects.filter(
+            solicitud__paciente_id=paciente_id,
+            tipo_examen__codigo__in=CODIGOS_MARCADORES_PROBNP_JUSTIF,
+            solicitud__estado__in=ESTADOS_HISTORIAL_VALIDOS,
+        )
+        .exclude(valor_obtenido="")
+        .select_related("solicitud", "tipo_examen")
+        .order_by("-solicitud__fecha_solicitud", "-fecha_validacion", "-id")
+    )
+    if excluir_solicitud_id is not None:
+        qs = qs.exclude(solicitud_id=excluir_solicitud_id)
+
+    por_codigo: dict[str, MarcadorPrevioJustif] = {}
+    for res in qs:
+        codigo = (res.tipo_examen.codigo or "").strip().upper()
+        if not codigo or codigo in por_codigo:
+            continue
+        if not (res.valor_obtenido or "").strip():
+            continue
+        por_codigo[codigo] = MarcadorPrevioJustif(
+            codigo=codigo,
+            alterado=_marcador_previo_esta_alterado(res),
+        )
+
+    return [
+        por_codigo[c]
+        for c in CODIGOS_MARCADORES_PROBNP_JUSTIF
+        if c in por_codigo
+    ]
+
+
+def _perfil_labs_justificacion_probnp(
+    marcadores: list[MarcadorPrevioJustif],
+) -> str:
+    """
+    Clasifica el perfil analítico previo (uso interno).
+    Retornos: sin_previos | probnp_alto | dano_miocardico | enzimas |
+    mixto_alterado | previos_en_rango
+    """
+    if not marcadores:
+        return "sin_previos"
+    alterados = {m.codigo for m in marcadores if m.alterado}
+    if not alterados:
+        return "previos_en_rango"
+    tiene_probnp = "PROBNP" in alterados
+    tiene_dano = bool(alterados & _CODIGOS_DANIO_MIOCARDICO)
+    tiene_enz = bool(alterados & _CODIGOS_ENZIMAS)
+    n_familias = sum((tiene_probnp, tiene_dano, tiene_enz))
+    if n_familias >= 2:
+        return "mixto_alterado"
+    if tiene_probnp:
+        return "probnp_alto"
+    if tiene_dano:
+        return "dano_miocardico"
+    return "enzimas"
+
+
+def construir_texto_justificacion_probnp(
+    *,
+    diagnostico: str = "",
+    marcadores: list[MarcadorPrevioJustif] | None = None,
+) -> str:
+    """
+    Justificación de Pro-BNP basada en diagnóstico; el perfil de labs previos
+    solo varía la redacción (sin valores ni listas de analitos en el texto).
+    """
+    dx = " ".join((diagnostico or "").split()).rstrip(".")
+    perfil = _perfil_labs_justificacion_probnp(list(marcadores or []))
+
+    if not dx and perfil == "sin_previos":
+        return TEXTO_PROBNP_JUSTIFICACION
+
+    base = (
+        f"Ante diagnóstico de {dx}. "
+        if dx
+        else "Ingresa a internación con signos de congestión al examen físico. "
+    )
+
+    variantes = {
+        "sin_previos": (
+            "Ingresa con signos de congestión al examen físico. Ante la sospecha "
+            "de insuficiencia cardíaca descompensada se solicita Pro-BNP."
+        ),
+        "probnp_alto": (
+            "Ingresa con signos de congestión. Por elevación previa del péptido "
+            "natriurético se solicita Pro-BNP para reevaluación del estado congestivo."
+        ),
+        "dano_miocardico": (
+            "Ingresa con signos de congestión y controles previos con marcadores "
+            "de daño miocárdico alterados; se solicita Pro-BNP para discriminar "
+            "el componente congestivo."
+        ),
+        "enzimas": (
+            "Ingresa con signos de congestión y enzimas cardíacas previamente "
+            "alteradas; se solicita Pro-BNP para orientar el componente congestivo."
+        ),
+        "mixto_alterado": (
+            "Ingresa con signos de congestión y perfil cardíaco previo alterado; "
+            "se solicita Pro-BNP para reevaluación integral del estado congestivo."
+        ),
+        "previos_en_rango": (
+            "Ingresa con signos de congestión pese a controles cardíacos previos "
+            "dentro de rango; se solicita Pro-BNP ante nueva sospecha de descompensación."
+        ),
+    }
+    cuerpo = variantes.get(perfil, variantes["sin_previos"])
+    if dx and perfil == "sin_previos":
+        # Evita repetir "Ante diagnóstico..." + otra frase de sospecha genérica.
+        return (
+            f"Ante diagnóstico de {dx}. Ingresa a internación con signos de congestión "
+            "al examen físico; ante la sospecha de insuficiencia cardíaca descompensada "
+            "se solicita Pro-BNP."
+        )
+    return base + cuerpo
 
 
 def _marco(c: rl_canvas.Canvas) -> None:
@@ -964,7 +1146,9 @@ def _dibujar_probnp_solicitud(c: rl_canvas.Canvas, d: DatosPedidoPapel) -> None:
     _campo_adj(c, 226, "Dx:", d.diagnostico)
 
 
-def _dibujar_probnp_justificacion(c: rl_canvas.Canvas, d: DatosPedidoPapel) -> None:
+def _dibujar_probnp_justificacion(
+    c: rl_canvas.Canvas, d: DatosPedidoPapel, texto: str | None = None
+) -> None:
     _marco(c)
     _logo_centrado(c, 20)
     _campo_adj(c, 86, "Nombre y apellido:", d.paciente)
@@ -1001,9 +1185,11 @@ def _dibujar_probnp_justificacion(c: rl_canvas.Canvas, d: DatosPedidoPapel) -> N
     for y_mm in lineas_ant:
         _linea_punteada(c, ADJ_X, ADJ_DERECHA, _y(y_mm))
 
+    cuerpo = (texto or "").strip() or TEXTO_PROBNP_JUSTIFICACION
     c.setFont(FONT, FS_ADJ)
+    # Hasta 5 líneas antes de firma/sello (~y 212).
     for i, txt in enumerate(
-        _partir_lineas(c, TEXTO_PROBNP_JUSTIFICACION, FONT, FS_ADJ, ADJ_DERECHA - ADJ_X)
+        _partir_lineas(c, cuerpo, FONT, FS_ADJ, ADJ_DERECHA - ADJ_X)[:5]
     ):
         c.drawString(ADJ_X, _y(166 + i * 8.6), txt)
 
@@ -1080,7 +1266,10 @@ def _armar_slots(
             if len(slots) % PEDIDOS_POR_HOJA:
                 slots.append(None)
             slots.append(lambda c, d=ped.datos: _dibujar_probnp_solicitud(c, d))
-            slots.append(lambda c, d=ped.datos: _dibujar_probnp_justificacion(c, d))
+            justif = ped.justificacion_probnp or TEXTO_PROBNP_JUSTIFICACION
+            slots.append(
+                lambda c, d=ped.datos, t=justif: _dibujar_probnp_justificacion(c, d, t)
+            )
     return slots
 
 

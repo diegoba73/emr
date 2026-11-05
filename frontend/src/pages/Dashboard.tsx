@@ -123,7 +123,16 @@ const quickActions: QuickActionCard[] = [
     icon: <Hotel />,
     path: '/internacion',
     color: '#9f7aea',
-    roles: ['medico', 'admin', 'enfermeria', 'secretaria', 'secretaria_lab', 'kinesiologo'],
+    roles: [
+      'medico',
+      'admin',
+      'enfermeria',
+      'secretaria',
+      'secretaria_lab',
+      'kinesiologo',
+      'laboratorio',
+      'bioquimico',
+    ],
   },
   {
     title: 'Estadísticas',

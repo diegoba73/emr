@@ -258,17 +258,23 @@ export function canAccessBiDashboard(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'bioquimico';
 }
 
-/** Panel de internación: médico (completo), enfermería, kinesiólogo, admin y ambas secretarías.
+/** Panel de internación: lectura de camas/internados.
+ * Médico/enfermería/secretaría/kine/admin; operadores LIMS (laboratorio/bioquímico) solo lectura.
  * Requiere capacidad de sede (CEHTA no tiene internación).
  */
 export function canAccessInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
-  if (isLaboratorioRole(user)) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
   if (!userHasCapacidad(user, 'internacion')) return false;
   const rol = normalizeRol(user);
-  return rol === 'medico' || rol === 'enfermeria' || isSecretariaEmrRole(rol) || rol === 'kinesiologo';
+  return (
+    rol === 'medico' ||
+    rol === 'enfermeria' ||
+    isSecretariaEmrRole(rol) ||
+    rol === 'kinesiologo' ||
+    isOperadorLimsRole(rol)
+  );
 }
 
 /** Infraestructura de camas/sectores: sin secretaría. */

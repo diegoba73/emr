@@ -63,6 +63,59 @@ def test_ya_voy_recepcion_no_cambia_estado(puesto, paciente):
 
 
 @pytest.mark.django_db
+def test_marcar_atendido_por_turno_id_desde_en_atencion(puesto, paciente):
+    """Cerrar consulta → llegada del turno pasa a ATENDIDO."""
+    from datetime import timedelta
+
+    from django.contrib.auth import get_user_model
+    from medicos.models import Medico
+    from turnos.models import Recurso, Turno
+
+    User = get_user_model()
+    medico_user = User.objects.create_user(username='med_cierre', password='x', rol='medico')
+    medico = Medico.objects.create(
+        user=medico_user,
+        nombre='Luis',
+        apellido='Cierre',
+        matricula=f'M-CI-{medico_user.pk}',
+    )
+    recurso = Recurso.objects.create(
+        nombre='Consultorio Cierre', tipo_recurso='CONSULTORIO', activo=True
+    )
+    ahora = timezone.now()
+    turno = Turno.objects.create(
+        paciente=paciente,
+        medico=medico,
+        recurso=recurso,
+        fecha_hora_inicio=ahora,
+        fecha_hora_fin=ahora + timedelta(minutes=20),
+        estado='CONFIRMADO',
+    )
+    llegada = LlegadaRecepcion.objects.create(
+        paciente=paciente,
+        turno=turno,
+        puesto=puesto,
+        fecha=timezone.localdate(),
+        tipo_actividad='CONSULTA',
+        estado_flujo=LlegadaRecepcion.EstadoFlujo.EN_ATENCION,
+        zona_llamado='MEDICO',
+        codigo_llamado='T01',
+        prefijo_llamado='T',
+        checkin_en=ahora,
+        destino_recurso=recurso,
+        destino_label=recurso.nombre,
+    )
+    out = services.marcar_atendido_por_turno_id(turno.pk)
+    assert out is not None
+    assert out.estado_flujo == LlegadaRecepcion.EstadoFlujo.ATENDIDO
+    # Idempotente
+    out2 = services.marcar_atendido_por_turno_id(turno.pk)
+    assert out2 is not None
+    assert out2.estado_flujo == LlegadaRecepcion.EstadoFlujo.ATENDIDO
+    assert services.marcar_atendido_por_turno_id(999999) is None
+
+
+@pytest.mark.django_db
 def test_ya_voy_medico_pasa_a_en_atencion(puesto, paciente):
     from datetime import timedelta
 

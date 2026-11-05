@@ -589,6 +589,36 @@ def marcar_atendido(llegada: LlegadaRecepcion) -> LlegadaRecepcion:
     return llegada
 
 
+def marcar_atendido_por_turno_id(
+    turno_id: int, *, fecha=None
+) -> LlegadaRecepcion | None:
+    """
+    Tras cerrar consulta: pasa a ATENDIDO la llegada activa del turno (hoy).
+    Idempotente si ya está ATENDIDO. No toca CANCELADO / NO_ASISTIO.
+    """
+    from django.utils import timezone as dj_tz
+
+    if not turno_id:
+        return None
+    dia = fecha or dj_tz.localdate()
+    llegada = (
+        LlegadaRecepcion.objects.filter(turno_id=turno_id, fecha=dia)
+        .exclude(
+            estado_flujo__in=[
+                LlegadaRecepcion.EstadoFlujo.CANCELADO,
+                LlegadaRecepcion.EstadoFlujo.NO_ASISTIO,
+            ]
+        )
+        .order_by('-id')
+        .first()
+    )
+    if not llegada:
+        return None
+    if llegada.estado_flujo == LlegadaRecepcion.EstadoFlujo.ATENDIDO:
+        return llegada
+    return marcar_atendido(llegada)
+
+
 @transaction.atomic
 def marcar_no_asistio(llegada: LlegadaRecepcion) -> LlegadaRecepcion:
     llegada = LlegadaRecepcion.objects.select_for_update().get(pk=llegada.pk)

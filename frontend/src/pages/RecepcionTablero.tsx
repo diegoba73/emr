@@ -700,88 +700,93 @@ const RecepcionTablero: React.FC = () => {
         </Box>
       ) : (
         <>
-          <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-            1. Turnos de hoy sin registro en recepción ({pendientes.length})
-          </Typography>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Hora</TableCell>
-                  <TableCell>Paciente</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Médico / recurso</TableCell>
-                  <TableCell>Puesto sugerido</TableCell>
-                  <TableCell align="right">Acción</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {pendientes.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <Typography color="text.secondary">
-                        No hay turnos pendientes de registro.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  pendientes.map((t) => (
-                    <TableRow key={t.turno_id} hover>
-                      <TableCell>
-                        {new Date(t.inicio).toLocaleTimeString('es-AR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Typography fontWeight={600}>{t.paciente_nombre}</Typography>
-                        <Typography variant="caption">DNI {t.paciente_dni || '—'}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={TIPO_LABEL[t.tipo_actividad] || t.tipo_actividad}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {t.medico_nombre || '—'}
-                        {t.recurso_nombre && (
-                          <Typography variant="caption" display="block">
-                            {t.recurso_nombre}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>{t.puesto_sugerido_label}</TableCell>
-                      <TableCell align="right">
-                        {soyMedico ? (
-                          <Typography variant="caption" color="text.secondary">
-                            Esperando registro de recepción
-                          </Typography>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            disabled={busyId === `t-${t.turno_id}`}
-                            onClick={() => void onCheckin(t)}
-                          >
-                            Registrar llegada
-                          </Button>
-                        )}
-                      </TableCell>
+          {/* Extracciones (L): walk-in / orden de llegada — sin turnos de agenda. */}
+          {!soyLab && (
+            <>
+              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
+                1. Turnos de hoy sin registro en recepción ({pendientes.length})
+              </Typography>
+              <TableContainer component={Paper} sx={{ mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Hora</TableCell>
+                      <TableCell>Paciente</TableCell>
+                      <TableCell>Tipo</TableCell>
+                      <TableCell>Médico / recurso</TableCell>
+                      <TableCell>Puesto sugerido</TableCell>
+                      <TableCell align="right">Acción</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {pendientes.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <Typography color="text.secondary">
+                            No hay turnos pendientes de registro.
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      pendientes.map((t) => (
+                        <TableRow key={t.turno_id} hover>
+                          <TableCell>
+                            {new Date(t.inicio).toLocaleTimeString('es-AR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            <Typography fontWeight={600}>{t.paciente_nombre}</Typography>
+                            <Typography variant="caption">DNI {t.paciente_dni || '—'}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={TIPO_LABEL[t.tipo_actividad] || t.tipo_actividad}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {t.medico_nombre || '—'}
+                            {t.recurso_nombre && (
+                              <Typography variant="caption" display="block">
+                                {t.recurso_nombre}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>{t.puesto_sugerido_label}</TableCell>
+                          <TableCell align="right">
+                            {soyMedico ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Esperando registro de recepción
+                              </Typography>
+                            ) : (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                disabled={busyId === `t-${t.turno_id}`}
+                                onClick={() => void onCheckin(t)}
+                              >
+                                Registrar llegada
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
 
           <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-            2. En recepción / en curso ({enCurso.length})
+            {soyLab ? '1' : '2'}. En recepción / en curso ({enCurso.length})
           </Typography>
           {renderTablaEnCurso(enCurso)}
 
           <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-            3. Atendidos — consulta guardada ({atendidos.length})
+            {soyLab ? '2' : '3'}. Atendidos — consulta guardada ({atendidos.length})
           </Typography>
           {renderTablaEnCurso(atendidos)}
         </>

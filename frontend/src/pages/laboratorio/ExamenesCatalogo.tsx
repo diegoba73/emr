@@ -178,7 +178,9 @@ const ExamenesCatalogo: React.FC = () => {
 
   /**
    * Muestras que no van en tubo EDTA/suero sino en frasco estéril
-   * (LCR, esputo, hisopos y demás materiales de pedido no sangre/orina).
+   * (LCR, esputo, vaginal/hisopos y demás materiales de pedido no sangre/orina).
+   * Bloqueo intencional del select: el payload de guardado siempre persiste FRASCO_ESTERIL.
+   * Alineado a laboratorio.tubos_catalogo.MUESTRAS_FRASCO_ESTERIL / es_muestra_frasco_esteril.
    */
   const muestrasFrascoEsteril = useMemo(() => {
     // Códigos legacy / clínicos frecuentes de secreciones (además de materiales de pedido).
@@ -307,7 +309,20 @@ const ExamenesCatalogo: React.FC = () => {
 
   const openEdit = (row: LimsTipoExamen) => {
     setEditingId(row.id);
-    setForm(formFromRow(row));
+    const base = formFromRow(row);
+    const codigoMuestra = (
+      tiposMuestra.find((t) => t.id === base.tipo_muestra_requerida)?.codigo || ''
+    ).toUpperCase();
+    const fuerzaFrasco =
+      muestrasFrascoEsteril.has(codigoMuestra) ||
+      codigoMuestra.startsWith('HISOP') ||
+      codigoMuestra.startsWith('SEC_') ||
+      codigoMuestra.startsWith('EXUDADO_');
+    setForm(
+      fuerzaFrasco && frascoEsterilId != null
+        ? { ...base, tipo_contenedor: frascoEsterilId }
+        : base
+    );
     setDialogOpen(true);
   };
 

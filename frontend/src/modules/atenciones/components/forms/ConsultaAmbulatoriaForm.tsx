@@ -19,6 +19,7 @@ import { useSaveConsultaAmbulatoriaMutation, useAtencionQuery, useCloseAtencionM
 import { flushConsultaPedidosDrafts } from '../../consultaPedidosDraft';
 import SignosVitalesPanel from '../../../../components/clinical/SignosVitalesPanel';
 import { establecerProblemaPrincipal } from '../../../../services/pacienteProblemas';
+import { marcarAtendidoPorTurno } from '../../../../services/recepcionApi';
 
 interface ConsultaAmbulatoriaFormProps {
   atencionId: number;
@@ -347,6 +348,24 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
         // Toast del hook; la clínica ya está persistida.
         clearDraft();
         return;
+      }
+
+      // Propagar a sala: EN_ATENCION → ATENDIDO (sin botón extra).
+      // El backend cerrar_atencion también lo intenta; este call es idempotente.
+      const turnoId =
+        typeof atencion?.turno === 'object' && atencion?.turno
+          ? atencion.turno.id
+          : typeof atencion?.turno === 'number'
+            ? atencion.turno
+            : atencion?.turno_id ?? null;
+      if (turnoId) {
+        try {
+          await marcarAtendidoPorTurno(Number(turnoId));
+        } catch {
+          toast.error(
+            'Consulta cerrada, pero no se pudo actualizar la sala de espera. Revisá el tablero de recepción.'
+          );
+        }
       }
 
       clearDraft();

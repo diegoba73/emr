@@ -36,8 +36,8 @@ No hay roles `secretaria_cehta` / `secretaria_icpl`. El aislamiento es por **`Us
 
 Filtra: recursos, turnos (vía `recurso.ubicacion`), médicos (solape de `sedes`), puestos/llegadas de recepción, orígenes LIMS. **No** filtra pacientes. SoT: `usuarios/sedes.py`.
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
-| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO` |
-| `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`) |
+| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO`; **Internación solo lectura** (camas/internados; sede con capacidad `internacion`) |
+| `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`); misma lectura de Internación |
 | `paciente` | Portal propio |
 
 Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pacientes`).
