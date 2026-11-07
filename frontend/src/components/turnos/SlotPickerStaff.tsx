@@ -18,6 +18,7 @@ import {
   type TipoAgenda,
 } from '../../services/agendaMedica';
 import { getSafeClinicalActionMessage } from '../../utils/apiError';
+import { formatHoraDisplay } from '../../utils/dateFieldFormat';
 
 const fechaLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -285,10 +286,7 @@ const SlotPickerStaff: React.FC<SlotPickerStaffProps> = ({
           )}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {slots.map((slot) => {
-              const hora = new Date(slot.inicio).toLocaleTimeString('es-AR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              const hora = formatHoraDisplay(new Date(slot.inicio));
               const selected = value?.inicio === slot.inicio;
               return (
                 <Button

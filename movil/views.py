@@ -307,8 +307,10 @@ class InstitucionMovil(APIView):
             return Response({'detail': 'Institución móvil no configurada.'}, status=503)
         from recepcion.kiosco_origen import resolver_origen_espera_kiosco
 
-        origen = (resolver_origen_espera_kiosco(request).get('espera_origin') or '').rstrip('/')
-        kiosco_anuncio_url = f'{origen}/kiosco-recepcion' if origen else ''
+        from recepcion.kiosco_origen import url_anuncio_kiosco
+
+        origen = resolver_origen_espera_kiosco(request).get('espera_origin') or ''
+        kiosco_anuncio_url = url_anuncio_kiosco(origen)
         return Response(
             {
                 'code': settings.MOBILE_INSTITUTION_CODE,

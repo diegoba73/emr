@@ -440,11 +440,18 @@ class RefreshTokenSerializer(serializers.Serializer):
 
 class UserListSerializer(serializers.ModelSerializer):
     """
-    Serializer simplificado para listar usuarios
+    Serializer simplificado para listar usuarios.
+
+    Incluye ``sedes`` / ``telefono`` / ``is_staff`` porque la UI de gestión
+    edita desde el listado (sin retrieve previo); omitirlos hacía que al
+    guardar se enviaran defaults vacíos y se borrara la asignación.
     """
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'rol', 'is_active']
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'rol', 'telefono', 'sedes', 'is_active', 'is_staff', 'is_superuser',
+        ]
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -458,7 +465,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'rol', 'telefono', 'is_active', 'is_staff', 'is_superuser',
+            'rol', 'telefono', 'sedes', 'is_active', 'is_staff', 'is_superuser',
             'date_joined', 'last_login', 'medico', 'paciente'
         ]
     

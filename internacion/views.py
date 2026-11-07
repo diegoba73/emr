@@ -185,12 +185,15 @@ class InternacionViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         action = getattr(self, 'action', None)
-        # Excepción acotada: secretaría solo puede corregir la dieta por PATCH.
+        # Excepción acotada: secretaría solo puede corregir la dieta por PATCH
+        # (requiere escritura de sede; CEHTA es solo lectura).
         if (action == 'partial_update'
                 and str(getattr(self.request.user, 'rol', '')).strip().lower() in ROLES_SECRETARIA_EMR
                 and set(self.request.data).issubset({'tipo_dieta_id', 'dieta_texto'})
                 and set(self.request.data)):
-            return [IsAuthenticated(), IsInternacionStaff()]
+            from usuarios.sedes import usuario_tiene_capacidad
+            if usuario_tiene_capacidad(self.request.user, 'internacion_escritura'):
+                return [IsAuthenticated(), IsInternacionStaff()]
         if action == 'alta':
             return [IsAuthenticated(), IsInternacionAlta()]
         if action == 'iniciar_evolucion':

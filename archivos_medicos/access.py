@@ -178,13 +178,17 @@ def validar_atencion_archivo_para_usuario(user, atencion: Atencion, paciente_id:
                 'Médico no vinculado. Tu usuario no tiene perfil de médico asociado.'
             )
         if atencion.medico_principal_id and atencion.medico_principal_id != medico.id:
-            principal = atencion.medico_principal
-            if principal is not None and principal.user_id is None:
-                raise ValueError(
-                    'Esta atención está asignada a un médico del catálogo sin usuario de sistema. '
-                    'Pedile a administración que vincule ese médico a un login o reasigne la atención.'
-                )
-            raise ValueError('No puede adjuntar archivos a atenciones ajenas.')
+            from turnos.models import Atencion as AtencionModel
+
+            # Guardia compartida: cualquier médico del tablero puede adjuntar.
+            if atencion.contexto_atencion != AtencionModel.ContextoAtencion.GUARDIA:
+                principal = atencion.medico_principal
+                if principal is not None and principal.user_id is None:
+                    raise ValueError(
+                        'Esta atención está asignada a un médico del catálogo sin usuario de sistema. '
+                        'Pedile a administración que vincule ese médico a un login o reasigne la atención.'
+                    )
+                raise ValueError('No puede adjuntar archivos a atenciones ajenas.')
         paciente = Paciente.objects.get(pk=paciente_id)
         if not medico_puede_acceder_paciente(medico, paciente):
             raise ValueError('No tiene vínculo clínico con el paciente de la atención.')

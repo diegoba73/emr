@@ -29,7 +29,7 @@ export function getAppSegmentTitle(pathname: string, user: User | null | undefin
   if (p.startsWith('/estudios-complementarios')) {
     return isPacienteRole(user)
       ? 'Mis turnos programados'
-      : 'Programación de turnos';
+      : 'Agenda clínica';
   }
   if (p.startsWith('/solicitudes/') && p !== '/solicitudes') {
     return isPacienteRole(user) ? 'Detalle de análisis' : 'Detalle de orden';

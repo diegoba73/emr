@@ -38,6 +38,7 @@ import type {
   TurnoPendienteCheckin,
 } from '../types/recepcion';
 import { getSafeClinicalActionMessage } from '../utils/apiError';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 import { useData } from '../contexts/DataContext';
 import { normalizeRol } from '../utils/permissions';
 import { apiService } from '../services/api';
@@ -108,20 +109,13 @@ function esColaDelMedico(l: LlegadaRecepcion): boolean {
   return l.estado_flujo === 'LLAMADO' && (l.zona_llamado || '') === 'MEDICO';
 }
 
+/** Cola por hora de turno. Anticipados quedan visibles y accionables. */
 function sortLlegadas(rows: LlegadaRecepcion[]): LlegadaRecepcion[] {
-  const prioridadOrden: Record<string, number> = {
-    EN_HORARIO: 0,
-    TARDE: 1,
-    ANTICIPADO: 2,
-    SIN_TURNO: 3,
-  };
   return [...rows].sort((a, b) => {
-    const pa = prioridadOrden[a.prioridad?.codigo || 'SIN_TURNO'] ?? 9;
-    const pb = prioridadOrden[b.prioridad?.codigo || 'SIN_TURNO'] ?? 9;
-    if (pa !== pb) return pa - pb;
     const ta = a.turno_inicio ? new Date(a.turno_inicio).getTime() : Number.MAX_SAFE_INTEGER;
     const tb = b.turno_inicio ? new Date(b.turno_inicio).getTime() : Number.MAX_SAFE_INTEGER;
-    return ta - tb;
+    if (ta !== tb) return ta - tb;
+    return (a.id || 0) - (b.id || 0);
   });
 }
 
@@ -383,16 +377,23 @@ const RecepcionTablero: React.FC = () => {
       );
     }
 
+    const secretariaPuedeCheckinMedico =
+      soySecretaria &&
+      Boolean(l.turno) &&
+      !esColaDelMedico(l) &&
+      ['EN_ESPERA_RECEPCION', 'LLAMADO'].includes(l.estado_flujo);
+
     return (
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
-        {l.estado_flujo === 'EN_ESPERA_RECEPCION' && soySecretaria && l.turno && (
+        {secretariaPuedeCheckinMedico && (
           <Button
             size="small"
-            variant="outlined"
+            variant="contained"
+            color="success"
             disabled={busy}
             onClick={() => void onAccion(l, 'derivar-espera')}
           >
-            Pasar a médico
+            Check-in
           </Button>
         )}
         {((soyMedico &&
@@ -414,21 +415,18 @@ const RecepcionTablero: React.FC = () => {
             {l.estado_flujo === 'LLAMADO' ? 'Rellamar' : 'Llamar'}
           </Button>
         )}
-        {(l.estado_flujo === 'LLAMADO' || l.estado_flujo === 'EN_ATENCION') && (
+        {soyMedico && (l.estado_flujo === 'LLAMADO' || l.estado_flujo === 'EN_ATENCION') && (
           <Button
             size="small"
-            variant={soyMedico ? 'contained' : 'outlined'}
+            variant="contained"
             disabled={busy}
             onClick={() => void onAccion(l, 'en-atencion')}
           >
-            {soyMedico
-              ? l.estado_flujo === 'EN_ATENCION'
-                ? 'Abrir consulta'
-                : 'En atención'
-              : 'En atención'}
+            {l.estado_flujo === 'EN_ATENCION' ? 'Abrir consulta' : 'En atención'}
           </Button>
         )}
-        {(soyLab || soySecretaria) && ['LLAMADO', 'EN_ATENCION'].includes(l.estado_flujo) && (
+        {((soyMedico && ['LLAMADO', 'EN_ATENCION'].includes(l.estado_flujo)) ||
+          (soyLab && ['LLAMADO', 'EN_ATENCION'].includes(l.estado_flujo))) && (
           <Button
             size="small"
             color="success"
@@ -639,8 +637,8 @@ const RecepcionTablero: React.FC = () => {
         ) : (
           <>
             El paciente se anuncia por QR o app. La cola se filtra por los tipos de tu cobertura.
-            Cuando esté OK administrativamente, usá <strong>Pasar a médico</strong> para enviarlo a
-            la cola del médico.
+            Cuando esté OK administrativamente, usá <strong>Check-in</strong> para enviarlo a la cola
+            del médico. <strong>En atención</strong> y <strong>Atendido</strong> los marca el médico.
           </>
         )}
       </Alert>
@@ -731,10 +729,7 @@ const RecepcionTablero: React.FC = () => {
                       pendientes.map((t) => (
                         <TableRow key={t.turno_id} hover>
                           <TableCell>
-                            {new Date(t.inicio).toLocaleTimeString('es-AR', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatHoraDisplay(new Date(t.inicio))}
                           </TableCell>
                           <TableCell>
                             <Typography fontWeight={600}>{t.paciente_nombre}</Typography>

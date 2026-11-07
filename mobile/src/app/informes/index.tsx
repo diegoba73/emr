@@ -3,21 +3,25 @@ import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api } from '../../lib/api';
 import { InformeResumen } from '../../lib/types';
+import { useSession } from '../../lib/session';
 import { Action, Body, Card, colors, ErrorText, Field, Loading, Page, Title } from '../../components/ui';
 
 export default function InformesList() {
+  const { user } = useSession();
   const [rows, setRows] = useState<InformeResumen[]>([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const esPaciente = user?.rol === 'paciente';
 
   const load = useCallback(async (search = q) => {
     setLoading(true);
     setError('');
     try {
-      const path = search.trim()
-        ? `/informes/?q=${encodeURIComponent(search.trim())}`
-        : '/informes/';
+      const path =
+        search.trim() && !esPaciente
+          ? `/informes/?q=${encodeURIComponent(search.trim())}`
+          : '/informes/';
       const data = await api<{ results: InformeResumen[] }>(path);
       setRows(data.results || []);
     } catch (e) {
@@ -25,7 +29,7 @@ export default function InformesList() {
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, [q, esPaciente]);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,20 +41,23 @@ export default function InformesList() {
     <Page>
       <Title>Informes</Title>
       <Body>
-        Médico y paciente solo ven informes validados (con PDF). Bioquímico y laboratorio también
-        ven la bandeja en proceso para validar.
+        {esPaciente
+          ? 'Solo ves tus informes validados, con el PDF cuando esté disponible.'
+          : 'Médico y paciente solo ven informes validados (con PDF). Bioquímico y laboratorio también ven la bandeja en proceso para validar.'}
       </Body>
-      <Card>
-        <Field
-          label="Buscar"
-          placeholder="Número, paciente o DNI"
-          value={q}
-          onChangeText={setQ}
-          autoCorrect={false}
-          onSubmitEditing={() => void load(q)}
-        />
-        <Action title="Buscar" secondary disabled={loading} onPress={() => void load(q)} />
-      </Card>
+      {!esPaciente && (
+        <Card>
+          <Field
+            label="Buscar"
+            placeholder="Número, paciente o DNI"
+            value={q}
+            onChangeText={setQ}
+            autoCorrect={false}
+            onSubmitEditing={() => void load(q)}
+          />
+          <Action title="Buscar" secondary disabled={loading} onPress={() => void load(q)} />
+        </Card>
+      )}
       <ErrorText text={error} />
       {loading ? (
         <Loading />

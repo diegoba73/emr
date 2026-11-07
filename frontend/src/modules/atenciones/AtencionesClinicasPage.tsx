@@ -25,6 +25,7 @@ import { AtencionFilters, useAtencionesQuery } from './hooks';
 import { Atencion, Medico } from '../../types';
 import AtencionDetailDrawer from './components/AtencionDetailDrawer';
 import { canOperateAtenciones } from '../../utils/permissions';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 const contextoAtencionOptions = [
   { value: '', label: 'Todos' },
@@ -68,9 +69,7 @@ const estadoClinicoOptions = [
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  return formatFechaHoraDisplay(value);
 };
 
 const getEstadoColor = (estado?: string) => {

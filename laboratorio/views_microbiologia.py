@@ -825,6 +825,25 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=["get"], url_path="historial-cultivo")
+    def historial_cultivo(self, request, pk=None):
+        """
+        Episodios previos del mismo tipo de cultivo (mismo paciente).
+
+        No filtra por microorganismo: muestra cualquier aislado previo y si el
+        cultivo fue con/sin desarrollo. Query ``n`` (default 10, máx. 50).
+        """
+        from laboratorio.analisis_historial_microbiologia import historial_cultivo_estudio
+
+        estudio = self.get_object()
+        raw_n = request.query_params.get("n", "10")
+        try:
+            n = int(raw_n)
+        except (TypeError, ValueError):
+            n = 10
+        data = historial_cultivo_estudio(estudio, limit=n)
+        return Response(data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=["post"], url_path="desvalidar")
     def desvalidar(self, request, pk=None):
         """

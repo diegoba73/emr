@@ -26,6 +26,9 @@ export interface ListEstudiosParams {
   page?: number;
   /** A5: filtra en servidor antes de paginar */
   bandeja?: string;
+  /** YYYY-MM-DD — mismo criterio que bandejas-resumen */
+  fecha_desde?: string;
+  fecha_hasta?: string;
 }
 
 function unwrapList<T>(data: T[] | ApiResponse<T>): T[] {

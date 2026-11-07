@@ -232,20 +232,24 @@ class TestSerializersDoNotLeakPassword:
             username='leak_list',
             email='leak_list@hd.test',
             password='Sup3rStr0ng!Pass',
+            sedes=['CEHTA'],
         )
         data = UserListSerializer(u).data
         assert 'password' not in data
         assert 'password_confirm' not in data
+        assert data.get('sedes') == ['CEHTA']
 
     def test_user_detail_serializer_no_password(self):
         u = User.objects.create_user(
             username='leak_detail',
             email='leak_detail@hd.test',
             password='Sup3rStr0ng!Pass',
+            sedes=['ICPL'],
         )
         data = UserDetailSerializer(u).data
         assert 'password' not in data
         assert 'password_confirm' not in data
+        assert data.get('sedes') == ['ICPL']
 
 
 # ---------------------------------------------------------------------------

@@ -547,6 +547,8 @@ export interface Turno extends BaseModel {
   fecha_hora_fin?: string;
   motivo_reserva?: string;
   motivo_consulta?: string; // Mantener para compatibilidad
+  /** Sobreturno creado por secretaría sobre un slot ya ocupado. */
+  es_sobreturno?: boolean;
   estado: 'DISPONIBLE' | 'RESERVADO' | 'CONFIRMADO' | 'REALIZADO' | 'CANCELADO' | 'REAGENDADO';
   prioridad?: 'NORMAL' | 'ALTA' | 'URGENTE';
   notas_administrativas?: string;

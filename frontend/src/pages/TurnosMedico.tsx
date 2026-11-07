@@ -5,6 +5,7 @@ import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../utils/apiError';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 import './TurnosMedico.css';
 
 /** Pantalla legacy: no está enrutada en App.tsx (agenda médica usa /turnos + TurnoModal). */
@@ -245,10 +246,7 @@ const TurnosMedico: React.FC = () => {
               <div className="turno-medico-header">
                 <div className="turno-medico-time">
                   <span className="time">
-                    {new Date(turno.fecha_hora_inicio).toLocaleTimeString('es-ES', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {formatHoraDisplay(new Date(turno.fecha_hora_inicio))}
                   </span>
                   <span className="date">
                     {new Date(turno.fecha_hora_inicio).toLocaleDateString('es-ES', {

@@ -68,6 +68,55 @@ class TestUserManagementRouting:
         response = api_client.get('/api/usuarios/users/')
         assert response.status_code == status.HTTP_200_OK, response.data
 
+    def test_list_incluye_sedes_y_roundtrip_cehta(self, api_client, staff_admin):
+        """Alta CEHTA debe verse en el listado y sobrevivir un PUT de edición."""
+        create = api_client.post(
+            '/api/usuarios/users/',
+            {
+                'username': 'sec_cehta_rt',
+                'email': 'sec_cehta_rt@um.test',
+                'password': 'Sup3rStr0ng!Pass',
+                'password_confirm': 'Sup3rStr0ng!Pass',
+                'first_name': 'Sec',
+                'last_name': 'Cehta',
+                'rol': 'secretaria',
+                'sedes': ['CEHTA'],
+                'is_active': True,
+            },
+            format='json',
+        )
+        assert create.status_code == status.HTTP_201_CREATED, create.data
+        uid = create.data['id']
+        assert create.data.get('sedes') == ['CEHTA']
+
+        listing = api_client.get('/api/usuarios/users/')
+        assert listing.status_code == status.HTTP_200_OK, listing.data
+        payload = listing.data
+        rows = payload['results'] if isinstance(payload, dict) and 'results' in payload else payload
+        row = next(r for r in rows if r['id'] == uid)
+        assert row.get('sedes') == ['CEHTA']
+        assert 'telefono' in row
+        assert 'is_staff' in row
+
+        update = api_client.put(
+            f'/api/usuarios/users/{uid}/',
+            {
+                'username': 'sec_cehta_rt',
+                'email': 'sec_cehta_rt@um.test',
+                'first_name': 'Sec',
+                'last_name': 'Cehta',
+                'telefono': '',
+                'rol': 'secretaria',
+                'sedes': ['CEHTA'],
+                'is_active': True,
+                'is_staff': False,
+            },
+            format='json',
+        )
+        assert update.status_code == status.HTTP_200_OK, update.data
+        assert update.data.get('sedes') == ['CEHTA']
+        assert User.objects.get(pk=uid).sedes == ['CEHTA']
+
     def test_non_staff_get_users_forbidden(self, api_client, plain_user):
         response = api_client.get('/api/usuarios/users/')
         assert response.status_code in (

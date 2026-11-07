@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Chip, Paper, Typography } from '@mui/material';
 import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
+import HistorialCultivoMicroPanel from './HistorialCultivoMicroPanel';
 import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
 import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
 
@@ -39,6 +40,7 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
   const puedeImprimirEtiqueta = Boolean(onReimprimirEtiquetas) && e !== 'CANCELADO';
   const puedeImprimirTalon = Boolean(onImprimirTalon) && e !== 'CANCELADO';
   return (
+    <>
     <Paper sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Estudio {estudio.numero || estudio.id}</Typography>
@@ -173,6 +175,11 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
         </Typography>
       )}
     </Paper>
+    <HistorialCultivoMicroPanel
+      estudioId={estudio.id}
+      tipoCultivoNombre={estudio.tipo_cultivo_nombre || estudio.tipo_estudio}
+    />
+    </>
   );
 };
 

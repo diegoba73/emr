@@ -1031,6 +1031,31 @@ def _perfil_labs_justificacion_probnp(
     return "enzimas"
 
 
+def _dx_sugiere_insuficiencia_cardiaca(diagnostico: str) -> bool:
+    """True si el dx ya nombra IC/congestión (evita repetir la misma idea)."""
+    d = (diagnostico or "").casefold()
+    claves = (
+        "insuficiencia card",
+        "insuf. card",
+        "insuf card",
+        "falla card",
+        "fallo card",
+        "ic descompens",
+        "icc ",
+        "icc,",
+        "icc.",
+        "congesti",
+        "probnp",
+        "pro-bnp",
+        "pro bnp",
+        "péptido natriurético",
+        "peptido natriuretico",
+    )
+    if "icc" in d.split() or d.strip() in {"icc", "ic"}:
+        return True
+    return any(k in d for k in claves)
+
+
 def construir_texto_justificacion_probnp(
     *,
     diagnostico: str = "",
@@ -1039,6 +1064,8 @@ def construir_texto_justificacion_probnp(
     """
     Justificación de Pro-BNP basada en diagnóstico; el perfil de labs previos
     solo varía la redacción (sin valores ni listas de analitos en el texto).
+
+    Con diagnóstico: una sola oración (no concatena “Ante dx…” + “Ingresa…”).
     """
     dx = " ".join((diagnostico or "").split()).rstrip(".")
     perfil = _perfil_labs_justificacion_probnp(list(marcadores or []))
@@ -1046,48 +1073,72 @@ def construir_texto_justificacion_probnp(
     if not dx and perfil == "sin_previos":
         return TEXTO_PROBNP_JUSTIFICACION
 
-    base = (
-        f"Ante diagnóstico de {dx}. "
-        if dx
-        else "Ingresa a internación con signos de congestión al examen físico. "
-    )
+    # Sin diagnóstico: variantes completas (contexto clínico genérico).
+    if not dx:
+        variantes_sin_dx = {
+            "probnp_alto": (
+                "Ingresa a internación con signos de congestión. Por elevación previa "
+                "del péptido natriurético se solicita Pro-BNP para reevaluación del "
+                "estado congestivo."
+            ),
+            "dano_miocardico": (
+                "Ingresa a internación con signos de congestión y controles previos con "
+                "marcadores de daño miocárdico alterados; se solicita Pro-BNP para "
+                "discriminar el componente congestivo."
+            ),
+            "enzimas": (
+                "Ingresa a internación con signos de congestión y enzimas cardíacas "
+                "previamente alteradas; se solicita Pro-BNP para orientar el "
+                "componente congestivo."
+            ),
+            "mixto_alterado": (
+                "Ingresa a internación con signos de congestión y perfil cardíaco previo "
+                "alterado; se solicita Pro-BNP para reevaluación integral del estado "
+                "congestivo."
+            ),
+            "previos_en_rango": (
+                "Ingresa a internación con signos de congestión pese a controles "
+                "cardíacos previos dentro de rango; se solicita Pro-BNP ante nueva "
+                "sospecha de descompensación."
+            ),
+            "sin_previos": TEXTO_PROBNP_JUSTIFICACION,
+        }
+        return variantes_sin_dx.get(perfil, TEXTO_PROBNP_JUSTIFICACION)
 
-    variantes = {
+    # Con diagnóstico: no repetir “Ingresa…” ni “sospecha de IC” si el dx ya lo dice.
+    dx_ya_ic = _dx_sugiere_insuficiencia_cardiaca(dx)
+    motivos = {
         "sin_previos": (
-            "Ingresa con signos de congestión al examen físico. Ante la sospecha "
-            "de insuficiencia cardíaca descompensada se solicita Pro-BNP."
+            ""
+            if dx_ya_ic
+            else (
+                ", con signos de congestión al examen físico, ante sospecha de "
+                "insuficiencia cardíaca descompensada"
+            )
         ),
         "probnp_alto": (
-            "Ingresa con signos de congestión. Por elevación previa del péptido "
-            "natriurético se solicita Pro-BNP para reevaluación del estado congestivo."
+            " por elevación previa del péptido natriurético, para reevaluación "
+            "del estado congestivo"
         ),
         "dano_miocardico": (
-            "Ingresa con signos de congestión y controles previos con marcadores "
-            "de daño miocárdico alterados; se solicita Pro-BNP para discriminar "
-            "el componente congestivo."
+            " para discriminar el componente congestivo ante marcadores de daño "
+            "miocárdico previos alterados"
         ),
         "enzimas": (
-            "Ingresa con signos de congestión y enzimas cardíacas previamente "
-            "alteradas; se solicita Pro-BNP para orientar el componente congestivo."
+            " para orientar el componente congestivo ante enzimas cardíacas "
+            "previamente alteradas"
         ),
         "mixto_alterado": (
-            "Ingresa con signos de congestión y perfil cardíaco previo alterado; "
-            "se solicita Pro-BNP para reevaluación integral del estado congestivo."
+            " para reevaluación integral del estado congestivo ante perfil "
+            "cardíaco previo alterado"
         ),
         "previos_en_rango": (
-            "Ingresa con signos de congestión pese a controles cardíacos previos "
-            "dentro de rango; se solicita Pro-BNP ante nueva sospecha de descompensación."
+            " ante nueva sospecha de descompensación pese a controles cardíacos "
+            "previos dentro de rango"
         ),
     }
-    cuerpo = variantes.get(perfil, variantes["sin_previos"])
-    if dx and perfil == "sin_previos":
-        # Evita repetir "Ante diagnóstico..." + otra frase de sospecha genérica.
-        return (
-            f"Ante diagnóstico de {dx}. Ingresa a internación con signos de congestión "
-            "al examen físico; ante la sospecha de insuficiencia cardíaca descompensada "
-            "se solicita Pro-BNP."
-        )
-    return base + cuerpo
+    motivo = motivos.get(perfil, motivos["sin_previos"])
+    return f"Ante diagnóstico de {dx}{motivo} se solicita Pro-BNP."
 
 
 def _marco(c: rl_canvas.Canvas) -> None:
@@ -1173,29 +1224,41 @@ def _dibujar_probnp_justificacion(
             c.setStrokeColor(colors.black)
         x += w
 
-    lineas_ant = [141, 152]
-    antecedentes = recortar_antecedentes(d.antecedentes, max_len=140)
+    # Una línea corta para antecedentes (después de "con antecedentes de").
+    y_ant_mm = 141.0
+    antecedentes = recortar_antecedentes(d.antecedentes, max_len=90)
     if antecedentes:
         c.setFillColor(COLOR_DATO)
         c.setFont(FONT_B, FS_ADJ_DATO - 1)
-        partes = _partir_lineas(c, antecedentes, FONT_B, FS_ADJ_DATO - 1, ADJ_DERECHA - ADJ_X - 2 * mm)
-        for y_mm, txt in zip(lineas_ant, partes):
-            c.drawString(ADJ_X + 1 * mm, _y(y_mm) + 1.5 * mm, txt)
+        partes = _partir_lineas(
+            c, antecedentes, FONT_B, FS_ADJ_DATO - 1, ADJ_DERECHA - ADJ_X - 2 * mm
+        )
+        if partes:
+            c.drawString(ADJ_X + 1 * mm, _y(y_ant_mm) + 1.5 * mm, partes[0])
         c.setFillColor(COLOR_TEXTO)
-    for y_mm in lineas_ant:
-        _linea_punteada(c, ADJ_X, ADJ_DERECHA, _y(y_mm))
+    _linea_punteada(c, ADJ_X, ADJ_DERECHA, _y(y_ant_mm))
 
+    # Justificación automática primero; debajo, renglones para agregar a mano.
     cuerpo = (texto or "").strip() or TEXTO_PROBNP_JUSTIFICACION
     c.setFont(FONT, FS_ADJ)
-    # Hasta 5 líneas antes de firma/sello (~y 212).
-    for i, txt in enumerate(
-        _partir_lineas(c, cuerpo, FONT, FS_ADJ, ADJ_DERECHA - ADJ_X)[:5]
-    ):
-        c.drawString(ADJ_X, _y(166 + i * 8.6), txt)
+    top_just_mm = 154.0
+    leading_just = 8.2
+    max_just_lineas = 4
+    lineas_just = _partir_lineas(c, cuerpo, FONT, FS_ADJ, ADJ_DERECHA - ADJ_X)[
+        :max_just_lineas
+    ]
+    for i, txt in enumerate(lineas_just):
+        c.drawString(ADJ_X, _y(top_just_mm + i * leading_just), txt)
 
-    _firma_y_sello_adj(c, 212)
-    _fecha_adj(c, 229, d.fecha)
-    _campo_adj(c, 252, "Dx:", d.diagnostico)
+    # Espacio manuscrito debajo del texto armado (no arriba).
+    n_usadas = len(lineas_just)
+    top_mano_mm = top_just_mm + max(n_usadas, 1) * leading_just + 4.0
+    for i in range(3):
+        _linea_punteada(c, ADJ_X, ADJ_DERECHA, _y(top_mano_mm + i * 9.0))
+
+    _firma_y_sello_adj(c, 228)
+    _fecha_adj(c, 245, d.fecha)
+    _campo_adj(c, 262, "Dx:", d.diagnostico)
 
 
 def _dibujar_resena(c: rl_canvas.Canvas, ped: PedidoClinicoPapel, texto: str) -> None:

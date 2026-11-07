@@ -66,7 +66,7 @@ import { downloadInformeMicroPdf, listEstudiosMicrobiologia } from '../services/
 import type { EstudioMicrobiologia, ResultadoExamenLims, SolicitudExamenLims } from '../types/lims';
 import { useData } from '../contexts/DataContext';
 import { canUpdatePacienteDemographics } from '../utils/permissions';
-import { formatFechaDisplay } from '../utils/dateFieldFormat';
+import { formatFechaDisplay, formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 import {
   canDownloadInformeClinicoPdf,
   canDownloadInformeMicroPdf,
@@ -283,9 +283,7 @@ const PatientIntegratedView: React.FC<PatientIntegratedViewProps> = ({
 
   const formatDateTime = (value?: string | null) => {
     if (!value) return '—';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return formatFechaHoraDisplay(value);
   };
 
   const getEstadoColor = (estado?: string) => {

@@ -329,8 +329,19 @@ class TurnoViewSet(viewsets.ModelViewSet):
         if not fin and inicio:
             fin = inicio + duracion_de(medico)
             data['fecha_hora_fin'] = fin
-        validar_reserva(medico, inicio, fin, data.get('recurso', getattr(instance, 'recurso', None)),
-                        excluir=getattr(instance, 'pk', None))
+        es_sobreturno = data.get(
+            'es_sobreturno',
+            getattr(instance, 'es_sobreturno', False) if instance else False,
+        )
+        # Solo secretaría/admin crean/mutan turnos aquí; sobreturno es su herramienta.
+        validar_reserva(
+            medico,
+            inicio,
+            fin,
+            data.get('recurso', getattr(instance, 'recurso', None)),
+            excluir=getattr(instance, 'pk', None),
+            permitir_sobreturno=bool(es_sobreturno),
+        )
 
     def perform_create(self, serializer):
         """
@@ -993,10 +1004,9 @@ class AtencionViewSet(viewsets.ModelViewSet):
             atencion.id, user.username, getattr(user, 'rol', 'N/A')
         )
 
-        # Verificación defensiva: aunque get_queryset ya filtra, dejamos el
-        # check explícito para los casos en que un admin reutilice este action
-        # con un usuario médico vinculado a otro Medico distinto del de la
-        # atención. No se reporta el detalle para no leakear información.
+        # Verificación defensiva: aunque get_queryset/AtencionPermission ya
+        # filtran, reforzamos acá. En GUARDIA cualquier médico con acceso al
+        # tablero puede operar (no solo el medico_principal).
         if not emr_staff_or_admin_global(user):
             try:
                 user_medico = user.medico
@@ -1007,7 +1017,11 @@ class AtencionViewSet(viewsets.ModelViewSet):
                     {'error': 'No tiene permisos para registrar consultas.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            if atencion.medico_principal_id != user_medico.id:
+            es_propia = atencion.medico_principal_id == user_medico.id
+            es_guardia_compartida = (
+                atencion.contexto_atencion == Atencion.ContextoAtencion.GUARDIA
+            )
+            if not es_propia and not es_guardia_compartida:
                 logger.warning(
                     "Intento de registro de consulta por médico no asignado. "
                     "Atención ID: %s, Médico asignado: %s, Usuario: %s, Médico usuario: %s",

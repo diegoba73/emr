@@ -236,13 +236,11 @@ export function canAccessMicrobiologia(user: User | null): boolean {
 
 /**
  * Listado «Microbiología» en sidebar/ruta de estudios:
- * operadores LIMS (todos los estados) + médico (solo liberados; filtra el API).
- * No habilita catálogos ni operaciones técnicas.
+ * solo operadores LIMS / admin / secretaría lab (todos los estados).
+ * El médico no ve el menú ni el listado; lee/pide desde portal clínico / ficha.
  */
 export function canAccessMicrobiologiaListado(user: User | null): boolean {
-  if (!user) return false;
-  if (canAccessMicrobiologia(user)) return true;
-  return normalizeRol(user) === 'medico';
+  return canAccessMicrobiologia(user);
 }
 
 /**

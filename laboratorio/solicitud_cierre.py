@@ -168,6 +168,18 @@ def orden_tiene_tubos_pendientes_recepcion(solicitud: SolicitudExamen) -> bool:
     ).exists()
 
 
+def listar_tubos_pendientes_recepcion(solicitud: SolicitudExamen) -> list[Muestra]:
+    """Tubos que bloquean LISTO_PARA_VALIDAR / validar (PENDIENTE_TOMA o TOMADA)."""
+    return list(
+        Muestra.objects.filter(
+            solicitud_id=solicitud.pk,
+            estado__in=MUESTRA_ESTADOS_PENDIENTES_RECEPCION,
+        )
+        .select_related("tipo_contenedor", "tipo_muestra")
+        .order_by("id")
+    )
+
+
 MSG_TUBOS_PENDIENTES_RECEPCION = (
     "Hay tubos pendientes de recepción. Recibilos o cancelalos (o rechazadlos) "
     "antes de marcar la orden como lista para validar."

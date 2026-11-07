@@ -217,6 +217,7 @@ class TurnoSerializer(serializers.ModelSerializer):
             'estado',
             'motivo_reserva',
             'asistencia_confirmada_en',
+            'es_sobreturno',
             'created_at',
             'updated_at',
         ]
@@ -353,7 +354,17 @@ class TurnoSerializer(serializers.ModelSerializer):
                 if nuevo_rid != inst.recurso_id:
                     raise serializers.ValidationError({"recurso_id": msg})
 
-        if medico and inicio and estado in [Turno.Estado.CONFIRMADO, Turno.Estado.RESERVADO]:
+        es_sobreturno = attrs.get(
+            'es_sobreturno',
+            getattr(inst, 'es_sobreturno', False) if inst else False,
+        )
+
+        if (
+            medico
+            and inicio
+            and estado in [Turno.Estado.CONFIRMADO, Turno.Estado.RESERVADO]
+            and not es_sobreturno
+        ):
             turnos_solapados = Turno.objects.filter(
                 medico=medico,
                 estado__in=[Turno.Estado.CONFIRMADO, Turno.Estado.RESERVADO],
@@ -382,7 +393,8 @@ class TurnoSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "fecha_hora_inicio": f"Ya existe un turno {turno_solapado.get_estado_display()} "
                     f"para este médico en el rango horario especificado. "
-                    f"Turno existente: {turno_solapado.fecha_hora_inicio} - {turno_solapado.fecha_hora_fin}"
+                    f"Turno existente: {turno_solapado.fecha_hora_inicio} - {turno_solapado.fecha_hora_fin} "
+                    f"(usá es_sobreturno=true para agenda de sobreturno)."
                 })
 
         return attrs

@@ -107,6 +107,18 @@ export async function countEstudiosMicrobiologia(
 export const getEstudioMicrobiologia = (id: number) =>
   apiClient.get<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`).then((r) => r.data);
 
+/** Episodios previos del mismo cultivo (cualquier microorganismo aislado). */
+export async function getHistorialCultivoMicro(
+  estudioId: number,
+  n = 10
+): Promise<import('../types/lims').HistorialCultivoEstudioLims> {
+  const { data } = await apiClient.get<import('../types/lims').HistorialCultivoEstudioLims>(
+    `${MICRO}/estudios/${estudioId}/historial-cultivo/`,
+    { params: { n } }
+  );
+  return data;
+}
+
 export async function patchEstadoObraSocialEstudio(
   id: number,
   estado_obra_social: string

@@ -426,6 +426,7 @@ def aplicar_recibir(
         )
         _audit_muestra_update(muestra, before=before, actor=actor, metadata=meta)
         _hook_inventario_recibir(muestra, actor=actor)
+        _sincronizar_orden_tras_cambio_tubo(muestra, actor=actor, view=view)
         return muestra
 
 
@@ -526,15 +527,18 @@ def aplicar_iniciar_proceso(
         return muestra
 
 
-def _sincronizar_orden_tras_tubo_terminal(
+def _sincronizar_orden_tras_cambio_tubo(
     muestra: Muestra,
     *,
     actor: AbstractUser | None,
     view: str,
 ) -> None:
     """
-    Tras cancelar/rechazar/descartar un tubo, reevalúa listo/parcial de la orden
-    (ensayos vacíos de ese contenedor dejan de ser exigibles).
+    Tras recibir / cancelar / rechazar / descartar un tubo, reevalúa listo/parcial.
+
+    - Terminal: ensayos vacíos de ese contenedor dejan de ser exigibles.
+    - Recepción: si los resultados ya estaban completos y era el último tubo
+      pendiente, promociona a LISTO_PARA_VALIDAR sin exigir otro Guardar.
     """
     from laboratorio.solicitud_cierre import sincronizar_estado_tras_carga
 
@@ -542,6 +546,10 @@ def _sincronizar_orden_tras_tubo_terminal(
     if sol is None or sol.estado in ("FINALIZADO", "CANCELADO"):
         return
     sincronizar_estado_tras_carga(sol, actor=actor, view=view)
+
+
+# Compat: nombre histórico usado por cancelar/rechazar/descartar.
+_sincronizar_orden_tras_tubo_terminal = _sincronizar_orden_tras_cambio_tubo
 
 
 def aplicar_rechazar(

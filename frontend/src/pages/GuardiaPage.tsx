@@ -20,7 +20,6 @@ import {
   Add,
   Refresh,
   Visibility,
-  Edit,
   LocalHospital,
   TransferWithinAStation,
   CheckCircleOutline,
@@ -33,14 +32,13 @@ import { Atencion } from '../types';
 import GuardiaAtencionDialog, {
   GuardiaDialogMode,
 } from '../modules/guardia/components/GuardiaAtencionDialog';
-import { canOperateAtenciones, isStaffOrAdmin, normalizeRol } from '../utils/permissions';
+import { canOperateAtenciones } from '../utils/permissions';
 import { apiService } from '../services/api';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  return formatFechaHoraDisplay(value);
 };
 
 const GuardiaPage: React.FC = () => {
@@ -56,14 +54,8 @@ const GuardiaPage: React.FC = () => {
   const [closingId, setClosingId] = useState<number | null>(null);
 
   const canOperate = canOperateAtenciones(currentUser);
-  const myMedicoId = currentUser?.medico?.id ?? null;
-  const canMutateAtencion = (atencion: Atencion) => {
-    if (!canOperate) return false;
-    // Médico estándar: solo opera las propias; secretaría/admin/staff operan todas.
-    if (isStaffOrAdmin(currentUser) || normalizeRol(currentUser) !== 'medico') return true;
-    const ownerId = atencion.medico_principal?.id ?? atencion.medico_principal_id ?? null;
-    return myMedicoId != null && ownerId === myMedicoId;
-  };
+  /** Guardia compartida: cualquier médico/secre/admin puede editar, cerrar o derivar. */
+  const canMutateAtencion = (_atencion: Atencion) => canOperate;
   const atenciones = useMemo(() => data?.results ?? [], [data?.results]);
 
   const openDialog = (mode: GuardiaDialogMode, atencionId?: number) => {
@@ -118,8 +110,8 @@ const GuardiaPage: React.FC = () => {
             Guardia cardiológica
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Guardá la atención abierta para seguir cargando pedidos. Derivar a internación no
-            requiere cerrarla: los análisis y estudios pendientes se siguen marcando en esta lista.
+            Con los resultados, cerrá la atención o derivá a internación. Los pedidos pendientes se
+            siguen marcando en esta lista.
           </Typography>
         </Box>
         {canOperate && (
@@ -241,16 +233,6 @@ const GuardiaPage: React.FC = () => {
                             </IconButton>
                           </Tooltip>
                           {canMutateAtencion(atencion) && atencion.estado_clinico === 'ABIERTA' && (
-                            <Tooltip title="Continuar atención">
-                              <IconButton
-                                size="small"
-                                onClick={() => openDialog('edit', atencion.id)}
-                              >
-                                <Edit fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {canMutateAtencion(atencion) && atencion.estado_clinico === 'ABIERTA' && (
                             <Tooltip title="Cerrar atención">
                               <span>
                                 <IconButton
@@ -268,6 +250,7 @@ const GuardiaPage: React.FC = () => {
                             </Tooltip>
                           )}
                           {canMutateAtencion(atencion) &&
+                            atencion.estado_clinico === 'ABIERTA' &&
                             !atencion.internacion_id &&
                             !atencion.derivada_a_internacion && (
                             <Tooltip title="Derivar a internación">

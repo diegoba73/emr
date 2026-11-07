@@ -184,6 +184,8 @@ export interface KioscoCheckinResult {
 export interface KioscoConfig {
   ok: boolean;
   espera_origin: string;
+  /** Canónica: siempre `{origin}/kiosco-recepcion` (nunca APK). */
+  anuncio_url?: string;
   espera_origins?: string[];
   lan_ips?: string[];
   fuente: string;

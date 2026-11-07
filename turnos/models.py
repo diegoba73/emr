@@ -83,6 +83,8 @@ class Turno(TimestampedModel):
     )
     motivo_reserva = models.CharField(max_length=255, blank=True, null=True)
     asistencia_confirmada_en = models.DateTimeField(null=True, blank=True, editable=False)
+    # Sobreturno: secretaría agenda un paciente extra sobre un slot ya ocupado.
+    es_sobreturno = models.BooleanField(default=False, db_index=True)
 
 
     class Meta:

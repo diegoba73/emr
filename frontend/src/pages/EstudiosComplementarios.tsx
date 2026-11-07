@@ -61,6 +61,7 @@ import {
   type ProgramacionTipoFiltro,
 } from '../utils/programacionTurnosRows';
 import { canCreateTurno } from '../utils/turnoPermissions';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 
 type TurnosPagePayload = Turno[] | { results?: Turno[]; next?: string | null };
 
@@ -112,8 +113,9 @@ const EstudiosComplementarios: React.FC = () => {
   const [filtroTipoActividad, setFiltroTipoActividad] = useState<ProgramacionTipoFiltro>('');
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
   const [busquedaPacienteDebounced, setBusquedaPacienteDebounced] = useState('');
-  const [fechaDesde, setFechaDesde] = useState(() => fechaLocalHoy());
-  const [fechaHasta, setFechaHasta] = useState(() => fechaLocalHoy());
+  // Vacío = sin filtro de fecha (chips y listado alineados). «Hoy» acota el día.
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const initialLoadDone = useRef(false);
   const practicaOptions = practicaOptionsFromTipos(tipos);
@@ -136,6 +138,8 @@ const EstudiosComplementarios: React.FC = () => {
       if (busquedaPacienteDebounced.trim()) {
         baseParams.search = busquedaPacienteDebounced.trim();
       }
+      if (fechaDesde) baseParams.fecha_desde = fechaDesde;
+      if (fechaHasta) baseParams.fecha_hasta = fechaHasta;
       const listParams = {
         ...baseParams,
         ...(filtroBandeja !== 'todos' && mostrarBandejas ? { bandeja: filtroBandeja } : {}),
@@ -387,6 +391,17 @@ const EstudiosComplementarios: React.FC = () => {
           <Button variant="outlined" onClick={setHoy}>
             Hoy
           </Button>
+          {(fechaDesde || fechaHasta) && (
+            <Button
+              variant="text"
+              onClick={() => {
+                setFechaDesde('');
+                setFechaHasta('');
+              }}
+            >
+              Todas las fechas
+            </Button>
+          )}
           <Button variant="outlined" onClick={load} disabled={loading}>
             Actualizar
           </Button>
@@ -422,15 +437,7 @@ const EstudiosComplementarios: React.FC = () => {
               {rows.map((row) => (
                 <TableRow key={row.key} hover>
                   <TableCell>
-                    {row.fechaInicio
-                      ? new Date(row.fechaInicio).toLocaleString('es-AR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : '—'}
+                    {row.fechaInicio ? formatFechaHoraDisplay(row.fechaInicio) : '—'}
                   </TableCell>
                   {rol !== 'paciente' && <TableCell>{row.pacienteNombre}</TableCell>}
                   <TableCell>

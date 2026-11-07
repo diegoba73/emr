@@ -102,7 +102,7 @@ const quickActions: QuickActionCard[] = [
     roles: ['paciente'],
   },
   {
-    title: 'Programación de turnos',
+    title: 'Mis turnos programados',
     description: 'Ver turnos e informes programados',
     icon: <Folder />,
     path: '/estudios-complementarios',

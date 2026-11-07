@@ -6,7 +6,13 @@ GET no repara datos.
 """
 from __future__ import annotations
 
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from datetime import datetime, time, timedelta
+from typing import Optional
+
+from django.db.models import DateTimeField, Exists, OuterRef, Q, QuerySet
+from django.db.models.functions import Coalesce
+from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 
 BANDEJA_PENDIENTE_PROGRAMAR = 'pendiente_programar'
 BANDEJA_PROGRAMADOS = 'programados'
@@ -45,6 +51,62 @@ def _q_reserva_vigente() -> Q:
     )
     # Exists es Combinable: OR con Q del espejo estudio.turno.
     return Q(turno__estado__in=TURNOS_VIGENTES) | sesion_vigente
+
+
+def _parse_fecha_param(raw: str | None, *, end_of_day: bool = False) -> Optional[datetime]:
+    value = (raw or '').strip()
+    if not value:
+        return None
+    tz = timezone.get_current_timezone()
+    # YYYY-MM-DD → día civil local (inicio o fin inclusive).
+    if len(value) == 10 and value[4] == '-' and value[7] == '-':
+        d = parse_date(value)
+        if d is None:
+            return None
+        start = timezone.make_aware(datetime.combine(d, time.min), tz)
+        if end_of_day:
+            return start + timedelta(days=1) - timedelta(microseconds=1)
+        return start
+    dt = parse_datetime(value)
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, tz)
+    return dt
+
+
+def filtrar_por_rango_fechas(
+    qs: QuerySet,
+    fecha_desde: str | None = None,
+    fecha_hasta: str | None = None,
+) -> QuerySet:
+    """Filtra por fecha de referencia (turno → solicitud → realización → created_at).
+
+    Ítems sin ninguna fecha siguen visibles (p. ej. pendientes de programar).
+    Así listado y ``bandejas-resumen`` usan el mismo criterio que la UI.
+    """
+    desde = _parse_fecha_param(fecha_desde, end_of_day=False)
+    hasta = _parse_fecha_param(fecha_hasta, end_of_day=True)
+    if desde is None and hasta is None:
+        return qs
+
+    qs = qs.annotate(
+        _fecha_ref=Coalesce(
+            'turno__fecha_hora_inicio',
+            'fecha_solicitud',
+            'fecha_realizacion',
+            'created_at',
+            output_field=DateTimeField(),
+        )
+    )
+    # Sin fecha de referencia: no ocultar (alineado al FE).
+    q_sin_fecha = Q(_fecha_ref__isnull=True)
+    q_rango = Q()
+    if desde is not None:
+        q_rango &= Q(_fecha_ref__gte=desde)
+    if hasta is not None:
+        q_rango &= Q(_fecha_ref__lte=hasta)
+    return qs.filter(q_sin_fecha | q_rango)
 
 
 def aplicar_bandeja(qs: QuerySet, bandeja: str | None) -> QuerySet:

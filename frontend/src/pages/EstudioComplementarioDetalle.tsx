@@ -98,6 +98,7 @@ import type {
 } from '../types/estudios';
 import { ArchivoMedico } from '../types';
 import { formatPacienteLabel } from '../utils/pacienteFormat';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 import ArchivoMedicoPreviewDialog, {
   type ArchivoPreviewMeta,
 } from '../components/archivos/ArchivoMedicoPreviewDialog';
@@ -578,19 +579,19 @@ const EstudioComplementarioDetalle: React.FC = () => {
           </Typography>
           <Typography variant="body2">
             <strong>F. solicitud:</strong>{' '}
-            {estudio.fecha_solicitud ? new Date(estudio.fecha_solicitud).toLocaleString() : '—'}
+            {estudio.fecha_solicitud ? formatFechaHoraDisplay(estudio.fecha_solicitud) : '—'}
           </Typography>
           <Typography variant="body2">
             <strong>Turno:</strong>{' '}
             {estudio.turno_fecha_hora_inicio
-              ? `${new Date(estudio.turno_fecha_hora_inicio).toLocaleString()}${
+              ? `${formatFechaHoraDisplay(estudio.turno_fecha_hora_inicio)}${
                   estudio.turno_recurso_nombre ? ` · ${estudio.turno_recurso_nombre}` : ''
                 }`
               : '—'}
           </Typography>
           <Typography variant="body2">
             <strong>F. realización:</strong>{' '}
-            {estudio.fecha_realizacion ? new Date(estudio.fecha_realizacion).toLocaleString() : '—'}
+            {estudio.fecha_realizacion ? formatFechaHoraDisplay(estudio.fecha_realizacion) : '—'}
           </Typography>
         </Box>
       </Paper>

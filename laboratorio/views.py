@@ -734,7 +734,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
         else:
             queryset = super().get_queryset()
         queryset = self._restringir_solicitudes_por_rol(queryset)
-        queryset = self._restringir_solicitudes_por_sede(queryset)
+        # Órdenes LIMS (incl. FINALIZADO) son compartidas entre sedes: no filtrar por origen.
         return self._aplicar_filtros_listado(queryset)
 
     def _restringir_solicitudes_por_rol(self, queryset):
@@ -755,18 +755,6 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             except Exception:
                 return queryset.none()
         return queryset.none()
-
-    def _restringir_solicitudes_por_sede(self, queryset):
-        # Módulo opcional (WIP sedes): sin él no filtrar, no tumbar detalle/listado.
-        try:
-            from usuarios.sedes import filtro_origen_lims, sedes_efectivas
-        except ImportError:
-            return queryset
-
-        origenes = filtro_origen_lims(sedes_efectivas(self.request.user))
-        if origenes is None:
-            return queryset
-        return queryset.filter(origen_solicitud__in=origenes)
 
     def _aplicar_filtros_listado(self, queryset):
         numero = self.request.query_params.get('numero')
@@ -872,6 +860,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                             'orden_abierta': obj.estado == 'PENDIENTE',
                             'esperando_recepcion': False,
                             'tubos_pendientes_extraccion': [],
+                            'tubos_pendientes_recepcion': [],
                         }
                     )
                 except Exception:

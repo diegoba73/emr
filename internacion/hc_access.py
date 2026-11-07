@@ -33,4 +33,8 @@ def puede_escribir_hc(request, write_roles: frozenset[str]) -> bool:
         return False
     if user.is_superuser:
         return True
+    from usuarios.sedes import usuario_tiene_capacidad
+    # CEHTA: Internación solo lectura (sin formularios HC de escritura).
+    if not usuario_tiene_capacidad(user, 'internacion_escritura'):
+        return False
     return get_normalized_role(user) in write_roles

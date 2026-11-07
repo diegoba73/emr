@@ -562,6 +562,7 @@ const GestionUsuarios: React.FC = () => {
                   <TableCell>Nombre</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Rol</TableCell>
+                  <TableCell>Sedes</TableCell>
                   <TableCell>Teléfono</TableCell>
                   <TableCell>Estado</TableCell>
                   <TableCell>Staff</TableCell>
@@ -571,7 +572,7 @@ const GestionUsuarios: React.FC = () => {
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       No hay usuarios disponibles
                     </TableCell>
                   </TableRow>
@@ -590,6 +591,17 @@ const GestionUsuarios: React.FC = () => {
                           color="primary"
                           variant="outlined"
                         />
+                      </TableCell>
+                      <TableCell>
+                        {(user.sedes || []).length === 0 ? (
+                          <Chip label="Ambas" size="small" variant="outlined" />
+                        ) : (
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {(user.sedes || []).map((sede) => (
+                              <Chip key={sede} label={sede} size="small" variant="outlined" />
+                            ))}
+                          </Box>
+                        )}
                       </TableCell>
                       <TableCell>{user.telefono || '-'}</TableCell>
                       <TableCell>
@@ -731,7 +743,7 @@ const GestionUsuarios: React.FC = () => {
                 <TextField
                   {...params}
                   label="Sedes"
-                  helperText="Vacío = ambas (sin filtro). CEHTA no incluye Guardia/Internación."
+                  helperText="Vacío = ambas (sin filtro). CEHTA: sin Guardia; Internación solo lectura."
                 />
               )}
             />

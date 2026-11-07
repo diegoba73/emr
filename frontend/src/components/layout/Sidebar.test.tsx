@@ -129,7 +129,7 @@ describe('Sidebar laboratorio + is_staff (PERM-FE-LAB-01)', () => {
     expect(screen.queryByText('Solicitudes')).not.toBeInTheDocument();
     // Portal clínico (duplicado de LIMS) y estudios: fuera del menú principal.
     expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Programación de turnos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agenda clínica')).not.toBeInTheDocument();
   });
 
   it('muestra enlaces LIMS', () => {
@@ -169,7 +169,7 @@ describe('Sidebar bioquímico: sin Laboratorio clínico ni Estudios', () => {
     );
     expect(screen.getByText('Pacientes')).toBeInTheDocument();
     expect(screen.getByText('Estadísticas')).toBeInTheDocument();
-    expect(screen.queryByText('Programación de turnos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agenda clínica')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
     expect(screen.queryByText('Administración')).not.toBeInTheDocument();
     expect(screen.queryByText('Catálogos clínicos')).not.toBeInTheDocument();
@@ -183,7 +183,7 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
     jest.clearAllMocks();
   });
 
-  it('médico ve Laboratorio clínico; Microbiología LIMS pero no Órdenes/Pendientes', () => {
+  it('médico ve Laboratorio clínico; no Microbiología LIMS ni Órdenes/Pendientes', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'MEDICO' }) });
     render(
       <MemoryRouter>
@@ -191,7 +191,8 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('Laboratorio')).toBeInTheDocument();
-    expect(screen.getByText('Microbiología')).toBeInTheDocument();
+    expect(screen.queryByText('Microbiología')).not.toBeInTheDocument();
+    expect(screen.queryByText('Laboratorio (LIMS)')).not.toBeInTheDocument();
     expect(screen.queryByText('Órdenes LIMS')).not.toBeInTheDocument();
     expect(screen.queryByText('Pendientes')).not.toBeInTheDocument();
   });
@@ -205,7 +206,7 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
     );
     expect(screen.getByText('Pacientes')).toBeInTheDocument();
     expect(screen.getByText('Calendario')).toBeInTheDocument();
-    expect(screen.getByText('Programación de turnos')).toBeInTheDocument();
+    expect(screen.getByText('Agenda clínica')).toBeInTheDocument();
     expect(screen.getByText('Horarios de atención')).toBeInTheDocument();
     expect(screen.getByText('Recepción')).toBeInTheDocument();
     expect(screen.getByText('Guardia')).toBeInTheDocument();
@@ -235,7 +236,7 @@ describe('Sidebar Laboratorio (LIMS) solo admin/laboratorio', () => {
     expect(screen.getByText('Catálogos LIMS')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Laboratorio' })).not.toBeInTheDocument();
     expect(screen.queryByText('Calendario')).not.toBeInTheDocument();
-    expect(screen.queryByText('Programación de turnos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agenda clínica')).not.toBeInTheDocument();
     expect(screen.queryByText('Horarios de atención')).not.toBeInTheDocument();
     expect(screen.queryByText('Recepción')).not.toBeInTheDocument();
     expect(screen.queryByText('Archivos')).not.toBeInTheDocument();
@@ -259,7 +260,7 @@ describe('orden del menú principal', () => {
     useData.mockReturnValue({ currentUser: mockUser({ rol: 'ADMIN' }) });
     render(<MemoryRouter><SidebarContent /></MemoryRouter>);
     const labels = ['Inicio', 'Pacientes', 'Médicos', 'Profesionales', 'Calendario', 'Recepción', 'Guardia', 'Internación',
-      'Laboratorio', 'Atenciones Clínicas', 'Programación de turnos', 'Archivos'];
+      'Laboratorio', 'Atenciones Clínicas', 'Agenda clínica', 'Archivos'];
     const nodes = labels.map((label) => screen.getByText(label));
     for (let i = 1; i < nodes.length; i++) {
       expect(nodes[i - 1].compareDocumentPosition(nodes[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

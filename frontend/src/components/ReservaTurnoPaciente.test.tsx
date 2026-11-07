@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ReservaTurnoPaciente from './ReservaTurnoPaciente';
 import { getDiasDisponibles, getSlotsMedico, reservarHorario } from '../services/agendaMedica';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 
 jest.mock('../services/agendaMedica', () => ({
   getSlotsMedico: jest.fn(),
@@ -86,7 +87,7 @@ const slot = {
   recurso_id: 3,
   recurso_nombre: 'Consultorio 1',
 };
-const horaLabel = slotInicio.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+const horaLabel = formatHoraDisplay(slotInicio);
 
 beforeEach(() => {
   jest.clearAllMocks();

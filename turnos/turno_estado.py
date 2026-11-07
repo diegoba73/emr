@@ -142,7 +142,10 @@ def _validar_solapamiento(
     fin: datetime | None,
     estado: str,
     excluir_turno_id: int | None,
+    es_sobreturno: bool = False,
 ) -> None:
+    if es_sobreturno:
+        return
     if estado not in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
         return
     qs = Turno.objects.filter(
@@ -383,9 +386,17 @@ def reprogramar_turno(
 
     from medicos.agenda import validar_reserva
     from rest_framework.exceptions import ValidationError as AgendaValidationError
+    permitir_sobreturno = bool(getattr(turno, 'es_sobreturno', False))
     try:
-        validar_reserva(medico_efectivo, inicio, fin, recurso_efectivo,
-                        excluir=turno.pk, exigir_horario=rol == 'paciente')
+        validar_reserva(
+            medico_efectivo,
+            inicio,
+            fin,
+            recurso_efectivo,
+            excluir=turno.pk,
+            exigir_horario=rol == 'paciente',
+            permitir_sobreturno=permitir_sobreturno,
+        )
     except AgendaValidationError as exc:
         raise TurnoEstadoTransitionError(str(exc.detail)) from exc
 
@@ -408,6 +419,7 @@ def reprogramar_turno(
         fin=turno.fecha_hora_fin,
         estado=turno.estado,
         excluir_turno_id=turno.pk,
+        es_sobreturno=permitir_sobreturno,
     )
 
     try:

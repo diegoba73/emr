@@ -17,22 +17,26 @@ SEDE_CHOICES = (
 )
 
 # Capacidades por sede (menú + gates API). Unión si el usuario tiene varias.
+# CEHTA ve Internación en solo lectura (seguimiento post-alta / rehabilitación);
+# escritura clínica e infraestructura quedan en ICPL.
 SEDE_CAPACIDADES = {
     SEDE_CEHTA: {
         'guardia': False,
-        'internacion': False,
+        'internacion': True,
+        'internacion_escritura': False,
         'recepcion': True,
         'agenda': True,
     },
     SEDE_ICPL: {
         'guardia': True,
         'internacion': True,
+        'internacion_escritura': True,
         'recepcion': True,
         'agenda': True,
     },
 }
 
-# Orígenes LIMS tipados por sede (ver laboratorio / DOC_FLUJOS_LIMS).
+# Orígenes LIMS tipados por sede (mapeo auxiliar; el listado LIMS NO se filtra por sede).
 _ORIGENES_POR_SEDE = {
     SEDE_CEHTA: (
         'AMBULATORIO_CEHTA',

@@ -18,6 +18,7 @@ import {
 import { accionLlegada, getTableroRecepcion } from '../services/recepcionApi';
 import type { LlegadaRecepcion } from '../types/recepcion';
 import { getSafeClinicalActionMessage } from '../utils/apiError';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 import { apiService } from '../services/api';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
 import { useData } from '../contexts/DataContext';
@@ -30,7 +31,7 @@ function fechaHoyLocal(): string {
 const horaTurno = (iso?: string | null) => {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    return formatHoraDisplay(new Date(iso)) || '—';
   } catch {
     return '—';
   }
@@ -56,9 +57,18 @@ const MedicoCola: React.FC = () => {
     setError(null);
     try {
       const data = await getTableroRecepcion(fecha, null);
-      const activas = (data.llegadas || []).filter((l) =>
-        (ESTADOS_COLA as readonly string[]).includes(l.estado_flujo)
-      );
+      const activas = (data.llegadas || [])
+        .filter((l) => (ESTADOS_COLA as readonly string[]).includes(l.estado_flujo))
+        .sort((a, b) => {
+          const ta = a.turno_inicio
+            ? new Date(a.turno_inicio).getTime()
+            : Number.MAX_SAFE_INTEGER;
+          const tb = b.turno_inicio
+            ? new Date(b.turno_inicio).getTime()
+            : Number.MAX_SAFE_INTEGER;
+          if (ta !== tb) return ta - tb;
+          return (a.id || 0) - (b.id || 0);
+        });
       setLlegadas(activas);
     } catch (e) {
       setError(getSafeClinicalActionMessage(e, 'No se pudo cargar tu cola.'));
@@ -122,8 +132,9 @@ const MedicoCola: React.FC = () => {
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        <strong>Llamar</strong>: TV + aviso en la app del paciente. <strong>En atención</strong>: abre
-        la consulta (Detalle clínico / Pedidos y resultados).
+        Cola ordenada por hora de turno. Si el paciente del horario no llegó, podés atender a quien
+        llegó anticipado. <strong>Llamar</strong>: TV + aviso en la app.{' '}
+        <strong>En atención</strong>: abre la consulta.
       </Alert>
 
       {error && (

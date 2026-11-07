@@ -96,6 +96,10 @@ interface TurnoModalProps {
   initialAgendaTipo?: AgendaTipo;
   /** Estudio preseleccionado (p. ej. desde módulo Estudios). */
   initialEstudio?: EstudioComplementario | null;
+  /** Secretaría: alta de sobreturno desde franja ocupada del calendario. */
+  initialEsSobreturno?: boolean;
+  initialMedicoId?: number | null;
+  initialRecursoId?: number | null;
 }
 
 const TurnoModal: React.FC<TurnoModalProps> = ({
@@ -108,6 +112,9 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   forceReadOnly = false,
   initialAgendaTipo = 'consulta',
   initialEstudio = null,
+  initialEsSobreturno = false,
+  initialMedicoId = null,
+  initialRecursoId = null,
 }) => {
   const {
     recursos: recursosRaw,
@@ -1176,7 +1183,12 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 : isTurnoRealizado()
                   ? '✅ Turno Realizado (Solo Lectura)'
                   : `✏️ Editar ${TURNO_KIND_META[getTurnoAgendaKind(editingTurno)].label.toLowerCase()}`
-            : '📅 Nuevo turno'}
+            : initialEsSobreturno
+              ? '📅 Nuevo sobreturno'
+              : '📅 Nuevo turno'}
+          {editingTurno?.es_sobreturno && (
+            <Chip size="small" color="warning" label="Sobreturno" sx={{ ml: 1 }} />
+          )}
         </Typography>
         <IconButton onClick={onClose} sx={{ color: 'grey.500' }} aria-label="Cerrar panel de turno">
           <Close />
@@ -1198,12 +1210,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             <ProgramacionTurnoForm
               allowConsulta
               initialTipo={initialAgendaTipo === 'estudio' ? 'ESTUDIO' : 'CONSULTA'}
+              initialDateTime={selectedDateTime}
+              initialEsSobreturno={initialEsSobreturno}
+              initialMedicoId={initialMedicoId}
+              initialRecursoId={initialRecursoId}
               onCancel={onClose}
               onSuccess={() => {
                 onSuccess?.();
                 onClose();
               }}
-              submitLabel="Crear"
+              submitLabel={initialEsSobreturno ? 'Crear sobreturno' : 'Crear'}
             />
           </Box>
         ) : (
@@ -1226,7 +1242,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               <RouterLink
                 to={`/estudios-complementarios/${editingTurno.estudio_complementario.id}`}
               >
-                Programación de turnos
+                Agenda clínica
               </RouterLink>
               .
             </Alert>

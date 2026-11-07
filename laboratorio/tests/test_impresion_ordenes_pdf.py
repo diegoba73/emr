@@ -421,6 +421,28 @@ class TestImpresionOrdenes(TestCase):
         for texto in (t_alto, t_dano, t_ok):
             self.assertNotRegex(texto, r"\d+\s*(pg|ng|U)/")
             self.assertNotIn("Controles previos:", texto)
+            # No concatenar abertura de dx + "Ingresa…" (redacción duplicada).
+            self.assertNotIn("Ingresa", texto)
+            self.assertEqual(texto.lower().count("ante diagnóstico"), 1)
+
+    def test_justificacion_probnp_dx_ic_no_repite_sospecha(self):
+        """Si el dx ya nombra IC, no vuelve a decir 'sospecha de insuficiencia…'."""
+        dx = "Insuficiencia cardíaca descompensada"
+        t = construir_texto_justificacion_probnp(diagnostico=dx, marcadores=[])
+        self.assertEqual(
+            t,
+            "Ante diagnóstico de Insuficiencia cardíaca descompensada se solicita Pro-BNP.",
+        )
+        self.assertNotIn("sospecha", t.casefold())
+        self.assertEqual(t.casefold().count("insuficiencia card"), 1)
+
+    def test_justificacion_probnp_dx_otro_agrega_contexto_sin_duplicar_ingresa(self):
+        dx = "Disnea de esfuerzo"
+        t = construir_texto_justificacion_probnp(diagnostico=dx, marcadores=[])
+        self.assertTrue(t.startswith("Ante diagnóstico de Disnea de esfuerzo"))
+        self.assertIn("se solicita Pro-BNP", t)
+        self.assertIn("congestión", t.casefold())
+        self.assertNotIn("Ingresa", t)
 
     def test_dimero_d_requiere_resena(self):
         tm = self.glu.tipo_muestra_requerida

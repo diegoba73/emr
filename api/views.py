@@ -2890,7 +2890,14 @@ class DocumentoViewSet(viewsets.ModelViewSet):
             return
         if role == 'medico':
             try:
-                if atencion.medico_principal_id != user.medico.id:
+                from turnos.models import Atencion as AtencionModel
+
+                propia = atencion.medico_principal_id == user.medico.id
+                guardia = (
+                    getattr(atencion, 'contexto_atencion', None)
+                    == AtencionModel.ContextoAtencion.GUARDIA
+                )
+                if not propia and not guardia:
                     raise PermissionDenied(
                         'No puede adjuntar documentos a atenciones ajenas.'
                     )

@@ -1,10 +1,24 @@
 const STORAGE_KEY = 'synesis_kiosco_public_origin';
+export const KIOSCO_ANUNCIO_PATH = '/kiosco-recepcion';
 
 function normalizeOrigin(raw: string): string {
   const t = raw.trim().replace(/\/$/, '');
   if (!t) return '';
-  if (/^https?:\/\//i.test(t)) return t;
-  return `http://${t}`;
+  const withScheme = /^https?:\/\//i.test(t) ? t : `http://${t}`;
+  try {
+    const u = new URL(withScheme);
+    // Solo origen (scheme+host+port). Evita pegar .../synesis-movil.apk u otras rutas.
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return withScheme.replace(/\/$/, '');
+  }
+}
+
+/** URL canónica del anuncio QR: siempre termina en /kiosco-recepcion. */
+export function buildKioscoAnuncioUrl(originOrUrl?: string): string {
+  const origin = normalizeOrigin(originOrUrl || '');
+  if (!origin) return '';
+  return `${origin}${KIOSCO_ANUNCIO_PATH}`;
 }
 
 export function isLocalHostName(hostname: string): boolean {

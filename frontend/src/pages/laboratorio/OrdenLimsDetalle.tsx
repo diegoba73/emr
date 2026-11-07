@@ -71,6 +71,9 @@ import EditarOrdenLimsDialog from '../../components/lims/EditarOrdenLimsDialog';
 import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
 import { colorEstadoObraSocial, labelEstadoObraSocial, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 import {
+  formatListaTubosPendientesRecepcion,
+} from '../../utils/limsTubosRecepcion';
+import {
   limsActionBtnErrorSx,
   limsActionBtnPrimaryOutlineSx,
   limsActionBtnSoftSx,
@@ -120,6 +123,18 @@ const OrdenLimsDetalle: React.FC = () => {
   const refreshMuestras = async (oid: number, numero?: string | null) => {
     const m = await listMuestrasPorSolicitud(oid, numero ?? undefined);
     setMuestras(m);
+  };
+
+  /** Tras recibir/cancelar tubos el BE puede promover a LISTO_PARA_VALIDAR. */
+  const refreshOrdenYMuestras = async () => {
+    if (!orden) return;
+    try {
+      const fresh = await getSolicitudExamen(orden.id);
+      setOrden(fresh);
+      await refreshMuestras(fresh.id, fresh.numero);
+    } catch {
+      await refreshMuestras(orden.id, orden.numero);
+    }
   };
 
   const loadAll = useCallback(async () => {
@@ -310,6 +325,13 @@ const OrdenLimsDetalle: React.FC = () => {
   const informeEnviado = Boolean(orden.fecha_informe_enviado);
   const osPermiteValidar = ordenPuedeValidarObraSocial(orden);
   const bloqueoObraSocial = !osPermiteValidar && e !== 'FINALIZADO' && !cancelada;
+  const tubosPendientesRecepcion = orden.tubos_pendientes_recepcion || [];
+  const bloqueoTubosRecepcion =
+    tubosPendientesRecepcion.length > 0 &&
+    !finalizada &&
+    !cancelada &&
+    (resultadosCompletos || e === 'EN_PROCESO' || e === 'INFORMADO_PARCIAL');
+  const listaTubosRecepcionMsg = formatListaTubosPendientesRecepcion(tubosPendientesRecepcion);
 
   const handleCancelarOrden = () => {
     openMotivoDialog({
@@ -592,7 +614,28 @@ const OrdenLimsDetalle: React.FC = () => {
             (Obra social → Autorizado).
           </Alert>
         )}
-        {orden.tubos_pendientes_extraccion && orden.tubos_pendientes_extraccion.length > 0 && (
+        {bloqueoTubosRecepcion && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            {resultadosCompletos ? (
+              <>
+                Los resultados están cargados, pero para <strong>validar</strong> hace falta{' '}
+                <strong>recepcionar</strong> {tubosPendientesRecepcion.length === 1 ? 'el tubo' : 'los tubos'}:{' '}
+                {listaTubosRecepcionMsg}. Escanealos en <strong>Recepción</strong> o recibilos desde la
+                pestaña de muestras. Al recepcionar el último, la orden pasa sola a{' '}
+                <strong>Listo para validar</strong>.
+              </>
+            ) : (
+              <>
+                Hay tubos sin recepcionar: {listaTubosRecepcionMsg}. Podés cargar resultados de los
+                ensayos cuyos tubos ya estén recibidos; para validar hay que recepcionar (o
+                cancelar/rechazar) todos los pendientes.
+              </>
+            )}
+          </Alert>
+        )}
+        {!bloqueoTubosRecepcion &&
+          orden.tubos_pendientes_extraccion &&
+          orden.tubos_pendientes_extraccion.length > 0 && (
           <Alert severity="warning" sx={{ mt: 1.5 }}>
             Recepción incompleta. Faltan escanear:{' '}
             {orden.tubos_pendientes_extraccion
@@ -705,6 +748,9 @@ const OrdenLimsDetalle: React.FC = () => {
               ordenEstado={orden.estado}
               canOperate={canOp && !cancelada && !finalizada}
               onMuestrasChange={setMuestras}
+              onMuestraAccionCompletada={() => {
+                void refreshOrdenYMuestras();
+              }}
               origenOrden={{
                 origen_solicitud: orden.origen_solicitud,
                 origen_solicitud_display: orden.origen_solicitud_display,

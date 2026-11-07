@@ -14,6 +14,42 @@ from synesis.lan_env import (
     public_emr_origin,
 )
 
+KIOSCO_ANUNCIO_PATH = '/kiosco-recepcion'
+
+
+def url_anuncio_kiosco(origin: str) -> str:
+    """Siempre ``{origin}/kiosco-recepcion`` — nunca APK ni otras rutas."""
+    base = _norm_origin(origin)
+    if not base:
+        return ''
+    # Si pegaron una URL con path (p. ej. .../synesis-movil.apk), usar solo el origen.
+    try:
+        p = urlparse(base)
+        if p.scheme and p.netloc:
+            base = f'{p.scheme}://{p.netloc}'.rstrip('/')
+    except Exception:
+        pass
+    return f'{base}{KIOSCO_ANUNCIO_PATH}'
+
+
+def es_url_permitida_qr_kiosco(data: str) -> bool:
+    """QR de anuncio/espera: rechaza APK y URLs ajenas al kiosco."""
+    raw = (data or '').strip()
+    if not raw or len(raw) > 2048:
+        return False
+    lower = raw.lower()
+    if '.apk' in lower or 'synesis-movil' in lower:
+        return False
+    if raw.startswith('/espera/') or raw.startswith(KIOSCO_ANUNCIO_PATH):
+        return True
+    if raw.startswith('http://') or raw.startswith('https://'):
+        try:
+            path = (urlparse(raw).path or '').rstrip('/') or '/'
+        except Exception:
+            return False
+        return path == KIOSCO_ANUNCIO_PATH or path.startswith('/espera/')
+    return False
+
 
 def _norm_origin(raw: str) -> str:
     t = (raw or '').strip().rstrip('/')

@@ -375,8 +375,8 @@ class TestAtencionPermissionsMutations:
         assert client.get(url).status_code == status.HTTP_404_NOT_FOUND
         assert client.patch(url, {'observaciones_generales': 'x'}, format='json').status_code == status.HTTP_404_NOT_FOUND
 
-    def test_medico_ve_pero_no_opera_guardia_ajena(self, client, medico_a, medico_b, paciente):
-        """Guardia compartida: otro médico puede ver, no editar ni cerrar."""
+    def test_medico_opera_guardia_ajena(self, client, medico_a, medico_b, paciente):
+        """Guardia compartida: otro médico puede ver, editar y cerrar (agilidad)."""
         _, med_b = medico_b
         guardia_ajena = Atencion.objects.create(
             paciente=paciente,
@@ -394,13 +394,16 @@ class TestAtencionPermissionsMutations:
             {'observaciones_generales': 'continúa otro médico'},
             format='json',
         )
-        assert patch.status_code == status.HTTP_403_FORBIDDEN
+        assert patch.status_code == status.HTTP_200_OK, patch.content
+        assert patch.data.get('observaciones_generales') == 'continúa otro médico'
         cerrar = client.post(
             reverse('atenciones-cerrar', args=[guardia_ajena.id]),
             {},
             format='json',
         )
-        assert cerrar.status_code == status.HTTP_403_FORBIDDEN
+        assert cerrar.status_code == status.HTTP_200_OK, cerrar.content
+        guardia_ajena.refresh_from_db()
+        assert guardia_ajena.estado_clinico == Atencion.EstadoClinico.FINALIZADA
 
     def test_medico_puede_cerrar_propia(self, client, medico_a, atencion_medico_a):
         client.force_authenticate(user=medico_a[0])

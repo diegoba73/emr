@@ -260,7 +260,7 @@ export function canAccessBiDashboard(user: User | null | undefined): boolean {
 
 /** Panel de internación: lectura de camas/internados.
  * Médico/enfermería/secretaría/kine/admin; operadores LIMS (laboratorio/bioquímico) solo lectura.
- * Requiere capacidad de sede (CEHTA no tiene internación).
+ * Requiere capacidad de sede (`internacion`: CEHTA e ICPL). Escritura: `internacion_escritura` (solo ICPL).
  */
 export function canAccessInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
@@ -277,12 +277,13 @@ export function canAccessInternacion(user: User | null | undefined): boolean {
   );
 }
 
-/** Infraestructura de camas/sectores: sin secretaría. */
+/** Infraestructura de camas/sectores: sin secretaría. Requiere escritura de sede. */
 export function canManageInternacionInfra(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
+  if (!userHasCapacidad(user, 'internacion_escritura')) return false;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria';
 }
@@ -297,12 +298,13 @@ export function canAdmitirInternacion(user: User | null | undefined): boolean {
   return canOperateInternacionClinica(user);
 }
 
-/** Alta de internación: solo médico y admin. */
+/** Alta de internación: solo médico y admin. Requiere escritura de sede. */
 export function canDarAltaInternacion(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isLaboratorioRole(user)) return false;
   if (isMedicoSoloAmbulatorio(user)) return false;
+  if (!userHasCapacidad(user, 'internacion_escritura')) return false;
   return normalizeRol(user) === 'medico';
 }
 
@@ -311,6 +313,7 @@ export function canWriteHcMedico(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   if (isMedicoSoloAmbulatorio(user)) return false;
+  if (!userHasCapacidad(user, 'internacion_escritura')) return false;
   return normalizeRol(user) === 'medico';
 }
 
@@ -318,6 +321,7 @@ export function canWriteHcMedico(user: User | null | undefined): boolean {
 export function canWriteHcEnfermeria(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  if (!userHasCapacidad(user, 'internacion_escritura')) return false;
   return normalizeRol(user) === 'enfermeria';
 }
 
@@ -325,6 +329,7 @@ export function canWriteHcEnfermeria(user: User | null | undefined): boolean {
 export function canWriteHcKinesiologia(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
+  if (!userHasCapacidad(user, 'internacion_escritura')) return false;
   return normalizeRol(user) === 'kinesiologo';
 }
 

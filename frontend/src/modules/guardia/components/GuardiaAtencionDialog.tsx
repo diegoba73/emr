@@ -404,10 +404,9 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
           <Stack spacing={2.5} sx={{ mt: 1 }}>
             {!isReadOnly && (
               <Alert severity="info" variant="outlined">
-                Al guardar, la atención queda <strong>abierta</strong>: podés seguir agregando
-                pedidos y derivar a internación cuando haga falta. Los análisis y estudios se
-                completan en sus módulos; cerrá la atención solo cuando el episodio de guardia
-                termine.
+                Al guardar, la atención queda <strong>abierta</strong> con los pedidos cargados.
+                Cuando estén los resultados, desde la lista podés <strong>cerrar</strong> la
+                atención o <strong>derivar a internación</strong>.
               </Alert>
             )}
 

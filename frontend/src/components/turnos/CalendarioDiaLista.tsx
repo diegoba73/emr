@@ -17,9 +17,10 @@ import {
   type TurnoAgendaKind,
 } from '../../utils/turnoKind';
 import { getTurnoEstadoColor } from '../../utils/turnoEstadoColors';
+import { formatHoraDisplay } from '../../utils/dateFieldFormat';
 
 function formatHora(d: Date): string {
-  return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  return formatHoraDisplay(d);
 }
 
 function sameLocalDay(a: Date, b: Date): boolean {

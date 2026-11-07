@@ -1,8 +1,21 @@
 /** Puerto SPA del kiosco en LAN (mismo default que EMR_KIOSCO_FRONTEND_PORT). */
 const KIOSCO_FRONTEND_PORT = '3000';
+const KIOSCO_ANUNCIO_PATH = '/kiosco-recepcion';
 
 function normalizeUrl(raw: string): string {
   return raw.trim().replace(/\/$/, '');
+}
+
+/** Fuerza path /kiosco-recepcion; descarta .apk u otras rutas. */
+function toKioscoAnuncioUrl(raw: string): string {
+  const t = normalizeUrl(raw);
+  if (!t) return '';
+  try {
+    const u = new URL(/^https?:\/\//i.test(t) ? t : `http://${t}`);
+    return `${u.protocol}//${u.host}${KIOSCO_ANUNCIO_PATH}`;
+  } catch {
+    return t.endsWith(KIOSCO_ANUNCIO_PATH) ? t : `${t}${KIOSCO_ANUNCIO_PATH}`;
+  }
 }
 
 function isPrivateLanHost(hostname: string): boolean {
@@ -39,10 +52,8 @@ export function deriveKioscoAnuncioUrlFromApi(apiBase: string): string {
  */
 export function resolveKioscoAnuncioUrl(fromApi?: string | null, apiBase?: string): string {
   const env = normalizeUrl(process.env.EXPO_PUBLIC_KIOSCO_URL || '');
-  if (env) {
-    return env.endsWith('/kiosco-recepcion') ? env : `${env}/kiosco-recepcion`;
-  }
+  if (env) return toKioscoAnuncioUrl(env);
   const api = normalizeUrl(fromApi || '');
-  if (api) return api.endsWith('/kiosco-recepcion') ? api : `${api}/kiosco-recepcion`;
+  if (api) return toKioscoAnuncioUrl(api);
   return deriveKioscoAnuncioUrlFromApi(apiBase || '');
 }

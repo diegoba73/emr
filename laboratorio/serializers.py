@@ -528,6 +528,7 @@ def _ocultar_detalle_clinico_secretaria(data, user):
     data['observaciones'] = ''
     data['orden_grupos_informe'] = []
     data['tubos_pendientes_extraccion'] = []
+    data['tubos_pendientes_recepcion'] = []
     data['derivaciones_resumen'] = []
     data['resultados'] = []
     data['resultados_visibles'] = False
@@ -589,6 +590,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
     diagnostico = serializers.SerializerMethodField()
     extraccion_completa = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
+    tubos_pendientes_recepcion = serializers.SerializerMethodField()
     tipos_muestra_display = serializers.SerializerMethodField()
     orden_abierta = serializers.SerializerMethodField()
     esperando_recepcion = serializers.SerializerMethodField()
@@ -660,6 +662,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'orden_grupos_informe',
             'extraccion_completa',
             'tubos_pendientes_extraccion',
+            'tubos_pendientes_recepcion',
             'tipos_muestra_display',
             'orden_abierta',
             'esperando_recepcion',
@@ -702,6 +705,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'paneles_nombres',
             'extraccion_completa',
             'tubos_pendientes_extraccion',
+            'tubos_pendientes_recepcion',
             'orden_abierta',
             'esperando_recepcion',
             'puede_agregar_examenes',
@@ -924,6 +928,27 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             )
         return out
 
+    def get_tubos_pendientes_recepcion(self, obj):
+        """Tubos PENDIENTE_TOMA/TOMADA que bloquean pasar a LISTO_PARA_VALIDAR."""
+        out = []
+        for p in self._muestras_prefetched(obj):
+            if getattr(p, 'estado', None) not in ('PENDIENTE_TOMA', 'TOMADA'):
+                continue
+            tc = getattr(p, 'tipo_contenedor', None)
+            tm = getattr(p, 'tipo_muestra', None)
+            out.append(
+                {
+                    'id': p.pk,
+                    'codigo_barra': p.codigo_barra,
+                    'tipo_contenedor_codigo': getattr(tc, 'codigo', None) if p.tipo_contenedor_id else None,
+                    'tipo_contenedor_nombre': getattr(tc, 'nombre', None) if p.tipo_contenedor_id else None,
+                    'tipo_muestra_codigo': getattr(tm, 'codigo', None) if p.tipo_muestra_id else None,
+                    'tipo_muestra_nombre': getattr(tm, 'nombre', None) if p.tipo_muestra_id else None,
+                    'estado': p.estado,
+                }
+            )
+        return out
+
     def get_tipos_muestra_display(self, obj):
         """Nombres de material clínicos de la orden (para listado, como micro)."""
         nombres: list[str] = []
@@ -1103,6 +1128,7 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
     puede_quitar_examenes = serializers.SerializerMethodField()
     pedido_adicional = serializers.SerializerMethodField()
     tubos_pendientes_extraccion = serializers.SerializerMethodField()
+    tubos_pendientes_recepcion = serializers.SerializerMethodField()
     tipos_muestra_display = serializers.SerializerMethodField()
     estado_obra_social_display = serializers.SerializerMethodField()
     obra_social_efectiva = serializers.SerializerMethodField()
@@ -1140,6 +1166,7 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
             "puede_quitar_examenes",
             "pedido_adicional",
             "tubos_pendientes_extraccion",
+            "tubos_pendientes_recepcion",
             "tipos_muestra_display",
         )
         read_only_fields = fields
@@ -1158,6 +1185,7 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
     get_puede_quitar_examenes = SolicitudExamenSerializer.get_puede_quitar_examenes
     get_pedido_adicional = SolicitudExamenSerializer.get_pedido_adicional
     get_tubos_pendientes_extraccion = SolicitudExamenSerializer.get_tubos_pendientes_extraccion
+    get_tubos_pendientes_recepcion = SolicitudExamenSerializer.get_tubos_pendientes_recepcion
     get_estado_obra_social_display = SolicitudExamenSerializer.get_estado_obra_social_display
     get_obra_social_efectiva = SolicitudExamenSerializer.get_obra_social_efectiva
     get_afiliado_efectivo = SolicitudExamenSerializer.get_afiliado_efectivo
@@ -1547,6 +1575,20 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
             )
         except RestriccionFrecuenciaError as exc:
             raise serializers.ValidationError(str(exc)) from exc
+
+        from laboratorio.restricciones_guardia_catalogo import (
+            GuardiaCatalogoError,
+            assert_examenes_permitidos_en_guardia,
+        )
+
+        try:
+            assert_examenes_permitidos_en_guardia(
+                origen_solicitud=validated_data.get("origen_solicitud"),
+                examenes_ids=examenes_ids,
+                paneles_ids=paneles_ids,
+            )
+        except GuardiaCatalogoError as exc:
+            raise serializers.ValidationError({"detail": str(exc)}) from exc
 
         from pacientes.afiliaciones import (
             normalizar_snapshot_os,

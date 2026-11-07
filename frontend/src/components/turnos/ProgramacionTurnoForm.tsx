@@ -4,8 +4,10 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
@@ -79,6 +81,12 @@ export interface ProgramacionTurnoFormProps {
   /** Si false, oculta Consulta médica (solo estudios). Default true. */
   allowConsulta?: boolean;
   submitLabel?: string;
+  /** Slot del calendario (p. ej. franja de sobreturno). */
+  initialDateTime?: Date | null;
+  /** Secretaría: turno extra sobre un horario ya ocupado. */
+  initialEsSobreturno?: boolean;
+  initialMedicoId?: number | null;
+  initialRecursoId?: number | null;
 }
 
 const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
@@ -88,10 +96,24 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   initialTipo = 'CONSULTA',
   allowConsulta = true,
   submitLabel = 'Crear',
+  initialDateTime = null,
+  initialEsSobreturno = false,
+  initialMedicoId = null,
+  initialRecursoId = null,
 }) => {
-  const { currentUser, medicos, loadMedicos, pacientes, loadPacientes, refreshTurnos } = useData();
+  const {
+    currentUser,
+    medicos,
+    loadMedicos,
+    pacientes,
+    loadPacientes,
+    refreshTurnos,
+    recursos,
+    loadRecursos,
+  } = useData();
   const rol = (currentUser?.rol || '').toLowerCase();
   const esPaciente = rol === 'paciente';
+  const puedeSobreturno = !esPaciente && (rol === 'secretaria' || rol === 'admin' || Boolean(currentUser?.is_staff));
 
   const [tipoActividad, setTipoActividad] = useState<TipoActividadProgramacion>(
     allowConsulta ? initialTipo : initialTipo === 'CONSULTA' ? 'ESTUDIO' : initialTipo
@@ -118,7 +140,8 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   const [fechaManual, setFechaManual] = useState('');
   const [horaManual, setHoraManual] = useState('');
   const [duracionMin, setDuracionMin] = useState(20);
-  const [recursoId, setRecursoId] = useState<number | null>(null);
+  const [recursoId, setRecursoId] = useState<number | null>(initialRecursoId);
+  const [esSobreturno, setEsSobreturno] = useState(Boolean(initialEsSobreturno && puedeSobreturno));
 
   const [tipos, setTipos] = useState<TipoEstudioComplementario[]>([]);
   const [recursosProc, setRecursosProc] = useState<Recurso[]>([]);
@@ -131,13 +154,24 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   const [loadingCatalogos, setLoadingCatalogos] = useState(true);
 
   const practicaOptions = useMemo(() => practicaOptionsFromTipos(tipos), [tipos]);
-  const usaSlots = tipoActividad === 'CONSULTA' || tipoActividad === 'ESTUDIO';
+  const usaSlots =
+    (tipoActividad === 'CONSULTA' || tipoActividad === 'ESTUDIO') && !esSobreturno;
   const tipoAgendaSlot = tipoActividad === 'ESTUDIO' ? 'ESTUDIO' : 'CONSULTA';
+  const recursosConsulta = useMemo(
+    () =>
+      (recursos || []).filter(
+        (r) =>
+          r.activo !== false &&
+          (r.tipo_recurso === 'CONSULTORIO' || !r.tipo_recurso)
+      ),
+    [recursos]
+  );
 
   useEffect(() => {
     loadMedicos?.();
     loadPacientes?.();
-  }, [loadMedicos, loadPacientes]);
+    loadRecursos?.();
+  }, [loadMedicos, loadPacientes, loadRecursos]);
 
   useEffect(() => {
     if (esPaciente && currentUser?.paciente?.id) {
@@ -151,6 +185,31 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
       if (p) setPaciente(p);
     }
   }, [esPaciente, currentUser, pacientes, initialPacienteId]);
+
+  useEffect(() => {
+    if (!initialMedicoId || !medicos?.length) return;
+    const m = medicos.find((x) => x.id === initialMedicoId) || null;
+    if (m) setMedico(m);
+  }, [initialMedicoId, medicos]);
+
+  useEffect(() => {
+    if (!initialDateTime) return;
+    const d = initialDateTime;
+    setFechaManual(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    );
+    setHoraManual(
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    );
+  }, [initialDateTime]);
+
+  useEffect(() => {
+    setEsSobreturno(Boolean(initialEsSobreturno && puedeSobreturno));
+  }, [initialEsSobreturno, puedeSobreturno]);
+
+  useEffect(() => {
+    if (initialRecursoId) setRecursoId(initialRecursoId);
+  }, [initialRecursoId]);
 
   useEffect(() => {
     let active = true;
@@ -245,6 +304,39 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
     }
 
     if (tipoActividad === 'CONSULTA') {
+      if (esSobreturno) {
+        const inicio = parseLocalDateTime(fechaManual, horaManual);
+        if (!inicio) {
+          setError('Indicá fecha y hora del sobreturno.');
+          return;
+        }
+        const rid = recursoId;
+        if (!rid) {
+          setError('Seleccioná el consultorio del sobreturno.');
+          return;
+        }
+        setSaving(true);
+        try {
+          const fin = new Date(inicio.getTime() + duracionMin * 60_000);
+          await apiService.createTurno({
+            paciente_id: pacienteId,
+            medico_id: medico.id,
+            recurso_id: rid,
+            fecha_hora_inicio: formatLocalDateTimeSeconds(inicio),
+            fecha_hora_fin: formatLocalDateTimeSeconds(fin),
+            estado: 'CONFIRMADO',
+            motivo_reserva: motivo || '',
+            es_sobreturno: true,
+          } as any);
+          await refreshTurnos?.();
+          onSuccess?.();
+        } catch (err) {
+          setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.turnoGuardar));
+        } finally {
+          setSaving(false);
+        }
+        return;
+      }
       if (!slot) {
         setError('Elegí un horario libre.');
         return;
@@ -472,6 +564,29 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
         />
       )}
 
+      {puedeSobreturno && tipoActividad === 'CONSULTA' && (
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={esSobreturno}
+              onChange={(e) => {
+                setEsSobreturno(e.target.checked);
+                if (e.target.checked) setSlot(null);
+              }}
+              disabled={saving}
+            />
+          }
+          label="Sobreturno (extra sobre un horario ya ocupado)"
+        />
+      )}
+
+      {esSobreturno && tipoActividad === 'CONSULTA' && (
+        <Alert severity="info">
+          La secretaría agenda un paciente adicional en este bloque horario del médico. El turno
+          queda marcado como sobreturno.
+        </Alert>
+      )}
+
       {tipoActividad === 'ESTUDIO' && (
         <Autocomplete
           options={practicaOptions}
@@ -593,10 +708,12 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
         </Box>
       )}
 
-      {!usaSlots && (
+      {(esSobreturno && tipoActividad === 'CONSULTA') || !usaSlots ? (
         <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography variant="subtitle2" color="text.secondary">
-            Fecha y hora (acordada con el equipo)
+            {esSobreturno && tipoActividad === 'CONSULTA'
+              ? 'Horario del sobreturno (mismo bloque del médico)'
+              : 'Fecha y hora (acordada con el equipo)'}
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
             <TextField
@@ -621,30 +738,47 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
               label="Duración (min)"
               type="number"
               value={duracionMin}
-              onChange={(e) => setDuracionMin(Number(e.target.value) || 60)}
+              onChange={(e) =>
+                setDuracionMin(
+                  Number(e.target.value) || (esSobreturno && tipoActividad === 'CONSULTA' ? 20 : 60)
+                )
+              }
               inputProps={{ min: 15, step: 5 }}
               sx={{ width: 140 }}
             />
           </Box>
-          <Autocomplete
-            options={recursosProc}
-            value={recursosProc.find((r) => r.id === recursoId) || null}
-            onChange={(_e, opt) => setRecursoId(opt?.id ?? null)}
-            getOptionLabel={(r) =>
-              `${r.nombre}${r.tipo_recurso ? ` (${r.tipo_recurso.replace(/_/g, ' ')})` : ''}`
-            }
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            renderInput={(params) => (
-              <TextField {...params} label="Sala / quirófano *" required />
-            )}
-          />
-          {!recursosProc.length && (
+          {esSobreturno && tipoActividad === 'CONSULTA' ? (
+            <Autocomplete
+              options={recursosConsulta}
+              value={recursosConsulta.find((r) => r.id === recursoId) || null}
+              onChange={(_e, opt) => setRecursoId(opt?.id ?? null)}
+              getOptionLabel={(r) => r.nombre || `Recurso #${r.id}`}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              renderInput={(params) => (
+                <TextField {...params} label="Consultorio *" required />
+              )}
+            />
+          ) : (
+            <Autocomplete
+              options={recursosProc}
+              value={recursosProc.find((r) => r.id === recursoId) || null}
+              onChange={(_e, opt) => setRecursoId(opt?.id ?? null)}
+              getOptionLabel={(r) =>
+                `${r.nombre}${r.tipo_recurso ? ` (${r.tipo_recurso.replace(/_/g, ' ')})` : ''}`
+              }
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              renderInput={(params) => (
+                <TextField {...params} label="Sala / quirófano *" required />
+              )}
+            />
+          )}
+          {!usaSlots && !esSobreturno && !recursosProc.length && (
             <Alert severity="warning">
               No hay salas ni quirófanos activos. Configurá recursos en Administración.
             </Alert>
           )}
         </Box>
-      )}
+      ) : null}
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, pt: 1 }}>
         {onCancel && (

@@ -124,7 +124,7 @@ def usuario_puede_ver_estudio_micro(user, estudio) -> bool:
     """True si el usuario puede leer el estudio de microbiología (ficha / timeline).
 
     Misma audiencia de lectura que órdenes clínicas LIMS (sin filtro de estado).
-    El listado operativo de micro puede restringir más (p. ej. médico solo liberados).
+    El listado/sidebar operativo de micro es solo LIMS (el médico no lo ve).
     """
     if not user or not user.is_authenticated:
         return False
@@ -628,7 +628,7 @@ class IsInternacionStaff(permissions.BasePermission):
 
     Escritura (ingreso/alta/infra) va por IsInternacionClinica / IsInternacionAlta.
     Médicos con ámbito solo ambulatorio no acceden.
-    Sedes: CEHTA no tiene capacidad internación (ICPL sí).
+    Sedes: CEHTA e ICPL tienen capacidad de lectura; escritura solo ICPL (o sin filtro).
     """
 
     def has_permission(self, request, view):
@@ -646,7 +646,10 @@ class IsInternacionStaff(permissions.BasePermission):
 
 
 class IsInternacionClinica(permissions.BasePermission):
-    """Ingreso, edición e infraestructura de internación: médico, enfermería y admin."""
+    """Ingreso, edición e infraestructura de internación: médico, enfermería y admin.
+
+    Requiere capacidad de sede ``internacion_escritura`` (CEHTA solo lectura).
+    """
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -654,13 +657,19 @@ class IsInternacionClinica(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         from medicos.ambito import user_medico_es_solo_ambulatorio
+        from usuarios.sedes import usuario_tiene_capacidad
         if user_medico_es_solo_ambulatorio(request.user):
+            return False
+        if not usuario_tiene_capacidad(request.user, 'internacion_escritura'):
             return False
         return get_normalized_role(request.user) in ROLES_INTERNACION_CLINICA
 
 
 class IsInternacionAlta(permissions.BasePermission):
-    """Alta de internación: solo médico y admin."""
+    """Alta de internación: solo médico y admin.
+
+    Requiere capacidad de sede ``internacion_escritura`` (CEHTA solo lectura).
+    """
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -668,13 +677,19 @@ class IsInternacionAlta(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         from medicos.ambito import user_medico_es_solo_ambulatorio
+        from usuarios.sedes import usuario_tiene_capacidad
         if user_medico_es_solo_ambulatorio(request.user):
+            return False
+        if not usuario_tiene_capacidad(request.user, 'internacion_escritura'):
             return False
         return get_normalized_role(request.user) in ROLES_INTERNACION_ALTA
 
 
 class IsInternacionHcMedico(permissions.BasePermission):
-    """Evolución SOAP / hojas médicas de internación."""
+    """Evolución SOAP / hojas médicas de internación.
+
+    Requiere capacidad de sede ``internacion_escritura`` (CEHTA solo lectura).
+    """
 
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
@@ -682,7 +697,10 @@ class IsInternacionHcMedico(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         from medicos.ambito import user_medico_es_solo_ambulatorio
+        from usuarios.sedes import usuario_tiene_capacidad
         if user_medico_es_solo_ambulatorio(request.user):
+            return False
+        if not usuario_tiene_capacidad(request.user, 'internacion_escritura'):
             return False
         return get_normalized_role(request.user) in ROLES_HC_MEDICO
 
@@ -811,8 +829,8 @@ class AtencionPermission(permissions.BasePermission):
     Permisos para atenciones clínicas (QA-ROLE-01).
 
     - admin/staff/superuser: operación completa (destroy bloqueado en view).
-    - médico: propias (lectura/escritura); además lectura de todas las GUARDIA
-      (tablero compartido) si el ámbito no es solo ambulatorio.
+    - médico: propias (lectura/escritura); GUARDIA es tablero compartido
+      (ver y operar: editar/cerrar/derivar) si el ámbito no es solo ambulatorio.
     - secretaría: lectura/escritura global (guardia: iniciar, pedidos, cerrar).
     - enfermería: solo lectura global (coordinación asistencial; sin mutación clínica).
     - paciente: solo lectura de propias atenciones.
@@ -898,14 +916,12 @@ class AtencionPermission(permissions.BasePermission):
             medico = _atencion_user_medico(user)
             if not _medico_puede_acceder_atencion(medico, atencion):
                 return False
-            # Propias: lectura + mutación. Guardia ajena: solo lectura.
-            if medico is not None and atencion.medico_principal_id == medico.id:
-                return action in (
-                    _ATENCION_READ_ACTIONS
-                    | _ATENCION_WRITE_ACTIONS
-                    | _ATENCION_CLINICAL_ACTIONS
-                )
-            return action in _ATENCION_READ_ACTIONS
+            # Propias o GUARDIA compartida: lectura + mutación (agilidad de guardia).
+            return action in (
+                _ATENCION_READ_ACTIONS
+                | _ATENCION_WRITE_ACTIONS
+                | _ATENCION_CLINICAL_ACTIONS
+            )
 
         return False
 
@@ -1264,10 +1280,11 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             return action in (
                 "list",
                 "retrieve",
+                "historial_cultivo",
                 "informe_pdf",
                 "enviar_informe",
             )
-        if action in ("list", "retrieve", "por_codigo"):
+        if action in ("list", "retrieve", "por_codigo", "historial_cultivo"):
             return True
         # Create/batch micro granular: solo LIMS write (médico usa pedidos-completos).
         if action in ("create", "batch"):
@@ -1345,7 +1362,14 @@ class LimsMicrobiologiaPermission(permissions.BasePermission):
             or role in ROLES_SECRETARIA_ENTREGA_INFORME
             or role == "medico"
         ):
-            if action not in ("retrieve", "list", "por_codigo", "informe_pdf", "enviar_informe"):
+            if action not in (
+                "retrieve",
+                "list",
+                "por_codigo",
+                "historial_cultivo",
+                "informe_pdf",
+                "enviar_informe",
+            ):
                 return False
             return True
         return False

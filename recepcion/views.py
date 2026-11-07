@@ -533,12 +533,16 @@ def _payload_kiosco(
 @permission_classes([AllowAny])
 def kiosco_config(request):
     """Orígenes LAN configurados para el QR (sin Internet / dominio público)."""
+    from .kiosco_origen import url_anuncio_kiosco
+
     info = resolver_origen_espera_kiosco(request)
+    origin = info.get('espera_origin') or ''
     return Response(
         {
             'ok': True,
-            'espera_origin': info.get('espera_origin') or '',
+            'espera_origin': origin,
             'espera_origins': info.get('espera_origins') or [],
+            'anuncio_url': url_anuncio_kiosco(origin),
             'lan_ips': info.get('lan_ips') or [],
             'fuente': info.get('fuente') or '',
             'es_lan': bool(info.get('es_lan')),
@@ -557,17 +561,13 @@ def kiosco_qr_png(request):
     import qrcode
     from django.http import HttpResponse
 
+    from .kiosco_origen import es_url_permitida_qr_kiosco
+
     data = (request.query_params.get('data') or '').strip()
-    if not data or len(data) > 2048:
-        raise ValidationError({'detail': 'data inválido.'})
-    # Enlaces http(s) o rutas de espera / kiosco de anuncio
-    if not (
-        data.startswith('http://')
-        or data.startswith('https://')
-        or data.startswith('/espera/')
-        or data.startswith('/kiosco-recepcion')
-    ):
-        raise ValidationError({'detail': 'Solo se permiten URLs de anuncio o espera.'})
+    if not es_url_permitida_qr_kiosco(data):
+        raise ValidationError(
+            {'detail': 'Solo se permiten URLs /kiosco-recepcion o /espera/ (no APK).'}
+        )
     img = qrcode.make(data, border=2)
     buf = io.BytesIO()
     img.save(buf, format='PNG')

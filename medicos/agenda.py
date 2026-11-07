@@ -115,7 +115,17 @@ def dias_disponibles(medico, desde, hasta, tipo=None):
     return resultado
 
 
-def validar_reserva(medico, inicio, fin, recurso=None, *, excluir=None, exigir_horario=False, horario_id=None):
+def validar_reserva(
+    medico,
+    inicio,
+    fin,
+    recurso=None,
+    *,
+    excluir=None,
+    exigir_horario=False,
+    horario_id=None,
+    permitir_sobreturno=False,
+):
     slot = duracion_de(medico)
     minutes = duracion_minutos(medico)
     if inicio and fin != inicio + slot:
@@ -140,5 +150,8 @@ def validar_reserva(medico, inicio, fin, recurso=None, *, excluir=None, exigir_h
                        and (h.recurso_id is None or h.recurso_id == getattr(recurso, 'pk', None))]
         if not encontrados:
             raise ValidationError('El horario no está disponible en la agenda del médico.')
+    # Sobreturno (secretaría): permite un turno extra sobre un slot ya ocupado.
+    if permitir_sobreturno:
+        return
     if ocupado(medico, inicio, fin, recurso, excluir):
         raise ValidationError('El horario ya está ocupado. Seleccione otro.')

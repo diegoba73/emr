@@ -1,4 +1,10 @@
-import { formatFecha, formatFechaDisplay, formatHora } from './dateFieldFormat';
+import {
+  formatFecha,
+  formatFechaDisplay,
+  formatFechaHoraDisplay,
+  formatHora,
+  formatHoraDisplay,
+} from './dateFieldFormat';
 
 describe('dateFieldFormat', () => {
   test('formatFecha YYYY-MM-DD local', () => {
@@ -9,6 +15,16 @@ describe('dateFieldFormat', () => {
   test('formatHora HH:mm con padding', () => {
     const d = new Date(2025, 2, 5, 9, 7, 0);
     expect(formatHora(d)).toBe('09:07');
+  });
+
+  test('formatHoraDisplay 24h (incluye tarde)', () => {
+    const d = new Date(2025, 2, 5, 15, 30, 0);
+    expect(formatHoraDisplay(d)).toBe('15:30');
+  });
+
+  test('formatFechaHoraDisplay 24h', () => {
+    const d = new Date(2025, 2, 5, 15, 30, 0);
+    expect(formatFechaHoraDisplay(d)).toMatch(/05\/03\/2025 15:30|5\/3\/2025 15:30/);
   });
 
   test('fecha/hora desde mismo instante que slot de calendario', () => {

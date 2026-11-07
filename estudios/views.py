@@ -148,11 +148,16 @@ class EstudioComplementarioViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def filter_queryset(self, queryset):
-        """Aplica search/filters y, en list, bandeja antes de paginar (A5)."""
-        qs = super().filter_queryset(queryset)
-        if getattr(self, 'action', None) == 'list':
-            from estudios.bandejas import aplicar_bandeja
+        """Aplica search/filters, rango de fechas y, en list, bandeja (A5)."""
+        from estudios.bandejas import aplicar_bandeja, filtrar_por_rango_fechas
 
+        qs = super().filter_queryset(queryset)
+        qs = filtrar_por_rango_fechas(
+            qs,
+            self.request.query_params.get('fecha_desde'),
+            self.request.query_params.get('fecha_hasta'),
+        )
+        if getattr(self, 'action', None) == 'list':
             qs = aplicar_bandeja(qs, self.request.query_params.get('bandeja'))
         return qs
 

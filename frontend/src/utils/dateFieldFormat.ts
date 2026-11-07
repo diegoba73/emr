@@ -50,8 +50,47 @@ export function formatFechaDisplay(
   });
 }
 
-/** HH:mm */
+/** HH:mm (24 h, sin AM/PM). */
 export function formatHora(date: Date): string {
   if (Number.isNaN(date.getTime())) return '';
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
+
+const HORA_24: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+};
+
+const FECHA_HORA_24: Intl.DateTimeFormatOptions = {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  ...HORA_24,
+};
+
+/** Hora corta 24 h vía locale (p. ej. grillas de agenda). */
+export function formatHoraDisplay(date: Date, locale = 'es-AR'): string {
+  if (Number.isNaN(date.getTime())) return '';
+  // Preferir padding manual: algunos motores ignoran hour12 con es-AR.
+  return formatHora(date) || date.toLocaleTimeString(locale, HORA_24);
+}
+
+/** Fecha + hora 24 h (dd/mm/aaaa HH:mm). */
+export function formatFechaHoraDisplay(
+  value: string | Date | null | undefined,
+  locale = 'es-AR'
+): string {
+  if (value == null || value === '') return '—';
+  const dt = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(dt.getTime())) return '—';
+  const fecha = dt.toLocaleDateString(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `${fecha} ${formatHora(dt)}`;
+}
+
+export const LOCALE_TIME_24 = HORA_24;
+export const LOCALE_DATETIME_24 = FECHA_HORA_24;

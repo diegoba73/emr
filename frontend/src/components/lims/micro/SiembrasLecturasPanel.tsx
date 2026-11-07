@@ -46,6 +46,28 @@ import {
 
 const CRECIMIENTOS = ['PENDIENTE', 'SIN_DESARROLLO', 'ESCASO', 'MODERADO', 'ABUNDANTE', 'MIXTO'];
 
+function labelMedioCultivo(m: MedioCultivo): string {
+  const code = (m.codigo || '').trim();
+  const name = (m.nombre || '').trim();
+  if (code && name) return `${code} — ${name}`;
+  return name || code || `Medio #${m.id}`;
+}
+
+function medioMatchesQuery(m: MedioCultivo, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [m.codigo, m.nombre, m.tipo]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+function labelMedioDeSiembra(medioId: number, medios: MedioCultivo[]): string {
+  const m = medios.find((x) => x.id === medioId);
+  return m ? labelMedioCultivo(m) : String(medioId);
+}
+
 export interface SiembrasLecturasPanelProps {
   estudioId: number;
   siembras: SiembraMicrobiologia[];
@@ -65,7 +87,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
   onRefresh,
   onIrAInformes,
 }) => {
-  const [medioId, setMedioId] = useState<number | ''>('');
+  const [medioSel, setMedioSel] = useState<MedioCultivo | null>(null);
   const [siembraIdLectura, setSiembraIdLectura] = useState<number | ''>('');
   const [lecturaForm, setLecturaForm] = useState({
     crecimiento: 'PENDIENTE',
@@ -118,15 +140,20 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
 
   const cultivoNegativo = todasLecturasSinDesarrollo(lecturas);
 
+  const mediosActivos = useMemo(
+    () => medios.filter((m) => m.activo !== false),
+    [medios]
+  );
+
   const crearSiembra = async () => {
-    if (medioId === '') {
+    if (!medioSel) {
       toast.error('Seleccione medio de cultivo');
       return;
     }
     try {
-      await createSiembraMicrobiologia({ estudio_id: estudioId, medio_id: Number(medioId) });
+      await createSiembraMicrobiologia({ estudio_id: estudioId, medio_id: medioSel.id });
       toast.success('Siembra registrada');
-      setMedioId('');
+      setMedioSel(null);
       onRefresh();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarSiembra));
@@ -290,20 +317,31 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
           <Typography variant="subtitle2" gutterBottom>
             Nueva siembra
           </Typography>
-          <FormControl size="small" sx={{ minWidth: 220, mr: 2 }}>
-            <InputLabel>Medio</InputLabel>
-            <Select label="Medio" value={medioId === '' ? '' : String(medioId)} onChange={(ev) => setMedioId(ev.target.value === '' ? '' : Number(ev.target.value))}>
-              <MenuItem value="">—</MenuItem>
-              {medios.filter((m) => m.activo !== false).map((m) => (
-                <MenuItem key={m.id} value={m.id}>
-                  {m.codigo} — {m.nombre}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={crearSiembra}>
-            Registrar siembra
-          </Button>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+            <Autocomplete
+              size="small"
+              sx={{ minWidth: 320, flex: '1 1 280px', maxWidth: 480 }}
+              options={mediosActivos}
+              value={medioSel}
+              onChange={(_e, value) => setMedioSel(value)}
+              getOptionLabel={(m) => labelMedioCultivo(m)}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              filterOptions={(options, state) =>
+                options.filter((m) => medioMatchesQuery(m, state.inputValue))
+              }
+              noOptionsText="Sin coincidencias"
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Medio"
+                  placeholder="Buscar por código o nombre"
+                />
+              )}
+            />
+            <Button variant="contained" onClick={crearSiembra}>
+              Registrar siembra
+            </Button>
+          </Box>
         </Paper>
       )}
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
@@ -328,7 +366,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
               siembras.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell>{s.id}</TableCell>
-                  <TableCell>{medios.find((m) => m.id === s.medio)?.nombre || s.medio}</TableCell>
+                  <TableCell>{labelMedioDeSiembra(s.medio, medios)}</TableCell>
                   <TableCell>{s.fecha_siembra ? new Date(s.fecha_siembra).toLocaleString() : '—'}</TableCell>
                   <TableCell>{s.condicion_incubacion || '—'}</TableCell>
                   {canOperate && (

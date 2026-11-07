@@ -3,6 +3,7 @@ import { Alert, Box, Button, Paper, TextField, Typography } from '@mui/material'
 import QrCodeImage from '../components/recepcion/QrCodeImage';
 import { getKioscoConfig } from '../services/recepcionApi';
 import {
+  buildKioscoAnuncioUrl,
   getStoredKioscoPublicOrigin,
   resolveKioscoPublicOrigin,
   setStoredKioscoPublicOrigin,
@@ -10,10 +11,12 @@ import {
 
 /**
  * Cartel imprimible: QR fijo que abre el anuncio de llegada (/kiosco-recepcion).
+ * Nunca apunta al APK de la app móvil.
  * En CEHTA/prod apunta a la URL pública del EMR (no IP LAN).
  * Ruta staff: /recepcion/qr-anuncio
  */
 const QrAnuncioImprimible: React.FC = () => {
+  const [apiAnuncioUrl, setApiAnuncioUrl] = useState('');
   const [apiOrigin, setApiOrigin] = useState('');
   const [hostDraft, setHostDraft] = useState(() => {
     const stored = getStoredKioscoPublicOrigin();
@@ -29,6 +32,9 @@ const QrAnuncioImprimible: React.FC = () => {
   useEffect(() => {
     void getKioscoConfig()
       .then((cfg) => {
+        if (cfg.anuncio_url) {
+          setApiAnuncioUrl(cfg.anuncio_url);
+        }
         if (cfg.espera_origin) {
           setApiOrigin(cfg.espera_origin);
           const next = resolveKioscoPublicOrigin(cfg.espera_origin);
@@ -39,17 +45,19 @@ const QrAnuncioImprimible: React.FC = () => {
   }, []);
 
   const anuncioUrl = useMemo(() => {
-    const origin = resolveKioscoPublicOrigin(apiOrigin || publicOrigin);
-    if (!origin) return '';
-    return `${origin.replace(/\/$/, '')}/kiosco-recepcion`;
-  }, [apiOrigin, publicOrigin]);
+    // Override local del operador tiene prioridad; si no, URL canónica del API.
+    const stored = getStoredKioscoPublicOrigin();
+    if (stored) return buildKioscoAnuncioUrl(stored);
+    if (apiAnuncioUrl) return apiAnuncioUrl;
+    return buildKioscoAnuncioUrl(resolveKioscoPublicOrigin(apiOrigin || publicOrigin));
+  }, [apiAnuncioUrl, apiOrigin, publicOrigin]);
 
   const aplicarHost = () => {
     const raw = hostDraft.trim().replace(/\/$/, '');
     if (!raw) return;
     let origin: string;
     if (/^https?:\/\//i.test(raw)) {
-      origin = raw.replace(/\/$/, '');
+      origin = raw;
     } else if (raw.includes('.') && !/^\d+\.\d+\.\d+\.\d+/.test(raw.split(':')[0])) {
       // Dominio público sin esquema → HTTPS (prod CEHTA/ICPL)
       origin = `https://${raw}`;
@@ -57,8 +65,10 @@ const QrAnuncioImprimible: React.FC = () => {
       // IP LAN de desarrollo
       origin = raw.includes(':') ? `http://${raw}` : `http://${raw}:3000`;
     }
-    setStoredKioscoPublicOrigin(origin);
-    setPublicOrigin(origin);
+    // Normaliza a origen (sin path .apk u otros).
+    const normalized = buildKioscoAnuncioUrl(origin).replace(/\/kiosco-recepcion$/, '');
+    setStoredKioscoPublicOrigin(normalized);
+    setPublicOrigin(normalized);
   };
 
   return (
@@ -68,7 +78,8 @@ const QrAnuncioImprimible: React.FC = () => {
       </Typography>
       <Typography sx={{ mb: 2, color: 'text.secondary' }}>
         Pegá este cartel en recepción (CEHTA o ICPL). El paciente escanea y elige recepción
-        (puesto 1) o sala de extracción. El enlace debe ser la URL pública del EMR, por ejemplo{' '}
+        (puesto 1) o sala de extracción. El QR <strong>siempre</strong> abre{' '}
+        <code>/kiosco-recepcion</code> (anuncio web), nunca la descarga de la app. Ejemplo:{' '}
         <strong>https://emr.icpueblodeluis.com.ar:8080/kiosco-recepcion</strong>.
       </Typography>
 

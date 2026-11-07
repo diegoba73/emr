@@ -62,7 +62,7 @@ export function getTourSteps(role: DemoTourRole): DemoTourStep[] {
       attentionFilters(),
       step('/guardia', 'page-guardia', 'Guardia: seguimiento de atenciones abiertas', '<p>El tablero muestra las atenciones de guardia y marca pedidos pendientes de laboratorio y estudios. Las acciones permiten consultar el detalle, continuar la atención, cerrarla o derivar a internación cuando corresponde.</p><p>La derivación no exige cerrar primero la atención: los pedidos pendientes siguen identificados en la lista.</p>'),
       beds(), bedDetails(), requests(),
-      step('/estudios-complementarios', 'page-estudios', 'Programación de turnos', '<p>Filtrá por paciente, tipo, prestación y fechas para seguir consultas, estudios, procedimientos y cirugías programados. El listado muestra el tipo, turno vinculado y datos del paciente y profesional.</p><p>Abrí un ítem para revisar su detalle y las acciones habilitadas en su etapa del proceso.</p>'),
+      step('/estudios-complementarios', 'page-estudios', 'Agenda clínica', '<p>Filtrá por paciente, tipo, prestación y fechas para seguir consultas, estudios, procedimientos y cirugías programados. El listado muestra el tipo, turno vinculado y datos del paciente y profesional.</p><p>Abrí un ítem para revisar su detalle y las acciones habilitadas en su etapa del proceso.</p>'),
       finish('/estudios-complementarios', 'page-estudios'),
     ];
     case 'laboratorio': return [

@@ -62,10 +62,12 @@ export function formatTurnoCalendarTitle(
     paciente?: { nombre?: string; apellido?: string } | null;
     medico?: { nombre?: string; apellido?: string } | null;
     motivo_reserva?: string;
+    es_sobreturno?: boolean;
   }
 ): string {
   const kind = getTurnoAgendaKind(turno);
   const meta = TURNO_KIND_META[kind];
+  const prefijoSobreturno = turno.es_sobreturno ? 'ST · ' : '';
   const pacienteNombre = turno.paciente
     ? turno.paciente.apellido
       ? `${turno.paciente.apellido}, ${turno.paciente.nombre || ''}`.trim()
@@ -78,7 +80,7 @@ export function formatTurnoCalendarTitle(
       turno.motivo_reserva?.replace(/^Estudio:\s*/i, '') ||
       'Estudio';
     const sala = turno.recurso?.nombre ? ` · ${turno.recurso.nombre}` : '';
-    return `${meta.shortLabel}: ${pacienteNombre} — ${estudioLabel}${sala}`;
+    return `${prefijoSobreturno}${meta.shortLabel}: ${pacienteNombre} — ${estudioLabel}${sala}`;
   }
 
   if (pacienteNombre && turno.medico) {
@@ -87,11 +89,11 @@ export function formatTurnoCalendarTitle(
       : turno.medico.nombre
         ? `Dr. ${turno.medico.nombre}`
         : 'Sin médico';
-    return `${meta.shortLabel}: ${pacienteNombre} (${medicoNombre})`;
+    return `${prefijoSobreturno}${meta.shortLabel}: ${pacienteNombre} (${medicoNombre})`;
   }
 
   if (pacienteNombre) {
-    return `${meta.shortLabel}: ${pacienteNombre}`;
+    return `${prefijoSobreturno}${meta.shortLabel}: ${pacienteNombre}`;
   }
 
   if (turno.medico) {

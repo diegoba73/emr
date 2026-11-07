@@ -290,6 +290,16 @@ export interface SolicitudExamenLims {
     tipo_contenedor_nombre?: string | null;
     estado?: string;
   }>;
+  /** Tubos PENDIENTE_TOMA/TOMADA que bloquean LISTO_PARA_VALIDAR. */
+  tubos_pendientes_recepcion?: Array<{
+    id: number;
+    codigo_barra: string | null;
+    tipo_contenedor_codigo?: string | null;
+    tipo_contenedor_nombre?: string | null;
+    tipo_muestra_codigo?: string | null;
+    tipo_muestra_nombre?: string | null;
+    estado?: string;
+  }>;
   /** Materiales clínicos de la orden (p. ej. «Líquido ascítico · Suero»). */
   tipos_muestra_display?: string | null;
 }
@@ -784,6 +794,39 @@ export interface HistorialAnalitoPrevioLims {
   fecha: string | null;
   solicitud_id: number;
   solicitud_numero: string | null;
+}
+
+/** Episodio previo del mismo tipo de cultivo (historial-cultivo micro). */
+export type DesarrolloHistorialMicro = 'CON_DESARROLLO' | 'SIN_DESARROLLO' | 'SIN_LECTURA';
+
+export interface HistorialMicroorganismoPrevioLims {
+  microorganismo_id: number;
+  codigo?: string | null;
+  nombre: string;
+  aislado_id: number;
+  aislado_estado: string;
+}
+
+export interface HistorialCultivoEpisodioLims {
+  estudio_id: number;
+  estudio_numero: string | null;
+  estado: string;
+  fecha: string | null;
+  desarrollo: DesarrolloHistorialMicro;
+  desarrollo_display: string;
+  microorganismos: HistorialMicroorganismoPrevioLims[];
+  tipo_cultivo_id: number | null;
+  tipo_cultivo_nombre: string | null;
+}
+
+export interface HistorialCultivoEstudioLims {
+  estudio_id: number;
+  paciente_id: number;
+  tipo_cultivo_id: number | null;
+  tipo_cultivo_codigo: string | null;
+  tipo_cultivo_nombre: string | null;
+  limit: number;
+  previos: HistorialCultivoEpisodioLims[];
 }
 
 export interface HistorialAnalitoItemLims {

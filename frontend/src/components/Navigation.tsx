@@ -54,7 +54,7 @@ const menuItems: MenuItemConfig[] = [
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', roles: ['medico', 'admin', 'enfermeria', 'paciente'] },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', roles: ['medico', 'admin', 'paciente'] },
   { text: 'Calendario', icon: <CalendarIcon />, path: '/turnos', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
-  { text: 'Programación de turnos', icon: <MedicalServices />, path: '/estudios-complementarios', roles: ['medico', 'admin', 'paciente', 'secretaria'] },
+  { text: 'Agenda clínica', icon: <MedicalServices />, path: '/estudios-complementarios', roles: ['medico', 'admin', 'paciente', 'secretaria'] },
   { text: 'Laboratorio', icon: <Schedule />, path: '/solicitudes', roles: ['medico', 'admin', 'secretaria', 'paciente'] },
   { text: 'Pacientes', icon: <PeopleIcon />, path: '/pacientes', roles: ['medico', 'admin', 'secretaria', 'secretaria_lab', 'enfermeria'] },
   { text: 'Médicos', icon: <Person />, path: '/medicos', roles: ['admin', 'secretaria', 'secretaria_lab', 'laboratorio', 'bioquimico'] },

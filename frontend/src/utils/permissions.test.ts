@@ -337,6 +337,19 @@ describe('canAccessInternacion', () => {
     expect(canWriteHcMedico(amb)).toBe(false);
   });
 
+  it('CEHTA: acceso lectura a Internación, sin escritura clínica', () => {
+    const secCehta = user({ rol: 'SECRETARIA', sedes: ['CEHTA'] });
+    const medCehta = user({ rol: 'MEDICO', sedes: ['CEHTA'] });
+    expect(canAccessInternacion(secCehta)).toBe(true);
+    expect(canAccessInternacion(medCehta)).toBe(true);
+    expect(canOperateInternacionClinica(medCehta)).toBe(false);
+    expect(canAdmitirInternacion(medCehta)).toBe(false);
+    expect(canDarAltaInternacion(medCehta)).toBe(false);
+    expect(canWriteHcMedico(medCehta)).toBe(false);
+    expect(canWriteHcEnfermeria(user({ rol: 'ENFERMERIA', sedes: ['CEHTA'] }))).toBe(false);
+    expect(canAccessGuardia(secCehta)).toBe(false);
+  });
+
   it('escritura de formularios HC según rol', () => {
     expect(canWriteHcMedico(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canWriteHcMedico(user({ rol: 'ENFERMERIA' }))).toBe(false);

@@ -15,7 +15,8 @@ import {
 } from '@mui/material';
 import { Calendar as CalendarBase } from 'react-big-calendar';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { localizer } from '../utils/calendarLocalizer';
+import { calendarFormats24h, localizer } from '../utils/calendarLocalizer';
+import { formatFechaHoraDisplay, formatHoraDisplay } from '../utils/dateFieldFormat';
 import AsyncAutocomplete from './common/AsyncAutocomplete';
 import {
   getDiasDisponibles,
@@ -323,6 +324,7 @@ export default function ReservaTurnoPaciente({
           <Box sx={{ height: 520 }} data-testid="reserva-calendario">
             <Calendar
               localizer={localizer}
+              formats={calendarFormats24h}
               culture="es"
               events={calendarEvents}
               startAccessor="start"
@@ -394,10 +396,7 @@ export default function ReservaTurnoPaciente({
           )}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {slots.map((slot) => {
-              const hora = new Date(slot.inicio).toLocaleTimeString('es-AR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              const hora = formatHoraDisplay(new Date(slot.inicio));
               return (
                 <Button
                   key={slot.inicio}
@@ -434,13 +433,7 @@ export default function ReservaTurnoPaciente({
               </Typography>
               <Typography>
                 <strong>Día y hora:</strong>{' '}
-                {new Date(selected.inicio).toLocaleString('es-AR', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                {formatFechaHoraDisplay(selected.inicio)}
               </Typography>
               <Typography>
                 <strong>Duración:</strong> {selected.duracion_min} minutos

@@ -44,6 +44,8 @@ export interface MuestrasOrdenPanelProps {
   reloadToken?: number;
   /** Sincroniza el listado con el padre (p. ej. carga de resultados). */
   onMuestrasChange?: (muestras: MuestraTransaccional[]) => void;
+  /** Tras recibir/cancelar/etc.: el padre debe refrescar la orden (puede pasar a LISTO). */
+  onMuestraAccionCompletada?: () => void;
   /** Origen/procedencia de la orden para prellenar lugar de extracción. */
   origenOrden?: OrigenParaLugarExtraccion | null;
 }
@@ -55,6 +57,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
   canOperate,
   reloadToken = 0,
   onMuestrasChange,
+  onMuestraAccionCompletada,
   origenOrden = null,
 }) => {
   const [rows, setRows] = useState<MuestraTransaccional[]>([]);
@@ -228,7 +231,10 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
                     <MuestraAcciones
                       muestra={m}
                       canOperate={canOperate}
-                      onUpdated={load}
+                      onUpdated={async () => {
+                        await load();
+                        onMuestraAccionCompletada?.();
+                      }}
                       origenOrden={origenOrden}
                     />
                   </TableCell>

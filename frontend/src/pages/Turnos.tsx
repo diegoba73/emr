@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Calendar as BigCalendarBase } from 'react-big-calendar';
-import { localizer } from '../utils/calendarLocalizer';
+import { calendarFormats24h, localizer } from '../utils/calendarLocalizer';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { Turno, Medico } from '../types';
 import { apiService } from '../services/api';
@@ -205,6 +206,9 @@ const Turnos: React.FC = () => {
 	/** Tras clic en +N (vista semana): scroll a esta hora en vista día; se limpia a ~2 s */
 	const [forcedScrollToTime, setForcedScrollToTime] = useState<Date | null>(null);
 	const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+	const [crearComoSobreturno, setCrearComoSobreturno] = useState(false);
+	const [sobreturnoMedicoId, setSobreturnoMedicoId] = useState<number | null>(null);
+	const [sobreturnoRecursoId, setSobreturnoRecursoId] = useState<number | null>(null);
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [estudioAgendaPendiente, setEstudioAgendaPendiente] = useState<EstudioComplementario | null>(null);
 
@@ -400,19 +404,51 @@ const Turnos: React.FC = () => {
 
 	// Abrir el modal con una fecha/hora específica. Punto único de entrada para
 	// "click en calendario → nuevo turno", independientemente del camino (slot wrapper,
-	// onSelectSlot por drag, o Month view).
-	const openNewTurnoAt = useCallback((when: Date) => {
-		if (enModoAgendarEstudio && estudioAgendaPendiente) {
+	// onSelectSlot por drag, o Month view). En franja ocupada: sobreturno (secretaría).
+	const openNewTurnoAt = useCallback(
+		(
+			when: Date,
+			opts?: {
+				sobreturno?: boolean;
+				medicoId?: number | null;
+				recursoId?: number | null;
+			}
+		) => {
+			if (enModoAgendarEstudio && estudioAgendaPendiente) {
+				setSelectedDateTime(new Date(when.getTime()));
+				setCrearComoSobreturno(false);
+				setSobreturnoMedicoId(null);
+				setSobreturnoRecursoId(null);
+				setEditingTurno(null);
+				setShowModal(true);
+				return;
+			}
+			if (!canCreateTurno(currentUser)) return;
+			const comoSobreturno = Boolean(opts?.sobreturno);
+			let medicoId = opts?.medicoId ?? null;
+			let recursoId = opts?.recursoId ?? null;
+			if (comoSobreturno && (medicoId == null || recursoId == null)) {
+				const slotKey = twentyMinSlotKey(when);
+				const enFranja = calendarEvents.find((ev) => {
+					const r = ev.resource;
+					if (!r || isOverflowResource(r)) return false;
+					return twentyMinSlotKey(ev.start) === slotKey;
+				});
+				const t = enFranja?.resource as Turno | undefined;
+				if (t) {
+					medicoId = medicoId ?? t.medico?.id ?? t.medico_id ?? null;
+					recursoId = recursoId ?? t.recurso?.id ?? t.recurso_id ?? null;
+				}
+			}
 			setSelectedDateTime(new Date(when.getTime()));
+			setCrearComoSobreturno(comoSobreturno);
+			setSobreturnoMedicoId(medicoId);
+			setSobreturnoRecursoId(recursoId);
 			setEditingTurno(null);
 			setShowModal(true);
-			return;
-		}
-		if (!canCreateTurno(currentUser)) return;
-		setSelectedDateTime(new Date(when.getTime()));
-		setEditingTurno(null);
-		setShowModal(true);
-	}, [currentUser, enModoAgendarEstudio, estudioAgendaPendiente]);
+		},
+		[currentUser, enModoAgendarEstudio, estudioAgendaPendiente, calendarEvents]
+	);
 
 	// `onSelectSlot` de react-big-calendar calcula el slot por pixel, lo cual es
 	// frágil (depende de `pageYOffset`, containers con overflow, CSS, etc.).
@@ -428,8 +464,7 @@ const Turnos: React.FC = () => {
 		openNewTurnoAt(slotInfo.start);
 	};
 
-	const formatHoraCorta = (d: Date) =>
-		d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+	const formatHoraCorta = (d: Date) => formatHoraDisplay(d);
 
 	/**
 	 * En semana y día, capa encima de los eventos: franja punteada solo en slots
@@ -477,20 +512,20 @@ const Turnos: React.FC = () => {
 							onClick={(e) => {
 								e.stopPropagation();
 								e.preventDefault();
-								openNewTurnoAt(slotCopy);
+								openNewTurnoAt(slotCopy, { sobreturno: true });
 							}}
 							onKeyDown={(e) => {
 								if (e.key === 'Enter' || e.key === ' ') {
 									e.stopPropagation();
 									e.preventDefault();
-									openNewTurnoAt(slotCopy);
+									openNewTurnoAt(slotCopy, { sobreturno: true });
 								}
 							}}
 							onMouseDown={(e) => e.stopPropagation()}
 							title={
 								currentView === 'week'
-									? `Agendar turno — ${formatHoraCorta(slotValue)}. La columna de turnos queda a la izquierda; +N (si hay varios a la hora) y esta franja a la derecha.`
-									: `Agendar turno — ${formatHoraCorta(slotValue)}. Los turnos quedan en el 70% izquierdo; esta franja es solo la zona punteada.`
+									? `Agregar sobreturno — ${formatHoraCorta(slotValue)}. Franja a la derecha; turnos a la izquierda.`
+									: `Agregar sobreturno — ${formatHoraCorta(slotValue)}. Zona punteada para un turno extra de secretaría.`
 							}
 						/>
 					);
@@ -885,6 +920,9 @@ const Turnos: React.FC = () => {
                 onClick={() => {
                   setEditingTurno(null);
                   setSelectedDateTime(null);
+                  setCrearComoSobreturno(false);
+                  setSobreturnoMedicoId(null);
+                  setSobreturnoRecursoId(null);
                   setShowModal(true);
                 }}
               >
@@ -1067,6 +1105,7 @@ const Turnos: React.FC = () => {
 			>
 				<BigCalendar
 					localizer={localizer}
+					formats={calendarFormats24h}
 					events={displayCalendarEvents}
 					startAccessor="start"
 					endAccessor="end"
@@ -1116,9 +1155,15 @@ const Turnos: React.FC = () => {
 					setShowModal(false);
 					setEditingTurno(null);
 					setSelectedDateTime(null);
+					setCrearComoSobreturno(false);
+					setSobreturnoMedicoId(null);
+					setSobreturnoRecursoId(null);
 				}}
 				editingTurno={editingTurno}
 				selectedDateTime={selectedDateTime}
+				initialEsSobreturno={crearComoSobreturno}
+				initialMedicoId={sobreturnoMedicoId}
+				initialRecursoId={sobreturnoRecursoId}
 				initialAgendaTipo={estudioAgendaPendiente ? 'estudio' : undefined}
 				initialEstudio={estudioAgendaPendiente}
 				forceReadOnly={
@@ -1135,6 +1180,9 @@ const Turnos: React.FC = () => {
 						setShowModal(false);
 						setEditingTurno(null);
 						setSelectedDateTime(null);
+						setCrearComoSobreturno(false);
+						setSobreturnoMedicoId(null);
+						setSobreturnoRecursoId(null);
 						clearEstudioAgendaPendiente();
 					} catch {
 						// El modal ya mostró feedback; no interrumpir el cierre

@@ -200,13 +200,33 @@ class TestPedidosCompletosRemediacion(TestCase):
             {self.glu.pk, self.orina_ex.pk, soh.pk},
         )
 
-    def test_guardia_no_unifica_sangre_orina(self):
+    def test_guardia_pedido_completo_rechaza_orina(self):
+        """Catálogo de guardia: orina no está permitida (ni unificada ni en orden aparte)."""
         self.client.force_authenticate(self.lab)
         r = self.client.post(
             "/api/lab/pedidos-completos/",
             {
                 "paciente_id": self.pac.pk,
                 "origen_solicitud": "GUARDIA",
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "solicitudes_lab": [
+                    {"material_pedido": "SANGRE", "examenes_ids": [self.glu.pk]},
+                    {"material_pedido": "ORINA", "examenes_ids": [self.orina_ex.pk]},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        detail = str(r.data.get("detail") or r.data)
+        self.assertIn("guardia", detail.lower())
+
+    def test_internacion_no_unifica_sangre_orina(self):
+        self.client.force_authenticate(self.lab)
+        r = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "INTERNACION_UCO",
                 "fecha_programada_toma": self.hoy.isoformat(),
                 "solicitudes_lab": [
                     {"material_pedido": "SANGRE", "examenes_ids": [self.glu.pk]},
@@ -250,6 +270,40 @@ class TestPedidosCompletosRemediacion(TestCase):
             set(sol.resultados.values_list("tipo_examen_id", flat=True)),
             {self.glu.pk, self.orina_ex.pk},
         )
+
+    def test_agregar_orina_a_orden_sangre_guardia_bloqueado_por_catalogo(self):
+        """Guardia: orina queda fuera del catálogo permitido (aunque el material se pueda mezclar)."""
+        self.client.force_authenticate(self.lab)
+        glu_canon, _ = TipoExamen.objects.get_or_create(
+            codigo="GLU",
+            defaults={
+                "nombre": "Glucemia",
+                "tipo_muestra_requerida": self.tm_suero,
+                "tipo_resultado": "NUMERICO",
+                "activo": True,
+            },
+        )
+        r1 = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "GUARDIA",
+                "material_pedido": "SANGRE",
+                "examenes_ids": [glu_canon.pk],
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        sol_id = r1.data["id"]
+        r2 = self.client.post(
+            f"/api/lab/solicitudes/{sol_id}/agregar-examenes/",
+            {"examenes_ids": [self.orina_ex.pk]},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST, r2.data)
+        detail = str(r2.data.get("detail") or r2.data)
+        self.assertIn("guardia", detail.lower())
 
     def test_agregar_orina_bloquea_si_ya_hay_orden_orina_activa(self):
         self.client.force_authenticate(self.lab)

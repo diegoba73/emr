@@ -17,6 +17,7 @@ import {
 import { Close } from '@mui/icons-material';
 import { apiService } from '../services/api';
 import { Turno, Consulta } from '../types';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 
 interface ConsultaModalProps {
   open: boolean;
@@ -193,10 +194,7 @@ const ConsultaModal: React.FC<ConsultaModalProps> = ({
               <Box>
                 <Typography variant="caption" color="text.secondary">🕐 Hora</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {new Date(turno.fecha_hora_inicio).toLocaleTimeString('es-ES', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  {formatHoraDisplay(new Date(turno.fecha_hora_inicio))}
                 </Typography>
               </Box>
               {turno.motivo_consulta && (

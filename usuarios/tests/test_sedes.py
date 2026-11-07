@@ -29,16 +29,18 @@ def test_sedes_vacias_sin_filtro_y_capacidades():
     assert sedes_efectivas(u) is None
     assert usuario_tiene_capacidad(u, 'guardia') is True
     assert usuario_tiene_capacidad(u, 'internacion') is True
+    assert usuario_tiene_capacidad(u, 'internacion_escritura') is True
 
 
 @pytest.mark.django_db
-def test_cehta_sin_guardia_ni_internacion():
+def test_cehta_sin_guardia_internacion_solo_lectura():
     u = User.objects.create_user(
         username='sec_cehta', password='x', rol='secretaria', sedes=['CEHTA']
     )
     assert sedes_efectivas(u) == ['CEHTA']
     assert usuario_tiene_capacidad(u, 'guardia') is False
-    assert usuario_tiene_capacidad(u, 'internacion') is False
+    assert usuario_tiene_capacidad(u, 'internacion') is True
+    assert usuario_tiene_capacidad(u, 'internacion_escritura') is False
     assert usuario_tiene_capacidad(u, 'recepcion') is True
 
 
@@ -49,6 +51,7 @@ def test_icpl_con_guardia_e_internacion():
     )
     assert usuario_tiene_capacidad(u, 'guardia') is True
     assert usuario_tiene_capacidad(u, 'internacion') is True
+    assert usuario_tiene_capacidad(u, 'internacion_escritura') is True
 
 
 @pytest.mark.django_db
@@ -58,6 +61,7 @@ def test_ambas_sedes_union_capacidades():
     )
     assert usuario_tiene_capacidad(u, 'guardia') is True
     assert usuario_tiene_capacidad(u, 'internacion') is True
+    assert usuario_tiene_capacidad(u, 'internacion_escritura') is True
 
 
 @pytest.mark.django_db

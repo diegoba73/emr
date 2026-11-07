@@ -117,9 +117,9 @@ describe('micro LIMS role matrix', () => {
     expect(canOperateMicroEstudioTecnico(labUser, 'SEMBRADO')).toBe(true);
   });
 
-  it('medico ve listado micro liberado, puede pedir, sin operar ni módulo LIMS completo', () => {
+  it('medico no ve listado micro; puede pedir, sin operar ni módulo LIMS completo', () => {
     expect(canAccessMicrobiologia(medUser)).toBe(false);
-    expect(canAccessMicrobiologiaListado(medUser)).toBe(true);
+    expect(canAccessMicrobiologiaListado(medUser)).toBe(false);
     expect(canCreatePedidoMicrobiologia(medUser)).toBe(true);
     expect(canOperateMicrobiologia(medUser)).toBe(false);
     expect(canOperateMicroEstudioTecnico(medUser, 'SEMBRADO')).toBe(false);
@@ -276,11 +276,11 @@ describe('canAccessMicrobiologiaLectura', () => {
 });
 
 describe('canAccessMicrobiologiaListado', () => {
-  it('operadores LIMS y médico; no secretaría/enfermería/paciente', () => {
+  it('solo operadores LIMS; no médico/secretaría/enfermería/paciente', () => {
     expect(canAccessMicrobiologiaListado(labUser)).toBe(true);
     expect(canAccessMicrobiologiaListado(bioUser)).toBe(true);
     expect(canAccessMicrobiologiaListado(adminUser)).toBe(true);
-    expect(canAccessMicrobiologiaListado(medUser)).toBe(true);
+    expect(canAccessMicrobiologiaListado(medUser)).toBe(false);
     expect(canAccessMicrobiologiaListado(secUser)).toBe(false);
     expect(canAccessMicrobiologiaListado(enfUser)).toBe(false);
     expect(canAccessMicrobiologiaListado(pacUser)).toBe(false);

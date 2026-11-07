@@ -644,12 +644,26 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       resultadosYaCompletos ||
       (resultados.length > 0 && resultados.every(filaTieneValorEnPantalla));
     if (completosEnPantalla) {
-      toast.success(
-        'Los resultados de la orden ya están completos, ya se pueden validar.'
-      );
+      const tubosPend = orden.tubos_pendientes_recepcion || [];
       if (orden.estado === 'LISTO_PARA_VALIDAR') {
+        toast.success(
+          'Los resultados de la orden ya están completos, ya se pueden validar.'
+        );
         requestFocusValidar();
+        return;
       }
+      if (tubosPend.length > 0) {
+        const labels = tubosPend
+          .map((t) => t.codigo_barra || t.tipo_contenedor_codigo || `tubo #${t.id}`)
+          .join(', ');
+        toast.error(
+          `Resultados completos, pero falta recepcionar ${tubosPend.length === 1 ? 'el tubo' : 'los tubos'}: ${labels}. Sin eso no aparece Validar.`
+        );
+        return;
+      }
+      toast.success(
+        'Los resultados están cargados. Si no ves Validar, recepcioná los tubos pendientes o volvé a abrir la orden.'
+      );
       return;
     }
     // Ya hay valores pero nada dirty: no mostrar error engañoso de “ingresá un valor”.
@@ -686,12 +700,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         return;
       }
       if (progreso.conValor >= progreso.total || resultadosYaCompletos) {
-        toast.success(
-          'Los resultados de la orden ya están completos, ya se pueden validar.'
-        );
-        if (orden.estado === 'LISTO_PARA_VALIDAR') {
-          requestFocusValidar();
-        }
+        toastSinFilasAGuardar();
         return;
       }
       setSaving(true);

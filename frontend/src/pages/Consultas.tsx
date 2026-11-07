@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Consulta } from '../types';
 import { useData } from '../contexts/DataContext';
 import SearchAndFilters from '../components/SearchAndFilters';
+import { formatHoraDisplay } from '../utils/dateFieldFormat';
 import './Consultas.css';
 
 const Consultas: React.FC = () => {
@@ -138,10 +139,7 @@ const Consultas: React.FC = () => {
               <div className="turno-header">
                 <div className="turno-time">
                   <span className="time">
-                    {new Date(consulta.fecha_hora_consulta).toLocaleTimeString('es-ES', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {formatHoraDisplay(new Date(consulta.fecha_hora_consulta))}
                   </span>
                   <span className="date">
                     {new Date(consulta.fecha_hora_consulta).toLocaleDateString('es-ES', {

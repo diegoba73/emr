@@ -128,7 +128,7 @@ const navItems: NavItem[] = [
   },
   { text: 'Atenciones Clínicas', icon: <LocalHospital />, path: '/atenciones', canAccess: canAccessAtenciones },
   {
-    text: 'Programación de turnos',
+    text: 'Agenda clínica',
     icon: <Description />,
     path: '/estudios-complementarios',
     canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),

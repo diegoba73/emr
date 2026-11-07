@@ -85,6 +85,46 @@ class TestTurnoAPI(APITestCase):
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'fecha_hora_inicio' in response.data or 'non_field_errors' in response.data
 
+    def test_secretaria_puede_crear_sobreturno_solapado(self):
+        """Secretaría agenda un sobreturno sobre un slot ya ocupado."""
+        secretaria = User.objects.create_user(
+            username='ta_sec_sobreturno',
+            email='ta_sec_sobreturno@example.com',
+            password='testpass123',
+            rol='secretaria',
+        )
+        self.client.force_authenticate(user=secretaria)
+        fecha_base = timezone.now().replace(hour=11, minute=0, second=0, microsecond=0) + timedelta(
+            days=2
+        )
+        Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_base,
+            fecha_hora_fin=fecha_base + timedelta(minutes=20),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+        otro = Paciente.objects.create(
+            dni='TA-1002',
+            nombre='Ana',
+            apellido='Sobreturno',
+        )
+        data = {
+            'paciente_id': otro.id,
+            'medico_id': self.medico.id,
+            'recurso_id': self.recurso.id,
+            'fecha_hora_inicio': fecha_base.isoformat(),
+            'fecha_hora_fin': (fecha_base + timedelta(minutes=20)).isoformat(),
+            'estado': Turno.Estado.CONFIRMADO,
+            'es_sobreturno': True,
+            'motivo_reserva': 'Sobreturno secretaría',
+        }
+        response = self.client.post('/api/turnos/', data, format='json')
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        assert response.data.get('es_sobreturno') is True
+        assert Turno.objects.filter(paciente=otro, es_sobreturno=True).exists()
+
     def test_solapamiento_no_aplica_a_disponible(self):
         fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
         Turno.objects.create(

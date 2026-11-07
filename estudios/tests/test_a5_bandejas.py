@@ -213,6 +213,49 @@ def test_lab_sin_acceso_bandejas(db):
 
 
 @pytest.mark.django_db
+def test_rango_fechas_alinea_listado_y_resumen(paciente, tipo_estudio, admin_user, admin_client):
+    """fecha_desde/hasta deben aplicarse igual a list y bandejas-resumen."""
+    from estudios.bandejas import filtrar_por_rango_fechas
+
+    viejo = crear_estudio(
+        {'paciente': paciente, 'tipo_estudio': tipo_estudio, 'practica': tipo_estudio.practica},
+        user=admin_user,
+    )
+    hace_40 = timezone.now() - timedelta(days=40)
+    EstudioComplementario.objects.filter(pk=viejo.pk).update(
+        estado=EstudioComplementario.Estado.ANULADO,
+        fecha_solicitud=hace_40,
+        created_at=hace_40,
+    )
+    reciente = crear_estudio(
+        {'paciente': paciente, 'tipo_estudio': tipo_estudio, 'practica': tipo_estudio.practica},
+        user=admin_user,
+    )
+    EstudioComplementario.objects.filter(pk=reciente.pk).update(
+        estado=EstudioComplementario.Estado.ANULADO,
+        fecha_solicitud=timezone.now(),
+    )
+
+    hoy = timezone.localdate().isoformat()
+    qs = EstudioComplementario.objects.filter(pk__in=[viejo.pk, reciente.pk])
+    filtrados = set(filtrar_por_rango_fechas(qs, hoy, hoy).values_list('pk', flat=True))
+    assert filtrados == {reciente.pk}
+
+    r_list = admin_client.get(
+        BASE, {'bandeja': BANDEJA_ANULADOS, 'fecha_desde': hoy, 'fecha_hasta': hoy}
+    )
+    assert r_list.status_code == status.HTTP_200_OK
+    assert reciente.pk in _ids(r_list)
+    assert viejo.pk not in _ids(r_list)
+
+    r_resumen = admin_client.get(
+        f'{BASE}bandejas-resumen/', {'fecha_desde': hoy, 'fecha_hasta': hoy}
+    )
+    assert r_resumen.status_code == status.HTTP_200_OK
+    assert r_resumen.data.get(BANDEJA_ANULADOS, 0) >= 1
+
+
+@pytest.mark.django_db
 def test_confirmado_turno_cancelado_es_pendiente_programar(
     paciente, tipo_estudio, admin_user, recurso_sala, medico,
 ):

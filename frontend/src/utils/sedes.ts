@@ -7,10 +7,29 @@ export type SedeCodigo = (typeof SEDES)[number];
 
 export const SEDE_CAPACIDADES: Record<
   SedeCodigo,
-  { guardia: boolean; internacion: boolean; recepcion: boolean; agenda: boolean }
+  {
+    guardia: boolean;
+    internacion: boolean;
+    internacion_escritura: boolean;
+    recepcion: boolean;
+    agenda: boolean;
+  }
 > = {
-  CEHTA: { guardia: false, internacion: false, recepcion: true, agenda: true },
-  ICPL: { guardia: true, internacion: true, recepcion: true, agenda: true },
+  // CEHTA: Internación visible en solo lectura (seguimiento / rehabilitación post-alta).
+  CEHTA: {
+    guardia: false,
+    internacion: true,
+    internacion_escritura: false,
+    recepcion: true,
+    agenda: true,
+  },
+  ICPL: {
+    guardia: true,
+    internacion: true,
+    internacion_escritura: true,
+    recepcion: true,
+    agenda: true,
+  },
 };
 
 export function normalizeSedes(raw?: string[] | null): SedeCodigo[] {
@@ -42,7 +61,7 @@ export function userSedesEfectivas(user: {
 
 export function userHasCapacidad(
   user: { is_superuser?: boolean; rol?: string | null; sedes?: string[] | null } | null,
-  capacidad: 'guardia' | 'internacion' | 'recepcion' | 'agenda'
+  capacidad: 'guardia' | 'internacion' | 'internacion_escritura' | 'recepcion' | 'agenda'
 ): boolean {
   const sedes = userSedesEfectivas(user);
   if (sedes === null) return true;

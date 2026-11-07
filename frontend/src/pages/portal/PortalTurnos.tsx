@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { getMisTurnos } from '../../services/agendaMedica';
 import type { Turno } from '../../types';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 const PortalTurnos: React.FC = () => {
   const [turnos, setTurnos] = useState<Turno[]>([]);
@@ -63,13 +64,7 @@ const PortalTurnos: React.FC = () => {
             Tu turno
           </Typography>
           <Typography>
-            {new Date(turnoActivo.fecha_hora_inicio).toLocaleString('es-AR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {formatFechaHoraDisplay(turnoActivo.fecha_hora_inicio)}
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 1 }}>
             {(turnoActivo.medico
@@ -95,7 +90,7 @@ const PortalTurnos: React.FC = () => {
         {proximos.map((t) => (
           <ListItem key={t.id} secondaryAction={<Chip size="small" label={t.estado} />}>
             <ListItemText
-              primary={new Date(t.fecha_hora_inicio).toLocaleString('es-AR')}
+              primary={formatFechaHoraDisplay(t.fecha_hora_inicio)}
               secondary={(t.medico ? `${t.medico.apellido}, ${t.medico.nombre}` : t.motivo_reserva) || 'Turno'}
             />
           </ListItem>
@@ -108,7 +103,7 @@ const PortalTurnos: React.FC = () => {
         {historial.slice(0, 20).map((t) => (
           <ListItem key={t.id} secondaryAction={<Chip size="small" label={t.estado} />}>
             <ListItemText
-              primary={new Date(t.fecha_hora_inicio).toLocaleString('es-AR')}
+              primary={formatFechaHoraDisplay(t.fecha_hora_inicio)}
               secondary={(t.medico ? `${t.medico.apellido}, ${t.medico.nombre}` : t.motivo_reserva) || 'Turno'}
             />
           </ListItem>

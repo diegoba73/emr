@@ -1030,6 +1030,10 @@ class TestCargaParcialYValidarConTubosPendientes(APITestCase):
         sol.refresh_from_db()
         # Completos pero tubo pendiente → no LISTO
         self.assertEqual(sol.estado, "EN_PROCESO")
+        r_det = self.client.get(f"/api/lab/solicitudes/{sol.pk}/")
+        self.assertEqual(r_det.status_code, status.HTTP_200_OK, r_det.content)
+        pendientes = r_det.data.get("tubos_pendientes_recepcion") or []
+        self.assertTrue(any(p.get("id") == m_pend.pk for p in pendientes))
         self.client.force_authenticate(user=self.user_admin)
         # Forzar LISTO para probar el gate de validar
         sol.estado = "LISTO_PARA_VALIDAR"
@@ -1040,6 +1044,37 @@ class TestCargaParcialYValidarConTubosPendientes(APITestCase):
         self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
         m_pend.refresh_from_db()
         self.assertEqual(m_pend.estado, "PENDIENTE_TOMA")
+
+    def test_recibir_ultimo_tubo_promueve_a_listo_sin_guardar_de_nuevo(self):
+        """Resultados completos + recibir tubo pendiente → LISTO sin otro cargar-resultados."""
+        sol, res_a, res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()
+        self.client.force_authenticate(user=self.user_lab)
+        r = self.client.post(
+            f"/api/lab/solicitudes/{sol.pk}/cargar-resultados/",
+            {
+                "resultados": [
+                    {"id": res_a.pk, "valor": "11", "muestra_id": m_ok.pk},
+                    {"id": res_b.pk, "valor": "22"},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "EN_PROCESO")
+
+        aplicar_tomar(m_pend.pk, actor=self.user_lab, view="t")
+        aplicar_recibir(m_pend.pk, actor=self.user_lab, view="t")
+        sol.refresh_from_db()
+        m_pend.refresh_from_db()
+        self.assertEqual(m_pend.estado, "RECIBIDA")
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
+
+        self.client.force_authenticate(user=self.user_admin)
+        r_val = self.client.post(f"/api/lab/solicitudes/{sol.pk}/validar/", {}, format="json")
+        self.assertEqual(r_val.status_code, status.HTTP_200_OK, r_val.content)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "FINALIZADO")
 
     def test_validar_ok_tras_cancelar_tubo_pendiente_sin_quitar_examen(self):
         sol, res_a, res_b, m_ok, m_pend = self._orden_dos_tubos_uno_recibido()

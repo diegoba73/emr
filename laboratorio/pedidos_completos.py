@@ -588,6 +588,26 @@ def crear_pedido_completo(
             or ""
         )
 
+    # Guardia: solo catálogo clínico acotado (hemograma, glucemia, etc.).
+    from laboratorio.restricciones_guardia_catalogo import (
+        GuardiaCatalogoError,
+        assert_examenes_permitidos_en_guardia,
+    )
+
+    try:
+        all_exam_ids: list[int] = []
+        all_panel_ids: list[int] = []
+        for g in solicitudes_lab or []:
+            all_exam_ids.extend(int(x) for x in (g.get("examenes_ids") or []) if x is not None)
+            all_panel_ids.extend(int(x) for x in (g.get("paneles_ids") or []) if x is not None)
+        assert_examenes_permitidos_en_guardia(
+            origen_solicitud=origen,
+            examenes_ids=all_exam_ids,
+            paneles_ids=all_panel_ids,
+        )
+    except GuardiaCatalogoError as exc:
+        raise ValidationError({"detail": str(exc)}) from exc
+
     snap_os, snap_afil = "", ""
     if afiliacion_id is not None:
         try:

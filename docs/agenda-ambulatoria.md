@@ -18,6 +18,7 @@
 - El paciente siempre reserva mediante `POST /api/turnos/reservar-horario/`; la identidad, estado y recurso son asignados por el servidor. El POST genérico no permite eludir la agenda.
 - Un médico sin horarios publicados no ofrece reservas al paciente. Para permitir la transición desde la agenda existente, el personal conserva la carga manual si el médico nunca tiene franjas registradas; si hay franjas, se valida el día, tipo, recurso y horario configurados. Quitar todas las franjas deja nuevamente al médico sin configuración.
 - Se consideran ocupación del médico y del recurso, bloqueos y ajustes por fecha existentes. Un turno cancelado libera el intervalo. No se permite reservar horas pasadas desde el portal.
+- **Sobreturno (solo secretaría/admin):** se puede agendar un turno extra (`es_sobreturno=true`) sobre un bloque ya ocupado del médico. El portal del paciente sigue viendo solo horarios libres; el médico no crea sobreturnos. En el calendario, la franja punteada de un slot ocupado abre el alta de sobreturno.
 - Las reservas de estudios del portal son reservas logísticas de agenda; no generan por sí mismas una orden clínica ni un informe.
 - Cambiar horarios publicados no cancela ni mueve reservas existentes.
 - Se bloquean las filas del médico y del recurso dentro de la transacción al reservar. Los cambios de configuración también bloquean al médico. Pruebas automatizadas locales con SQLite: no equivalen a una prueba de carga/concurrencia sobre PostgreSQL.

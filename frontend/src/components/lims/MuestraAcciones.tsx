@@ -32,7 +32,7 @@ import EtiquetaMuestraZplDialog, { printerErrorMessage } from './EtiquetaMuestra
 export interface MuestraAccionesProps {
   muestra: MuestraTransaccional;
   canOperate: boolean;
-  onUpdated: () => void;
+  onUpdated: () => void | Promise<void>;
   /** Origen/procedencia de la orden — prellena lugar de extracción (editable). */
   origenOrden?: OrigenParaLugarExtraccion | null;
 }
@@ -63,7 +63,7 @@ const MuestraAcciones: React.FC<MuestraAccionesProps> = ({
     try {
       await fn();
       toast.success('Muestra actualizada');
-      onUpdated();
+      await onUpdated();
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsActualizarMuestra));
     } finally {
