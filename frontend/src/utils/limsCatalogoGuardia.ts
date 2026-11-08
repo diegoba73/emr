@@ -13,6 +13,7 @@ export const PANELES_GUARDIA_PERMITIDOS = new Set([
 
 export const EXAMENES_GUARDIA_PERMITIDOS = new Set([
   'GLU',
+  'UREA',
   'CREATI',
   'TROP_US',
   'TROP_I',
@@ -22,7 +23,7 @@ export const EXAMENES_GUARDIA_PERMITIDOS = new Set([
 ]);
 
 export const MENSAJE_CATALOGO_GUARDIA =
-  'En guardia solo se pueden pedir: hemograma, ionograma plasmático, glucemia, creatininemia, hepatograma, enzimas cardíacas (troponina I ultrasensible, troponina I, CPK-MB, CPK, mioglobina) y EAB arterial/venoso.';
+  'En guardia solo se pueden pedir: hemograma, ionograma plasmático, glucemia, uremia, creatininemia, hepatograma, enzimas cardíacas (troponina I ultrasensible, troponina I, CPK-MB, CPK, mioglobina) y EAB arterial/venoso.';
 
 function normCodigo(codigo: string | null | undefined): string {
   return (codigo || '').trim().toUpperCase();

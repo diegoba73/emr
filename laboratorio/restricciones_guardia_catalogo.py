@@ -8,6 +8,7 @@ Nombres canónicos del seed (`catalogo_solicitud_papel`): se valida por
 | Hemograma             | PAN_HEMO    | Hemograma                     |
 | Ionograma             | PAN_IONO    | Ionograma plasmático          |
 | Glucosa               | GLU         | Glucemia                      |
+| Urea                  | UREA        | Uremia                        |
 | Creatinina            | CREATI      | Creatininemia                 |
 | Hepatograma           | PAN_HEP     | Hepatograma                   |
 | Troponina US          | TROP_US     | Troponina I ultrasensible     |
@@ -18,11 +19,10 @@ Nombres canónicos del seed (`catalogo_solicitud_papel`): se valida por
 | Gases arteriales      | PAN_EAB_ART | EAB arterial                  |
 | Gases venosos         | PAN_EAB_VEN | EAB venoso                    |
 
-Notas de naming (no forman parte del allowlist de guardia salvo que se
-pidan vía panel/examen listado arriba):
+Notas de naming:
 
-- Urea → ``UREA`` / «Uremia» (no «uricemia»)
-- Ácido úrico → ``AU`` / «Uricemia»
+- Urea → ``UREA`` / «Uremia» (sí en allowlist de guardia)
+- Ácido úrico → ``AU`` / «Uricemia» (no forma parte del allowlist de guardia)
 """
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ PANELES_GUARDIA_PERMITIDOS = frozenset(
 EXAMENES_GUARDIA_PERMITIDOS = frozenset(
     {
         "GLU",
+        "UREA",
         "CREATI",
         "TROP_US",
         "TROP_I",
@@ -80,7 +81,7 @@ COMPONENTES_GUARDIA_PERMITIDOS = _componentes_de_paneles_permitidos()
 
 MENSAJE_EXAMEN_NO_PERMITIDO_GUARDIA = (
     "En guardia solo se pueden pedir: hemograma, ionograma plasmático, "
-    "glucemia, creatininemia, hepatograma, enzimas cardíacas "
+    "glucemia, uremia, creatininemia, hepatograma, enzimas cardíacas "
     "(troponina I ultrasensible, troponina I, CPK-MB, CPK, mioglobina) "
     "y EAB arterial/venoso. No permitido: {codigos}."
 )

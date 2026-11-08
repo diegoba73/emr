@@ -90,17 +90,23 @@ class TestRestriccionesGuardiaCatalogo(TestCase):
         self.assertIn("PAN_HEP", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_EAB_ART", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_EAB_VEN", PANELES_GUARDIA_PERMITIDOS)
-        # Naming: uremia / uricemia NO están en el pedido de guardia.
-        self.assertNotIn("UREA", EXAMENES_GUARDIA_PERMITIDOS)
+        self.assertIn("UREA", EXAMENES_GUARDIA_PERMITIDOS)
+        # Uricemia (AU) sigue fuera del pedido de guardia.
         self.assertNotIn("AU", EXAMENES_GUARDIA_PERMITIDOS)
 
-    def test_helper_rechaza_urea_en_guardia(self):
+    def test_helper_acepta_urea_en_guardia(self):
+        assert_examenes_permitidos_en_guardia(
+            origen_solicitud="GUARDIA",
+            examenes_ids=[self.urea.pk],
+        )
+
+    def test_helper_rechaza_uricemia_en_guardia(self):
         with self.assertRaises(GuardiaCatalogoError) as ctx:
             assert_examenes_permitidos_en_guardia(
                 origen_solicitud="GUARDIA",
-                examenes_ids=[self.urea.pk],
+                examenes_ids=[self.au.pk],
             )
-        self.assertIn("UREA", str(ctx.exception))
+        self.assertIn("AU", str(ctx.exception))
 
     def test_helper_acepta_glucemia_y_creatininemia(self):
         assert_examenes_permitidos_en_guardia(
@@ -140,6 +146,21 @@ class TestRestriccionesGuardiaCatalogo(TestCase):
                 "origen_solicitud": "GUARDIA",
                 "material_pedido": "SANGRE",
                 "examenes_ids": [self.glu.pk],
+                "fecha_programada_toma": self.hoy.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+
+    def test_api_create_guardia_acepta_uremia(self):
+        self.client.force_authenticate(self.lab)
+        r = self.client.post(
+            "/api/lab/solicitudes/",
+            {
+                "paciente_id": self.pac.pk,
+                "origen_solicitud": "GUARDIA",
+                "material_pedido": "SANGRE",
+                "examenes_ids": [self.urea.pk],
                 "fecha_programada_toma": self.hoy.isoformat(),
             },
             format="json",

@@ -24,8 +24,8 @@ describe('limsCatalogoGuardia', () => {
     });
   });
 
-  it('rechaza urea, AU y perfil lipídico', () => {
-    expect(examenPermitidoEnGuardia('UREA')).toBe(false);
+  it('acepta urea y rechaza AU / perfil lipídico', () => {
+    expect(examenPermitidoEnGuardia('UREA')).toBe(true);
     expect(examenPermitidoEnGuardia('AU')).toBe(false);
     expect(panelPermitidoEnGuardia('PAN_LIP')).toBe(false);
   });
@@ -47,8 +47,9 @@ describe('limsCatalogoGuardia', () => {
       filtrarExamenesGuardia([
         { codigo: 'GLU' },
         { codigo: 'UREA' },
+        { codigo: 'AU' },
         { codigo: 'X', panel_equivalente: 'PAN_IONO' },
       ]).map((e) => e.codigo)
-    ).toEqual(['GLU', 'X']);
+    ).toEqual(['GLU', 'UREA', 'X']);
   });
 });
