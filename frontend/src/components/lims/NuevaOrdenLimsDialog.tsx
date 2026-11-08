@@ -71,6 +71,12 @@ import {
   esOrigenInternacion,
   origenExigeBloqueoFrecuenciaEnsayos,
 } from '../../utils/limsOrigenSolicitud';
+import {
+  esOrigenCatalogoGuardia,
+  filtrarExamenesGuardia,
+  filtrarPanelesGuardia,
+  MENSAJE_CATALOGO_GUARDIA,
+} from '../../utils/limsCatalogoGuardia';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import {
   clinicalDrawerDialogProps,
@@ -520,14 +526,22 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     if (!open) return;
     let cancelled = false;
     setCatalogLoading(true);
+    const origenCatalogo = origenInicial || origenManual;
+    const restringirGuardia = esOrigenCatalogoGuardia(origenCatalogo);
     const loaders: Promise<unknown>[] = [
       getTiposExamenMap().then((examMap) => {
         if (!cancelled) {
-          setExamenes(Array.from(examMap.values()).filter((e) => e.activo !== false));
+          const activos = Array.from(examMap.values()).filter((e) => e.activo !== false);
+          setExamenes(
+            restringirGuardia ? filtrarExamenesGuardia(activos) : activos
+          );
         }
       }),
       listPanelesLims({ activo: true }).then((panList) => {
-        if (!cancelled) setPaneles(panList.filter((p) => p.activo !== false));
+        if (!cancelled) {
+          const activos = panList.filter((p) => p.activo !== false);
+          setPaneles(restringirGuardia ? filtrarPanelesGuardia(activos) : activos);
+        }
       }),
       listMaterialesPedidoLims()
         .then((list) => {
@@ -557,7 +571,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, soloLab]);
+  }, [open, soloLab, origenInicial, origenManual]);
 
   useEffect(() => {
     if (!open || pacienteInicial || draftMode) return;
@@ -1058,6 +1072,11 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         <DialogContent dividers sx={{ ...scrollableClinicalDialogContentSx, px: 3, py: 2.5 }}>
           <Stack spacing={2.5} sx={{ mt: 0.5 }}>
             {error && <Alert severity="error">{error}</Alert>}
+            {esOrigenCatalogoGuardia(origenInicial || origenManual) ? (
+              <Alert severity="info" sx={{ py: 0.5 }}>
+                {MENSAJE_CATALOGO_GUARDIA}
+              </Alert>
+            ) : null}
             {agregarAOrdenId ? (
               <Alert severity="info" sx={{ py: 0.5 }}>
                 Si el examen cabe en un tubo ya generado se reutiliza; si necesita otro tubo o

@@ -38,13 +38,16 @@ import type { EstudioComplementario, TipoEstudioComplementario } from '../../../
 import { buildEstudioTipoCatalogOptions } from '../../../utils/estudioTipoCatalog';
 import NuevaOrdenLimsDialog from '../../../components/lims/NuevaOrdenLimsDialog';
 import ResultadosOrdenLista from '../../../components/lims/ResultadosOrdenLista';
-import type { ResultadoExamenLims } from '../../../types/lims';
+import type {
+  EstadoSolicitudLims,
+  OrigenSolicitudLims,
+  ResultadoExamenLims,
+} from '../../../types/lims';
 import { estadoOrdenColor, labelEstadoOrdenGeneral } from '../../../utils/limsEstadosOrden';
 import {
   estadoMicroGeneralColor,
   labelEstadoMicroGeneral,
 } from '../../../utils/limsEstadosMicro';
-import type { EstadoSolicitudLims } from '../../../types/lims';
 import { useData } from '../../../contexts/DataContext';
 import {
   canDownloadInformeClinicoPdf,
@@ -78,6 +81,8 @@ interface ConsultaPedidosPanelProps {
   usePendingDraft?: boolean;
   /** Notifica cambios del borrador (p. ej. validación al guardar guardia). */
   onDraftChange?: (draft: ConsultaPedidosDraft) => void;
+  /** Origen LIMS al armar el pedido (guardia → catálogo acotado). */
+  origenPedidoLab?: OrigenSolicitudLims;
   /** Mostrar bloque laboratorio (y microbiología). Default true. */
   showLab?: boolean;
   /** Mostrar bloque estudios complementarios. Default true. */
@@ -118,6 +123,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
   variant = 'full',
   usePendingDraft = false,
   onDraftChange,
+  origenPedidoLab,
   showLab = true,
   showEstudios = true,
 }) => {
@@ -421,7 +427,9 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
         onClose={() => setLabOpen(false)}
         draftMode
         consultaHcId={consultaHcId}
-        origenInicial={usePendingDraft ? 'GUARDIA' : 'AMBULATORIO_ICPL'}
+        origenInicial={
+          origenPedidoLab || (usePendingDraft ? 'GUARDIA' : 'AMBULATORIO_ICPL')
+        }
         onAddDraft={handleAddLabDraft}
         onAddDraftMicro={handleAddMicroDraft}
       />

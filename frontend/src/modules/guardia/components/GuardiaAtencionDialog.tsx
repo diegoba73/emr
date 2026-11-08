@@ -91,6 +91,9 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
   const [pendingPanelKey, setPendingPanelKey] = useState(0);
   /** Atención ya creada en este alta si falló el flush de pedidos (evita duplicar). */
   const [createdAtencionId, setCreatedAtencionId] = useState<number | null>(null);
+  const createdAtencionIdRef = useRef<number | null>(null);
+  /** Error persistente (toast solo no alcanza si el pedido lab falla tras crear la atención). */
+  const [persistError, setPersistError] = useState('');
 
   const canEditPedidos = !isReadOnly;
   const medicoFromUser =
@@ -114,6 +117,8 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     setPendingDraft(empty);
     setPendingPanelKey((k) => k + 1);
     setCreatedAtencionId(null);
+    createdAtencionIdRef.current = null;
+    setPersistError('');
     setSelectedPaciente(null);
     setPacienteInputValue('');
     setMotivoConsulta('');
@@ -265,6 +270,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
           observaciones_generales: motivoConsulta.trim() || undefined,
         });
         targetAtencionId = created.id;
+        createdAtencionIdRef.current = created.id;
         setCreatedAtencionId(created.id);
       }
     } else if (motivoConsulta.trim() !== (atencion?.observaciones_generales ?? '')) {
@@ -319,6 +325,7 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
 
   const handleGuardar = async () => {
     setSaving(true);
+    setPersistError('');
     try {
       await persistAtencion();
       toast.success('Atención de guardia guardada (sigue abierta).');
@@ -332,11 +339,19 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
       };
       const detail = ax.response?.data?.error || ax.response?.data?.detail;
       const raw = detail || (err instanceof Error ? err.message : '') || ax.message || '';
-      const message =
+      const atencionYaCreada = Boolean(createdAtencionIdRef.current);
+      let message =
         !ax.response && /network error/i.test(raw)
           ? 'No se pudo confirmar el pedido de laboratorio (error de red/CORS). La atención puede haber quedado creada: reintentá Guardar o abrila desde la lista.'
           : raw || 'No se pudo guardar la atención.';
-      toast.error(message);
+      if (
+        atencionYaCreada &&
+        !/atención.*creada|quedado creada/i.test(message)
+      ) {
+        message = `${message} La atención ya quedó creada; corregí el pedido y reintentá Guardar (no se duplica).`;
+      }
+      setPersistError(message);
+      toast.error(message, { duration: 8000 });
     } finally {
       setSaving(false);
     }
@@ -527,22 +542,39 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
               </Box>
             )}
 
+            {persistError && (
+              <Alert severity="error" onClose={() => setPersistError('')}>
+                {persistError}
+              </Alert>
+            )}
+
             {showPedidosEditor && isCreate && (
               <ConsultaPedidosPanel
                 key={pendingPanelKey}
                 canEdit
                 variant="compact"
                 usePendingDraft
+                origenPedidoLab="GUARDIA"
                 onDraftChange={handlePendingDraftChange}
               />
             )}
 
             {showPedidosEditor && !isCreate && consultaHcId && (
-              <ConsultaPedidosPanel consultaHcId={consultaHcId} canEdit variant="compact" />
+              <ConsultaPedidosPanel
+                consultaHcId={consultaHcId}
+                canEdit
+                variant="compact"
+                origenPedidoLab="GUARDIA"
+              />
             )}
 
             {showPedidosReadOnly && consultaHcId && (
-              <ConsultaPedidosPanel consultaHcId={consultaHcId} canEdit={false} variant="full" />
+              <ConsultaPedidosPanel
+                consultaHcId={consultaHcId}
+                canEdit={false}
+                variant="full"
+                origenPedidoLab="GUARDIA"
+              />
             )}
 
             {(selectedPaciente?.id || atencion?.paciente?.id) && !isCreate && (
