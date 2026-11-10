@@ -480,7 +480,8 @@ def ingestar_resultados(
                 solicitud_id=solicitud.pk,
                 resultados_data=payload,
                 actor=actor,
-                informar_parcial=True,
+                # Informar (aun parcial) es decisión humana: el analizador solo deja borrador.
+                informar_parcial=False,
                 view="instrumentos.ingesta",
                 equipo_iqc=interfaz.equipo,
                 fuente="INSTRUMENTO",

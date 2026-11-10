@@ -167,6 +167,41 @@ class TestInstrumentosIntegracion(TestCase):
         self.assertTrue((glu.valor_obtenido or "").strip())
         self.assertIsNone(glu.validado_por_id)
 
+    def test_ingesta_parcial_no_informa_parcial(self):
+        sol, m = self._orden_con_tubo(self.glu, self.urea, self.creati)
+        ing = ingestar_resultados(
+            sample_id=m.codigo_barra,
+            interfaz=self.if_cm,
+            items=[
+                IngestaItem(codigo_instrumento="GLU", valor="98"),
+                IngestaItem(codigo_instrumento="URE", valor="35"),
+            ],
+            actor=None,
+        )
+        self.assertEqual(ing.estado, MensajeInstrumento.Estado.OK)
+        self.assertEqual(ing.cargados, 2)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "EN_PROCESO")
+
+    def test_ingesta_completa_queda_lista_para_validar(self):
+        sol, m = self._orden_con_tubo(self.glu, self.urea, self.creati)
+        ing = ingestar_resultados(
+            sample_id=m.codigo_barra,
+            interfaz=self.if_cm,
+            items=[
+                IngestaItem(codigo_instrumento="GLU", valor="98"),
+                IngestaItem(codigo_instrumento="URE", valor="35"),
+                IngestaItem(codigo_instrumento="CRE", valor="0.9"),
+            ],
+            actor=None,
+        )
+        self.assertEqual(ing.cargados, 3)
+        sol.refresh_from_db()
+        self.assertEqual(sol.estado, "LISTO_PARA_VALIDAR")
+        self.assertFalse(
+            ResultadoExamen.objects.filter(solicitud=sol, validado_por__isnull=False).exists()
+        )
+
     def test_cre_mapea_a_creati(self):
         sol, m = self._orden_con_tubo(self.creati)
         ing = ingestar_resultados(

@@ -30,7 +30,7 @@ La consulta acepta código completo o compacto.
 
 ## IQC
 
-Sin control ACEPTADO de hoy para el equipo de la interfaz:
+Sin control ACEPTADO **vigente** para el equipo de la interfaz (ventana lunes/viernes 08:00, ver `control-calidad.md`):
 
 - Worklist vacío (`IQC_BLOQUEADO`).
 - Ingesta rechazada (mismo gate que `cargar-resultados`, sin override).
@@ -43,6 +43,10 @@ Tabla `MapeoAnalitoInstrumento` por interfaz. Semilla: `manage.py seed_instrumen
 - CM260: códigos de canal Wiener (`CRE` → `CREATI`, `URE` → `UREA`, etc.) editables.
 
 Un analito que no está pedido en la orden **no crea** `ResultadoExamen`.
+
+## Estado de la orden tras la ingesta
+
+La ingesta carga con `informar_parcial=False`: orden incompleta queda `EN_PROCESO`; completa (sin tubos pendientes de recepción) pasa a `LISTO_PARA_VALIDAR`. **Nunca** `INFORMADO_PARCIAL` desde el analizador: ese estado ya es visible fuera del lab (historial del médico, últimos resultados, PDF parcial, móvil) y lo decide un humano.
 
 ## Valores
 
@@ -60,3 +64,5 @@ python manage.py simular_instrumento --driver CM260 --sample-id LAB-2026-00001-0
 ```
 
 Hasta tener una traza ASTM real del puerto, el simulador es la prueba de regresión.
+
+Procedimiento de prueba en sitio (gateway, túnel, bridge serie): `docs_synesis/checklists/PRUEBA_SITIO_CM260.md`.
