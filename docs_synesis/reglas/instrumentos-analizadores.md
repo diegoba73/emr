@@ -60,3 +60,5 @@ python manage.py simular_instrumento --driver CM260 --sample-id LAB-2026-00001-0
 ```
 
 Hasta tener una traza ASTM real del puerto, el simulador es la prueba de regresión.
+
+Procedimiento de prueba en sitio (gateway, túnel, bridge serie): `docs_synesis/checklists/PRUEBA_SITIO_CM260.md`.
