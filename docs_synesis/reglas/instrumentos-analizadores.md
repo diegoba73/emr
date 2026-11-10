@@ -30,7 +30,7 @@ La consulta acepta código completo o compacto.
 
 ## IQC
 
-Sin control ACEPTADO de hoy para el equipo de la interfaz:
+Sin control ACEPTADO **vigente** para el equipo de la interfaz (ventana lunes/viernes 08:00, ver `control-calidad.md`):
 
 - Worklist vacío (`IQC_BLOQUEADO`).
 - Ingesta rechazada (mismo gate que `cargar-resultados`, sin override).

@@ -54,7 +54,7 @@ El medio de red (WiFi o cable) no importa: lo que importa es que PC-CM260 llegue
 
 - [ ] Orden de prueba **A** con GLU, UREA, CREATI — tubo recibido — código: `LAB-____-_____-__`
 - [ ] Orden de prueba **B** con GLU, UREA, CREATI — tubo recibido — código: `LAB-____-_____-__`
-- [ ] IQC CM260 del día **ACEPTADO** (si no → `IQC_BLOQUEADO`)
+- [ ] IQC CM260 **vigente** ACEPTADO, S1 y S2 (si no → `IQC_BLOQUEADO`). Ventana: lunes 08:00 → viernes 08:00 vale el del lunes; viernes 08:00 → lunes 08:00 vale el del viernes (`reglas/control-calidad.md`)
 - [ ] Laboratorio → Analizadores muestra interfaz CM260
 - [ ] Pre-chequeo (§4.2) OK
 - [ ] Paso A (simulador JSON) OK
@@ -99,7 +99,16 @@ for t in TipoExamen.objects.filter(codigo__in=['GLU','UREA','CREATI']):
     print(t.codigo, 'equipo:', t.equipo_analizador_id, 'tubo:', t.tipo_contenedor)"
 ```
 
-Los tres `equipo:` tienen que coincidir con `interfaz equipo:`. El IQC del día tiene que estar cargado contra ese mismo equipo.
+Los tres `equipo:` tienen que coincidir con `interfaz equipo:`. El IQC vigente tiene que estar cargado contra ese mismo equipo. Para verlo:
+
+```bash
+docker compose -f docker-compose.server.yml exec backend python manage.py shell -c "
+from laboratorio.models_qc import EquipoAnalizador, CorridaQC
+for e in EquipoAnalizador.objects.filter(codigo__icontains='CM'): print('equipo', e.id, e.codigo, e.activo)
+for c in CorridaQC.objects.filter(equipo__codigo='CM260').order_by('-fecha')[:5]: print('corrida', c.fecha, c.estado, c.nivel)"
+```
+
+Las fechas salen en UTC (restar 3 h para hora local).
 
 Para ver el ID compacto de un tubo (útil en Paso C):
 
@@ -124,7 +133,7 @@ m=Muestra.objects.get(codigo_barra='LAB-2026-XXXXX-01'); print(m.codigo_instrume
 2. Crear las **dos órdenes de prueba** (GLU, UREA, CREATI; nada más).
 3. Imprimir etiquetas y anotar exactamente cada `LAB-AAAA-NNNNN-nn`.
 4. Toma / recepción hasta tubo **RECIBIDA** (worklist acepta RECIBIDA / CONSERVADA / EN_PROCESO).
-5. **IQC:** en Control de calidad, corrida **ACEPTADA** de hoy para CM260.
+5. **IQC:** en Control de calidad, corrida **ACEPTADA** vigente (S1 y S2) para CM260. Martes a jueves vale la del lunes; no hace falta correr control nuevo.
 6. **Laboratorio → Analizadores** (`/laboratorio/instrumentos`): debe listar la interfaz CM260. Después de cada paso, mirar excepciones `SIN_MATCH`, `IQC_BLOQUEADO`, `ERROR`.
 
 ---
@@ -154,7 +163,7 @@ docker compose -f docker-compose.server.yml exec backend \
 | Síntoma | Qué revisar |
 |---|---|
 | `SIN_MATCH` / Tubo no encontrado | Sample-id ≠ código de barra del tubo |
-| `IQC_BLOQUEADO` | Control del día de CM260 (mismo equipo que la interfaz, §4.2) |
+| `IQC_BLOQUEADO` | IQC vigente de CM260: falta, está rechazado, o se cargó en otro equipo (§4.2) |
 | Worklist 0 analitos | §4.2: equipo de los ensayos; o ya tienen valor; o tubo/orden en estado inválido |
 | `ERROR` "Muestra en estado …" / "Orden en estado …" | Recepción del tubo / estado de la orden |
 | `cargados` < 3 con `sin match` | Canal del equipo ≠ mapeo (URE vs UREA, etc.) |
