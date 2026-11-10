@@ -10,9 +10,10 @@ import re
 from typing import Any
 
 from django.utils import timezone
-from reportlab.lib.units import cm
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import KeepTogether, PageBreak, Paragraph, Spacer, Table, TableStyle
 
 from auditoria.audit_service import log_event
 from laboratorio.informe_pdf_layout import (
@@ -170,6 +171,72 @@ def preparar_contexto_encabezado_micro(estudio: EstudioMicrobiologia) -> dict[st
         "historia_clinica": hc,
         "documento": str(getattr(paciente, "dni", "") or "—") if paciente else "—",
         "fecha_nac": formatear_edad_paciente(paciente) if paciente else "—",
+    }
+
+
+def _estilos_antibiograma_una_hoja(n_filas_datos: int) -> dict[str, Any]:
+    """Tipografía/padding compactos para que el antibiograma entre en una sola hoja.
+
+    El frame útil del informe ICPL ronda ~15.5 cm; con muchos antibióticos se
+    reduce fuente y padding para no desbordar ni generar hoja en blanco.
+    """
+    if n_filas_datos <= 16:
+        body, header, title, panel, pad = 7.0, 7.0, 8.0, 9.0, 2.0
+    elif n_filas_datos <= 24:
+        body, header, title, panel, pad = 6.5, 6.5, 7.5, 8.5, 1.0
+    elif n_filas_datos <= 32:
+        body, header, title, panel, pad = 6.0, 6.0, 7.0, 8.0, 0.5
+    else:
+        body, header, title, panel, pad = 5.5, 5.5, 6.5, 7.5, 0.5
+    meta = colors.HexColor("#4A4A4A")
+    return {
+        "pad": pad,
+        "panel": ParagraphStyle(
+            "MicroAbPanel",
+            fontName="Helvetica-Bold",
+            fontSize=panel,
+            leading=panel + 1.5,
+            spaceBefore=0,
+            spaceAfter=2,
+        ),
+        "title": ParagraphStyle(
+            "MicroAbTitle",
+            fontName="Helvetica-Bold",
+            fontSize=title,
+            leading=title + 1.5,
+            spaceBefore=1,
+            spaceAfter=1,
+        ),
+        "header": ParagraphStyle(
+            "MicroAbHeader",
+            fontName="Helvetica-Bold",
+            fontSize=header,
+            leading=header + 1,
+        ),
+        "cell": ParagraphStyle(
+            "MicroAbCell",
+            fontName="Helvetica",
+            fontSize=body,
+            leading=body + 1.2,
+            textColor=meta,
+            spaceBefore=0,
+            spaceAfter=0,
+        ),
+        "interp": ParagraphStyle(
+            "MicroAbInterp",
+            fontName="Helvetica-Bold",
+            fontSize=body,
+            leading=body + 1.2,
+            spaceBefore=0,
+            spaceAfter=0,
+        ),
+        "empty": ParagraphStyle(
+            "MicroAbEmpty",
+            fontName="Helvetica-Oblique",
+            fontSize=body,
+            leading=body + 1.2,
+            textColor=meta,
+        ),
     }
 
 
@@ -411,13 +478,11 @@ def _construir_story_micro(
                 story.append(
                     Paragraph(
                         esc(" · ".join(partes_aislado)),
-                        styles["exam_meta"],
+                        styles["exam_title"],
                     )
                 )
-        story.append(Spacer(1, 0.25 * cm))
 
-        # Antibiogramas completos
-        story.append(Paragraph("ANTIBIOGRAMA", styles["panel"]))
+        # Antibiograma: siempre hoja nueva; bloque único (sin partir ni hoja en blanco).
         abs_completos = list(
             Antibiograma.objects.filter(
                 aislado__estudio_id=estudio.pk,
@@ -427,29 +492,38 @@ def _construir_story_micro(
             .prefetch_related("resultados__antibiotico")
             .order_by("pk")
         )
+        resultados_por_ab = [list(ab.resultados.all()) for ab in abs_completos]
+        n_filas_datos = sum(len(rs) for rs in resultados_por_ab)
+        ab_styles = _estilos_antibiograma_una_hoja(n_filas_datos)
+        pad = ab_styles["pad"]
+
+        bloque_ab: list[Any] = [Paragraph("ANTIBIOGRAMA", ab_styles["panel"])]
         if not abs_completos:
-            story.append(Paragraph("Sin antibiogramas completos.", styles["empty"]))
+            bloque_ab.append(
+                Paragraph("Sin antibiogramas completos.", ab_styles["empty"])
+            )
         else:
-            for ab in abs_completos:
+            for ab, resultados in zip(abs_completos, resultados_por_ab):
                 aislado = ab.aislado
                 micro = aislado.microorganismo if aislado else None
                 micro_lbl = (
                     f"{micro.codigo} — {micro.nombre}" if micro else f"Aislado #{aislado.pk}"
                 )
-                story.append(
+                bloque_ab.append(
                     Paragraph(
                         esc(f"Antibiograma #{ab.pk} · {micro_lbl}"),
-                        styles["exam_title"],
+                        ab_styles["title"],
                     )
                 )
-                resultados = list(ab.resultados.all())
                 if not resultados:
-                    story.append(Paragraph("Sin resultados cargados.", styles["empty"]))
+                    bloque_ab.append(
+                        Paragraph("Sin resultados cargados.", ab_styles["empty"])
+                    )
                     continue
                 header = [
-                    Paragraph("Antibiótico", styles["table_header"]),
-                    Paragraph("MIC", styles["table_header"]),
-                    Paragraph("Interp.", styles["table_header"]),
+                    Paragraph("Antibiótico", ab_styles["header"]),
+                    Paragraph("MIC", ab_styles["header"]),
+                    Paragraph("Interp.", ab_styles["header"]),
                 ]
                 rows = [header]
                 for r in resultados:
@@ -459,9 +533,9 @@ def _construir_story_micro(
                     )
                     rows.append(
                         [
-                            Paragraph(esc(nom), styles["exam_meta"]),
-                            Paragraph(esc(r.mic or "—"), styles["exam_meta"]),
-                            Paragraph(esc(r.interpretacion or "—"), styles["exam_title"]),
+                            Paragraph(esc(nom), ab_styles["cell"]),
+                            Paragraph(esc(r.mic or "—"), ab_styles["cell"]),
+                            Paragraph(esc(r.interpretacion or "—"), ab_styles["interp"]),
                         ]
                     )
                 table = Table(rows, colWidths=[10.0 * cm, 3.5 * cm, 3.7 * cm])
@@ -469,16 +543,23 @@ def _construir_story_micro(
                     TableStyle(
                         [
                             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F3F4F6")),
-                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ("TOPPADDING", (0, 0), (-1, -1), 3),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                            ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#E5E7EB")),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                            ("TOPPADDING", (0, 0), (-1, -1), pad),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                            ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor("#E5E7EB")),
                         ]
                     )
                 )
-                story.append(table)
-                story.append(Spacer(1, 0.15 * cm))
+                # No partir filas: el bloque entero va en KeepTogether + tipografía compacta.
+                table.splitByRow = 0
+                bloque_ab.append(table)
+
+        # PageBreak forzado (siempre hoja nueva). KeepTogether evita fragmentar el
+        # bloque; tipografía compacta evita desborde → hoja en blanco intermedia.
+        story.append(PageBreak())
+        story.append(KeepTogether(bloque_ab))
 
     # Texto informe (el recuento vive en lecturas; no repetirlo en la conclusión).
     texto = (informe.texto or "").strip()

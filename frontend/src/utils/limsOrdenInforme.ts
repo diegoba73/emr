@@ -48,6 +48,8 @@ const MUESTRAS_SANGRE = new Set([
 export const ORDEN_PRESENTACION_PEDIDO: string[] = [
   'PAN_HEMO',
   'GLU',
+  // HbA1c siempre bajo glucosa; si no hay GLU, queda arriba de urea/creatinina.
+  'HBA1C',
   'PAN_CTOG',
   'UREA',
   'CREATI',

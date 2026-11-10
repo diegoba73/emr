@@ -523,6 +523,8 @@ ORDEN_PRESENTACION_PEDIDO: list[str] = [
     "PAN_HEMO",
     # Química CM260 sueltos (CPK y orinas fuera de este bloque)
     "GLU",
+    # HbA1c siempre bajo glucosa; si no hay GLU, queda arriba de urea/creatinina.
+    "HBA1C",
     "PAN_CTOG",
     "UREA",
     "CREATI",

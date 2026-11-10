@@ -77,7 +77,7 @@ export const ORDEN_FORMULARIO_PAPEL: string[] = [
 
 /** Orden de presentación clínica (informe / resultados), alineado al web. */
 const ORDEN_PRESENTACION_PEDIDO: string[] = [
-  'PAN_HEMO', 'GLU', 'UREA', 'CREATI', 'PAN_CLEAR', 'AU', 'CA', 'MG', 'P', 'PROT_T', 'ALB',
+  'PAN_HEMO', 'GLU', 'HBA1C', 'UREA', 'CREATI', 'PAN_CLEAR', 'AU', 'CA', 'MG', 'P', 'PROT_T', 'ALB',
   'FERR', 'UIBC', 'GOT', 'GPT', 'FAL', 'BIL_T', 'BIL_D', 'BIL_I', 'COL_TOT', 'HDL', 'TG',
   'LDL', 'VLDL', 'PCR_US', 'AMIL', 'LIP', 'GGT', 'LDH', 'PAN_HEP', 'PAN_LIP', 'PAN_IONO',
   'CPK', 'CPK_MB', 'TROP_I', 'TROP_US', 'MIOG', 'PAN_ENA',
