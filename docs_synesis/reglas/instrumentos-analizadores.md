@@ -44,6 +44,10 @@ Tabla `MapeoAnalitoInstrumento` por interfaz. Semilla: `manage.py seed_instrumen
 
 Un analito que no está pedido en la orden **no crea** `ResultadoExamen`.
 
+## Estado de la orden tras la ingesta
+
+La ingesta carga con `informar_parcial=False`: orden incompleta queda `EN_PROCESO`; completa (sin tubos pendientes de recepción) pasa a `LISTO_PARA_VALIDAR`. **Nunca** `INFORMADO_PARCIAL` desde el analizador: ese estado ya es visible fuera del lab (historial del médico, últimos resultados, PDF parcial, móvil) y lo decide un humano.
+
 ## Valores
 
 Los números ASTM son **clínicos**. No aplicar `TICKET_ENTERO` (eso es tipeo del ticket impreso).
