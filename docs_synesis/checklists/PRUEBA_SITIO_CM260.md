@@ -30,6 +30,7 @@ El medio de red (WiFi o cable) no importa: lo que importa es que PC-CM260 llegue
 
 - Usar **órdenes de prueba** (paciente demo o "PRUEBA CM260"), nunca una orden clínica real.
 - Preparar **dos órdenes de prueba** (una para Paso A y otra para Paso B), cada una con **exactamente** GLU, UREA y CREATI.
+- El LIMS admite **una orden activa por paciente y día** (`solicitud_orden_abierta.py`): con un solo paciente ficticio, crear la orden B recién después de validar (o cancelar) la A. Alternativa: dos pacientes ficticios.
 - Mandar siempre los **3 valores** por orden.
 - Probar primero **sin cable** (simulador JSON).
 - Validar a mano en la UI para cerrar el circuito humano.
@@ -132,7 +133,7 @@ m=Muestra.objects.get(codigo_barra='LAB-2026-XXXXX-01'); print(m.codigo_instrume
 ## 5. Preparación en PC-Lab (navegador)
 
 1. Entrar a SYNESIS con usuario de laboratorio.
-2. Crear las **dos órdenes de prueba** (GLU, UREA, CREATI; nada más).
+2. Crear la orden de prueba **A** (GLU, UREA, CREATI; nada más). La **B** después de validar la A (una orden activa por paciente y día).
 3. Imprimir etiquetas y anotar exactamente cada `LAB-AAAA-NNNNN-nn`.
 4. Toma / recepción hasta tubo **RECIBIDA** (worklist acepta RECIBIDA / CONSERVADA / EN_PROCESO).
 5. **IQC:** en Control de calidad, corrida **ACEPTADA** vigente (S1 y S2) para CM260. Martes a jueves vale la del lunes; no hace falta correr control nuevo.
