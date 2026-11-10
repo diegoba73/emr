@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from pacientes.models import Paciente
 from pacientes.serializers import PacienteLightSerializer
 from medicos.models import Medico, Especialidad
-from medicos.models import DisponibilidadMedico, ExcepcionMedico
+from medicos.models import DisponibilidadMedico, ExcepcionMedico, Feriado
 
 User = get_user_model()
 # from laboratorio.models import TipoExamen, PanelExamen, SolicitudExamen, ResultadoExamen
@@ -286,6 +286,30 @@ class ExcepcionMedicoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExcepcionMedico
         fields = '__all__'
+
+
+class FeriadoSerializer(serializers.ModelSerializer):
+    pendientes_count = serializers.SerializerMethodField()
+
+    def get_pendientes_count(self, obj):
+        if not obj.activo:
+            return 0
+        from medicos.agenda import turnos_pendientes_feriado
+        return turnos_pendientes_feriado(obj.fecha).count()
+
+    def validate_nombre(self, value):
+        nombre = (value or '').strip()
+        if not nombre:
+            raise serializers.ValidationError('Indique el nombre del feriado.')
+        return nombre
+
+    class Meta:
+        model = Feriado
+        fields = (
+            'id', 'fecha', 'nombre', 'activo',
+            'creado_en', 'actualizado_en', 'pendientes_count',
+        )
+        read_only_fields = ('creado_en', 'actualizado_en', 'pendientes_count')
 
 
 # class TipoExamenSerializer(serializers.ModelSerializer):

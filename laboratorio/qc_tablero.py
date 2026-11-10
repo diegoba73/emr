@@ -25,8 +25,10 @@ from laboratorio.models_qc import (
     ProductoControl,
 )
 from laboratorio.qc_service import (
+    DIAS_CONTROL_IQC_NOMINALES,
     _ultima_corrida_producto,
     _ventana_hoy,
+    es_dia_control_iqc_efectivo,
     fecha_corte_dia_operativo_iqc,
     fecha_dia_operativo_iqc,
     materiales_iqc_canonicos,
@@ -35,13 +37,14 @@ from laboratorio.solicitud_orden_abierta import ESTADOS_ORDEN_EN_CURSO
 
 logger = logging.getLogger(__name__)
 
-# Lunes=0 … Viernes=4 — aviso de control con valores (no bloquea OK rápido).
-DIAS_AVISO_CONTROL_VALORES: frozenset[int] = frozenset({0, 4})
+# Compat: lun/vie nominales (el aviso real usa día de control efectivo post-feriado).
+DIAS_AVISO_CONTROL_VALORES: frozenset[int] = DIAS_CONTROL_IQC_NOMINALES
 
 
 def es_dia_aviso_control_valores(*, fecha=None) -> bool:
+    """Aviso de control con valores el día de control efectivo (lun/vie o corrido por feriado)."""
     d = fecha if fecha is not None else timezone.localdate()
-    return d.weekday() in DIAS_AVISO_CONTROL_VALORES
+    return es_dia_control_iqc_efectivo(d)
 
 
 def _nombre_dia(fecha) -> str:

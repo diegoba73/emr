@@ -134,9 +134,12 @@ export function canAccessSolicitudes(user: User | null | undefined): boolean {
   return isSecretariaInstitucionalRole(rol) || rol === 'enfermeria' || rol === 'medico' || rol === 'paciente';
 }
 
-/** Archivos médicos: lectura para admin, médico, secretaría institucional, enfermería y paciente. */
+/** Archivos médicos: lectura para admin, médico, secretaría institucional, enfermería y paciente.
+ * Operadores LIMS (laboratorio/bioquímico) y secretaría lab: sin menú/acceso.
+ */
 export function canAccessArchivosMedicos(user: User | null | undefined): boolean {
   if (!user) return false;
+  if (isLaboratorioRole(user) || isSecretariaLabRole(normalizeRol(user))) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
   return rol === 'medico' || isSecretariaInstitucionalRole(rol) || rol === 'enfermeria' || rol === 'paciente';
@@ -194,10 +197,11 @@ export function isMedicoSoloAmbulatorio(user: User | null | undefined): boolean 
 
 /**
  * Módulo /atenciones (QA-ROLE-01): admin/staff, médico, enfermería (lectura), paciente (lectura propia).
- * Secretaría, laboratorio y sin rol: bloqueados (secretaría opera Guardia por separado).
+ * Secretaría, laboratorio, bioquímico y sin rol: bloqueados (secretaría opera Guardia por separado).
  */
 export function canAccessAtenciones(user: User | null | undefined): boolean {
   if (!user) return false;
+  if (isLaboratorioRole(user)) return false;
   if (isStaffOrAdmin(user)) return true;
   const rol = normalizeRol(user);
   return rol === 'medico' || rol === 'enfermeria' || rol === 'paciente';
@@ -375,17 +379,21 @@ export function canAccessEstadisticasLims(user: User | null | undefined): boolea
 
 export function canManageHorarios(user: User | null | undefined): boolean {
   if (!user) return false;
+  if (isLaboratorioRole(user)) return false;
   if (user.is_superuser) return true;
   const rol = normalizeRol(user);
   return rol === 'admin' || isSecretariaInstitucionalRole(rol);
 }
 
-/** Tablero de recepción del día (secretaria, médico, lab cola L, admin, enfermería). */
+/** Tablero de recepción del día (secretaria, médico, lab cola L, admin, enfermería).
+ * Bioquímico no usa recepción/cola de extracciones.
+ */
 export function canAccessRecepcion(user: User | null | undefined): boolean {
   if (!user) return false;
   const rol = normalizeRol(user);
+  if (rol === 'bioquimico') return false;
   // Laboratorio / secretaria_lab: solo cola L (extracciones) en el mismo tablero.
-  if (isSecretariaLabRole(rol) || isLaboratorioRole(user)) return true;
+  if (isSecretariaLabRole(rol) || rol === 'laboratorio') return true;
   if (user.is_superuser || user.is_staff) return true;
   return (
     rol === 'admin' ||

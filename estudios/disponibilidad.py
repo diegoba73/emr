@@ -10,7 +10,7 @@ from datetime import datetime
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from medicos.agenda import ocupado, tipo_para_recurso
+from medicos.agenda import feriado_activo, mensaje_feriado, ocupado, tipo_para_recurso
 from medicos.models import DisponibilidadMedico, ExcepcionMedico, Medico
 from turnos.models import Recurso
 from turnos.validacion_sala import validar_disponibilidad_sala_estudio
@@ -21,6 +21,8 @@ def _cubre_intervalo(medico, inicio, fin, recurso=None) -> bool:
     local = timezone.localtime(inicio)
     fecha = local.date()
     if timezone.localtime(fin).date() != fecha:
+        return False
+    if feriado_activo(fecha):
         return False
 
     horarios = DisponibilidadMedico.objects.filter(
@@ -89,6 +91,10 @@ def validar_disponibilidad_reserva_estudio(
         )
 
     _lock_recursos_profesionales(medico=medico, recurso=recurso)
+
+    msg_feriado = mensaje_feriado(timezone.localtime(fecha_hora_inicio).date())
+    if msg_feriado:
+        raise ValidationError(msg_feriado)
 
     if medico and DisponibilidadMedico.objects.filter(medico=medico).exists():
         if fecha_hora_inicio <= timezone.now():

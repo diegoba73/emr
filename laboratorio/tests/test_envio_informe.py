@@ -285,18 +285,31 @@ class TestEnvioInformeAPI(APITestCase):
 
     def test_informe_entrega_publico_con_token(self):
         sol = self._sol_finalizada()
+        from auditoria.models import AuditEvent
         from laboratorio.informe_entrega_token import asignar_token_entrega
 
         tok = asignar_token_entrega(sol, renovar=True)
         sol.save(update_fields=["informe_entrega_token", "informe_entrega_token_expira"])
         self.client.force_authenticate(user=None)
-        r = self.client.get(f"/api/lab/solicitudes/informe-entrega/?t={tok}")
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertEqual(r["Content-Type"], "application/pdf")
-        self.assertIn(b"%PDF", r.content[:10])
-        r2 = self.client.get(f"/api/lab/solicitudes/informe-entrega/{tok}/")
-        self.assertEqual(r2.status_code, status.HTTP_200_OK)
-        self.assertIn(b"%PDF", r2.content[:10])
+        # log_event usa on_commit; en TestCase hay que ejecutar callbacks.
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.get(f"/api/lab/solicitudes/informe-entrega/?t={tok}")
+            self.assertEqual(r.status_code, status.HTTP_200_OK)
+            self.assertEqual(r["Content-Type"], "application/pdf")
+            self.assertIn(b"%PDF", r.content[:10])
+            r2 = self.client.get(f"/api/lab/solicitudes/informe-entrega/{tok}/")
+            self.assertEqual(r2.status_code, status.HTTP_200_OK)
+            self.assertIn(b"%PDF", r2.content[:10])
+        eventos = [
+            e
+            for e in AuditEvent.objects.filter(
+                module="laboratorio",
+                action="UPDATE",
+                entity_id=str(sol.pk),
+            )
+            if (e.metadata or {}).get("accion") == "lims_informe_entrega_publico"
+        ]
+        self.assertGreaterEqual(len(eventos), 2)
 
     @patch("laboratorio.services_envio_informe.EmailMessage.send", return_value=1)
     def test_secretaria_envia_informe_finalizado(self, mock_send):

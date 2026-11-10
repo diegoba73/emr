@@ -91,11 +91,79 @@ def _fecha_corte_dia_operativo(ahora=None):
     return ahora_local.date()
 
 
+# Lunes=0 y viernes=4: días nominales de control IQC.
+DIAS_CONTROL_IQC_NOMINALES: frozenset[int] = frozenset({0, 4})
+
+
+def _es_feriado_iqc(fecha) -> bool:
+    from medicos.agenda import feriado_activo
+
+    return feriado_activo(fecha) is not None
+
+
+def es_dia_habil_iqc(fecha) -> bool:
+    """Lun–vie y no feriado institucional activo."""
+    return fecha.weekday() < 5 and not _es_feriado_iqc(fecha)
+
+
+def proximo_dia_habil_iqc(fecha):
+    """Primer día hábil >= fecha (máx. 21 días de búsqueda)."""
+    d = fecha
+    for _ in range(21):
+        if es_dia_habil_iqc(d):
+            return d
+        d += timedelta(days=1)
+    return fecha
+
+
+def fecha_control_iqc_efectiva(nominal):
+    """Si el lunes/viernes nominal no es hábil, corre al próximo hábil."""
+    return proximo_dia_habil_iqc(nominal)
+
+
+def _fechas_control_efectivas_en_rango(desde, hasta):
+    """Fechas efectivas de control (lun/vie corridos por feriado) en [desde, hasta]."""
+    effectives: list = []
+    d = desde
+    while d <= hasta:
+        if d.weekday() in DIAS_CONTROL_IQC_NOMINALES:
+            eff = fecha_control_iqc_efectiva(d)
+            if not effectives or effectives[-1] != eff:
+                effectives.append(eff)
+        d += timedelta(days=1)
+    return effectives
+
+
+def _pares_ventana_control(inicio_date):
+    """
+    (C, N): último día de control efectivo <= inicio_date y el siguiente.
+
+    Escanea nominales lun/vie alrededor de la fecha operativa.
+    """
+    scan_desde = inicio_date - timedelta(days=21)
+    scan_hasta = inicio_date + timedelta(days=21)
+    effectives = _fechas_control_efectivas_en_rango(scan_desde, scan_hasta)
+    previas = [e for e in effectives if e <= inicio_date]
+    if not previas:
+        # Fallback conservador: tratar inicio_date como control.
+        c = proximo_dia_habil_iqc(inicio_date)
+        return c, proximo_dia_habil_iqc(c + timedelta(days=1))
+    c = previas[-1]
+    siguientes = [e for e in effectives if e > c]
+    if siguientes:
+        return c, siguientes[0]
+    return c, proximo_dia_habil_iqc(c + timedelta(days=1))
+
+
 def _ventana_hoy(ahora=None):
     """
     Ventana del día operativo IQC en TZ local.
 
-    Corte default 08:00. Control obligatorio solo **lunes** y **viernes**:
+    Corte default 08:00. Control obligatorio en **lunes** y **viernes** nominales;
+    si ese día es feriado (o no hábil), el control se corre al **próximo día hábil**
+    y la ventana anterior se estira hasta ahí.
+
+    Sin feriados:
     - Lun 08:00 → vie 08:00: vale ACEPTADA del lunes (cubre mar/mié/jue).
     - Vie 08:00 → lun 08:00: vale ACEPTADA del viernes (cubre sáb/dom y
       lunes antes del corte).
@@ -103,31 +171,27 @@ def _ventana_hoy(ahora=None):
     inicio_date = _fecha_corte_dia_operativo(ahora)
     hora_corte = _hora_inicio_dia_operativo()
     corte = time(hora_corte, 0, 0)
-    wd = inicio_date.weekday()  # 0=lun … 6=dom
+    c, n = _pares_ventana_control(inicio_date)
+    start = timezone.make_aware(datetime.combine(c, corte))
+    end = timezone.make_aware(datetime.combine(n, corte))
+    return start, end
 
-    if wd == 0:
-        # Lunes: ventana hasta el viernes 08:00.
-        start = timezone.make_aware(datetime.combine(inicio_date, corte))
-        return start, start + timedelta(days=4)
-    if wd in (1, 2, 3):
-        # Mar / mié / jue → hereda el lunes de esa semana.
-        lunes = inicio_date - timedelta(days=wd)
-        start = timezone.make_aware(datetime.combine(lunes, corte))
-        return start, start + timedelta(days=4)
-    if wd == 4:
-        # Viernes: ventana hasta el lunes 08:00.
-        start = timezone.make_aware(datetime.combine(inicio_date, corte))
-        return start, start + timedelta(days=3)
-    # Sábado / domingo → hereda el viernes.
-    viernes = inicio_date - timedelta(days=wd - 4)
-    start = timezone.make_aware(datetime.combine(viernes, corte))
-    return start, start + timedelta(days=3)
+
+def es_dia_control_iqc_efectivo(fecha) -> bool:
+    """True si `fecha` es el día hábil en que corre un control lun/vie (tras feriados)."""
+    if not es_dia_habil_iqc(fecha):
+        return False
+    for delta in range(0, 8):
+        cand = fecha - timedelta(days=delta)
+        if cand.weekday() in DIAS_CONTROL_IQC_NOMINALES and fecha_control_iqc_efectiva(cand) == fecha:
+            return True
+    return False
 
 
 def fecha_dia_operativo_iqc(ahora=None):
     """Fecha civil del inicio de la ventana IQC vigente (etiquetas del tablero).
 
-    Lunes–jueves: el lunes de control. Viernes–domingo: el viernes de control.
+    Es el día de control efectivo (lun/vie o el hábil al que se corrió por feriado).
     """
     start, _ = _ventana_hoy(ahora)
     return timezone.localtime(start).date()

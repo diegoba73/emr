@@ -1,6 +1,7 @@
 import type { User } from '../types';
 import {
   canManageHorarios,
+  canAccessRecepcion,
   canAccessArchivosMedicos,
   canAccessAtenciones,
   canAccessAuditoria,
@@ -156,10 +157,11 @@ describe('canAccessArchivosMedicos', () => {
     expect(canAccessArchivosMedicos(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('permite lectura a secretaría y enfermería; bloquea laboratorio', () => {
+  it('permite lectura a secretaría y enfermería; bloquea laboratorio y bioquímico', () => {
     expect(canAccessArchivosMedicos(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canAccessArchivosMedicos(user({ rol: 'ENFERMERIA' }))).toBe(true);
     expect(canAccessArchivosMedicos(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canAccessArchivosMedicos(user({ rol: 'BIOQUIMICO' }))).toBe(false);
   });
 });
 
@@ -229,9 +231,10 @@ describe('canAccessAtenciones / canOperateAtenciones (QA-ROLE-01)', () => {
     expect(canAccessAtenciones(user({ rol: 'PACIENTE' }))).toBe(true);
   });
 
-  it('bloquea secretaría, laboratorio y anónimo', () => {
+  it('bloquea secretaría, laboratorio, bioquímico y anónimo', () => {
     expect(canAccessAtenciones(user({ rol: 'SECRETARIA' }))).toBe(false);
     expect(canAccessAtenciones(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canAccessAtenciones(user({ rol: 'BIOQUIMICO' }))).toBe(false);
     expect(canAccessAtenciones(null)).toBe(false);
   });
 
@@ -386,6 +389,21 @@ describe('canManageHorarios', () => {
     expect(canManageHorarios(user({ rol: 'MEDICO', is_staff: true }))).toBe(false);
     expect(canManageHorarios(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canManageHorarios(user({ rol: 'ENFERMERIA' }))).toBe(false);
+    expect(canManageHorarios(user({ rol: 'BIOQUIMICO' }))).toBe(false);
+    expect(canManageHorarios(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canManageHorarios(null)).toBe(false);
+  });
+});
+
+describe('canAccessRecepcion', () => {
+  it('permite laboratorio y secretaría lab (cola extracciones), no bioquímico', () => {
+    expect(canAccessRecepcion(user({ rol: 'LABORATORIO' }))).toBe(true);
+    expect(canAccessRecepcion(user({ rol: 'SECRETARIA_LAB' }))).toBe(true);
+    expect(canAccessRecepcion(user({ rol: 'BIOQUIMICO' }))).toBe(false);
+  });
+  it('permite secretaría institucional, médico y admin', () => {
+    expect(canAccessRecepcion(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canAccessRecepcion(user({ rol: 'MEDICO' }))).toBe(true);
+    expect(canAccessRecepcion(user({ rol: 'ADMIN' }))).toBe(true);
   });
 });

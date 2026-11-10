@@ -90,6 +90,24 @@ def auditar_descarga_informe_pdf(*, actor, solicitud: SolicitudExamen) -> None:
     )
 
 
+def auditar_descarga_informe_entrega_publico(*, solicitud: SolicitudExamen) -> None:
+    """Descarga pública por token (WhatsApp/email). Sin PHI; actor anónimo."""
+    log_event(
+        action="UPDATE",
+        actor=None,
+        entity=solicitud,
+        entity_repr=f"laboratorio.SolicitudExamen:{solicitud.pk}",
+        after=None,
+        module="laboratorio",
+        metadata={
+            "accion": "lims_informe_entrega_publico",
+            "solicitud_id": solicitud.pk,
+            "via": "informe_entrega_publico",
+            "view": "SolicitudExamenViewSet.informe_entrega",
+        },
+    )
+
+
 def sanitizar_numero_para_filename(numero: str | None) -> str:
     """Por si se usa numero en filename en fases futuras; solo alfanumérico y guión."""
     if not numero:

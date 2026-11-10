@@ -532,3 +532,21 @@ def auditar_descarga_informe_micro_pdf(*, actor, estudio: EstudioMicrobiologia) 
             "view": "EstudioMicrobiologiaViewSet.informe_pdf",
         },
     )
+
+
+def auditar_descarga_informe_micro_entrega_publico(*, estudio: EstudioMicrobiologia) -> None:
+    """Descarga pública micro por token. Sin PHI; actor anónimo."""
+    log_event(
+        action="UPDATE",
+        actor=None,
+        entity=estudio,
+        entity_repr=f"laboratorio.EstudioMicrobiologia:{estudio.pk}",
+        after=None,
+        module="laboratorio",
+        metadata={
+            "accion": "lims_micro_informe_entrega_publico",
+            "estudio_id": estudio.pk,
+            "via": "informe_entrega_publico",
+            "view": "EstudioMicrobiologiaViewSet.informe_entrega",
+        },
+    )

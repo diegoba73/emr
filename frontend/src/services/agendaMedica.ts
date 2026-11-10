@@ -75,3 +75,60 @@ export const getMisTurnos = async (): Promise<Turno[]> => {
   }
   return rows;
 };
+
+export interface TurnoAfectadoFeriado {
+  id: number;
+  estado: string;
+  fecha_hora_inicio: string | null;
+  paciente_id: number | null;
+  paciente_nombre: string | null;
+  medico_id: number | null;
+  medico_nombre: string | null;
+}
+
+export interface Feriado {
+  id: number;
+  fecha: string;
+  nombre: string;
+  activo: boolean;
+  creado_en?: string;
+  actualizado_en?: string;
+  pendientes_count: number;
+  turnos_afectados?: TurnoAfectadoFeriado[];
+}
+
+export interface TurnosPendientesFeriado {
+  feriado_id: number;
+  fecha: string;
+  nombre: string;
+  activo: boolean;
+  turnos: TurnoAfectadoFeriado[];
+  count: number;
+}
+
+export const getFeriados = async (): Promise<Feriado[]> => {
+  let url: string | null = '/feriados/';
+  const rows: Feriado[] = [];
+  while (url) {
+    const { data }: { data: any } = await apiClient.get(url);
+    rows.push(...(Array.isArray(data) ? data : data.results));
+    url = data.next ? `/feriados/?${String(data.next).split('?')[1]}` : null;
+  }
+  return rows;
+};
+
+export const createFeriado = async (payload: {
+  fecha: string;
+  nombre: string;
+  activo?: boolean;
+}): Promise<Feriado> => (await apiClient.post('/feriados/', payload)).data;
+
+export const updateFeriado = async (
+  id: number,
+  payload: Partial<Pick<Feriado, 'fecha' | 'nombre' | 'activo'>>,
+): Promise<Feriado> => (await apiClient.patch(`/feriados/${id}/`, payload)).data;
+
+export const deleteFeriado = async (id: number) => apiClient.delete(`/feriados/${id}/`);
+
+export const getTurnosPendientesFeriado = async (id: number): Promise<TurnosPendientesFeriado> =>
+  (await apiClient.get(`/feriados/${id}/turnos-pendientes/`)).data;

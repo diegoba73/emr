@@ -4,8 +4,9 @@ Idempotente: usa get_or_create para no duplicar datos si se corre dos veces.
 """
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from catalogos.models import CentroFisico, TipoAtencion
@@ -32,7 +33,20 @@ QA_RECURSO_NOMBRE = 'QA DEMO Consultorio 1'
 class Command(BaseCommand):
     """Comando Django para poblar datos iniciales."""
     
-    help = 'Pobla la base de datos con datos iniciales (idempotente)'
+    help = (
+        'Pobla la base de datos con datos iniciales (idempotente). '
+        'Bloqueado si DEBUG=False salvo --force-unsafe.'
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--force-unsafe',
+            action='store_true',
+            help=(
+                'Permite ejecutar seed_data con DEBUG=False. '
+                'Solo entornos controlados (tests/demo); nunca en DB clínica.'
+            ),
+        )
     
     def _ensure_user(self, username, password, defaults):
         """Crea usuario demo si no existe; no resetea contraseña en corridas posteriores."""
@@ -180,6 +194,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Ejecuta el comando."""
+        if not settings.DEBUG and not options.get('force_unsafe'):
+            raise CommandError(
+                'seed_data rechazado: DEBUG=False. '
+                'Usso permitido solo en desarrollo/demo, o con --force-unsafe '
+                'en entornos controlados (nunca en DB clínica).'
+            )
+
         self.stdout.write(self.style.SUCCESS('Iniciando seeding de datos...'))
 
         self.stdout.write('Cargando tipos de dieta de internación...')

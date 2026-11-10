@@ -129,8 +129,7 @@ MIDDLEWARE = [
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',  # Re-enabled
-        'rest_framework.authentication.TokenAuthentication',  # Re-enabled
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',  # Changed back to authenticated
@@ -143,6 +142,11 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_RENDERER_CLASSES': resolve_drf_renderers(DEBUG),
+    # Rates de auth pública (api.throttles); generosos para no bloquear operativa.
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': '30/min',
+        'auth_register': '10/min',
+    },
 }
 
 # CORS — abierto solo en DEBUG; lista explícita en producción

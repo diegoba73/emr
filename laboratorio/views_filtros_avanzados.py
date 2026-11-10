@@ -17,9 +17,10 @@ from laboratorio.cohortes_filtros import (
     paciente_ids_por_filtro,
     resumen_filtro,
 )
-from usuarios.roles import ROLES_LIMS_WRITE
+from usuarios.roles import ROLES_SECRETARIA_LAB
 
-_ROLES_FILTROS = frozenset({*ROLES_LIMS_WRITE, "medico"})
+# Sin rol laboratorio técnico: cohortes / Excel para bioquímico, secretaría lab, admin y médico.
+_ROLES_FILTROS = frozenset({"admin", "bioquimico", "medico", *ROLES_SECRETARIA_LAB})
 
 
 def _puede_filtros(user) -> bool:

@@ -1,9 +1,10 @@
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, SAFE_METHODS
+from .throttles import AuthLoginThrottle, AuthRegisterThrottle
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 from .serializers import (
     PacienteSerializer, MedicoSerializer, EspecialidadSerializer,
-    DisponibilidadMedicoSerializer, ExcepcionMedicoSerializer,
+    DisponibilidadMedicoSerializer, ExcepcionMedicoSerializer, FeriadoSerializer,
     # TipoExamenSerializer, PanelExamenSerializer, SolicitudExamenSerializer,
     # ResultadoExamenSerializer, 
     ConsultaSerializer, ConsultaCreateSerializer, DiagnosticoSerializer,
@@ -57,7 +58,7 @@ from .serializers import (
 )
 
 from pacientes.models import Paciente
-from medicos.models import Medico, Especialidad, DisponibilidadMedico, ExcepcionMedico
+from medicos.models import Medico, Especialidad, DisponibilidadMedico, ExcepcionMedico, Feriado
 # from laboratorio.models import TipoExamen, PanelExamen, SolicitudExamen, ResultadoExamen
 from historias_clinicas.models import Consulta, Diagnostico, Prescripcion, HistoriaClinica, Internacion
 from catalogos.models import Medicamento, DiagnosticoCIE10
@@ -227,6 +228,60 @@ class ExcepcionMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewSet):
     queryset = ExcepcionMedico.objects.select_related('medico').all()
     serializer_class = ExcepcionMedicoSerializer
     permission_classes = [CanManageAgendaMedica]
+
+
+class FeriadoViewSet(viewsets.ModelViewSet):
+    """Feriados institucionales: cierran agenda de turnos ese día."""
+
+    queryset = Feriado.objects.all()
+    serializer_class = FeriadoSerializer
+    permission_classes = [CanManageAgendaMedica]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['activo', 'fecha']
+    ordering_fields = ['fecha', 'nombre']
+    ordering = ['-fecha']
+
+    def _respuesta_con_afectados(self, instance, status_code=status.HTTP_200_OK):
+        from medicos.agenda import serializar_turnos_pendientes_feriado
+
+        data = self.get_serializer(instance).data
+        data['turnos_afectados'] = (
+            serializar_turnos_pendientes_feriado(instance.fecha) if instance.activo else []
+        )
+        return Response(data, status=status_code)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return self._respuesta_con_afectados(serializer.instance, status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return self._respuesta_con_afectados(serializer.instance)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    @action(detail=True, methods=['get'], url_path='turnos-pendientes')
+    def turnos_pendientes(self, request, pk=None):
+        from medicos.agenda import serializar_turnos_pendientes_feriado
+
+        feriado = self.get_object()
+        turnos = serializar_turnos_pendientes_feriado(feriado.fecha) if feriado.activo else []
+        return Response({
+            'feriado_id': feriado.pk,
+            'fecha': feriado.fecha.isoformat(),
+            'nombre': feriado.nombre,
+            'activo': feriado.activo,
+            'turnos': turnos,
+            'count': len(turnos),
+        })
 
 
 class PacienteViewSet(viewsets.ModelViewSet):
@@ -1677,6 +1732,7 @@ def csrf_token_view(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([AuthLoginThrottle])
 def login_view(request):
     """Vista para login de usuarios"""
     username = request.data.get('username')
@@ -1983,6 +2039,7 @@ from usuarios.models import Secretaria
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([AuthRegisterThrottle])
 def register_patient(request):
     """Registro de pacientes (público)"""
     try:

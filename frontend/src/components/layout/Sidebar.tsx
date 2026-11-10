@@ -107,7 +107,7 @@ const navItems: NavItem[] = [
     path: '/recepcion',
     canAccess: canAccessRecepcion,
     resolveLabel: (u) =>
-      isLaboratorioRole(u) || isSecretariaLabRole(normalizeRol(u))
+      normalizeRol(u) === 'laboratorio' || isSecretariaLabRole(normalizeRol(u))
         ? 'Cola extracciones'
         : 'Recepción',
   },

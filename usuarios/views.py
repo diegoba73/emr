@@ -40,6 +40,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from auditoria.audit_service import log_create, log_update
 from auditoria.context import get_request_id
 from auditoria.snapshot import safe_model_snapshot
+from api.throttles import AuthRegisterThrottle
 
 from .models import UserProfile
 from .serializers import (
@@ -408,6 +409,7 @@ class PacienteRegisterView(generics.CreateAPIView):
 
     permission_classes = [permissions.AllowAny]
     serializer_class = PacienteRegistrationSerializer
+    throttle_classes = [AuthRegisterThrottle]
 
     def create(self, request, *args, **kwargs):
         rid = get_request_id() or "no-request-id"

@@ -36,8 +36,8 @@ No hay roles `secretaria_cehta` / `secretaria_icpl`. El aislamiento es por **`Us
 
 Capacidades de sede (`usuarios/sedes.py`): `internacion` (menú/API lectura) vs `internacion_escritura` (ingreso/alta/infra/HC; solo ICPL). Filtra: recursos, turnos (vía `recurso.ubicacion`), médicos (solape de `sedes`), puestos/llegadas de recepción. **No** filtra pacientes, ni órdenes/estudios LIMS (compartidos entre sedes; p. ej. informes validados).
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
-| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO`; **Internación solo lectura** (camas/internados; sede con capacidad `internacion`) |
-| `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`); misma lectura de Internación |
+| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO`; **Internación solo lectura** (camas/internados; sede con capacidad `internacion`); cola extracciones (`/recepcion`). **Sin** menú Filtros avanzados |
+| `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`); misma lectura de Internación; **sí** Filtros avanzados. **Sin** menú: Horarios de atención, Recepción/cola extracciones, Atenciones clínicas, Archivos |
 | `paciente` | Portal propio |
 
 Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pacientes`).

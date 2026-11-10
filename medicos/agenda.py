@@ -1,12 +1,14 @@
 """Disponibilidad compartida por calendario, reservas y reprogramaciones."""
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-from .models import DisponibilidadMedico, ExcepcionMedico, Medico
+from .models import DisponibilidadMedico, ExcepcionMedico, Feriado, Medico
 
 DEFAULT_DURACION_MIN = 20
 # Compat: importadores legacy. Preferir duracion_de(medico).
 DURACION = timedelta(minutes=DEFAULT_DURACION_MIN)
+
+ESTADOS_TURNO_PENDIENTE_FERIADO = ('RESERVADO', 'CONFIRMADO')
 
 
 def duracion_minutos(medico) -> int:
@@ -26,7 +28,60 @@ def tipo_para_recurso(recurso):
     return 'ESTUDIO' if recurso and recurso.tipo_recurso in ('SALA_PROCEDIMIENTO', 'SALA_HEMODINAMIA') else 'CONSULTA'
 
 
+def feriado_activo(fecha):
+    """Devuelve el Feriado activo de la fecha, o None."""
+    return Feriado.objects.filter(fecha=fecha, activo=True).first()
+
+
+def mensaje_feriado(fecha) -> str:
+    feriado = feriado_activo(fecha)
+    if not feriado:
+        return ''
+    return f'Día feriado: {feriado.nombre}.'
+
+
+def turnos_pendientes_feriado(fecha):
+    """Turnos RESERVADO/CONFIRMADO del día local que secretaría debe gestionar."""
+    from turnos.models import Turno
+
+    tz = timezone.get_current_timezone()
+    inicio = timezone.make_aware(datetime.combine(fecha, time.min), tz)
+    fin = inicio + timedelta(days=1)
+    return (
+        Turno.objects.filter(
+            fecha_hora_inicio__gte=inicio,
+            fecha_hora_inicio__lt=fin,
+            estado__in=ESTADOS_TURNO_PENDIENTE_FERIADO,
+        )
+        .select_related('paciente', 'medico')
+        .order_by('fecha_hora_inicio')
+    )
+
+
+def serializar_turnos_pendientes_feriado(fecha):
+    rows = []
+    for t in turnos_pendientes_feriado(fecha):
+        paciente = t.paciente
+        medico = t.medico
+        rows.append({
+            'id': t.pk,
+            'estado': t.estado,
+            'fecha_hora_inicio': t.fecha_hora_inicio.isoformat() if t.fecha_hora_inicio else None,
+            'paciente_id': paciente.pk if paciente else None,
+            'paciente_nombre': (
+                f'{paciente.apellido}, {paciente.nombre}'.strip(', ') if paciente else None
+            ),
+            'medico_id': medico.pk if medico else None,
+            'medico_nombre': (
+                f'{medico.apellido}, {medico.nombre}'.strip(', ') if medico else None
+            ),
+        })
+    return rows
+
+
 def intervalos(medico, fecha, tipo=None):
+    if feriado_activo(fecha):
+        return
     horarios = DisponibilidadMedico.objects.filter(medico=medico, activo=True, dia_semana=fecha.weekday()).select_related('recurso')
     if tipo:
         horarios = horarios.filter(tipo=tipo)
@@ -141,8 +196,11 @@ def validar_reserva(
     if recurso:
         Recurso.objects.select_for_update().get(pk=recurso.pk)
     configurado = medico and DisponibilidadMedico.objects.filter(medico=medico).exists()
+    local = timezone.localtime(inicio)
+    msg_feriado = mensaje_feriado(local.date())
+    if msg_feriado:
+        raise ValidationError(msg_feriado)
     if exigir_horario or configurado:
-        local = timezone.localtime(inicio)
         if inicio <= timezone.now():
             raise ValidationError('Seleccione un horario futuro.')
         encontrados = [h for h, a, b in intervalos(medico, local.date(), tipo_para_recurso(recurso))

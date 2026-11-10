@@ -1447,6 +1447,9 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
                 {'error': 'No se pudo generar el informe.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        from laboratorio.services_informes_pdf import auditar_descarga_informe_entrega_publico
+
+        auditar_descarga_informe_entrega_publico(solicitud=solicitud)
         nombre = nombre_archivo_pdf_seguro(solicitud.pk)
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="{nombre}"'

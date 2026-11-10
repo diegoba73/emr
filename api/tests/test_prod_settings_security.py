@@ -106,6 +106,16 @@ class TestDrfRenderers:
         assert prod_renderers == ['rest_framework.renderers.JSONRenderer']
 
 
+class TestDrfAuthenticationDefaults:
+    def test_token_authentication_no_esta_en_defaults(self):
+        from django.conf import settings
+
+        classes = settings.REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']
+        assert 'rest_framework.authentication.SessionAuthentication' in classes
+        assert 'rest_framework.authentication.TokenAuthentication' not in classes
+
+
+
 class TestMediaUrls:
     def test_media_static_routes_only_when_debug(self):
         import synesis.urls as urls_module

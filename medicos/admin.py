@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Medico, Especialidad, DisponibilidadMedico, ExcepcionMedico
+from .models import Medico, Especialidad, DisponibilidadMedico, ExcepcionMedico, Feriado
 
 @admin.register(Especialidad)
 class EspecialidadAdmin(admin.ModelAdmin):
@@ -81,4 +81,12 @@ class DisponibilidadMedicoAdmin(admin.ModelAdmin):
 class ExcepcionMedicoAdmin(admin.ModelAdmin):
     list_display = ('medico', 'fecha', 'tipo', 'hora_inicio', 'hora_fin')
     list_filter = ('medico', 'tipo', 'fecha')
+    ordering = ('-fecha',)
+
+
+@admin.register(Feriado)
+class FeriadoAdmin(admin.ModelAdmin):
+    list_display = ('fecha', 'nombre', 'activo', 'actualizado_en')
+    list_filter = ('activo',)
+    search_fields = ('nombre',)
     ordering = ('-fecha',)

@@ -2,8 +2,8 @@
 
 ## Uso
 
-- Secretaría y administrador: menú **Horarios de atención**, seleccionan cualquiera de los médicos.
-- Médico: no puede configurar horarios ni excepciones, tampoco mediante la API.
+- Secretaría y administrador: menú **Horarios de atención**, seleccionan cualquiera de los médicos. En la misma pantalla gestionan **feriados institucionales** (fecha + nombre).
+- Médico: no puede configurar horarios, excepciones ni feriados, tampoco mediante la API.
 - Cada franja define día, inicio, fin y atención (consulta o estudio). Permite agregar, editar y quitar franjas. Para lunes a viernes de 09:00 a 13:00 se cargan cinco franjas.
 - Consultas: consultorio opcional configurado por el secretaría/administrador. Estudios: sala obligatoria. El paciente no selecciona estos recursos.
 - Paciente: **Mis turnos**, selecciona médico, consulta/estudio y fecha. El calendario muestra los horarios libres del día seleccionado y sus propias reservas. Seleccionar un horario abre una confirmación con motivo opcional. La reserva queda `RESERVADO`; secretaría confirma. El paciente no cancela ni reprograma (pide a secretaría).
@@ -18,7 +18,8 @@
 - El paciente siempre reserva mediante `POST /api/turnos/reservar-horario/`; la identidad, estado y recurso son asignados por el servidor. El POST genérico no permite eludir la agenda.
 - Un médico sin horarios publicados no ofrece reservas al paciente. Para permitir la transición desde la agenda existente, el personal conserva la carga manual si el médico nunca tiene franjas registradas; si hay franjas, se valida el día, tipo, recurso y horario configurados. Quitar todas las franjas deja nuevamente al médico sin configuración.
 - Se consideran ocupación del médico y del recurso, bloqueos y ajustes por fecha existentes. Un turno cancelado libera el intervalo. No se permite reservar horas pasadas desde el portal.
-- **Sobreturno (solo secretaría/admin):** se puede agendar un turno extra (`es_sobreturno=true`) sobre un bloque ya ocupado del médico. El portal del paciente sigue viendo solo horarios libres; el médico no crea sobreturnos. En el calendario, la franja punteada de un slot ocupado abre el alta de sobreturno.
+- **Feriados institucionales** (`medicos.Feriado`): un feriado activo cierra la agenda ese día para todos los médicos (sin slots, sin altas ni reprogramaciones hacia ese día, tampoco sobreturno). Crear/activar el feriado **no** cancela turnos ya existentes (`RESERVADO`/`CONFIRMADO`); la API devuelve `turnos_afectados` / `turnos-pendientes` y la UI obliga a secretaría a reprogramarlos o cancelarlos. API: `/api/feriados/`.
+- **Sobreturno (solo secretaría/admin):** se puede agendar un turno extra (`es_sobreturno=true`) sobre un bloque ya ocupado del médico. El portal del paciente sigue viendo solo horarios libres; el médico no crea sobreturnos. En el calendario, la franja punteada de un slot ocupado abre el alta de sobreturno. No aplica en días feriados.
 - Las reservas de estudios del portal son reservas logísticas de agenda; no generan por sí mismas una orden clínica ni un informe.
 - Cambiar horarios publicados no cancela ni mueve reservas existentes.
 - Se bloquean las filas del médico y del recurso dentro de la transacción al reservar. Los cambios de configuración también bloquean al médico. Pruebas automatizadas locales con SQLite: no equivalen a una prueba de carga/concurrencia sobre PostgreSQL.

@@ -411,6 +411,25 @@ Referencia: `PROD_OBSERVABILITY_MIN.md`, `PROD_MIN_REAL_DATA_AUTH.md` (suspensi�
 
 ---
 
+## Checklist operativo A+1 (sin rebuild frontend)
+
+Verificación manual en host/entorno clínico. **No** cambia flujos LIMS/EMR ni caduca links de informe.
+
+| # | Chequeo | Cómo / criterio |
+|---|---------|-----------------|
+| 1 | `.env` no world-readable | `stat` → modo `600` (o equivalente ACL restringida) |
+| 2 | Sin dumps PHI en tree de app | No `*.dump` / SQL clínicos legibles junto al código; backups cifrados/fuera del repo |
+| 3 | `DJANGO_DEBUG=False` en runtime clínico | Env del compose/servidor |
+| 4 | `RUN_SEED` no habilitado en clínico | Default/`false`; `seed_data` falla si `DEBUG=False` sin `--force-unsafe` |
+| 5 | Postgres sin puerto publicado al host (prod) | Compose servidor: `db` sin `ports:` públicos |
+| 6 | Usuarios demo ausentes o deshabilitados | No `admin/admin123`, `medico1/medico123`, etc. en DB clínica |
+| 7 | `/media/` denegado en Nginx clínico | `deny all` / 404 en location media |
+| 8 | Throttle login activo (app) | Tras deploy backend: `AuthLoginThrottle` 30/min; abuso → 429 |
+
+Pendiente explícito (fase futura, requiere OK): TTL de tokens de informe, Admin FSM readonly, TLS/HSTS/WAF en edge.
+
+---
+
 ## Referencias
 
 | Documento | Fase |

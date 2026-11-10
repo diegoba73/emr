@@ -82,7 +82,11 @@
 - ~~**SECRET_KEY** por defecto en settings~~ — **mitigado (PROD-1 / PROD-1-A):** arranque falla si `DEBUG=False` y clave placeholder o baja entropía; `.env.production.example` no contiene clave usable; usar `get_random_secret_key()` o gestor de secretos.
 - ~~**Browsable API** siempre habilitada~~ — **mitigado (PROD-1):** solo con `DEBUG=True`.
 - ~~**`/media/` directo**~~ — **mitigado (PROD-1 + PROD-3 + PROD-4):** Django solo sirve media con `DEBUG=True`; Nginx prod bloquea `/media/`; descargas vía API autenticada. No confiar en `FileField.url` como autorización.
-- **Login** `@csrf_exempt` — entender implicancia CSRF en despliegue.
+- **Login** `@csrf_exempt` — entender implicancia CSRF en despliegue. **Mitigado parcialmente (A+1 nov 2026):** throttle por IP `AuthLoginThrottle` 30/min + registro `AuthRegisterThrottle` 10/min; sin caducar links de informe ni cambiar permisos clínicos.
+- ~~**`TokenAuthentication` en defaults sin app instalada**~~ — **mitigado (A+1):** quitado de `DEFAULT_AUTHENTICATION_CLASSES`.
+- ~~**`seed_data` sin gate en prod**~~ — **mitigado (A+1):** aborta si `DEBUG=False` salvo `--force-unsafe`.
+- ~~**`IsAuditAdmin` = cualquier `is_staff` (lab inclusive)**~~ — **mitigado (A+1):** excluye operadores LIMS; alineado a FE `canAccessAuditoria`.
+- **Informe entrega pública sin caducidad** — riesgo aceptado (opción A); A+1 agrega `log_event` de descarga pública sin PHI. TTL/revocación: fase futura con OK explícito.
 - ~~**Gunicorn productivo**~~ — **mitigado (PROD-2-A):** `DJANGO_RUNTIME=gunicorn` en entrypoint; dev mantiene `runserver`.
 - ~~**Sin verificación ejecutable del entrypoint**~~ — **mitigado (PROD-2-B):** tests con stubs en `api/tests/test_prod_runtime_config.py`; sin Postgres/servidor real.
 - ~~**Healthcheck HTTP Gunicorn en compose**~~ — **mitigado (PROD-2-B CERRADO):** `GET /api/health/` con `DJANGO_HEALTHCHECK_HOST`, header `Host` alineado a `ALLOWED_HOSTS` y `X-Forwarded-Proto: https` cuando `DJANGO_USE_PROXY_SSL_HEADER=True`.

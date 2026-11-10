@@ -191,3 +191,22 @@ class ExcepcionMedico(models.Model):
     def __str__(self):
         rango = f" {self.hora_inicio}-{self.hora_fin}" if self.hora_inicio and self.hora_fin else ''
         return f"{self.medico} - {self.fecha} {self.tipo}{rango}"
+
+
+class Feriado(models.Model):
+    """Día no laborable institucional: cierra la agenda de turnos para todos los médicos."""
+
+    fecha = models.DateField(unique=True)
+    nombre = models.CharField(max_length=200)
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Feriado'
+        verbose_name_plural = 'Feriados'
+        ordering = ['-fecha']
+
+    def __str__(self):
+        estado = '' if self.activo else ' (inactivo)'
+        return f"{self.fecha} — {self.nombre}{estado}"

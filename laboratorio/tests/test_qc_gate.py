@@ -15,6 +15,7 @@ from laboratorio.models_qc import CorridaQC, EquipoAnalizador, LoteControl, Mate
 from laboratorio.qc_service import (
     QcGateError,
     _ventana_hoy,
+    es_dia_control_iqc_efectivo,
     estado_iqc_solicitud,
     fecha_corte_dia_operativo_iqc,
     fecha_dia_operativo_iqc,
@@ -22,7 +23,8 @@ from laboratorio.qc_service import (
     validar_qc_para_cierre,
     verificar_iqc_para_solicitud,
 )
-from medicos.models import Especialidad, Medico
+from laboratorio.qc_tablero import es_dia_aviso_control_valores
+from medicos.models import Especialidad, Feriado, Medico
 from pacientes.models import Paciente
 
 User = get_user_model()
@@ -575,3 +577,106 @@ class TestQcVentanaDiaOperativo(TestCase):
         with patch("django.utils.timezone.now", return_value=ahora):
             with self.assertRaises(QcGateError):
                 validar_qc_para_cierre(self.solicitud)
+
+
+@override_settings(IQC_DIA_OPERATIVO_HORA=8)
+class TestQcVentanaFeriados(TestCase):
+    """Lun/vie feriado → control al próximo hábil; ventana anterior se estira."""
+
+    def setUp(self):
+        self.muestra = TipoMuestra.objects.create(codigo="SANGRE_FER", nombre="Sangre FER")
+        self.examen = TipoExamen.objects.create(
+            codigo="GLU_FER",
+            nombre="Glucosa FER",
+            tipo_muestra_requerida=self.muestra,
+            tipo_resultado="NUMERICO",
+        )
+        self.equipo = EquipoAnalizador.objects.create(
+            codigo="CM260",
+            nombre="CM260 FER",
+            marca_modelo="CM260",
+            activo=True,
+        )
+        self.examen.equipo_analizador = self.equipo
+        self.examen.save(update_fields=["equipo_analizador"])
+        self.mat = MaterialControl.objects.create(
+            nombre="Ctrl GLU FER S1",
+            nivel=MaterialControl.Nivel.N1,
+            tipo_examen=self.examen,
+            equipo=self.equipo,
+            media_target=Decimal("100"),
+            de_target=Decimal("5"),
+            activo=True,
+        )
+        self.lote = LoteControl.objects.create(
+            material=self.mat,
+            codigo_lote="L-FER",
+            vencimiento=timezone.localdate() + timedelta(days=30),
+        )
+        self.solicitud = _FakeSolicitud([self.examen.id])
+
+    def _aware(self, y, m, d, hh, mm=0):
+        return datetime(y, m, d, hh, mm, tzinfo=TZ_AR)
+
+    def _assert_local(self, dt, y, m, d, hh, mm=0):
+        local = timezone.localtime(dt)
+        self.assertEqual(
+            (local.year, local.month, local.day, local.hour, local.minute),
+            (y, m, d, hh, mm),
+        )
+
+    def test_lunes_feriado_estira_viernes_hasta_martes(self):
+        # 2026-10-12 lun feriado → control martes 13; vie 9 sigue vigente el lun.
+        Feriado.objects.create(fecha=datetime(2026, 10, 12).date(), nombre="Feriado lun")
+        ahora = self._aware(2026, 10, 12, 10, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 9, 8, 0)
+            self._assert_local(end, 2026, 10, 13, 8, 0)
+            self.assertEqual(fecha_dia_operativo_iqc(), datetime(2026, 10, 9).date())
+            self.assertFalse(es_dia_control_iqc_efectivo(datetime(2026, 10, 12).date()))
+            self.assertFalse(es_dia_aviso_control_valores(fecha=datetime(2026, 10, 12).date()))
+
+    def test_martes_tras_lunes_feriado_exige_control_nuevo(self):
+        Feriado.objects.create(fecha=datetime(2026, 10, 12).date(), nombre="Feriado lun")
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 9, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        ahora = self._aware(2026, 10, 13, 9, 0)  # martes
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 13, 8, 0)
+            self._assert_local(end, 2026, 10, 16, 8, 0)
+            self.assertTrue(es_dia_control_iqc_efectivo(datetime(2026, 10, 13).date()))
+            self.assertTrue(es_dia_aviso_control_valores(fecha=datetime(2026, 10, 13).date()))
+            with self.assertRaises(QcGateError):
+                validar_qc_para_cierre(self.solicitud)
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 13, 9, 15),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        with patch("django.utils.timezone.now", return_value=ahora):
+            validar_qc_para_cierre(self.solicitud)
+
+    def test_viernes_feriado_corre_control_al_lunes(self):
+        # 2026-10-16 vie feriado → control lun 19; lun 12 cubre hasta lun 19 08:00.
+        Feriado.objects.create(fecha=datetime(2026, 10, 16).date(), nombre="Feriado vie")
+        ahora = self._aware(2026, 10, 16, 10, 0)
+        with patch("django.utils.timezone.now", return_value=ahora):
+            start, end = _ventana_hoy()
+            self._assert_local(start, 2026, 10, 12, 8, 0)
+            self._assert_local(end, 2026, 10, 19, 8, 0)
+            self.assertFalse(es_dia_aviso_control_valores(fecha=datetime(2026, 10, 16).date()))
+        CorridaQC.objects.create(
+            lote_control=self.lote,
+            equipo=self.equipo,
+            fecha=self._aware(2026, 10, 12, 10, 0),
+            estado=CorridaQC.Estado.ACEPTADA,
+        )
+        with patch("django.utils.timezone.now", return_value=ahora):
+            validar_qc_para_cierre(self.solicitud)

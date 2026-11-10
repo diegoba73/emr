@@ -81,6 +81,7 @@ Registros `router.register` (recurso → ViewSet). Convención DRF:
 | `laboratorio/solicitudes` | `SolicitudExamenViewSet` | (alias duplicado) | Igual que `lab/solicitudes` (**misma clase**, misma protección) |
 | `disponibilidades` | `api.views.DisponibilidadMedicoViewSet` | — | — |
 | `excepciones` | `api.views.ExcepcionMedicoViewSet` | — | — |
+| `feriados` | `api.views.FeriadoViewSet` | CRUD feriados institucionales; `GET …/turnos-pendientes/` | `CanManageAgendaMedica` |
 | `diagnosticos` | `api.views.DiagnosticoViewSet` | — | — |
 | `diagnosticos-cie10` | `api.views.DiagnosticoCIE10ViewSet` | — | — |
 | `prescripciones` | `api.views.PrescripcionViewSet` | — | — |

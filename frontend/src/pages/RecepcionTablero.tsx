@@ -123,7 +123,7 @@ const RecepcionTablero: React.FC = () => {
   const { currentUser } = useData();
   const rol = normalizeRol(currentUser);
   const soyMedico = rol === 'medico';
-  const soyLab = rol === 'laboratorio' || rol === 'secretaria_lab' || rol === 'bioquimico';
+  const soyLab = rol === 'laboratorio' || rol === 'secretaria_lab';
   const soySecretaria = !soyMedico && !soyLab;
   const [puestos, setPuestos] = useState<PuestoRecepcion[]>([]);
   const [puestoId, setPuestoId] = useState<number | ''>('');

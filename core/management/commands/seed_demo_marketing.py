@@ -56,7 +56,8 @@ class Command(BaseCommand):
         bio_user = User.objects.filter(username='bioquimico1').first()
         if not medico_user or not paciente_user:
             self.stdout.write('Usuarios base ausentes; ejecutando seed_data…')
-            call_command('seed_data')
+            # Comando demo: force-unsafe por si DEBUG=False en el entorno.
+            call_command('seed_data', '--force-unsafe')
             medico_user = User.objects.get(username='medico1')
             paciente_user = User.objects.get(username='paciente1')
             bio_user = User.objects.filter(username='bioquimico1').first()

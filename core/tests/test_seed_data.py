@@ -18,7 +18,8 @@ from usuarios.models import User
 
 def seed():
     output = StringIO()
-    call_command('seed_data', stdout=output)
+    # Tests suelen correr con DEBUG=False; --force-unsafe es el bypass controlado.
+    call_command('seed_data', '--force-unsafe', stdout=output)
     return output.getvalue()
 
 

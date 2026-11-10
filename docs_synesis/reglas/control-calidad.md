@@ -23,14 +23,16 @@ No es EQC, no es CAPA, no es ISO 15189 completo. Es el ciclo: registrar control 
 | `POST …/cargar-resultados/` | Sí | **No** (`permitir_override=False`) |
 | `POST …/validar/` (cierre `FINALIZADO`) | Sí | Solo **admin/superuser** + `confirmar_qc_override` + `motivo_qc_override` |
 
-Ventana temporal en `America/Argentina/Buenos_Aires`, corte **08:00** (`IQC_DIA_OPERATIVO_HORA`, default 8). **Control obligatorio solo lunes y viernes** (desde las 08:00 de ese día):
+Ventana temporal en `America/Argentina/Buenos_Aires`, corte **08:00** (`IQC_DIA_OPERATIVO_HORA`, default 8). **Control obligatorio lunes y viernes** (desde las 08:00 de ese día):
 
 | Ventana | Cubre | Qué libera |
 |---------|-------|------------|
 | `[lunes 08:00, viernes 08:00)` | Lun (desde 08) + mar + mié + jue | ACEPTADA del **lunes** |
 | `[viernes 08:00, lunes 08:00)` | Vie (desde 08) + sáb + dom + lun madrugada | ACEPTADA del **viernes** |
 
-Mar/mié/jue y sáb/dom **no** exigen IQC nuevo: quedan liberados en OK con el pase del lunes o viernes correspondiente. Antes de las 08:00 del día de control sigue la ventana anterior (p. ej. lunes 01:00 = aún viernes). Un rechazo en la ventana vigente anula si es la **última** corrida del nivel; un ACEPTADA posterior en la misma ventana **sí** vale. Fuente: `laboratorio/qc_service.py` `_ventana_hoy`.
+**Feriados institucionales** (`medicos.Feriado` activo): si el lunes o viernes nominal es feriado, el día de control se **corre al próximo día hábil** (lun–vie no feriado) y la ventana anterior se estira hasta las 08:00 de ese día. Ejemplo: lunes feriado → control el martes; el martes libera hasta el viernes. El tablero no pide control el feriado; el aviso de valores aplica el día efectivo. Fuente: `laboratorio/qc_service.py` (`fecha_control_iqc_efectiva`, `_ventana_hoy`).
+
+Mar/mié/jue y sáb/dom **no** exigen IQC nuevo: quedan liberados en OK con el pase del lunes o viernes correspondiente (o del hábil al que se corrió). Antes de las 08:00 del día de control sigue la ventana anterior (p. ej. lunes 01:00 = aún viernes). Un rechazo en la ventana vigente anula si es la **última** corrida del nivel; un ACEPTADA posterior en la misma ventana **sí** vale.
 
 ---
 

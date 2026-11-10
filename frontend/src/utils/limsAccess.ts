@@ -84,13 +84,19 @@ export function canAccessAnalisisClinicoLab(user: User | null): boolean {
 
 /**
  * Filtros avanzados / listados de estudio (cohorte por exámenes + Excel).
- * Lab/bioquímico/secretaria_lab/admin y médico.
+ * Bioquímico / secretaria_lab / admin / médico. No laboratorio técnico.
  */
 export function canAccessFiltrosAvanzados(user: User | null): boolean {
   if (!user) return false;
   if (user.is_superuser) return true;
   const r = normalizeRol(user);
-  return r === 'medico' || canAccessLimsModule(user);
+  if (r === 'laboratorio') return false;
+  return (
+    r === 'medico' ||
+    r === 'admin' ||
+    r === 'bioquimico' ||
+    isSecretariaLabRole(r)
+  );
 }
 
 /**

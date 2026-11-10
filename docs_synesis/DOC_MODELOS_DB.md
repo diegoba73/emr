@@ -76,6 +76,11 @@
 - FK `medico`; `fecha`, `tipo` BLOQUEO/AJUSTE; horas opcionales
 - **unique_together:** medico, fecha, tipo, hora_inicio, hora_fin
 
+### Feriado
+
+- `fecha` **unique**; `nombre`; `activo` (default true); timestamps
+- Feriado activo cierra agenda de turnos institucional ese día (ver reglas de turnos)
+
 ---
 
 ## catalogos (extracto)

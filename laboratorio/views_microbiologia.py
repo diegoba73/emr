@@ -1031,6 +1031,11 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                 {"error": "No se pudo generar el informe."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        from laboratorio.services_informes_micro_pdf import (
+            auditar_descarga_informe_micro_entrega_publico,
+        )
+
+        auditar_descarga_informe_micro_entrega_publico(estudio=estudio)
         resp = HttpResponse(pdf_bytes, content_type="application/pdf")
         resp["Content-Disposition"] = (
             f'attachment; filename="{nombre_archivo_pdf_micro(estudio.pk)}"'

@@ -122,3 +122,13 @@ class TestCohortesFiltros(TestCase):
         self.assertEqual(r2.status_code, 200)
         self.assertIn("spreadsheetml", r2["Content-Type"])
         self.assertGreater(len(r2.content), 100)
+
+    def test_laboratorio_tecnico_no_accede_filtros(self):
+        client = APIClient()
+        client.force_authenticate(user=self.lab)
+        r = client.post(
+            "/api/lab/filtros-avanzados/preview/",
+            {"codigos": ["LPA"], "modo": "any"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 403)

@@ -1,5 +1,6 @@
 import {
   ESTADOS_MICRO_CERRADOS,
+  canAccessFiltrosAvanzados,
   canAccessMicrobiologia,
   canAccessMicrobiologiaLectura,
   canAccessMicrobiologiaListado,
@@ -42,6 +43,16 @@ const bioUser: User = {
   username: 'bio',
   rol: 'BIOQUIMICO',
 };
+
+describe('canAccessFiltrosAvanzados', () => {
+  it('bloquea laboratorio técnico; permite bioquímico, admin y médico', () => {
+    expect(canAccessFiltrosAvanzados(labUser)).toBe(false);
+    expect(canAccessFiltrosAvanzados(bioUser)).toBe(true);
+    expect(canAccessFiltrosAvanzados({ ...labUser, rol: 'ADMIN' })).toBe(true);
+    expect(canAccessFiltrosAvanzados({ ...labUser, rol: 'MEDICO' })).toBe(true);
+    expect(canAccessFiltrosAvanzados({ ...labUser, rol: 'SECRETARIA_LAB' })).toBe(true);
+  });
+});
 
 describe('canSelectMedicoPedidoLims', () => {
   it('permite admin, laboratorio y bioquímico', () => {

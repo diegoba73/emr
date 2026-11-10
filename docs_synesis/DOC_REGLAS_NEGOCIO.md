@@ -95,6 +95,7 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - No asistencia: `marcar-no-asistio` → `CANCELADO` con metadata `marcar_no_asistio` (sin estado `NO_ASISTIO`) **[DEUDA]** campos estructurales.
 - Validación serializer: solapamiento, bloqueo de cambios en turno REALIZADO/consulta cargada.
 - **Sobreturno** (`Turno.es_sobreturno`): solo secretaría/admin puede crear un turno extra sobre un slot ya ocupado del médico (`es_sobreturno=true` omite el rechazo por solape). El portal del paciente y el médico no crean sobreturnos. UI: franja punteada del calendario / checkbox en el alta.
+- **Feriados institucionales** (`medicos.Feriado`, CRUD `/api/feriados/`, permiso `CanManageAgendaMedica`): fecha + nombre; activo cierra agenda de turnos ese día (slots, reservas, reprogramaciones y sobreturnos). No cancela turnos previos; secretaría debe reprogramar/cancelar los `RESERVADO`/`CONFIRMADO` del día (`turnos_afectados` / `GET …/turnos-pendientes/`). Alcance v1: solo turnos.
 - Filtros de calendario: query params `start`, `end`.
 
 ---

@@ -376,6 +376,7 @@ router.register(
 )
 router.register(r'disponibilidades', views.DisponibilidadMedicoViewSet, basename='disponibilidades')
 router.register(r'excepciones', views.ExcepcionMedicoViewSet, basename='excepciones')
+router.register(r'feriados', views.FeriadoViewSet, basename='feriados')
 # router.register(r'tipos-examen', views.TipoExamenViewSet)
 # router.register(r'paneles-examen', views.PanelExamenViewSet)
 # router.register(r'solicitudes-examen', views.SolicitudExamenViewSet)

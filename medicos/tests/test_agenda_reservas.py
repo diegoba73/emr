@@ -3,7 +3,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
-from medicos.models import Medico, DisponibilidadMedico, ExcepcionMedico
+from medicos.models import Medico, DisponibilidadMedico, ExcepcionMedico, Feriado
 from pacientes.models import Paciente
 from turnos.models import Turno, Recurso
 
@@ -357,3 +357,87 @@ def test_medico_no_modifica_ni_elimina_su_propia_agenda(agenda):
         assert c.delete(url).status_code == 403
     assert DisponibilidadMedico.objects.filter(pk=h.pk).exists()
     assert ExcepcionMedico.objects.filter(pk=ex.pk).exists()
+
+
+def test_feriado_cierra_slots_y_bloquea_reserva(agenda):
+    med, _, _, admin, user, pac, fecha, inicio, h = agenda
+    Feriado.objects.create(fecha=fecha, nombre='Día de la Independencia')
+    c = client(user)
+    assert c.get(f'/api/medicos/{med.pk}/slots/', {'fecha': fecha.isoformat()}).data['slots'] == []
+    desde = fecha.replace(day=1)
+    if fecha.month == 12:
+        hasta = fecha.replace(year=fecha.year + 1, month=1, day=1) - timedelta(days=1)
+    else:
+        hasta = fecha.replace(month=fecha.month + 1, day=1) - timedelta(days=1)
+    dias = c.get(f'/api/medicos/{med.pk}/dias-disponibles/', {
+        'desde': desde.isoformat(), 'hasta': hasta.isoformat(),
+    }).data['dias']
+    assert fecha.isoformat() not in {d['fecha'] for d in dias}
+    r = c.post('/api/turnos/reservar-horario/', {'horario_id': h.pk, 'inicio': inicio.isoformat()}, format='json')
+    assert r.status_code == 400
+    assert 'feriado' in str(r.data).lower()
+    data = {
+        'medico_id': med.pk, 'paciente_id': pac.pk,
+        'fecha_hora_inicio': inicio.isoformat(),
+        'fecha_hora_fin': (inicio + timedelta(minutes=20)).isoformat(),
+        'estado': 'RESERVADO', 'es_sobreturno': True,
+    }
+    assert client(admin).post('/api/turnos/', data, format='json').status_code == 400
+
+
+def test_feriado_bloquea_reprogramacion(agenda):
+    med, _, _, admin, _, pac, fecha, inicio, h = agenda
+    t = Turno.objects.create(
+        medico=med, paciente=pac, fecha_hora_inicio=inicio,
+        fecha_hora_fin=inicio + timedelta(minutes=20), estado='CONFIRMADO',
+    )
+    otra = fecha + timedelta(days=7)
+    Feriado.objects.create(fecha=otra, nombre='Feriado puente')
+    destino = timezone.make_aware(datetime.combine(otra, time(9)))
+    r = client(admin).post(f'/api/turnos/{t.pk}/reprogramar/', {
+        'fecha_hora_inicio': destino.isoformat(),
+        'fecha_hora_fin': (destino + timedelta(minutes=20)).isoformat(),
+        'motivo': 'Mover a feriado',
+    }, format='json')
+    assert r.status_code == 400
+    assert 'feriado' in str(r.data).lower()
+    t.refresh_from_db()
+    assert t.fecha_hora_inicio == inicio
+
+
+def test_crear_feriado_con_turnos_existentes_no_los_cancela(agenda):
+    med, _, _, admin, _, pac, fecha, inicio, h = agenda
+    t = Turno.objects.create(
+        medico=med, paciente=pac, fecha_hora_inicio=inicio,
+        fecha_hora_fin=inicio + timedelta(minutes=20), estado='RESERVADO',
+    )
+    c = client(admin)
+    r = c.post('/api/feriados/', {
+        'fecha': fecha.isoformat(), 'nombre': 'Feriado con agenda',
+    }, format='json')
+    assert r.status_code == 201, r.data
+    assert r.data['activo'] is True
+    assert r.data['pendientes_count'] == 1
+    assert len(r.data['turnos_afectados']) == 1
+    assert r.data['turnos_afectados'][0]['id'] == t.pk
+    t.refresh_from_db()
+    assert t.estado == 'RESERVADO'
+
+    pend = c.get(f"/api/feriados/{r.data['id']}/turnos-pendientes/")
+    assert pend.status_code == 200
+    assert pend.data['count'] == 1
+
+    t.estado = 'CANCELADO'
+    t.save(update_fields=['estado'])
+    pend = c.get(f"/api/feriados/{r.data['id']}/turnos-pendientes/")
+    assert pend.data['count'] == 0
+    assert c.get(f'/api/medicos/{med.pk}/slots/', {'fecha': fecha.isoformat()}).data['slots'] == []
+
+
+@pytest.mark.parametrize('rol', ['paciente', 'medico', 'enfermeria'])
+def test_roles_no_autorizados_no_gestionan_feriados(agenda, rol):
+    u = get_user_model().objects.create_user(username='feriado_blocked_' + rol, rol=rol, is_staff=True)
+    fecha = agenda[6]
+    assert client(u).post('/api/feriados/', {
+        'fecha': fecha.isoformat(), 'nombre': 'No debe',
+    }, format='json').status_code == 403
