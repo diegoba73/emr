@@ -33,7 +33,9 @@ El medio de red (WiFi o cable) no importa: lo que importa es que PC-CM260 llegue
 - Mandar siempre los **3 valores** por orden.
 - Probar primero **sin cable** (simulador JSON).
 - Validar a mano en la UI para cerrar el circuito humano.
-- Al terminar, **cancelar las órdenes de prueba** (que no queden en listas de trabajo ni estadísticas).
+- Usar siempre el mismo paciente ficticio, claramente identificado (ej. apellido "PRUEBA", nombre "CM260", DNI inventado).
+- Al terminar, **cancelar con motivo** ("Prueba interfaz CM260") las órdenes de prueba que no se validaron, para que no queden en la cola de trabajo. No se borran: el LIMS conserva orden, tubos, resultados, mensajes del analizador y auditoría.
+- Una orden **validada** queda `FINALIZADO` y ya no se puede cancelar. Validar a lo sumo una (la del Paso A) para probar el circuito humano; queda como informe del paciente ficticio.
 
 **No**
 
@@ -60,7 +62,7 @@ El medio de red (WiFi o cable) no importa: lo que importa es que PC-CM260 llegue
 - [ ] Paso A (simulador JSON) OK
 - [ ] Paso B (gateway TCP + simulador ASTM) OK — si hay tiempo
 - [ ] Paso C (cable real CM260) — si hay bridge
-- [ ] Órdenes de prueba canceladas al final
+- [ ] Órdenes de prueba no validadas canceladas con motivo al final
 
 ---
 
@@ -281,7 +283,7 @@ La carga desde el analizador queda auditada con `fuente=INSTRUMENTO` y sin usuar
 3. Si Paso A OK → Paso B (10–15 min).
 4. Si hay bridge → Paso C con una sola muestra de prueba.
 5. Si no hay bridge → capturar traza serie.
-6. Cancelar órdenes de prueba; cortar el gateway (`Ctrl-c` en tmux).
+6. Cancelar con motivo las órdenes de prueba no validadas; cortar el gateway (`Ctrl-c` en tmux).
 
 ---
 
