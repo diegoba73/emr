@@ -6,7 +6,8 @@
 [CmdletBinding()]
 param(
   [string]$AgentDir = 'C:\EMR\label_print_agent',
-  [string]$PrinterName = 'EMR ZPL RAW'
+  # Vacío = auto-detecta 4BARCODE / 4B-2054 / EMR ZPL RAW / 3nStar / LDT114 / ZDesigner
+  [string]$PrinterName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,7 +88,8 @@ $config = @{
 }
 $configPath = Join-Path $AgentDir 'label_print_agent.config.json'
 ($config | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $configPath -Encoding UTF8
-Write-Step "Config escrita: language=tspl printerName=$PrinterName"
+$printerLabel = if ($PrinterName -and $PrinterName.Trim()) { $PrinterName.Trim() } else { '(auto-detect)' }
+Write-Step "Config escrita: language=tspl printerName=$printerLabel"
 
 $arg = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ps1`""
 Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -WorkingDirectory $AgentDir -ArgumentList $arg | Out-Null
@@ -109,7 +111,12 @@ if (-not $health) {
 Write-Step ("health ok={0} printer={1} language={2}" -f $health.ok, $health.printer, $health.language)
 
 if (-not $health.ok -or -not $health.printer) {
-  throw "Agente vivo pero sin impresora. Verifique que exista la impresora '$PrinterName' (Generic/Text Only RAW)."
+  $hint = if ($PrinterName -and $PrinterName.Trim()) {
+    "Verifique que exista la impresora '$($PrinterName.Trim())' en Windows."
+  } else {
+    "No se auto-detecto impresora (4BARCODE / 4B-2054 / EMR ZPL RAW / 3nStar / LDT114 / ZDesigner). Ejecute label_print_agent_listar_impresoras.bat y fije printerName en label_print_agent.config.json."
+  }
+  throw "Agente vivo pero sin impresora. $hint"
 }
 if (("" + $health.language).ToLowerInvariant() -ne 'tspl') {
   throw "language=$($health.language) (debe ser tspl). Borre config vieja y reejecute este script."

@@ -39,12 +39,14 @@ El servidor **no** habla con la impresora. El navegador pide el ZPL al EMR y lo 
 - PC con agente + impresora USB instalada → imprime ahí.
 - PC sin agente o sin impresora → el botón se ve igual; al imprimir: *En esta PC no hay agente de impresión…* o *No se encontró impresora de etiquetas en esta PC.*
 
-Scripts:
+Scripts (SoT en `scripts/`):
 
-- **Una vez en LABORATORIO:** `scripts/label_print_agent_instalar.bat` — registra una tarea de Windows y arranca el agente **oculto**. Desde entonces se inicia solo al iniciar sesión; el operador no toca ningún `.bat`.
-- **Tras copiar archivos nuevos:** `scripts/label_print_agent_reparar.bat` — mata el listener viejo en 18181, reescribe config TSPL y hace selftest. Si solo se corre `label_print_agent.bat` con el puerto ocupado, el `.ps1` sale con código 0 y **no** actualiza el agente.
-- Diagnóstico (ventana visible): `scripts/label_print_agent.bat`.
-- Quitar: `scripts/label_print_agent_desinstalar.bat`.
+- **Paquete listo para copiar:** `deploy/label_print_agent/` (incluye `LEEME_INSTALACION.txt` + config). Regenerar con `scripts/pack_label_print_agent.sh`.
+- **Una vez en LABORATORIO:** `label_print_agent_instalar.bat` — registra una tarea de Windows y arranca el agente **oculto**. Desde entonces se inicia solo al iniciar sesión; el operador no toca ningún `.bat`.
+- **Tras copiar archivos nuevos:** `label_print_agent_reparar.bat` — mata el listener viejo en 18181, reescribe config TSPL y hace selftest. Si solo se corre `label_print_agent.bat` con el puerto ocupado, el `.ps1` sale con código 0 y **no** actualiza el agente.
+- Diagnóstico (ventana visible): `label_print_agent.bat`.
+- Listar nombres Windows: `label_print_agent_listar_impresoras.bat`.
+- Quitar: `label_print_agent_desinstalar.bat`.
 
 CORS del agente: el origen de la pestaña del navegador tiene que coincidir (p. ej. `http://192.168.10.240`, `https://emr.sytes.net:8080`, `https://emr.icpueblodeluis.com.ar:8080`). Si usan otra URL, agregarla a `allowedOrigins` en `label_print_agent.config.json` y reiniciar el agente (`label_print_agent_reparar.bat`).
 
@@ -52,24 +54,28 @@ CORS del agente: el origen de la pestaña del navegador tiene que coincidir (p. 
 
 Ejemplo: `C:\EMR\label_print_agent\`
 
+Usar el contenido de `deploy/label_print_agent/` (o el zip generado por el packer). Archivos clave:
+
 | Archivo | Rol |
 |---------|-----|
+| `LEEME_INSTALACION.txt` | Pasos en español para restaurar / instalar |
 | `label_print_agent.ps1` | Agente (TSPL + CORS) |
 | `EmrRawPrinter.cs` | RAW Win32; **sin este archivo el agente no arranca** |
 | `label_print_agent.bat` | Arranque visible |
 | `label_print_agent_reparar.bat` + `.ps1` | Recarga tras actualizar archivos |
 | `label_print_agent_instalar.bat` + `label_print_agent_install.ps1` | Tarea al iniciar sesión (primera vez) |
-| `label_print_agent.config.json.example` | Plantilla (`language: tspl`) |
+| `label_print_agent.config.json` | Config lista (`language: tspl`; `printerName` vacío = auto-detect) |
+| `label_print_agent_listar_impresoras.bat` | Muestra nombres de impresoras Windows |
 
 ### Instalar en LABORATORIO (una vez)
 
 1. Instalar rollo 40 × 23 mm y driver Windows de la 4BARCODE (TSPL / Generic Text RAW si usan `EMR ZPL RAW`).
 2. Calibrar sensor gap/black mark según consumible.
-3. Confirmar que Windows ve la impresora (`4BARCODE`, `4B-2054` o `EMR ZPL RAW`). Si el nombre es otro, copiar `label_print_agent.config.json.example` a `label_print_agent.config.json` (mismo directorio) y poner `printerName`.
-4. Copiar los archivos de la tabla anterior a esa PC.
+3. Confirmar que Windows ve la impresora (`4BARCODE`, `4B-2054` o `EMR ZPL RAW`). Si el nombre es otro, editar `label_print_agent.config.json` y poner `printerName` (o usar `label_print_agent_listar_impresoras.bat`).
+4. Copiar **toda** la carpeta `deploy/label_print_agent/` a `C:\EMR\label_print_agent\` en esa PC.
 5. Ejecutar **`label_print_agent_instalar.bat` una sola vez** (usuario de LABORATORIO). Debe aparecer un aviso de que ya está corriendo. No hace falta dejar ninguna ventana abierta.
 6. En el servidor EMR, `LIMS_LABEL_PRINTER_ENABLED` puede quedar `false` (ya no se usa HOST:9100 para el botón).
-7. Desde el navegador **en esa misma PC**, abrir el EMR (`http://192.168.10.240` o `http://emr.sytes.net:8080`) e imprimir una etiqueta de prueba.
+7. Desde el navegador **en esa misma PC**, abrir el EMR (`http://192.168.10.240` o `https://emr.sytes.net:8080`) e imprimir una etiqueta de prueba.
 8. Verificar dimensiones, márgenes, Ñ/tildes, apellido largo, CAMA/GUARDIA.
 9. Si no imprime: ver `label_print_agent.log` en la misma carpeta, o correr `label_print_agent_reparar.bat`.
 10. Reimprimir y confirmar un segundo `AuditEvent` (`muestra_etiqueta_print`, `transport=local_agent`).
