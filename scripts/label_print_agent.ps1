@@ -121,19 +121,23 @@ function Read-RequestBody($Request) {
 
 function Convert-ToTsplAscii([string]$text) {
   if (-not $text) { return '' }
-  $map = @{
-    'Á'='A'; 'À'='A'; 'Ä'='A'; 'Â'='A'; 'Ã'='A'; 'Å'='A'
-    'É'='E'; 'È'='E'; 'Ë'='E'; 'Ê'='E'
-    'Í'='I'; 'Ì'='I'; 'Ï'='I'; 'Î'='I'
-    'Ó'='O'; 'Ò'='O'; 'Ö'='O'; 'Ô'='O'; 'Õ'='O'
-    'Ú'='U'; 'Ù'='U'; 'Ü'='U'; 'Û'='U'
-    'Ñ'='N'; 'Ç'='C'
-    'á'='a'; 'à'='a'; 'ä'='a'; 'â'='a'; 'ã'='a'; 'å'='a'
-    'é'='e'; 'è'='e'; 'ë'='e'; 'ê'='e'
-    'í'='i'; 'ì'='i'; 'ï'='i'; 'î'='i'
-    'ó'='o'; 'ò'='o'; 'ö'='o'; 'ô'='o'; 'õ'='o'
-    'ú'='u'; 'ù'='u'; 'ü'='u'; 'û'='u'
-    'ñ'='n'; 'ç'='c'
+  # ASCII-only source: WinPS 5.1 misparses UTF-8 accent literals without BOM.
+  $map = @{}
+  foreach ($pair in @(
+      @(0x00C1, 'A'), @(0x00C0, 'A'), @(0x00C4, 'A'), @(0x00C2, 'A'), @(0x00C3, 'A'), @(0x00C5, 'A'),
+      @(0x00C9, 'E'), @(0x00C8, 'E'), @(0x00CB, 'E'), @(0x00CA, 'E'),
+      @(0x00CD, 'I'), @(0x00CC, 'I'), @(0x00CF, 'I'), @(0x00CE, 'I'),
+      @(0x00D3, 'O'), @(0x00D2, 'O'), @(0x00D6, 'O'), @(0x00D4, 'O'), @(0x00D5, 'O'),
+      @(0x00DA, 'U'), @(0x00D9, 'U'), @(0x00DC, 'U'), @(0x00DB, 'U'),
+      @(0x00D1, 'N'), @(0x00C7, 'C'),
+      @(0x00E1, 'a'), @(0x00E0, 'a'), @(0x00E4, 'a'), @(0x00E2, 'a'), @(0x00E3, 'a'), @(0x00E5, 'a'),
+      @(0x00E9, 'e'), @(0x00E8, 'e'), @(0x00EB, 'e'), @(0x00EA, 'e'),
+      @(0x00ED, 'i'), @(0x00EC, 'i'), @(0x00EF, 'i'), @(0x00EE, 'i'),
+      @(0x00F3, 'o'), @(0x00F2, 'o'), @(0x00F6, 'o'), @(0x00F4, 'o'), @(0x00F5, 'o'),
+      @(0x00FA, 'u'), @(0x00F9, 'u'), @(0x00FC, 'u'), @(0x00FB, 'u'),
+      @(0x00F1, 'n'), @(0x00E7, 'c')
+    )) {
+    $map[[string][char]$pair[0]] = [string]$pair[1]
   }
   $sb = New-Object Text.StringBuilder
   foreach ($ch in $text.ToCharArray()) {
