@@ -80,6 +80,8 @@ MSG_TIPO_MUESTRA_INCORRECTO = (
 
 # Química/hormonas migraron HEPARINA→SUERO; tubos ya tomados pueden seguir en plasma heparina.
 _LEGACY_HEPARINA_PARA_SUERO = frozenset({"PLASMA_HEPARINA", "SANGRE_HEPARINA"})
+# Pedidos preexistentes: CA_ION pasó de heparina/EAB a SUERO; jeringas art/ven ya asociadas.
+_LEGACY_CA_ION_JERINGA_EAB = frozenset({"SANGRE_HEPARINA_ART", "SANGRE_HEPARINA_VEN"})
 
 
 def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> bool:
@@ -93,8 +95,9 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
     Tras migrar química a SUERO, un tubo HEPARINA/PLASMA_HEPARINA ya asociado
     sigue siendo aceptable para exámenes que exigen SUERO (órdenes vivas).
 
-    Lactato / Ca iónico pueden cargarse sobre jeringa EAB art/ven cuando
-    comparten etiqueta con gases (catálogo sigue en SANGRE_HEPARINA).
+    Lactato (y legacy CAIE/CAIISE) pueden cargarse sobre jeringa EAB art/ven cuando
+    comparten etiqueta con gases. CA_ION solo conserva art/ven como excepción
+    de pedidos viejos (catálogo actual = SUERO).
     """
     tipo_req_id = getattr(tipo_examen, "tipo_muestra_requerida_id", None)
     if tipo_req_id is None:
@@ -119,6 +122,10 @@ def tipo_muestra_fisica_compatible_con_examen(tipo_examen, muestra: Muestra) -> 
         return True
 
     codigo = (getattr(tipo_examen, "codigo", None) or "").strip().upper()
+    # Pedidos preexistentes al cambio CA_ION heparina→suero: jeringa EAB ya vinculada.
+    if codigo == "CA_ION" and req_u == SUERO and got_u in _LEGACY_CA_ION_JERINGA_EAB:
+        return True
+
     if (
         codigo in _CODIGOS_HEPARINA_COMPARTEN_EAB
         and req_u in _MUESTRAS_HEPARINA_SANGRE

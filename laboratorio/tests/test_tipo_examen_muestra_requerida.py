@@ -377,6 +377,61 @@ class TestTipoExamenMuestraRequerida(APITestCase):
             raw_muestra_id=m.pk,
         )
 
+    def test_ca_ion_suero_acepta_jeringa_eab_legacy(self):
+        """CA_ION migró a SUERO; jeringa EAB art/ven de pedidos viejos sigue válida."""
+        from laboratorio.resultado_muestra_validacion import (
+            MSG_TIPO_MUESTRA_INCORRECTO,
+            assert_tipo_examen_muestra_carga,
+        )
+
+        tm_suero, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO", defaults={"nombre": "Suero", "activo": True}
+        )
+        tm_art, _ = TipoMuestra.objects.get_or_create(
+            codigo="SANGRE_HEPARINA_ART",
+            defaults={"nombre": "Sangre heparina arterial", "activo": True},
+        )
+        te_ca, _ = TipoExamen.objects.update_or_create(
+            codigo="CA_ION",
+            defaults={
+                "nombre": "Calcio ionico",
+                "tipo_muestra_requerida": tm_suero,
+                "requiere_muestra": True,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_ca.tipo_muestra_requerida = tm_suero
+        te_ca.save(update_fields=["tipo_muestra_requerida"])
+        sol, _res = self._solicitud_con_tipo(te_ca)
+        m = self._muestra_recibida(sol, tipo_muestra=tm_art)
+        assert_tipo_examen_muestra_carga(
+            tipo_examen=te_ca,
+            resultado_muestra=m,
+            muestra_id_en_payload=True,
+            raw_muestra_id=m.pk,
+        )
+        # Otros exámenes SUERO no heredan jeringa art/ven.
+        te_glu, _ = TipoExamen.objects.update_or_create(
+            codigo="GLU",
+            defaults={
+                "nombre": "Glucemia",
+                "tipo_muestra_requerida": tm_suero,
+                "requiere_muestra": True,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_glu.tipo_muestra_requerida = tm_suero
+        te_glu.save(update_fields=["tipo_muestra_requerida"])
+        with pytest.raises(ValueError, match=MSG_TIPO_MUESTRA_INCORRECTO):
+            assert_tipo_examen_muestra_carga(
+                tipo_examen=te_glu,
+                resultado_muestra=m,
+                muestra_id_en_payload=True,
+                raw_muestra_id=m.pk,
+            )
+
     def test_resultado_validado_no_cambia_muestra_aunque_tipo_requiera(self):
         from django.utils import timezone
 
