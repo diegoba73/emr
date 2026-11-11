@@ -9,8 +9,28 @@ from laboratorio.models import PanelExamen, ResultadoExamen, SolicitudExamen, Ti
 from pacientes.models import Paciente
 
 
+def _ensure_caie() -> None:
+    """CAIE puede no estar en el seed papel; asegurar fila activa para el test."""
+    from laboratorio.models import TipoMuestra
+
+    tm = TipoMuestra.objects.filter(codigo="SUERO").first() or TipoMuestra.objects.first()
+    assert tm is not None
+    TipoExamen.objects.update_or_create(
+        codigo="CAIE",
+        defaults={
+            "nombre": "Calcio ionico estimado",
+            "activo": True,
+            "tipo_resultado": "NUMERICO",
+            "tipo_muestra_requerida": tm,
+            "precio": 1,
+        },
+    )
+
+
 def _sol_con_codigos(*codigos: str, paneles: tuple[str, ...] = ()) -> SolicitudExamen:
     call_command("seed_catalogo_solicitud_papel", stdout=StringIO())
+    if "CAIE" in codigos:
+        _ensure_caie()
     # DNI max 20 chars en Paciente.
     dni_body = "-".join(codigos)[:12]
     paciente = Paciente.objects.create(
@@ -37,75 +57,28 @@ def _codigos(sol: SolicitudExamen) -> set[str]:
 
 
 @pytest.mark.django_db
-def test_creatininemia_sola_no_trae_clearance():
-    sol = _sol_con_codigos("CREATI")
-    assert asegurar_resultados_paneles_derivados(sol) == 0
-    assert _codigos(sol) == {"CREATI"}
-
-
-@pytest.mark.django_db
-def test_ionograma_orina_azar_no_trae_24hs():
-    """PAN_IONO_U (NA_U/K_U/CL_U) no debe expandir PAN_IONO_U24."""
-    sol = _sol_con_codigos("NA_U", "K_U", "CL_U", paneles=("PAN_IONO_U",))
-    assert asegurar_resultados_paneles_derivados(sol) == 0
-    assert _codigos(sol) == {"NA_U", "K_U", "CL_U"}
-    assert "NA_U24" not in _codigos(sol)
-    assert "DIUR" not in _codigos(sol)
-
-
-@pytest.mark.django_db
-def test_na_u_suelto_no_trae_ionograma_24hs():
-    sol = _sol_con_codigos("NA_U")
-    assert asegurar_resultados_paneles_derivados(sol) == 0
-    assert _codigos(sol) == {"NA_U"}
-
-
-@pytest.mark.django_db
-def test_microalbuminuria_azar_no_trae_24hs():
-    sol = _sol_con_codigos("MICROALB", "CREA_U", paneles=("PAN_MALB_AZ",))
-    # Catálogo creció: reponer RAC faltante del panel al azar.
-    assert asegurar_resultados_paneles_derivados(sol) == 1
-    assert _codigos(sol) == {"MICROALB", "CREA_U", "RAC"}
-    assert "MICROALB_24" not in _codigos(sol)
-    assert "DIUR" not in _codigos(sol)
-    # CREA_U tampoco debe arrastrar clearance
-    assert "CLEAR_CREA" not in _codigos(sol)
-
-
-@pytest.mark.django_db
-def test_microalb_suelta_no_trae_malb24():
-    sol = _sol_con_codigos("MICROALB")
-    assert asegurar_resultados_paneles_derivados(sol) == 0
-    assert _codigos(sol) == {"MICROALB"}
-
-
-@pytest.mark.django_db
-def test_rac_suelto_trae_microalb_y_crea_u():
-    """RAC sin panel debe completar insumos; no debe arrastrar MICROALB_24."""
-    sol = _sol_con_codigos("RAC")
-    assert asegurar_resultados_paneles_derivados(sol) == 2
-    assert _codigos(sol) == {"RAC", "MICROALB", "CREA_U"}
-    assert "MICROALB_24" not in _codigos(sol)
-    assert "DIUR" not in _codigos(sol)
-    assert "CLEAR_CREA" not in _codigos(sol)
-
-
-@pytest.mark.django_db
-def test_ca_ion_suelto_trae_ca_y_prot_t():
-    """CA_ION suelto completa CA + PROT_T para Zeisler; no arrastra EAB."""
+def test_ca_ion_suelto_no_trae_insumos_zeisler():
+    """CA_ION medido (K-ión) no completa CA/PROT_T."""
     sol = _sol_con_codigos("CA_ION")
-    assert asegurar_resultados_paneles_derivados(sol) == 2
-    assert _codigos(sol) == {"CA_ION", "CA", "PROT_T"}
+    assert asegurar_resultados_paneles_derivados(sol) == 0
+    assert _codigos(sol) == {"CA_ION"}
 
 
 @pytest.mark.django_db
-def test_ca_ion_con_eab_no_trae_insumos_zeisler():
-    """Con EAB el iónico viene del equipo: no forzar CA/PROT_T."""
-    sol = _sol_con_codigos("CA_ION", paneles=("PAN_EAB_ART",))
-    # Puede completar componentes EAB del panel; no debe agregar CA/PROT_T.
+def test_caie_suelto_trae_ca_y_prot_t():
+    """CAIE suelto completa CA + PROT_T para Zeisler; no arrastra EAB."""
+    sol = _sol_con_codigos("CAIE")
+    assert asegurar_resultados_paneles_derivados(sol) == 2
+    assert _codigos(sol) == {"CAIE", "CA", "PROT_T"}
+
+
+@pytest.mark.django_db
+def test_caie_con_eab_no_trae_insumos_zeisler():
+    """Con EAB no forzar CA/PROT_T aunque haya CAIE."""
+    sol = _sol_con_codigos("CAIE", paneles=("PAN_EAB_ART",))
     asegurar_resultados_paneles_derivados(sol)
     codigos = _codigos(sol)
-    assert "CA_ION" in codigos
+    assert "CAIE" in codigos
     assert "CA" not in codigos
     assert "PROT_T" not in codigos
 

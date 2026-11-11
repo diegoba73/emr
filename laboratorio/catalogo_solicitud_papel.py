@@ -193,7 +193,7 @@ EXAMENES: list[ExamenDef] = [
     {"codigo": "CA", "nombre": "Calcemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "MG", "nombre": "Magnesemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "P", "nombre": "Fosfatemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
-    {"codigo": "CA_ION", "nombre": "Calcio iónico", "muestra": "SANGRE_HEPARINA", "tipo_resultado": "NUMERICO"},
+    {"codigo": "CA_ION", "nombre": "Calcio iónico", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "PROT_T", "nombre": "Proteinemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "ALB", "nombre": "Albuminemia", "muestra": "SUERO", "tipo_resultado": "NUMERICO"},
     {"codigo": "VSG", "nombre": "Eritrosedimentación (VSG)", "muestra": "SANGRE_ERITRO", "tipo_resultado": "NUMERICO"},

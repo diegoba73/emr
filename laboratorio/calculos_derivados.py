@@ -10,7 +10,8 @@ Orinas 24 hs — concentración + DIUR → excreción
 (PROT_U_24, NA/K/CL_U24, MICROALB_24, CA/MG/P/AU/UREA_U24, CREA_U24).
 RAC — se cargan MICROALB + CREA_U; RAC (mg/g) = (MICROALB / CREA_U) × 100.
 TFG — CREATI + edad/sexo del paciente; CKD-EPI 2021 (creatinina, sin raza).
-Calcio iónico — opcional Zeisler desde CA + PROT_T (mg/dL → mmol/L); sigue editable (equipo).
+Calcio iónico estimado (CAIE) — Zeisler desde CA + PROT_T (mg/dL → mmol/L).
+CA_ION (K-ión / medido) no usa insumos Zeisler; con EAB viene del equipo.
 """
 from __future__ import annotations
 
@@ -70,12 +71,12 @@ EXCRECION_POR_LITRO_A_24H: tuple[tuple[str, str, int], ...] = (
 )
 CODIGOS_RAC_CALCULADOS = frozenset({"RAC"})
 CODIGOS_TFG_CALCULADOS = frozenset({"TFG"})
-# Estimable por fórmula pero editable (valor de equipo / EAB). No es CALCULADO de catálogo.
-CODIGOS_OVERRIDEABLES_ESTIMADOS = frozenset({"CA_ION"})
-# Pedido suelto de CA_ION → incluir CA + PROT_T para estimar Zeisler en carga.
-# No aplica si la orden trae EAB (el iónico viene del equipo de gases).
+# Estimable Zeisler (CAIE). CA_ION medido no es overrideable por fórmula.
+CODIGOS_OVERRIDEABLES_ESTIMADOS = frozenset({"CAIE"})
+# Pedido suelto de CAIE → incluir CA + PROT_T para Zeisler.
+# No aplica si la orden trae EAB (el iónico de equipo es CA_ION).
 INSUMOS_POR_CODIGO_OVERRIDEABLE: dict[str, tuple[str, ...]] = {
-    "CA_ION": ("CA", "PROT_T"),
+    "CAIE": ("CA", "PROT_T"),
 }
 PANELES_SIN_INSUMOS_CA_ION = frozenset({"PAN_EAB_ART", "PAN_EAB_VEN"})
 CODIGOS_CALCULADOS = (
@@ -467,9 +468,9 @@ def calcular_derivados(
     if ca is not None and prot_t is not None:
         ca_ion = calc_ca_ion_zeisler_mmol_l(ca, prot_t)
         if ca_ion is not None:
-            out["CA_ION"] = (quantize_valor_numerico(ca_ion), _fmt(ca_ion, 2))
+            out["CAIE"] = (quantize_valor_numerico(ca_ion), _fmt(ca_ion, 2))
         else:
-            out["CA_ION"] = (None, RESULTADO_NO_CALCULABLE)
+            out["CAIE"] = (None, RESULTADO_NO_CALCULABLE)
 
     return out
 
@@ -498,9 +499,9 @@ def codigos_insumos_de_overrideables(
     *,
     paneles: Iterable[str] | None = None,
 ) -> list[str]:
-    """Insumos de estimables editables (p. ej. CA_ION → CA + PROT_T).
+    """Insumos de estimables editables (p. ej. CAIE → CA + PROT_T).
 
-    Con panel EAB no se piden: el iónico lo da el equipo de gases.
+    Con panel EAB no se piden: el iónico medido (CA_ION) lo da el equipo.
     """
     presentes = {(c or "").strip().upper() for c in codigos if c}
     paneles_norm = {(p or "").strip().upper() for p in (paneles or []) if p}
@@ -553,11 +554,10 @@ def aplicar_calculos_derivados_solicitud(
     else:
         derivados = dict(derivados_all)
 
-    # CA_ION: estimable por Zeisler pero editable (equipo). Solo rellenar si vacío
-    # o si el valor actual coincide con el estimado (recalcular sin pisar equipo).
-    if "CA_ION" in derivados_all and "CA_ION" in by_codigo:
-        res_ca = by_codigo["CA_ION"]
-        num_est, texto_est = derivados_all["CA_ION"]
+    # CAIE: Zeisler. Solo rellenar si vacío o si el valor actual coincide con el estimado.
+    if "CAIE" in derivados_all and "CAIE" in by_codigo:
+        res_ca = by_codigo["CAIE"]
+        num_est, texto_est = derivados_all["CAIE"]
         if not (res_ca.validado_por_id or res_ca.fecha_validacion):
             actual_txt = (res_ca.valor_obtenido or "").strip()
             actual_num = _dec(res_ca.valor_numerico)
@@ -570,7 +570,7 @@ def aplicar_calculos_derivados_solicitud(
             elif texto_est and actual_txt == texto_est:
                 mismo_estimado = True
             if vacio or mismo_estimado:
-                derivados["CA_ION"] = (num_est, texto_est)
+                derivados["CAIE"] = (num_est, texto_est)
 
     actualizados = 0
     for codigo, (num, texto) in derivados.items():

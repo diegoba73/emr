@@ -592,12 +592,13 @@ class TestResolverTubosOrden(TestCase):
         assert len(grupos) == 1
         assert grupos[0].tipo_muestra_id == tm_hep.pk
 
-    def test_ca_ion_con_eab_art_no_genera_etiqueta_extra(self):
+    def test_ca_ion_con_eab_art_queda_en_suero_aparte(self):
+        """CA_ION ya no comparte jeringa EAB: EAB + suero = 2 grupos."""
         tm_art = TipoMuestra.objects.create(
             codigo=f"A3{self.suf}", nombre="Sangre heparina arterial", activo=True
         )
-        tm_hep = TipoMuestra.objects.create(
-            codigo=f"H4{self.suf}", nombre="Sangre heparina", activo=True
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"S4{self.suf}", nombre="Suero", activo=True
         )
         ph, _ = TipoExamen.objects.update_or_create(
             codigo="PH_ART",
@@ -616,44 +617,87 @@ class TestResolverTubosOrden(TestCase):
             codigo="CA_ION",
             defaults={
                 "nombre": "Calcio iónico",
-                "tipo_muestra_requerida": tm_hep,
-                "tipo_contenedor": self.hep,
+                "tipo_muestra_requerida": tm_sue,
+                "tipo_contenedor": self.sue,
                 "precio": 1,
                 "activo": True,
             },
         )
-        ca.tipo_muestra_requerida = tm_hep
-        ca.tipo_contenedor = self.hep
+        ca.tipo_muestra_requerida = tm_sue
+        ca.tipo_contenedor = self.sue
         ca.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
 
         sol = self._solicitud(ph, ca)
         grupos = resolver_tubos_para_solicitud(sol)
-        assert len(grupos) == 1
-        assert grupos[0].cantidad == 1
-        assert grupos[0].tipo_muestra_id == tm_art.pk
-        assert len(expandir_items_crear_muestras(sol, grupos)) == 1
+        assert len(grupos) == 2
+        assert {g.tipo_muestra_id for g in grupos} == {tm_art.pk, tm_sue.pk}
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 2
 
-    def test_ca_ion_solo_sigue_heparina_propia(self):
-        tm_hep = TipoMuestra.objects.create(
-            codigo=f"H5{self.suf}", nombre="Sangre heparina", activo=True
+    def test_ca_ion_solo_sigue_suero(self):
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"S5{self.suf}", nombre="Suero", activo=True
         )
         ca, _ = TipoExamen.objects.update_or_create(
             codigo="CA_ION",
             defaults={
                 "nombre": "Calcio iónico",
-                "tipo_muestra_requerida": tm_hep,
-                "tipo_contenedor": self.hep,
+                "tipo_muestra_requerida": tm_sue,
+                "tipo_contenedor": self.sue,
                 "precio": 1,
                 "activo": True,
             },
         )
-        ca.tipo_muestra_requerida = tm_hep
-        ca.tipo_contenedor = self.hep
+        ca.tipo_muestra_requerida = tm_sue
+        ca.tipo_contenedor = self.sue
         ca.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
         sol = self._solicitud(ca)
         grupos = resolver_tubos_para_solicitud(sol)
         assert len(grupos) == 1
-        assert grupos[0].tipo_muestra_id == tm_hep.pk
+        assert grupos[0].tipo_muestra_id == tm_sue.pk
+        assert grupos[0].tipo_contenedor_id == self.sue.pk
+
+    def test_ionograma_mas_ca_ion_solo_suero_sin_heparina(self):
+        """PAN_IONO + CA_ION sin EAB → solo tubo(s) suero; nada de heparina/jeringa."""
+        from laboratorio.models import PanelExamen
+
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"SI{self.suf}", nombre="Suero", activo=True
+        )
+        comps = []
+        for codigo, nombre in (
+            ("NA", "Sodio"),
+            ("K", "Potasio"),
+            ("CL", "Cloro"),
+            ("CA_ION", "Calcio ionico"),
+        ):
+            te, _ = TipoExamen.objects.update_or_create(
+                codigo=codigo,
+                defaults={
+                    "nombre": nombre,
+                    "tipo_muestra_requerida": tm_sue,
+                    "tipo_contenedor": self.sue,
+                    "precio": 1,
+                    "activo": True,
+                },
+            )
+            te.tipo_muestra_requerida = tm_sue
+            te.tipo_contenedor = self.sue
+            te.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor", "nombre"])
+            comps.append(te)
+        panel, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_IONO",
+            defaults={"nombre": "Ionograma", "activo": True},
+        )
+        panel.tipos_examen.set([c for c in comps if c.codigo in ("NA", "K", "CL")])
+        sol = self._solicitud(*comps)
+        sol.paneles.add(panel)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].cantidad == 1
+        assert grupos[0].tipo_contenedor_id == self.sue.pk
+        assert grupos[0].tipo_muestra_id == tm_sue.pk
+        assert "HEP" not in (grupos[0].tipo_contenedor_codigo or "").upper()
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 1
 
 
 @pytest.mark.django_db

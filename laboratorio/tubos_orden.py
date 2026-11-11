@@ -217,7 +217,7 @@ def _ancla_eab_en_orden(examenes) -> dict[str, Any]:
     """
     Primera jeringa EAB arterial / venosa de la orden (contenedor + muestra).
 
-    Lactato / Ca iónico se fusionan ahí para no imprimir etiqueta extra.
+    Lactato (legacy CAIE/CAIISE) se fusionan ahí para no imprimir etiqueta extra.
     Preferencia: arterial; si no hay art, venosa.
     """
     art = None
@@ -240,7 +240,7 @@ def _remap_heparina_suelta_a_jeringa_eab(
     tm_id: int | None,
     ancla_eab: dict[str, Any],
 ) -> tuple[Any, int | None, str]:
-    """Si hay EAB, LACT/CA_ION comparten esa jeringa (sin etiqueta heparina extra)."""
+    """Si hay EAB, LACT (y legacy CAIE/CAIISE) comparten esa jeringa (sin etiqueta heparina extra)."""
     c = (codigo or "").strip().upper()
     if c not in _CODIGOS_HEPARINA_COMPARTEN_EAB:
         return tc_eff, tm_id, ""
@@ -327,7 +327,7 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
             split = "EAB_VEN"
         else:
             split = ""
-            # LACT / CA_ION con EAB: misma jeringa (no etiqueta SANGRE_HEPARINA extra)
+            # LACT (legacy CAIE/CAIISE) con EAB: misma jeringa (no etiqueta SANGRE_HEPARINA extra)
             tc_eff, tm_id, split = _remap_heparina_suelta_a_jeringa_eab(
                 codigo, tc_eff=tc_eff, tm_id=tm_id, ancla_eab=ancla_eab
             )

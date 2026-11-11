@@ -144,19 +144,19 @@ describe('groupResultadosPorPanel', () => {
     );
   });
 
-  it('agrupa CA / PROT_T / CA_ION cuando hay iónico e insumos', () => {
+  it('agrupa CA / PROT_T / CAIE cuando hay estimado e insumos', () => {
     const resultados = [
       { ...res(1, 1), tipo_examen_codigo: 'CA', tipo_examen_nombre: 'Calcemia' },
       { ...res(2, 2), tipo_examen_codigo: 'PROT_T', tipo_examen_nombre: 'Proteinemia' },
-      { ...res(3, 3), tipo_examen_codigo: 'CA_ION', tipo_examen_nombre: 'Calcio iónico' },
+      { ...res(3, 3), tipo_examen_codigo: 'CAIE', tipo_examen_nombre: 'Calcio iónico estimado' },
     ];
     const grupos = groupResultadosPorPanel({ tipos_examen: [1, 2, 3] }, resultados);
     const g = grupos.find((x) => x.codigo === 'GRP_CA_ION');
-    expect(g?.titulo).toBe('Calcio iónico');
+    expect(g?.titulo).toBe('Calcio iónico estimado');
     expect(g?.resultados.map((r) => r.tipo_examen_codigo)).toEqual([
       'CA',
       'PROT_T',
-      'CA_ION',
+      'CAIE',
     ]);
   });
 

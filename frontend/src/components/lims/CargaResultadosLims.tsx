@@ -415,11 +415,11 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           indicesManualRef.current.add(r.id);
         }
       }
-      // CA_ION persistido: solo fijar manual si no coincide con Zeisler actual.
+      // CAIE persistido: solo fijar manual si no coincide con Zeisler actual.
       for (const r of resultados) {
         const te = tiposExamenMap.get(r.tipo_examen);
         const c = (r.tipo_examen_codigo || te?.codigo || '').toUpperCase();
-        if (c !== 'CA_ION') continue;
+        if (c !== 'CAIE') continue;
         if (clearedIdsRef.current.has(r.id)) {
           indicesManualRef.current.add(r.id);
           continue;
@@ -516,7 +516,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     const r = resultadosRef.current.find((x) => x.id === id);
     const te = r ? tiposExamenMapRef.current.get(r.tipo_examen) : undefined;
     const codigo = (r?.tipo_examen_codigo || te?.codigo || '').toUpperCase();
-    if (codigo === 'VCM' || codigo === 'HCM' || codigo === 'CHCM' || codigo === 'CA_ION') {
+    if (codigo === 'VCM' || codigo === 'HCM' || codigo === 'CHCM' || codigo === 'CAIE') {
       if (patch.valor_sysmex !== undefined || patch.valor !== undefined || patch.valor_numerico !== undefined) {
         indicesManualRef.current.add(id);
       }
@@ -1001,7 +1001,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       }
 
       let chipCaIonEstimado = false;
-      if (codigoUpper === 'CA_ION' && !indicesManualRef.current.has(r.id) && row.valor) {
+      if (codigoUpper === 'CAIE' && !indicesManualRef.current.has(r.id) && row.valor) {
         const rCa = resultados.find((x) => {
           const c = (x.tipo_examen_codigo || tiposExamenMap.get(x.tipo_examen)?.codigo || '').toUpperCase();
           return c === 'CA';

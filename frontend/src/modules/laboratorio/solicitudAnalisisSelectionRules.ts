@@ -13,10 +13,11 @@ export const EAB_INCLUYE_CODIGOS = {
 };
 
 /**
- * Al pedir CA_ION suelto (no vía EAB): incluir Ca total y proteínas
- * para poder estimar Zeisler en carga. Con EAB el iónico viene del equipo.
+ * Al pedir CAIE (calcio iónico estimado): incluir Ca total y proteínas
+ * para Zeisler. CA_ION / K-ión medido no dispara esta regla.
+ * Con EAB el iónico de equipo sigue siendo CA_ION (sin insumos Zeisler).
  */
-export const CA_ION_INCLUYE_CODIGOS = ['CA', 'PROT_T'] as const;
+export const CAIE_INCLUYE_CODIGOS = ['CA', 'PROT_T'] as const;
 
 export const PANELES_EAB = new Set(['PAN_EAB_ART', 'PAN_EAB_VEN']);
 

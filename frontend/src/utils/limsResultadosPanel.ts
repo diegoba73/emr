@@ -143,11 +143,11 @@ export const PERFILES_POR_CODIGO: ReadonlyArray<{
   },
 ];
 
-/** Agrupa CA / PROT_T / CA_ION cuando el iónico está pedido (Zeisler o equipo). */
+/** Agrupa CA / PROT_T / CAIE cuando el estimado Zeisler está pedido. */
 export const GRUPO_CA_ION_ZEISLER = {
   codigo: 'GRP_CA_ION',
-  nombre: 'Calcio iónico',
-  examenes: ['CA', 'PROT_T', 'CA_ION'] as const,
+  nombre: 'Calcio iónico estimado',
+  examenes: ['CA', 'PROT_T', 'CAIE'] as const,
 };
 
 function sortByPanelOrder(
@@ -181,15 +181,15 @@ function inferirGrupoCaIon(
 ): { grupo: GrupoResultadosOrden | null; sobrantes: ResultadoExamenLims[] } {
   const set = new Set(GRUPO_CA_ION_ZEISLER.examenes.map((c) => c.toUpperCase()));
   const match = pool.filter((r) => set.has((r.tipo_examen_codigo || '').toUpperCase()));
-  const tieneCaIon = match.some(
-    (r) => (r.tipo_examen_codigo || '').toUpperCase() === 'CA_ION'
+  const tieneCaie = match.some(
+    (r) => (r.tipo_examen_codigo || '').toUpperCase() === 'CAIE'
   );
-  // Solo agrupar si hay CA_ION y al menos un insumo (CA o PROT_T), o solo CA_ION.
-  if (!tieneCaIon) {
+  // Solo agrupar si hay CAIE y al menos un insumo (CA o PROT_T).
+  if (!tieneCaie) {
     return { grupo: null, sobrantes: pool };
   }
   if (match.length === 1) {
-    // Solo CA_ION: dejar como suelto (caso EAB/equipo).
+    // Solo CAIE sin insumos aún: suelto.
     return { grupo: null, sobrantes: pool };
   }
   const matchIds = new Set(match.map((r) => r.id));

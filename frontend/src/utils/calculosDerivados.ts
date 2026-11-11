@@ -14,8 +14,8 @@ export const MINUTOS_24H = 1440;
 export const FACTOR_CA_MG_DL_A_MMOL_L = 4.008;
 /** CKD-EPI 2021: solo adultos. */
 export const CKD_EPI_2021_EDAD_MIN = 18;
-/** Estimable por fórmula pero editable (valor de equipo / EAB). */
-export const CODIGOS_OVERRIDEABLES_ESTIMADOS = new Set(['CA_ION']);
+/** Estimable Zeisler (CAIE). CA_ION medido no se estima por fórmula. */
+export const CODIGOS_OVERRIDEABLES_ESTIMADOS = new Set(['CAIE']);
 
 export function esResultadoNoCalculable(valor?: string | null): boolean {
   return valor?.trim() === RESULTADO_NO_CALCULABLE;
@@ -367,9 +367,9 @@ export function calcularDerivados(
   if (ca != null && protT != null) {
     const caIon = calcCaIonZeislerMmolL(ca, protT);
     if (caIon != null) {
-      out.CA_ION = { numerico: caIon, informe: fmt(caIon, 2) };
+      out.CAIE = { numerico: caIon, informe: fmt(caIon, 2) };
     } else {
-      out.CA_ION = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+      out.CAIE = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
     }
   }
 

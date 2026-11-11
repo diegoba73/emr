@@ -23,7 +23,7 @@ import {
 } from '../../modules/laboratorio/solicitudAnalisisPapelLayout';
 import {
   CARTUCHO_CARDIACO_CODIGOS,
-  CA_ION_INCLUYE_CODIGOS,
+  CAIE_INCLUYE_CODIGOS,
   EAB_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
   esCodigoCartuchoCardiaco,
@@ -441,8 +441,8 @@ export function useSolicitudAnalisisSelection(
         }
         if (selecting) {
           next.add(id);
-          if ((codigo || '').toUpperCase() === 'CA_ION') {
-            return addExamenesByCodigo(next, CA_ION_INCLUYE_CODIGOS);
+          if ((codigo || '').toUpperCase() === 'CAIE') {
+            return addExamenesByCodigo(next, CAIE_INCLUYE_CODIGOS);
           }
         } else {
           next.delete(id);

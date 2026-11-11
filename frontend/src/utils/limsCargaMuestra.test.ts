@@ -218,7 +218,7 @@ describe('limsCargaMuestra', () => {
     ).toEqual([1]);
   });
 
-  it('CA_ION acepta jeringa EAB arterial aunque el catálogo diga SANGRE_HEPARINA', () => {
+  it('CA_ION en suero no acepta jeringa EAB arterial', () => {
     const proc = [
       {
         ...muestra(1, 10, 'RECIBIDA'),
@@ -227,8 +227,8 @@ describe('limsCargaMuestra', () => {
       },
     ] as MuestraTransaccional[];
     expect(
-      muestrasCompatiblesParaTipo(proc, 99, 50, 'SANGRE_HEPARINA', 'CA_ION').map((m) => m.id)
-    ).toEqual([1]);
+      muestrasCompatiblesParaTipo(proc, 99, 50, 'SUERO', 'CA_ION').map((m) => m.id)
+    ).toEqual([]);
   });
 
   it('dual CREA_U acepta bidón ORINA_24_H aunque el catálogo diga ORINA', () => {
@@ -405,27 +405,27 @@ describe('limsCargaMuestra', () => {
     expect(payload.valor_numerico).toBeNull();
   });
 
-  it('no rellena CA_ION con Zeisler si la fila está en clearedIds', () => {
+  it('no rellena CAIE con Zeisler si la fila está en clearedIds', () => {
     const resultados = (
       [
         ['CA', 1],
         ['PROT_T', 2],
-        ['CA_ION', 3],
+        ['CAIE', 3],
       ] as const
     ).map(([codigo, id]) => ({
       id,
       tipo_examen: id,
       tipo_examen_codigo: codigo,
       tipo_examen_nombre: codigo,
-      valor_obtenido: codigo === 'CA_ION' ? '1.25' : '',
-      valor_numerico: codigo === 'CA_ION' ? 1.25 : null,
+      valor_obtenido: codigo === 'CAIE' ? '1.25' : '',
+      valor_numerico: codigo === 'CAIE' ? 1.25 : null,
     })) as ResultadoExamenLims[];
     const catalog = new Map<number, LimsTipoExamen>(
       (
         [
           [1, 'CA', 'ESTANDAR'],
           [2, 'PROT_T', 'ESTANDAR'],
-          [3, 'CA_ION', 'ESTANDAR'],
+          [3, 'CAIE', 'ESTANDAR'],
         ] as const
       ).map(([id, codigo, modo]) => [
         id,
@@ -440,7 +440,7 @@ describe('limsCargaMuestra', () => {
     const next = applyAutofillVcmChcm(resultados, draft, catalog, new Set([3]), new Set([3]));
     expect(next[3].valor).toBe('');
     expect(next[3].valor_numerico).toBe('');
-    expect(draftRowClearsServerValue(resultados[2], next[3], catalog.get(3), 'CA_ION')).toBe(true);
+    expect(draftRowClearsServerValue(resultados[2], next[3], catalog.get(3), 'CAIE')).toBe(true);
     expect(resultadoDebeGuardarse(resultados[2], next[3], catalog.get(3))).toBe(true);
   });
 

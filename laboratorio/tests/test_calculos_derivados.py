@@ -283,7 +283,7 @@ class TestCalculosDerivados(TestCase):
             {"COL_TOT", "HDL", "TG", "BIL_T", "BIL_D", "FERR", "UIBC"},
         )
 
-    def test_ca_ion_zeisler_golden(self):
+    def test_caie_zeisler_golden(self):
         # CA 7.3 + PROT 5.8 → 3.53 mg/dL → 0.88 mmol/L (÷ 4.008)
         self.assertEqual(
             calc_ca_ion_zeisler_mg_dl(Decimal("7.3"), Decimal("5.8")),
@@ -296,26 +296,31 @@ class TestCalculosDerivados(TestCase):
         out = calcular_derivados(
             {"CA": Decimal("7.3"), "PROT_T": Decimal("5.8")}
         )
-        self.assertEqual(out["CA_ION"][1], "0.88")
-        self.assertEqual(out["CA_ION"][0], Decimal("0.8800"))
-        self.assertFalse(es_codigo_calculado("CA_ION"))
+        self.assertEqual(out["CAIE"][1], "0.88")
+        self.assertEqual(out["CAIE"][0], Decimal("0.8800"))
+        self.assertNotIn("CA_ION", out)
+        self.assertFalse(es_codigo_calculado("CAIE"))
 
-    def test_ca_ion_sin_insumos_completos_no_emite(self):
-        self.assertNotIn("CA_ION", calcular_derivados({"CA": Decimal("7.3")}))
-        self.assertNotIn("CA_ION", calcular_derivados({"PROT_T": Decimal("5.8")}))
+    def test_caie_sin_insumos_completos_no_emite(self):
+        self.assertNotIn("CAIE", calcular_derivados({"CA": Decimal("7.3")}))
+        self.assertNotIn("CAIE", calcular_derivados({"PROT_T": Decimal("5.8")}))
 
-    def test_insumos_ca_ion_overrideable(self):
+    def test_insumos_caie_overrideable(self):
         self.assertEqual(
-            codigos_insumos_de_overrideables(["CA_ION"]),
+            codigos_insumos_de_overrideables(["CAIE"]),
             ["CA", "PROT_T"],
         )
         self.assertEqual(
-            codigos_insumos_de_overrideables(["CA_ION", "CA"]),
+            codigos_insumos_de_overrideables(["CAIE", "CA"]),
             ["PROT_T"],
         )
         self.assertEqual(
+            codigos_insumos_de_overrideables(["CA_ION"]),
+            [],
+        )
+        self.assertEqual(
             codigos_insumos_de_overrideables(
-                ["CA_ION"], paneles=["PAN_EAB_ART"]
+                ["CAIE"], paneles=["PAN_EAB_ART"]
             ),
             [],
         )

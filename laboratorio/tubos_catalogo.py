@@ -120,15 +120,15 @@ EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
     }
 )
 
-# Gases / lactato / calcio iónico (sangre total heparina)
+# Gases / lactato (sangre total heparina). CA_ION (K-ión) va a suero, no a jeringa EAB.
 # EAB arterial y venoso = jeringas distintas (no compartir etiqueta)
 _EAB_ART = frozenset({"PH_ART", "PO2_ART", "PCO2_ART", "SAT_O2_ART", "HCO3_ART", "BE_ART"})
 _EAB_VEN = frozenset({"PH_VEN", "PO2_VEN", "PCO2_VEN", "SAT_O2_VEN", "HCO3_VEN", "BE_VEN"})
 _EAB_JERINGA_INDIVIDUAL = _EAB_ART | _EAB_VEN
-# Lactato / Ca iónico: misma jeringa EAB (art preferida; si no, ven).
+# Lactato (y legacy CAIE/CAIISE): misma jeringa EAB (art preferida; si no, ven).
 # Sin EAB en la orden → heparina propia (etiqueta SANGRE_HEPARINA).
 _CODIGOS_HEPARINA_COMPARTEN_EAB = frozenset(
-    {"LACT", "LACPLA", "CA_ION", "CAIISE", "CAIE"}
+    {"LACT", "LACPLA", "CAIISE", "CAIE"}
 )
 # Alias legacy (imports / compat).
 _CODIGOS_LACTATO_COMPARTEN_EAB = frozenset({"LACT", "LACPLA"})
@@ -163,10 +163,11 @@ _QUIMICA_RUTINA = frozenset(
         "NA",
         "K",
         "CL",
+        "CA_ION",
     }
 )
 
-# Solo gases / lactato / Ca iónico siguen en heparina
+# Solo gases / lactato (y legacy iónicos estimados) siguen en heparina
 _HEPARINA = _HEPARINA_GASES
 
 # Orina al azar / completa → frasco

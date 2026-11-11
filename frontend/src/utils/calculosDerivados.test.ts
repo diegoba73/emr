@@ -129,18 +129,19 @@ describe('calculosDerivados Corte A', () => {
     );
   });
 
-  it('Zeisler CA_ION: CA 7.3 + PROT 5.8 → 0.88 mmol/L', () => {
+  it('Zeisler CAIE: CA 7.3 + PROT 5.8 → 0.88 mmol/L', () => {
     expect(calcCaIonZeislerMgDl(7.3, 5.8)).toBe(3.53);
     expect(calcCaIonZeislerMmolL(7.3, 5.8)).toBe(0.88);
     const out = calcularDerivados({ CA: 7.3, PROT_T: 5.8 });
-    expect(out.CA_ION?.numerico).toBe(0.88);
-    expect(out.CA_ION?.informe).toBe('0.88');
-    expect(esCodigoCalculado('CA_ION')).toBe(false);
+    expect(out.CAIE?.numerico).toBe(0.88);
+    expect(out.CAIE?.informe).toBe('0.88');
+    expect(esCodigoCalculado('CAIE')).toBe(false);
+    expect(out.CA_ION).toBeUndefined();
   });
 
-  it('Zeisler no emite CA_ION si falta insumo', () => {
-    expect(calcularDerivados({ CA: 7.3 }).CA_ION).toBeUndefined();
-    expect(calcularDerivados({ PROT_T: 5.8 }).CA_ION).toBeUndefined();
+  it('Zeisler no emite CAIE si falta insumo', () => {
+    expect(calcularDerivados({ CA: 7.3 }).CAIE).toBeUndefined();
+    expect(calcularDerivados({ PROT_T: 5.8 }).CAIE).toBeUndefined();
   });
 
   it('absoluto de fórmula leucocitaria se etiqueta con abs./mm³', () => {

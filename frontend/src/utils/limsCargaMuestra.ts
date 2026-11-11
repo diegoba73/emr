@@ -74,11 +74,11 @@ const ORINA_COMPAT = new Set(['ORINA', 'ORINA_24_H']);
 /** Química migró HEPARINA→SUERO; tubos vivos pueden seguir en plasma/sangre heparina. */
 const LEGACY_HEPARINA_PARA_SUERO = new Set(['PLASMA_HEPARINA', 'SANGRE_HEPARINA']);
 
-/** Lactato / Ca iónico comparten jeringa EAB: catálogo SANGRE_HEPARINA ↔ art/ven. */
+/** Lactato (y legacy CAIE/CAIISE) comparten jeringa EAB: catálogo SANGRE_HEPARINA ↔ art/ven.
+ * CA_ION (K-ión) es suero y no entra en este puente. */
 const CODIGOS_HEPARINA_COMPARTEN_EAB = new Set([
   'LACT',
   'LACPLA',
-  'CA_ION',
   'CAIISE',
   'CAIE',
 ]);
@@ -597,7 +597,7 @@ function patchValorCalculado(
 
 /**
  * Rellena índices hemo (VCM/HCM/CHCM) y parámetros calculados
- * (lípidos / BIL_I / férrico / clearance / Zeisler CA_ION).
+ * (lípidos / BIL_I / férrico / clearance / Zeisler CAIE).
  * ``manualIds`` / ``clearedIds``: no pisar edición manual ni borrado explícito.
  * Los CALCULADO se sobrescriben salvo que estén en clearedIds.
  */
