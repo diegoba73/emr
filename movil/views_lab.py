@@ -292,6 +292,7 @@ class OrdenesLabMovil(BaseLabMovil):
             )
             observaciones = serializers.CharField(required=False, allow_blank=True, max_length=500)
             fecha_programada_toma = serializers.DateField(required=False)
+            material_pedido = serializers.CharField(required=False, allow_blank=True, max_length=40)
 
         datos = Body(data=request.data)
         datos.is_valid(raise_exception=True)
@@ -324,6 +325,7 @@ class OrdenesLabMovil(BaseLabMovil):
             'paneles_ids': paneles_ids,
             'fecha_programada_toma': fecha_toma,
             'observaciones': (vd.get('observaciones') or '').strip(),
+            'material_pedido': (vd.get('material_pedido') or '').strip(),
         }
         ser = SolicitudExamenCreateSerializer(data=payload, context={'request': request})
         ser.is_valid(raise_exception=True)

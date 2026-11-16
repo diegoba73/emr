@@ -67,7 +67,7 @@ import {
   isSecretariaLabRole,
   normalizeRol,
 } from '../../utils/permissions';
-import { canAccessEstudiosModule } from '../../modules/estudios/permissions';
+import { canAccessEstudiosModule, canAsignarTurnoEstudio } from '../../modules/estudios/permissions';
 import {
   canAccessLimsCatalogos,
   canAccessLimsPendientes,
@@ -132,6 +132,18 @@ const navItems: NavItem[] = [
     icon: <Description />,
     path: '/estudios-complementarios',
     canAccess: (u) => canAccessEstudiosModule(u) && !isLaboratorioRole(u),
+  },
+  {
+    text: 'Pedidos de estudio',
+    icon: <Description />,
+    path: '/estudios-complementarios/pedidos',
+    canAccess: (u) => canAsignarTurnoEstudio(u) && !isLaboratorioRole(u),
+  },
+  {
+    text: 'Catálogo agenda estudios',
+    icon: <CatalogIcon />,
+    path: '/estudios-complementarios/catalogo-agenda',
+    canAccess: (u) => canAsignarTurnoEstudio(u) && !isLaboratorioRole(u),
   },
   { text: 'Archivos', icon: <FolderIcon />, path: '/archivos', canAccess: canAccessArchivosMedicos },
   { text: 'Estadísticas', icon: <EstadisticasIcon />, path: '/laboratorio/estadisticas', canAccess: canAccessEstadisticasLims },

@@ -49,6 +49,7 @@ import { getTurnoAgendaKind, TURNO_KIND_META } from '../utils/turnoKind';
 import { Link as RouterLink } from 'react-router-dom';
 import AgendaTipoSelector, { type AgendaTipo } from './turnos/AgendaTipoSelector';
 import ProgramacionTurnoForm from './turnos/ProgramacionTurnoForm';
+import ReprogramarTurnoDialog from './turnos/ReprogramarTurnoDialog';
 import { asignarTurnoEstudio, agendarTurnoEstudioDesdeAgenda, listTiposEstudioComplementario } from '../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import { canAsignarTurnoEstudio } from '../modules/estudios/permissions';
@@ -58,7 +59,6 @@ import { pacienteLabelFromList } from '../utils/estudioAgendaFormat';
 import {
   buildEstudioTipoCatalogOptions,
   isEstudioTipoCatalogFallbackId,
-  resolveEstudioPracticaFromTipoId,
 } from '../utils/estudioTipoCatalog';
 import type { Recurso } from '../types';
 
@@ -305,6 +305,8 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
 
   const puedeAgendarEstudio = canAsignarTurnoEstudio(currentUser);
   const lockEstudioSelection = Boolean(initialEstudio?.id);
+  /** Alta libre desde calendario: formulario propio con Cancelar/Crear (sin footer duplicado). */
+  const usaProgramacionForm = !editingTurno && !lockEstudioSelection;
   const [agendaTipo, setAgendaTipo] = useState<AgendaTipo>('consulta');
   const [recursosEstudio, setRecursosEstudio] = useState<Recurso[]>([]);
   const [tiposEstudio, setTiposEstudio] = useState<TipoEstudioComplementario[]>([]);
@@ -362,48 +364,30 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     });
   };
 
+  const [reprogramOpen, setReprogramOpen] = useState(false);
+
   const handleReprogramarTurno = () => {
     if (!editingTurno?.id) return;
-    if (!formData.fecha || !formData.horaInicio || !formData.duracionMin) {
-      alert('Completá fecha, hora y duración antes de reprogramar.');
-      return;
+    setReprogramOpen(true);
+  };
+
+  const handleConfirmReprogramar = async (payload: {
+    fecha_hora_inicio: string;
+    fecha_hora_fin: string;
+    motivo: string;
+    recurso_id?: number;
+  }) => {
+    if (!editingTurno?.id) return;
+    try {
+      const { turno } = await apiService.reprogramarTurno(editingTurno.id, payload);
+      setTurnoEfectivo(turno);
+      alert('Turno reprogramado.');
+      onSuccess?.();
+    } catch (error: unknown) {
+      throw new Error(
+        getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoReprogramar)
+      );
     }
-    openMotivoDialog({
-      title: 'Reprogramar turno',
-      label: 'Motivo de reprogramación (obligatorio)',
-      confirmLabel: 'Reprogramar',
-      onConfirm: async (motivo) => {
-        try {
-          const [y, m, d] = formData.fecha.split('-').map(Number);
-          const [hh, mm] = formData.horaInicio.split(':').map(Number);
-          const inicio = new Date(y, m - 1, d, hh, mm, 0, 0);
-          const fin = new Date(inicio.getTime() + formData.duracionMin * 60_000);
-          const { turno, notificacion } = await apiService.reprogramarTurno(editingTurno.id, {
-            fecha_hora_inicio: formatLocalDateTimeSeconds(inicio),
-            fecha_hora_fin: formatLocalDateTimeSeconds(fin),
-            motivo,
-          });
-          setTurnoEfectivo(turno);
-          if (notificacion?.whatsapp_url) {
-            const abrir = window.confirm(
-              'Turno reprogramado. ¿Abrir WhatsApp para avisar al paciente?'
-            );
-            if (abrir) {
-              window.open(notificacion.whatsapp_url, '_blank', 'noopener,noreferrer');
-            }
-          } else if (notificacion?.whatsapp_enviado) {
-            alert('Turno reprogramado. Se envió WhatsApp al paciente.');
-          } else {
-            alert('Turno reprogramado.');
-          }
-          onSuccess?.();
-        } catch (error: unknown) {
-          throw new Error(
-            getSafeClinicalActionMessage(error, CLINICAL_ACTION_ERRORS.turnoReprogramar)
-          );
-        }
-      },
-    });
   };
 
   const handleMarcarRealizado = async () => {
@@ -752,12 +736,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           setEstudioFormError('Indique el tipo de estudio a realizar.');
           return;
         }
-        if (
-          !lockEstudioSelection &&
-          isEstudioTipoCatalogFallbackId(tipoEstudioId) &&
-          !resolveEstudioPracticaFromTipoId(tipoEstudioId, tiposEstudio)
-        ) {
-          setEstudioFormError('Seleccione un tipo de estudio válido.');
+        if (!lockEstudioSelection && isEstudioTipoCatalogFallbackId(tipoEstudioId)) {
+          setEstudioFormError(
+            'No hay tipos de estudio en el catálogo. Configurá tipos, médicos y salas en Catálogo agenda estudios.'
+          );
           return;
         }
         const inicio = new Date(`${formData.fecha}T${formData.horaInicio}:00`);
@@ -766,10 +748,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           return;
         }
         const fin = new Date(inicio.getTime() + (formData.duracionMin || 20) * 60_000);
+        const medicoIdEstudio = formData.medico ? Number(formData.medico) : NaN;
+        if (!medicoIdEstudio || Number.isNaN(medicoIdEstudio)) {
+          setEstudioFormError('Seleccioná el médico del estudio (catálogo agenda).');
+          return;
+        }
         const turnoPayload = {
           recurso_id: Number(formData.recurso),
           fecha_hora_inicio: inicio.toISOString(),
           fecha_hora_fin: fin.toISOString(),
+          medico_id: medicoIdEstudio,
         };
 
         if (lockEstudioSelection && initialEstudio?.id) {
@@ -777,11 +765,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         } else {
           await agendarTurnoEstudioDesdeAgenda({
             paciente_id: pacienteId,
-            ...(isEstudioTipoCatalogFallbackId(tipoEstudioId)
-              ? {
-                  practica: resolveEstudioPracticaFromTipoId(tipoEstudioId, tiposEstudio)!,
-                }
-              : { tipo_estudio: Number(tipoEstudioId) }),
+            tipo_estudio: Number(tipoEstudioId),
             origen: estudioOrigen,
             descripcion_clinica: formData.motivo || '',
             ...turnoPayload,
@@ -929,11 +913,8 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     return true;
   };
 
-  /** Secretaría puede cambiar fecha/hora de un turno existente (reprogramar). */
-  const canEditAgendaSlot = () => {
-    if (!editingTurno || isTurnoBloqueado() || isTurnoDeEstudio) return false;
-    return canReprogramarTurno(currentUser, turnoParaAcciones);
-  };
+  /** Fecha/hora de consulta existente: solo lectura; reprogramar usa diálogo con slots. */
+  const canEditAgendaSlot = () => false;
 
   // Resolver el nombre completo del paciente actual
   const getCurrentPacienteNombre = () => {
@@ -1205,7 +1186,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               Cargando datos desde el servidor...
             </Typography>
           </Box>
-        ) : !editingTurno && !lockEstudioSelection ? (
+        ) : usaProgramacionForm ? (
           <Box sx={{ mt: 1, pb: 2 }}>
             <ProgramacionTurnoForm
               allowConsulta
@@ -1245,6 +1226,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 Agenda clínica
               </RouterLink>
               .
+              {editingTurno.viene_de_pedido_estudio && editingTurno.pedido_estudio_id ? (
+                <>
+                  {' '}
+                  Origen:{' '}
+                  <RouterLink to="/estudios-complementarios/pedidos">
+                    pedido #{editingTurno.pedido_estudio_id}
+                  </RouterLink>{' '}
+                  (foto del paciente).
+                </>
+              ) : null}
             </Alert>
           )}
           {estudioFormError && (
@@ -1448,30 +1439,50 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             />
           )}
 
-          <FormControl fullWidth sx={{ mb: 2 }} disabled={!canEditFormFields()}>
-            <InputLabel>{editingTurno ? '🏥 Recurso' : '🏥 Consultorio'}</InputLabel>
-            <Select
-              value={formData.recurso}
-              label={editingTurno ? '🏥 Recurso' : '🏥 Consultorio'}
-              onChange={(e) => setFormData({...formData, recurso: String(e.target.value)})}
-              required
-              disabled={!canEditFormFields()}
-            >
-              {recursosActivos.map(recurso => (
-                <MenuItem key={recurso.id} value={String(recurso.id)}>
-                  {recurso.nombre}
-                  {editingTurno
-                    ? ` (${recurso.tipo_recurso_display || recurso.tipo_recurso})`
-                    : ''}
-                </MenuItem>
-              ))}
-              {recursosActivos.length === 0 && (
-                <MenuItem disabled value="">
-                  {editingTurno ? 'Sin recursos disponibles' : 'Sin consultorios disponibles'}
-                </MenuItem>
-              )}
-            </Select>
-          </FormControl>
+          {editingTurno ? (
+            <TextField
+              fullWidth
+              sx={{ mb: 2 }}
+              label="🏥 Consultorio / recurso"
+              value={
+                editingTurno.recurso?.nombre
+                  ? `${editingTurno.recurso.nombre}${
+                      editingTurno.recurso.tipo_recurso
+                        ? ` (${editingTurno.recurso.tipo_recurso_display || editingTurno.recurso.tipo_recurso})`
+                        : ''
+                    }`
+                  : 'Sin recurso'
+              }
+              InputProps={{ readOnly: true }}
+              helperText={
+                isTurnoDeEstudio
+                  ? 'El recurso del estudio se gestiona en Estudios y procedimientos.'
+                  : 'El consultorio lo define la agenda del médico (Horarios de atención).'
+              }
+            />
+          ) : (
+            <FormControl fullWidth sx={{ mb: 2 }} disabled={!canEditFormFields()}>
+              <InputLabel>🏥 Consultorio</InputLabel>
+              <Select
+                value={formData.recurso}
+                label="🏥 Consultorio"
+                onChange={(e) => setFormData({...formData, recurso: String(e.target.value)})}
+                required
+                disabled={!canEditFormFields()}
+              >
+                {recursosActivos.map(recurso => (
+                  <MenuItem key={recurso.id} value={String(recurso.id)}>
+                    {recurso.nombre}
+                  </MenuItem>
+                ))}
+                {recursosActivos.length === 0 && (
+                  <MenuItem disabled value="">
+                    Sin consultorios disponibles
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          )}
             </>
           )}
 
@@ -1612,6 +1623,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         )}
       </Box>
 
+      {!usaProgramacionForm && (
       <Box
         sx={{
           p: 2,
@@ -1637,7 +1649,9 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             Confirmar turno
           </Button>
         )}
-        {editingTurno && canReprogramarTurno(currentUser, turnoParaAcciones) && (
+        {editingTurno &&
+          (!isTurnoDeEstudio || Boolean(editingTurno.viene_de_pedido_estudio)) &&
+          canReprogramarTurno(currentUser, turnoParaAcciones) && (
           <Button
             variant="outlined"
             color="secondary"
@@ -1647,7 +1661,14 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             Reprogramar turno
           </Button>
         )}
-        {editingTurno && canCancelarTurnoAccion(currentUser, turnoParaAcciones) && (
+        {editingTurno && isTurnoDeEstudio && !editingTurno.viene_de_pedido_estudio && (
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
+            Para reprogramar o cancelar un estudio, usá el módulo Estudios y procedimientos.
+          </Typography>
+        )}
+        {editingTurno &&
+          !isTurnoDeEstudio &&
+          canCancelarTurnoAccion(currentUser, turnoParaAcciones) && (
           <Button
             variant="outlined"
             color="warning"
@@ -1708,6 +1729,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           </Typography>
         )}
       </Box>
+      )}
     </Drawer>
 
     {/* Drawer de Atención - SOLO si NO hay callback onOpenAtencion del padre */}
@@ -1756,6 +1778,20 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       />
     )}
     <MotivoDialog {...motivoDialogProps} />
+    <ReprogramarTurnoDialog
+      open={reprogramOpen}
+      onClose={() => setReprogramOpen(false)}
+      medicoId={
+        editingTurno?.medico_id ??
+        editingTurno?.medico?.id ??
+        (formData.medico ? Number(formData.medico) : null)
+      }
+      turnoId={editingTurno?.id ?? 0}
+      tipoAgenda={
+        editingTurno?.viene_de_pedido_estudio || isTurnoDeEstudio ? 'ESTUDIO' : 'CONSULTA'
+      }
+      onConfirm={handleConfirmReprogramar}
+    />
   </>
   );
 };

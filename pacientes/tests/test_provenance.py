@@ -18,6 +18,7 @@ def _payload_create(**overrides):
         "nombre": "Juan",
         "apellido": "Pérez",
         "fecha_nacimiento": "1990-05-15",
+        "obra_social": "PARTICULAR",
     }
     base.update(overrides)
     return base

@@ -31,11 +31,12 @@ class TestTurnoAPI(APITestCase):
     """Tests de integración para la API de Turnos."""
 
     def setUp(self):
+        # Alta/reprogramación de turnos: secretaría/admin (médico ya no crea por API).
         self.user = User.objects.create_user(
             username='ta_admin',
             email='ta_admin@example.com',
             password='testpass123',
-            rol='medico',
+            rol='secretaria',
             is_staff=True,
         )
         self.client.force_authenticate(user=self.user)
@@ -125,14 +126,144 @@ class TestTurnoAPI(APITestCase):
         assert response.data.get('es_sobreturno') is True
         assert Turno.objects.filter(paciente=otro, es_sobreturno=True).exists()
 
+    def test_admin_no_puede_crear_sobreturno(self):
+        """Sobreturno es exclusivo de secretaría institucional."""
+        admin = User.objects.create_user(
+            username='ta_admin_sobreturno',
+            email='ta_admin_st@example.com',
+            password='testpass123',
+            rol='admin',
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.client.force_authenticate(user=admin)
+        fecha_base = timezone.now().replace(hour=12, minute=0, second=0, microsecond=0) + timedelta(
+            days=3
+        )
+        Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=fecha_base,
+            fecha_hora_fin=fecha_base + timedelta(minutes=20),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+        otro = Paciente.objects.create(dni='TA-1003', nombre='Luis', apellido='AdminST')
+        data = {
+            'paciente_id': otro.id,
+            'medico_id': self.medico.id,
+            'recurso_id': self.recurso.id,
+            'fecha_hora_inicio': fecha_base.isoformat(),
+            'fecha_hora_fin': (fecha_base + timedelta(minutes=20)).isoformat(),
+            'estado': Turno.Estado.CONFIRMADO,
+            'es_sobreturno': True,
+            'motivo_reserva': 'Intento admin',
+        }
+        response = self.client.post('/api/turnos/', data, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'es_sobreturno' in response.data or 'sobreturno' in str(response.data).lower()
+        assert not Turno.objects.filter(paciente=otro).exists()
+
+    def test_admin_no_reprograma_sobreturno_hacia_ocupado(self):
+        """Reprogramar un sobreturno existente no habilita solapamiento a admin."""
+        from datetime import time as time_cls
+
+        from medicos.models import DisponibilidadMedico
+
+        secretaria = User.objects.create_user(
+            username='ta_sec_reprog_st',
+            password='x',
+            rol='secretaria',
+        )
+        admin = User.objects.create_user(
+            username='ta_admin_reprog_st',
+            password='x',
+            rol='admin',
+            is_staff=True,
+            is_superuser=True,
+        )
+        fecha = timezone.localdate() + timedelta(days=7)
+        while fecha.weekday() != 0:
+            fecha += timedelta(days=1)
+        inicio_a = timezone.make_aware(datetime.combine(fecha, time_cls(10, 0)))
+        inicio_b = inicio_a + timedelta(minutes=20)
+        DisponibilidadMedico.objects.create(
+            medico=self.medico,
+            dia_semana=fecha.weekday(),
+            hora_inicio=time_cls(9, 0),
+            hora_fin=time_cls(13, 0),
+            tipo='CONSULTA',
+            recurso=self.recurso,
+            activo=True,
+        )
+        ocupado = Turno.objects.create(
+            paciente=self.paciente,
+            medico=self.medico,
+            recurso=self.recurso,
+            fecha_hora_inicio=inicio_b,
+            fecha_hora_fin=inicio_b + timedelta(minutes=20),
+            estado=Turno.Estado.CONFIRMADO,
+        )
+        otro = Paciente.objects.create(dni='TA-ST-REP', nombre='Sob', apellido='Rep')
+        self.client.force_authenticate(user=secretaria)
+        r_crear = self.client.post(
+            '/api/turnos/',
+            {
+                'paciente_id': otro.id,
+                'medico_id': self.medico.id,
+                'recurso_id': self.recurso.id,
+                'fecha_hora_inicio': inicio_a.isoformat(),
+                'fecha_hora_fin': (inicio_a + timedelta(minutes=20)).isoformat(),
+                'es_sobreturno': True,
+            },
+            format='json',
+        )
+        assert r_crear.status_code == 201, r_crear.data
+        sob = Turno.objects.get(pk=r_crear.data['id'])
+        assert sob.es_sobreturno
+
+        self.client.force_authenticate(user=admin)
+        r_rep = self.client.post(
+            f'/api/turnos/{sob.id}/reprogramar/',
+            {
+                'fecha_hora_inicio': inicio_b.isoformat(),
+                'fecha_hora_fin': (inicio_b + timedelta(minutes=20)).isoformat(),
+                'motivo': 'Admin intenta solapar',
+            },
+            format='json',
+        )
+        assert r_rep.status_code == 400, r_rep.data
+        sob.refresh_from_db()
+        assert sob.estado != Turno.Estado.CANCELADO
+        assert sob.fecha_hora_inicio == inicio_a
+        ocupado.refresh_from_db()
+        assert ocupado.estado == Turno.Estado.CONFIRMADO
+
+        # Secretaría sí puede reprogramar el sobreturno hacia el horario ocupado.
+        self.client.force_authenticate(user=secretaria)
+        r_ok = self.client.post(
+            f'/api/turnos/{sob.id}/reprogramar/',
+            {
+                'fecha_hora_inicio': inicio_b.isoformat(),
+                'fecha_hora_fin': (inicio_b + timedelta(minutes=20)).isoformat(),
+                'motivo': 'Sobreturno secretaría',
+            },
+            format='json',
+        )
+        assert r_ok.status_code == 200, r_ok.data
+
     def test_solapamiento_no_aplica_a_disponible(self):
-        fecha_base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        slot = timedelta(minutes=self.medico.duracion_slot_min or 20)
+        # Futuro alineado (sin agenda publicada el médico no exige franja).
+        fecha_base = (timezone.now() + timedelta(days=3)).replace(
+            hour=10, minute=0, second=0, microsecond=0
+        )
         Turno.objects.create(
             paciente=None,
             medico=self.medico,
             recurso=self.recurso,
             fecha_hora_inicio=fecha_base,
-            fecha_hora_fin=fecha_base + timedelta(minutes=30),
+            fecha_hora_fin=fecha_base + slot,
             estado=Turno.Estado.DISPONIBLE,
         )
 
@@ -140,13 +271,13 @@ class TestTurnoAPI(APITestCase):
             'paciente_id': self.paciente.id,
             'medico_id': self.medico.id,
             'recurso_id': self.recurso.id,
-            'fecha_hora_inicio': (fecha_base + timedelta(minutes=15)).isoformat(),
-            'fecha_hora_fin': (fecha_base + timedelta(minutes=45)).isoformat(),
+            'fecha_hora_inicio': (fecha_base + timedelta(minutes=10)).isoformat(),
+            'fecha_hora_fin': (fecha_base + timedelta(minutes=10) + slot).isoformat(),
             'estado': Turno.Estado.CONFIRMADO,
         }
         response = self.client.post('/api/turnos/', data, format='json')
 
-        assert response.status_code == status.HTTP_201_CREATED
+        assert response.status_code == status.HTTP_201_CREATED, response.data
 
     def test_filtro_fechas(self):
         fecha_enero = timezone.make_aware(datetime(2025, 1, 15, 10, 0, 0))

@@ -36,7 +36,7 @@ No hay roles `secretaria_cehta` / `secretaria_icpl`. El aislamiento es por **`Us
 
 Capacidades de sede (`usuarios/sedes.py`): `internacion` (menú/API lectura) vs `internacion_escritura` (ingreso/alta/infra/HC; solo ICPL). Filtra: recursos, turnos (vía `recurso.ubicacion`), médicos (solape de `sedes`), puestos/llegadas de recepción. **No** filtra pacientes, ni órdenes/estudios LIMS (compartidos entre sedes; p. ej. informes validados).
 | `enfermeria` | Pacientes globales; lectura de estudios, archivos y resultados LIMS |
-| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **alta de pacientes** (sin editar ficha); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO`; **Internación solo lectura** (camas/internados; sede con capacidad `internacion`); cola extracciones (`/recepcion`). **Sin** menú Filtros avanzados |
+| `laboratorio` | LIMS nativo: toma, carga, QC, agregar/quitar ensayos; **no** `validar`; **sin alta ni edición de pacientes** (solo lectura/búsqueda para pedidos); **alta de médicos** (ficha básica, sin agenda/staff); **editar cabecera y ensayos** de orden mientras `estado != FINALIZADO`; **Internación solo lectura** (camas/internados; sede con capacidad `internacion`); cola extracciones (`/recepcion`). **Sin** menú Filtros avanzados |
 | `bioquimico` | Todo lo de `laboratorio` **más** `validar` (`LISTO_PARA_VALIDAR` → `FINALIZADO`); misma lectura de Internación; **sí** Filtros avanzados. **Sin** menú: Horarios de atención, Recepción/cola extracciones, Atenciones clínicas, Archivos |
 | `paciente` | Portal propio |
 
@@ -68,11 +68,11 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Listado sidebar Microbiología (`/laboratorio/microbiologia/estudios`) | admin, laboratorio, bioquímico, secretaria_lab (todos los estados). **Médico sin menú/listado**; lee detalle liberado y puede **pedir** desde portal clínico / ficha; sin catálogos ni ops técnicas |
 | Validar orden LIMS | admin, bioquímico (`ROLES_LIMS_VALIDAR`) |
 | Override IQC al cerrar | admin / superuser + motivo |
-| Alta de pacientes | admin, secretaría, médico, laboratorio, bioquímico (`_ROLES_ALTA_PACIENTE`); sin PATCH demográfico para lab/bio |
+| Alta / edición demográfica de pacientes | admin, secretaría, secretaría lab, médico (`_ROLES_ALTA_PACIENTE` = `_ROLES_EDICION_PACIENTE`); laboratorio/bioquímico/enfermería sin alta ni PATCH |
 | Eliminar pacientes (API) | solo admin/superuser; bloqueado si hay historia clínica asociada (`pacientes.eliminacion`) |
 | Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
 | Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
-| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaría institucional / admin/staff (UI); API `ROLES_SECRETARIA_EMR` incluye ambas secretarías; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1) |
+| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaría institucional / admin/staff (UI); API `ROLES_SECRETARIA_EMR` incluye ambas secretarías; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1). **Sobreturno** (`es_sobreturno`): solo `secretaria` institucional |
 | Módulo Estudios / Agenda clínica | secretaría **institucional**, médico, admin, enfermería (lectura), profesionales de estudio — **no** `secretaria_lab` |
 | Cerrar atención | medico, enfermeria, admin |
 | Catálogo quirúrgico jerárquico (`cirugia-especialidades` / `-procedimientos` / `-abordajes`) | Lectura: operadores del módulo Estudios (médico, secretaría, admin, …). **Escritura solo admin/superuser** (`CirugiaCatalogoPermission`). UI admin: `/catalogos/cirugias`. No LIMS. |
@@ -183,7 +183,7 @@ Endpoints en `turnos.views.TurnoViewSet`:
 |--------|------|---------------------|-------|
 | Confirmar | `POST .../confirmar/` | `RESERVADO` → `CONFIRMADO` | admin/staff, secretaría |
 | Cancelar | `POST .../cancelar/` | → `CANCELADO` (motivo obligatorio) | admin/staff, secretaría |
-| Reprogramar | `POST .../reprogramar/` | conserva estado; cambia agenda; notifica paciente (push + WhatsApp Twilio/wa.me) | admin/staff, secretaría |
+| Reprogramar | `POST .../reprogramar/` | turno nuevo en horario libre de la agenda del médico; cancela el anterior y libera el slot; historial vínculo; notifica paciente (push + WhatsApp) | admin/staff, secretaría |
 | Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría |
 | Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría |
 | Iniciar atención **(C5.10.1)** | `POST .../iniciar-atencion/` | `REALIZADO` + atención clínica | médico propio; admin/staff/superuser; **no** secretaría/paciente/enfermería/laboratorio |

@@ -19,7 +19,7 @@ from api.permissions import (
     IsInternacionHcMedico,
     IsInternacionStaff,
 )
-from usuarios.roles import ROLES_SECRETARIA_EMR
+from usuarios.roles import ROLES_INTERNACION, ROLES_SECRETARIA_EMR, normalize_rol
 from api.serializers import AtencionSerializer
 
 logger = logging.getLogger(__name__)
@@ -236,19 +236,17 @@ class InternacionViewSet(viewsets.ModelViewSet):
         else:
             queryset = super().get_queryset()
         
-        if hasattr(user, 'rol') and user.rol:
-            rol_upper = str(user.rol).strip().upper()
-            if rol_upper in ('MEDICO', 'ENFERMERIA', 'SECRETARIA', 'KINESIOLOGO'):
-                if not (paciente_param or incluir_historico):
-                    queryset = queryset.filter(activo=True)
-            elif rol_upper == 'ADMIN':
-                pass
-            else:
-                queryset = queryset.none()
-        elif not user.is_superuser:
-            queryset = queryset.none()
-        
-        return queryset
+        # Misma audiencia que IsInternacionStaff / ROLES_INTERNACION
+        # (incluye laboratorio, bioquímico y secretaria_lab). Antes el else
+        # devolvía none y la revista de sala quedaba vacía para LIMS.
+        if user.is_superuser:
+            return queryset
+        role = normalize_rol(user)
+        if role in ROLES_INTERNACION:
+            if role != 'admin' and not (paciente_param or incluir_historico):
+                queryset = queryset.filter(activo=True)
+            return queryset
+        return queryset.none()
     
     def perform_create(self, serializer):
         """
@@ -267,44 +265,34 @@ class InternacionViewSet(viewsets.ModelViewSet):
     def get_object(self):
         """
         Override para permitir actualizar internaciones incluso si no están en el queryset filtrado
-        (pero solo si el usuario tiene permisos)
+        (pero solo si el usuario tiene permisos).
         """
-        # Obtener el pk de la URL
+        from rest_framework.exceptions import NotFound
+
         pk = self.kwargs.get('pk')
         user = self.request.user
-        
-        # Si es ADMIN, puede acceder a cualquier internación
-        if hasattr(user, 'rol') and user.rol:
-            rol_upper = str(user.rol).strip().upper()
-            if rol_upper == 'ADMIN':
-                try:
-                    return Internacion.objects.get(pk=pk)
-                except Internacion.DoesNotExist:
-                    from rest_framework.exceptions import NotFound
-                    raise NotFound('No Internacion matches the given query.')
-        
-        # Médico, enfermería y secretaría: internaciones activas (diagnóstico visible en la cama)
-        if hasattr(user, 'rol') and user.rol:
-            rol_upper = str(user.rol).strip().upper()
-            if rol_upper in ['MEDICO', 'ENFERMERIA', 'SECRETARIA', 'KINESIOLOGO']:
-                try:
-                    internacion = Internacion.objects.get(pk=pk)
-                    # Permitir acceso a internaciones activas
-                    if internacion.activo:
-                        return internacion
-                    else:
-                        from rest_framework.exceptions import PermissionDenied
-                        raise PermissionDenied('No puede acceder a internaciones inactivas.')
-                except Internacion.DoesNotExist:
-                    from rest_framework.exceptions import NotFound
-                    raise NotFound('No Internacion matches the given query.')
-        
-        # Intentar con el queryset filtrado por defecto
+        role = normalize_rol(user) if getattr(user, 'is_authenticated', False) else ''
+
+        if user.is_superuser or role == 'admin':
+            try:
+                return Internacion.objects.get(pk=pk)
+            except Internacion.DoesNotExist as exc:
+                raise NotFound('No Internacion matches the given query.') from exc
+
+        # Lectura de activas: misma audiencia que ROLES_INTERNACION (LIMS incluido).
+        if role in ROLES_INTERNACION:
+            try:
+                internacion = Internacion.objects.get(pk=pk)
+            except Internacion.DoesNotExist as exc:
+                raise NotFound('No Internacion matches the given query.') from exc
+            if internacion.activo:
+                return internacion
+            raise PermissionDenied('No puede acceder a internaciones inactivas.')
+
         try:
             return super().get_object()
-        except Exception:
-            from rest_framework.exceptions import NotFound
-            raise NotFound('No Internacion matches the given query.')
+        except Exception as exc:
+            raise NotFound('No Internacion matches the given query.') from exc
     
     @action(detail=False, methods=['post'], url_path='ingresar')
     def ingresar(self, request):

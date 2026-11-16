@@ -6,6 +6,7 @@ import { isEmrStaffOrAdmin } from './permissions';
 import {
   isOperadorLimsRole,
   isProfesionalEstudioRole,
+  isSecretariaInstitucionalRole,
   ROLES_ESTUDIO_COMPLEMENTARIO,
 } from './roles';
 import { isTurnoEstudio } from './recursosEstudio';
@@ -74,6 +75,12 @@ export function canCreateTurno(user?: User | null): boolean {
   return canMutateTurnosGlobally(user);
 }
 
+/** Sobreturno: solo secretaría institucional (no admin, staff ni secretaría lab). */
+export function canCrearSobreturno(user?: User | null): boolean {
+  if (!user) return false;
+  return isSecretariaInstitucionalRole(user.rol);
+}
+
 export function canEditTurno(user?: User | null, _turno?: Turno | null): boolean {
   if (!user) return false;
   if (isAgendaReadOnlyRole(user)) return false;
@@ -129,12 +136,14 @@ export function canPatchEstadoEnFormulario(_user?: User | null): boolean {
   return false;
 }
 
-/** Reprogramar / cambiar día: solo secretaría/admin. */
+/** Reprogramar: secretaría/admin, o paciente dueño de turno nacido de pedido de estudio. */
 export function canReprogramarTurno(user?: User | null, turno?: Turno | null): boolean {
   if (!user || !turno || isAgendaReadOnlyRole(user)) return false;
   const st = (turno.estado || '').toUpperCase();
   if (st === 'CANCELADO' || st === 'REALIZADO') return false;
-  return canMutateTurnosGlobally(user);
+  if (canMutateTurnosGlobally(user)) return true;
+  if (normalizeRol(user) !== 'PACIENTE') return false;
+  return Boolean(turno.viene_de_pedido_estudio);
 }
 
 /** POST marcar-realizado — solo secretaría/admin (médico usa iniciar-atencion). */

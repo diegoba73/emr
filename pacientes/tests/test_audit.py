@@ -34,6 +34,7 @@ def _payload_create(dni_suffix):
         "nombre": "Ana",
         "apellido": "Audit",
         "fecha_nacimiento": "1988-03-20",
+        "obra_social": "PARTICULAR",
     }
 
 

@@ -488,6 +488,13 @@ def _resolver_tipo_examen_ids(
         insumos_faltan.update(
             codigos_insumos_de_overrideables(codigos, paneles=panel_codigos)
         )
+        from laboratorio.acompanamiento_pedido import codigos_acompanamiento_pedido
+
+        insumos_faltan.update(
+            codigos_acompanamiento_pedido(
+                codigos_examen=codigos, codigos_panel=panel_codigos
+            )
+        )
         if insumos_faltan:
             tipos.update(
                 TipoExamen.objects.filter(codigo__in=insumos_faltan, activo=True).values_list(

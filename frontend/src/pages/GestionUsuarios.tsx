@@ -405,6 +405,26 @@ const GestionUsuarios: React.FC = () => {
         }
       } else if (formData.rol === 'paciente') {
         if (crearNuevoPaciente) {
+          if (!formData.first_name.trim() || !formData.last_name.trim()) {
+            setError('Nombre y apellido del usuario son obligatorios al crear el paciente');
+            setSaving(false);
+            return;
+          }
+          if (!nuevoPacienteData.dni.trim()) {
+            setError('El DNI es obligatorio al crear el paciente');
+            setSaving(false);
+            return;
+          }
+          if (!nuevoPacienteData.fecha_nacimiento) {
+            setError('La fecha de nacimiento es obligatoria al crear el paciente');
+            setSaving(false);
+            return;
+          }
+          if (!nuevoPacienteData.obra_social.trim()) {
+            setError('La obra social es obligatoria al crear el paciente');
+            setSaving(false);
+            return;
+          }
           // Crear nuevo paciente
           payload.paciente_data = {
             dni: nuevoPacienteData.dni,
@@ -1041,11 +1061,12 @@ const GestionUsuarios: React.FC = () => {
                     />
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <TextField
-                        label="Fecha de Nacimiento"
+                        label="Fecha de Nacimiento *"
                         type="date"
                         value={nuevoPacienteData.fecha_nacimiento}
                         onChange={(e) => setNuevoPacienteData({ ...nuevoPacienteData, fecha_nacimiento: e.target.value })}
                         InputLabelProps={{ shrink: true }}
+                        required
                         fullWidth
                       />
                       <TextField
@@ -1070,9 +1091,10 @@ const GestionUsuarios: React.FC = () => {
                     />
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <TextField
-                        label="Obra Social"
+                        label="Obra Social *"
                         value={nuevoPacienteData.obra_social}
                         onChange={(e) => setNuevoPacienteData({ ...nuevoPacienteData, obra_social: e.target.value })}
+                        required
                         fullWidth
                       />
                       <TextField

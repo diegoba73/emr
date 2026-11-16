@@ -28,6 +28,7 @@ from .views_lab import (
 )
 from .views_consultas import ConsultasMovil
 from .views_estudios import EstudioInformePdfMovil, EstudioMovilDetalle, EstudiosMovil
+from .views_pedidos_estudio import PedidosEstudioMovil
 
 urlpatterns = [
     path('institucion/', InstitucionMovil.as_view()),
@@ -59,6 +60,7 @@ urlpatterns = [
     path('estudios/', EstudiosMovil.as_view()),
     path('estudios/<int:pk>/', EstudioMovilDetalle.as_view()),
     path('estudios/<int:pk>/informes/<int:informe_id>/pdf/', EstudioInformePdfMovil.as_view()),
+    path('pedidos-estudio/', PedidosEstudioMovil.as_view()),
     path('lab/pacientes/', PacientesLabMovil.as_view()),
     path('lab/pacientes/<int:pk>/contexto/', PacienteContextoLabMovil.as_view()),
     path('lab/pacientes/<int:pk>/restricciones-ensayos/', RestriccionesEnsayosLabMovil.as_view()),

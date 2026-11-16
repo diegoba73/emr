@@ -53,6 +53,8 @@ ENTRADA_DEFAULTS_POR_CODIGO: dict[str, EntradaDefault] = {
     "CREA_U24": ("CALCULADO", 0, "1", ""),
     # RAC: medidos MICROALB + CREA_U; RAC = (MICROALB / CREA_U) × 100 (mg/g, 1 decimal)
     "RAC": ("CALCULADO", 1, "1", ""),
+    # RAR: medidos ALDOS + ARPLA; RAR = ALDOS / ARPLA (1 decimal)
+    "RAR": ("CALCULADO", 1, "1", ""),
     # TFG: CREATI + edad/sexo (CKD-EPI 2021); mL/min/1.73 m², 0 decimales
     "TFG": ("CALCULADO", 0, "1", ""),
 }

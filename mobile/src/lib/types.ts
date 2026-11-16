@@ -35,6 +35,23 @@ export interface Turno {
   estado: string;
   asistencia_confirmada_en: string | null;
   tipo: 'CONSULTA' | 'ESTUDIO';
+  viene_de_pedido_estudio?: boolean;
+  estudio_complementario?: {
+    id: number;
+    tipo_estudio_id?: number | null;
+    tipo_estudio_nombre?: string | null;
+  } | null;
+}
+
+export interface PedidoEstudio {
+  id: number;
+  estado: 'PENDIENTE' | 'AGENDADO' | 'CANCELADO';
+  origen_canal?: string;
+  notas?: string;
+  turno: number | null;
+  estudio?: number | null;
+  created_at: string;
+  agendado_en?: string | null;
 }
 
 export interface AnuncioRecepcion {
@@ -71,6 +88,8 @@ export interface Slot {
   fin: string;
   duracion_min: number;
   tipo: 'CONSULTA' | 'ESTUDIO';
+  recurso_id?: number | null;
+  recurso_nombre?: string | null;
 }
 
 export interface InformeResumen {

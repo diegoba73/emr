@@ -9,6 +9,7 @@ Clearance — se cargan CREATI, CREA_U, DIUR; CLEAR_CREA y CREA_U24 se calculan.
 Orinas 24 hs — concentración + DIUR → excreción
 (PROT_U_24, NA/K/CL_U24, MICROALB_24, CA/MG/P/AU/UREA_U24, CREA_U24).
 RAC — se cargan MICROALB + CREA_U; RAC (mg/g) = (MICROALB / CREA_U) × 100.
+RAR — se cargan ALDOS + ARPLA; RAR = aldosterona ÷ actividad de renina.
 TFG — CREATI + edad/sexo del paciente; CKD-EPI 2021 (creatinina, sin raza).
 Calcio iónico estimado (CAIE) — Zeisler desde CA + PROT_T (mg/dL → mmol/L).
 CA_ION (K-ión / medido) no usa insumos Zeisler; con EAB viene del equipo.
@@ -70,6 +71,7 @@ EXCRECION_POR_LITRO_A_24H: tuple[tuple[str, str, int], ...] = (
     ("MICROALB", "MICROALB_24", 1),
 )
 CODIGOS_RAC_CALCULADOS = frozenset({"RAC"})
+CODIGOS_RAR_CALCULADOS = frozenset({"RAR"})
 CODIGOS_TFG_CALCULADOS = frozenset({"TFG"})
 # Estimable Zeisler (CAIE). CA_ION medido no es overrideable por fórmula.
 CODIGOS_OVERRIDEABLES_ESTIMADOS = frozenset({"CAIE"})
@@ -86,6 +88,7 @@ CODIGOS_CALCULADOS = (
     | CODIGOS_CLEARANCE_CALCULADOS
     | CODIGOS_ORINA_24H_CALCULADOS
     | CODIGOS_RAC_CALCULADOS
+    | CODIGOS_RAR_CALCULADOS
     | CODIGOS_TFG_CALCULADOS
 )
 # Pedido suelto del calculado → asegurar insumos medidos.
@@ -95,6 +98,8 @@ INSUMOS_POR_CODIGO_CALCULADO: dict[str, tuple[str, ...]] = {
     "CLEAR_CREA": ("CREATI", "CREA_U", "DIUR"),
     # RAC (mg/g)
     "RAC": ("MICROALB", "CREA_U"),
+    # RAR (relación aldosterona / actividad de renina)
+    "RAR": ("ALDOS", "ARPLA"),
     # TFG / eGFR (CKD-EPI 2021); demografía desde ficha paciente
     "TFG": ("CREATI",),
     # Orinas 24 hs
@@ -258,6 +263,13 @@ def calc_rac(microalb_mg_l: Decimal, crea_u_mg_dl: Decimal) -> Decimal | None:
     if crea_u_mg_dl <= 0:
         return None
     return _q((microalb_mg_l / crea_u_mg_dl) * Decimal(100), 1)
+
+
+def calc_rar(aldosterona: Decimal, actividad_renina: Decimal) -> Decimal | None:
+    """RAR = aldosterona ÷ actividad de renina plasmática (PRA)."""
+    if actividad_renina <= 0:
+        return None
+    return _q(aldosterona / actividad_renina, 1)
 
 
 def calc_tfg_ckd_epi_2021(
@@ -450,6 +462,17 @@ def calcular_derivados(
     elif microalb is not None or crea_u is not None:
         # aplicar_* solo escribe si la orden tiene fila RAC.
         out["RAC"] = (None, RESULTADO_NO_CALCULABLE)
+
+    aldos = _dec(valores.get("ALDOS"))
+    arpla = _dec(valores.get("ARPLA"))
+    if aldos is not None and arpla is not None:
+        rar = calc_rar(aldos, arpla)
+        if rar is not None:
+            out["RAR"] = (quantize_valor_numerico(rar), _fmt(rar, 1))
+        else:
+            out["RAR"] = (None, RESULTADO_NO_CALCULABLE)
+    elif aldos is not None or arpla is not None:
+        out["RAR"] = (None, RESULTADO_NO_CALCULABLE)
 
     # TFG: creatininemia + demografía (edad/sexo) del paciente.
     if creati is not None:

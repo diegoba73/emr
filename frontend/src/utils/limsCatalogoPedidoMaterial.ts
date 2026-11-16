@@ -8,6 +8,7 @@ import type {
   MaterialPedidoLims,
 } from '../types/lims';
 import { esExamenExcluidoDeLabClinico } from '../modules/laboratorio/solicitudAnalisisPapelLayout';
+import { EXAMENES_SOLICITABLES_AUNQUE_CUBIERTOS_POR_GRILLA } from '../modules/laboratorio/solicitudAnalisisSelectionRules';
 import { esTipoMuestraSangrePedido } from './limsMuestraSangre';
 
 export type CatalogAddItem = {
@@ -192,7 +193,13 @@ export function agregarCatalogOptionsForMaterial(opts: {
   for (const e of examenes) {
     if (e.activo === false) continue;
     if (esExamenExcluidoDeLabClinico(e)) continue;
-    if (ocultosPorGrilla.has(e.codigo)) continue;
+    const codigoUp = (e.codigo || '').trim().toUpperCase();
+    if (
+      ocultosPorGrilla.has(e.codigo) &&
+      !EXAMENES_SOLICITABLES_AUNQUE_CUBIERTOS_POR_GRILLA.has(codigoUp)
+    ) {
+      continue;
+    }
     if (selectedExamenesIds.has(e.id)) continue;
     if (!examenPerteneceAMaterial(e, mat)) continue;
     if (!examenPasaFiltroOrina(e, materialKey, orinaModalidad)) continue;

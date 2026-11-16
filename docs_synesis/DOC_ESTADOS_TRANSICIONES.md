@@ -35,7 +35,7 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 |------------|-------|----------------|
 | `confirmar` | `RESERVADO` | `CONFIRMADO` (secretaría/admin, o paciente dueño vía app/portal) |
 | `cancelar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | `CANCELADO` |
-| `reprogramar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | conserva estado; cambia fechas/médico/recurso |
+| `reprogramar` | `DISPONIBLE`, `RESERVADO`, `CONFIRMADO` | turno **nuevo** en franja libre de la agenda del médico; anterior → `CANCELADO`; historial `HistorialReprogramacionTurno` (consulta) / `HistorialTurnoSesionActividad` (estudio); conserva estado operativo en el nuevo |
 | `marcar-realizado` | `CONFIRMADO` (médico); `RESERVADO`/`CONFIRMADO` (admin/secretaría) | `REALIZADO` |
 | `marcar-no-asistio` | `RESERVADO`, `CONFIRMADO` | `CANCELADO` (metadata `marcar_no_asistio`) |
 | `iniciar-atencion` **(C5.10.1)** | `RESERVADO`, `CONFIRMADO` (+ idempotencia si ya hay atención / `REALIZADO`) | `REALIZADO` + crea/obtiene `Atencion` y registro hijo si alta nueva |

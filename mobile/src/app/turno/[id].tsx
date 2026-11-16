@@ -2,10 +2,10 @@ import React, { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Alert } from 'react-native';
 import { api } from '../../lib/api';
-import { AnuncioRecepcion, RecepcionHoy, Turno } from '../../lib/types';
+import { AnuncioRecepcion, RecepcionHoy, Slot, Turno } from '../../lib/types';
 import { useSession } from '../../lib/session';
 import { dateKey } from '../../lib/calendar';
-import { Action, Body, Card, ErrorText, Loading, Page, Title } from '../../components/ui';
+import { Action, Body, Card, ErrorText, Field, Loading, Page, Title } from '../../components/ui';
 
 export default function Detail() {
   const [now, setNow] = useState(() => Date.now());
@@ -17,21 +17,32 @@ export default function Detail() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const lock = useRef(false);
+  const loadGen = useRef(0);
+  const [reprogFecha, setReprogFecha] = useState('');
+  const [reprogSlots, setReprogSlots] = useState<Slot[]>([]);
+  const [showReprog, setShowReprog] = useState(false);
 
   const refresh = useCallback(async () => {
+    const gen = ++loadGen.current;
+    const turnoId = id;
     setNow(Date.now());
     setLoading(true);
     setError('');
     try {
-      setTurno(await api<Turno>(`/turnos/${id}/`));
+      const data = await api<Turno>(`/turnos/${turnoId}/`);
+      if (gen !== loadGen.current) return;
+      setTurno(data);
       if (user?.rol === 'paciente') {
-        setRecepcionHoy(await api<RecepcionHoy>('/recepcion/hoy/'));
+        const recepcion = await api<RecepcionHoy>('/recepcion/hoy/');
+        if (gen !== loadGen.current) return;
+        setRecepcionHoy(recepcion);
       }
     } catch (e) {
+      if (gen !== loadGen.current) return;
       setTurno(null);
       setError(e instanceof Error ? e.message : 'No se pudo cargar el turno.');
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [id, user?.rol]);
 
@@ -41,14 +52,16 @@ export default function Detail() {
     }, [refresh])
   );
 
-  const run = async (fn: () => Promise<void>, fail: string) => {
+  const run = async (fn: () => Promise<void | 'skip-refresh'>, fail: string) => {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
     try {
-      await fn();
-      await refresh();
+      const outcome = await fn();
+      if (outcome !== 'skip-refresh') {
+        await refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : fail);
     } finally {
@@ -147,6 +160,89 @@ export default function Detail() {
                 }
               />
             )}
+
+            {activo &&
+              user?.rol === 'paciente' &&
+              turno.viene_de_pedido_estudio &&
+              turno.medico_id && (
+                <Card>
+                  <Body>¿Otro día u horario? Elegí fecha y un slot libre del mismo médico.</Body>
+                  {!showReprog ? (
+                    <Action title="Pedir otro horario" secondary disabled={busy} onPress={() => setShowReprog(true)} />
+                  ) : (
+                    <>
+                      <Field
+                        label="Fecha (AAAA-MM-DD)"
+                        value={reprogFecha}
+                        onChangeText={(v) => {
+                          setReprogFecha(v);
+                          setReprogSlots([]);
+                        }}
+                        editable={!busy}
+                      />
+                      <Action
+                        title="Ver horarios"
+                        secondary
+                        disabled={busy || !/^\d{4}-\d{2}-\d{2}$/.test(reprogFecha)}
+                        onPress={() =>
+                          void run(async () => {
+                            const r = await api<{ slots: Slot[]; detail?: string }>(
+                              `/turnos/${id}/slots-reprogramacion/?fecha=${reprogFecha}`
+                            );
+                            setReprogSlots(r.slots || []);
+                            if (!(r.slots || []).length) {
+                              throw new Error(
+                                r.detail || 'No hay horarios libres compatibles con tu estudio ese día.'
+                              );
+                            }
+                          }, 'No se pudieron cargar horarios.')
+                        }
+                      />
+                      {reprogSlots.map((s) => (
+                        <Action
+                          key={s.inicio}
+                          title={
+                            s.recurso_nombre
+                              ? `${new Date(s.inicio).toLocaleString('es-AR')} · ${s.recurso_nombre}`
+                              : new Date(s.inicio).toLocaleString('es-AR')
+                          }
+                          disabled={busy}
+                          onPress={() =>
+                            Alert.alert('Reprogramar', `¿Pasar el turno a ${new Date(s.inicio).toLocaleString('es-AR')}?`, [
+                              { text: 'Volver', style: 'cancel' },
+                              {
+                                text: 'Sí',
+                                onPress: () =>
+                                  void run(async () => {
+                                    const nuevo = await api<Turno>(
+                                      `/turnos/${id}/reprogramar-horario/`,
+                                      'POST',
+                                      {
+                                        horario_id: s.horario_id,
+                                        inicio: s.inicio,
+                                        motivo: 'Reprogramado por el paciente (pedido de estudio)',
+                                      }
+                                    );
+                                    loadGen.current += 1;
+                                    setTurno(nuevo);
+                                    setShowReprog(false);
+                                    setReprogSlots([]);
+                                    Alert.alert('Listo', 'Turno reprogramado.');
+                                    router.replace({
+                                      pathname: '/turno/[id]',
+                                      params: { id: String(nuevo.id) },
+                                    });
+                                    return 'skip-refresh';
+                                  }, 'No se pudo reprogramar.'),
+                              },
+                            ])
+                          }
+                        />
+                      ))}
+                    </>
+                  )}
+                </Card>
+              )}
 
             {activo &&
               user?.rol === 'paciente' &&

@@ -100,9 +100,13 @@ class AgendaMedicoMutationMixin:
 
 
 class DisponibilidadMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewSet):
-    queryset = DisponibilidadMedico.objects.select_related('medico').all()
+    queryset = DisponibilidadMedico.objects.select_related('medico', 'recurso').all()
     serializer_class = DisponibilidadMedicoSerializer
     permission_classes = [CanManageAgendaMedica]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['medico', 'tipo', 'activo', 'dia_semana']
+    ordering_fields = ['dia_semana', 'hora_inicio', 'id']
+    ordering = ['dia_semana', 'hora_inicio', 'id']
 
     @action(detail=False, methods=['post'], url_path='configurar-semana')
     def configurar_semana(self, request):
@@ -182,9 +186,10 @@ class DisponibilidadMedicoViewSet(AgendaMedicoMutationMixin, viewsets.ModelViewS
                         raise DRFValidationError({
                             'dias': f'Día {dia_n}: el recurso no corresponde al tipo de atención.',
                         })
-                if tipo == 'ESTUDIO' and not recurso:
+                if not recurso:
+                    label = 'la sala' if tipo == 'ESTUDIO' else 'el consultorio'
                     raise DRFValidationError({
-                        'dias': f'Día {dia_n}: seleccione la sala para la agenda de estudios.',
+                        'dias': f'Día {dia_n}: seleccione {label} para la agenda del médico.',
                     })
 
                 solapa = DisponibilidadMedico.objects.filter(
@@ -720,8 +725,29 @@ class MedicoViewSet(viewsets.ModelViewSet):
         tipo = request.query_params.get('tipo', 'CONSULTA')
         if tipo not in ('CONSULTA', 'ESTUDIO'):
             return Response({'detail': 'Tipo de atención inválido.'}, status=400)
-        return Response({'fecha': fecha_str, 'medico_id': medico.id,
-                         'slots': list(slots_disponibles(medico, target_date, tipo))})
+        recurso_ids = None
+        tipo_estudio_raw = request.query_params.get('tipo_estudio')
+        if tipo_estudio_raw:
+            try:
+                tipo_estudio_id = int(tipo_estudio_raw)
+            except (TypeError, ValueError):
+                return Response({'tipo_estudio': 'Id de tipo de estudio inválido.'}, status=400)
+            from estudios.pedido_paciente import salas_ids_para_tipo
+
+            recurso_ids = salas_ids_para_tipo(tipo_estudio_id)
+            if not recurso_ids:
+                return Response({
+                    'fecha': fecha_str,
+                    'medico_id': medico.id,
+                    'tipo_estudio': tipo_estudio_id,
+                    'slots': [],
+                    'detail': 'El tipo de estudio no tiene salas asociadas en el catálogo.',
+                })
+        return Response({
+            'fecha': fecha_str,
+            'medico_id': medico.id,
+            'slots': list(slots_disponibles(medico, target_date, tipo, recurso_ids=recurso_ids)),
+        })
 
 
 
@@ -2041,101 +2067,84 @@ from usuarios.models import Secretaria
 @permission_classes([AllowAny])
 @throttle_classes([AuthRegisterThrottle])
 def register_patient(request):
-    """Registro de pacientes (público)"""
+    """
+    Adaptador legacy de ``/api/auth/register/patient/`` al flujo seguro
+    ``PacienteRegistrationSerializer`` (mismas validaciones que ``/auth/register/``).
+    Acepta alias first_name/last_name/username y conserva el contrato de respuesta.
+    """
+    from rest_framework import serializers as drf_serializers
+    from usuarios.serializers import PacienteRegistrationSerializer
+
+    raw = request.data
+    if hasattr(raw, 'dict'):
+        data_in = raw.dict()
+    else:
+        data_in = dict(raw) if raw is not None else {}
+
+    # Alias legacy → campos del serializer seguro.
+    mapped = {
+        'email': data_in.get('email'),
+        'password': data_in.get('password'),
+        'nombre': data_in.get('nombre') or data_in.get('first_name'),
+        'apellido': data_in.get('apellido') or data_in.get('last_name'),
+        'dni': (data_in.get('dni') or data_in.get('username') or '').strip()
+        if isinstance(data_in.get('dni') or data_in.get('username'), str)
+        else (data_in.get('dni') or data_in.get('username')),
+        'telefono': data_in.get('telefono') or '',
+        'fecha_nacimiento': data_in.get('fecha_nacimiento'),
+        'obra_social': data_in.get('obra_social'),
+    }
+
+    serializer = PacienteRegistrationSerializer(data=mapped)
     try:
-        data = request.data
-        
-        # Validar campos requeridos
-        required_fields = ['username', 'email', 'password', 'first_name', 'last_name', 'dni']
-        for field in required_fields:
-            if not data.get(field):
-                return Response({
-                    'error': f'El campo {field} es requerido'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validar que el username no exista
-        if User.objects.filter(username=data['username']).exists():
-            return Response({
-                'error': 'El nombre de usuario ya existe'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validar que el email no exista
-        if User.objects.filter(email=data['email']).exists():
-            return Response({
-                'error': 'El email ya está registrado'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validar que el DNI no exista
-        if Paciente.objects.filter(dni=data['dni']).exists():
-            return Response({
-                'error': 'El DNI ya está registrado'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validar contraseña
-        try:
-            validate_password(data['password'])
-        except ValidationError as e:
-            return Response({
-                'error': 'Contraseña inválida: ' + ', '.join(e.messages)
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Crear usuario
-        user = User.objects.create_user(
-            username=data['username'],
-            email=data['email'],
-            password=data['password'],
-            first_name=data['first_name'],
-            last_name=data['last_name'],
-            telefono=data.get('telefono', ''),
-            rol='paciente'
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+    except drf_serializers.ValidationError as exc:
+        return Response(
+            {'error': 'Error de validación', 'details': exc.detail},
+            status=status.HTTP_400_BAD_REQUEST,
         )
-        
-        # Crear perfil de usuario
-        profile_data = {
-            'fecha_nacimiento': data.get('fecha_nacimiento'),
-            'genero': data.get('genero'),
-            'direccion': data.get('direccion'),
-            'ciudad': data.get('ciudad'),
-            'codigo_postal': data.get('codigo_postal'),
-            'grupo_sanguineo': data.get('grupo_sanguineo'),
-            'alergias': data.get('alergias'),
-            'medicamentos_actuales': data.get('medicamentos_actuales'),
-            'contacto_emergencia_nombre': data.get('contacto_emergencia_nombre'),
-            'contacto_emergencia_telefono': data.get('contacto_emergencia_telefono'),
-            'contacto_emergencia_relacion': data.get('contacto_emergencia_relacion'),
-        }
-        
-        UserProfile.objects.create(user=user, **profile_data)
-        
-        # Crear paciente - Solo campos específicos de paciente (no duplicados)
-        paciente_data = {
-            'user': user,  # Relación obligatoria
-            'dni': data['dni'],
-            'obra_social': data.get('obra_social'),
-            'numero_afiliado': data.get('numero_afiliado'),
-            'antecedentes_personales': data.get('antecedentes_personales'),
-            'antecedentes_familiares': data.get('antecedentes_familiares'),
-            'observaciones': data.get('observaciones'),
-        }
-        
-        Paciente.objects.create(**paciente_data)
-        
-        # Asignar al grupo Pacientes
-        try:
-            pacientes_group = Group.objects.get(name='Pacientes')
-            user.groups.add(pacientes_group)
-        except Group.DoesNotExist:
-            pass  # El grupo no existe, pero no es crítico
-        
-        return Response({
+    except Exception:
+        logger.exception('register_patient: error inesperado')
+        return Response(
+            {'error': 'Error interno del servidor. Por favor, intenta nuevamente más tarde.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Perfil opcional (campos legacy no clínicos de UserProfile).
+    try:
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                'fecha_nacimiento': data_in.get('fecha_nacimiento') or mapped.get('fecha_nacimiento'),
+                'genero': data_in.get('genero'),
+                'direccion': data_in.get('direccion'),
+                'ciudad': data_in.get('ciudad'),
+                'codigo_postal': data_in.get('codigo_postal'),
+                'grupo_sanguineo': data_in.get('grupo_sanguineo'),
+                'alergias': data_in.get('alergias'),
+                'medicamentos_actuales': data_in.get('medicamentos_actuales'),
+                'contacto_emergencia_nombre': data_in.get('contacto_emergencia_nombre'),
+                'contacto_emergencia_telefono': data_in.get('contacto_emergencia_telefono'),
+                'contacto_emergencia_relacion': data_in.get('contacto_emergencia_relacion'),
+            },
+        )
+    except Exception:
+        logger.exception('register_patient: no se pudo crear UserProfile (no crítico)')
+
+    try:
+        pacientes_group = Group.objects.get(name='Pacientes')
+        user.groups.add(pacientes_group)
+    except Group.DoesNotExist:
+        pass
+
+    return Response(
+        {
             'message': 'Paciente registrado exitosamente',
-            'user_id': user.id
-        }, status=status.HTTP_201_CREATED)
-        
-    except Exception as e:
-        return Response({
-            'error': f'Error en el registro: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            'user_id': user.id,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 @csrf_exempt
 @api_view(['POST'])

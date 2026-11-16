@@ -37,3 +37,30 @@ export async function allPages<T>(path: string): Promise<T[]> {
   }
   return rows;
 }
+
+/** Multipart upload (p. ej. foto de pedido de estudio). No fuerza Content-Type JSON. */
+export async function apiUpload<T = unknown>(path: string, form: FormData): Promise<T> {
+  const current = revision;
+  const capturedToken = token;
+  if (!base || !path.startsWith('/') || path.startsWith('//')) {
+    throw new Error('La conexión segura de la app todavía no está configurada.');
+  }
+  const response = await fetch(`${base.replace(/\/$/, '')}${path}`, {
+    method: 'POST',
+    headers: {
+      ...(capturedToken ? { Authorization: `Bearer ${capturedToken}` } : {}),
+    },
+    body: form,
+  });
+  if (current !== revision) throw new Error('La institución cambió. Volvé a consultar.');
+  const data = response.status === 204 ? null : await response.json().catch(() => null);
+  if (!response.ok) {
+    if (response.status === 401) unauthorized();
+    const detail =
+      data && typeof data === 'object' && 'detail' in data
+        ? String((data as { detail: unknown }).detail)
+        : '';
+    throw new Error(detail || `No se pudo completar la operación (${response.status}).`);
+  }
+  return data as T;
+}

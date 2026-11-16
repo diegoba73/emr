@@ -549,6 +549,9 @@ export interface Turno extends BaseModel {
   motivo_consulta?: string; // Mantener para compatibilidad
   /** Sobreturno creado por secretaría sobre un slot ya ocupado. */
   es_sobreturno?: boolean;
+  /** Turno agendado desde pedido de estudio del paciente (app/portal). */
+  viene_de_pedido_estudio?: boolean;
+  pedido_estudio_id?: number | null;
   estado: 'DISPONIBLE' | 'RESERVADO' | 'CONFIRMADO' | 'REALIZADO' | 'CANCELADO' | 'REAGENDADO';
   prioridad?: 'NORMAL' | 'ALTA' | 'URGENTE';
   notas_administrativas?: string;

@@ -24,8 +24,13 @@ import {
 import {
   CARTUCHO_CARDIACO_CODIGOS,
   CAIE_INCLUYE_CODIGOS,
+  COAG_SIN_HEMO_INCLUYE_CODIGOS,
   EAB_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
+  PANEL_COAGULOGRAMA,
+  PANEL_HEMOGRAMA,
+  RAC_INCLUYE_CODIGOS,
+  RAR_INCLUYE_CODIGOS,
   esCodigoCartuchoCardiaco,
   esPanelEab,
 } from '../../modules/laboratorio/solicitudAnalisisSelectionRules';
@@ -413,6 +418,15 @@ export function useSolicitudAnalisisSelection(
           addExamenesByCodigo(prev, EAB_INCLUYE_CODIGOS.examenes)
         );
       }
+      if (selecting && (codigo || '').toUpperCase() === PANEL_COAGULOGRAMA) {
+        const hemoId = panelIdByCodigo.get(PANEL_HEMOGRAMA);
+        const tieneHemo = hemoId != null && selectedPanelesIds.has(hemoId);
+        if (!tieneHemo) {
+          setSelectedExamenesIds((prev) =>
+            addExamenesByCodigo(prev, COAG_SIN_HEMO_INCLUYE_CODIGOS)
+          );
+        }
+      }
     },
     [
       addExamenesByCodigo,
@@ -441,8 +455,15 @@ export function useSolicitudAnalisisSelection(
         }
         if (selecting) {
           next.add(id);
-          if ((codigo || '').toUpperCase() === 'CAIE') {
+          const codigoUp = (codigo || '').toUpperCase();
+          if (codigoUp === 'CAIE') {
             return addExamenesByCodigo(next, CAIE_INCLUYE_CODIGOS);
+          }
+          if (codigoUp === 'RAC') {
+            return addExamenesByCodigo(next, RAC_INCLUYE_CODIGOS);
+          }
+          if (codigoUp === 'RAR') {
+            return addExamenesByCodigo(next, RAR_INCLUYE_CODIGOS);
           }
         } else {
           next.delete(id);

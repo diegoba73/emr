@@ -180,13 +180,30 @@ class TurnoMovilSerializer(serializers.ModelSerializer):
     medico_nombre = serializers.CharField(source='medico.nombre_completo', default='')
     medico_id = serializers.IntegerField(read_only=True)
     tipo = serializers.SerializerMethodField()
+    viene_de_pedido_estudio = serializers.SerializerMethodField()
+
     def get_tipo(self, obj):
         from medicos.agenda import tipo_para_recurso
         return tipo_para_recurso(obj.recurso)
+
+    def get_viene_de_pedido_estudio(self, obj):
+        from estudios.pedido_paciente import turno_viene_de_pedido_paciente
+        return turno_viene_de_pedido_paciente(obj)
+
     class Meta:
         model = Turno
-        fields = ['id', 'medico_id', 'medico_nombre', 'paciente_nombre', 'fecha_hora_inicio',
-                  'fecha_hora_fin', 'estado', 'asistencia_confirmada_en', 'tipo']
+        fields = [
+            'id',
+            'medico_id',
+            'medico_nombre',
+            'paciente_nombre',
+            'fecha_hora_inicio',
+            'fecha_hora_fin',
+            'estado',
+            'asistencia_confirmada_en',
+            'tipo',
+            'viene_de_pedido_estudio',
+        ]
         read_only_fields = fields
 
 

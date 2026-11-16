@@ -170,6 +170,9 @@ export default function Home() {
         </Card>
       )}
 
+      {user?.rol === 'paciente' && (
+        <Action title="Mis pedidos de estudio" secondary onPress={() => router.push('/pedidos')} />
+      )}
       {user?.rol === 'paciente' && !turnoActivoPaciente && (
         <Action title="Reservar un turno" onPress={() => router.push('/reservar')} />
       )}

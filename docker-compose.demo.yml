@@ -4,8 +4,13 @@
 # Local:
 #   cp .env.demo.example .env.demo
 #   docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo up -d --build
-#   docker compose -p emr-demo -f docker-compose.demo.yml exec backend python manage.py seed_data
-#   docker compose -p emr-demo -f docker-compose.demo.yml exec backend python manage.py seed_demo_marketing
+#   # Seeds: override a admin (el runtime es read-only):
+#   docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec \
+#     -e DB_USER=postgres -e DB_PASSWORD="${POSTGRES_PASSWORD:-demo_postgres_change_me}" backend \
+#     python manage.py seed_data
+#   docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec \
+#     -e DB_USER=postgres -e DB_PASSWORD="${POSTGRES_PASSWORD:-demo_postgres_change_me}" backend \
+#     python manage.py seed_demo_marketing
 #   Abrir http://localhost:8081/demo
 #
 # Ver docs/demo-stack.md
@@ -17,9 +22,10 @@ services:
     image: postgres:15-alpine
     container_name: emr_demo_postgres
     environment:
+      # Admin del contenedor (migrate/seed/grants). Independiente del DB_USER de runtime.
       POSTGRES_DB: ${DB_NAME:-synesis_db}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-demo_postgres_change_me}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-demo_postgres_change_me}
     volumes:
       - postgres_data_demo:/var/lib/postgresql/data
     # Sin publish de 5432 al host → no choca con emr_postgres
@@ -51,10 +57,14 @@ services:
       DJANGO_USE_PROXY_SSL_HEADER: ${DJANGO_USE_PROXY_SSL_HEADER:-False}
       DB_ENGINE: django.db.backends.postgresql
       DB_NAME: ${DB_NAME:-synesis_db}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-demo_postgres_change_me}
+      # Runtime read-only (SELECT + django_session + auth_user.last_login)
+      DB_USER: ${DB_USER:-demo_readonly}
+      DB_PASSWORD: ${DB_PASSWORD:-demo_readonly_change_me}
       DB_HOST: db
       DB_PORT: "5432"
+      # Admin solo para migrate/seed/ensure_readonly en entrypoint
+      DB_ADMIN_USER: ${DB_ADMIN_USER:-postgres}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD:-demo_postgres_change_me}
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       RUN_SEED: ${RUN_SEED:-false}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}

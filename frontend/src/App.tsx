@@ -27,6 +27,8 @@ import SolicitudLabDetalle from './pages/SolicitudLabDetalle';
 import ArchivosMedicos from './pages/ArchivosMedicos';
 import EstudiosComplementarios from './pages/EstudiosComplementarios';
 import EstudioComplementarioDetalle from './pages/EstudioComplementarioDetalle';
+import PedidosEstudioBandeja from './pages/PedidosEstudioBandeja';
+import CatalogoAgendaEstudios from './pages/CatalogoAgendaEstudios';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import DemoLanding from './pages/DemoLanding';
@@ -98,7 +100,7 @@ import {
   canAccessSolicitudes,
   isPacienteRole,
 } from './utils/permissions';
-import { canAccessEstudiosModule } from './modules/estudios/permissions';
+import { canAccessEstudiosModule, canAsignarTurnoEstudio } from './modules/estudios/permissions';
 import {
   canAccessLimsModule,
   canAccessLimsCatalogos,
@@ -480,6 +482,32 @@ const AppContent: React.FC = () => {
                 canAccess={canAccessEstudiosModule}
               >
                 <EstudiosComplementarios />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estudios-complementarios/pedidos"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAsignarTurnoEstudio}
+              >
+                <PedidosEstudioBandeja />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estudios-complementarios/catalogo-agenda"
+            element={
+              <ProtectedRoute
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+                isLoading={isLoading}
+                canAccess={canAsignarTurnoEstudio}
+              >
+                <CatalogoAgendaEstudios />
               </ProtectedRoute>
             }
           />

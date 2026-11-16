@@ -1,5 +1,5 @@
 /** Puerto SPA del kiosco en LAN (mismo default que EMR_KIOSCO_FRONTEND_PORT). */
-const KIOSCO_FRONTEND_PORT = '3000';
+const KIOSCO_FRONTEND_PORT: string = '3000';
 const KIOSCO_ANUNCIO_PATH = '/kiosco-recepcion';
 
 function normalizeUrl(raw: string): string {

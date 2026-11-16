@@ -136,6 +136,22 @@ def _resolver_tipos_para_material(
                     tipos.add(te.id)
                     codigos.add(code)
 
+        from laboratorio.acompanamiento_pedido import codigos_acompanamiento_pedido
+
+        panel_codigos = {
+            (c or "").strip().upper()
+            for c in PanelExamen.objects.filter(pk__in=paneles_ok).values_list(
+                "codigo", flat=True
+            )
+        }
+        for code in codigos_acompanamiento_pedido(
+            codigos_examen=codigos, codigos_panel=panel_codigos
+        ):
+            te = TipoExamen.objects.filter(codigo=code, activo=True).first()
+            if te:
+                tipos.add(te.id)
+                codigos.add(code)
+
     return tipos, paneles_ok, errores
 
 
@@ -236,6 +252,22 @@ def _resolver_tipos_materiales_permitidos(
                 if te:
                     tipos.add(te.id)
                     codigos.add(code)
+
+        from laboratorio.acompanamiento_pedido import codigos_acompanamiento_pedido
+
+        panel_codigos = {
+            (c or "").strip().upper()
+            for c in PanelExamen.objects.filter(pk__in=paneles_ok).values_list(
+                "codigo", flat=True
+            )
+        }
+        for code in codigos_acompanamiento_pedido(
+            codigos_examen=codigos, codigos_panel=panel_codigos
+        ):
+            te = TipoExamen.objects.filter(codigo=code, activo=True).first()
+            if te:
+                tipos.add(te.id)
+                codigos.add(code)
 
     return tipos, paneles_ok, errores
 

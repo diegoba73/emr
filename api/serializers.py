@@ -249,9 +249,13 @@ class DisponibilidadMedicoSerializer(serializers.ModelSerializer):
         tipo = attrs.get('tipo', getattr(self.instance, 'tipo', 'CONSULTA'))
         recurso = attrs.get('recurso', getattr(self.instance, 'recurso', None))
         from medicos.agenda import tipo_para_recurso
-        if tipo == 'ESTUDIO' and not recurso:
-            raise serializers.ValidationError('Seleccione la sala para la agenda de estudios.')
-        if recurso and (not recurso.activo or tipo_para_recurso(recurso) != tipo):
+        if not recurso:
+            raise serializers.ValidationError(
+                'Seleccione la sala para la agenda de estudios.'
+                if tipo == 'ESTUDIO'
+                else 'Seleccione el consultorio para la agenda de consultas.'
+            )
+        if not recurso.activo or tipo_para_recurso(recurso) != tipo:
             raise serializers.ValidationError('El recurso no corresponde al tipo de atención.')
         dia = attrs.get('dia_semana', getattr(self.instance, 'dia_semana', None))
         activo = attrs.get('activo', getattr(self.instance, 'activo', True))

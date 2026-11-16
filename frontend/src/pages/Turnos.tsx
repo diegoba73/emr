@@ -34,6 +34,7 @@ import {
 import { isSelectableSlotAction } from '../utils/calendarSlotSelection';
 import {
 	canCreateTurno,
+	canCrearSobreturno,
 	canEditTurno,
 	canViewTurnosAgenda,
 	isAgendaReadOnlyRole,
@@ -132,6 +133,15 @@ function buildWeekBucketCappedEvents(
 			return;
 		}
 		const sorted = [...list].sort((a, b) => a.start.getTime() - b.start.getTime());
+		// Sobreturno: mostrar todos en la hora (si no, el alta parece fallar porque solo se ve +N).
+		const tieneSobreturno = sorted.some((ev) => {
+			const r = ev.resource;
+			return Boolean(r && !isOverflowResource(r) && r.es_sobreturno);
+		});
+		if (tieneSobreturno) {
+			out.push(...sorted);
+			return;
+		}
 		const total = sorted.length;
 		const tMin = new Date(Math.min(...list.map((ev) => ev.start.getTime())));
 		const tMax = new Date(Math.max(...list.map((ev) => ev.end.getTime())));
@@ -213,6 +223,7 @@ const Turnos: React.FC = () => {
 	const [estudioAgendaPendiente, setEstudioAgendaPendiente] = useState<EstudioComplementario | null>(null);
 
 	const userCanCreateTurno = useMemo(() => canCreateTurno(currentUser), [currentUser]);
+	const userCanSobreturno = useMemo(() => canCrearSobreturno(currentUser), [currentUser]);
 	const userCanAgendarEstudio = useMemo(() => canAsignarTurnoEstudio(currentUser), [currentUser]);
 	const enModoAgendarEstudio = Boolean(estudioAgendaPendiente && userCanAgendarEstudio);
 	const puedeAgendarEnCalendario = userCanCreateTurno || enModoAgendarEstudio;
@@ -348,8 +359,11 @@ const Turnos: React.FC = () => {
 
 
 	const filteredTurnos = turnos.filter(turno => {
-		// Filtro por estado
-		const estadoMatch = !filterEstado || turno.estado === filterEstado;
+		// Por defecto no mostrar CANCELADO (p. ej. turnos viejos tras reprogramar).
+		// Solo aparecen si el filtro de estado es explícitamente «Cancelado».
+		const estadoMatch = filterEstado
+			? turno.estado === filterEstado
+			: turno.estado !== 'CANCELADO';
 		
 		// Filtro por paciente
 		const pacienteMatch = pacienteSearchWords.length === 0 ||
@@ -424,7 +438,7 @@ const Turnos: React.FC = () => {
 				return;
 			}
 			if (!canCreateTurno(currentUser)) return;
-			const comoSobreturno = Boolean(opts?.sobreturno);
+			const comoSobreturno = Boolean(opts?.sobreturno) && canCrearSobreturno(currentUser);
 			let medicoId = opts?.medicoId ?? null;
 			let recursoId = opts?.recursoId ?? null;
 			if (comoSobreturno && (medicoId == null || recursoId == null)) {
@@ -485,7 +499,8 @@ const Turnos: React.FC = () => {
 			};
 		}) {
 			if (!slotMetrics?.groups) return <>{children}</>;
-			if (!puedeAgendarEnCalendario) return <>{children}</>;
+			// Franja punteada = alta de sobreturno; solo secretaría institucional.
+			if (!userCanSobreturno) return <>{children}</>;
 			const strips: React.ReactNode[] = [];
 			for (const grp of slotMetrics.groups) {
 				for (const slotValue of grp) {
@@ -539,7 +554,7 @@ const Turnos: React.FC = () => {
 				</div>
 			);
 		};
-	}, [slotKeysConTurno, openNewTurnoAt, currentView, puedeAgendarEnCalendario]);
+	}, [slotKeysConTurno, openNewTurnoAt, currentView, userCanSobreturno]);
 
 	// Wrapper que react-big-calendar usa para cada sub-slot de 20 min en day/week.
 	// Nos pasa `value` con la Date exacta del slot, así el click abre el modal
@@ -883,7 +898,7 @@ const Turnos: React.FC = () => {
               label="Estado"
               onChange={(e) => setFilterEstado(e.target.value)}
             >
-              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="">Activos (oculta cancelados)</MenuItem>
               <MenuItem value="RESERVADO">Reservado</MenuItem>
               <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
               <MenuItem value="REALIZADO">Realizado</MenuItem>
@@ -1148,7 +1163,7 @@ const Turnos: React.FC = () => {
 						? `edit-${editingTurno.id}`
 						: estudioAgendaPendiente
 							? `estudio-${estudioAgendaPendiente.id}-${selectedDateTime?.getTime() ?? 'slot'}`
-							: 'new'
+							: `new-${crearComoSobreturno ? 'st' : 'n'}-${selectedDateTime?.getTime() ?? 'x'}-${sobreturnoMedicoId ?? 'm'}`
 				}
 				open={showModal}
 				onClose={() => {

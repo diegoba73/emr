@@ -24,6 +24,7 @@ import {
   agendarTurnoEstudioDesdeAgenda,
   listTiposEstudioComplementario,
 } from '../../services/estudiosComplementariosApi';
+import { listMedicoTipos, listTipoSalas } from '../../services/pedidosEstudioApi';
 import {
   getCirugiaAbordajes,
   getCirugiaEspecialidades,
@@ -35,7 +36,8 @@ import { listRecursosProcCirugiaAgenda } from '../../utils/recursosEstudio';
 import { formatLocalDateTimeSeconds } from '../../utils/formatLocalDateTime';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { getSafeClinicalActionMessage, CLINICAL_ACTION_ERRORS } from '../../utils/apiError';
-import type { SlotMedico } from '../../services/agendaMedica';
+import { canCrearSobreturno } from '../../utils/turnoPermissions';
+import { getHorarios, type SlotMedico } from '../../services/agendaMedica';
 import type { Medico, Paciente, Recurso } from '../../types';
 import type {
   CirugiaAbordajeCatalogo,
@@ -113,7 +115,7 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   } = useData();
   const rol = (currentUser?.rol || '').toLowerCase();
   const esPaciente = rol === 'paciente';
-  const puedeSobreturno = !esPaciente && (rol === 'secretaria' || rol === 'admin' || Boolean(currentUser?.is_staff));
+  const puedeSobreturno = canCrearSobreturno(currentUser);
 
   const [tipoActividad, setTipoActividad] = useState<TipoActividadProgramacion>(
     allowConsulta ? initialTipo : initialTipo === 'CONSULTA' ? 'ESTUDIO' : initialTipo
@@ -148,6 +150,8 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   const [cirEspOptions, setCirEspOptions] = useState<CirugiaEspecialidadCatalogo[]>([]);
   const [cirProcOptions, setCirProcOptions] = useState<CirugiaProcedimientoCatalogo[]>([]);
   const [cirAbrOptions, setCirAbrOptions] = useState<CirugiaAbordajeCatalogo[]>([]);
+  const [medicoIdsCatalogo, setMedicoIdsCatalogo] = useState<number[]>([]);
+  const [salaIdsCatalogo, setSalaIdsCatalogo] = useState<number[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +170,13 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
       ),
     [recursos]
   );
+  const medicosDisponibles = useMemo(() => {
+    if (tipoActividad !== 'ESTUDIO' || !tipoEstudioId) {
+      return medicos || [];
+    }
+    // Sin asociaciones (o fallo de carga → arrays vacíos): no habilitar todos.
+    return (medicos || []).filter((m) => medicoIdsCatalogo.includes(m.id));
+  }, [tipoActividad, tipoEstudioId, medicoIdsCatalogo, medicos]);
 
   useEffect(() => {
     loadMedicos?.();
@@ -210,6 +221,84 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   useEffect(() => {
     if (initialRecursoId) setRecursoId(initialRecursoId);
   }, [initialRecursoId]);
+
+  // Duración del bloque = la del médico (misma regla que la agenda publicada).
+  useEffect(() => {
+    const slot = medico?.duracion_slot_min;
+    if (slot && slot > 0) setDuracionMin(slot);
+  }, [medico?.id, medico?.duracion_slot_min]);
+
+  // Catálogo médico↔tipo y tipo↔sala para alta directa de estudio.
+  useEffect(() => {
+    if (tipoActividad !== 'ESTUDIO' || !tipoEstudioId) {
+      setMedicoIdsCatalogo([]);
+      setSalaIdsCatalogo([]);
+      return;
+    }
+    let active = true;
+    Promise.all([listMedicoTipos(), listTipoSalas(tipoEstudioId)])
+      .then(([mt, salas]) => {
+        if (!active) return;
+        setMedicoIdsCatalogo(
+          mt.filter((r) => r.tipo_estudio === tipoEstudioId).map((r) => r.medico)
+        );
+        setSalaIdsCatalogo(salas.map((s) => s.recurso));
+        setMedico((prev) => {
+          if (!prev) return prev;
+          const ids = mt
+            .filter((r) => r.tipo_estudio === tipoEstudioId)
+            .map((r) => r.medico);
+          return ids.length && !ids.includes(prev.id) ? null : prev;
+        });
+        setSlot(null);
+      })
+      .catch(() => {
+        if (active) {
+          setMedicoIdsCatalogo([]);
+          setSalaIdsCatalogo([]);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [tipoActividad, tipoEstudioId]);
+
+  // Sobreturno de consulta: consultorio = franja del médico que cubre esa hora (no elección libre).
+  useEffect(() => {
+    if (!esSobreturno || tipoActividad !== 'CONSULTA' || !medico?.id || !fechaManual) {
+      return;
+    }
+    let active = true;
+    const [y, m, d] = fechaManual.split('-').map(Number);
+    const weekday = new Date(y, m - 1, d).getDay();
+    // JS: 0=domingo … convertir a agenda (0=lunes).
+    const diaSemana = weekday === 0 ? 6 : weekday - 1;
+    const hora = horaManual || '00:00';
+    getHorarios({ medico: medico.id, tipo: 'CONSULTA', activo: true })
+      .then((horarios) => {
+        if (!active) return;
+        const delDia = horarios.filter(
+          (h) => h.medico === medico.id && h.tipo === 'CONSULTA' && h.activo && h.dia_semana === diaSemana && h.recurso
+        );
+        const cubre = delDia.find((h) => {
+          const ini = (h.hora_inicio || '').slice(0, 5);
+          const fin = (h.hora_fin || '').slice(0, 5);
+          return ini <= hora && hora < fin;
+        });
+        const franja = cubre || delDia[0];
+        if (franja?.recurso) {
+          setRecursoId(franja.recurso);
+          if (franja.duracion_slot_min) setDuracionMin(franja.duracion_slot_min);
+        }
+        // Si no hay franja, no pisar un consultorio ya resuelto (p. ej. desde el calendario).
+      })
+      .catch(() => {
+        /* mantener recursoId previo */
+      });
+    return () => {
+      active = false;
+    };
+  }, [esSobreturno, tipoActividad, medico?.id, fechaManual, horaManual]);
 
   useEffect(() => {
     let active = true;
@@ -312,12 +401,18 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
         }
         const rid = recursoId;
         if (!rid) {
-          setError('Seleccioná el consultorio del sobreturno.');
+          setError(
+            'Ese día el médico no tiene consultorio en su agenda. Revisá Horarios de atención.'
+          );
           return;
         }
+        const minutos =
+          medico.duracion_slot_min && medico.duracion_slot_min > 0
+            ? medico.duracion_slot_min
+            : duracionMin || 20;
         setSaving(true);
         try {
-          const fin = new Date(inicio.getTime() + duracionMin * 60_000);
+          const fin = new Date(inicio.getTime() + minutos * 60_000);
           await apiService.createTurno({
             paciente_id: pacienteId,
             medico_id: medico.id,
@@ -507,7 +602,7 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
       )}
 
       <Autocomplete
-        options={medicos || []}
+        options={medicosDisponibles}
         value={medico}
         onChange={(_e, opt) => {
           setMedico(opt);
@@ -520,6 +615,11 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
             {...params}
             label={tipoActividad === 'CIRUGIA' ? 'Cirujano *' : 'Profesional / médico *'}
             required
+            helperText={
+              tipoActividad === 'ESTUDIO' && tipoEstudioId && medicoIdsCatalogo.length === 0
+                ? 'Ningún médico en el catálogo para este estudio. Configuralo en Catálogo agenda estudios.'
+                : undefined
+            }
           />
         )}
       />
@@ -704,6 +804,14 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
             value={slot}
             onChange={setSlot}
             disabled={saving}
+            recursoIdsPermitidos={
+              tipoActividad === 'ESTUDIO' && tipoEstudioId
+                ? salaIdsCatalogo
+                : null
+            }
+            tipoEstudioId={
+              tipoActividad === 'ESTUDIO' && tipoEstudioId ? tipoEstudioId : null
+            }
           />
         </Box>
       )}
@@ -748,15 +856,15 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
             />
           </Box>
           {esSobreturno && tipoActividad === 'CONSULTA' ? (
-            <Autocomplete
-              options={recursosConsulta}
-              value={recursosConsulta.find((r) => r.id === recursoId) || null}
-              onChange={(_e, opt) => setRecursoId(opt?.id ?? null)}
-              getOptionLabel={(r) => r.nombre || `Recurso #${r.id}`}
-              isOptionEqualToValue={(a, b) => a.id === b.id}
-              renderInput={(params) => (
-                <TextField {...params} label="Consultorio *" required />
-              )}
+            <TextField
+              label="Consultorio (según agenda del médico)"
+              value={
+                recursosConsulta.find((r) => r.id === recursoId)?.nombre ||
+                (recursoId ? `Consultorio #${recursoId}` : 'Sin consultorio en la franja')
+              }
+              fullWidth
+              InputProps={{ readOnly: true }}
+              helperText="Se toma del consultorio cargado en Horarios de atención para ese día."
             />
           ) : (
             <Autocomplete

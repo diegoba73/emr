@@ -156,6 +156,55 @@ describe('agregarCatalogOptionsForMaterial', () => {
     expect(opts.some((o) => o.codigo === 'METFRA')).toBe(false);
   });
 
+  it('ofrece RAC suelto aunque PAN_MALB_AZ esté en grilla; sigue ocultando MICROALB/CREA_U', () => {
+    const microalb: LimsTipoExamen = {
+      id: 20,
+      codigo: 'MICROALB',
+      nombre: 'Microalbuminuria',
+      tipo_muestra_requerida: 20,
+      tipo_muestra_codigo: 'ORINA',
+      activo: true,
+    };
+    const creaU: LimsTipoExamen = {
+      id: 21,
+      codigo: 'CREA_U',
+      nombre: 'Creatininuria',
+      tipo_muestra_requerida: 20,
+      tipo_muestra_codigo: 'ORINA',
+      activo: true,
+    };
+    const rac: LimsTipoExamen = {
+      id: 22,
+      codigo: 'RAC',
+      nombre: 'RAC - Relación albúmina/creatinina',
+      tipo_muestra_requerida: 20,
+      tipo_muestra_codigo: 'ORINA',
+      modo_entrada: 'CALCULADO',
+      activo: true,
+    };
+    const panMalbAz: LimsPanelExamen = {
+      id: 301,
+      codigo: 'PAN_MALB_AZ',
+      nombre: 'Microalbuminuria al azar',
+      tipos_examen: [20, 21, 22],
+      activo: true,
+    };
+    const opts = agregarCatalogOptionsForMaterial({
+      mat: orina,
+      examenes: [...examenes, microalb, creaU, rac],
+      paneles: [panMalbAz],
+      gridCodigos: new Set(['PAN_MALB_AZ']),
+      selectedExamenesIds: new Set(),
+      selectedPanelesIds: new Set(),
+      orinaModalidad: 'azar',
+    });
+    const codes = opts.map((o) => o.codigo);
+    expect(codes).toContain('RAC');
+    expect(codes).not.toContain('MICROALB');
+    expect(codes).not.toContain('CREA_U');
+    expect(codes).not.toContain('PAN_MALB_AZ');
+  });
+
   it('omite componentes e IACA de paneles ya en grilla (uricuria/calcio 24h)', () => {
     const auU: LimsTipoExamen = {
       id: 10,

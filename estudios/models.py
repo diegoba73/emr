@@ -628,3 +628,154 @@ class HistorialEntregaEstudioComplementario(TimestampedModel):
     def __str__(self) -> str:
         return f'Entrega estudio={self.estudio_id} v={self.version_protocolo}'
 
+
+class MedicoTipoEstudio(TimestampedModel):
+    """Estudios que realiza un médico (catálogo de agenda)."""
+
+    medico = models.ForeignKey(
+        'medicos.Medico',
+        on_delete=models.CASCADE,
+        related_name='tipos_estudio_realiza',
+    )
+    tipo_estudio = models.ForeignKey(
+        TipoEstudioComplementario,
+        on_delete=models.CASCADE,
+        related_name='medicos_habilitados',
+    )
+
+    class Meta:
+        verbose_name = 'Médico — tipo de estudio'
+        verbose_name_plural = 'Médicos — tipos de estudio'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['medico', 'tipo_estudio'],
+                name='uniq_medico_tipo_estudio',
+            ),
+        ]
+        ordering = ['medico_id', 'tipo_estudio_id']
+
+    def __str__(self) -> str:
+        return f'MedicoTipoEstudio medico={self.medico_id} tipo={self.tipo_estudio_id}'
+
+
+class TipoEstudioSala(TimestampedModel):
+    """Salas donde se realiza un tipo de estudio."""
+
+    tipo_estudio = models.ForeignKey(
+        TipoEstudioComplementario,
+        on_delete=models.CASCADE,
+        related_name='salas_habilitadas',
+    )
+    recurso = models.ForeignKey(
+        'turnos.Recurso',
+        on_delete=models.CASCADE,
+        related_name='tipos_estudio_sala',
+    )
+
+    class Meta:
+        verbose_name = 'Tipo de estudio — sala'
+        verbose_name_plural = 'Tipos de estudio — salas'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tipo_estudio', 'recurso'],
+                name='uniq_tipo_estudio_sala',
+            ),
+        ]
+        ordering = ['tipo_estudio_id', 'recurso_id']
+
+    def clean(self) -> None:
+        from turnos.models import Recurso
+
+        if self.recurso_id:
+            tipo = getattr(self.recurso, 'tipo_recurso', None)
+            if tipo not in (
+                Recurso.TipoRecurso.SALA_PROCEDIMIENTO,
+                Recurso.TipoRecurso.SALA_HEMODINAMIA,
+            ):
+                raise ValidationError(
+                    {'recurso': 'El recurso debe ser sala de procedimiento o hemodinamia.'}
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f'TipoEstudioSala tipo={self.tipo_estudio_id} sala={self.recurso_id}'
+
+
+class PedidoEstudioPaciente(TimestampedModel):
+    """
+    Pedido de estudio desde app/portal: el paciente sube la foto del pedido médico
+    sin tipificar ni elegir horario; secretaría tipifica y agenda.
+    """
+
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        AGENDADO = 'AGENDADO', 'Agendado'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+
+    class OrigenCanal(models.TextChoices):
+        MOVIL = 'MOVIL', 'App móvil'
+        PORTAL = 'PORTAL', 'Portal web'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        on_delete=models.PROTECT,
+        related_name='pedidos_estudio',
+    )
+    foto = models.ImageField(upload_to='emr/pedidos_estudio/')
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+        db_index=True,
+    )
+    origen_canal = models.CharField(
+        max_length=20,
+        choices=OrigenCanal.choices,
+        default=OrigenCanal.MOVIL,
+    )
+    notas = models.CharField(max_length=255, blank=True, default='')
+    turno = models.ForeignKey(
+        'turnos.Turno',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedido_estudio_origen',
+    )
+    estudio = models.ForeignKey(
+        EstudioComplementario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedido_paciente_origen',
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedidos_estudio_creados',
+    )
+    agendado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedidos_estudio_agendados',
+    )
+    agendado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Pedido de estudio (paciente)'
+        verbose_name_plural = 'Pedidos de estudio (paciente)'
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['estado', 'created_at']),
+            models.Index(fields=['paciente', 'estado']),
+        ]
+
+    def __str__(self) -> str:
+        return f'PedidoEstudioPaciente:{self.pk} {self.estado}'
+

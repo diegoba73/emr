@@ -3,6 +3,12 @@ import {
   CARTUCHO_CARDIACO_CODIGOS,
   EAB_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
+  COAG_SIN_HEMO_INCLUYE_CODIGOS,
+  EXAMENES_SOLICITABLES_AUNQUE_CUBIERTOS_POR_GRILLA,
+  PANEL_COAGULOGRAMA,
+  PANEL_HEMOGRAMA,
+  RAC_INCLUYE_CODIGOS,
+  RAR_INCLUYE_CODIGOS,
   esCodigoCartuchoCardiaco,
   esPanelEab,
 } from './solicitudAnalisisSelectionRules';
@@ -23,6 +29,22 @@ describe('solicitudAnalisisSelectionRules', () => {
 
   it('CAIE suelto incluye CA y PROT_T para Zeisler', () => {
     expect(CAIE_INCLUYE_CODIGOS).toEqual(['CA', 'PROT_T']);
+  });
+
+  it('RAC suelto incluye MICROALB y CREA_U', () => {
+    expect(RAC_INCLUYE_CODIGOS).toEqual(['MICROALB', 'CREA_U']);
+    expect(EXAMENES_SOLICITABLES_AUNQUE_CUBIERTOS_POR_GRILLA.has('RAC')).toBe(true);
+  });
+
+  it('RAR suelto incluye ALDOS y ARPLA', () => {
+    expect(RAR_INCLUYE_CODIGOS).toEqual(['ALDOS', 'ARPLA']);
+  });
+
+  it('coagulograma sin hemograma incluye plaquetas', () => {
+    expect(PANEL_COAGULOGRAMA).toBe('PAN_COAG');
+    expect(PANEL_HEMOGRAMA).toBe('PAN_HEMO');
+    expect(COAG_SIN_HEMO_INCLUYE_CODIGOS).toEqual(['PLAQ']);
+    expect(EXAMENES_CUBIERTOS_POR_PANEL.PLAQ).toBe('PAN_HEMO');
   });
 
   it('cubre INR y CL por sus paneles', () => {

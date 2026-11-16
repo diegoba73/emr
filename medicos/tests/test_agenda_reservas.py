@@ -20,7 +20,17 @@ def agenda():
     pac = Paciente.objects.create(user=user, nombre='Paciente', apellido='Agenda', dni='AG-P1')
     fecha = timezone.localdate() + timedelta(days=7)
     inicio = timezone.make_aware(datetime.combine(fecha, time(9)))
-    horario = DisponibilidadMedico.objects.create(medico=med, dia_semana=fecha.weekday(), hora_inicio=time(9), hora_fin=time(13))
+    consultorio = Recurso.objects.create(
+        nombre='Cons Agenda', ubicacion='CEHTA', tipo_recurso='CONSULTORIO',
+    )
+    horario = DisponibilidadMedico.objects.create(
+        medico=med,
+        dia_semana=fecha.weekday(),
+        hora_inicio=time(9),
+        hora_fin=time(13),
+        tipo='CONSULTA',
+        recurso=consultorio,
+    )
     return med, other, doctor, admin, user, pac, fecha, inicio, horario
 
 
@@ -40,7 +50,7 @@ def test_slots_20_min_sin_datos_de_otros_pacientes(agenda):
         for s in r.data['slots']
     )
     assert r.data['slots'][0]['duracion_min'] == 20
-    assert r.data['slots'][0]['recurso_id'] is None
+    assert r.data['slots'][0]['recurso_id'] == h.recurso_id
 
 
 def test_dias_disponibles_paciente_ve_cupo_del_mes(agenda):
@@ -86,7 +96,7 @@ def test_paciente_reserva_propio_sin_consultorio_prioridad_y_no_duplica(agenda):
     r = c.post('/api/turnos/reservar-horario/', data, format='json')
     assert r.status_code == 201, r.data
     t = Turno.objects.get(pk=r.data['id'])
-    assert t.paciente == pac and t.estado == 'RESERVADO' and t.recurso is None
+    assert t.paciente == pac and t.estado == 'RESERVADO' and t.recurso_id == h.recurso_id
     assert t.fecha_hora_fin-t.fecha_hora_inicio == timedelta(minutes=20)
     # Mismo horario ocupado / ya tiene turno activo
     r = c.post('/api/turnos/reservar-horario/', data, format='json')
@@ -126,27 +136,63 @@ def test_cancelado_libera_slot_y_bloqueo_impide_reserva(agenda):
 
 
 def test_estudio_asigna_sala_configurada(agenda):
+    """Paciente no puede reservar franjas ESTUDIO por API; debe usar pedido con foto."""
     med, _, _, _, user, pac, fecha, inicio, h = agenda
     sala = Recurso.objects.create(nombre='Sala agenda', ubicacion='CEHTA', tipo_recurso='SALA_PROCEDIMIENTO')
     h.tipo='ESTUDIO'; h.recurso=sala; h.save()
     r = client(user).get(f'/api/medicos/{med.pk}/slots/', {'fecha':fecha.isoformat(), 'tipo':'ESTUDIO'})
     assert len(r.data['slots']) == 12
     r = client(user).post('/api/turnos/reservar-horario/', {'horario_id':h.pk,'inicio':inicio.isoformat()}, format='json')
+    assert r.status_code == 400, r.data
+    body = str(r.data).lower()
+    assert 'foto' in body or 'pedido' in body or 'estudio' in body
+    assert not Turno.objects.filter(paciente=pac, recurso=sala).exists()
+
+
+def test_estudio_sala_asignada_por_secretaria(agenda):
+    """Flujo autorizado: secretaría crea turno de estudio en la sala de la franja."""
+    med, _, _, _, _, pac, fecha, inicio, h = agenda
+    sala = Recurso.objects.create(nombre='Sala sec', ubicacion='CEHTA', tipo_recurso='SALA_PROCEDIMIENTO')
+    h.tipo = 'ESTUDIO'
+    h.recurso = sala
+    h.save()
+    sec = get_user_model().objects.create_user(username='sec_est_sala', password='x', rol='secretaria')
+    r = client(sec).post(
+        '/api/turnos/',
+        {
+            'paciente_id': pac.pk,
+            'medico_id': med.pk,
+            'recurso_id': sala.pk,
+            'fecha_hora_inicio': inicio.isoformat(),
+            'fecha_hora_fin': (inicio + timedelta(minutes=20)).isoformat(),
+        },
+        format='json',
+    )
     assert r.status_code == 201, r.data
-    assert Turno.objects.get(pk=r.data['id']).recurso == sala
+    assert Turno.objects.get(pk=r.data['id']).recurso_id == sala.pk
 
 
-def payload(med, dia=0):
-    return {'medico':med.pk,'dia_semana':dia,'hora_inicio':'15:00','hora_fin':'17:00','duracion_slot_min':20,'tipo':'CONSULTA'}
+def payload(med, dia=0, recurso=None):
+    data = {
+        'medico': med.pk,
+        'dia_semana': dia,
+        'hora_inicio': '15:00',
+        'hora_fin': '17:00',
+        'duracion_slot_min': 20,
+        'tipo': 'CONSULTA',
+    }
+    if recurso is not None:
+        data['recurso'] = recurso.pk if hasattr(recurso, 'pk') else recurso
+    return data
 
 
 @pytest.mark.parametrize('rol', ['secretaria', 'admin'])
 def test_secretaria_admin_configuran_cualquier_medico(agenda, rol):
-    med, other, _, _, _, _, fecha, _, _ = agenda
+    med, other, _, _, _, _, fecha, _, h = agenda
     user = get_user_model().objects.create_user(username='gestor_'+rol, rol=rol)
     c = client(user)
     for medico in [med, other]:
-        r = c.post('/api/disponibilidades/', payload(medico), format='json')
+        r = c.post('/api/disponibilidades/', payload(medico, recurso=h.recurso), format='json')
         assert r.status_code == 201, r.data
         url = f"/api/disponibilidades/{r.data['id']}/"
         assert c.patch(url, {'hora_fin':'18:00'}, format='json').status_code == 200
@@ -161,12 +207,20 @@ def test_secretaria_admin_configuran_cualquier_medico(agenda, rol):
 @pytest.mark.parametrize('rol', ['paciente', 'medico', 'enfermeria'])
 def test_roles_no_autorizados_no_configuran(agenda, rol):
     u = get_user_model().objects.create_user(username='blocked_'+rol, rol=rol, is_staff=True)
-    assert client(u).post('/api/disponibilidades/', payload(agenda[0]), format='json').status_code == 403
+    h = agenda[8]
+    assert client(u).post(
+        '/api/disponibilidades/', payload(agenda[0], recurso=h.recurso), format='json'
+    ).status_code == 403
 
 
 @pytest.mark.parametrize('changes', [{'hora_fin':'08:00'}, {'hora_inicio':'09:10'}, {'tipo':'ESTUDIO'}])
 def test_validacion_horario(agenda, changes):
-    r = client(agenda[3]).post('/api/disponibilidades/', {**payload(agenda[1]), **changes}, format='json')
+    h = agenda[8]
+    r = client(agenda[3]).post(
+        '/api/disponibilidades/',
+        {**payload(agenda[1], recurso=h.recurso), **changes},
+        format='json',
+    )
     assert r.status_code == 400, r.data
 
 
@@ -219,6 +273,22 @@ def test_configurar_semana_upsert_y_estudio_exige_sala(agenda):
     med.refresh_from_db()
     assert med.duracion_slot_min == 30
     assert not DisponibilidadMedico.objects.filter(pk=h.pk).exists()
+
+    r = c.post('/api/disponibilidades/configurar-semana/', {
+        'medico': med.pk,
+        'tipo': 'CONSULTA',
+        'dias': [
+            {
+                'dia_semana': i,
+                'activo': i == 0,
+                'hora_inicio': '09:00' if i == 0 else None,
+                'hora_fin': '12:00' if i == 0 else None,
+                'recurso': None,
+            }
+            for i in range(7)
+        ],
+    }, format='json')
+    assert r.status_code == 400
 
     r = c.post('/api/disponibilidades/configurar-semana/', {
         'medico': med.pk,
@@ -357,6 +427,61 @@ def test_medico_no_modifica_ni_elimina_su_propia_agenda(agenda):
         assert c.delete(url).status_code == 403
     assert DisponibilidadMedico.objects.filter(pk=h.pk).exists()
     assert ExcepcionMedico.objects.filter(pk=ex.pk).exists()
+
+
+def test_secretaria_crea_sobreturno_sobre_slot_ocupado_con_agenda(agenda):
+    """Con disponibilidad publicada, es_sobreturno=true permite solapar el mismo bloque."""
+    med, _, _, _admin, _, pac, fecha, inicio, h = agenda
+    Turno.objects.create(
+        medico=med,
+        paciente=pac,
+        recurso=h.recurso,
+        fecha_hora_inicio=inicio,
+        fecha_hora_fin=inicio + timedelta(minutes=20),
+        estado='CONFIRMADO',
+    )
+    otro = Paciente.objects.create(nombre='Otro', apellido='Sobreturno', dni='AG-ST1')
+    User = get_user_model()
+    sec = User.objects.create_user(username='agenda_sec_st', rol='secretaria')
+    payload = {
+        'paciente_id': otro.id,
+        'medico_id': med.pk,
+        'recurso_id': h.recurso_id,
+        'fecha_hora_inicio': inicio.isoformat(),
+        'fecha_hora_fin': (inicio + timedelta(minutes=20)).isoformat(),
+        'estado': 'CONFIRMADO',
+        'es_sobreturno': True,
+        'motivo_reserva': 'Sobreturno con agenda',
+    }
+    r = client(sec).post('/api/turnos/', payload, format='json')
+    assert r.status_code == 201, r.data
+    assert r.data.get('es_sobreturno') is True
+    assert Turno.objects.filter(paciente=otro, es_sobreturno=True, medico=med).exists()
+
+    # Admin no puede activar sobreturno aunque gestione turnos.
+    admin_payload = {**payload, 'paciente_id': Paciente.objects.create(
+        nombre='Admin', apellido='ST', dni='AG-ST2'
+    ).id}
+    r_admin = client(_admin).post('/api/turnos/', admin_payload, format='json')
+    assert r_admin.status_code == 400
+    assert 'sobreturno' in str(r_admin.data).lower()
+
+
+def test_disponibilidades_filtra_por_medico(agenda):
+    med, other, _, admin, _, _, fecha, _, h = agenda
+    DisponibilidadMedico.objects.create(
+        medico=other,
+        dia_semana=fecha.weekday(),
+        hora_inicio=time(9),
+        hora_fin=time(12),
+        tipo='CONSULTA',
+        recurso=h.recurso,
+    )
+    r = client(admin).get('/api/disponibilidades/', {'medico': med.pk, 'tipo': 'CONSULTA'})
+    assert r.status_code == 200, r.data
+    rows = r.data['results'] if isinstance(r.data, dict) else r.data
+    assert rows
+    assert all(row['medico'] == med.pk for row in rows)
 
 
 def test_feriado_cierra_slots_y_bloquea_reserva(agenda):

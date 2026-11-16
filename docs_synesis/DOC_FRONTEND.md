@@ -63,7 +63,7 @@ Ver secciones **Frontend EMR+LIMS (`frontend/`)** y **Estudios complementarios (
 | Función | Roles permitidos (UI; backend valida) |
 |---------|----------------------------------------|
 | `canAccessPacientes` | admin/staff **no laboratorio**, secretaría, enfermería, médico, paciente |
-| `canCreatePaciente` | admin/staff, secretaría, enfermería, médico |
+| `canCreatePaciente` | admin, secretaría, secretaría lab, médico |
 | `canAccessPaciente360` | igual que pacientes |
 | `canAccessSolicitudes` | admin, secretaría, médico, paciente — **no** enfermería/laboratorio |
 | `canAccessArchivosMedicos` | admin, médico, paciente |
@@ -285,8 +285,12 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | Cerrar atención | `POST .../cerrar/` vía `closeAtencion` (C5.10.1-A; antes `/cerrar_atencion/` legacy) |
 | `TurnosMedico.tsx` | **No enrutado** en `App.tsx`; migrado a `iniciarAtencionTurno` por si se reactiva |
 | Chip de estado (solo lectura) para todos los roles | PATCH/PUT `estado` bloqueado (400) |
-| Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo por `prompt`) **[DEUDA]** modal dedicado |
+| Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo vía `MotivoDialog`); crea turno nuevo + cancela anterior + historial; franja de agenda del médico |
 | `cancelarTurno(id, motivo)` en `api.ts` | Motivo obligatorio (prompt mínimo) |
+| Pedidos de estudio (bandeja) | `/estudios-complementarios/pedidos` — tipificar + agendar desde foto |
+| Catálogo agenda estudios | `/estudios-complementarios/catalogo-agenda` — médico↔tipo y tipo↔sala |
+| Portal / app: Estudio | Solo foto (`createPedidoEstudioPaciente` / `POST /api/movil/pedidos-estudio/`); consulta intacta con slots |
+| Portal Mis turnos | Confirmar `RESERVADO`; reprogramar si `viene_de_pedido_estudio` |
 
 - Validación: `cd frontend && npm run build && npm exec -- tsc --noEmit`.
 

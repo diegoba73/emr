@@ -116,6 +116,7 @@ EXAMENES_CALCULADOS_SIN_TUBO = frozenset(
         "UREA_U24",
         "CREA_U24",
         "RAC",
+        "RAR",
         "TFG",
     }
 )

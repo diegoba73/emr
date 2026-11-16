@@ -24,8 +24,17 @@ DJANGO_CSRF_TRUSTED_ORIGINS=http://emr.sytes.net:8081,http://localhost:8081
 ENV
 
 docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo up -d --build
-docker compose -p emr-demo -f docker-compose.demo.yml exec -T backend python manage.py seed_data
-docker compose -p emr-demo -f docker-compose.demo.yml exec -T backend python manage.py seed_demo_marketing
+# Seeds requieren admin: el runtime Django usa DB_USER read-only.
+ADMIN_USER=$(grep -E '^DB_ADMIN_USER=' .env.demo | head -1 | cut -d= -f2- || true)
+ADMIN_PASS=$(grep -E '^DB_ADMIN_PASSWORD=' .env.demo | head -1 | cut -d= -f2- || true)
+ADMIN_USER=${ADMIN_USER:-postgres}
+ADMIN_PASS=${ADMIN_PASS:-demo_postgres_change_me}
+docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec -T \
+  -e DB_USER="$ADMIN_USER" -e DB_PASSWORD="$ADMIN_PASS" backend \
+  python manage.py seed_data
+docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec -T \
+  -e DB_USER="$ADMIN_USER" -e DB_PASSWORD="$ADMIN_PASS" backend \
+  python manage.py seed_demo_marketing
 curl -s -o /dev/null -w 'demo:%{http_code}\n' http://127.0.0.1:8081/demo
 curl -s -o /dev/null -w 'health:%{http_code}\n' http://127.0.0.1:8081/api/health/
 echo "Listo. Abrí http://emr.sytes.net:8081/demo (NAT 8081 requerido)."

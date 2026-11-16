@@ -78,15 +78,16 @@ describe('canAccessPacientes', () => {
 });
 
 describe('canCreatePaciente', () => {
-  it('permite admin, secretaría, médico, laboratorio y bioquímico', () => {
+  it('permite admin, secretaría, secretaría lab y médico', () => {
     expect(canCreatePaciente(user({ rol: 'ADMIN' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canCreatePaciente(user({ rol: 'SECRETARIA_LAB' }))).toBe(true);
     expect(canCreatePaciente(user({ rol: 'MEDICO' }))).toBe(true);
-    expect(canCreatePaciente(user({ rol: 'LABORATORIO' }))).toBe(true);
-    expect(canCreatePaciente(user({ rol: 'BIOQUIMICO' }))).toBe(true);
   });
 
-  it('no permite paciente ni enfermería', () => {
+  it('no permite laboratorio, bioquímico, paciente ni enfermería', () => {
+    expect(canCreatePaciente(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canCreatePaciente(user({ rol: 'BIOQUIMICO' }))).toBe(false);
     expect(canCreatePaciente(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canCreatePaciente(user({ rol: 'ENFERMERIA' }))).toBe(false);
   });
@@ -107,13 +108,16 @@ describe('canCreateMedico / canAccessMedicos', () => {
 });
 
 describe('canUpdatePacienteDemographics', () => {
-  it('permite secretaría, médico y admin', () => {
+  it('permite secretaría, secretaría lab, médico y admin', () => {
     expect(canUpdatePacienteDemographics(user({ rol: 'SECRETARIA' }))).toBe(true);
+    expect(canUpdatePacienteDemographics(user({ rol: 'SECRETARIA_LAB' }))).toBe(true);
     expect(canUpdatePacienteDemographics(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canUpdatePacienteDemographics(user({ rol: 'ADMIN' }))).toBe(true);
   });
 
-  it('bloquea enfermería y paciente', () => {
+  it('bloquea laboratorio, bioquímico, enfermería y paciente', () => {
+    expect(canUpdatePacienteDemographics(user({ rol: 'LABORATORIO' }))).toBe(false);
+    expect(canUpdatePacienteDemographics(user({ rol: 'BIOQUIMICO' }))).toBe(false);
     expect(canUpdatePacienteDemographics(user({ rol: 'ENFERMERIA' }))).toBe(false);
     expect(canUpdatePacienteDemographics(user({ rol: 'PACIENTE' }))).toBe(false);
   });
@@ -264,7 +268,7 @@ describe('laboratorio + is_staff — sin bypass EMR', () => {
     expect(canAccessAtenciones(labStaff)).toBe(false);
     expect(canOperateAtenciones(labStaff)).toBe(false);
     expect(canAccessAuditoria(labStaff)).toBe(false);
-    expect(canCreatePaciente(labStaff)).toBe(true);
+    expect(canCreatePaciente(labStaff)).toBe(false);
     expect(canAccessSolicitudes(labStaff)).toBe(false);
     expect(canAccessArchivosMedicos(labStaff)).toBe(false);
   });

@@ -89,13 +89,12 @@ export function canAccessPacientes(user: User | null | undefined): boolean {
   return normalizeRol(user) === 'medico';
 }
 
-/** Alta de paciente: secretaría, médico, operadores LIMS (lab/bio) y admin. */
+/** Alta de paciente: admin, secretaría / secretaría lab y médico. */
 export function canCreatePaciente(user: User | null | undefined): boolean {
   if (!user) return false;
   if (user.is_superuser || normalizeRol(user) === 'admin') return true;
   const rol = normalizeRol(user);
-  if (isOperadorLimsRole(rol)) return true;
-  if (isLecturaOperativaRole(rol)) return false;
+  if (isOperadorLimsRole(rol) || isLecturaOperativaRole(rol)) return false;
   return isSecretariaEmrRole(rol) || rol === 'medico';
 }
 

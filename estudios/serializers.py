@@ -755,12 +755,32 @@ class AgendarTurnoEstudioDesdeAgendaSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs.get('estudio'):
+            estudio = attrs['estudio']
+            tipo_act = getattr(estudio, 'tipo_actividad', None) or 'ESTUDIO'
+            if tipo_act == 'ESTUDIO' and getattr(estudio, 'tipo_estudio_id', None):
+                if not attrs.get('medico') and not getattr(estudio, 'medico_solicitante_id', None):
+                    raise serializers.ValidationError(
+                        {'medico_id': 'Indicá el médico para el turno de estudio tipificado.'}
+                    )
             return attrs
-        if not attrs.get('tipo_estudio') and not attrs.get('practica'):
+        if attrs.get('tipo_estudio'):
+            if not attrs.get('medico'):
+                raise serializers.ValidationError(
+                    {'medico_id': 'Indicá el médico para el turno de estudio tipificado.'}
+                )
+            return attrs
+        if attrs.get('practica'):
             raise serializers.ValidationError(
-                'Indique tipo_estudio o practica para registrar el estudio.'
+                {
+                    'tipo_estudio': (
+                        'Para agenda de estudios tipificados indique el tipo de estudio '
+                        '(no solo la práctica).'
+                    )
+                }
             )
-        return attrs
+        raise serializers.ValidationError(
+            'Indique tipo_estudio (o un estudio solicitado) para registrar el turno.'
+        )
 
 
 class RectificarInformeSerializer(serializers.Serializer):

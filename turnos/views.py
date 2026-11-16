@@ -46,6 +46,7 @@ from usuarios.roles import (
     ROLES_ESTUDIO_COMPLEMENTARIO,
     ROLES_LIMS_OPERADOR,
     ROLES_SECRETARIA_EMR,
+    es_secretaria_institucional,
 )
 
 _ROLES_AGENDA_GLOBAL_TURNOS = frozenset({'admin', 'enfermeria', *ROLES_SECRETARIA_EMR}) | ROLES_AGENDA_TURNOS_LECTURA
@@ -293,6 +294,13 @@ class TurnoViewSet(viewsets.ModelViewSet):
                     pk=datos.validated_data['horario_id'], activo=True)
             except DisponibilidadMedico.DoesNotExist:
                 raise ValidationError('El horario ya no está disponible.') from None
+            if str(getattr(horario, 'tipo', '') or '').upper() == 'ESTUDIO':
+                raise ValidationError(
+                    'Los estudios no se reservan por horario directo. '
+                    'Enviá la foto del pedido médico desde «Reservar turno» '
+                    '(opción Estudio) en el portal o la app; secretaría tipifica '
+                    'el estudio y te propone un horario para confirmar.'
+                )
             paciente = ensure_paciente_linked_to_user(request.user)
             if not paciente:
                 raise ValidationError('Su usuario no tiene una ficha de paciente vinculada.')
@@ -316,7 +324,10 @@ class TurnoViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(turno).data, status=201)
 
     def _validar_agenda(self, serializer, instance=None):
-        from medicos.agenda import validar_reserva, duracion_de
+        from medicos.agenda import validar_reserva, duracion_de, recurso_de_franja_publicada
+        from medicos.models import DisponibilidadMedico
+        from rest_framework.exceptions import ValidationError as AgendaValidationError
+
         data = serializer.validated_data
         if instance and not any(k in data and data[k] != getattr(instance, k)
                                 for k in ('medico', 'recurso', 'fecha_hora_inicio', 'fecha_hora_fin')):
@@ -333,14 +344,31 @@ class TurnoViewSet(viewsets.ModelViewSet):
             'es_sobreturno',
             getattr(instance, 'es_sobreturno', False) if instance else False,
         )
-        # Solo secretaría/admin crean/mutan turnos aquí; sobreturno es su herramienta.
+        ya_era_sobreturno = bool(getattr(instance, 'es_sobreturno', False)) if instance else False
+        # Alta/activación de sobreturno: solo secretaría institucional.
+        if es_sobreturno and not ya_era_sobreturno and not es_secretaria_institucional(self.request.user):
+            raise ValidationError({'es_sobreturno': 'Solo secretaría puede agendar sobreturnos.'})
+        # Solapamiento solo si secretaría institucional lo autoriza en esta operación
+        # (no basta con que el turno ya fuera sobreturno: admin no genera cupo extra).
+        permitir_sobreturno = bool(es_sobreturno) and es_secretaria_institucional(self.request.user)
+        # Consultorio/sala = el de la franja publicada (no elección libre).
+        if medico and inicio and fin and DisponibilidadMedico.objects.filter(medico=medico).exists():
+            try:
+                data['recurso'] = recurso_de_franja_publicada(
+                    medico,
+                    inicio,
+                    fin,
+                    recurso_solicitado=data.get('recurso', getattr(instance, 'recurso', None)),
+                )
+            except AgendaValidationError as exc:
+                raise ValidationError(exc.detail) from exc
         validar_reserva(
             medico,
             inicio,
             fin,
             data.get('recurso', getattr(instance, 'recurso', None)),
             excluir=getattr(instance, 'pk', None),
-            permitir_sobreturno=bool(es_sobreturno),
+            permitir_sobreturno=permitir_sobreturno,
         )
 
     def perform_create(self, serializer):
@@ -450,16 +478,16 @@ class TurnoViewSet(viewsets.ModelViewSet):
 
     def _estado_action_response(self, outcome: turno_estado.TurnoEstadoOutcome) -> Response:
         serializer = self.get_serializer(outcome.turno)
-        return Response(
-            {
-                'message': outcome.message,
-                'applied': outcome.applied,
-                'estado_anterior': outcome.estado_anterior,
-                'estado_nuevo': outcome.estado_nuevo,
-                'turno': serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        payload = {
+            'message': outcome.message,
+            'applied': outcome.applied,
+            'estado_anterior': outcome.estado_anterior,
+            'estado_nuevo': outcome.estado_nuevo,
+            'turno': serializer.data,
+        }
+        if outcome.turno_anterior_id is not None:
+            payload['turno_anterior_id'] = outcome.turno_anterior_id
+        return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='confirmar')
     def confirmar(self, request, pk=None):
@@ -499,9 +527,76 @@ class TurnoViewSet(viewsets.ModelViewSet):
 
         return self._estado_action_response(outcome)
 
+    @action(detail=True, methods=['get'], url_path='slots-reprogramacion')
+    def slots_reprogramacion(self, request, pk=None):
+        """
+        Slots elegibles para reprogramar este turno.
+        Paciente: médico y tipo de estudio se resuelven desde el turno (no del query).
+        """
+        from datetime import date as date_cls
+
+        from medicos.agenda import slots_disponibles
+        from estudios.pedido_paciente import salas_ids_para_tipo, tipo_estudio_de_turno
+
+        turno = self.get_object()
+        if not turno_estado.puede_reprogramar_turno(request.user, turno):
+            raise PermissionDenied('No puede consultar horarios de reprogramación para este turno.')
+        fecha_str = request.query_params.get('fecha')
+        if not fecha_str:
+            raise ValidationError({'fecha': 'Indique la fecha (AAAA-MM-DD).'})
+        try:
+            fecha = date_cls.fromisoformat(fecha_str)
+        except ValueError as exc:
+            raise ValidationError({'fecha': 'Fecha inválida.'}) from exc
+        if turno.medico_id is None:
+            raise ValidationError({'detail': 'El turno no tiene médico asignado.'})
+
+        tipo_estudio = tipo_estudio_de_turno(turno)
+        recurso_ids = None
+        detail = None
+        if tipo_estudio is not None:
+            recurso_ids = salas_ids_para_tipo(tipo_estudio.pk)
+            if not recurso_ids:
+                detail = (
+                    'El tipo de estudio no tiene salas asociadas en el catálogo. '
+                    'Consultá a secretaría.'
+                )
+                return Response(
+                    {
+                        'fecha': fecha.isoformat(),
+                        'medico_id': turno.medico_id,
+                        'tipo_estudio_id': tipo_estudio.pk,
+                        'slots': [],
+                        'detail': detail,
+                    }
+                )
+        tipo_agenda = 'ESTUDIO' if tipo_estudio is not None else None
+        from medicos.agenda import tipo_para_recurso
+
+        if tipo_agenda is None:
+            tipo_agenda = tipo_para_recurso(turno.recurso) or 'CONSULTA'
+
+        slots = list(
+            slots_disponibles(
+                turno.medico,
+                fecha,
+                tipo_agenda,
+                recurso_ids=recurso_ids,
+            )
+        )
+        return Response(
+            {
+                'fecha': fecha.isoformat(),
+                'medico_id': turno.medico_id,
+                'tipo_estudio_id': tipo_estudio.pk if tipo_estudio else None,
+                'slots': slots,
+                'detail': detail,
+            }
+        )
+
     @action(detail=True, methods=['post'], url_path='reprogramar')
     def reprogramar(self, request, pk=None):
-        """Reprograma fecha/hora (y opcionalmente médico/recurso) sin cambiar estado."""
+        """Reprograma: turno nuevo en franja libre del médico + cancela el anterior."""
         fecha_hora_inicio = request.data.get('fecha_hora_inicio')
         fecha_hora_fin = request.data.get('fecha_hora_fin')
         motivo = request.data.get('motivo', '')

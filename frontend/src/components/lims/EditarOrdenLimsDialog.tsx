@@ -72,6 +72,7 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
     nombre: '',
     dni: '',
     fecha_nacimiento: '',
+    obra_social: '',
   });
 
   const [openNuevoMedico, setOpenNuevoMedico] = useState(false);
@@ -187,15 +188,20 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
     setSaving(true);
     setError('');
     try {
-      const updated = await patchSolicitudExamenLims(orden.id, {
+      const fechaOriginal = orden.fecha_programada_toma || '';
+      const body: Parameters<typeof patchSolicitudExamenLims>[1] = {
         paciente_id: paciente.id,
         medico_id: usarMedicoExterno ? null : medicoInterno?.id ?? null,
         medico_externo_nombre: usarMedicoExterno ? medicoExterno.trim() : '',
         origen_solicitud: origen,
-        fecha_programada_toma: fechaProgramada,
         fecha_entrega_prometida: fechaEntrega || null,
         observaciones: observaciones.trim(),
-      });
+      };
+      // Solo enviar fecha si el operador la cambió (evita restaurar valor viejo en carrera).
+      if (fechaProgramada !== fechaOriginal) {
+        body.fecha_programada_toma = fechaProgramada;
+      }
+      const updated = await patchSolicitudExamenLims(orden.id, body);
       toast.success('Orden actualizada.');
       onSaved(updated);
       onClose();
@@ -243,6 +249,7 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                       nombre: '',
                       dni: '',
                       fecha_nacimiento: '',
+                      obra_social: '',
                     });
                     setOpenNuevoPaciente(true);
                   }}
@@ -418,6 +425,14 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                 setNuevoPacienteForm((f) => ({ ...f, fecha_nacimiento: e.target.value }))
               }
             />
+            <TextField
+              label="Obra social *"
+              size="small"
+              value={nuevoPacienteForm.obra_social}
+              onChange={(e) =>
+                setNuevoPacienteForm((f) => ({ ...f, obra_social: e.target.value }))
+              }
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -433,8 +448,11 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                 const nombre = nuevoPacienteForm.nombre.trim();
                 const dni = nuevoPacienteForm.dni.trim();
                 const fecha_nacimiento = nuevoPacienteForm.fecha_nacimiento;
-                if (!apellido || !nombre || !dni || !fecha_nacimiento) {
-                  setNuevoPacienteError('Completá apellido, nombre, DNI y fecha de nacimiento.');
+                const obra_social = nuevoPacienteForm.obra_social.trim();
+                if (!apellido || !nombre || !dni || !fecha_nacimiento || !obra_social) {
+                  setNuevoPacienteError(
+                    'Completá apellido, nombre, DNI, fecha de nacimiento y obra social.'
+                  );
                   return;
                 }
                 setNuevoPacienteSaving(true);
@@ -480,6 +498,7 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                     nombre,
                     dni,
                     fecha_nacimiento,
+                    obra_social,
                   });
                   setPaciente(created);
                   setPacienteQuery(formatPacienteLabel(created));

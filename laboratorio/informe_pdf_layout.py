@@ -46,6 +46,10 @@ from laboratorio.ctog import PANEL_CTOG
 from laboratorio.proteinograma import PANEL_ELP
 from laboratorio.solicitud_cierre import solicitud_resultados_completos
 
+# Códigos de TipoExamen que van al pie del panel (texto libre), no a la tabla
+# EXAMEN/RESULTADO/UNIDAD/REFERENCIA. Mismo patrón que ELP_CONC en proteinograma.
+CODIGOS_NOTA_PIE_INFORME = frozenset({"OBS"})
+
 # Título/logo + separación + caja de datos del paciente (tipografía +2 pt).
 HEADER_HEIGHT = 5.5 * cm
 CONTENT_TOP_PAD = 0.25 * cm
@@ -731,6 +735,45 @@ def _valores_por_codigo(resultados: list[ResultadoExamen]) -> dict[str, Any]:
     return valores
 
 
+def _codigo_tipo_examen(res: ResultadoExamen) -> str:
+    return (getattr(getattr(res, "tipo_examen", None), "codigo", None) or "").strip().upper()
+
+
+def _es_nota_pie_informe(res: ResultadoExamen) -> bool:
+    """True si el resultado es nota de texto al pie (p. ej. OBS), no fila de tabla."""
+    return _codigo_tipo_examen(res) in CODIGOS_NOTA_PIE_INFORME
+
+
+def _partir_analitos_y_notas_pie(
+    resultados: list[ResultadoExamen],
+) -> tuple[list[ResultadoExamen], list[str]]:
+    analitos: list[ResultadoExamen] = []
+    notas: list[str] = []
+    for res in resultados:
+        if _es_nota_pie_informe(res):
+            texto = (res.valor_obtenido or "").strip()
+            if texto:
+                notas.append(texto)
+            continue
+        analitos.append(res)
+    return analitos, notas
+
+
+def _append_observaciones_panel(
+    flow: list[Any],
+    notas: list[str],
+    styles: dict[str, ParagraphStyle],
+) -> None:
+    """Pie de panel estilo proteinograma (ELP_CONC): título + texto a ancho completo."""
+    if not notas:
+        return
+    texto = "\n".join(notas)
+    flow.append(Paragraph("Observaciones:", styles["observaciones_title"]))
+    flow.append(
+        Paragraph(_escape(texto).replace("\n", "<br/>"), styles["observaciones"])
+    )
+
+
 def _bloque_panel(
     grupo: GrupoResultadosPdf,
     styles: dict[str, ParagraphStyle],
@@ -743,6 +786,7 @@ def _bloque_panel(
     flow: list[Any] = []
     es_perfil = bool(grupo.panel_codigo)
     fechas_ext = fechas_extraccion_por_resultado or {}
+    analitos, notas_pie = _partir_analitos_y_notas_pie(list(grupo.resultados or []))
 
     if es_perfil:
         panel_header = Table(
@@ -763,7 +807,7 @@ def _bloque_panel(
         flow.append(panel_header)
 
         materiales = []
-        for res in grupo.resultados:
+        for res in analitos:
             mat = _material_texto(res)
             if mat and mat not in materiales:
                 materiales.append(mat)
@@ -772,7 +816,7 @@ def _bloque_panel(
             flow.append(Paragraph(f"Material: {_escape(mat_txt)}", styles["panel_meta"]))
 
         metodos: list[str] = []
-        for res in grupo.resultados:
+        for res in analitos:
             metodo = _metodo_texto(res)
             if metodo and metodo not in metodos:
                 metodos.append(metodo)
@@ -784,14 +828,14 @@ def _bloque_panel(
     else:
         metodo_panel = None
 
-    if mostrar_encabezado_columnas:
+    if mostrar_encabezado_columnas and analitos:
         flow.append(_tabla_encabezado_columnas(styles))
 
     vals = valores_por_codigo
     if vals is None:
-        vals = _valores_por_codigo(grupo.resultados)
+        vals = _valores_por_codigo(analitos)
 
-    for res in grupo.resultados:
+    for res in analitos:
         flow.append(
             _fila_resultado(
                 res,
@@ -801,6 +845,8 @@ def _bloque_panel(
                 fecha_extraccion=fechas_ext.get(res.pk),
             )
         )
+
+    _append_observaciones_panel(flow, notas_pie, styles)
 
     if es_perfil:
         flow.append(Spacer(1, 0.25 * cm))

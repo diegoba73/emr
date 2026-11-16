@@ -2,6 +2,7 @@ from django.contrib import admin
 from django import forms
 from .models import (
     Turno,
+    HistorialReprogramacionTurno,
     Recurso,
     Atencion,
     ConsultaAmbulatoria,
@@ -53,6 +54,14 @@ class TurnoAdmin(admin.ModelAdmin):
     )
     date_hierarchy = 'fecha_hora_inicio'
     autocomplete_fields = ('paciente', 'medico', 'recurso')
+
+
+@admin.register(HistorialReprogramacionTurno)
+class HistorialReprogramacionTurnoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'turno_anterior', 'turno_nuevo', 'actor', 'created_at')
+    search_fields = ('motivo', 'turno_anterior__id', 'turno_nuevo__id')
+    autocomplete_fields = ('turno_anterior', 'turno_nuevo', 'actor')
+    readonly_fields = ('created_at', 'updated_at')
 
 
 @admin.register(Recurso)

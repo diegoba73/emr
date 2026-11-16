@@ -48,6 +48,36 @@ jest.mock('../modules/atenciones/components/AtencionDetailDrawer', () => ({
   default: () => null,
 }));
 
+jest.mock('./turnos/SlotPickerStaff', () => ({
+  __esModule: true,
+  default: ({
+    onChange,
+  }: {
+    onChange: (slot: {
+      horario_id: number;
+      inicio: string;
+      fin: string;
+      duracion_min: number;
+      tipo: 'CONSULTA';
+    }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onChange({
+          horario_id: 1,
+          inicio: '2026-06-21T11:00:00',
+          fin: '2026-06-21T11:20:00',
+          duracion_min: 20,
+          tipo: 'CONSULTA',
+        })
+      }
+    >
+      Elegir slot mock
+    </button>
+  ),
+}));
+
 const baseTurno = {
   id: 42,
   estado: 'CONFIRMADO',
@@ -107,10 +137,10 @@ describe('TurnoModal motivo dialog', () => {
     expect(screen.queryByRole('button', { name: 'Actualizar turno' })).not.toBeInTheDocument();
   });
 
-  it('reprograma con motivo y ofrece abrir WhatsApp si hay enlace', async () => {
+  it('reprograma eligiendo horario libre + motivo, sin abrir WhatsApp', async () => {
     const onSuccess = jest.fn();
     mockReprogramarTurno.mockResolvedValue({
-      turno: { ...baseTurno, fecha_hora_inicio: '2026-06-21T11:00:00' },
+      turno: { ...baseTurno, id: 99, fecha_hora_inicio: '2026-06-21T11:00:00' },
       message: 'Turno reprogramado',
       notificacion: {
         whatsapp_enviado: false,
@@ -118,25 +148,28 @@ describe('TurnoModal motivo dialog', () => {
         push_enviados: 0,
       },
     });
-    window.confirm = jest.fn(() => true);
+    window.alert = jest.fn();
     window.open = jest.fn();
     renderTurnoModal({ onSuccess });
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Reprogramar turno' })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Reprogramar turno' }));
-    const dialog = getMotivoDialog('Reprogramar turno');
-    fireEvent.change(within(dialog).getByRole('textbox'), {
+    const dialog = screen.getByRole('dialog', { name: 'Reprogramar turno' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Elegir slot mock' }));
+    fireEvent.change(within(dialog).getByLabelText(/Motivo de reprogramación/i), {
       target: { value: 'Paciente pidió otro día' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reprogramar' }));
     await waitFor(() => {
-      expect(mockReprogramarTurno).toHaveBeenCalled();
-      expect(window.open).toHaveBeenCalledWith(
-        'https://wa.me/5491112345678?text=hola',
-        '_blank',
-        'noopener,noreferrer'
+      expect(mockReprogramarTurno).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({
+          motivo: 'Paciente pidió otro día',
+          fecha_hora_inicio: expect.stringMatching(/2026-06-21T11:00/),
+        })
       );
+      expect(window.open).not.toHaveBeenCalled();
       expect(onSuccess).toHaveBeenCalled();
     });
   });
@@ -206,7 +239,8 @@ describe('TurnoModal motivo dialog', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar turno' }));
 
     await waitFor(() => {
-      expect(within(dialog).getByText(CLINICAL_ACTION_ERRORS.turnoCancelar)).toBeInTheDocument();
+      // Plain Error(msg) from apiService: se muestra el mensaje, no el fallback genérico.
+      expect(within(dialog).getByText('Error de red')).toBeInTheDocument();
     });
     expect(screen.getByRole('heading', { name: 'Cancelar turno' })).toBeInTheDocument();
   });

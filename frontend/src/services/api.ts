@@ -136,6 +136,7 @@ class ApiService {
     dni: string;
     telefono: string;
     fecha_nacimiento: string;
+    obra_social: string;
   }): Promise<{ message: string; user_id: number; email: string }> {
     try {
       const response = await fetchWithCSRF(`${this.api.defaults.baseURL}/auth/register/`, {

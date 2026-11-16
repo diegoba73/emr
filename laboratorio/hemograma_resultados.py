@@ -181,6 +181,61 @@ def _asegurar_legacy_ena(solicitud: SolicitudExamen) -> int:
     return _asegurar_codigos_panel(solicitud, panel_codigo)
 
 
+def _asegurar_plaq_con_coagulograma(solicitud: SolicitudExamen) -> int:
+    """Si hay coagulograma sin hemograma, asegura fila de plaquetas."""
+    from laboratorio.acompanamiento_pedido import (
+        EXAMENES_ACOMPANAN_COAG_SIN_HEMO,
+        PANEL_COAGULOGRAMA,
+        PANEL_HEMOGRAMA,
+        codigos_acompanamiento_pedido,
+    )
+    from laboratorio.examen_orina_micro import valor_inicial_resultado
+
+    try:
+        panel_codigos = {
+            (c or "").strip().upper()
+            for c in solicitud.paneles.values_list("codigo", flat=True)
+        }
+    except Exception:
+        return 0
+    if PANEL_COAGULOGRAMA not in panel_codigos or PANEL_HEMOGRAMA in panel_codigos:
+        return 0
+
+    existentes = {
+        (getattr(te, "codigo", None) or "").strip().upper()
+        for te in TipoExamen.objects.filter(
+            id__in=solicitud.resultados.values_list("tipo_examen_id", flat=True)
+        )
+    }
+    faltan = codigos_acompanamiento_pedido(
+        codigos_examen=existentes, codigos_panel=panel_codigos
+    )
+    if not faltan:
+        return 0
+
+    tipos = {
+        te.codigo: te
+        for te in TipoExamen.objects.filter(
+            codigo__in=faltan or EXAMENES_ACOMPANAN_COAG_SIN_HEMO, activo=True
+        )
+    }
+    creados = 0
+    for codigo in faltan:
+        te = tipos.get(codigo)
+        if te is None:
+            continue
+        _, was_created = ResultadoExamen.objects.get_or_create(
+            solicitud=solicitud,
+            tipo_examen=te,
+            defaults={"valor_obtenido": valor_inicial_resultado(te)},
+        )
+        if was_created:
+            creados += 1
+            if not solicitud.tipos_examen.filter(pk=te.pk).exists():
+                solicitud.tipos_examen.add(te)
+    return creados
+
+
 def asegurar_resultados_paneles_derivados(solicitud: SolicitudExamen) -> int:
     """Asegura componentes faltantes de paneles pedidos y de insumos de calculados."""
     if getattr(solicitud, "estado", None) not in _ESTADOS_ABIERTOS:
@@ -190,4 +245,5 @@ def asegurar_resultados_paneles_derivados(solicitud: SolicitudExamen) -> int:
     for codigo in _PANELES_ASEGURAR:
         total += _asegurar_codigos_panel(solicitud, codigo)
     total += _asegurar_insumos_calculados(solicitud)
+    total += _asegurar_plaq_con_coagulograma(solicitud)
     return total

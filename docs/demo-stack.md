@@ -11,6 +11,11 @@ No usa `emr_postgres` ni la BD clínica de producción.
 | Volumen | `postgres_data` | `emr_demo_postgres_data` |
 | URL | `:8000` / `:3000` | **http://localhost:8081** |
 | Datos | QA + tu trabajo | `seed_data` + `seed_demo_marketing` |
+| DB runtime | `postgres` (escritura) | `demo_readonly` (SELECT; escribe solo `django_session` + `usuarios.last_login`) |
+
+El entrypoint del demo migra/seed como `DB_ADMIN_*`, aplica
+`scripts/demo_ensure_readonly_role.py` y arranca gunicorn con `DB_USER` read-only.
+Los seeds manuales deben overridear `DB_USER`/`DB_PASSWORD` al admin (ver abajo).
 
 ## Local — arranque
 
@@ -21,10 +26,13 @@ cp .env.demo.example .env.demo
 
 docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo up -d --build
 
-docker compose -p emr-demo -f docker-compose.demo.yml exec backend \
+# Runtime Django = DB_USER read-only (demo_readonly). Seeds van con admin:
+docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec \
+  -e DB_USER=postgres -e DB_PASSWORD=demo_postgres_change_me backend \
   python manage.py seed_data
 
-docker compose -p emr-demo -f docker-compose.demo.yml exec backend \
+docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec \
+  -e DB_USER=postgres -e DB_PASSWORD=demo_postgres_change_me backend \
   python manage.py seed_demo_marketing
 ```
 

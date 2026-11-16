@@ -202,5 +202,16 @@ export function getSafeClinicalActionMessage(error: unknown, fallback: string): 
       return validation;
     }
   }
+  // fetchWithCSRF / apiService suelen lanzar Error(msg) sin response.status.
+  const message = (error as { message?: string })?.message;
+  if (
+    message &&
+    message !== fallback &&
+    !/^Request failed with status code \d+$/i.test(message) &&
+    message !== 'Network Error' &&
+    !/^HTTP \d+/i.test(message)
+  ) {
+    return message;
+  }
   return fallback;
 }

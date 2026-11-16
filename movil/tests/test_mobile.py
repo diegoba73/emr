@@ -150,7 +150,9 @@ def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
     t.save(update_fields=['estado'])
     day=timezone.localdate()+timedelta(days=7)
     start=timezone.make_aware(datetime.combine(day,time(9)))
-    h=DisponibilidadMedico.objects.create(medico=t.medico,dia_semana=day.weekday(),hora_inicio=time(9),hora_fin=time(13))
+    from turnos.models import Recurso
+    cons=Recurso.objects.create(nombre='Cons movil',ubicacion='CEHTA',tipo_recurso='CONSULTORIO',activo=True)
+    h=DisponibilidadMedico.objects.create(medico=t.medico,dia_semana=day.weekday(),hora_inicio=time(9),hora_fin=time(13),tipo='CONSULTA',recurso=cons,activo=True)
     r=c.post('/api/movil/turnos/reservar-horario/',{'horario_id':h.pk,'inicio':start.isoformat()},format='json')
     assert r.status_code==201,r.data
     pk=r.data['id']
@@ -224,14 +226,17 @@ def test_llamado_activo_polling(data):
 def test_reserva_hoy_nace_confirmado(data):
     from datetime import datetime, time
     from medicos.models import DisponibilidadMedico
+    from turnos.models import Recurso
     c,_,_,t,_,_,_=data
     t.estado='CANCELADO';t.save(update_fields=['estado'])
-    day=timezone.localdate()
-    start=timezone.make_aware(datetime.combine(day,time(16)))
-    if start <= timezone.now():
-        start = timezone.now() + timedelta(hours=1)
+    cons=Recurso.objects.create(nombre='Cons hoy',ubicacion='CEHTA',tipo_recurso='CONSULTORIO',activo=True)
+    # Mañana 10:00 → sigue CONFIRMADO (regla hoy/mañana) y evita carrera con la hora actual.
+    day = timezone.localdate() + timedelta(days=1)
+    start = timezone.make_aware(datetime.combine(day, time(10, 0)))
     h=DisponibilidadMedico.objects.create(
-        medico=t.medico,dia_semana=start.weekday(),hora_inicio=time(0),hora_fin=time(23,59)
+        medico=t.medico,dia_semana=day.weekday(),
+        hora_inicio=time(9, 0),hora_fin=time(13, 0),
+        tipo='CONSULTA',recurso=cons,activo=True,
     )
     r=c.post('/api/movil/turnos/reservar-horario/',{'horario_id':h.pk,'inicio':start.isoformat()},format='json')
     assert r.status_code==201,r.data

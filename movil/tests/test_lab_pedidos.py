@@ -33,7 +33,10 @@ def _login(rol, username='u', with_medico=False):
 
 
 def _catalogo_minimo():
-    tm = TipoMuestra.objects.create(codigo='SUE-LAB', nombre='Suero', activo=True)
+    # codigo canónico SUERO → material_pedido SANGRE (catálogo de pedido).
+    tm, _ = TipoMuestra.objects.get_or_create(
+        codigo='SUERO', defaults={'nombre': 'Suero', 'activo': True}
+    )
     glu = TipoExamen.objects.create(codigo='GLU-LAB', nombre='Glucemia', tipo_muestra_requerida=tm, activo=True)
     crea = TipoExamen.objects.create(codigo='CRE-LAB', nombre='Creatinina', tipo_muestra_requerida=tm, activo=True)
     panel = PanelExamen.objects.create(codigo='PAN-BAS', nombre='Básico', activo=True)
@@ -85,17 +88,17 @@ def test_buscar_paciente_y_crear_orden_con_examen_extra():
     assert fav.status_code == 200
     assert FavoritoLabMedico.objects.filter(medico=medico, panel=panel).exists()
 
-    # Pedido: paquete (panel) + examen complementario (mismo panel ya lo tiene; agregamos solo panel + nada extra)
-    # Complemento: pedir panel + examen suelto creatinina (ya en panel) y glucemia vía panel
+    # Pedido ambulatorio (el panel de prueba no está en el whitelist de guardia).
     crear = c.post(
         '/api/movil/lab/ordenes/',
         {
             'paciente_id': pac.id,
-            'contexto': 'GUARDIA',
+            'contexto': 'AMBULATORIO',
             'paneles_ids': [panel.id],
             'examenes_ids': [crea.id],  # complemento / redundante OK
             'observaciones': 'Desde app móvil',
             'fecha_programada_toma': date.today().isoformat(),
+            'material_pedido': 'SANGRE',
         },
         format='json',
     )
@@ -145,6 +148,7 @@ def test_medico_solo_ambulatorio_no_pide_guardia():
             'examenes_ids': [glu.id],
             'paneles_ids': [],
             'fecha_programada_toma': date.today().isoformat(),
+            'material_pedido': 'SANGRE',
         },
         format='json',
     )
@@ -158,6 +162,7 @@ def test_medico_solo_ambulatorio_no_pide_guardia():
             'examenes_ids': [glu.id],
             'paneles_ids': [],
             'fecha_programada_toma': date.today().isoformat(),
+            'material_pedido': 'SANGRE',
         },
         format='json',
     )

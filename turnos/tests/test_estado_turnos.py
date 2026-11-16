@@ -786,6 +786,10 @@ class TestUsuarioSinRolAccionesTurno(APITestCase):
 class TestReprogramarTurno(APITestCase):
     @classmethod
     def setUpTestData(cls):
+        from datetime import time as dt_time
+
+        from medicos.models import DisponibilidadMedico
+
         cls.especialidad = _esp('Cardiología Reprog')
         cls.paciente = Paciente.objects.create(
             dni='TE-REP-P', nombre='Pac', apellido='Rep',
@@ -803,15 +807,34 @@ class TestReprogramarTurno(APITestCase):
             tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
             activo=True,
         )
+        # Agenda publicada todos los días 09:00–13:00 (slots de 20 min + consultorio).
+        for med in (cls.medico_a, cls.medico_b):
+            for dia in range(7):
+                DisponibilidadMedico.objects.create(
+                    medico=med,
+                    dia_semana=dia,
+                    hora_inicio=dt_time(9, 0),
+                    hora_fin=dt_time(13, 0),
+                    tipo='CONSULTA',
+                    recurso=cls.recurso,
+                    activo=True,
+                )
 
-    def _turno(self, medico, estado, offset_hours: int) -> Turno:
-        base = timezone.now().replace(second=0, microsecond=0) + timedelta(hours=200 + offset_hours)
+    def _slot(self, day_offset: int, hour: int = 9, minute: int = 0):
+        from datetime import datetime, time as dt_time
+
+        fecha = timezone.localdate() + timedelta(days=14 + day_offset)
+        inicio = timezone.make_aware(datetime.combine(fecha, dt_time(hour, minute)))
+        return inicio, inicio + timedelta(minutes=20)
+
+    def _turno(self, medico, estado, day_offset: int, hour: int = 9) -> Turno:
+        inicio, fin = self._slot(day_offset, hour=hour)
         return Turno.objects.create(
             paciente=self.paciente,
             medico=medico,
             recurso=self.recurso,
-            fecha_hora_inicio=base,
-            fecha_hora_fin=base + timedelta(minutes=30),
+            fecha_hora_inicio=inicio,
+            fecha_hora_fin=fin,
             estado=estado,
         )
 
@@ -825,24 +848,33 @@ class TestReprogramarTurno(APITestCase):
         return data
 
     def test_secretaria_puede_reprogramar_reservado(self):
+        from turnos.models import HistorialReprogramacionTurno
+
         sec = User.objects.create_user(
             username='te_rep_sec', email='te_rep_sec@test.com', password='x', rol='secretaria',
         )
         self.paciente.telefono = '1123456789'
         self.paciente.save(update_fields=['telefono'])
-        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 1)
-        nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=2)
-        nuevo_fin = nuevo_inicio + timedelta(minutes=20)
+        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 1, hour=9)
+        nuevo_inicio, nuevo_fin = self._slot(3, hour=10)
         self.client.force_authenticate(user=sec)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
             self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
-        assert r.status_code == status.HTTP_200_OK
+        assert r.status_code == status.HTTP_200_OK, r.data
         turno.refresh_from_db()
-        assert turno.estado == Turno.Estado.RESERVADO
-        assert turno.fecha_hora_inicio == nuevo_inicio
+        assert turno.estado == Turno.Estado.CANCELADO
+        nuevo = Turno.objects.get(pk=r.data['turno']['id'])
+        assert nuevo.pk != turno.pk
+        assert nuevo.estado == Turno.Estado.RESERVADO
+        assert nuevo.fecha_hora_inicio == nuevo_inicio
+        assert nuevo.paciente_id == self.paciente.pk
+        assert r.data.get('turno_anterior_id') == turno.pk
+        assert HistorialReprogramacionTurno.objects.filter(
+            turno_anterior=turno, turno_nuevo=nuevo,
+        ).exists()
         assert 'notificacion' in r.data
         assert r.data['notificacion']['whatsapp_enviado'] is False
         assert r.data['notificacion']['whatsapp_url']
@@ -855,8 +887,7 @@ class TestReprogramarTurno(APITestCase):
         self.medico_a.user = user
         self.medico_a.save()
         turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 2)
-        nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=1)
-        nuevo_fin = nuevo_inicio + timedelta(minutes=20)
+        nuevo_inicio, nuevo_fin = self._slot(4, hour=10)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
@@ -872,14 +903,11 @@ class TestReprogramarTurno(APITestCase):
         self.medico_b.user = user
         self.medico_b.save()
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 3)
+        nuevo_inicio, nuevo_fin = self._slot(5, hour=10)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(
-                turno,
-                turno.fecha_hora_inicio + timedelta(days=1),
-                turno.fecha_hora_fin + timedelta(days=1),
-            ),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
@@ -891,12 +919,12 @@ class TestReprogramarTurno(APITestCase):
         self.medico_a.user = user
         self.medico_a.save()
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 4)
-        nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=3)
+        nuevo_inicio, nuevo_fin = self._slot(6, hour=11)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
             self._payload_reprog(
-                turno, nuevo_inicio, nuevo_inicio + timedelta(minutes=30),
+                turno, nuevo_inicio, nuevo_fin,
                 medico_id=self.medico_b.id,
             ),
             format='json',
@@ -910,15 +938,11 @@ class TestReprogramarTurno(APITestCase):
         self.paciente.user = user
         self.paciente.save()
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 5)
-        nuevo_inicio = timezone.localtime(turno.fecha_hora_inicio + timedelta(days=4)).replace(hour=9, minute=0, second=0, microsecond=0)
-        from medicos.models import DisponibilidadMedico
-        from datetime import time
-        DisponibilidadMedico.objects.create(medico=self.medico_a, dia_semana=nuevo_inicio.weekday(),
-            hora_inicio=time(9), hora_fin=time(13), recurso=self.recurso)
+        nuevo_inicio, nuevo_fin = self._slot(7, hour=9)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(turno, nuevo_inicio, nuevo_inicio + timedelta(minutes=20)),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code == status.HTTP_403_FORBIDDEN
@@ -930,23 +954,20 @@ class TestReprogramarTurno(APITestCase):
         )
         self.paciente.user = user
         self.paciente.save()
-        base = timezone.now() + timedelta(hours=210)
+        inicio, fin = self._slot(8, hour=9)
         turno = Turno.objects.create(
             paciente=otro,
             medico=self.medico_a,
             recurso=self.recurso,
-            fecha_hora_inicio=base,
-            fecha_hora_fin=base + timedelta(minutes=30),
+            fecha_hora_inicio=inicio,
+            fecha_hora_fin=fin,
             estado=Turno.Estado.RESERVADO,
         )
+        nuevo_inicio, nuevo_fin = self._slot(9, hour=10)
         self.client.force_authenticate(user=user)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(
-                turno,
-                base + timedelta(days=1),
-                base + timedelta(days=1, minutes=30),
-            ),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code == status.HTTP_404_NOT_FOUND
@@ -956,14 +977,11 @@ class TestReprogramarTurno(APITestCase):
             username='te_rep_enf', email='te_rep_enf@test.com', password='x', rol='enfermeria',
         )
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 6)
+        nuevo_inicio, nuevo_fin = self._slot(10, hour=9)
         self.client.force_authenticate(user=enf)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(
-                turno,
-                turno.fecha_hora_inicio + timedelta(days=1),
-                turno.fecha_hora_fin + timedelta(days=1),
-            ),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code == status.HTTP_403_FORBIDDEN
@@ -973,14 +991,11 @@ class TestReprogramarTurno(APITestCase):
             username='te_rep_lab', email='te_rep_lab@test.com', password='x', rol='laboratorio',
         )
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 7)
+        nuevo_inicio, nuevo_fin = self._slot(11, hour=9)
         self.client.force_authenticate(user=lab)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(
-                turno,
-                turno.fecha_hora_inicio + timedelta(days=1),
-                turno.fecha_hora_fin + timedelta(days=1),
-            ),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
@@ -991,14 +1006,11 @@ class TestReprogramarTurno(APITestCase):
             rol='admin', is_staff=True,
         )
         turno = self._turno(self.medico_a, Turno.Estado.CANCELADO, 8)
+        nuevo_inicio, nuevo_fin = self._slot(12, hour=9)
         self.client.force_authenticate(user=admin)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(
-                turno,
-                turno.fecha_hora_inicio + timedelta(days=1),
-                turno.fecha_hora_fin + timedelta(days=1),
-            ),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code == status.HTTP_400_BAD_REQUEST
@@ -1009,14 +1021,11 @@ class TestReprogramarTurno(APITestCase):
             rol='admin', is_staff=True,
         )
         turno = self._turno(self.medico_a, Turno.Estado.REALIZADO, 9)
+        nuevo_inicio, nuevo_fin = self._slot(13, hour=9)
         self.client.force_authenticate(user=admin)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
-            self._payload_reprog(
-                turno,
-                turno.fecha_hora_inicio + timedelta(days=1),
-                turno.fecha_hora_fin + timedelta(days=1),
-            ),
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
             format='json',
         )
         assert r.status_code == status.HTTP_400_BAD_REQUEST
@@ -1027,7 +1036,7 @@ class TestReprogramarTurno(APITestCase):
             rol='admin', is_staff=True,
         )
         turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 10)
-        inicio = turno.fecha_hora_inicio + timedelta(days=1)
+        inicio, _ = self._slot(14, hour=9)
         self.client.force_authenticate(user=admin)
         r = self.client.post(
             f'/api/turnos/{turno.id}/reprogramar/',
@@ -1045,8 +1054,8 @@ class TestReprogramarTurno(APITestCase):
             username='te_rep_sol', email='te_rep_sol@test.com', password='x',
             rol='admin', is_staff=True,
         )
-        t1 = self._turno(self.medico_a, Turno.Estado.RESERVADO, 11)
-        t2 = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 12)
+        t1 = self._turno(self.medico_a, Turno.Estado.RESERVADO, 15, hour=9)
+        t2 = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 16, hour=10)
         self.client.force_authenticate(user=admin)
         r = self.client.post(
             f'/api/turnos/{t2.id}/reprogramar/',
@@ -1055,6 +1064,47 @@ class TestReprogramarTurno(APITestCase):
         )
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_reprogramar_fuera_de_agenda_400(self):
+        admin = User.objects.create_user(
+            username='te_rep_out', email='te_rep_out@test.com', password='x',
+            rol='admin', is_staff=True,
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 17, hour=9)
+        # 15:00 está fuera de 09:00–13:00
+        fuera_inicio, fuera_fin = self._slot(18, hour=15)
+        self.client.force_authenticate(user=admin)
+        r = self.client.post(
+            f'/api/turnos/{turno.id}/reprogramar/',
+            self._payload_reprog(turno, fuera_inicio, fuera_fin),
+            format='json',
+        )
+        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.RESERVADO
+
+    def test_reprogramar_acepta_datetime_naive_local(self):
+        """El FE manda `YYYY-MM-DDTHH:MM:SS` sin zona; no debe 500 por localtime()."""
+        from turnos.models import HistorialReprogramacionTurno
+
+        admin = User.objects.create_user(
+            username='te_rep_naive', email='te_rep_naive@test.com', password='x',
+            rol='admin', is_staff=True,
+        )
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 21, hour=9)
+        nuevo_inicio, nuevo_fin = self._slot(22, hour=10)
+        # Sin offset / Z — mismo contrato que formatLocalDateTimeSeconds del frontend.
+        payload = {
+            'fecha_hora_inicio': nuevo_inicio.strftime('%Y-%m-%dT%H:%M:%S'),
+            'fecha_hora_fin': nuevo_fin.strftime('%Y-%m-%dT%H:%M:%S'),
+            'motivo': 'Reprogramación naive',
+        }
+        self.client.force_authenticate(user=admin)
+        r = self.client.post(f'/api/turnos/{turno.id}/reprogramar/', payload, format='json')
+        assert r.status_code == status.HTTP_200_OK, r.data
+        turno.refresh_from_db()
+        assert turno.estado == Turno.Estado.CANCELADO
+        assert HistorialReprogramacionTurno.objects.filter(turno_anterior=turno).exists()
+
     def test_reprogramar_auditoria_metadata(self):
         from auditoria.tests.compat import capture_on_commit_callbacks
 
@@ -1062,31 +1112,35 @@ class TestReprogramarTurno(APITestCase):
             username='te_rep_aud', email='te_rep_aud@test.com', password='x',
             rol='admin', is_staff=True,
         )
-        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 13)
-        nuevo_inicio = turno.fecha_hora_inicio + timedelta(days=5)
-        nuevo_fin = nuevo_inicio + timedelta(minutes=20)
+        turno = self._turno(self.medico_a, Turno.Estado.RESERVADO, 19, hour=9)
+        nuevo_inicio, nuevo_fin = self._slot(20, hour=11)
         self.client.force_authenticate(user=admin)
         with capture_on_commit_callbacks(execute=True):
-            self.client.post(
+            r = self.client.post(
                 f'/api/turnos/{turno.id}/reprogramar/',
                 self._payload_reprog(
                     turno, nuevo_inicio, nuevo_fin,
-                    recurso_id=self.recurso_b.id,
-                    motivo='Cambio de sala',
+                    motivo='Cambio de horario',
                 ),
                 format='json',
             )
+        assert r.status_code == status.HTTP_200_OK, r.data
+        nuevo_id = r.data['turno']['id']
+        nuevo = Turno.objects.get(pk=nuevo_id)
+        assert nuevo.recurso_id == self.recurso.id  # consultorio de la agenda
         ev = AuditEvent.objects.filter(
             entity_type='turnos.Turno',
-            entity_id=str(turno.id),
+            entity_id=str(nuevo_id),
             action='UPDATE',
         ).order_by('-id').first()
         assert ev is not None
         assert ev.metadata.get('accion') == 'reprogramar_turno'
         assert ev.metadata.get('estado_anterior') == Turno.Estado.RESERVADO
         assert ev.metadata.get('estado_nuevo') == Turno.Estado.RESERVADO
+        assert ev.metadata.get('turno_anterior_id') == turno.id
+        assert ev.metadata.get('turno_nuevo_id') == nuevo_id
         assert 'fecha_hora_inicio_nueva' in ev.metadata
-        assert ev.metadata.get('motivo') == 'Cambio de sala'
+        assert ev.metadata.get('motivo') == 'Cambio de horario'
         assert ev.metadata.get('view') == 'TurnoViewSet.reprogramar'
 
 

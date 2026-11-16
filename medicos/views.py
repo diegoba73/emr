@@ -77,11 +77,34 @@ class MedicoViewSet(viewsets.ModelViewSet):
         tipo = request.query_params.get("tipo", "CONSULTA")
         if tipo not in ("CONSULTA", "ESTUDIO"):
             raise ValidationError("Tipo de atención inválido.")
+        recurso_ids = None
+        tipo_estudio_raw = request.query_params.get("tipo_estudio")
+        if tipo_estudio_raw:
+            try:
+                tipo_estudio_id = int(tipo_estudio_raw)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError({"tipo_estudio": "Id de tipo de estudio inválido."}) from exc
+            from estudios.pedido_paciente import salas_ids_para_tipo
+
+            recurso_ids = salas_ids_para_tipo(tipo_estudio_id)
+            # Sin salas en catálogo: cero opciones (no ampliar a todas).
+            if not recurso_ids:
+                return Response(
+                    {
+                        "fecha": fecha.isoformat(),
+                        "medico_id": medico.pk,
+                        "tipo_estudio": tipo_estudio_id,
+                        "slots": [],
+                        "detail": (
+                            "El tipo de estudio no tiene salas asociadas en el catálogo."
+                        ),
+                    }
+                )
         return Response(
             {
                 "fecha": fecha.isoformat(),
                 "medico_id": medico.pk,
-                "slots": list(slots_disponibles(medico, fecha, tipo)),
+                "slots": list(slots_disponibles(medico, fecha, tipo, recurso_ids=recurso_ids)),
             }
         )
 

@@ -44,6 +44,8 @@ export interface PacienteDemographicsFormProps {
   onChange: (patch: Partial<PacienteDemographicsFormValues>) => void;
   dniReadOnly?: boolean;
   requireBirthDate?: boolean;
+  /** Obligatoria al crear (nombre/DNI/fecha ya lo son; OS también en alta). */
+  requireObraSocial?: boolean;
   /** Si true, no muestra OS/afiliado (se gestionan aparte con multi-afiliación). */
   hideObraSocial?: boolean;
 }
@@ -53,6 +55,7 @@ const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
   onChange,
   dniReadOnly = false,
   requireBirthDate = false,
+  requireObraSocial = false,
   hideObraSocial = false,
 }) => (
   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1 }}>
@@ -123,7 +126,11 @@ const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
     {!hideObraSocial && (
       <>
         <TextField
-          label="Obra Social"
+          label={requireObraSocial ? 'Obra Social *' : 'Obra Social'}
+          required={requireObraSocial}
+          helperText={
+            requireObraSocial ? 'Obligatoria para crear el paciente' : undefined
+          }
           value={values.obra_social}
           onChange={(e) => onChange({ obra_social: e.target.value })}
           sx={{ flex: '1 1 260px' }}

@@ -8,6 +8,7 @@ import {
   calcExcrecionPorLitroA24h,
   calcLdlFriedewald,
   calcRac,
+  calcRar,
   calcTfgCkdEpi2021,
   calcularDerivados,
   esCodigoCalculado,
@@ -125,6 +126,20 @@ describe('calculosDerivados Corte A', () => {
   it('RAC incompleto o creatinuria cero no calculable', () => {
     expect(calcularDerivados({ MICROALB: 30 }).RAC?.informe).toBe(RESULTADO_NO_CALCULABLE);
     expect(calcularDerivados({ MICROALB: 30, CREA_U: 0 }).RAC?.informe).toBe(
+      RESULTADO_NO_CALCULABLE
+    );
+  });
+
+  it('RAR = ALDOS / ARPLA', () => {
+    expect(calcRar(20, 1)).toBe(20);
+    const out = calcularDerivados({ ALDOS: 20, ARPLA: 1 });
+    expect(out.RAR?.numerico).toBe(20);
+    expect(out.RAR?.informe).toBe('20');
+  });
+
+  it('RAR incompleto o renina cero no calculable', () => {
+    expect(calcularDerivados({ ALDOS: 20 }).RAR?.informe).toBe(RESULTADO_NO_CALCULABLE);
+    expect(calcularDerivados({ ALDOS: 20, ARPLA: 0 }).RAR?.informe).toBe(
       RESULTADO_NO_CALCULABLE
     );
   });

@@ -508,7 +508,7 @@ export default function HorariosMedicos() {
                         disabled={saving || !d.activo}
                       >
                         <MenuItem value="">
-                          {tipo === 'ESTUDIO' ? 'Seleccionar sala' : 'Sin asignar'}
+                          {tipo === 'ESTUDIO' ? 'Seleccionar sala' : 'Seleccionar consultorio'}
                         </MenuItem>
                         {recursosFiltrados.map((r) => (
                           <MenuItem key={r.id} value={String(r.id)}>
@@ -530,7 +530,7 @@ export default function HorariosMedicos() {
                 busy ||
                 saving ||
                 !medico ||
-                (tipo === 'ESTUDIO' && dias.some((d) => d.activo && !d.recurso))
+                dias.some((d) => d.activo && !d.recurso)
               }
             >
               {saving ? 'Guardando…' : 'Guardar semana'}

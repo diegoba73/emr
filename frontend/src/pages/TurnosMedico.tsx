@@ -29,8 +29,8 @@ const TurnosMedico: React.FC = () => {
     turno.medico?.id === currentUser?.medico?.id
   );
 
-  const filteredTurnos = misTurnos.filter(turno => 
-    !filterEstado || turno.estado === filterEstado
+  const filteredTurnos = misTurnos.filter((turno) =>
+    filterEstado ? turno.estado === filterEstado : turno.estado !== 'CANCELADO'
   );
 
 
@@ -207,7 +207,7 @@ const TurnosMedico: React.FC = () => {
             onChange={(e) => setFilterEstado(e.target.value)}
             className="filter-select"
           >
-            <option value="">Todos los estados</option>
+            <option value="">Activos (oculta cancelados)</option>
             <option value="RESERVADO">Reservado</option>
             <option value="CONFIRMADO">Confirmado</option>
             <option value="REALIZADO">Realizado</option>

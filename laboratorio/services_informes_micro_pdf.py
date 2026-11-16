@@ -482,7 +482,9 @@ def _construir_story_micro(
                     )
                 )
 
-        # Antibiograma: siempre hoja nueva; bloque único (sin partir ni hoja en blanco).
+        # Antibiograma solo si hay COMPLETO:
+        # - Con ATB → hoja nueva + bloque junto (no partir / no hoja en blanco).
+        # - Sin ATB → no forzar 2ª hoja; conclusión/aislados quedan en la 1ª si caben.
         abs_completos = list(
             Antibiograma.objects.filter(
                 aislado__estudio_id=estudio.pk,
@@ -492,17 +494,13 @@ def _construir_story_micro(
             .prefetch_related("resultados__antibiotico")
             .order_by("pk")
         )
-        resultados_por_ab = [list(ab.resultados.all()) for ab in abs_completos]
-        n_filas_datos = sum(len(rs) for rs in resultados_por_ab)
-        ab_styles = _estilos_antibiograma_una_hoja(n_filas_datos)
-        pad = ab_styles["pad"]
+        if abs_completos:
+            resultados_por_ab = [list(ab.resultados.all()) for ab in abs_completos]
+            n_filas_datos = sum(len(rs) for rs in resultados_por_ab)
+            ab_styles = _estilos_antibiograma_una_hoja(n_filas_datos)
+            pad = ab_styles["pad"]
 
-        bloque_ab: list[Any] = [Paragraph("ANTIBIOGRAMA", ab_styles["panel"])]
-        if not abs_completos:
-            bloque_ab.append(
-                Paragraph("Sin antibiogramas completos.", ab_styles["empty"])
-            )
-        else:
+            bloque_ab: list[Any] = [Paragraph("ANTIBIOGRAMA", ab_styles["panel"])]
             for ab, resultados in zip(abs_completos, resultados_por_ab):
                 aislado = ab.aislado
                 micro = aislado.microorganismo if aislado else None
@@ -556,10 +554,8 @@ def _construir_story_micro(
                 table.splitByRow = 0
                 bloque_ab.append(table)
 
-        # PageBreak forzado (siempre hoja nueva). KeepTogether evita fragmentar el
-        # bloque; tipografía compacta evita desborde → hoja en blanco intermedia.
-        story.append(PageBreak())
-        story.append(KeepTogether(bloque_ab))
+            story.append(PageBreak())
+            story.append(KeepTogether(bloque_ab))
 
     # Texto informe (el recuento vive en lecturas; no repetirlo en la conclusión).
     texto = (informe.texto or "").strip()

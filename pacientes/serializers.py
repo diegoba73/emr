@@ -280,6 +280,14 @@ class PacienteSerializer(serializers.ModelSerializer):
                 "La fecha de nacimiento es obligatoria al crear un paciente."
             )
 
+        obra_social = attrs.get("obra_social")
+        if obra_social is None or (
+            isinstance(obra_social, str) and not obra_social.strip()
+        ):
+            errors["obra_social"] = (
+                "La obra social es obligatoria al crear un paciente."
+            )
+
         if errors:
             raise serializers.ValidationError(errors)
         return attrs

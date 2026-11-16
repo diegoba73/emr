@@ -421,6 +421,7 @@ def asignar_turno_estudio(
     fecha_hora_fin,
     medico=None,
     sesion_id=None,
+    estado_turno=None,
 ):
     from turnos.models import Turno
     from estudios.sesion_sync import resolver_sesion_para_asignacion, sync_asignar_turno_a_sesion
@@ -456,22 +457,46 @@ def asignar_turno_estudio(
             {'fecha_hora_fin': 'La fecha/hora de fin debe ser posterior al inicio.'}
         )
 
+    tipo_act = getattr(estudio, 'tipo_actividad', None) or EstudioComplementario.TipoActividad.ESTUDIO
+    medico_turno = medico or getattr(estudio, 'medico_solicitante', None)
+    if tipo_act == EstudioComplementario.TipoActividad.ESTUDIO and estudio.tipo_estudio_id:
+        if medico_turno is None:
+            raise ValidationError(
+                {'medico_id': 'Indicá el médico para el turno de estudio tipificado.'}
+            )
+        from estudios.pedido_paciente import validar_catalogo_agenda_estudio
+
+        validar_catalogo_agenda_estudio(
+            medico=medico_turno,
+            tipo_estudio=estudio.tipo_estudio,
+            recurso=recurso,
+        )
+
     from estudios.disponibilidad import validar_disponibilidad_reserva_estudio
 
+    tipificado = (
+        tipo_act == EstudioComplementario.TipoActividad.ESTUDIO
+        and bool(estudio.tipo_estudio_id)
+    )
     validar_disponibilidad_reserva_estudio(
-        medico=medico,
+        medico=medico_turno,
         recurso=recurso,
         fecha_hora_inicio=fecha_hora_inicio,
         fecha_hora_fin=fecha_hora_fin,
+        exigir_franja_estudio=tipificado,
     )
+
+    estado_final = estado_turno or Turno.Estado.CONFIRMADO
+    if estado_final not in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
+        raise ValidationError({'estado_turno': 'Estado de turno no permitido.'})
 
     turno = Turno(
         paciente=estudio.paciente,
-        medico=medico,
+        medico=medico_turno,
         recurso=recurso,
         fecha_hora_inicio=fecha_hora_inicio,
         fecha_hora_fin=fecha_hora_fin,
-        estado=Turno.Estado.CONFIRMADO,
+        estado=estado_final,
         motivo_reserva=_motivo_turno_desde_estudio(estudio),
     )
     turno.full_clean()
@@ -550,6 +575,8 @@ def agendar_turno_estudio_desde_agenda(
             raise ValidationError(
                 {'estudio_id': 'El estudio seleccionado no corresponde al paciente.'}
             )
+        # Validación tipificada ocurre dentro de asignar_turno_estudio
+        # (medico o medico_solicitante + catálogo).
         return asignar_turno_estudio(
             estudio,
             user=user,
@@ -566,6 +593,30 @@ def agendar_turno_estudio_desde_agenda(
     )
     if origen is None:
         origen = EstudioComplementario.Origen.EXTERNO
+
+    # Alta tipificada: validar catálogo antes de crear el estudio.
+    if tipo_estudio is not None:
+        if medico is None:
+            raise ValidationError(
+                {'medico_id': 'Indicá el médico para el turno de estudio tipificado.'}
+            )
+        from estudios.pedido_paciente import validar_catalogo_agenda_estudio
+
+        validar_catalogo_agenda_estudio(
+            medico=medico,
+            tipo_estudio=tipo_estudio,
+            recurso=recurso,
+        )
+    elif practica:
+        # practica sin tipo_estudio no omite la tipificación: exigir tipo del catálogo.
+        raise ValidationError(
+            {
+                'tipo_estudio': (
+                    'Para agenda de estudios tipificados indique el tipo de estudio '
+                    '(no solo la práctica). Configure médico, tipo y sala en el catálogo.'
+                )
+            }
+        )
 
     nuevo = crear_estudio(
         {
@@ -868,15 +919,20 @@ def reprogramar_turno_estudio(
             {'recurso_id': 'El recurso debe ser sala de procedimiento o hemodinamia.'}
         )
 
+    medico_efectivo = medico if medico is not None else turno_anterior.medico
+    tipificado = (
+        getattr(estudio, 'tipo_actividad', None) == EstudioComplementario.TipoActividad.ESTUDIO
+        and bool(estudio.tipo_estudio_id)
+    )
     validar_disponibilidad_reserva_estudio(
-        medico=medico if medico is not None else turno_anterior.medico,
+        medico=medico_efectivo,
         recurso=recurso,
         fecha_hora_inicio=fecha_hora_inicio,
         fecha_hora_fin=fecha_hora_fin,
         excluir_turno_id=turno_anterior.pk,
+        exigir_franja_estudio=tipificado,
     )
 
-    medico_efectivo = medico if medico is not None else turno_anterior.medico
     turno_nuevo = Turno(
         paciente=estudio.paciente,
         medico=medico_efectivo,

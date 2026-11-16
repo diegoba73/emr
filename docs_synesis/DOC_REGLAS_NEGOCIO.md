@@ -94,8 +94,9 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 - PATCH/PUT directo de `estado`: bloqueado para **todos** los roles (400). Creación: no permitir `REALIZADO` ni `CANCELADO` en POST genérico.
 - No asistencia: `marcar-no-asistio` → `CANCELADO` con metadata `marcar_no_asistio` (sin estado `NO_ASISTIO`) **[DEUDA]** campos estructurales.
 - Validación serializer: solapamiento, bloqueo de cambios en turno REALIZADO/consulta cargada.
-- **Sobreturno** (`Turno.es_sobreturno`): solo secretaría/admin puede crear un turno extra sobre un slot ya ocupado del médico (`es_sobreturno=true` omite el rechazo por solape). El portal del paciente y el médico no crean sobreturnos. UI: franja punteada del calendario / checkbox en el alta.
+- **Sobreturno** (`Turno.es_sobreturno`): solo **secretaría institucional** (`rol=secretaria`) puede crear un turno extra sobre un slot ya ocupado del médico (`es_sobreturno=true` omite el rechazo por solape). Admin, staff, secretaría lab, médico y portal no crean sobreturnos. UI: franja punteada del calendario / checkbox en el alta.
 - **Feriados institucionales** (`medicos.Feriado`, CRUD `/api/feriados/`, permiso `CanManageAgendaMedica`): fecha + nombre; activo cierra agenda de turnos ese día (slots, reservas, reprogramaciones y sobreturnos). No cancela turnos previos; secretaría debe reprogramar/cancelar los `RESERVADO`/`CONFIRMADO` del día (`turnos_afectados` / `GET …/turnos-pendientes/`). Alcance v1: solo turnos.
+- **Pedido de estudio (app/portal):** el paciente sube solo la foto (`PedidoEstudioPaciente`); no elige tipo ni horario. Secretaría tipifica y agenda con catálogo `MedicoTipoEstudio` / `TipoEstudioSala` → turno `RESERVADO`. El paciente dueño puede confirmar y reprogramar ese turno; la reprogramación migra el vínculo pedido/estudio al turno nuevo. Alta directa de secretaría (consulta/estudio) sigue creando `CONFIRMADO` sin pedido.
 - Filtros de calendario: query params `start`, `end`.
 
 ---

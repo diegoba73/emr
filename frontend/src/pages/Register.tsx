@@ -56,6 +56,11 @@ const registerSchema = yup.object({
     .typeError('La fecha de nacimiento no es válida')
     .max(new Date(), 'La fecha no puede ser futura')
     .required('La fecha de nacimiento es requerida'),
+  obra_social: yup
+    .string()
+    .trim()
+    .min(2, 'La obra social es requerida')
+    .required('La obra social es requerida'),
 });
 
 type RegisterFormData = yup.InferType<typeof registerSchema>;
@@ -69,6 +74,7 @@ interface RegisterFormInputs {
   dni: string;
   telefono: string;
   fecha_nacimiento: string;
+  obra_social: string;
 }
 
 const Register: React.FC = () => {
@@ -97,6 +103,7 @@ const Register: React.FC = () => {
           dni: data.dni,
           telefono: data.telefono,
           fecha_nacimiento: data.fecha_nacimiento,
+          obra_social: data.obra_social,
           // NO loguear la contraseña
         });
       }
@@ -110,6 +117,7 @@ const Register: React.FC = () => {
         dni: data.dni,
         telefono: data.telefono,
         fecha_nacimiento: data.fecha_nacimiento.toISOString().split('T')[0],
+        obra_social: data.obra_social.trim(),
       };
 
       await apiService.registerPaciente(registerData);
@@ -153,12 +161,18 @@ const Register: React.FC = () => {
             if (details.dni && Array.isArray(details.dni)) {
               const dniError = details.dni[0];
               fieldErrors.push(`DNI: ${dniError}`);
-              if (dniError.includes('ya está registrado') || dniError.includes('inicia sesión')) {
+              if (
+                !String(dniError).toLowerCase().includes('secretaría') &&
+                (dniError.includes('ya está registrado') || dniError.includes('inicia sesión'))
+              ) {
                 shouldSuggestLogin = true;
               }
             } else if (details.dni && typeof details.dni === 'string') {
               fieldErrors.push(`DNI: ${details.dni}`);
-              if (details.dni.includes('ya está registrado') || details.dni.includes('inicia sesión')) {
+              if (
+                !details.dni.toLowerCase().includes('secretaría') &&
+                (details.dni.includes('ya está registrado') || details.dni.includes('inicia sesión'))
+              ) {
                 shouldSuggestLogin = true;
               }
             }
@@ -397,6 +411,19 @@ const Register: React.FC = () => {
                 }}
                 error={!!errors.fecha_nacimiento}
                 helperText={errors.fecha_nacimiento?.message}
+                disabled={isLoading}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                {...register('obra_social')}
+                margin="normal"
+                required
+                fullWidth
+                label="Obra Social"
+                autoComplete="organization"
+                error={!!errors.obra_social}
+                helperText={errors.obra_social?.message}
                 disabled={isLoading}
                 sx={{ mb: 3 }}
               />

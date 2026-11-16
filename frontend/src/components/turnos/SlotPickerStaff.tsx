@@ -43,6 +43,10 @@ export interface SlotPickerStaffProps {
   disabled?: boolean;
   /** Meses hacia adelante permitidos desde el mes actual (default 12). */
   maxMesesAdelante?: number;
+  /** Si hay IDs, solo muestra slots cuya sala esté en el conjunto (catálogo tipo↔sala). */
+  recursoIdsPermitidos?: number[] | null;
+  /** Filtra en backend por salas del tipo (alta tipificada). */
+  tipoEstudioId?: number | null;
 }
 
 /**
@@ -56,6 +60,8 @@ const SlotPickerStaff: React.FC<SlotPickerStaffProps> = ({
   onChange,
   disabled = false,
   maxMesesAdelante = 12,
+  recursoIdsPermitidos = null,
+  tipoEstudioId = null,
 }) => {
   const hoy = useMemo(() => {
     const d = new Date();
@@ -142,12 +148,34 @@ const SlotPickerStaff: React.FC<SlotPickerStaffProps> = ({
     if (!medicoId || !fechaElegida) return;
     let active = true;
     setLoadingSlots(true);
-    getSlotsMedico(medicoId, fechaElegida, tipo)
+    setError('');
+    if (recursoIdsPermitidos != null && recursoIdsPermitidos.length === 0) {
+      setSlots([]);
+      setError(
+        'No hay salas compatibles en el catálogo para este tipo de estudio. Configuralo antes de agendar.'
+      );
+      setLoadingSlots(false);
+      return () => {
+        active = false;
+      };
+    }
+    getSlotsMedico(medicoId, fechaElegida, tipo, {
+      tipo_estudio: tipoEstudioId ?? undefined,
+    })
       .then((s) => {
-        if (active) setSlots(s);
+        if (!active) return;
+        // null = sin filtro (consultas). Array (incluso vacío) = solo esas salas.
+        const filtrados =
+          recursoIdsPermitidos == null
+            ? s
+            : s.filter(
+                (x) => x.recurso_id != null && recursoIdsPermitidos.includes(x.recurso_id)
+              );
+        setSlots(filtrados);
       })
       .catch((e) => {
         if (active) {
+          setSlots([]);
           setError(getSafeClinicalActionMessage(e, 'No se pudo consultar la disponibilidad.'));
         }
       })
@@ -158,7 +186,7 @@ const SlotPickerStaff: React.FC<SlotPickerStaffProps> = ({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [medicoId, fechaElegida, tipo]);
+  }, [medicoId, fechaElegida, tipo, recursoIdsPermitidos, tipoEstudioId]);
 
   const irMes = (delta: number) => {
     if (disabled) return;

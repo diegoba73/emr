@@ -267,6 +267,7 @@ class TestPacienteRegisterPublic:
             'dni': 'HARD-PUB-001',
             'telefono': '111',
             'fecha_nacimiento': '1990-01-01',
+            'obra_social': 'PARTICULAR',
             # Intentos de escalada — no están en fields, deben ser ignorados:
             'rol': 'admin',
             'is_superuser': True,
@@ -291,6 +292,7 @@ class TestPacienteRegisterPublic:
                 'dni': 'HARD-PUB-002',
                 'telefono': '111',
                 'fecha_nacimiento': '1990-01-01',
+                'obra_social': 'PARTICULAR',
             },
             format='json',
         )

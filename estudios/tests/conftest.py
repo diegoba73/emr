@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import time, timedelta
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -11,9 +11,14 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from archivos_medicos.models import ArchivoMedico
-from estudios.models import EstudioComplementario, TipoEstudioComplementario
+from estudios.models import (
+    EstudioComplementario,
+    MedicoTipoEstudio,
+    TipoEstudioComplementario,
+    TipoEstudioSala,
+)
 from historias_clinicas.models import Consulta, HistoriaClinica
-from medicos.models import Medico
+from medicos.models import DisponibilidadMedico, Medico
 from pacientes.models import Paciente
 from solicitudes.models import Solicitud
 from turnos.models import Atencion, Recurso, Turno
@@ -30,11 +35,26 @@ def client():
 
 
 @pytest.fixture
-def tipo_estudio(db):
-    return TipoEstudioComplementario.objects.create(
+def tipo_estudio(db, medico, recurso_sala):
+    """Tipo tipificado + catálogo agenda + franjas ESTUDIO publicadas (todos los días)."""
+    tipo = TipoEstudioComplementario.objects.create(
         nombre='RX Tórax',
         practica=TipoEstudioComplementario.Modalidad.IMAGEN_RX,
     )
+    MedicoTipoEstudio.objects.get_or_create(medico=medico, tipo_estudio=tipo)
+    TipoEstudioSala.objects.get_or_create(tipo_estudio=tipo, recurso=recurso_sala)
+    # Franja amplia: tests tipificados usan offsets/horas variables.
+    for dia in range(7):
+        DisponibilidadMedico.objects.get_or_create(
+            medico=medico,
+            dia_semana=dia,
+            hora_inicio=time(0, 0),
+            hora_fin=time(23, 59),
+            tipo='ESTUDIO',
+            recurso=recurso_sala,
+            defaults={'activo': True},
+        )
+    return tipo
 
 
 @pytest.fixture

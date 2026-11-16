@@ -235,6 +235,39 @@ class UserSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         'paciente_id': 'No puede proporcionar tanto paciente_id como paciente_data. Use solo uno.'
                     })
+                if paciente_data:
+                    pd_errors = {}
+                    dni = (paciente_data.get('dni') or '').strip() if isinstance(paciente_data.get('dni'), str) else paciente_data.get('dni')
+                    if not dni:
+                        pd_errors['dni'] = 'El DNI es obligatorio al crear un paciente.'
+                    fecha_nac = paciente_data.get('fecha_nacimiento')
+                    if not fecha_nac:
+                        pd_errors['fecha_nacimiento'] = (
+                            'La fecha de nacimiento es obligatoria al crear un paciente.'
+                        )
+                    obra = paciente_data.get('obra_social')
+                    if obra is None or (isinstance(obra, str) and not obra.strip()):
+                        pd_errors['obra_social'] = (
+                            'La obra social es obligatoria al crear un paciente.'
+                        )
+                    nombre = (
+                        (attrs.get('first_name') or '').strip()
+                        or (str(paciente_data.get('nombre') or '').strip())
+                    )
+                    apellido = (
+                        (attrs.get('last_name') or '').strip()
+                        or (str(paciente_data.get('apellido') or '').strip())
+                    )
+                    if not nombre:
+                        pd_errors['nombre'] = (
+                            'El nombre es obligatorio (nombre del usuario o paciente_data.nombre).'
+                        )
+                    if not apellido:
+                        pd_errors['apellido'] = (
+                            'El apellido es obligatorio (apellido del usuario o paciente_data.apellido).'
+                        )
+                    if pd_errors:
+                        raise serializers.ValidationError({'paciente_data': pd_errors})
                 if paciente_id:
                     try:
                         paciente = Paciente.objects.get(id=paciente_id)
@@ -530,7 +563,16 @@ class PacienteRegistrationSerializer(serializers.Serializer):
     dni = serializers.CharField(max_length=20, required=True)
     telefono = serializers.CharField(max_length=25, required=True, allow_blank=False)
     fecha_nacimiento = serializers.DateField(required=True)
-    
+    obra_social = serializers.CharField(max_length=100, required=True, allow_blank=False)
+
+    def validate_obra_social(self, value: str) -> str:
+        text = (value or '').strip()
+        if not text:
+            raise serializers.ValidationError(
+                'La obra social es obligatoria al crear un paciente.'
+            )
+        return text.upper()
+
     def validate_email(self, value: str) -> str:
         """
         Validar que el email sea único en el modelo User.
@@ -543,149 +585,81 @@ class PacienteRegistrationSerializer(serializers.Serializer):
             )
         return value
     
+    # Mensaje neutro: no revelar si ya existe ficha clínica u otra cuenta.
+    MSG_DNI_NO_AUTO_VINCULA = (
+        'No pudimos completar el registro con esos datos. '
+        'Si ya tenés ficha en el centro, acercate a secretaría para activar tu acceso al portal.'
+    )
+
     def validate_dni(self, value: str) -> str:
-        """
-        Validar el DNI. 
-        IMPORTANTE: Ya NO rechazamos pacientes existentes con este DNI, 
-        porque implementamos lógica de VINCULACIÓN en el método create().
-        Solo rechazamos si ya existe un User con username = DNI (ya registrado).
-        """
-        dni_clean = value.strip()  # Limpiar espacios
-        
-        # Verificar que no exista un usuario con username = DNI (CRÍTICO)
-        # Si ya existe un User con este username, significa que ya está registrado
-        if User.objects.filter(username=dni_clean).exists():
-            raise serializers.ValidationError(
-                "Este DNI ya está registrado. Por favor, inicia sesión con tu DNI y contraseña."
-            )
-        
-        # NOTA: Ya NO rechazamos si existe un Paciente con este DNI,
-        # porque en create() implementamos la lógica de vinculación
-        
+        """Rechaza DNI ya usado en User o Paciente sin auto-vincular fichas existentes."""
+        dni_clean = (value or '').strip()
+        if not dni_clean:
+            raise serializers.ValidationError('El DNI es obligatorio.')
+
+        # Conflicto de cuenta o ficha: misma respuesta genérica (sin enumerar).
+        if User.objects.filter(username=dni_clean).exists() or Paciente.objects.filter(dni=dni_clean).exists():
+            raise serializers.ValidationError(self.MSG_DNI_NO_AUTO_VINCULA)
+
         return dni_clean
-    
+
     def create(self, validated_data: dict) -> User:
         """
-        Crear el User y vincular/crear el Paciente asociado en una transacción atómica.
-        FORZA que user.username == dni para permitir login de pacientes con DNI.
-        
-        LÓGICA DE VINCULACIÓN:
-        - Si existe un Paciente con este DNI:
-          * Si ya tiene user asociado -> Error (ya registrado)
-          * Si NO tiene user -> Vincular el nuevo user al paciente existente
-        - Si NO existe un Paciente -> Crear nuevo User y nuevo Paciente
-        
-        Args:
-            validated_data: Datos validados del serializer
-            
-        Returns:
-            User: Usuario creado con rol='paciente' y username=dni
-            
-        Raises:
-            serializers.ValidationError: Si falla la creación
+        Alta pública atómica de User + Paciente nuevos.
+        No vincula fichas clínicas preexistentes (eso lo hace personal autorizado).
         """
         import logging
+
+        from django.db import IntegrityError
+
         logger = logging.getLogger(__name__)
-        
-        # 1. Extraer y limpiar datos
-        dni = validated_data['dni'].strip()  # Limpiar espacios
+
+        dni = validated_data['dni'].strip()
         email = validated_data['email']
         password = validated_data['password']
         nombre = validated_data.get('nombre', '')
         apellido = validated_data.get('apellido', '')
         telefono = validated_data.get('telefono', '')
         fecha_nacimiento = validated_data.get('fecha_nacimiento')
-        
-        # LOG DE DEBUG
-        logger.info(f"INTENTO REGISTRO: DNI={dni}, Email={email}")
-        
+        obra_social = validated_data.get('obra_social', '')
+
         try:
             with transaction.atomic():
-                # 2. Verificar si existe un Paciente con este DNI
-                paciente_existente = Paciente.objects.filter(dni=dni).first()
-                
-                if paciente_existente:
-                    # CASO 1: Existe un Paciente con este DNI
-                    logger.info(f"PACIENTE EXISTENTE ENCONTRADO: DNI={dni}, ID={paciente_existente.id}")
-                    
-                    # Verificar si ya tiene un user asociado
-                    if paciente_existente.user:
-                        # Ya está registrado, no permitir duplicado
-                        raise serializers.ValidationError(
-                            "Este DNI ya está registrado como usuario. Por favor, inicia sesión o contacta al administrador."
-                        )
-                    
-                    # El paciente existe pero NO tiene user -> VINCULAR
-                    logger.info(f"VINCULANDO usuario nuevo al paciente existente ID={paciente_existente.id}")
-                    
-                    # Crear Usuario FORZANDO username = dni
-                    user = User.objects.create_user(
-                        username=dni,  # <--- PUNTO CRÍTICO: username = dni
-                        email=email,
-                        password=password,
-                        first_name=nombre or paciente_existente.nombre or '',
-                        last_name=apellido or paciente_existente.apellido or '',
-                        telefono=telefono or paciente_existente.telefono or '',
-                        rol='paciente',
-                        is_active=True
-                    )
-                    
-                    # Vincular el user al paciente existente
-                    paciente_existente.user = user
-                    
-                    # Actualizar datos del paciente si están vacíos
-                    if not paciente_existente.email:
-                        paciente_existente.email = email
-                    if not paciente_existente.nombre and nombre:
-                        paciente_existente.nombre = nombre
-                    if not paciente_existente.apellido and apellido:
-                        paciente_existente.apellido = apellido
-                    if not paciente_existente.telefono and telefono:
-                        paciente_existente.telefono = telefono
-                    if not paciente_existente.fecha_nacimiento and fecha_nacimiento:
-                        paciente_existente.fecha_nacimiento = fecha_nacimiento
-                    
-                    paciente_existente.save()
-                    
-                    logger.info(f"EXITO VINCULACIÓN: Usuario {dni} vinculado al paciente existente. User.id={user.id}, Paciente.id={paciente_existente.id}")
-                    
-                else:
-                    # CASO 2: NO existe un Paciente con este DNI -> Crear nuevo
-                    logger.info(f"CREANDO NUEVO PACIENTE: DNI={dni}")
-                    
-                    # Crear Usuario FORZANDO username = dni
-                    user = User.objects.create_user(
-                        username=dni,  # <--- PUNTO CRÍTICO: username = dni
-                        email=email,
-                        password=password,
-                        first_name=nombre,
-                        last_name=apellido,
-                        telefono=telefono,
-                        rol='paciente',
-                        is_active=True
-                    )
-                    
-                    # Crear nuevo Perfil Paciente
-                    paciente = Paciente.objects.create(
-                        user=user,
-                        dni=dni,
-                        nombre=nombre,
-                        apellido=apellido,
-                        fecha_nacimiento=fecha_nacimiento,
-                        telefono=telefono,
-                        email=email
-                    )
-                    
-                    logger.info(f"EXITO CREACIÓN: Usuario {dni} y Paciente creados. User.id={user.id}, Paciente.id={paciente.id}")
-                
+                # Re-chequear dentro de la TX (carrera concurrente del mismo DNI).
+                if (
+                    User.objects.select_for_update().filter(username=dni).exists()
+                    or Paciente.objects.select_for_update().filter(dni=dni).exists()
+                ):
+                    raise serializers.ValidationError({'dni': self.MSG_DNI_NO_AUTO_VINCULA})
+
+                user = User.objects.create_user(
+                    username=dni,
+                    email=email,
+                    password=password,
+                    first_name=nombre,
+                    last_name=apellido,
+                    telefono=telefono,
+                    rol='paciente',
+                    is_active=True,
+                )
+                Paciente.objects.create(
+                    user=user,
+                    dni=dni,
+                    nombre=nombre,
+                    apellido=apellido,
+                    fecha_nacimiento=fecha_nacimiento,
+                    telefono=telefono,
+                    email=email,
+                    obra_social=obra_social,
+                )
                 return user
-                
         except serializers.ValidationError:
-            # Re-lanzar errores de validación sin modificar
             raise
+        except IntegrityError:
+            logger.warning('Registro público: IntegrityError (posible DNI concurrente)')
+            raise serializers.ValidationError({'dni': self.MSG_DNI_NO_AUTO_VINCULA})
         except Exception as e:
-            logger.error(f"FALLO EN TRANSACCIÓN REGISTRO: {str(e)}", exc_info=True)
-            # Si ocurre cualquier error, la transacción se revierte automáticamente
+            logger.exception('Fallo en registro público de paciente')
             raise serializers.ValidationError(
-                f"Error al crear el registro: {str(e)}"
-            )
+                'No se pudo completar el registro. Intentá nuevamente más tarde.'
+            ) from e

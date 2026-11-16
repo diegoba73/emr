@@ -81,12 +81,28 @@ def test_asignar_turno_confirma_estudio(client, secretaria, estudio_solicitado, 
 
 @pytest.mark.django_db
 def test_agendar_turno_crea_estudio_externo_sin_pedido_previo(
-    client, secretaria, paciente, tipo_estudio, recurso_sala,
+    client, secretaria, paciente, tipo_estudio, recurso_sala, medico,
 ):
     """Secretaría puede turnar creando el estudio al momento (p. ej. pedido externo)."""
     client.force_authenticate(user=secretaria)
-    inicio = timezone.now() + timedelta(days=4)
-    fin = inicio + timedelta(minutes=20)
+    from datetime import datetime, time as time_cls
+
+    from medicos.models import DisponibilidadMedico
+
+    fecha = timezone.localdate() + timedelta(days=7)
+    while fecha.weekday() != 0:
+        fecha += timedelta(days=1)
+    DisponibilidadMedico.objects.create(
+        medico=medico,
+        dia_semana=fecha.weekday(),
+        hora_inicio=time_cls(9, 0),
+        hora_fin=time_cls(12, 0),
+        tipo='ESTUDIO',
+        recurso=recurso_sala,
+        activo=True,
+    )
+    inicio = timezone.make_aware(datetime.combine(fecha, time_cls(9, 0)))
+    fin = inicio + timedelta(minutes=medico.duracion_slot_min or 20)
     r = client.post(
         f'{BASE}agendar-turno/',
         {
@@ -94,13 +110,14 @@ def test_agendar_turno_crea_estudio_externo_sin_pedido_previo(
             'tipo_estudio': tipo_estudio.id,
             'origen': 'EXTERNO',
             'recurso_id': recurso_sala.id,
+            'medico_id': medico.id,
             'fecha_hora_inicio': inicio.isoformat(),
             'fecha_hora_fin': fin.isoformat(),
             'descripcion_clinica': 'Pedido de otro centro',
         },
         format='json',
     )
-    assert r.status_code == 201
+    assert r.status_code == 201, r.data
     assert r.data['estado'] == 'CONFIRMADO'
     assert r.data['origen'] == 'EXTERNO'
     assert r.data['turno_id'] is not None

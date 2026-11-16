@@ -14,8 +14,10 @@ from laboratorio.informe_pdf_layout import (
     construir_story_icpl,
     escape_texto_informe_con_superindices,
     generar_pdf_icpl_bytes,
+    _bloque_panel,
     _grupo_es_solo_probnp,
     _metodo_texto,
+    _partir_analitos_y_notas_pie,
     _referencia_texto,
     _valor_y_unidad,
 )
@@ -348,4 +350,97 @@ class TestEscapeTextoInformeSuperindices(TestCase):
     def test_menor_con_superindice_latin1(self):
         out = escape_texto_informe_con_superindices("<10³ UFC/ml")
         self.assertEqual(out, "&lt;10<super>3</super> UFC/ml")
+
+
+@pytest.mark.django_db
+class TestInformePdfObsNotaPie(TestCase):
+    """OBS (texto) al pie del panel, no en la tabla con Unidad/Referencia."""
+
+    def setUp(self):
+        tag = uuid.uuid4().hex[:6]
+        self.tm = TipoMuestra.objects.create(codigo=f"SU{tag}", nombre="Suero", activo=True)
+        self.panel = PanelExamen.objects.create(
+            codigo=f"PAN_PSA{tag}",
+            nombre="PSA LIBRE Y PSA TOTAL",
+            activo=True,
+        )
+        self.paciente = Paciente.objects.create(dni=f"O{tag}", nombre="Luis", apellido="Psa")
+        self.sol = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            origen_solicitud="AMBULATORIO_CEHTA",
+            estado="EN_PROCESO",
+        )
+        self.sol.paneles.add(self.panel)
+        self.nota = (
+            "* La relación no se informa, porque la utilidad está definida "
+            "para un rango de PSA total 4-10 ng/mL."
+        )
+        defs = [
+            ("PSAL", "PSA LIBRE", "0.79", "ng/mL"),
+            ("PSAT", "PSA TOTAL", "3.16", "ng/mL"),
+            ("OBS", "Observaciones", self.nota, ""),
+        ]
+        self.resultados = []
+        for codigo, nombre, valor, unidad in defs:
+            te = TipoExamen.objects.create(
+                codigo=codigo,
+                nombre=nombre,
+                tipo_muestra_requerida=self.tm,
+                tipo_resultado="TEXTO" if codigo == "OBS" else "NUMERICO",
+                unidad_default=unidad,
+                precio=1,
+                activo=True,
+            )
+            self.panel.tipos_examen.add(te)
+            self.sol.tipos_examen.add(te)
+            self.resultados.append(
+                ResultadoExamen.objects.create(
+                    solicitud=self.sol,
+                    tipo_examen=te,
+                    valor_obtenido=valor,
+                    unidad=unidad,
+                )
+            )
+
+    def test_partir_saca_obs_de_analitos(self):
+        analitos, notas = _partir_analitos_y_notas_pie(self.resultados)
+        self.assertEqual(len(analitos), 2)
+        self.assertEqual(len(notas), 1)
+        self.assertIn("relación no se informa", notas[0])
+        self.assertTrue(all(_codigo_ok(r) != "OBS" for r in analitos))
+
+    def test_bloque_panel_obs_al_pie_sin_fila_tabla(self):
+        from reportlab.platypus import Paragraph
+
+        from laboratorio.informe_pdf_layout import GrupoResultadosPdf, _styles
+
+        # OBS primero (como en el informe problemático) para verificar reorden de presentación.
+        ordenados = [self.resultados[2], self.resultados[0], self.resultados[1]]
+        grupo = GrupoResultadosPdf(
+            key=f"panel-{self.panel.codigo}",
+            titulo=self.panel.nombre.upper(),
+            resultados=ordenados,
+            panel_codigo=self.panel.codigo,
+        )
+        flow = _bloque_panel(grupo, _styles())
+        self.assertEqual(len(flow), 1)
+        inner = getattr(flow[0], "_content", None) or getattr(flow[0], "content", None) or []
+        textos = [p.text for p in inner if isinstance(p, Paragraph)]
+        self.assertTrue(any(t == "Observaciones:" for t in textos))
+        self.assertTrue(any("relación no se informa" in t for t in textos))
+        # No debe quedar el nombre de examen OBS como fila de tabla (Paragraph exam_title).
+        exam_titles = [
+            p.text
+            for p in inner
+            if isinstance(p, Paragraph) and getattr(p.style, "name", "") == "ExamTitle"
+        ]
+        # Los títulos de analito viven dentro de Tables; no como Paragraph sueltos con OBS.
+        self.assertFalse(any("Observaciones" == t or t.startswith("OBSERVACIONES") for t in exam_titles))
+
+        pdf = generar_pdf_icpl_bytes(self.sol, list(self.sol.resultados.all()))
+        self.assertTrue(pdf.startswith(b"%PDF"))
+
+
+def _codigo_ok(res) -> str:
+    return (res.tipo_examen.codigo or "").strip().upper()
 

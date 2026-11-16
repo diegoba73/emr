@@ -54,10 +54,8 @@ from usuarios.roles import ROLES_LECTURA_OPERATIVA, ROLES_SECRETARIA_EMR
 
 _ROLES_LECTURA_GLOBAL = frozenset({"admin", "medico", "enfermeria", *ROLES_SECRETARIA_EMR})
 _ROLES_EDICION_PACIENTE = frozenset({"admin", "medico", *ROLES_SECRETARIA_EMR})
-# Alta: mismos editores + operadores LIMS (ficha mínima para pedidos).
-_ROLES_ALTA_PACIENTE = frozenset(
-    {"admin", "medico", "laboratorio", "bioquimico", *ROLES_SECRETARIA_EMR}
-)
+# Alta = mismos roles que edición demográfica (admin, médico, secretaría / secretaría lab).
+_ROLES_ALTA_PACIENTE = _ROLES_EDICION_PACIENTE
 # Diagnóstico unificado: solo médico/admin (juicio clínico).
 _ROLES_PROBLEMAS_CLINICOS = frozenset({"admin", "medico"})
 _ACCIONES_PROBLEMAS = frozenset(

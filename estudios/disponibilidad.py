@@ -81,8 +81,13 @@ def validar_disponibilidad_reserva_estudio(
     fecha_hora_inicio,
     fecha_hora_fin,
     excluir_turno_id: int | None = None,
+    exigir_franja_estudio: bool = False,
 ) -> None:
-    """Validación completa para flujo estudios (sin duración fija de consultorio)."""
+    """Validación completa para flujo estudios (sin duración fija de consultorio).
+
+    ``exigir_franja_estudio``: estudios tipificados — exige franja ESTUDIO activa
+    del médico con la sala del turno (no alcanza con catálogo médico/sala solo).
+    """
     if not fecha_hora_inicio or not fecha_hora_fin:
         raise ValidationError('Indique fecha/hora de inicio y fin.')
     if fecha_hora_fin <= fecha_hora_inicio:
@@ -96,7 +101,30 @@ def validar_disponibilidad_reserva_estudio(
     if msg_feriado:
         raise ValidationError(msg_feriado)
 
-    if medico and DisponibilidadMedico.objects.filter(medico=medico).exists():
+    if exigir_franja_estudio:
+        if medico is None:
+            raise ValidationError(
+                {'medico_id': 'Indicá el médico para el turno de estudio tipificado.'}
+            )
+        if not DisponibilidadMedico.objects.filter(
+            medico=medico, tipo='ESTUDIO', activo=True
+        ).exists():
+            raise ValidationError(
+                {
+                    'medico_id': (
+                        'El médico no tiene franjas de estudio publicadas. '
+                        'Configure la agenda ESTUDIO antes de confirmar el turno.'
+                    )
+                }
+            )
+        if fecha_hora_inicio <= timezone.now():
+            raise ValidationError('Seleccione un horario futuro.')
+        if not _cubre_intervalo(medico, fecha_hora_inicio, fecha_hora_fin, recurso):
+            raise ValidationError(
+                'El horario no está disponible en una franja ESTUDIO del médico '
+                'con esa sala.'
+            )
+    elif medico and DisponibilidadMedico.objects.filter(medico=medico).exists():
         if fecha_hora_inicio <= timezone.now():
             raise ValidationError('Seleccione un horario futuro.')
         if not _cubre_intervalo(medico, fecha_hora_inicio, fecha_hora_fin, recurso):

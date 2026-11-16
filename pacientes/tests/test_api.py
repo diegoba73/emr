@@ -2,7 +2,7 @@
 
 Cubren:
 
-- Identidad mínima al crear vía POST (dni, nombre, apellido, fecha_nacimiento).
+- Identidad mínima al crear vía POST (dni, nombre, apellido, fecha_nacimiento, obra_social).
 - Normalización de nombre/apellido al crear vía POST.
 - Búsqueda inteligente respetando filtros de rol (admin vs médico vs paciente).
 - Lectura global para médicos/secretaría/enfermería; portal paciente restringido.
@@ -26,6 +26,7 @@ def _payload_create(**overrides):
         "nombre": "Juan",
         "apellido": "Pérez",
         "fecha_nacimiento": "1990-05-15",
+        "obra_social": "PARTICULAR",
     }
     base.update(overrides)
     return base
@@ -121,6 +122,23 @@ class TestPacienteAPICreacionIdentidadMinima:
         response = client.post("/api/pacientes/", data, format="json")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "fecha_nacimiento" in response.data
+
+    def test_post_sin_obra_social_400(self):
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.noos"))
+        data = _payload_create(dni="API-NOOS-0")
+        del data["obra_social"]
+        response = client.post("/api/pacientes/", data, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "obra_social" in response.data
+
+    def test_post_obra_social_vacia_400(self):
+        client = APIClient()
+        client.force_authenticate(user=_admin("admin.api.osempty"))
+        data = _payload_create(dni="API-OSEMPTY-0", obra_social="   ")
+        response = client.post("/api/pacientes/", data, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "obra_social" in response.data
 
     def test_post_valido_201(self):
         client = APIClient()
@@ -292,7 +310,7 @@ class TestPacienteAPIPrivacidad:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["results"]) == 1
 
-    def test_laboratorio_puede_crear_paciente(self):
+    def test_laboratorio_no_puede_crear_paciente(self):
         client = APIClient()
         client.force_authenticate(user=_laboratorio_user("lab.alta.create"))
         response = client.post(
@@ -300,10 +318,10 @@ class TestPacienteAPIPrivacidad:
             _payload_create(dni="LAB-ALTA-1", fecha_nacimiento="1988-01-02"),
             format="json",
         )
-        assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert Paciente.objects.filter(dni="LAB-ALTA-1").exists()
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert not Paciente.objects.filter(dni="LAB-ALTA-1").exists()
 
-    def test_bioquimico_puede_crear_paciente(self):
+    def test_bioquimico_no_puede_crear_paciente(self):
         client = APIClient()
         client.force_authenticate(user=_bioquimico_user("bio.alta.create"))
         response = client.post(
@@ -311,8 +329,8 @@ class TestPacienteAPIPrivacidad:
             _payload_create(dni="BIO-ALTA-1", fecha_nacimiento="1988-03-04"),
             format="json",
         )
-        assert response.status_code == status.HTTP_201_CREATED, response.data
-        assert Paciente.objects.filter(dni="BIO-ALTA-1").exists()
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert not Paciente.objects.filter(dni="BIO-ALTA-1").exists()
 
     def test_laboratorio_no_puede_patch_paciente(self):
         paciente = Paciente.objects.create(dni="LAB-PATCH-1", nombre="L", apellido="Ab")

@@ -236,6 +236,28 @@ class TestCalculosDerivados(TestCase):
         self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB"]), ["CREA_U"])
         self.assertEqual(codigos_insumos_de_calculados(["RAC", "MICROALB", "CREA_U"]), [])
 
+    def test_rar_aldosterona_renina(self):
+        out = calcular_derivados(
+            {"ALDOS": Decimal("20"), "ARPLA": Decimal("1")}
+        )
+        self.assertEqual(out["RAR"][0], Decimal("20.0"))
+        self.assertEqual(out["RAR"][1], "20")
+
+    def test_rar_incompleto_o_renina_cero(self):
+        out = calcular_derivados({"ALDOS": Decimal("20"), "ARPLA": Decimal("0")})
+        self.assertIsNone(out["RAR"][0])
+        self.assertEqual(out["RAR"][1], RESULTADO_NO_CALCULABLE)
+        out = calcular_derivados({"ALDOS": Decimal("20")})
+        self.assertEqual(out["RAR"][1], RESULTADO_NO_CALCULABLE)
+
+    def test_insumos_de_rar(self):
+        self.assertEqual(
+            codigos_insumos_de_calculados(["RAR"]),
+            ["ALDOS", "ARPLA"],
+        )
+        self.assertEqual(codigos_insumos_de_calculados(["RAR", "ALDOS"]), ["ARPLA"])
+        self.assertEqual(codigos_insumos_de_calculados(["RAR", "ALDOS", "ARPLA"]), [])
+
     def test_tfg_ckd_epi_2021_basico(self):
         # Mujer 50 a, Cr 1.0 → 69 mL/min/1.73 m² (CKD-EPI 2021)
         self.assertEqual(

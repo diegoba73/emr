@@ -18,7 +18,17 @@ from laboratorio.informe_entrega_token import (
     crear_token_entrega_informe_micro,
     verificar_token_entrega_informe_micro,
 )
-from laboratorio.models_microbiologia import EstudioMicrobiologia
+from reportlab.platypus import PageBreak
+
+from laboratorio.models_microbiologia import (
+    AisladoMicrobiologico,
+    Antibiograma,
+    Antibiotico,
+    EstudioMicrobiologia,
+    Microorganismo,
+    ResultadoAntibiotico,
+)
+from laboratorio.services_informes_micro_pdf import _construir_story_micro
 from laboratorio.tests.test_microbiologia_api import _setup_estudio_con_lectura
 from pacientes.models import Paciente
 
@@ -337,4 +347,50 @@ class TestMicroPdfInforme(TestCase):
                 status.HTTP_403_FORBIDDEN,
                 status.HTTP_404_NOT_FOUND,
             ),
+        )
+
+    def test_sin_antibiograma_no_fuerza_segunda_hoja(self):
+        """Sin ATB completo: no hay PageBreak (conclusión puede ir en la 1ª hoja)."""
+        iid = self._emitir_final()
+        from laboratorio.models_microbiologia import InformeMicrobiologia
+
+        informe = InformeMicrobiologia.objects.get(pk=iid)
+        story = _construir_story_micro(self.ctx["estudio"], informe)
+        self.assertFalse(
+            any(isinstance(f, PageBreak) for f in story),
+            "Sin antibiograma no debe forzar salto de página",
+        )
+
+    def test_con_antibiograma_completo_usa_hoja_nueva(self):
+        """Con ATB COMPLETO: PageBreak antes del bloque antibiograma."""
+        micro = Microorganismo.objects.create(
+            codigo=f"EC{self.suf}",
+            nombre="E. coli",
+            genero="Escherichia",
+            especie="coli",
+            activo=True,
+        )
+        aislado = AisladoMicrobiologico.objects.create(
+            estudio=self.ctx["estudio"],
+            lectura_origen=self.ctx["lectura"],
+            microorganismo=micro,
+            estado="IDENTIFICADO",
+            significancia="SIGNIFICATIVO",
+        )
+        ab = Antibiograma.objects.create(aislado=aislado, estado="PENDIENTE", metodo="Kirby")
+        abio = Antibiotico.objects.create(
+            codigo=f"AMP{self.suf}", nombre="Ampicilina", activo=True
+        )
+        ResultadoAntibiotico.objects.create(
+            antibiograma=ab, antibiotico=abio, interpretacion="S", mic="8"
+        )
+        Antibiograma.objects.filter(pk=ab.pk).update(estado="COMPLETO")
+        iid = self._emitir_final()
+        from laboratorio.models_microbiologia import InformeMicrobiologia
+
+        informe = InformeMicrobiologia.objects.get(pk=iid)
+        story = _construir_story_micro(self.ctx["estudio"], informe)
+        self.assertTrue(
+            any(isinstance(f, PageBreak) for f in story),
+            "Con antibiograma completo debe forzar hoja nueva",
         )

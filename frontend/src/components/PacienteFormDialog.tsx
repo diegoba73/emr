@@ -216,6 +216,10 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
       setError('Nombre, apellido y DNI son obligatorios');
       return;
     }
+    if (mode === 'create' && !values.obra_social.trim()) {
+      setError('La obra social es obligatoria para crear el paciente');
+      return;
+    }
     if (createBlocked) {
       setError(
         bloqueaAlta
@@ -322,6 +326,7 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
               values={values}
               onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))}
               requireBirthDate={mode === 'create'}
+              requireObraSocial={mode === 'create'}
               hideObraSocial={mode === 'edit'}
             />
             {mode === 'edit' && paciente && (

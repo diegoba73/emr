@@ -26,6 +26,18 @@ it('explica la fecha obligatoria antes de intentar crear', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('fecha de nacimiento');
   expect(createPaciente).not.toHaveBeenCalled();
 });
+it('exige obra social al crear', () => {
+  render(<PacienteFormDialog open mode="create" onSaved={jest.fn()} onClose={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText(/Nombre \*/i), { target: { value: 'Ana' } });
+  fireEvent.change(screen.getByLabelText(/Apellido \*/i), { target: { value: 'Test' } });
+  fireEvent.change(screen.getByLabelText(/DNI \*/i), { target: { value: '30111222' } });
+  fireEvent.change(screen.getByLabelText(/Fecha de Nacimiento/i), {
+    target: { value: '1990-01-01' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Crear Paciente' }));
+  expect(screen.getByRole('alert')).toHaveTextContent(/obra social/i);
+  expect(createPaciente).not.toHaveBeenCalled();
+});
 it('bloquea el alta y ofrece usar la ficha si el DNI ya existe', async () => {
   const existing = {
     id: 44,

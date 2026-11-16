@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -115,3 +116,52 @@ class TestSolicitudCabeceraUpdateAPI(TestCase):
         self.assertIn(r.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_403_FORBIDDEN))
         sol.refresh_from_db()
         self.assertNotEqual(sol.observaciones, "no debe")
+
+    def test_patch_sin_fecha_conserva_programada(self):
+        """Guardar cabecera sin enviar fecha no pisa fecha_programada_toma (carrera 2 operadores)."""
+        sol = self._crear_orden(estado="PENDIENTE")
+        nueva = sol.fecha_programada_toma + timedelta(days=2)
+        sol.fecha_programada_toma = nueva
+        sol.save(update_fields=["fecha_programada_toma"])
+
+        self.client.force_authenticate(user=self.lab)
+        r = self.client.patch(
+            f"/api/lab/solicitudes/{sol.id}/",
+            {"observaciones": "solo obs desde vista vieja"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        sol.refresh_from_db()
+        self.assertEqual(sol.fecha_programada_toma, nueva)
+        self.assertEqual(sol.observaciones, "solo obs desde vista vieja")
+
+    def test_patch_fecha_explicita_autorizada(self):
+        sol = self._crear_orden(estado="PENDIENTE")
+        destino = timezone.localdate() + timedelta(days=3)
+        self.client.force_authenticate(user=self.lab)
+        r = self.client.patch(
+            f"/api/lab/solicitudes/{sol.id}/",
+            {"fecha_programada_toma": destino.isoformat()},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        sol.refresh_from_db()
+        self.assertEqual(sol.fecha_programada_toma, destino)
+
+    def test_secretaria_institucional_no_edita_fecha(self):
+        sol = self._crear_orden(estado="PENDIENTE")
+        sec = User.objects.create_user(
+            username=f"sec_inst_{self.suf}",
+            password="x",
+            rol="secretaria",
+        )
+        destino = timezone.localdate() + timedelta(days=5)
+        self.client.force_authenticate(user=sec)
+        r = self.client.patch(
+            f"/api/lab/solicitudes/{sol.id}/",
+            {"fecha_programada_toma": destino.isoformat()},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        sol.refresh_from_db()
+        self.assertNotEqual(sol.fecha_programada_toma, destino)

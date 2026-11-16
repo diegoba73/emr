@@ -37,14 +37,28 @@ export interface ConfigurarSemanaResult {
   duracion_slot_min: number;
   horarios: HorarioMedico[];
 }
-export const getHorarios = async (): Promise<HorarioMedico[]> => {
-  let url: string | null = '/disponibilidades/';
+export const getHorarios = async (params?: {
+  medico?: number;
+  tipo?: TipoAgenda;
+  activo?: boolean;
+}): Promise<HorarioMedico[]> => {
+  const query = new URLSearchParams();
+  if (params?.medico != null) query.set('medico', String(params.medico));
+  if (params?.tipo) query.set('tipo', params.tipo);
+  if (params?.activo != null) query.set('activo', params.activo ? 'true' : 'false');
+  const qs = query.toString();
+  let url: string | null = qs ? `/disponibilidades/?${qs}` : '/disponibilidades/';
   const rows: HorarioMedico[] = [];
   while (url) {
-    const { data }: { data: any } = await apiClient.get(url);
+    const response = await apiClient.get<HorarioMedico[] | { results: HorarioMedico[]; next?: string | null }>(
+      url
+    );
+    const data = response.data;
     rows.push(...(Array.isArray(data) ? data : data.results));
     // El paginador puede retornar URL absoluta detrás del proxy.
-    url = data.next ? `/disponibilidades/?${String(data.next).split('?')[1]}` : null;
+    const nextRaw = Array.isArray(data) ? null : data.next;
+    const nextQs: string = nextRaw ? String(nextRaw).split('?')[1] || '' : '';
+    url = nextQs ? `/disponibilidades/?${nextQs}` : null;
   }
   return rows;
 };
@@ -53,8 +67,32 @@ export const updateHorario = async (id: number, horario: Omit<HorarioMedico, 'id
 export const deleteHorario = async (id: number) => apiClient.delete(`/disponibilidades/${id}/`);
 export const configurarSemana = async (payload: ConfigurarSemanaPayload): Promise<ConfigurarSemanaResult> =>
   (await apiClient.post('/disponibilidades/configurar-semana/', payload)).data;
-export const getSlotsMedico = async (medico: number, fecha: string, tipo: TipoAgenda): Promise<SlotMedico[]> =>
-  (await apiClient.get(`/medicos/${medico}/slots/`, { params: { fecha, tipo } })).data.slots;
+export const getSlotsMedico = async (
+  medico: number,
+  fecha: string,
+  tipo: TipoAgenda,
+  opts?: { tipo_estudio?: number },
+): Promise<SlotMedico[]> =>
+  (
+    await apiClient.get(`/medicos/${medico}/slots/`, {
+      params: { fecha, tipo, ...(opts?.tipo_estudio ? { tipo_estudio: opts.tipo_estudio } : {}) },
+    })
+  ).data.slots;
+
+/** Slots de reprogramación resueltos desde el turno (médico/tipo/salas del servidor). */
+export const getSlotsReprogramacionTurno = async (
+  turnoId: number,
+  fecha: string,
+): Promise<{ slots: SlotMedico[]; detail?: string | null; tipo_estudio_id?: number | null }> => {
+  const { data } = await apiClient.get(`/turnos/${turnoId}/slots-reprogramacion/`, {
+    params: { fecha },
+  });
+  return {
+    slots: data.slots || [],
+    detail: data.detail || null,
+    tipo_estudio_id: data.tipo_estudio_id ?? null,
+  };
+};
 export const getDiasDisponibles = async (
   medico: number,
   desde: string,

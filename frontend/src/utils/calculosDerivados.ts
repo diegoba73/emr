@@ -1,6 +1,6 @@
 /**
  * Parámetros clínicos derivados (lípido, hemo, férrico, clearance, orinas 24 hs, RAC,
- * TFG CKD-EPI, calcio iónico Zeisler).
+ * RAR, TFG CKD-EPI, calcio iónico Zeisler).
  * Alineado a laboratorio/calculos_derivados.py y PDF ICPL de referencia.
  */
 
@@ -44,6 +44,7 @@ export const CODIGOS_CALCULADOS = new Set([
   'UREA_U24',
   'CREA_U24',
   'RAC',
+  'RAR',
   'TFG',
 ]);
 
@@ -158,6 +159,12 @@ export function calcExcrecionPorLitroA24h(
 export function calcRac(microalbMgL: number, creaUMgDl: number): number | null {
   if (creaUMgDl <= 0) return null;
   return roundHalfUp((microalbMgL / creaUMgDl) * 100, 1);
+}
+
+/** RAR = aldosterona ÷ actividad de renina plasmática (PRA). */
+export function calcRar(aldosterona: number, actividadRenina: number): number | null {
+  if (actividadRenina <= 0) return null;
+  return roundHalfUp(aldosterona / actividadRenina, 1);
 }
 
 /**
@@ -347,6 +354,19 @@ export function calcularDerivados(
     }
   } else if (microalb != null || creaU != null) {
     out.RAC = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+  }
+
+  const aldos = valores.ALDOS;
+  const arpla = valores.ARPLA;
+  if (aldos != null && arpla != null) {
+    const rar = calcRar(aldos, arpla);
+    if (rar != null) {
+      out.RAR = { numerico: rar, informe: fmt(rar, 1) };
+    } else {
+      out.RAR = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
+    }
+  } else if (aldos != null || arpla != null) {
+    out.RAR = { numerico: null, informe: RESULTADO_NO_CALCULABLE };
   }
 
   if (creati != null) {

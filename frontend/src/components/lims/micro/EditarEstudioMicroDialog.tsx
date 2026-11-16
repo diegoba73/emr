@@ -90,6 +90,7 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
     nombre: '',
     dni: '',
     fecha_nacimiento: '',
+    obra_social: '',
   });
 
   const [openNuevoMedico, setOpenNuevoMedico] = useState(false);
@@ -244,7 +245,8 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
         tipo_muestra_micro_id: Number(tipoMuestraId),
         observaciones: observaciones.trim(),
       };
-      if (fechaEditable && fechaProgramada) {
+      const fechaOriginal = estudio.fecha_programada_toma || '';
+      if (fechaEditable && fechaProgramada && fechaProgramada !== fechaOriginal) {
         body.fecha_programada_toma = fechaProgramada;
       }
       const updated = await updateEstudioMicrobiologia(estudio.id, body);
@@ -303,6 +305,7 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
                       nombre: '',
                       dni: '',
                       fecha_nacimiento: '',
+                      obra_social: '',
                     });
                     setOpenNuevoPaciente(true);
                   }}
@@ -508,6 +511,14 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
                 setNuevoPacienteForm((f) => ({ ...f, fecha_nacimiento: e.target.value }))
               }
             />
+            <TextField
+              size="small"
+              label="Obra social *"
+              value={nuevoPacienteForm.obra_social}
+              onChange={(e) =>
+                setNuevoPacienteForm((f) => ({ ...f, obra_social: e.target.value }))
+              }
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -523,8 +534,11 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
                 const nombre = nuevoPacienteForm.nombre.trim();
                 const dni = nuevoPacienteForm.dni.trim();
                 const fecha_nacimiento = nuevoPacienteForm.fecha_nacimiento;
-                if (!apellido || !nombre || !dni || !fecha_nacimiento) {
-                  setNuevoPacienteError('Completá apellido, nombre, DNI y fecha de nacimiento.');
+                const obra_social = nuevoPacienteForm.obra_social.trim();
+                if (!apellido || !nombre || !dni || !fecha_nacimiento || !obra_social) {
+                  setNuevoPacienteError(
+                    'Completá apellido, nombre, DNI, fecha de nacimiento y obra social.'
+                  );
                   return;
                 }
                 setNuevoPacienteSaving(true);
@@ -564,6 +578,7 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
                     nombre,
                     dni,
                     fecha_nacimiento,
+                    obra_social,
                   });
                   setPaciente(created);
                   setPacienteQuery(formatPacienteLabel(created));

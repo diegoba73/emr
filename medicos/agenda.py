@@ -126,10 +126,17 @@ def ocupado(medico, inicio, fin, recurso=None, excluir=None):
     return qs.exists()
 
 
-def slots_disponibles(medico, fecha, tipo=None):
+def slots_disponibles(medico, fecha, tipo=None, recurso_ids=None):
+    """Slots libres. Si ``recurso_ids`` es un set/lista, solo esas salas/consultorios."""
+    permitidos = set(recurso_ids) if recurso_ids is not None else None
     vistos = set()
     minutes = duracion_minutos(medico)
     for horario, inicio, fin in intervalos(medico, fecha, tipo):
+        # Sin consultorio/sala en la franja no se ofrece el slot (evita alta incorrecta).
+        if not horario.recurso_id:
+            continue
+        if permitidos is not None and horario.recurso_id not in permitidos:
+            continue
         key = (inicio, horario.tipo)
         if inicio <= timezone.now() or key in vistos or ocupado(medico, inicio, fin, horario.recurso):
             continue
@@ -143,6 +150,53 @@ def slots_disponibles(medico, fecha, tipo=None):
             'recurso_id': horario.recurso_id,
             'recurso_nombre': horario.recurso.nombre if horario.recurso_id else None,
         }
+
+
+def franja_publicada(medico, inicio, fin, *, tipo=None, horario_id=None):
+    """Devuelve la DisponibilidadMedico que cubre exactamente [inicio, fin], o None."""
+    if not medico or not inicio or not fin:
+        return None
+    if timezone.is_naive(inicio):
+        inicio = timezone.make_aware(inicio, timezone.get_current_timezone())
+    if timezone.is_naive(fin):
+        fin = timezone.make_aware(fin, timezone.get_current_timezone())
+    local = timezone.localtime(inicio)
+    msg = mensaje_feriado(local.date())
+    if msg:
+        raise ValidationError(msg)
+    for horario, a, b in intervalos(medico, local.date(), tipo):
+        if a == inicio and b == fin and (horario_id is None or horario.pk == horario_id):
+            return horario
+    return None
+
+
+def recurso_de_franja_publicada(
+    medico,
+    inicio,
+    fin,
+    *,
+    tipo=None,
+    horario_id=None,
+    recurso_solicitado=None,
+):
+    """
+    Recurso obligatorio de la franja publicada del médico.
+
+    Evita que secretaría elija un consultorio/sala distinto al de la agenda.
+    """
+    horario = franja_publicada(medico, inicio, fin, tipo=tipo, horario_id=horario_id)
+    if horario is None:
+        raise ValidationError('El horario no está disponible en la agenda del médico.')
+    if not horario.recurso_id:
+        raise ValidationError(
+            'La franja del médico no tiene consultorio/sala asignado. '
+            'Configurá el recurso en Horarios de atención.'
+        )
+    if recurso_solicitado is not None and recurso_solicitado.pk != horario.recurso_id:
+        raise ValidationError(
+            'El consultorio/sala debe ser el asignado en la agenda del médico para ese horario.'
+        )
+    return horario.recurso
 
 
 def dias_disponibles(medico, desde, hasta, tipo=None):
@@ -181,6 +235,10 @@ def validar_reserva(
     horario_id=None,
     permitir_sobreturno=False,
 ):
+    if inicio and timezone.is_naive(inicio):
+        inicio = timezone.make_aware(inicio, timezone.get_current_timezone())
+    if fin is not None and timezone.is_naive(fin):
+        fin = timezone.make_aware(fin, timezone.get_current_timezone())
     slot = duracion_de(medico)
     minutes = duracion_minutos(medico)
     if inicio and fin != inicio + slot:
@@ -200,16 +258,32 @@ def validar_reserva(
     msg_feriado = mensaje_feriado(local.date())
     if msg_feriado:
         raise ValidationError(msg_feriado)
+    recurso_efectivo = recurso
     if exigir_horario or configurado:
         if inicio <= timezone.now():
             raise ValidationError('Seleccione un horario futuro.')
-        encontrados = [h for h, a, b in intervalos(medico, local.date(), tipo_para_recurso(recurso))
-                       if a == inicio and b == fin and (horario_id is None or h.pk == horario_id)
-                       and (h.recurso_id is None or h.recurso_id == getattr(recurso, 'pk', None))]
+        tipo = tipo_para_recurso(recurso) if recurso is not None else None
+        encontrados = [
+            h for h, a, b in intervalos(medico, local.date(), tipo)
+            if a == inicio and b == fin and (horario_id is None or h.pk == horario_id)
+        ]
         if not encontrados:
             raise ValidationError('El horario no está disponible en la agenda del médico.')
+        horario = encontrados[0]
+        if not horario.recurso_id:
+            raise ValidationError(
+                'La franja del médico no tiene consultorio/sala asignado. '
+                'Configurá el recurso en Horarios de atención.'
+            )
+        if recurso is not None and recurso.pk != horario.recurso_id:
+            raise ValidationError(
+                'El consultorio/sala debe ser el asignado en la agenda del médico para ese horario.'
+            )
+        recurso_efectivo = horario.recurso
+        if recurso_efectivo:
+            Recurso.objects.select_for_update().get(pk=recurso_efectivo.pk)
     # Sobreturno (secretaría): permite un turno extra sobre un slot ya ocupado.
     if permitir_sobreturno:
         return
-    if ocupado(medico, inicio, fin, recurso, excluir):
+    if ocupado(medico, inicio, fin, recurso_efectivo, excluir):
         raise ValidationError('El horario ya está ocupado. Seleccione otro.')

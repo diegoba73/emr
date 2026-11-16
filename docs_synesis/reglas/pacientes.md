@@ -24,12 +24,12 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Regla | Etiqueta |
 |-------|----------|
 | DNI único en base de datos. | **[IMPLEMENTADO]** |
-| **Creación API** exige `dni`, `nombre`, `apellido`, `fecha_nacimiento` (`PacienteSerializer.validate`). | **[IMPLEMENTADO]** C2 |
+| **Creación API** exige `dni`, `nombre`, `apellido`, `fecha_nacimiento`, `obra_social` (`PacienteSerializer.validate`). | **[IMPLEMENTADO]** C2 (+ OS) |
 | BD aún permite `NULL` en nombre/apellido/fecha (pacientes legacy). | **[DEUDA]** migración NOT NULL / limpieza futura |
 | PATCH parcial no exige completar identidad legacy vacía. | **[IMPLEMENTADO]** C2 |
 | Búsqueda: numérico → DNI; texto → nombre/apellido con prioridad. | **[IMPLEMENTADO]** `buscar` |
 | Admin/médico/secretaría/enfermería: listado y búsqueda global, sin exigir vínculos clínicos ni `?all=true`. | **[IMPLEMENTADO]** `pacientes.views` |
-| Laboratorio y bioquímico: listado/búsqueda global y **alta** de pacientes; sin PATCH de demografía. | **[IMPLEMENTADO]** `_ROLES_ALTA_PACIENTE` (`laboratorio`, `bioquimico`) |
+| Laboratorio y bioquímico: listado/búsqueda global; **sin** alta ni PATCH de demografía. | **[IMPLEMENTADO]** alta/edición solo admin/médico/`ROLES_SECRETARIA_EMR` |
 | Paciente solo ve su ficha vía queryset activo. | **[IMPLEMENTADO]** |
 | Alta vinculada a `User` cuando aplica (`ensure_paciente_linked_to_user`). | **[IMPLEMENTADO]** |
 | DELETE físico API: solo `admin`/superuser; 409 si hay historia clínica (órdenes, turnos, atenciones, etc.); afiliaciones sí se borran con la ficha. | **[IMPLEMENTADO]** |

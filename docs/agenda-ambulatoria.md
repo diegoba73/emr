@@ -5,9 +5,10 @@
 - Secretaría y administrador: menú **Horarios de atención**, seleccionan cualquiera de los médicos. En la misma pantalla gestionan **feriados institucionales** (fecha + nombre).
 - Médico: no puede configurar horarios, excepciones ni feriados, tampoco mediante la API.
 - Cada franja define día, inicio, fin y atención (consulta o estudio). Permite agregar, editar y quitar franjas. Para lunes a viernes de 09:00 a 13:00 se cargan cinco franjas.
-- Consultas: consultorio opcional configurado por el secretaría/administrador. Estudios: sala obligatoria. El paciente no selecciona estos recursos.
-- Paciente: **Mis turnos**, selecciona médico, consulta/estudio y fecha. El calendario muestra los horarios libres del día seleccionado y sus propias reservas. Seleccionar un horario abre una confirmación con motivo opcional. La reserva queda `RESERVADO`; secretaría confirma. El paciente no cancela ni reprograma (pide a secretaría).
-- Secretaría/admin: crean turnos ya `CONFIRMADO`; confirman reservas del portal; cancelan y reprograman. Al reprogramar se notifica al paciente por push (app móvil) y WhatsApp (Twilio o enlace wa.me).
+- Consultas: consultorio **obligatorio** en la franja del médico (Horarios de atención); al sacar/reprogramar turno se usa ese consultorio (no se elige otro). Estudios: sala obligatoria en la franja. El paciente no selecciona estos recursos.
+- Paciente (app y portal PC): **Consulta** = médico + franja + reserva (`RESERVADO`). **Estudio** = solo foto del pedido médico (sin tipo ni horario); crea `PedidoEstudioPaciente` pendiente. No elige slots ESTUDIO.
+- Secretaría: bandeja **Pedidos de estudio** — ve la foto, tipifica, elige médico/sala/horario del catálogo (`MedicoTipoEstudio` / `TipoEstudioSala`) y agenda → turno `RESERVADO` + estudio tipificado. El paciente luego confirma o reprograma (mismo médico, otro slot ESTUDIO). Alta directa (calendario / Nuevo turno): consulta o estudio tipificado ya `CONFIRMADO`, sin pedido previo; sobreturno sigue solo consulta.
+- Secretaría/admin: confirman reservas; cancelan y reprograman. Reprogramar (consulta): franja libre del médico; turno nuevo + cancelar anterior + historial; notifica push/WhatsApp. Estudios no nacidos de pedido: reprogramar/cancelar desde el módulo Estudios.
 - Médico: no crea, confirma, cancela ni reprograma turnos; solo inicia y cierra la consulta/atención clínica.
 - Los horarios libres nunca incluyen datos de otros pacientes. No hay selector de prioridad ni consultorio para el paciente.
 

@@ -64,7 +64,11 @@ class TestUserSerializerAntiEscalation:
         first_name='N',
         last_name='U',
         rol='paciente',
-        paciente_data={'dni': 'HARD-AE-001'},
+        paciente_data={
+            'dni': 'HARD-AE-001',
+            'fecha_nacimiento': '1990-01-01',
+            'obra_social': 'PARTICULAR',
+        },
     )
 
     def test_staff_no_puede_crear_superuser(self, staff_actor):

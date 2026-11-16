@@ -13,6 +13,7 @@ def _payload_create(**overrides):
         "nombre": "Juan",
         "apellido": "Pérez",
         "fecha_nacimiento": date(1990, 5, 15),
+        "obra_social": "PARTICULAR",
     }
     base.update(overrides)
     return base
@@ -40,6 +41,13 @@ class TestPacienteSerializerCreacionIdentidadMinima:
         serializer = PacienteSerializer(data=data)
         assert not serializer.is_valid()
         assert "fecha_nacimiento" in serializer.errors
+
+    def test_create_sin_obra_social_falla(self):
+        data = _payload_create()
+        del data["obra_social"]
+        serializer = PacienteSerializer(data=data)
+        assert not serializer.is_valid()
+        assert "obra_social" in serializer.errors
 
     def test_create_nombre_apellido_vacios_falla(self):
         serializer = PacienteSerializer(

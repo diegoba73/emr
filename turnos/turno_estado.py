@@ -8,7 +8,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from auditoria.audit_service import log_update
@@ -35,6 +37,7 @@ class TurnoEstadoOutcome:
     estado_nuevo: str
     applied: bool
     message: str
+    turno_anterior_id: int | None = None
 
 
 def _rol_usuario(user) -> str:
@@ -84,8 +87,23 @@ def puede_cancelar_turno(user, turno: Turno) -> bool:
 
 
 def puede_reprogramar_turno(user, turno: Turno) -> bool:
-    """Mover/cambiar día: solo secretaría/admin."""
-    return puede_gestionar_turnos_global(user)
+    """Secretaría/admin, o paciente dueño de turno de estudio agendado desde su pedido."""
+    if puede_gestionar_turnos_global(user):
+        return True
+    if _rol_usuario(user) != 'paciente':
+        return False
+    from django.utils import timezone
+    from pacientes.services import ensure_paciente_linked_to_user
+    from estudios.pedido_paciente import turno_viene_de_pedido_paciente
+
+    paciente = ensure_paciente_linked_to_user(user)
+    if not paciente or turno.paciente_id != paciente.pk:
+        return False
+    if turno.estado not in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
+        return False
+    if turno.fecha_hora_inicio <= timezone.now():
+        return False
+    return turno_viene_de_pedido_paciente(turno)
 
 
 def puede_marcar_realizado_turno(user, turno: Turno) -> bool:
@@ -125,13 +143,17 @@ def validate_estado_en_creacion(estado: str | None) -> None:
 
 
 def _parse_dt(value: Any) -> datetime:
+    """Parsea fecha/hora; si viene naive (p. ej. `2026-11-16T17:00:00` del FE), la asume en TZ local."""
     if isinstance(value, datetime):
-        return value
-    if not value:
+        parsed = value
+    elif not value:
         raise TurnoEstadoTransitionError('Fecha/hora inválida.')
-    parsed = parse_datetime(str(value))
-    if parsed is None:
-        raise TurnoEstadoTransitionError('Fecha/hora inválida.')
+    else:
+        parsed = parse_datetime(str(value))
+        if parsed is None:
+            raise TurnoEstadoTransitionError('Fecha/hora inválida.')
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
     return parsed
 
 
@@ -350,6 +372,18 @@ def reprogramar_turno(
     view_name: str = 'TurnoViewSet.reprogramar',
     desde_modulo_estudios: bool = False,
 ) -> TurnoEstadoOutcome:
+    """
+    Opción 2: turno nuevo en horario libre del médico + cancelar anterior + historial.
+
+    El slot nuevo debe pertenecer a la agenda publicada del médico (si tiene franjas).
+    El slot anterior queda libre (turno anterior → CANCELADO) para otro paciente.
+    """
+    from medicos.agenda import validar_reserva
+    from medicos.models import DisponibilidadMedico
+    from rest_framework.exceptions import ValidationError as AgendaValidationError
+
+    from .models import HistorialReprogramacionTurno
+
     motivo_limpio = (motivo or '').strip()
     if not motivo_limpio:
         raise TurnoEstadoTransitionError('El motivo de reprogramación es obligatorio.')
@@ -359,7 +393,14 @@ def reprogramar_turno(
         raise TurnoEstadoTransitionError(
             f'No se puede reprogramar un turno en estado {estado_anterior}.'
         )
-    if not desde_modulo_estudios and _turno_vinculado_modulo_estudios(turno):
+    from estudios.pedido_paciente import turno_viene_de_pedido_paciente
+
+    es_pedido_estudio = turno_viene_de_pedido_paciente(turno)
+    if (
+        not desde_modulo_estudios
+        and not es_pedido_estudio
+        and _turno_vinculado_modulo_estudios(turno)
+    ):
         raise TurnoEstadoTransitionError(_MSG_OPERAR_DESDE_ESTUDIOS)
     if estado_anterior not in (
         Turno.Estado.DISPONIBLE,
@@ -368,6 +409,10 @@ def reprogramar_turno(
     ):
         raise TurnoEstadoTransitionError(
             f'No se puede reprogramar un turno en estado {estado_anterior}.'
+        )
+    if turno_tiene_atencion_clinica(turno):
+        raise TurnoEstadoTransitionError(
+            'No se puede reprogramar un turno con atención clínica iniciada.'
         )
 
     inicio = _parse_dt(fecha_hora_inicio)
@@ -381,88 +426,217 @@ def reprogramar_turno(
     if rol == 'medico' and medico and medico.id != turno.medico_id:
         raise TurnoEstadoTransitionError('No puede reasignar el turno a otro médico.')
 
-    medico_efectivo = medico or turno.medico
-    recurso_efectivo = recurso if recurso is not None else turno.recurso
+    # Paciente: no puede cambiar de médico (ni aunque envíe otro medico_id).
+    if rol == 'paciente' and medico is not None and medico.id != turno.medico_id:
+        raise TurnoEstadoTransitionError(
+            'Solo podés reprogramar con el mismo médico del turno asignado.'
+        )
 
-    from medicos.agenda import validar_reserva
-    from rest_framework.exceptions import ValidationError as AgendaValidationError
-    permitir_sobreturno = bool(getattr(turno, 'es_sobreturno', False))
+    medico_efectivo = medico or turno.medico
+    if medico_efectivo is None:
+        raise TurnoEstadoTransitionError('El turno debe tener un médico para reprogramar.')
+    if rol == 'paciente':
+        medico_efectivo = turno.medico
+
+    # Solo secretaría institucional puede generar/conservar solapamiento al
+    # reprogramar (misma regla que el alta de sobreturno). Admin/superuser no.
+    from usuarios.roles import es_secretaria_institucional
+
+    permitir_sobreturno = bool(getattr(turno, 'es_sobreturno', False)) and es_secretaria_institucional(
+        actor
+    )
+
+    agenda_publicada = DisponibilidadMedico.objects.filter(medico=medico_efectivo).exists()
+    if not agenda_publicada and not permitir_sobreturno:
+        raise TurnoEstadoTransitionError(
+            'El médico no tiene horarios de atención publicados. '
+            'Configure la agenda antes de reprogramar.'
+        )
+
+    from medicos.agenda import recurso_de_franja_publicada, tipo_para_recurso
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    def _agenda_err(exc: AgendaValidationError) -> TurnoEstadoTransitionError:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            parts = []
+            for key, val in detail.items():
+                if isinstance(val, (list, tuple)):
+                    parts.extend(str(v) for v in val)
+                else:
+                    parts.append(str(val))
+            return TurnoEstadoTransitionError(' '.join(parts) if parts else str(detail))
+        return TurnoEstadoTransitionError(str(detail))
+
+    tipo_franja_requerido = None
+    if es_pedido_estudio or rol == 'paciente':
+        tipo_franja_requerido = 'ESTUDIO'
+
+    # Consultorio/sala del nuevo horario = el de la franja del médico (no elección libre).
+    recurso_efectivo = recurso if recurso is not None else turno.recurso
+    if agenda_publicada:
+        try:
+            recurso_efectivo = recurso_de_franja_publicada(
+                medico_efectivo,
+                inicio,
+                fin,
+                tipo=tipo_franja_requerido,
+                recurso_solicitado=recurso if recurso is not None else None,
+            )
+        except AgendaValidationError as exc:
+            raise _agenda_err(exc) from exc
+
+    tipo_franja_resuelto = tipo_para_recurso(recurso_efectivo)
+    if tipo_franja_requerido and tipo_franja_resuelto != tipo_franja_requerido:
+        raise TurnoEstadoTransitionError(
+            'Elegí un horario de estudio del mismo médico, no una consulta.'
+        )
+
     try:
+        from estudios.pedido_paciente import validar_reprogramacion_estudio
+
+        validar_reprogramacion_estudio(
+            turno,
+            actor=actor,
+            medico=medico_efectivo,
+            recurso=recurso_efectivo,
+            tipo_franja=tipo_franja_resuelto,
+        )
+    except DjangoValidationError as exc:
+        messages = getattr(exc, 'messages', None)
+        if messages:
+            raise TurnoEstadoTransitionError(' '.join(str(m) for m in messages)) from exc
+        detail = getattr(exc, 'message_dict', None) or getattr(exc, 'detail', None) or str(exc)
+        if isinstance(detail, dict):
+            parts = []
+            for val in detail.values():
+                if isinstance(val, (list, tuple)):
+                    parts.extend(str(v) for v in val)
+                else:
+                    parts.append(str(val))
+            raise TurnoEstadoTransitionError(' '.join(parts) if parts else str(detail)) from exc
+        raise TurnoEstadoTransitionError(str(detail)) from exc
+
+    try:
+        # Franja publicada del médico (no cualquier horario). Sobreturno conserva excepción.
         validar_reserva(
             medico_efectivo,
             inicio,
             fin,
             recurso_efectivo,
             excluir=turno.pk,
-            exigir_horario=rol == 'paciente',
+            exigir_horario=not permitir_sobreturno,
             permitir_sobreturno=permitir_sobreturno,
         )
     except AgendaValidationError as exc:
-        raise TurnoEstadoTransitionError(str(exc.detail)) from exc
+        raise _agenda_err(exc) from exc
+
+    _validar_solapamiento(
+        medico=medico_efectivo,
+        inicio=inicio,
+        fin=fin,
+        estado=estado_anterior if estado_anterior in (
+            Turno.Estado.RESERVADO,
+            Turno.Estado.CONFIRMADO,
+        ) else Turno.Estado.RESERVADO,
+        excluir_turno_id=turno.pk,
+        es_sobreturno=permitir_sobreturno,
+    )
 
     before = safe_model_snapshot(turno)
     inicio_ant = turno.fecha_hora_inicio
     fin_ant = turno.fecha_hora_fin
     medico_id_ant = turno.medico_id
     recurso_id_ant = turno.recurso_id
+    turno_anterior_id = turno.pk
 
-    turno.fecha_hora_inicio = inicio
-    turno.fecha_hora_fin = fin
-    if medico is not None:
-        turno.medico = medico
-    if recurso is not None:
-        turno.recurso = recurso
-
-    _validar_solapamiento(
-        medico=medico_efectivo,
-        inicio=turno.fecha_hora_inicio,
-        fin=turno.fecha_hora_fin,
-        estado=turno.estado,
-        excluir_turno_id=turno.pk,
-        es_sobreturno=permitir_sobreturno,
+    estado_nuevo_turno = (
+        estado_anterior
+        if estado_anterior != Turno.Estado.DISPONIBLE
+        else Turno.Estado.RESERVADO
     )
 
-    try:
-        turno.full_clean()
-    except ValidationError as exc:
-        raise TurnoEstadoTransitionError(str(exc)) from exc
+    with transaction.atomic():
+        turno_nuevo = Turno(
+            paciente=turno.paciente,
+            medico=medico_efectivo,
+            recurso=recurso_efectivo,
+            fecha_hora_inicio=inicio,
+            fecha_hora_fin=fin,
+            estado=estado_nuevo_turno,
+            motivo_reserva=turno.motivo_reserva,
+            es_sobreturno=permitir_sobreturno,
+        )
+        try:
+            turno_nuevo.full_clean()
+        except ValidationError as exc:
+            raise TurnoEstadoTransitionError(str(exc)) from exc
+        turno_nuevo.save()
 
-    turno.save(
-        update_fields=[
-            'fecha_hora_inicio',
-            'fecha_hora_fin',
-            'medico',
-            'recurso',
-            'updated_at',
-        ]
-    )
+        cancelar_turno(
+            turno,
+            actor=actor,
+            motivo=motivo_limpio,
+            view_name=view_name,
+            desde_modulo_estudios=desde_modulo_estudios or es_pedido_estudio,
+        )
 
-    _audit_transition(
-        turno=turno,
-        before=before,
-        actor=actor,
-        accion='reprogramar_turno',
-        estado_anterior=estado_anterior,
-        estado_nuevo=turno.estado,
-        view_name=view_name,
-        motivo=motivo_limpio,
-        extra_metadata={
-            'fecha_hora_inicio_anterior': inicio_ant.isoformat() if inicio_ant else None,
-            'fecha_hora_inicio_nueva': turno.fecha_hora_inicio.isoformat(),
-            'fecha_hora_fin_anterior': fin_ant.isoformat() if fin_ant else None,
-            'fecha_hora_fin_nueva': turno.fecha_hora_fin.isoformat() if turno.fecha_hora_fin else None,
-            'medico_id_anterior': medico_id_ant,
-            'medico_id_nuevo': turno.medico_id,
-            'recurso_id_anterior': recurso_id_ant,
-            'recurso_id_nuevo': turno.recurso_id,
-        },
-    )
+        if es_pedido_estudio:
+            from estudios.models import (
+                EstudioComplementario,
+                PedidoEstudioPaciente,
+                SesionActividad,
+            )
+
+            PedidoEstudioPaciente.objects.filter(turno_id=turno_anterior_id).update(
+                turno=turno_nuevo
+            )
+            EstudioComplementario.objects.filter(turno_id=turno_anterior_id).update(
+                turno=turno_nuevo
+            )
+            SesionActividad.objects.filter(turno_id=turno_anterior_id).update(
+                turno=turno_nuevo
+            )
+
+        HistorialReprogramacionTurno.objects.create(
+            turno_anterior_id=turno_anterior_id,
+            turno_nuevo=turno_nuevo,
+            actor=actor if getattr(actor, 'pk', None) else None,
+            motivo=motivo_limpio,
+        )
+
+        _audit_transition(
+            turno=turno_nuevo,
+            before=before,
+            actor=actor,
+            accion='reprogramar_turno',
+            estado_anterior=estado_anterior,
+            estado_nuevo=turno_nuevo.estado,
+            view_name=view_name,
+            motivo=motivo_limpio,
+            extra_metadata={
+                'turno_anterior_id': turno_anterior_id,
+                'turno_nuevo_id': turno_nuevo.pk,
+                'fecha_hora_inicio_anterior': inicio_ant.isoformat() if inicio_ant else None,
+                'fecha_hora_inicio_nueva': turno_nuevo.fecha_hora_inicio.isoformat(),
+                'fecha_hora_fin_anterior': fin_ant.isoformat() if fin_ant else None,
+                'fecha_hora_fin_nueva': (
+                    turno_nuevo.fecha_hora_fin.isoformat() if turno_nuevo.fecha_hora_fin else None
+                ),
+                'medico_id_anterior': medico_id_ant,
+                'medico_id_nuevo': turno_nuevo.medico_id,
+                'recurso_id_anterior': recurso_id_ant,
+                'recurso_id_nuevo': turno_nuevo.recurso_id,
+                'viene_de_pedido_estudio': es_pedido_estudio,
+            },
+        )
     return TurnoEstadoOutcome(
-        turno=turno,
+        turno=turno_nuevo,
         estado_anterior=estado_anterior,
-        estado_nuevo=turno.estado,
+        estado_nuevo=turno_nuevo.estado,
         applied=True,
         message='Turno reprogramado exitosamente.',
+        turno_anterior_id=turno_anterior_id,
     )
 
 

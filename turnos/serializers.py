@@ -192,6 +192,14 @@ class TurnoSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="Estudio complementario vinculado al turno (agenda de estudios)",
     )
+    viene_de_pedido_estudio = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="True si el turno nació de un pedido de estudio del paciente (app/portal).",
+    )
+    pedido_estudio_id = serializers.SerializerMethodField(
+        read_only=True,
+        help_text="Id del PedidoEstudioPaciente origen, si aplica.",
+    )
 
     class Meta:
         model = Turno
@@ -207,6 +215,8 @@ class TurnoSerializer(serializers.ModelSerializer):
             'recurso_nombre',
             'atencion',
             'estudio_complementario',
+            'viene_de_pedido_estudio',
+            'pedido_estudio_id',
             # Campos de escritura (IDs)
             'paciente_id',
             'medico_id',
@@ -231,6 +241,8 @@ class TurnoSerializer(serializers.ModelSerializer):
             'recurso_nombre',
             'atencion',
             'estudio_complementario',
+            'viene_de_pedido_estudio',
+            'pedido_estudio_id',
             'asistencia_confirmada_en',
             'created_at',
             'updated_at',
@@ -289,12 +301,29 @@ class TurnoSerializer(serializers.ModelSerializer):
             'estado': ec.estado,
             'practica': ec.practica,
             'tipo_actividad': getattr(ec, 'tipo_actividad', None) or 'ESTUDIO',
+            'tipo_estudio_id': ec.tipo_estudio_id,
             'tipo_estudio_nombre': tipo_nombre,
             'procedimiento_catalogo_nombre': getattr(
                 getattr(ec, 'procedimiento_catalogo', None), 'nombre', None
             ),
             'medico_solicitante_id': med_sol_id,
         }
+
+    def get_viene_de_pedido_estudio(self, obj: Turno) -> bool:
+        from estudios.pedido_paciente import turno_viene_de_pedido_paciente
+
+        return turno_viene_de_pedido_paciente(obj)
+
+    def get_pedido_estudio_id(self, obj: Turno):
+        from estudios.models import PedidoEstudioPaciente
+
+        row = (
+            PedidoEstudioPaciente.objects.filter(turno_id=obj.pk)
+            .order_by('-id')
+            .values_list('id', flat=True)
+            .first()
+        )
+        return row
 
     def validate(self, attrs):
         """
@@ -358,6 +387,16 @@ class TurnoSerializer(serializers.ModelSerializer):
             'es_sobreturno',
             getattr(inst, 'es_sobreturno', False) if inst else False,
         )
+        ya_era_sobreturno = bool(getattr(inst, 'es_sobreturno', False)) if inst else False
+        if es_sobreturno and not ya_era_sobreturno:
+            from usuarios.roles import es_secretaria_institucional
+
+            request = self.context.get('request')
+            user = getattr(request, 'user', None) if request is not None else None
+            if not user or not es_secretaria_institucional(user):
+                raise serializers.ValidationError({
+                    'es_sobreturno': 'Solo secretaría puede agendar sobreturnos.',
+                })
 
         if (
             medico

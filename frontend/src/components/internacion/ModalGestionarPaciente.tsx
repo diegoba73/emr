@@ -395,6 +395,8 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
       }
       if (!found) {
         setError('No se encontró la internación');
+        // La cama ya trae el id: igual intentar revista (labs/estudios del episodio).
+        await loadRevistaContexto(internacionId);
         return;
       }
       setInternacion(found);

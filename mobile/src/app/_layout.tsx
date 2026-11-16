@@ -86,6 +86,7 @@ function Navigation() {
       <Stack.Protected guard={Boolean(user)}>
         <Stack.Screen name="index" options={{ title: 'SYNESIS movil' }} />
         <Stack.Screen name="reservar" options={{ title: 'Elegir horario' }} />
+        <Stack.Screen name="pedidos" options={{ title: 'Mis pedidos' }} />
         <Stack.Screen name="turno/[id]" options={{ title: 'Detalle del turno' }} />
         <Stack.Screen name="informes/index" options={{ title: 'Informes' }} />
         <Stack.Screen name="informes/[id]" options={{ title: 'Informe' }} />

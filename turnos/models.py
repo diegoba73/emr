@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from pacientes.models import Paciente
@@ -121,6 +122,40 @@ class Turno(TimestampedModel):
         recurso_str = self.recurso.nombre if self.recurso else "Sin recurso"
         fecha_str = self.fecha_hora_inicio.strftime('%Y-%m-%d %H:%M') if self.fecha_hora_inicio else "Sin fecha"
         return f"Turno #{self.id} ({paciente_str}) - {recurso_str} - {fecha_str}"
+
+
+class HistorialReprogramacionTurno(TimestampedModel):
+    """Trazabilidad de reprogramaciones de consulta (turno nuevo + anterior cancelado)."""
+
+    turno_anterior = models.ForeignKey(
+        Turno,
+        on_delete=models.PROTECT,
+        related_name='reprogramaciones_como_anterior',
+    )
+    turno_nuevo = models.ForeignKey(
+        Turno,
+        on_delete=models.PROTECT,
+        related_name='reprogramaciones_como_nuevo',
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='historial_reprogramaciones_turno',
+    )
+    motivo = models.TextField()
+
+    class Meta:
+        verbose_name = 'Historial de reprogramación de turno'
+        verbose_name_plural = 'Historiales de reprogramación de turno'
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return (
+            f'Reprogramación #{self.pk}: '
+            f'turno {self.turno_anterior_id} → {self.turno_nuevo_id}'
+        )
 
 
 class Atencion(TimestampedModel):
