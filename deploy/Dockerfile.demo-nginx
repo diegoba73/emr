@@ -6,7 +6,12 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --legacy-peer-deps
 COPY frontend/ ./
-ENV REACT_APP_API_URL=/api
+# Misma origin vía nginx clínico: /showcase + /showcase-api (no usa el puerto 8081 público).
+ARG PUBLIC_URL=/showcase
+ARG REACT_APP_API_URL=/showcase-api
+ENV PUBLIC_URL=$PUBLIC_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_CSRF_COOKIE_NAME=emr_demo_csrftoken
 ENV REACT_APP_DEMO_MODE=true
 ENV CI=false
 ENV DISABLE_ESLINT_PLUGIN=true

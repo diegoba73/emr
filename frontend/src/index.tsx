@@ -13,9 +13,12 @@ setupGlobalErrorHandler();
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
+// PUBLIC_URL=/showcase en la imagen demo (proxy clínico :8080/showcase/).
+const routerBasename = (process.env.PUBLIC_URL || '').replace(/\/$/, '') || undefined;
+
 root.render(
   <React.StrictMode>
-    <Router>
+    <Router basename={routerBasename}>
       <App />
     </Router>
   </React.StrictMode>

@@ -55,6 +55,9 @@ services:
       DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-False}
       DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-False}
       DJANGO_USE_PROXY_SSL_HEADER: ${DJANGO_USE_PROXY_SSL_HEADER:-False}
+      # Cookies propias (mismo host :8080/showcase): no pisan sessionid/csrftoken clínicos
+      DJANGO_SESSION_COOKIE_NAME: ${DJANGO_SESSION_COOKIE_NAME:-emr_demo_sessionid}
+      DJANGO_CSRF_COOKIE_NAME: ${DJANGO_CSRF_COOKIE_NAME:-emr_demo_csrftoken}
       DB_ENGINE: django.db.backends.postgresql
       DB_NAME: ${DB_NAME:-synesis_db}
       # Runtime read-only (SELECT + django_session + auth_user.last_login)

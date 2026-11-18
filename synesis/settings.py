@@ -180,6 +180,13 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False  # Permitir acceso desde JavaScript (SPA)
 CSRF_COOKIE_SECURE = env_bool('DJANGO_CSRF_COOKIE_SECURE', default=not DEBUG)
 CSRF_COOKIE_DOMAIN = None
+# Demo detrás de /showcase en el mismo host clínico: nombres distintos para no pisar sesión EMR.
+_csrf_cookie_name = (os.getenv('DJANGO_CSRF_COOKIE_NAME') or '').strip()
+if _csrf_cookie_name:
+    CSRF_COOKIE_NAME = _csrf_cookie_name
+_csrf_cookie_path = (os.getenv('DJANGO_CSRF_COOKIE_PATH') or '').strip()
+if _csrf_cookie_path:
+    CSRF_COOKIE_PATH = _csrf_cookie_path
 
 # Session / HTTPS — activables por env en producción
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -187,6 +194,12 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = env_bool('DJANGO_SESSION_COOKIE_SECURE', default=not DEBUG)
 SESSION_COOKIE_DOMAIN = None
 SESSION_COOKIE_PATH = '/'
+_session_cookie_name = (os.getenv('DJANGO_SESSION_COOKIE_NAME') or '').strip()
+if _session_cookie_name:
+    SESSION_COOKIE_NAME = _session_cookie_name
+_session_cookie_path = (os.getenv('DJANGO_SESSION_COOKIE_PATH') or '').strip()
+if _session_cookie_path:
+    SESSION_COOKIE_PATH = _session_cookie_path
 
 SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', default=not DEBUG)
 SECURE_HSTS_SECONDS = int(

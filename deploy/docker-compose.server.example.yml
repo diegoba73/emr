@@ -14,6 +14,9 @@ services:
     container_name: emr_nginx_server
     ports:
       - "80:80"
+    # Showcase demo (:8080/showcase → host:8081). Ver deploy/nginx/nginx.emr.conf
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Obligatorio: APK fuera del contenedor (sobrevive redeploy)
       - /srv/emr/public:/srv/emr/public:ro

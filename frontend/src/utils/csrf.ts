@@ -2,12 +2,20 @@
  * Utilidad para manejar tokens CSRF
  */
 
+const CSRF_COOKIE_CANDIDATES = [
+  process.env.REACT_APP_CSRF_COOKIE_NAME || '',
+  'emr_demo_csrftoken',
+  'csrftoken',
+].filter(Boolean);
+
 export const getCSRFToken = (): string => {
   const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'csrftoken') {
-      return value;
+  for (const wanted of CSRF_COOKIE_CANDIDATES) {
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === wanted) {
+        return value || '';
+      }
     }
   }
   return '';

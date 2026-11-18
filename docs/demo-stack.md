@@ -36,7 +36,17 @@ docker compose -p emr-demo -f docker-compose.demo.yml --env-file .env.demo exec 
   python manage.py seed_demo_marketing
 ```
 
-Abrir: [http://localhost:8081/demo](http://localhost:8081/demo)
+Abrir local: [http://localhost:8081/showcase/demo](http://localhost:8081/showcase/demo)  
+(atajos `/` y `/demo` redirigen ahí)
+
+### Acceso público sin abrir 8081 en el router (recomendado)
+
+El nginx clínico proxea el stack demo (BD aislada + read-only) en el mismo puerto **8080**:
+
+- Enlace a compartir: `https://emr.icpueblodeluis.com.ar:8080/showcase/demo`
+- API demo: `/showcase-api/` → `emr_demo` (no la BD clínica)
+- Requiere `emr_demo_*` arriba en el host (`:8081` solo localhost) y `extra_hosts: host.docker.internal:host-gateway` en el nginx clínico
+- `/demo` en el SPA clínico (`:8080/demo`) sigue siendo tour sobre la **BD clínica** — no confundir
 
 Usuarios: `medico1` / `medico123`, `laboratorio1` / `laboratorio123`,
 `enfermeria1` / `enfermeria123`, `paciente1` / `paciente123`.
