@@ -130,9 +130,10 @@ def _rank_presentacion_item(codigo: str, *, es_orina: bool, nombre: str) -> tupl
 
 # Casillas sueltas del formulario papel que se marcan junto al panel.
 # Siguen siendo componentes (no expanden el panel), pero deben figurar en el
-# listado del pedido a firmar / talón (p. ej. Cloro con ionograma, R.I.N. con coag).
+# listado del pedido a firmar / talón (p. ej. Cloro/Ca iónico con ionograma,
+# R.I.N. con coag).
 LINEAS_FORMULARIO_CON_PANEL: dict[str, tuple[str, ...]] = {
-    "PAN_IONO": ("CL",),
+    "PAN_IONO": ("CL", "CA_ION"),
     "PAN_COAG": ("INR",),
 }
 
@@ -143,7 +144,7 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
     Orden: ORDEN_PRESENTACION_PEDIDO; orinas al final (orina completa última).
     No anota fecha de extracción por ítem (va en cabecera del talón / pie del pedido).
 
-    Excepción: CL / INR se listan si está pedido su panel (casillas del formulario).
+    Excepción: CL / CA_ION / INR se listan si está pedido su panel (casillas del formulario).
     """
     from laboratorio.orden_grupos_informe import PANELES_ORINA, CODIGOS_ORINA_SUELTOS, MUESTRAS_ORINA
 
@@ -167,7 +168,7 @@ def _examenes_solicitud(solicitud: SolicitudExamen) -> list[str]:
 
     for te in solicitud.tipos_examen.select_related("tipo_muestra_requerida").all():
         codigo_te = (te.codigo or "").strip().upper()
-        # CL/INR: casilla del formulario aunque sean componente del panel pedido.
+        # CL/CA_ION/INR: casilla del formulario aunque sean componente del panel pedido.
         if te.pk in componentes_panel and codigo_te not in codigos_linea_formulario:
             continue
         n = (te.nombre or te.codigo or "").strip()

@@ -111,7 +111,7 @@ const PERFILES_POR_CODIGO: ReadonlyArray<{
   {
     codigo: 'PAN_IONO',
     nombre: 'Ionograma plasmático',
-    examenes: ['NA', 'K', 'CL'],
+    examenes: ['NA', 'K', 'CL', 'CA_ION'],
   },
   {
     codigo: 'PAN_LIP',

@@ -87,10 +87,12 @@ class TestRestriccionesGuardiaCatalogo(TestCase):
         self.assertIn("CREATI", EXAMENES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_HEMO", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_IONO", PANELES_GUARDIA_PERMITIDOS)
+        self.assertIn("PAN_COAG", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_HEP", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_EAB_ART", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("PAN_EAB_VEN", PANELES_GUARDIA_PERMITIDOS)
         self.assertIn("UREA", EXAMENES_GUARDIA_PERMITIDOS)
+        self.assertIn("CA_ION", EXAMENES_GUARDIA_PERMITIDOS)
         # Uricemia (AU) sigue fuera del pedido de guardia.
         self.assertNotIn("AU", EXAMENES_GUARDIA_PERMITIDOS)
 

@@ -351,7 +351,7 @@ PANELES: list[PanelDef] = [
     {
         "codigo": "PAN_IONO",
         "nombre": "Ionograma plasmático",
-        "componentes": ["NA", "K", "CL"],
+        "componentes": ["NA", "K", "CL", "CA_ION"],
     },
     {
         "codigo": "PAN_COAG",

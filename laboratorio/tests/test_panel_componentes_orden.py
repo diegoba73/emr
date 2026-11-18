@@ -45,7 +45,7 @@ class TestPanelComponentesOrden:
         ]
 
     def test_ionograma_orden_canonico(self):
-        assert PANEL_COMPONENTES_BY_CODIGO["PAN_IONO"] == ["NA", "K", "CL"]
+        assert PANEL_COMPONENTES_BY_CODIGO["PAN_IONO"] == ["NA", "K", "CL", "CA_ION"]
 
     def test_ordenar_ids_por_panel(self):
         pares = [(5, "PLAQ"), (1, "HEMATIES"), (3, "HGB"), (2, "HTO")]

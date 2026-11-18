@@ -7,6 +7,8 @@ Nombres canónicos del seed (`catalogo_solicitud_papel`): se valida por
 |-----------------------|-------------|-------------------------------|
 | Hemograma             | PAN_HEMO    | Hemograma                     |
 | Ionograma             | PAN_IONO    | Ionograma plasmático          |
+| Calcio iónico         | CA_ION      | Calcio iónico                 |
+| Coagulograma          | PAN_COAG    | Coagulograma básico           |
 | Glucosa               | GLU         | Glucemia                      |
 | Urea                  | UREA        | Uremia                        |
 | Creatinina            | CREATI      | Creatininemia                 |
@@ -40,6 +42,7 @@ PANELES_GUARDIA_PERMITIDOS = frozenset(
     {
         "PAN_HEMO",
         "PAN_IONO",
+        "PAN_COAG",
         "PAN_HEP",
         "PAN_EAB_ART",
         "PAN_EAB_VEN",
@@ -52,6 +55,7 @@ EXAMENES_GUARDIA_PERMITIDOS = frozenset(
         "GLU",
         "UREA",
         "CREATI",
+        "CA_ION",
         "TROP_US",
         "TROP_I",
         "CPK_MB",
@@ -81,9 +85,9 @@ COMPONENTES_GUARDIA_PERMITIDOS = _componentes_de_paneles_permitidos()
 
 MENSAJE_EXAMEN_NO_PERMITIDO_GUARDIA = (
     "En guardia solo se pueden pedir: hemograma, ionograma plasmático, "
-    "glucemia, uremia, creatininemia, hepatograma, enzimas cardíacas "
-    "(troponina I ultrasensible, troponina I, CPK-MB, CPK, mioglobina) "
-    "y EAB arterial/venoso. No permitido: {codigos}."
+    "calcio iónico, coagulograma, glucemia, uremia, creatininemia, "
+    "hepatograma, enzimas cardíacas (troponina I ultrasensible, troponina I, "
+    "CPK-MB, CPK, mioglobina) y EAB arterial/venoso. No permitido: {codigos}."
 )
 
 

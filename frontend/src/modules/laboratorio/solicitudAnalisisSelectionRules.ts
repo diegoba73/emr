@@ -54,6 +54,7 @@ export const PANELES_EAB = new Set(['PAN_EAB_ART', 'PAN_EAB_VEN']);
 export const EXAMENES_CUBIERTOS_POR_PANEL: Record<string, string> = {
   INR: 'PAN_COAG',
   CL: 'PAN_IONO',
+  CA_ION: 'PAN_IONO',
   PLAQ: 'PAN_HEMO',
 };
 

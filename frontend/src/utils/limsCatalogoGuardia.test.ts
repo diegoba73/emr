@@ -30,6 +30,13 @@ describe('limsCatalogoGuardia', () => {
     expect(panelPermitidoEnGuardia('PAN_LIP')).toBe(false);
   });
 
+  it('acepta coagulograma, calcio iónico y casillas cubiertas por ionograma', () => {
+    expect(panelPermitidoEnGuardia('PAN_COAG')).toBe(true);
+    expect(examenPermitidoEnGuardia('CA_ION')).toBe(true);
+    expect(examenPermitidoEnGuardia('CL')).toBe(true);
+    expect(examenPermitidoEnGuardia('INR')).toBe(true);
+  });
+
   it('acepta examen con panel_equivalente permitido', () => {
     expect(
       examenPermitidoEnGuardia('HEMO_PROD', { panelEquivalente: 'PAN_HEMO' })

@@ -47,9 +47,10 @@ describe('solicitudAnalisisSelectionRules', () => {
     expect(EXAMENES_CUBIERTOS_POR_PANEL.PLAQ).toBe('PAN_HEMO');
   });
 
-  it('cubre INR y CL por sus paneles', () => {
+  it('cubre INR, CL y CA_ION por sus paneles', () => {
     expect(EXAMENES_CUBIERTOS_POR_PANEL.INR).toBe('PAN_COAG');
     expect(EXAMENES_CUBIERTOS_POR_PANEL.CL).toBe('PAN_IONO');
+    expect(EXAMENES_CUBIERTOS_POR_PANEL.CA_ION).toBe('PAN_IONO');
   });
 });
 

@@ -205,9 +205,10 @@ class TestImpresionOrdenes(TestCase):
             timezone.localtime(pedido_dt).strftime("%d/%m/%Y"),
         )
 
-    def test_pedido_clinico_marca_cl_e_inr_con_sus_paneles(self):
+    def test_pedido_clinico_marca_cl_ca_ion_e_inr_con_sus_paneles(self):
         tm = self.glu.tipo_muestra_requerida
         cl = _examen("CL", "Cloro", tm)
+        ca_ion = _examen("CA_ION", "Calcio ionico", tm)
         inr = _examen("INR", "R.I.N.", tm)
         iono, _ = PanelExamen.objects.get_or_create(
             codigo="PAN_IONO", defaults={"nombre": "Ionograma plasmático", "activo": True}
@@ -215,22 +216,24 @@ class TestImpresionOrdenes(TestCase):
         coag, _ = PanelExamen.objects.get_or_create(
             codigo="PAN_COAG", defaults={"nombre": "Coagulograma básico", "activo": True}
         )
-        iono.tipos_examen.add(cl)
+        iono.tipos_examen.add(cl, ca_ion)
         coag.tipos_examen.add(inr)
         sol = SolicitudExamen.objects.create(
             paciente=self.paciente, medico_interno=self.medico,
             origen_solicitud="AMBULATORIO_CEHTA", estado="EN_PROCESO",
         )
         sol.paneles.add(iono, coag)
-        sol.tipos_examen.add(cl, inr)
+        sol.tipos_examen.add(cl, ca_ion, inr)
         ped = construir_pedido_clinico(sol)
         self.assertIn("PAN_IONO", ped.marcados)
         self.assertIn("CL", ped.marcados)
+        self.assertIn("CA_ION", ped.marcados)
         self.assertIn("PAN_COAG", ped.marcados)
         self.assertIn("INR", ped.marcados)
         # Listado a firmar: casillas del formulario junto al panel.
         self.assertTrue(any("Ionograma" in s for s in ped.solicitados))
         self.assertTrue(any("Cloro" in s for s in ped.solicitados))
+        self.assertTrue(any("Calcio" in s for s in ped.solicitados))
         self.assertTrue(any("Coagulograma" in s for s in ped.solicitados))
         self.assertTrue(any("R.I.N" in s or "INR" in s or "RIN" in s.upper() for s in ped.solicitados))
 

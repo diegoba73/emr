@@ -3,9 +3,12 @@
  * Alineado a laboratorio/restricciones_guardia_catalogo.py (validación por código).
  */
 
+import { EXAMENES_CUBIERTOS_POR_PANEL } from '../modules/laboratorio/solicitudAnalisisSelectionRules';
+
 export const PANELES_GUARDIA_PERMITIDOS = new Set([
   'PAN_HEMO',
   'PAN_IONO',
+  'PAN_COAG',
   'PAN_HEP',
   'PAN_EAB_ART',
   'PAN_EAB_VEN',
@@ -15,6 +18,7 @@ export const EXAMENES_GUARDIA_PERMITIDOS = new Set([
   'GLU',
   'UREA',
   'CREATI',
+  'CA_ION',
   'TROP_US',
   'TROP_I',
   'CPK_MB',
@@ -23,7 +27,7 @@ export const EXAMENES_GUARDIA_PERMITIDOS = new Set([
 ]);
 
 export const MENSAJE_CATALOGO_GUARDIA =
-  'En guardia solo se pueden pedir: hemograma, ionograma plasmático, glucemia, uremia, creatininemia, hepatograma, enzimas cardíacas (troponina I ultrasensible, troponina I, CPK-MB, CPK, mioglobina) y EAB arterial/venoso.';
+  'En guardia solo se pueden pedir: hemograma, ionograma plasmático, calcio iónico, coagulograma, glucemia, uremia, creatininemia, hepatograma, enzimas cardíacas (troponina I ultrasensible, troponina I, CPK-MB, CPK, mioglobina) y EAB arterial/venoso.';
 
 function normCodigo(codigo: string | null | undefined): string {
   return (codigo || '').trim().toUpperCase();
@@ -56,6 +60,9 @@ export function examenPermitidoEnGuardia(
   if (PANELES_GUARDIA_PERMITIDOS.has(c)) return true;
   const pe = normCodigo(opts?.panelEquivalente);
   if (pe && PANELES_GUARDIA_PERMITIDOS.has(pe)) return true;
+  // Casillas del formulario cubiertas por un panel permitido (CL/CA_ION, INR).
+  const panelQueCubre = EXAMENES_CUBIERTOS_POR_PANEL[c];
+  if (panelQueCubre && PANELES_GUARDIA_PERMITIDOS.has(panelQueCubre)) return true;
   return false;
 }
 
