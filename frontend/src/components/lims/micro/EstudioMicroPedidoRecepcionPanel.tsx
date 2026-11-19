@@ -11,7 +11,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import { labelOrigenSolicitudLims } from '../../../utils/limsOrigenSolicitud';
-import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
+import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../../utils/limsObraSocial';
 import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
 
 export interface EstudioMicroPedidoRecepcionPanelProps {
@@ -55,7 +55,7 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
           {estudio.estado_obra_social ? (
             <Chip
               size="small"
-              label={`Obra social: ${labelEstadoObraSocial(estudio.estado_obra_social)}`}
+              label={`Obra social: ${labelObraSocialConMonto(estudio.estado_obra_social, estudio.monto_debe_abonar)}`}
               color={colorEstadoObraSocial(estudio.estado_obra_social)}
               variant="outlined"
             />

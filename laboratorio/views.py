@@ -966,6 +966,7 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
             request.data.get('estado_obra_social', ''),
             actor=request.user,
             view_name='SolicitudExamenViewSet.estado_obra_social',
+            raw_monto=request.data.get('monto_debe_abonar'),
         )
         if error is not None:
             return error

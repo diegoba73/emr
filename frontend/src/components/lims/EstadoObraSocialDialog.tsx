@@ -9,6 +9,7 @@ import {
   FormControlLabel,
   Radio,
   RadioGroup,
+  TextField,
   Typography,
 } from '@mui/material';
 import toast from 'react-hot-toast';
@@ -23,30 +24,60 @@ export interface EstadoObraSocialDialogProps {
   open: boolean;
   numero?: string | null;
   value?: string | null;
+  monto?: string | number | null;
   saving?: boolean;
   onClose: () => void;
-  onSave: (estado: EstadoObraSocialLims) => Promise<void>;
+  onSave: (estado: EstadoObraSocialLims, monto: number | null) => Promise<void>;
+}
+
+function montoToInput(monto?: string | number | null): string {
+  if (monto === null || monto === undefined || monto === '') return '';
+  return String(monto);
+}
+
+function parseMontoInput(raw: string): number | null {
+  const texto = raw.trim().replace(',', '.');
+  if (!texto) return null;
+  const n = Number(texto);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error('Monto inválido');
+  }
+  return Math.round(n * 100) / 100;
 }
 
 const EstadoObraSocialDialog: React.FC<EstadoObraSocialDialogProps> = ({
   open,
   numero,
   value,
+  monto,
   saving = false,
   onClose,
   onSave,
 }) => {
   const [estado, setEstado] = useState<EstadoObraSocialLims>('');
+  const [montoTexto, setMontoTexto] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) setEstado(normalizeEstadoObraSocial(value));
-  }, [open, value]);
+    if (open) {
+      setEstado(normalizeEstadoObraSocial(value));
+      setMontoTexto(montoToInput(monto));
+    }
+  }, [open, value, monto]);
 
   const handleSave = async () => {
     setBusy(true);
     try {
-      await onSave(estado);
+      let montoValor: number | null = null;
+      if (estado === 'DEBE_ABONAR') {
+        try {
+          montoValor = parseMontoInput(montoTexto);
+        } catch {
+          toast.error('Ingresá un monto válido (opcional) o dejalo vacío.');
+          return;
+        }
+      }
+      await onSave(estado, montoValor);
       toast.success('Estado de obra social actualizado.');
       onClose();
     } catch (e) {
@@ -84,6 +115,19 @@ const EstadoObraSocialDialog: React.FC<EstadoObraSocialDialogProps> = ({
             ))}
           </RadioGroup>
         </FormControl>
+        {estado === 'DEBE_ABONAR' ? (
+          <TextField
+            sx={{ mt: 2 }}
+            fullWidth
+            size="small"
+            label="Monto a abonar (opcional)"
+            value={montoTexto}
+            onChange={(e) => setMontoTexto(e.target.value)}
+            placeholder="Ej: 1500.50"
+            inputProps={{ inputMode: 'decimal' }}
+            helperText="Para que recepción sepa cuánto cobrarle al paciente."
+          />
+        ) : null}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={working}>

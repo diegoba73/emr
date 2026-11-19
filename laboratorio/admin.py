@@ -118,6 +118,7 @@ class SolicitudExamenAdmin(admin.ModelAdmin):
                 'origen_solicitud',
                 'estado',
                 'estado_obra_social',
+                'monto_debe_abonar',
             )
         }),
         ('Médico (Híbrido)', {

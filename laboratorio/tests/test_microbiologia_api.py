@@ -2177,6 +2177,34 @@ class TestEstadoObraSocialMicroAPI(TestCase):
         self.estudio.refresh_from_db()
         self.assertEqual(self.estudio.estado_obra_social, "DEBE_ORDEN")
 
+    def test_debe_abonar_con_monto_opcional(self):
+        from decimal import Decimal
+
+        url = f"/api/lab/microbiologia/estudios/{self.estudio.pk}/estado-obra-social/"
+        r = self.client.patch(
+            url,
+            {"estado_obra_social": "DEBE_ABONAR", "monto_debe_abonar": "990.25"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.content)
+        self.assertEqual(r.json()["estado_obra_social"], "DEBE_ABONAR")
+        self.assertEqual(Decimal(str(r.json()["monto_debe_abonar"])), Decimal("990.25"))
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.monto_debe_abonar, Decimal("990.25"))
+
+        r2 = self.client.patch(url, {"estado_obra_social": "AUTORIZADO"}, format="json")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.content)
+        self.estudio.refresh_from_db()
+        self.assertEqual(self.estudio.estado_obra_social, "AUTORIZADO")
+        self.assertIsNone(self.estudio.monto_debe_abonar)
+
+        r_bad = self.client.patch(
+            url,
+            {"estado_obra_social": "DEBE_ABONAR", "monto_debe_abonar": "abc"},
+            format="json",
+        )
+        self.assertEqual(r_bad.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_medico_no_puede_cargar(self):
         self.client.force_authenticate(self.med_user)
         r = self.client.patch(

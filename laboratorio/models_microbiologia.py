@@ -214,6 +214,14 @@ class EstudioMicrobiologia(models.Model):
         verbose_name="Estado obra social",
         help_text="Situación de cobertura: autorizado, debe orden, falta autorización o debe abonar.",
     )
+    monto_debe_abonar = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Monto a abonar",
+        help_text="Importe que debe abonar el paciente cuando estado_obra_social es DEBE_ABONAR.",
+    )
     obra_social_orden = models.CharField(
         max_length=100,
         blank=True,

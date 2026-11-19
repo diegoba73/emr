@@ -69,7 +69,7 @@ import EnviarInformeOrdenDialog from '../../components/lims/EnviarInformeOrdenDi
 import NuevaOrdenLimsDialog from '../../components/lims/NuevaOrdenLimsDialog';
 import EditarOrdenLimsDialog from '../../components/lims/EditarOrdenLimsDialog';
 import QuitarExamenesOrdenDialog from '../../components/lims/QuitarExamenesOrdenDialog';
-import { colorEstadoObraSocial, labelEstadoObraSocial, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
+import { colorEstadoObraSocial, labelObraSocialConMonto, ordenPuedeValidarObraSocial } from '../../utils/limsObraSocial';
 import {
   formatListaTubosPendientesRecepcion,
 } from '../../utils/limsTubosRecepcion';
@@ -371,7 +371,7 @@ const OrdenLimsDetalle: React.FC = () => {
         {orden.estado_obra_social ? (
           <Chip
             size="small"
-            label={`Obra social: ${labelEstadoObraSocial(orden.estado_obra_social)}`}
+            label={`Obra social: ${labelObraSocialConMonto(orden.estado_obra_social, orden.monto_debe_abonar)}`}
             color={colorEstadoObraSocial(orden.estado_obra_social)}
             variant="outlined"
           />

@@ -121,11 +121,12 @@ export async function getHistorialCultivoMicro(
 
 export async function patchEstadoObraSocialEstudio(
   id: number,
-  estado_obra_social: string
+  estado_obra_social: string,
+  monto_debe_abonar: number | null = null
 ): Promise<EstudioMicrobiologia> {
   const { data } = await apiClient.patch<EstudioMicrobiologia>(
     `${MICRO}/estudios/${id}/estado-obra-social/`,
-    { estado_obra_social }
+    { estado_obra_social, monto_debe_abonar }
   );
   return data;
 }

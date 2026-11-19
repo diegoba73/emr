@@ -15,6 +15,7 @@ export interface PendientePedidoRow {
   procedencia_display?: string | null;
   estado: string;
   estado_obra_social?: string | null;
+  monto_debe_abonar?: string | number | null;
   fecha_solicitud?: string | null;
   fecha_programada_toma?: string | null;
   fecha_toma_muestra?: string | null;
@@ -49,6 +50,7 @@ export function mapLabToPendiente(r: SolicitudExamenLims): PendientePedidoRow {
     procedencia_display: r.procedencia_display,
     estado: r.estado,
     estado_obra_social: r.estado_obra_social || '',
+    monto_debe_abonar: r.monto_debe_abonar ?? null,
     fecha_solicitud: r.fecha_solicitud,
     fecha_programada_toma: r.fecha_programada_toma,
     // Listado: «Extracción» solo con recepción real, no fecha programada ni sola toma.
@@ -126,6 +128,7 @@ export function mapMicroToPendiente(e: EstudioMicrobiologia): PendientePedidoRow
     procedencia_display: e.procedencia_display,
     estado: e.estado,
     estado_obra_social: e.estado_obra_social || '',
+    monto_debe_abonar: e.monto_debe_abonar ?? null,
     fecha_solicitud: e.created_at,
     fecha_programada_toma: e.fecha_programada_toma,
     // Extracción = recepción real (PENDIENTE → RECIBIDO). Nunca created_at ni programada.

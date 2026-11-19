@@ -5,6 +5,7 @@ import logging
 from decimal import Decimal
 
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from .models import (
     TipoMuestra,
@@ -19,6 +20,10 @@ from medicos.models import Medico
 from historias_clinicas.models import Consulta
 from laboratorio.panel_componentes_orden import ordenar_ids_por_panel, ordenar_queryset_panel
 from laboratorio.display_names import format_apellido_nombre, format_medico_display
+from laboratorio.interpretacion_catalogo import (
+    normalize_campos_detalle,
+    normalize_tabla_interpretacion,
+)
 from laboratorio.procedencia_display import resolver_procedencia_solicitud
 from laboratorio.origen_solicitud import (
     es_origen_ambulatorio_externo,
@@ -195,6 +200,8 @@ class TipoExamenSerializer(serializers.ModelSerializer):
             'unidad_default',
             'precio',
             'rango_referencia_texto',
+            'campos_detalle',
+            'tabla_interpretacion',
             'rango_min',
             'rango_max',
             'valor_critico_min',
@@ -263,6 +270,20 @@ class TipoExamenSerializer(serializers.ModelSerializer):
         if value is None:
             return ''
         return (value or '').strip()
+
+    def validate_campos_detalle(self, value):
+        try:
+            return normalize_campos_detalle(value)
+        except DjangoValidationError as exc:
+            detail = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
+            raise serializers.ValidationError(detail) from exc
+
+    def validate_tabla_interpretacion(self, value):
+        try:
+            return normalize_tabla_interpretacion(value)
+        except DjangoValidationError as exc:
+            detail = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
+            raise serializers.ValidationError(detail) from exc
 
     def validate_multiplicador_clinico(self, value):
         if value in (None, ''):
@@ -472,6 +493,8 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'valor_numerico',
             'unidad',
             'rango_referencia_snapshot',
+            'campos_detalle_snapshot',
+            'tabla_interpretacion_snapshot',
             'rango_min_snapshot',
             'rango_max_snapshot',
             'es_patologico',
@@ -502,6 +525,8 @@ class ResultadoExamenSerializer(serializers.ModelSerializer):
             'tipo_examen_nombre',
             'tipo_examen_codigo',
             'tipo_examen_rango_referencia',
+            'campos_detalle_snapshot',
+            'tabla_interpretacion_snapshot',
             'validado_por_nombre',
             'fecha_validacion',
             'muestra_id',
@@ -636,6 +661,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'estado',
             'estado_obra_social',
             'estado_obra_social_display',
+            'monto_debe_abonar',
             'requiere_autorizacion_obra_social',
             'obra_social_permite_validar',
             'obra_social_orden',
@@ -682,6 +708,7 @@ class SolicitudExamenSerializer(serializers.ModelSerializer):
             'estado',
             'estado_obra_social',
             'estado_obra_social_display',
+            'monto_debe_abonar',
             'requiere_autorizacion_obra_social',
             'obra_social_permite_validar',
             'obra_social_orden',
@@ -1152,6 +1179,7 @@ class SolicitudExamenListSerializer(serializers.ModelSerializer):
             "estado",
             "estado_obra_social",
             "estado_obra_social_display",
+            "monto_debe_abonar",
             "obra_social_orden",
             "afiliado_orden",
             "obra_social_efectiva",

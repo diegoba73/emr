@@ -145,6 +145,24 @@ class TipoExamen(models.Model):
         verbose_name="Rango de Referencia (Texto)",
         help_text="Para imprimir en informe (ej: '70-100 mg/dL')"
     )
+    campos_detalle = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Campos de detalle (informe)",
+        help_text=(
+            "Lista ordenada de {etiqueta, valor} del catálogo para imprimir "
+            "(ej. Alergeno). Vacío = no se imprime nada extra."
+        ),
+    )
+    tabla_interpretacion = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Tabla de interpretación",
+        help_text=(
+            "Tabla configurable {titulo?, columnas[], filas[][]} para el informe. "
+            "Null/vacío = sin tabla."
+        ),
+    )
     rango_min = models.DecimalField(
         max_digits=12,
         decimal_places=4,
@@ -440,6 +458,14 @@ class SolicitudExamen(models.Model):
         verbose_name="Estado obra social",
         help_text="Situación de cobertura: autorizado, debe orden, falta autorización o debe abonar.",
     )
+    monto_debe_abonar = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Monto a abonar",
+        help_text="Importe que debe abonar el paciente cuando estado_obra_social es DEBE_ABONAR.",
+    )
     # Snapshot de OS al crear el pedido (nullable: órdenes previas usan ficha paciente).
     obra_social_orden = models.CharField(
         max_length=100,
@@ -685,6 +711,16 @@ class ResultadoExamen(models.Model):
         blank=True,
         default="",
         verbose_name="Rango referencia (snapshot)",
+    )
+    campos_detalle_snapshot = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Campos de detalle (snapshot)",
+    )
+    tabla_interpretacion_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Tabla de interpretación (snapshot)",
     )
     rango_min_snapshot = models.DecimalField(
         max_digits=12,

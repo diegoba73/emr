@@ -30,6 +30,29 @@ export function labelEstadoObraSocial(estado?: string | null): string {
   return LABEL[code] || code;
 }
 
+export function formatMontoDebeAbonar(monto?: string | number | null): string | null {
+  if (monto === null || monto === undefined || monto === '') return null;
+  const n = typeof monto === 'number' ? monto : Number(String(monto).replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  return n.toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** Etiqueta de chip/resumen: incluye monto solo si DEBE_ABONAR y hay valor. */
+export function labelObraSocialConMonto(
+  estado?: string | null,
+  monto?: string | number | null
+): string {
+  const base = labelEstadoObraSocial(estado);
+  if (normalizeEstadoObraSocial(estado) !== 'DEBE_ABONAR') return base;
+  const fmt = formatMontoDebeAbonar(monto);
+  return fmt ? `${base} — ${fmt}` : base;
+}
+
 export function colorEstadoObraSocial(
   estado?: string | null
 ): ChipProps['color'] {

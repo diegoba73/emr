@@ -18,6 +18,10 @@ from laboratorio.entrada_resultados import (
     aplicar_valor_ticket_si_corresponde,
     quantize_valor_numerico,
 )
+from laboratorio.interpretacion_catalogo import (
+    snapshot_campos_detalle,
+    snapshot_tabla_interpretacion,
+)
 from laboratorio.sysmex_hemograma import get_sysmex_unidad
 
 
@@ -85,12 +89,16 @@ def _rango_referencia_snapshot_texto(tipo_examen) -> str:
 
 
 def aplicar_snapshots_desde_tipo_examen(resultado, tipo_examen) -> None:
-    """Copia unidad/rangos/críticos del catálogo al resultado (momento de carga)."""
+    """Copia unidad/rangos/críticos/detalle del catálogo al resultado (momento de carga)."""
     resultado.rango_referencia_snapshot = _rango_referencia_snapshot_texto(tipo_examen)
     resultado.rango_min_snapshot = tipo_examen.rango_min
     resultado.rango_max_snapshot = tipo_examen.rango_max
     resultado.valor_critico_min_snapshot = tipo_examen.valor_critico_min
     resultado.valor_critico_max_snapshot = tipo_examen.valor_critico_max
+    resultado.campos_detalle_snapshot = snapshot_campos_detalle(tipo_examen)
+    resultado.tabla_interpretacion_snapshot = snapshot_tabla_interpretacion(
+        tipo_examen
+    )
 
 
 def aplicar_carga_estructurada(resultado, tipo_examen, item: dict[str, Any]) -> dict[str, Any]:

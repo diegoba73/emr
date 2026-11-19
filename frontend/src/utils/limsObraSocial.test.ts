@@ -1,7 +1,23 @@
 import {
+  formatMontoDebeAbonar,
+  labelObraSocialConMonto,
   origenRequiereAutorizacionObraSocial,
   ordenPuedeValidarObraSocial,
 } from './limsObraSocial';
+
+describe('labelObraSocialConMonto', () => {
+  it('incluye monto solo en DEBE_ABONAR', () => {
+    expect(labelObraSocialConMonto('DEBE_ABONAR', 1500.5)).toContain('Debe abonar');
+    expect(labelObraSocialConMonto('DEBE_ABONAR', 1500.5)).toMatch(/1\.500,50|1500,50/);
+    expect(labelObraSocialConMonto('AUTORIZADO', 1500)).toBe('Autorizado');
+    expect(labelObraSocialConMonto('DEBE_ABONAR', null)).toBe('Debe abonar');
+  });
+
+  it('formatea monto vacío como null', () => {
+    expect(formatMontoDebeAbonar(null)).toBeNull();
+    expect(formatMontoDebeAbonar('')).toBeNull();
+  });
+});
 
 describe('origenRequiereAutorizacionObraSocial', () => {
   it('exige autorización en ambulatorio y receta externa', () => {

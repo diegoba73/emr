@@ -15,10 +15,14 @@ from laboratorio.informe_pdf_layout import (
     escape_texto_informe_con_superindices,
     generar_pdf_icpl_bytes,
     _bloque_panel,
+    _campos_detalle_lista,
+    _celda_examen,
     _grupo_es_solo_probnp,
     _metodo_texto,
     _partir_analitos_y_notas_pie,
     _referencia_texto,
+    _styles,
+    _tabla_interpretacion_data,
     _valor_y_unidad,
 )
 from laboratorio.informe_pdf_config import INFORME_TYPO
@@ -155,6 +159,63 @@ class TestInformePdfLayout(TestCase):
             2 / 3,
             places=2,
         )
+
+    def test_campos_detalle_y_tabla_en_bloque(self):
+        self.te2.campos_detalle = [
+            {"etiqueta": "Alergeno", "valor": "d201 - Blomia tropicalis"}
+        ]
+        self.te2.tabla_interpretacion = {
+            "titulo": "Interpretación",
+            "columnas": ["kU/L", "CLASE", "NIVEL"],
+            "filas": [
+                ["< 0,10", "0", "No detectable"],
+                ["0,10 - 0,34", "0", "Muy bajo"],
+            ],
+        }
+        self.te2.metodo = "quimioluminiscencia"
+        self.te2.save(
+            update_fields=["campos_detalle", "tabla_interpretacion", "metodo"]
+        )
+        self.r_suelto.campos_detalle_snapshot = self.te2.campos_detalle
+        self.r_suelto.tabla_interpretacion_snapshot = self.te2.tabla_interpretacion
+        self.r_suelto.save(
+            update_fields=["campos_detalle_snapshot", "tabla_interpretacion_snapshot"]
+        )
+
+        self.assertEqual(
+            _campos_detalle_lista(self.r_suelto)[0]["etiqueta"], "Alergeno"
+        )
+        self.assertEqual(
+            len(_tabla_interpretacion_data(self.r_suelto)["columnas"]), 3
+        )
+
+        styles = _styles()
+        parts = _celda_examen(self.r_suelto, styles)
+        textos = [getattr(p, "text", "") for p in parts]
+        self.assertTrue(any("Alergeno:" in t for t in textos))
+        self.assertTrue(any("Método:" in t for t in textos))
+
+        grupos = agrupar_resultados_por_panel(
+            self.sol, list(self.sol.resultados.all())
+        )
+        suelto = next(g for g in grupos if not g.panel_codigo)
+        flow = _bloque_panel(suelto, styles)
+        # Fila de resultado + tabla de interpretación (al menos 2 elementos)
+        self.assertGreaterEqual(len(flow), 2)
+        pdf = generar_pdf_icpl_bytes(self.sol, list(self.sol.resultados.all()))
+        self.assertTrue(pdf.startswith(b"%PDF"))
+
+    def test_examen_sin_detalle_ni_tabla_sigue_igual(self):
+        styles = _styles()
+        grupos = agrupar_resultados_por_panel(
+            self.sol, list(self.sol.resultados.all())
+        )
+        suelto = next(g for g in grupos if not g.panel_codigo)
+        flow = _bloque_panel(suelto, styles)
+        # Solo fila de resultado (sin tabla append)
+        self.assertEqual(len(flow), 2)  # encabezado columnas + fila
+        self.assertEqual(_campos_detalle_lista(self.r_suelto), [])
+        self.assertIsNone(_tabla_interpretacion_data(self.r_suelto))
 
 
 @pytest.mark.django_db

@@ -160,6 +160,7 @@ class EstudioMicrobiologiaSerializer(serializers.ModelSerializer):
             "estado",
             "estado_obra_social",
             "estado_obra_social_display",
+            "monto_debe_abonar",
             "requiere_autorizacion_obra_social",
             "obra_social_permite_validar",
             "obra_social_orden",

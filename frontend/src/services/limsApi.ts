@@ -214,11 +214,12 @@ export async function patchSolicitudExamenLims(
 
 export async function patchEstadoObraSocialSolicitud(
   id: number,
-  estado_obra_social: string
+  estado_obra_social: string,
+  monto_debe_abonar: number | null = null
 ): Promise<SolicitudExamenLims> {
   const { data } = await apiClient.patch<SolicitudExamenLims>(
     `${LAB}/solicitudes/${id}/estado-obra-social/`,
-    { estado_obra_social }
+    { estado_obra_social, monto_debe_abonar }
   );
   return data;
 }

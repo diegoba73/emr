@@ -29,6 +29,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import type {
+  LimsCampoDetalle,
+  LimsTablaInterpretacion,
   LimsTipoContenedor,
   LimsTipoExamen,
   LimsTipoMuestra,
@@ -78,11 +80,19 @@ type ExamenForm = {
   multiplicador_clinico: string;
   formato_informe_entrada: FormatoInformeEntrada | '';
   rango_referencia_texto: string;
+  campos_detalle: LimsCampoDetalle[];
+  tabla_interpretacion: LimsTablaInterpretacion | null;
   rango_min: string;
   rango_max: string;
   requiere_muestra: boolean;
   activo: boolean;
 };
+
+const emptyTabla = (): LimsTablaInterpretacion => ({
+  titulo: 'Interpretación',
+  columnas: ['Columna 1', 'Columna 2'],
+  filas: [['', '']],
+});
 
 const emptyForm = (): ExamenForm => ({
   codigo: '',
@@ -100,6 +110,8 @@ const emptyForm = (): ExamenForm => ({
   multiplicador_clinico: '1',
   formato_informe_entrada: '',
   rango_referencia_texto: '',
+  campos_detalle: [],
+  tabla_interpretacion: null,
   rango_min: '',
   rango_max: '',
   requiere_muestra: false,
@@ -122,6 +134,19 @@ const formFromRow = (row: LimsTipoExamen): ExamenForm => ({
   multiplicador_clinico: String(row.multiplicador_clinico ?? 1),
   formato_informe_entrada: (row.formato_informe_entrada ?? '') as FormatoInformeEntrada | '',
   rango_referencia_texto: row.rango_referencia_texto ?? '',
+  campos_detalle: Array.isArray(row.campos_detalle)
+    ? row.campos_detalle.map((c) => ({
+        etiqueta: c.etiqueta ?? '',
+        valor: c.valor ?? '',
+      }))
+    : [],
+  tabla_interpretacion: row.tabla_interpretacion
+    ? {
+        titulo: row.tabla_interpretacion.titulo ?? '',
+        columnas: [...(row.tabla_interpretacion.columnas || [])],
+        filas: (row.tabla_interpretacion.filas || []).map((f) => [...f]),
+      }
+    : null,
   rango_min: row.rango_min != null ? String(row.rango_min) : '',
   rango_max: row.rango_max != null ? String(row.rango_max) : '',
   requiere_muestra: !!row.requiere_muestra,
@@ -353,6 +378,21 @@ const ExamenesCatalogo: React.FC = () => {
       multiplicador_clinico: esTicket ? form.multiplicador_clinico.trim() || '1' : 1,
       formato_informe_entrada: formatoInforme,
       rango_referencia_texto: form.rango_referencia_texto.trim() || undefined,
+      campos_detalle: form.campos_detalle
+        .map((c) => ({
+          etiqueta: c.etiqueta.trim(),
+          valor: c.valor.trim(),
+        }))
+        .filter((c) => c.etiqueta || c.valor),
+      tabla_interpretacion: form.tabla_interpretacion
+        ? {
+            titulo: (form.tabla_interpretacion.titulo || '').trim() || undefined,
+            columnas: form.tabla_interpretacion.columnas.map((c) => c.trim()),
+            filas: form.tabla_interpretacion.filas.map((fila) =>
+              fila.map((celda) => celda.trim())
+            ),
+          }
+        : null,
       rango_min: form.rango_min.trim() || undefined,
       rango_max: form.rango_max.trim() || undefined,
       requiere_muestra: form.requiere_muestra,
@@ -570,7 +610,7 @@ const ExamenesCatalogo: React.FC = () => {
         </Typography>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="lg" fullWidth>
         <DialogTitle>{editingId ? `Editar ${form.codigo}` : 'Nuevo examen'}</DialogTitle>
         <DialogContent dividers>
           {editingRow?.panel_equivalente ? (
@@ -774,6 +814,7 @@ const ExamenesCatalogo: React.FC = () => {
               value={form.rango_referencia_texto}
               onChange={(ev) => patchForm({ rango_referencia_texto: ev.target.value })}
               sx={{ gridColumn: 'span 2' }}
+              helperText="Rango lineal clásico. Si usás tabla de interpretación, podés dejarlo vacío."
             />
             <TextField
               label="Rango mínimo"
@@ -785,6 +826,241 @@ const ExamenesCatalogo: React.FC = () => {
               value={form.rango_max}
               onChange={(ev) => patchForm({ rango_max: ev.target.value })}
             />
+
+            <Box sx={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Typography variant="subtitle2">Campos de detalle (informe)</Typography>
+              <FormHelperText sx={{ m: 0 }}>
+                Opcionales. Se imprimen como «Etiqueta: valor» (ej. Alergeno). Valen para todas las
+                órdenes de este examen.
+              </FormHelperText>
+              {form.campos_detalle.map((campo, idx) => (
+                <Box
+                  key={`detalle-${idx}`}
+                  sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 1 }}
+                >
+                  <TextField
+                    size="small"
+                    label="Etiqueta"
+                    value={campo.etiqueta}
+                    onChange={(ev) => {
+                      const next = [...form.campos_detalle];
+                      next[idx] = { ...next[idx], etiqueta: ev.target.value };
+                      patchForm({ campos_detalle: next });
+                    }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Valor"
+                    value={campo.valor}
+                    onChange={(ev) => {
+                      const next = [...form.campos_detalle];
+                      next[idx] = { ...next[idx], valor: ev.target.value };
+                      patchForm({ campos_detalle: next });
+                    }}
+                  />
+                  <Button
+                    color="inherit"
+                    onClick={() =>
+                      patchForm({
+                        campos_detalle: form.campos_detalle.filter((_, i) => i !== idx),
+                      })
+                    }
+                  >
+                    Quitar
+                  </Button>
+                </Box>
+              ))}
+              <Button
+                size="small"
+                variant="outlined"
+                sx={{ alignSelf: 'flex-start' }}
+                onClick={() =>
+                  patchForm({
+                    campos_detalle: [...form.campos_detalle, { etiqueta: '', valor: '' }],
+                  })
+                }
+              >
+                Agregar campo
+              </Button>
+            </Box>
+
+            <Box sx={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Typography variant="subtitle2">Tabla de interpretación</Typography>
+              <FormHelperText sx={{ m: 0 }}>
+                Tabla completa en el informe. Definí encabezados (2–8) y filas. Sin clasificación
+                automática del resultado.
+              </FormHelperText>
+              {!form.tabla_interpretacion ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ alignSelf: 'flex-start' }}
+                  onClick={() => patchForm({ tabla_interpretacion: emptyTabla() })}
+                >
+                  Agregar tabla
+                </Button>
+              ) : (
+                <>
+                  <TextField
+                    size="small"
+                    label="Título (opcional)"
+                    value={form.tabla_interpretacion.titulo ?? ''}
+                    onChange={(ev) =>
+                      patchForm({
+                        tabla_interpretacion: {
+                          ...form.tabla_interpretacion!,
+                          titulo: ev.target.value,
+                        },
+                      })
+                    }
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    Encabezados
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                    {form.tabla_interpretacion.columnas.map((col, cIdx) => (
+                      <TextField
+                        key={`col-${cIdx}`}
+                        size="small"
+                        label={`Col ${cIdx + 1}`}
+                        value={col}
+                        onChange={(ev) => {
+                          const columnas = [...form.tabla_interpretacion!.columnas];
+                          columnas[cIdx] = ev.target.value;
+                          patchForm({
+                            tabla_interpretacion: { ...form.tabla_interpretacion!, columnas },
+                          });
+                        }}
+                        sx={{ width: 140 }}
+                      />
+                    ))}
+                    <Button
+                      size="small"
+                      disabled={form.tabla_interpretacion.columnas.length >= 8}
+                      onClick={() => {
+                        const n = form.tabla_interpretacion!.columnas.length + 1;
+                        patchForm({
+                          tabla_interpretacion: {
+                            ...form.tabla_interpretacion!,
+                            columnas: [
+                              ...form.tabla_interpretacion!.columnas,
+                              `Columna ${n}`,
+                            ],
+                            filas: form.tabla_interpretacion!.filas.map((f) => [...f, '']),
+                          },
+                        });
+                      }}
+                    >
+                      + Columna
+                    </Button>
+                    <Button
+                      size="small"
+                      color="inherit"
+                      disabled={form.tabla_interpretacion.columnas.length <= 1}
+                      onClick={() => {
+                        const columnas = form.tabla_interpretacion!.columnas.slice(0, -1);
+                        patchForm({
+                          tabla_interpretacion: {
+                            ...form.tabla_interpretacion!,
+                            columnas,
+                            filas: form.tabla_interpretacion!.filas.map((f) =>
+                              f.slice(0, columnas.length)
+                            ),
+                          },
+                        });
+                      }}
+                    >
+                      − Columna
+                    </Button>
+                  </Box>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          {form.tabla_interpretacion.columnas.map((col, i) => (
+                            <TableCell key={`th-${i}`}>{col || `Col ${i + 1}`}</TableCell>
+                          ))}
+                          <TableCell width={72} />
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {form.tabla_interpretacion.filas.map((fila, rIdx) => (
+                          <TableRow key={`tr-${rIdx}`}>
+                            {fila.map((celda, cIdx) => (
+                              <TableCell key={`td-${rIdx}-${cIdx}`} sx={{ p: 0.5 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={celda}
+                                  onChange={(ev) => {
+                                    const filas = form.tabla_interpretacion!.filas.map((f) => [
+                                      ...f,
+                                    ]);
+                                    filas[rIdx][cIdx] = ev.target.value;
+                                    patchForm({
+                                      tabla_interpretacion: {
+                                        ...form.tabla_interpretacion!,
+                                        filas,
+                                      },
+                                    });
+                                  }}
+                                />
+                              </TableCell>
+                            ))}
+                            <TableCell>
+                              <Button
+                                size="small"
+                                color="inherit"
+                                onClick={() =>
+                                  patchForm({
+                                    tabla_interpretacion: {
+                                      ...form.tabla_interpretacion!,
+                                      filas: form.tabla_interpretacion!.filas.filter(
+                                        (_, i) => i !== rIdx
+                                      ),
+                                    },
+                                  })
+                                }
+                              >
+                                Quitar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={form.tabla_interpretacion.filas.length >= 30}
+                      onClick={() =>
+                        patchForm({
+                          tabla_interpretacion: {
+                            ...form.tabla_interpretacion!,
+                            filas: [
+                              ...form.tabla_interpretacion!.filas,
+                              form.tabla_interpretacion!.columnas.map(() => ''),
+                            ],
+                          },
+                        })
+                      }
+                    >
+                      Agregar fila
+                    </Button>
+                    <Button
+                      size="small"
+                      color="inherit"
+                      onClick={() => patchForm({ tabla_interpretacion: null })}
+                    >
+                      Quitar tabla
+                    </Button>
+                  </Box>
+                </>
+              )}
+            </Box>
+
             <FormControlLabel
               control={
                 <Switch

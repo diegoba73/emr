@@ -3,7 +3,7 @@ import { Box, Button, Chip, Paper, Typography } from '@mui/material';
 import type { EstudioMicrobiologia } from '../../../types/lims';
 import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import HistorialCultivoMicroPanel from './HistorialCultivoMicroPanel';
-import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../../utils/limsObraSocial';
+import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../../utils/limsObraSocial';
 import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
 
 export interface EstudioMicroResumenTabProps {
@@ -48,7 +48,7 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
         {estudio.estado_obra_social ? (
           <Chip
             size="small"
-            label={`Obra social: ${labelEstadoObraSocial(estudio.estado_obra_social)}`}
+            label={`Obra social: ${labelObraSocialConMonto(estudio.estado_obra_social, estudio.monto_debe_abonar)}`}
             color={colorEstadoObraSocial(estudio.estado_obra_social)}
             variant="outlined"
           />

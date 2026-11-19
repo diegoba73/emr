@@ -224,6 +224,57 @@ def _referencia_texto(res: ResultadoExamen) -> str | None:
     return None
 
 
+def _campos_detalle_lista(res: ResultadoExamen) -> list[dict[str, str]]:
+    """Campos extra del catálogo (snapshot preferido). Lista de {etiqueta, valor}."""
+    snap = getattr(res, "campos_detalle_snapshot", None)
+    if isinstance(snap, list) and snap:
+        out: list[dict[str, str]] = []
+        for item in snap:
+            if not isinstance(item, dict):
+                continue
+            etiqueta = str(item.get("etiqueta") or "").strip()
+            valor = str(item.get("valor") or "").strip()
+            if etiqueta:
+                out.append({"etiqueta": etiqueta, "valor": valor})
+        if out:
+            return out
+    te = res.tipo_examen
+    raw = getattr(te, "campos_detalle", None) or []
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        etiqueta = str(item.get("etiqueta") or "").strip()
+        valor = str(item.get("valor") or "").strip()
+        if etiqueta:
+            out.append({"etiqueta": etiqueta, "valor": valor})
+    return out
+
+
+def _tabla_interpretacion_data(res: ResultadoExamen) -> dict[str, Any] | None:
+    """Tabla de interpretación (snapshot preferido)."""
+    for candidate in (
+        getattr(res, "tabla_interpretacion_snapshot", None),
+        getattr(res.tipo_examen, "tabla_interpretacion", None),
+    ):
+        if not isinstance(candidate, dict):
+            continue
+        columnas = candidate.get("columnas")
+        filas = candidate.get("filas")
+        if isinstance(columnas, list) and columnas:
+            return {
+                "titulo": str(candidate.get("titulo") or "").strip(),
+                "columnas": [str(c).strip() for c in columnas],
+                "filas": [
+                    [str(c).strip() for c in (fila if isinstance(fila, list) else [])]
+                    for fila in (filas if isinstance(filas, list) else [])
+                ],
+            }
+    return None
+
+
 def _metodo_texto(res: ResultadoExamen) -> str | None:
     te = res.tipo_examen
     directo = (getattr(te, "metodo", None) or "").strip()
@@ -629,6 +680,12 @@ def _celda_examen(
         if metodo:
             parts.append(Paragraph(f"Método: {_escape(metodo)}", styles["exam_meta"]))
 
+    for campo in _campos_detalle_lista(res):
+        etiqueta = campo["etiqueta"]
+        valor = campo["valor"]
+        texto = f"{etiqueta}: {valor}" if valor else f"{etiqueta}:"
+        parts.append(Paragraph(_escape(texto), styles["exam_meta"]))
+
     return parts
 
 
@@ -774,6 +831,49 @@ def _append_observaciones_panel(
     )
 
 
+def _append_tabla_interpretacion(
+    flow: list[Any],
+    res: ResultadoExamen,
+    styles: dict[str, ParagraphStyle],
+) -> None:
+    """Tabla configurable debajo del resultado (ancho completo del informe)."""
+    data = _tabla_interpretacion_data(res)
+    if not data:
+        return
+    titulo = data.get("titulo") or ""
+    columnas = data["columnas"]
+    filas = data["filas"]
+    n = len(columnas)
+    if n < 1:
+        return
+
+    if titulo:
+        flow.append(Paragraph(_escape(f"{titulo}:"), styles["exam_meta"]))
+
+    col_w = COL_TOTAL / n
+    header = [Paragraph(_escape(c), styles["table_header"]) for c in columnas]
+    body = [
+        [Paragraph(_escape(celda), styles["exam_meta"]) for celda in fila]
+        for fila in filas
+        if len(fila) == n
+    ]
+    tbl = Table([header] + body, colWidths=[col_w] * n)
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor(INFORME_TYPO["color_rule"])),
+                ("LINEBELOW", (0, 1), (-1, -1), 0.2, colors.HexColor("#DDDDDD")),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    flow.append(tbl)
+    flow.append(Spacer(1, 0.12 * cm))
+
+
 def _bloque_panel(
     grupo: GrupoResultadosPdf,
     styles: dict[str, ParagraphStyle],
@@ -845,6 +945,7 @@ def _bloque_panel(
                 fecha_extraccion=fechas_ext.get(res.pk),
             )
         )
+        _append_tabla_interpretacion(flow, res, styles)
 
     _append_observaciones_panel(flow, notas_pie, styles)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from rest_framework import status
@@ -81,8 +82,35 @@ def parse_estado_obra_social(value: object) -> str:
     return codigo
 
 
-def guardar_estado_obra_social(instance, raw_value, *, actor, view_name: str):
-    """Persiste el estado y audita. Devuelve Response 400 o None si ok."""
+def parse_monto_debe_abonar(value: object) -> Decimal | None:
+    """Normaliza el monto opcional. Vacío/null → None. Lanza ValueError si es inválido."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        texto = value.strip().replace(",", ".")
+        if not texto or texto.upper() in _VACIOS:
+            return None
+        value = texto
+    if isinstance(value, bool):
+        raise ValueError("monto_debe_abonar inválido.")
+    try:
+        monto = value if isinstance(value, Decimal) else Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("monto_debe_abonar inválido.") from exc
+    if monto < 0:
+        raise ValueError("monto_debe_abonar no puede ser negativo.")
+    return monto.quantize(Decimal("0.01"))
+
+
+def guardar_estado_obra_social(
+    instance,
+    raw_value,
+    *,
+    actor,
+    view_name: str,
+    raw_monto=None,
+):
+    """Persiste estado (y monto opcional si DEBE_ABONAR) y audita. Devuelve Response 400 o None."""
     from auditoria.audit_service import log_update
     from auditoria.snapshot import safe_model_snapshot
 
@@ -91,10 +119,26 @@ def guardar_estado_obra_social(instance, raw_value, *, actor, view_name: str):
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+    if nuevo == "DEBE_ABONAR":
+        try:
+            nuevo_monto = parse_monto_debe_abonar(raw_monto)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        nuevo_monto = None
+
     before = safe_model_snapshot(instance)
+    changed = False
     if instance.estado_obra_social != nuevo:
         instance.estado_obra_social = nuevo
-        instance.save(update_fields=["estado_obra_social"])
+        changed = True
+    actual_monto = getattr(instance, "monto_debe_abonar", None)
+    if actual_monto != nuevo_monto:
+        instance.monto_debe_abonar = nuevo_monto
+        changed = True
+
+    if changed:
+        instance.save(update_fields=["estado_obra_social", "monto_debe_abonar"])
         log_update(
             actor=actor,
             entity=instance,
@@ -104,6 +148,7 @@ def guardar_estado_obra_social(instance, raw_value, *, actor, view_name: str):
                 "action": "estado_obra_social",
                 "view": view_name,
                 "estado_obra_social": nuevo,
+                "monto_debe_abonar": str(nuevo_monto) if nuevo_monto is not None else None,
             },
         )
     return None

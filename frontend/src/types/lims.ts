@@ -46,6 +46,19 @@ export interface LimsTipoMuestra {
 }
 
 /** Catálogo tipo examen (GET /lab/examenes/) */
+/** Campo extra de catálogo para imprimir en informe (ej. Alergeno). */
+export type LimsCampoDetalle = {
+  etiqueta: string;
+  valor: string;
+};
+
+/** Tabla de interpretación configurable (N columnas × M filas). */
+export type LimsTablaInterpretacion = {
+  titulo?: string;
+  columnas: string[];
+  filas: string[][];
+};
+
 export interface LimsTipoExamen {
   id: number;
   codigo: string;
@@ -75,6 +88,8 @@ export interface LimsTipoExamen {
   formato_informe_entrada?: 'decimal1' | 'integer' | 'absolute_int' | 'absolute_millions' | '';
   precio?: string;
   rango_referencia_texto?: string;
+  campos_detalle?: LimsCampoDetalle[];
+  tabla_interpretacion?: LimsTablaInterpretacion | null;
   rango_min?: string | null;
   rango_max?: string | null;
   laboratorio_derivacion?: number | null;
@@ -100,6 +115,8 @@ export type TipoExamenLimsWriteBody = {
   multiplicador_clinico?: string | number;
   formato_informe_entrada?: LimsTipoExamen['formato_informe_entrada'];
   rango_referencia_texto?: string;
+  campos_detalle?: LimsCampoDetalle[];
+  tabla_interpretacion?: LimsTablaInterpretacion | null;
   rango_min?: string | number | null;
   rango_max?: string | number | null;
   requiere_muestra?: boolean;
@@ -170,6 +187,8 @@ export interface ResultadoExamenLims {
   valor_numerico?: string | number | null;
   unidad?: string;
   rango_referencia_snapshot?: string;
+  campos_detalle_snapshot?: LimsCampoDetalle[];
+  tabla_interpretacion_snapshot?: LimsTablaInterpretacion | null;
   rango_min_snapshot?: string | number | null;
   rango_max_snapshot?: string | number | null;
   es_patologico?: boolean;
@@ -228,6 +247,8 @@ export interface SolicitudExamenLims {
   estado: EstadoSolicitudLims;
   estado_obra_social?: string | null;
   estado_obra_social_display?: string | null;
+  /** Importe opcional cuando estado_obra_social es DEBE_ABONAR. */
+  monto_debe_abonar?: string | number | null;
   obra_social_orden?: string | null;
   afiliado_orden?: string | null;
   obra_social_efectiva?: string | null;
@@ -516,6 +537,8 @@ export interface EstudioMicrobiologia {
   estado: EstadoEstudioMicrobiologia;
   estado_obra_social?: string | null;
   estado_obra_social_display?: string | null;
+  /** Importe opcional cuando estado_obra_social es DEBE_ABONAR. */
+  monto_debe_abonar?: string | number | null;
   obra_social_orden?: string | null;
   afiliado_orden?: string | null;
   obra_social_efectiva?: string | null;

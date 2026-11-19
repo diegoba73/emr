@@ -21,7 +21,7 @@ import { limsActionBtnSoftSx, limsActionBtnSx } from '../../utils/limsActionButt
 import type { PendientePedidoRow } from '../../utils/limsPendientesUnificados';
 import OrigenProcedenciaCellView from './OrigenProcedenciaCell';
 import EstadoObraSocialDialog from './EstadoObraSocialDialog';
-import { colorEstadoObraSocial, labelEstadoObraSocial } from '../../utils/limsObraSocial';
+import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../utils/limsObraSocial';
 import { patchEstadoObraSocialSolicitud } from '../../services/limsApi';
 import { patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
 
@@ -58,12 +58,12 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
 }) => {
   const [obraSocialRow, setObraSocialRow] = useState<PendientePedidoRow | null>(null);
 
-  const handleGuardarObraSocial = async (estado: string) => {
+  const handleGuardarObraSocial = async (estado: string, monto: number | null) => {
     if (!obraSocialRow) return;
     if (obraSocialRow.tipo === 'MICROBIOLOGIA') {
-      await patchEstadoObraSocialEstudio(obraSocialRow.id, estado);
+      await patchEstadoObraSocialEstudio(obraSocialRow.id, estado, monto);
     } else {
-      await patchEstadoObraSocialSolicitud(obraSocialRow.id, estado);
+      await patchEstadoObraSocialSolicitud(obraSocialRow.id, estado, monto);
     }
     onObraSocialSaved?.();
   };
@@ -174,7 +174,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                     {r.estado_obra_social ? (
                       <Chip
                         size="small"
-                        label={labelEstadoObraSocial(r.estado_obra_social)}
+                        label={labelObraSocialConMonto(r.estado_obra_social, r.monto_debe_abonar)}
                         color={colorEstadoObraSocial(r.estado_obra_social)}
                         variant="outlined"
                       />
@@ -271,6 +271,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
     open={!!obraSocialRow}
     numero={obraSocialRow?.numero}
     value={obraSocialRow?.estado_obra_social}
+    monto={obraSocialRow?.monto_debe_abonar}
     onClose={() => setObraSocialRow(null)}
     onSave={handleGuardarObraSocial}
   />

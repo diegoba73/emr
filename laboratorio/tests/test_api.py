@@ -447,6 +447,58 @@ class TestSolicitudExamenAPI(APITestCase):
         solicitud.refresh_from_db()
         assert solicitud.estado_obra_social == ''
 
+    def test_estado_obra_social_debe_abonar_con_monto(self):
+        from decimal import Decimal
+
+        solicitud = SolicitudExamen.objects.create(
+            paciente=self.paciente,
+            medico_interno=self.medico,
+            origen_solicitud='AMBULATORIO_CEHTA',
+        )
+        url = f'/api/lab/solicitudes/{solicitud.id}/estado-obra-social/'
+
+        r = self.client.patch(
+            url,
+            {'estado_obra_social': 'DEBE_ABONAR', 'monto_debe_abonar': '1500.50'},
+            format='json',
+        )
+        assert r.status_code == status.HTTP_200_OK
+        assert r.data['estado_obra_social'] == 'DEBE_ABONAR'
+        assert Decimal(str(r.data['monto_debe_abonar'])) == Decimal('1500.50')
+        solicitud.refresh_from_db()
+        assert solicitud.monto_debe_abonar == Decimal('1500.50')
+
+        r_sin = self.client.patch(
+            url,
+            {'estado_obra_social': 'DEBE_ABONAR'},
+            format='json',
+        )
+        assert r_sin.status_code == status.HTTP_200_OK
+        solicitud.refresh_from_db()
+        assert solicitud.monto_debe_abonar is None
+
+        self.client.patch(
+            url,
+            {'estado_obra_social': 'DEBE_ABONAR', 'monto_debe_abonar': 200},
+            format='json',
+        )
+        r_limpia = self.client.patch(
+            url,
+            {'estado_obra_social': 'AUTORIZADO'},
+            format='json',
+        )
+        assert r_limpia.status_code == status.HTTP_200_OK
+        solicitud.refresh_from_db()
+        assert solicitud.estado_obra_social == 'AUTORIZADO'
+        assert solicitud.monto_debe_abonar is None
+
+        r_bad = self.client.patch(
+            url,
+            {'estado_obra_social': 'DEBE_ABONAR', 'monto_debe_abonar': -10},
+            format='json',
+        )
+        assert r_bad.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_filtro_por_numero(self):
         """
         Test que el filtro por número funciona para código de barras.
