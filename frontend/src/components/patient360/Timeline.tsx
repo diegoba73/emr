@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Stack, Chip, useTheme, alpha, Paper } from '@mui/material';
 import { LocalHospital, Science, Healing, Event, Assignment, Hotel, Emergency } from '@mui/icons-material';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 export type TimelineItemType =
   | 'consulta'
@@ -176,7 +177,7 @@ const Timeline: React.FC<TimelineProps> = ({ items, emptyLabel = 'Sin eventos cl
                 ))
               ) : (
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                  {item.date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                  {formatFechaHoraDisplay(item.date)}
                 </Typography>
               )}
               {item.subtitle && (

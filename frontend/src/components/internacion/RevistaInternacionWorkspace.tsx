@@ -64,6 +64,7 @@ import type { OrigenSolicitudLims } from '../../types/lims';
 import type { TipoEstudioComplementario } from '../../types/estudios';
 import { buildEstudioTipoCatalogOptions } from '../../utils/estudioTipoCatalog';
 import { formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 type PedidoPanel = 'lab' | 'estudios' | null;
 
@@ -100,7 +101,7 @@ const soapPreview = (evo: RevistaEvolucionItem) =>
   [evo.analisis, evo.objetivo, evo.subjetivo, evo.plan].find((t) => t && t.trim()) || 'Sin texto';
 
 const formatFecha = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleString('es-AR') : '—';
+  iso ? formatFechaHoraDisplay(iso) : '—';
 
 const buildHistoria = (contexto: RevistaInternacionContexto | null): HistoriaEvento[] => {
   if (!contexto) return [];

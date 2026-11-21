@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { useData } from '../../contexts/DataContext';
 import { downloadInformeLimsPdf, listSolicitudesExamen } from '../../services/limsApi';
 import type { SolicitudExamenLims } from '../../types/lims';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 const LISTOS = new Set(['FINALIZADO']);
 
@@ -66,7 +67,7 @@ const PortalResultados: React.FC = () => {
               primary={o.numero || `Orden #${o.id}`}
               secondary={
                 o.fecha_solicitud
-                  ? new Date(o.fecha_solicitud).toLocaleString('es-AR')
+                  ? formatFechaHoraDisplay(o.fecha_solicitud)
                   : undefined
               }
             />

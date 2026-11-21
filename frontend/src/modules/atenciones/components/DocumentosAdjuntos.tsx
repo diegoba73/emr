@@ -31,6 +31,7 @@ import {
   getTiposArchivo,
 } from '../../../services/apiService';
 import { getSafeApiErrorMessage } from '../../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 import {
   clinicalDrawerDialogProps,
   clinicalDrawerDialogContentSx,
@@ -291,7 +292,7 @@ const DocumentosAdjuntos: React.FC<DocumentosAdjuntosProps> = ({
                 secondary={
                   <Typography variant="caption" color="text.secondary">
                     {archivo.descripcion || 'Sin descripción'} ·{' '}
-                    {new Date(archivo.fecha_subida).toLocaleString()}
+                    {formatFechaHoraDisplay(archivo.fecha_subida)}
                   </Typography>
                 }
               />

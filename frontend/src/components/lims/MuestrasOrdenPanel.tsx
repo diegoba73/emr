@@ -29,6 +29,7 @@ import {
   listTiposMuestraLims,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 import type { OrigenParaLugarExtraccion } from '../../utils/limsOrigenSolicitud';
 import MuestraEstadoBadge from './MuestraEstadoBadge';
 import MuestraAcciones from './MuestraAcciones';
@@ -204,7 +205,7 @@ const MuestrasOrdenPanel: React.FC<MuestrasOrdenPanelProps> = ({
                 const fechaExt = m.fecha_toma
                   ? (() => {
                       try {
-                        return new Date(m.fecha_toma).toLocaleString('es-AR');
+                        return formatFechaHoraDisplay(m.fecha_toma);
                       } catch {
                         return m.fecha_toma;
                       }

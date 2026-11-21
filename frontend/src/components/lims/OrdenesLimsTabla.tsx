@@ -24,6 +24,7 @@ import EstadoObraSocialDialog from './EstadoObraSocialDialog';
 import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../utils/limsObraSocial';
 import { patchEstadoObraSocialSolicitud } from '../../services/limsApi';
 import { patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 export interface OrdenesLimsTablaProps {
   rows: PendientePedidoRow[];
@@ -135,14 +136,7 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                   ) : null}
                   {r.fecha_toma_muestra ? (
                     <Typography variant="caption" display="block" color="primary.main" sx={{ mt: 0.25 }}>
-                      Extracción{' '}
-                      {new Date(r.fecha_toma_muestra).toLocaleString('es-AR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      Extracción {formatFechaHoraDisplay(r.fecha_toma_muestra)}
                     </Typography>
                   ) : null}
                 </TableCell>

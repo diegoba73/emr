@@ -48,6 +48,7 @@ import {
 } from '../../utils/limsAccess';
 import { normalizeRol } from '../../utils/permissions';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 import {
   estadoOrdenColor,
   labelEstadoOrdenLims,
@@ -603,7 +604,7 @@ const OrdenLimsDetalle: React.FC = () => {
             Orden cancelada
             {orden.motivo_cancelacion ? `: ${orden.motivo_cancelacion}` : '.'}
             {orden.fecha_cancelacion
-              ? ` (${new Date(orden.fecha_cancelacion).toLocaleString()})`
+              ? ` (${formatFechaHoraDisplay(orden.fecha_cancelacion)})`
               : ''}
           </Alert>
         )}
@@ -720,7 +721,7 @@ const OrdenLimsDetalle: React.FC = () => {
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
             Resultados validados y bloqueados
             {validadorInfo?.fecha_validacion
-              ? ` (${new Date(validadorInfo.fecha_validacion).toLocaleString('es-AR')})`
+              ? ` (${formatFechaHoraDisplay(validadorInfo.fecha_validacion)})`
               : ''}
             . Usá <strong>Enviar informe</strong> para entregar el PDF por email o WhatsApp.
           </Typography>

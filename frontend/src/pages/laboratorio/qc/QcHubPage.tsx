@@ -77,6 +77,7 @@ import {
   getSafeClinicalActionMessage,
   isProtectedDeleteError,
 } from '../../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 import QcHoyPage from './QcHoyPage';
 import {
   filterCalibracionesBusqueda,
@@ -1410,7 +1411,7 @@ const QcHubPage: React.FC = () => {
                 const esProd = Boolean(c.lote_producto);
                 return (
                   <TableRow key={c.id}>
-                    <TableCell>{new Date(c.fecha).toLocaleString('es-AR')}</TableCell>
+                    <TableCell>{formatFechaHoraDisplay(c.fecha)}</TableCell>
                     <TableCell>{esProd ? 'Producto' : 'Ensayo'}</TableCell>
                     <TableCell>{c.producto_nombre || c.material_nombre || '—'}</TableCell>
                     <TableCell>{c.lote_codigo}</TableCell>

@@ -19,16 +19,11 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { AuditEvent, getAuditEvent, getAuditEvents } from '../services/auditoria';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 
 const PAGE_SIZE = 50;
 
-const formatDateTime = (iso: string) => {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-};
+const formatDateTime = (iso: string) => formatFechaHoraDisplay(iso);
 
 const EventDetailDrawer: React.FC<{ id: number | null; onClose: () => void }> = ({ id, onClose }) => {
   const { data, isLoading, error } = useQuery({

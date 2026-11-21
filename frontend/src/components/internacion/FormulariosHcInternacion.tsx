@@ -26,6 +26,7 @@ import type { InternacionCama, MedicacionHabitualInternacion, User } from '../..
 import {
   canWriteHcMedico,
 } from '../../utils/permissions';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 interface IndicacionRow {
   id: number;
@@ -53,7 +54,7 @@ interface MedicacionRow {
   registrado_por_nombre?: string | null;
 }
 
-const formatFecha = (iso: string) => (iso ? new Date(iso).toLocaleString('es-AR') : '—');
+const formatFecha = (iso: string) => (iso ? formatFechaHoraDisplay(iso) : '—');
 
 interface FormulariosHcInternacionProps {
   internacionId: number;
@@ -185,11 +186,11 @@ const FormulariosHcInternacion: React.FC<FormulariosHcInternacionProps> = ({
           <Typography variant="caption" color="text.secondary">
             Ingreso:{' '}
             {internacion.paciente_cabecera.fecha_ingreso
-              ? new Date(internacion.paciente_cabecera.fecha_ingreso).toLocaleString('es-AR')
+              ? formatFechaHoraDisplay(internacion.paciente_cabecera.fecha_ingreso)
               : '—'}
             {' · Alta: '}
             {internacion.paciente_cabecera.fecha_alta
-              ? new Date(internacion.paciente_cabecera.fecha_alta).toLocaleString('es-AR')
+              ? formatFechaHoraDisplay(internacion.paciente_cabecera.fecha_alta)
               : '—'}
           </Typography>
         </Box>

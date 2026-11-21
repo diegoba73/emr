@@ -181,14 +181,9 @@ def _asegurar_legacy_ena(solicitud: SolicitudExamen) -> int:
     return _asegurar_codigos_panel(solicitud, panel_codigo)
 
 
-def _asegurar_plaq_con_coagulograma(solicitud: SolicitudExamen) -> int:
-    """Si hay coagulograma sin hemograma, asegura fila de plaquetas."""
-    from laboratorio.acompanamiento_pedido import (
-        EXAMENES_ACOMPANAN_COAG_SIN_HEMO,
-        PANEL_COAGULOGRAMA,
-        PANEL_HEMOGRAMA,
-        codigos_acompanamiento_pedido,
-    )
+def _asegurar_acompanamientos_pedido(solicitud: SolicitudExamen) -> int:
+    """Asegura acompañamientos (p. ej. PLAQ con coag, HTO con EAB sin hemo)."""
+    from laboratorio.acompanamiento_pedido import codigos_acompanamiento_pedido
     from laboratorio.examen_orina_micro import valor_inicial_resultado
 
     try:
@@ -197,8 +192,6 @@ def _asegurar_plaq_con_coagulograma(solicitud: SolicitudExamen) -> int:
             for c in solicitud.paneles.values_list("codigo", flat=True)
         }
     except Exception:
-        return 0
-    if PANEL_COAGULOGRAMA not in panel_codigos or PANEL_HEMOGRAMA in panel_codigos:
         return 0
 
     existentes = {
@@ -215,9 +208,7 @@ def _asegurar_plaq_con_coagulograma(solicitud: SolicitudExamen) -> int:
 
     tipos = {
         te.codigo: te
-        for te in TipoExamen.objects.filter(
-            codigo__in=faltan or EXAMENES_ACOMPANAN_COAG_SIN_HEMO, activo=True
-        )
+        for te in TipoExamen.objects.filter(codigo__in=faltan, activo=True)
     }
     creados = 0
     for codigo in faltan:
@@ -245,5 +236,5 @@ def asegurar_resultados_paneles_derivados(solicitud: SolicitudExamen) -> int:
     for codigo in _PANELES_ASEGURAR:
         total += _asegurar_codigos_panel(solicitud, codigo)
     total += _asegurar_insumos_calculados(solicitud)
-    total += _asegurar_plaq_con_coagulograma(solicitud)
+    total += _asegurar_acompanamientos_pedido(solicitud)
     return total

@@ -27,6 +27,7 @@ import { listTiposEstudioComplementario } from '../services/estudiosComplementar
 import { getSlotsMedico, type SlotMedico } from '../services/agendaMedica';
 import { apiClient } from '../services/apiClient';
 import { getSafeClinicalActionMessage } from '../utils/apiError';
+import { formatFechaHoraDisplay, formatHoraDisplay } from '../utils/dateFieldFormat';
 import type { TipoEstudioComplementario } from '../types/estudios';
 
 const PedidosEstudioBandeja: React.FC = () => {
@@ -221,7 +222,7 @@ const PedidosEstudioBandeja: React.FC = () => {
               <Box>
                 <Typography fontWeight={600}>{p.paciente_nombre}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {p.origen_canal} · {new Date(p.created_at).toLocaleString('es-AR')}
+                  {p.origen_canal} · {formatFechaHoraDisplay(p.created_at)}
                   {p.notas ? ` · ${p.notas}` : ''}
                 </Typography>
               </Box>
@@ -308,10 +309,7 @@ const PedidosEstudioBandeja: React.FC = () => {
             >
               {slots.map((s) => (
                 <MenuItem key={s.inicio} value={s.inicio}>
-                  {new Date(s.inicio).toLocaleTimeString('es-AR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatHoraDisplay(new Date(s.inicio))}
                   {s.recurso_nombre ? ` · ${s.recurso_nombre}` : ''}
                 </MenuItem>
               ))}

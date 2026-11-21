@@ -34,6 +34,7 @@ import {
   type IqcPrecheckResult,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 import { groupResultadosPorPanel } from '../../utils/limsResultadosPanel';
 import {
   applyOrdenGrupos,
@@ -882,20 +883,12 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
 
   const fechaSolicitudLabel = useMemo(() => {
     if (!orden.fecha_solicitud) return '—';
-    try {
-      return new Date(orden.fecha_solicitud).toLocaleString('es-AR');
-    } catch {
-      return orden.fecha_solicitud;
-    }
+    return formatFechaHoraDisplay(orden.fecha_solicitud);
   }, [orden.fecha_solicitud]);
 
   const fechaExtraccionLabel = useMemo(() => {
     if (orden.fecha_toma_muestra) {
-      try {
-        return new Date(orden.fecha_toma_muestra).toLocaleString('es-AR');
-      } catch {
-        return orden.fecha_toma_muestra;
-      }
+      return formatFechaHoraDisplay(orden.fecha_toma_muestra);
     }
     const fromMuestras = muestras
       .map((m) => m.fecha_toma)
@@ -903,11 +896,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       .sort()
       .at(-1);
     if (fromMuestras) {
-      try {
-        return new Date(fromMuestras).toLocaleString('es-AR');
-      } catch {
-        return fromMuestras;
-      }
+      return formatFechaHoraDisplay(fromMuestras);
     }
     if (orden.fecha_programada_toma) {
       return `${orden.fecha_programada_toma} (programada)`;
@@ -934,11 +923,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         iso = match?.fecha_toma;
       }
       if (iso) {
-        try {
-          map.set(r.id, new Date(iso).toLocaleString('es-AR'));
-        } catch {
-          map.set(r.id, iso);
-        }
+        map.set(r.id, formatFechaHoraDisplay(iso));
       }
     }
     return map;
@@ -1577,7 +1562,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                   if (!val) return null;
                   const quien = val.validado_por_nombre || 'bioquímico';
                   const cuando = val.fecha_validacion
-                    ? new Date(val.fecha_validacion).toLocaleString('es-AR')
+                    ? formatFechaHoraDisplay(val.fecha_validacion)
                     : '';
                   return (
                     <>

@@ -27,6 +27,7 @@ import CirugiaForm from './forms/CirugiaForm';
 import { useData } from '../../../contexts/DataContext';
 import { canOperateAtenciones } from '../../../utils/permissions';
 import { Z_CLINICAL_DRAWER } from '../../../utils/layerZIndex';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 
 interface AtencionDetailDrawerProps {
   atencionId: number | null;
@@ -410,10 +411,10 @@ const AtencionDetailDrawer: React.FC<AtencionDetailDrawerProps> = ({
                 Fechas
               </Typography>
               <Typography variant="body2">
-                Ingreso: {new Date(data.fecha_admision).toLocaleString()}
+                Ingreso: {formatFechaHoraDisplay(data.fecha_admision)}
               </Typography>
               <Typography variant="body2">
-                Cierre: {data.fecha_cierre ? new Date(data.fecha_cierre).toLocaleString() : '—'}
+                Cierre: {data.fecha_cierre ? formatFechaHoraDisplay(data.fecha_cierre) : '—'}
               </Typography>
             </Grid>
             {data.observaciones_generales && (

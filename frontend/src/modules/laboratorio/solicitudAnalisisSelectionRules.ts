@@ -13,6 +13,12 @@ export const EAB_INCLUYE_CODIGOS = {
 };
 
 /**
+ * EAB sin hemograma: agregar hematocrito.
+ * Alineado a `laboratorio.acompanamiento_pedido`.
+ */
+export const EAB_SIN_HEMO_INCLUYE_CODIGOS = ['HTO'] as const;
+
+/**
  * Al pedir CAIE (calcio iónico estimado): incluir Ca total y proteínas
  * para Zeisler. CA_ION / K-ión medido no dispara esta regla.
  * Con EAB el iónico de equipo sigue siendo CA_ION (sin insumos Zeisler).
@@ -56,6 +62,7 @@ export const EXAMENES_CUBIERTOS_POR_PANEL: Record<string, string> = {
   CL: 'PAN_IONO',
   CA_ION: 'PAN_IONO',
   PLAQ: 'PAN_HEMO',
+  HTO: 'PAN_HEMO',
 };
 
 export function esCodigoCartuchoCardiaco(codigo: string | undefined): boolean {

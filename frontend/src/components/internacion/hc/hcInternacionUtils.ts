@@ -1,3 +1,5 @@
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
+
 export type Turno = 'MANANA' | 'TARDE' | 'NOCHE';
 
 export interface ControlEnfermeriaRow {
@@ -51,7 +53,7 @@ export interface RegistroKinesiologiaRow {
 }
 
 export const formatFechaHc = (iso: string) =>
-  iso ? new Date(iso).toLocaleString('es-AR') : '—';
+  iso ? formatFechaHoraDisplay(iso) : '—';
 
 export const toIntHc = (v: string) => {
   const n = Number.parseInt(v, 10);

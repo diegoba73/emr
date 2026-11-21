@@ -26,7 +26,7 @@ import {
   type PedidoEstudioPaciente,
 } from '../../services/pedidosEstudioApi';
 import type { Turno } from '../../types';
-import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
+import { formatFechaHoraDisplay, formatHoraDisplay } from '../../utils/dateFieldFormat';
 import { getSafeClinicalActionMessage } from '../../utils/apiError';
 import { formatLocalDateTimeSeconds } from '../../utils/formatLocalDateTime';
 
@@ -294,10 +294,7 @@ const PortalTurnos: React.FC = () => {
               >
                 {reprogSlots.map((s) => (
                   <MenuItem key={s.inicio} value={s.inicio}>
-                    {new Date(s.inicio).toLocaleTimeString('es-AR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatHoraDisplay(new Date(s.inicio))}
                     {s.recurso_nombre ? ` · ${s.recurso_nombre}` : ''}
                   </MenuItem>
                 ))}

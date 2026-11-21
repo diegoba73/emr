@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { api } from '../lib/api';
 import { PedidoEstudio } from '../lib/types';
 import { Action, Body, Card, ErrorText, Loading, Page, Title } from '../components/ui';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 
 export default function MisPedidos() {
   const [pedidos, setPedidos] = useState<PedidoEstudio[]>([]);
@@ -44,9 +45,7 @@ export default function MisPedidos() {
               Pedido #{p.id} · {p.estado}
             </Body>
             <Body>
-              {p.created_at
-                ? new Date(p.created_at).toLocaleString('es-AR')
-                : 'Sin fecha'}
+              {p.created_at ? formatFechaHoraDisplay(p.created_at) : 'Sin fecha'}
             </Body>
             {p.notas ? <Body>{p.notas}</Body> : null}
             {p.estado === 'PENDIENTE' && (

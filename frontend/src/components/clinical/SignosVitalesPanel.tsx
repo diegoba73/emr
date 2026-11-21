@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast';
 import { apiService } from '../../services/api';
 import type { SignosVitales } from '../../types';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 interface SignosVitalesPanelProps {
   atencionId: number;
@@ -246,7 +247,7 @@ const SignosVitalesPanel: React.FC<SignosVitalesPanelProps> = ({
                 <TableRow key={sv.id}>
                   <TableCell>
                     {sv.fecha_registro
-                      ? new Date(sv.fecha_registro).toLocaleString('es-AR')
+                      ? formatFechaHoraDisplay(sv.fecha_registro)
                       : '—'}
                   </TableCell>
                   <TableCell>{formatSv(sv)}</TableCell>

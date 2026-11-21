@@ -36,6 +36,7 @@ import { canDarAltaInternacion, canOperateInternacionClinica, canWriteHcMedico, 
   isSecretariaEmrRole,
 } from '../../utils/permissions';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 import { origenLimsDesdeSectorInternacion } from '../../utils/limsOrigenSolicitud';
 import AtencionDetailDrawer from '../../modules/atenciones/components/AtencionDetailDrawer';
 import RevistaInternacionWorkspace from './RevistaInternacionWorkspace';
@@ -877,7 +878,7 @@ const ModalGestionarPaciente: React.FC<ModalGestionarPacienteProps> = ({
                 </Typography>
               </Box>
               <Typography variant="body1" sx={{ ml: 4 }}>
-                {new Date(internacionData.fecha_ingreso).toLocaleString('es-AR')}
+                {formatFechaHoraDisplay(internacionData.fecha_ingreso)}
               </Typography>
             </Box>
 

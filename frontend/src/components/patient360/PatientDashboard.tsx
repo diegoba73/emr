@@ -37,6 +37,7 @@ import SectionCard from './SectionCard';
 import InfoCard from './InfoCard';
 import Timeline, { TimelineItem, TimelineItemType } from './Timeline';
 import { patientAgeYears } from './patientAge';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 export function mapTimelineEvent(
   ev: PacienteTimelineEvent,
@@ -373,7 +374,7 @@ const PatientDashboard: React.FC = () => {
                             primary={parts.join(' · ') || 'Registro SV'}
                             secondary={
                               sv.fecha_registro
-                                ? new Date(sv.fecha_registro).toLocaleString('es-AR')
+                                ? formatFechaHoraDisplay(sv.fecha_registro)
                                 : a.fecha_admision
                             }
                           />
@@ -402,7 +403,7 @@ const PatientDashboard: React.FC = () => {
                     >
                       <ListItemText
                         primary={a.tipo_intervencion}
-                        secondary={a.fecha_admision ? new Date(a.fecha_admision).toLocaleString('es-AR') : ''}
+                        secondary={a.fecha_admision ? formatFechaHoraDisplay(a.fecha_admision) : ''}
                       />
                     </ListItemButton>
                   ))}

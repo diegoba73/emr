@@ -53,6 +53,7 @@ import {
 } from '../services/agendaMedica';
 import { Medico, Recurso } from '../types';
 import { getSafeClinicalActionMessage } from '../utils/apiError';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DIAS_CORTO = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
@@ -89,15 +90,7 @@ function weekFromHorarios(horarios: HorarioMedico[], medicoId: number, tipo: Tip
 
 function formatHoraTurno(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatFechaHoraDisplay(iso);
 }
 
 export default function HorariosMedicos() {

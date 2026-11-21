@@ -84,6 +84,7 @@ const SUGERENCIA_MUESTRA_POR_CULTIVO: Record<string, string[]> = {
   PIEL_PARTES_BLANDAS: ['tejido', 'hisop', 'exudado'],
   HERIDA_ABSCESO: ['pus', 'tejido'],
   MATERIAL_QUIRURGICO: ['tejido', 'dispositivo'],
+  MARCAPASOS: ['dispositivo'],
   BIOPSIA: ['biopsia'],
   TEJIDO: ['tejido'],
   OSEO: ['hueso'],

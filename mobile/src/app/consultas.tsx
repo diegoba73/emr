@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { api } from '../lib/api';
 import { ConsultaResumen } from '../lib/types';
 import { Action, Body, Card, colors, ErrorText, Loading, Page, Title } from '../components/ui';
+import { formatHora } from '../utils/dateFieldFormat';
 
 export default function ConsultasList() {
   const [rows, setRows] = useState<ConsultaResumen[]>([]);
@@ -50,14 +51,16 @@ export default function ConsultasList() {
             <Card key={r.id}>
               <Text style={{ fontWeight: '800', fontSize: 17, color: colors.ink }}>
                 {r.fecha
-                  ? new Date(r.fecha).toLocaleString('es-AR', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
+                  ? (() => {
+                      const d = new Date(r.fecha);
+                      const dia = d.toLocaleDateString('es-AR', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      });
+                      return `${dia} ${formatHora(d)}`;
+                    })()
                   : 'Sin fecha'}
               </Text>
               <Body>{r.medico_nombre || 'Médico'}</Body>

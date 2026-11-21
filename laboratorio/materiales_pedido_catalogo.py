@@ -742,6 +742,20 @@ MATERIALES_PEDIDO: tuple[MaterialPedidoDef, ...] = (
         muestra_micro="TEJIDO",
     ),
     MaterialPedidoDef(
+        codigo="MARCAPASOS",
+        nombre="Marcapasos",
+        sufijo="MCP",
+        cultivo_micro="MARCAPASOS",
+        muestra_micro="DISPOSITIVO",
+    ),
+    MaterialPedidoDef(
+        codigo="MAT_CIRUGIA",
+        nombre="Material de cirugía",
+        sufijo="MCI",
+        cultivo_micro="MATERIAL_QUIRURGICO",
+        muestra_micro="DISPOSITIVO",
+    ),
+    MaterialPedidoDef(
         codigo="ASP_MEDULA",
         nombre="Aspirado de médula ósea",
         sufijo="AMO",
@@ -858,6 +872,7 @@ CULTIVOS_MICRO_EXTRA: tuple[tuple[str, str, int], ...] = (
     ("HONGOS_UNAS", "Cultivo de uñas para hongos", 253),
     ("LIQ_SONICACION", "Cultivo de líquido de sonicación de prótesis", 235),
     ("VALVULA_CARDIACA", "Cultivo de válvula cardíaca", 236),
+    ("MARCAPASOS", "Cultivo de marcapasos", 247),
     ("ASP_MEDULA_OSEA", "Cultivo de aspirado de médula ósea", 237),
     ("LIQ_AMNIOTICO", "Cultivo de líquido amniótico", 238),
     ("CULTIVO_PLACENTA", "Cultivo de placenta", 239),

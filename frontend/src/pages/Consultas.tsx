@@ -251,10 +251,7 @@ const Consultas: React.FC = () => {
                   <div className="info-item">
                     <span className="label">🕐 Hora:</span>
                     <span className="value">
-                      {new Date(selectedConsulta.fecha_hora_consulta).toLocaleTimeString('es-ES', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatHoraDisplay(new Date(selectedConsulta.fecha_hora_consulta))}
                     </span>
                   </div>
                   <div className="info-item">

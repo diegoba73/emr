@@ -7,6 +7,7 @@ import { AnuncioRecepcion, RecepcionHoy, Turno } from '../lib/types';
 import { dateKey } from '../lib/calendar';
 import Calendar from '../components/Calendar';
 import { Action, Body, Card, colors, ErrorText, Loading, Page, Title } from '../components/ui';
+import { formatFechaHoraDisplay, formatHora } from '../utils/dateFieldFormat';
 
 export default function Home() {
   const [now, setNow] = useState(() => Date.now());
@@ -180,7 +181,7 @@ export default function Home() {
         <Card>
           <Body>
             Ya tenés un turno el{' '}
-            {new Date(turnoActivoPaciente.fecha_hora_inicio).toLocaleString('es-AR')}. No
+            {formatFechaHoraDisplay(turnoActivoPaciente.fecha_hora_inicio)}. No
             podés sacar otro desde la app; si necesitás cambiarlo, contactá a secretaría.
           </Body>
           {turnoActivoPaciente.estado === 'RESERVADO' && (
@@ -219,13 +220,15 @@ export default function Home() {
               {visibles.map((t) => (
                 <Card key={t.id}>
                   <Text style={{ fontWeight: '700', fontSize: 17, color: colors.ink }}>
-                    {new Date(t.fecha_hora_inicio).toLocaleString('es-AR', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {(() => {
+                      const d = new Date(t.fecha_hora_inicio);
+                      const dia = d.toLocaleDateString('es-AR', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      });
+                      return `${dia} ${formatHora(d)}`;
+                    })()}
                   </Text>
                   <Body>
                     {user?.rol === 'medico' ? t.paciente_nombre : t.medico_nombre} ·{' '}

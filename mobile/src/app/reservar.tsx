@@ -8,6 +8,7 @@ import { Medico, Slot, Turno } from '../lib/types';
 import { dateKey } from '../lib/calendar';
 import Calendar from '../components/Calendar';
 import { Action, Body, Card, colors, ErrorText, Field, Loading, Page, Title } from '../components/ui';
+import { formatFechaHoraDisplay, formatHoraDisplay } from '../utils/dateFieldFormat';
 
 export default function Booking() {
   const { user, clinic } = useSession();
@@ -112,7 +113,7 @@ export default function Booking() {
   const choose = (slot: Slot) =>
     Alert.alert(
       'Confirmar reserva',
-      `${clinic?.name}\n${new Date(slot.inicio).toLocaleString('es-AR')} · ${slot.duracion_min} minutos`,
+      `${clinic?.name}\n${formatFechaHoraDisplay(slot.inicio)} · ${slot.duracion_min} minutos`,
       [
         { text: 'Volver', style: 'cancel' },
         { text: 'Confirmar', onPress: () => submitConsulta(slot) },
@@ -306,10 +307,7 @@ export default function Booking() {
                   {slots.map((slot) => (
                     <View key={slot.inicio} style={{ width: '30%' }}>
                       <Action
-                        title={new Date(slot.inicio).toLocaleTimeString('es-AR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        title={formatHoraDisplay(new Date(slot.inicio))}
                         disabled={busy}
                         onPress={() => choose(slot)}
                       />

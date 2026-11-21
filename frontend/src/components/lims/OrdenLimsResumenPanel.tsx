@@ -4,6 +4,7 @@ import type { SolicitudExamenLims } from '../../types/lims';
 import { labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
 import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../utils/limsObraSocial';
 import { formatOrigenProcedenciaCell } from '../../utils/limsOrigenSolicitud';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 export interface OrdenLimsResumenPanelProps {
   orden: SolicitudExamenLims;
@@ -99,14 +100,14 @@ const OrdenLimsResumenPanel: React.FC<OrdenLimsResumenPanelProps> = ({ orden }) 
           ) : null}
           {orden.fecha_solicitud && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Solicitud: {new Date(orden.fecha_solicitud).toLocaleString('es-AR')}
+              Solicitud: {formatFechaHoraDisplay(orden.fecha_solicitud)}
             </Typography>
           )}
           {(orden.fecha_toma_muestra || orden.fecha_programada_toma) && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Extracción:{' '}
               {orden.fecha_toma_muestra
-                ? new Date(orden.fecha_toma_muestra).toLocaleString('es-AR')
+                ? formatFechaHoraDisplay(orden.fecha_toma_muestra)
                 : orden.fecha_programada_toma}
               {!orden.fecha_toma_muestra && orden.fecha_programada_toma ? ' (programada)' : ''}
             </Typography>

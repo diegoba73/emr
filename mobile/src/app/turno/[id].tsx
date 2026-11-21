@@ -6,6 +6,7 @@ import { AnuncioRecepcion, RecepcionHoy, Slot, Turno } from '../../lib/types';
 import { useSession } from '../../lib/session';
 import { dateKey } from '../../lib/calendar';
 import { Action, Body, Card, ErrorText, Field, Loading, Page, Title } from '../../components/ui';
+import { formatFechaHoraDisplay, formatHoraDisplay } from '../../utils/dateFieldFormat';
 
 export default function Detail() {
   const [now, setNow] = useState(() => Date.now());
@@ -127,11 +128,7 @@ export default function Detail() {
                 })}
               </Title>
               <Body>
-                {new Date(turno.fecha_hora_inicio).toLocaleTimeString('es-AR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}{' '}
-                · {turno.medico_nombre}
+                {formatHoraDisplay(new Date(turno.fecha_hora_inicio))} · {turno.medico_nombre}
               </Body>
               {user?.rol === 'medico' && <Body>{turno.paciente_nombre}</Body>}
               <Body>Estado: {turno.estado}</Body>
@@ -203,12 +200,12 @@ export default function Detail() {
                           key={s.inicio}
                           title={
                             s.recurso_nombre
-                              ? `${new Date(s.inicio).toLocaleString('es-AR')} · ${s.recurso_nombre}`
-                              : new Date(s.inicio).toLocaleString('es-AR')
+                              ? `${formatFechaHoraDisplay(s.inicio)} · ${s.recurso_nombre}`
+                              : formatFechaHoraDisplay(s.inicio)
                           }
                           disabled={busy}
                           onPress={() =>
-                            Alert.alert('Reprogramar', `¿Pasar el turno a ${new Date(s.inicio).toLocaleString('es-AR')}?`, [
+                            Alert.alert('Reprogramar', `¿Pasar el turno a ${formatFechaHoraDisplay(s.inicio)}?`, [
                               { text: 'Volver', style: 'cancel' },
                               {
                                 text: 'Sí',

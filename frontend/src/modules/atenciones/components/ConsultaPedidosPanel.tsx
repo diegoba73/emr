@@ -54,6 +54,7 @@ import {
   canDownloadInformeMicroPdf,
 } from '../../../utils/limsAccess';
 import { formatLimsPdfDownloadError } from '../../../utils/limsDownload';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 import toast from 'react-hot-toast';
 import {
   loadConsultaPedidosDraft,
@@ -752,7 +753,7 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
                     <Chip label={sol.material_pedido} size="small" variant="outlined" />
                   ) : null}
                   <Typography variant="caption" color="text.secondary">
-                    {new Date(sol.fecha_solicitud).toLocaleString()}
+                    {formatFechaHoraDisplay(sol.fecha_solicitud)}
                   </Typography>
                   {canDownloadInformeClinicoPdf(currentUser, sol.estado) && (
                     <Button

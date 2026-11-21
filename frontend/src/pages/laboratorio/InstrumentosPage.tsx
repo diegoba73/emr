@@ -19,6 +19,7 @@ import {
   type MensajeInstrumento,
 } from '../../services/limsApi';
 import { getSafeApiErrorMessage } from '../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 const ESTADO_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
   OK: 'success',
@@ -122,7 +123,7 @@ const InstrumentosPage: React.FC = () => {
             <TableBody>
               {mensajes.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
+                  <TableCell>{formatFechaHoraDisplay(row.created_at)}</TableCell>
                   <TableCell>{row.interfaz_driver}</TableCell>
                   <TableCell>
                     <Chip size="small" label={row.estado} color={ESTADO_COLOR[row.estado] || 'default'} />

@@ -42,6 +42,7 @@ import {
   listTiposMuestraMicro,
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { sugerirMuestraPorCultivo, validateCrearEstudioMicroPedido } from '../../utils/limsMicroUx';
 import {
@@ -367,7 +368,7 @@ const MicrobiologiaEstudios: React.FC = () => {
                       <EstudioMicrobiologiaEstadoBadge estado={r.estado} />
                     </TableCell>
                     <TableCell>
-                      {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                      {r.created_at ? formatFechaHoraDisplay(r.created_at) : '—'}
                     </TableCell>
                     <TableCell align="right">
                       <Button

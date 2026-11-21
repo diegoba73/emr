@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { EstudioResumen } from '../../lib/types';
 import { downloadEstudioInformePdf } from '../../lib/estudioPdf';
 import { Action, Body, Card, ErrorText, Loading, Page, Title } from '../../components/ui';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 export default function EstudioDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,7 +60,7 @@ export default function EstudioDetail() {
             <Body>{estudio.estado_display}</Body>
             <Body>
               {estudio.fecha_solicitud
-                ? new Date(estudio.fecha_solicitud).toLocaleString('es-AR')
+                ? formatFechaHoraDisplay(estudio.fecha_solicitud)
                 : 'Sin fecha de solicitud'}
             </Body>
           </Card>

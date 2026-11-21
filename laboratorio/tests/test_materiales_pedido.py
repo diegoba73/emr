@@ -105,6 +105,22 @@ def test_sudor_solo_clinico():
     assert "CL_SUD" in grilla_codigos_material(sud)
 
 
+def test_marcapasos_y_material_cirugia():
+    mcp = material_por_codigo("MARCAPASOS")
+    assert mcp is not None
+    assert mcp.nombre == "Marcapasos"
+    assert mcp.cultivo_micro == "MARCAPASOS"
+    assert mcp.muestra_micro == "DISPOSITIVO"
+    assert grilla_codigos_material(mcp) == []
+
+    cir = material_por_codigo("MAT_CIRUGIA")
+    assert cir is not None
+    assert cir.nombre == "Material de cirugía"
+    assert cir.cultivo_micro == "MATERIAL_QUIRURGICO"
+    assert cir.muestra_micro == "DISPOSITIVO"
+    assert grilla_codigos_material(cir) == []
+
+
 def test_api_list_shape():
     rows = as_api_list()
     assert len(rows) == len(MATERIALES_PEDIDO)

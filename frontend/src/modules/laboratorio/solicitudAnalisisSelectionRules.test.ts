@@ -2,6 +2,7 @@ import {
   CAIE_INCLUYE_CODIGOS,
   CARTUCHO_CARDIACO_CODIGOS,
   EAB_INCLUYE_CODIGOS,
+  EAB_SIN_HEMO_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
   COAG_SIN_HEMO_INCLUYE_CODIGOS,
   EXAMENES_SOLICITABLES_AUNQUE_CUBIERTOS_POR_GRILLA,
@@ -25,6 +26,7 @@ describe('solicitudAnalisisSelectionRules', () => {
     expect(esPanelEab('PAN_EAB_ART')).toBe(true);
     expect(EAB_INCLUYE_CODIGOS.paneles).toContain('PAN_IONO');
     expect(EAB_INCLUYE_CODIGOS.examenes).toEqual(expect.arrayContaining(['LACT', 'CA_ION']));
+    expect(EAB_SIN_HEMO_INCLUYE_CODIGOS).toEqual(['HTO']);
   });
 
   it('CAIE suelto incluye CA y PROT_T para Zeisler', () => {
@@ -47,10 +49,12 @@ describe('solicitudAnalisisSelectionRules', () => {
     expect(EXAMENES_CUBIERTOS_POR_PANEL.PLAQ).toBe('PAN_HEMO');
   });
 
-  it('cubre INR, CL y CA_ION por sus paneles', () => {
+  it('cubre INR, CL, CA_ION, PLAQ y HTO por sus paneles', () => {
     expect(EXAMENES_CUBIERTOS_POR_PANEL.INR).toBe('PAN_COAG');
     expect(EXAMENES_CUBIERTOS_POR_PANEL.CL).toBe('PAN_IONO');
     expect(EXAMENES_CUBIERTOS_POR_PANEL.CA_ION).toBe('PAN_IONO');
+    expect(EXAMENES_CUBIERTOS_POR_PANEL.PLAQ).toBe('PAN_HEMO');
+    expect(EXAMENES_CUBIERTOS_POR_PANEL.HTO).toBe('PAN_HEMO');
   });
 });
 

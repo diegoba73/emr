@@ -5,6 +5,7 @@ import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import HistorialCultivoMicroPanel from './HistorialCultivoMicroPanel';
 import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../../utils/limsObraSocial';
 import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 
 export interface EstudioMicroResumenTabProps {
   estudio: EstudioMicrobiologia;
@@ -80,12 +81,12 @@ const EstudioMicroResumenTab: React.FC<EstudioMicroResumenTabProps> = ({
       ) : null}
       <Typography sx={{ mt: 1 }}>
         <strong>Solicitud:</strong>{' '}
-        {estudio.created_at ? new Date(estudio.created_at).toLocaleString('es-AR') : '—'}
+        {estudio.created_at ? formatFechaHoraDisplay(estudio.created_at) : '—'}
       </Typography>
       <Typography sx={{ mt: 1 }}>
         <strong>Extracción:</strong>{' '}
         {estudio.fecha_inicio
-          ? new Date(estudio.fecha_inicio).toLocaleString('es-AR')
+          ? formatFechaHoraDisplay(estudio.fecha_inicio)
           : estudio.fecha_programada_toma || '—'}
         {!estudio.fecha_inicio && estudio.fecha_programada_toma ? ' (programada)' : ''}
       </Typography>

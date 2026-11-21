@@ -47,6 +47,7 @@ import {
 } from '../../../services/limsApi';
 import type { LimsTipoExamen } from '../../../types/lims';
 import { getSafeApiErrorMessage, isProtectedDeleteError } from '../../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 import {
   estadoCatalogoDisplay,
   existenciaDisplay,
@@ -1179,7 +1180,7 @@ const InventarioPage: React.FC = () => {
             <TableBody>
               {movimientosVisibles.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell>{new Date(m.created_at).toLocaleString('es-AR')}</TableCell>
+                  <TableCell>{formatFechaHoraDisplay(m.created_at)}</TableCell>
                   <TableCell>{m.tipo}</TableCell>
                   <TableCell>{m.insumo_codigo}</TableCell>
                   <TableCell>{m.lote_codigo}</TableCell>

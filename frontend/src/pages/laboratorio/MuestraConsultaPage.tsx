@@ -24,14 +24,11 @@ import { getLabCodigoPorCodigo } from '../../services/limsApi';
 import type { EstudioMicrobiologia, MuestraLookupLims } from '../../types/lims';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { canAccessLimsModule } from '../../utils/limsAccess';
+import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 
 const formatFecha = (iso?: string | null) => {
   if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('es-AR');
-  } catch {
-    return iso;
-  }
+  return formatFechaHoraDisplay(iso);
 };
 
 const MuestraConsultaPage: React.FC = () => {

@@ -26,6 +26,7 @@ import {
   CAIE_INCLUYE_CODIGOS,
   COAG_SIN_HEMO_INCLUYE_CODIGOS,
   EAB_INCLUYE_CODIGOS,
+  EAB_SIN_HEMO_INCLUYE_CODIGOS,
   EXAMENES_CUBIERTOS_POR_PANEL,
   PANEL_COAGULOGRAMA,
   PANEL_HEMOGRAMA,
@@ -414,9 +415,15 @@ export function useSolicitudAnalisisSelection(
         return next;
       });
       if (selecting && esPanelEab(codigo)) {
-        setSelectedExamenesIds((prev) =>
-          addExamenesByCodigo(prev, EAB_INCLUYE_CODIGOS.examenes)
-        );
+        const hemoId = panelIdByCodigo.get(PANEL_HEMOGRAMA);
+        const tieneHemo = hemoId != null && selectedPanelesIds.has(hemoId);
+        setSelectedExamenesIds((prev) => {
+          let next = addExamenesByCodigo(prev, EAB_INCLUYE_CODIGOS.examenes);
+          if (!tieneHemo) {
+            next = addExamenesByCodigo(next, EAB_SIN_HEMO_INCLUYE_CODIGOS);
+          }
+          return next;
+        });
       }
       if (selecting && (codigo || '').toUpperCase() === PANEL_COAGULOGRAMA) {
         const hemoId = panelIdByCodigo.get(PANEL_HEMOGRAMA);

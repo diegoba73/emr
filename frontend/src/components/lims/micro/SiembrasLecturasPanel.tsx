@@ -35,6 +35,7 @@ import {
   updateSiembraMicrobiologia,
 } from '../../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../../utils/apiError';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 import {
   handleLimsEnterNext,
   LIMS_ENTER_FOCUS_ATTR,
@@ -367,7 +368,7 @@ const SiembrasLecturasPanel: React.FC<SiembrasLecturasPanelProps> = ({
                 <TableRow key={s.id}>
                   <TableCell>{s.id}</TableCell>
                   <TableCell>{labelMedioDeSiembra(s.medio, medios)}</TableCell>
-                  <TableCell>{s.fecha_siembra ? new Date(s.fecha_siembra).toLocaleString() : '—'}</TableCell>
+                  <TableCell>{s.fecha_siembra ? formatFechaHoraDisplay(s.fecha_siembra) : '—'}</TableCell>
                   <TableCell>{s.condicion_incubacion || '—'}</TableCell>
                   {canOperate && (
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>

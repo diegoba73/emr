@@ -13,6 +13,7 @@ import { EstudioMicrobiologiaEstadoBadge } from './MicroBadges';
 import { labelOrigenSolicitudLims } from '../../../utils/limsOrigenSolicitud';
 import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../../utils/limsObraSocial';
 import { limsActionBtnSoftSx, limsActionBtnSx } from '../../../utils/limsActionButtonSx';
+import { formatFechaHoraDisplay } from '../../../utils/dateFieldFormat';
 
 export interface EstudioMicroPedidoRecepcionPanelProps {
   estudio: EstudioMicrobiologia;
@@ -233,7 +234,7 @@ const EstudioMicroPedidoRecepcionPanel: React.FC<EstudioMicroPedidoRecepcionPane
             </Typography>
             {estudio.etiquetas_impresas_at && (
               <Typography variant="caption" color="text.secondary" display="block">
-                Etiqueta: {new Date(estudio.etiquetas_impresas_at).toLocaleString()}
+                Etiqueta: {formatFechaHoraDisplay(estudio.etiquetas_impresas_at)}
               </Typography>
             )}
           </Box>
