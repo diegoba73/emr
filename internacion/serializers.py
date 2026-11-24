@@ -196,9 +196,14 @@ class InternacionSerializer(serializers.ModelSerializer):
         return None
 
     def get_paciente_cabecera(self, obj):
+        from pacientes.obras_sociales import codigo_obra_social
+
         paciente = obj.paciente
         cama = obj.cama
         sector = cama.sector.nombre if cama and cama.sector_id else None
+        # obra_social es FK a ObraSocial: devolver código (str), nunca la instancia
+        # (rompe JSON → 500 al abrir Gestionar Paciente / revista / pedidos).
+        obra = getattr(paciente, 'obra_social', None) if paciente else None
         return {
             'paciente_id': paciente.pk if paciente else None,
             'nombre': getattr(paciente, 'nombre', '') or '',
@@ -206,7 +211,7 @@ class InternacionSerializer(serializers.ModelSerializer):
             'dni': getattr(paciente, 'dni', '') or '',
             'edad': getattr(paciente, 'edad', None),
             'estado_civil': getattr(paciente, 'estado_civil', '') or '',
-            'obra_social': getattr(paciente, 'obra_social', None),
+            'obra_social': codigo_obra_social(obra) or None,
             'numero_afiliado': getattr(paciente, 'numero_afiliado', None),
             'direccion': getattr(paciente, 'direccion', None),
             'telefono': getattr(paciente, 'telefono', None),

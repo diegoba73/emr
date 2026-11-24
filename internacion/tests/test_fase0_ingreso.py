@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from internacion.models import Cama, Internacion, MedicacionHabitualInternacion, Sector
 from internacion.tests.helpers import unique_suffix
 from pacientes.models import Paciente
+from pacientes.obras_sociales import ensure_seed_obras_sociales, resolve_obra_social
 
 User = get_user_model()
 
@@ -13,6 +14,7 @@ User = get_user_model()
 class Fase0IngresoHcTestCase(APITestCase):
     def setUp(self):
         suffix = unique_suffix()
+        ensure_seed_obras_sociales()
         self.medico = User.objects.create_user(
             username=f'med-f0-{suffix}', password='x', email=f'med-f0-{suffix}@t.com', rol='medico',
         )
@@ -26,7 +28,7 @@ class Fase0IngresoHcTestCase(APITestCase):
             nombre='Marta',
             apellido='Sol',
             dni=f'F0-{suffix}',
-            obra_social='PAMI',
+            obra_social=resolve_obra_social('PAMI'),
         )
         self.sector = Sector.objects.create(nombre=f'UCO-f0-{suffix}')
         self.cama = Cama.objects.create(nombre=f'C-f0-{suffix}', sector=self.sector, estado='DISPONIBLE')

@@ -144,8 +144,12 @@ def test_movil_register_y_obras(seed_os):
             'telefono': '3517777777',
             'fecha_nacimiento': '1993-03-03',
             'obra_social': 'PAMI',
+            'numero_afiliado': 'PAMI-99',
+            'plan': 'BASICO',
         },
         format='json',
     )
     assert r2.status_code == status.HTTP_201_CREATED, r2.data
-    assert Paciente.objects.get(dni='OS-MOV-01').obra_social.codigo == 'PAMI'
+    pac = Paciente.objects.get(dni='OS-MOV-01')
+    assert pac.obra_social.codigo == 'PAMI'
+    assert (pac.plan_obra_social or '') == 'BASICO'

@@ -173,7 +173,13 @@ class TipoDietaViewSet(viewsets.ModelViewSet):
 class InternacionViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar internaciones"""
     queryset = Internacion.objects.select_related(
-        'paciente', 'cama', 'medico', 'cama__sector', 'diagnostico_cie', 'tipo_dieta'
+        'paciente',
+        'paciente__obra_social',
+        'cama',
+        'medico',
+        'cama__sector',
+        'diagnostico_cie',
+        'tipo_dieta',
     ).prefetch_related('medicaciones_habituales').filter(activo=True)
     serializer_class = InternacionSerializer
     permission_classes = [IsAuthenticated, IsInternacionStaff]
@@ -223,7 +229,15 @@ class InternacionViewSet(viewsets.ModelViewSet):
         user = self.request.user
         paciente_param = self.request.query_params.get('paciente')
         incluir_historico = self.request.query_params.get('historico', '').lower() in ('1', 'true', 'yes')
-        related = ('paciente', 'cama', 'medico', 'cama__sector', 'diagnostico_cie', 'tipo_dieta')
+        related = (
+            'paciente',
+            'paciente__obra_social',
+            'cama',
+            'medico',
+            'cama__sector',
+            'diagnostico_cie',
+            'tipo_dieta',
+        )
 
         if paciente_param or incluir_historico:
             queryset = Internacion.objects.select_related(*related).prefetch_related(
