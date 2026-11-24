@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from pacientes.models import Paciente
+from pacientes.tests.os_helpers import os_ref
 from usuarios.auth_login import normalize_login_identifier, username_candidates
 
 User = get_user_model()
@@ -37,7 +38,7 @@ def test_login_con_dni_cuando_username_es_otro(api):
         dni='30123456',
         nombre='Juan',
         apellido='Perez',
-        obra_social='OSDE',
+        obra_social=os_ref('OSDE'),
     )
     r = api.post(
         '/api/auth/login/',
@@ -62,7 +63,7 @@ def test_login_con_dni_con_puntos(api):
         dni='30111222',
         nombre='Ana',
         apellido='Diaz',
-        obra_social='PAMI',
+        obra_social=os_ref('PAMI'),
     )
     r = api.post(
         '/api/auth/login/',
@@ -85,7 +86,7 @@ def test_login_username_igual_dni_sigue_ok(api):
         dni='30999888',
         nombre='Luis',
         apellido='Gomez',
-        obra_social='OSDE',
+        obra_social=os_ref('OSDE'),
     )
     r = api.post(
         '/api/auth/login/',
@@ -108,7 +109,7 @@ def test_login_password_incorrecta_no_enumera(api):
         dni='30888777',
         nombre='Eva',
         apellido='Ruiz',
-        obra_social='OSDE',
+        obra_social=os_ref('OSDE'),
     )
     r = api.post(
         '/api/auth/login/',
