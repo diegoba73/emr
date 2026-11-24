@@ -10,6 +10,7 @@ from auditoria.snapshot import safe_entity_repr, safe_model_snapshot
 from historias_clinicas.models import Consulta, HistoriaClinica
 from medicos.models import Medico
 from pacientes.models import Paciente
+from pacientes.tests.os_helpers import os_ref
 from solicitudes.models import Solicitud
 from turnos.models import Atencion, ConsultaAmbulatoria, Recurso, Turno
 
@@ -29,7 +30,7 @@ class TestPacienteSnapshotRedaction:
             telefono='1122334455',
             email='juan@example.com',
             direccion='Calle Falsa 123',
-            obra_social='OSDE',
+            obra_social=os_ref('OSDE'),
             numero_afiliado='AF-999',
             antecedentes_personales='HTA',
             antecedentes_familiares='DM padre',

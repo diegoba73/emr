@@ -45,6 +45,7 @@ import {
   type CatalogAddItem,
   type OrinaModalidad,
 } from '../../utils/limsCatalogoPedidoMaterial';
+import { materialesPedidoEfectivos } from '../../utils/limsMaterialesPedidoCatalog';
 
 const ORINA_GRILLA_CODIGOS: readonly string[] = ORINA_SOLICITUD_PAPEL_CODIGOS;
 
@@ -60,88 +61,10 @@ const MATERIALES_FRECUENTES_FALLBACK = [
   'HISOP_AMB',
 ] as const;
 
-/** Fallback si la API aún no respondió. */
-const MATERIALES_FALLBACK: MaterialPedidoLims[] = [
-  {
-    codigo: 'SANGRE',
-    nombre: 'Sangre',
-    ui_preset: 'sangre',
-    tipo_muestra_codigos: [
-      'SUERO',
-      'SANGRE_EDTA',
-      'PLASMA_CITRATO',
-      'PLASMA_EDTA',
-      'SANGRE_ERITRO',
-      'SANGRE_CITRATO_VSG',
-      'SANGRE_HEPARINA',
-      'SANGRE_HEPARINA_ART',
-      'SANGRE_HEPARINA_VEN',
-      'PLASMA_HEPARINA',
-    ],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'HEMOCULTIVO',
-    muestra_micro_codigo: 'SANGRE',
-  },
-  {
-    codigo: 'ORINA',
-    nombre: 'Orina',
-    ui_preset: 'orina',
-    tipo_muestra_codigos: ['ORINA', 'ORINA_24_H'],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'UROCULTIVO',
-    muestra_micro_codigo: 'ORINA',
-    frecuente: true,
-  },
-  {
-    codigo: 'MATERIA_FECAL',
-    nombre: 'Materia fecal',
-    ui_preset: null,
-    tipo_muestra_codigos: ['MATERIA_FECAL'],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'COPROCULTIVO',
-    muestra_micro_codigo: 'MATERIA_FECAL',
-    frecuente: true,
-  },
-  {
-    codigo: 'ESPUTO',
-    nombre: 'Esputo',
-    tipo_muestra_codigos: ['ESPUTO'],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'ESPUTO',
-    muestra_micro_codigo: 'ESPUTO',
-    frecuente: true,
-  },
-  {
-    codigo: 'HISOP_NAS',
-    nombre: 'Hisopado nasal',
-    tipo_muestra_codigos: ['HISOP_NAS'],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'NASOFARINGEO',
-    muestra_micro_codigo: 'EXUDADO_NASAL',
-    frecuente: true,
-  },
-  {
-    codigo: 'HISOP_RECT',
-    nombre: 'Hisopado rectal',
-    tipo_muestra_codigos: ['HISOP_RECT'],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'HISOPADO_ANAL',
-    muestra_micro_codigo: 'HISOPADO_VIGILANCIA',
-    frecuente: true,
-  },
-  {
-    codigo: 'HISOP_AMB',
-    nombre: 'Hisopado ambiental',
-    tipo_muestra_codigos: ['HISOP_AMB'],
-    grilla_codigos: [],
-    cultivo_micro_codigo: 'AMBIENTAL',
-    muestra_micro_codigo: 'HISOPADO_VIGILANCIA',
-    frecuente: true,
-  },
-];
-
 const filterMaterialesBase = createFilterOptions<MaterialPedidoLims>({
-  stringify: (m) => `${m.codigo} ${m.nombre}`,
+  // Incluye cultivo asociado: tipiar «hemocultivo» encuentra Sangre.
+  stringify: (m) =>
+    `${m.codigo} ${m.nombre} ${m.cultivo_micro_codigo || ''}`.trim(),
 });
 
 type CatalogItem = {
@@ -150,6 +73,59 @@ type CatalogItem = {
   codigo: string;
   nombre: string;
 };
+
+/** Opción del buscador que marca el cultivo de microbiología del material. */
+type CatalogAddOrMicro =
+  | CatalogAddItem
+  | {
+      kind: 'micro';
+      id: number;
+      codigo: string;
+      nombre: string;
+    };
+
+function normalizarBusqueda(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * ¿La búsqueda apunta al cultivo de este material?
+ * Evita que «hemo» en Orina ofrezca urocultivo, o «hemograma» dispare micro.
+ */
+function queryCoincideConCultivoMaterial(
+  query: string,
+  cultivo: Pick<TipoCultivoMicrobiologia, 'codigo' | 'nombre'>
+): boolean {
+  const q = normalizarBusqueda(query);
+  if (!q) return false;
+  const cultivoNorm = normalizarBusqueda(`${cultivo.codigo} ${cultivo.nombre}`);
+  if (cultivoNorm.includes(q)) return true;
+  const code = (cultivo.codigo || '').toUpperCase();
+  if (q === 'cultivo' || q === 'micro' || q.startsWith('microb')) return true;
+  if (
+    code === 'HEMOCULTIVO' &&
+    (q.includes('hemocult') || q === 'hemo' || q.startsWith('hemoc'))
+  ) {
+    return true;
+  }
+  if (
+    code === 'UROCULTIVO' &&
+    (q.includes('urocult') || q === 'uro' || q.startsWith('uroc'))
+  ) {
+    return true;
+  }
+  if (
+    code === 'COPROCULTIVO' &&
+    (q.includes('coprocult') || q.startsWith('copro'))
+  ) {
+    return true;
+  }
+  return false;
+}
 
 type CatalogGridRow = { left: CatalogItem | null; right: CatalogItem | null };
 
@@ -373,10 +349,7 @@ export default function SolicitudAnalisisMaterialesForm({
   onObservacionesMicroChange,
 }: SolicitudAnalisisMaterialesFormProps) {
   const materiales = useMemo(
-    () =>
-      materialesPedido && materialesPedido.length > 0
-        ? materialesPedido
-        : MATERIALES_FALLBACK,
+    () => materialesPedidoEfectivos(materialesPedido),
     [materialesPedido]
   );
 
@@ -472,13 +445,24 @@ export default function SolicitudAnalisisMaterialesForm({
     setMaterialInput((prev) => ({ ...prev, [id]: '' }));
   };
 
-  const agregarOpciones = (materialKey: string): CatalogAddItem[] => {
+  const selectedCultivoIds = useMemo(
+    () => new Set(microItems.map((i) => i.tipo_cultivo_id)),
+    [microItems]
+  );
+
+  const agregarOpciones = (
+    materialKey: string,
+    query: string
+  ): CatalogAddOrMicro[] => {
     const mat = findMat(materialKey);
     if (!mat) return [];
     const gridCodigos = new Set(
       gridForMaterial(mat, paneles, examenes).map((g) => g.codigo)
     );
-    return agregarCatalogOptionsForMaterial({
+    const q = normalizarBusqueda(query);
+    // Sin texto: no listar todo el catálogo (el Autocomplete pide tipiar).
+    if (!q) return [];
+    const clinicos = agregarCatalogOptionsForMaterial({
       mat,
       examenes,
       paneles,
@@ -486,7 +470,23 @@ export default function SolicitudAnalisisMaterialesForm({
       selectedExamenesIds,
       selectedPanelesIds,
       orinaModalidad,
+    }).filter((o) => {
+      const haystack = normalizarBusqueda(`${o.codigo} ${o.nombre}`);
+      return haystack.includes(q);
     });
+    if (!showMicroPorMaterial || !onChangeMicroItems) return clinicos;
+    const cultivo = cultivoDeMaterial(mat, cultivos);
+    if (!cultivo || selectedCultivoIds.has(cultivo.id)) return clinicos;
+    if (!queryCoincideConCultivoMaterial(q, cultivo)) return clinicos;
+    return [
+      {
+        kind: 'micro',
+        id: cultivo.id,
+        codigo: cultivo.codigo,
+        nombre: cultivo.nombre,
+      },
+      ...clinicos,
+    ];
   };
 
   const chipsAgregados = (materialKey: string): CatalogAddItem[] => {
@@ -511,11 +511,6 @@ export default function SolicitudAnalisisMaterialesForm({
   const esFrecuente = (m: MaterialPedidoLims) =>
     Boolean(m.frecuente) ||
     (MATERIALES_FRECUENTES_FALLBACK as readonly string[]).includes(m.codigo);
-
-  const selectedCultivoIds = useMemo(
-    () => new Set(microItems.map((i) => i.tipo_cultivo_id)),
-    [microItems]
-  );
 
   const toggleCultivoMaterial = (mat: MaterialPedidoLims) => {
     if (!onChangeMicroItems || disabled) return;
@@ -567,7 +562,9 @@ export default function SolicitudAnalisisMaterialesForm({
         const opcionesMaterial = materiales.filter(
           (m) => m.codigo === block.materialKey || !materialesUsados.has(m.codigo)
         );
-        const agregarOpts = block.materialKey ? agregarOpciones(block.materialKey) : [];
+        const agregarOpts = block.materialKey
+          ? agregarOpciones(block.materialKey, agregarInput[block.id] || '')
+          : [];
         const chips = block.materialKey ? chipsAgregados(block.materialKey) : [];
         const soloMicro = Boolean(
           matDef &&
@@ -881,16 +878,19 @@ export default function SolicitudAnalisisMaterialesForm({
                         sx={{ mb: 1 }}
                       >
                         {block.materialKey === 'ORINA'
-                          ? 'Exámenes o paneles de orina que no están en la grilla frecuente.'
-                          : `Buscá en el catálogo exámenes o paneles de ${matDef?.nombre || 'este material'}.`}
+                          ? 'Exámenes o paneles de orina que no están en la grilla frecuente. Cultivos (urocultivo) también aparecen al buscar.'
+                          : `Buscá exámenes/paneles de ${matDef?.nombre || 'este material'}. Cultivos (p. ej. hemocultivo) se ofrecen al tipiar el nombre.`}
                       </Typography>
                       <Autocomplete
                         size="small"
                         options={agregarOpts}
+                        filterOptions={(opts) => opts}
                         getOptionLabel={(o) =>
-                          o.kind === 'panel'
-                            ? `Panel · ${o.codigo} — ${o.nombre}`
-                            : `${o.codigo} — ${o.nombre}`
+                          o.kind === 'micro'
+                            ? `Microbiología · ${o.nombre}`
+                            : o.kind === 'panel'
+                              ? `Panel · ${o.codigo} — ${o.nombre}`
+                              : `${o.codigo} — ${o.nombre}`
                         }
                         isOptionEqualToValue={(a, b) =>
                           a.kind === b.kind && a.id === b.id
@@ -903,21 +903,26 @@ export default function SolicitudAnalisisMaterialesForm({
                         disabled={disabled}
                         onChange={(_e, value) => {
                           if (!value) return;
-                          if (value.kind === 'panel') onTogglePanel(value.id);
-                          else onToggleExamen(value.id);
+                          if (value.kind === 'micro') {
+                            if (matDef) toggleCultivoMaterial(matDef);
+                          } else if (value.kind === 'panel') {
+                            onTogglePanel(value.id);
+                          } else {
+                            onToggleExamen(value.id);
+                          }
                           setAgregarInput((prev) => ({ ...prev, [block.id]: '' }));
                         }}
                         renderInput={(params) => (
                           <TextField
                             {...params}
-                            label="Agregar examen clínico"
-                            placeholder="Código o nombre"
+                            label="Agregar examen o cultivo"
+                            placeholder="Código, nombre o hemocultivo…"
                           />
                         )}
                         noOptionsText={
                           (agregarInput[block.id] || '').trim().length < 1
                             ? 'Escribí para buscar'
-                            : 'Sin coincidencias'
+                            : 'Sin coincidencias en Lab. Clínico. Los cultivos se marcan en Microbiología (abajo) o tipiá hemocultivo/urocultivo.'
                         }
                       />
                       {chips.length > 0 && (
