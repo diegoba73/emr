@@ -18,6 +18,7 @@ import {
 import { Close } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import { useData } from '../contexts/DataContext';
+import { notifyTurnosChanged } from '../hooks/useLiveRefresh';
 import { apiService } from '../services/api';
 import { Paciente, Medico, Turno } from '../types';
 import AsyncAutocomplete from './common/AsyncAutocomplete';
@@ -45,10 +46,12 @@ import {
   getSafeClinicalActionMessage,
 } from '../utils/apiError';
 import { isTurnoEstudio, listRecursosEstudioAgenda } from '../utils/recursosEstudio';
-import { getTurnoAgendaKind, TURNO_KIND_META } from '../utils/turnoKind';
+import { estudioNombreDeTurno, getTurnoAgendaKind, TURNO_KIND_META } from '../utils/turnoKind';
+import { TURNO_ORIGEN_OPTIONS } from '../utils/turnoOrigen';
 import { Link as RouterLink } from 'react-router-dom';
 import AgendaTipoSelector, { type AgendaTipo } from './turnos/AgendaTipoSelector';
 import ProgramacionTurnoForm from './turnos/ProgramacionTurnoForm';
+import PacienteAgendaSelect from './turnos/PacienteAgendaSelect';
 import ReprogramarTurnoDialog from './turnos/ReprogramarTurnoDialog';
 import { asignarTurnoEstudio, agendarTurnoEstudioDesdeAgenda, listTiposEstudioComplementario } from '../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
@@ -78,6 +81,7 @@ interface TurnoFormData {
   horaInicio: string;
   duracionMin: number;
   motivo: string;
+  origen: 'SISTEMA' | 'TELEFONO' | 'PRESENCIAL';
   estado: 'RESERVADO' | 'CONFIRMADO' | 'REALIZADO' | 'CANCELADO';
   prioridad: 'NORMAL' | 'ALTA' | 'URGENTE';
 }
@@ -243,6 +247,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
     horaInicio: '',
     duracionMin: 20,
     motivo: '',
+    origen: 'SISTEMA',
     estado: 'RESERVADO',
     prioridad: 'NORMAL',
   });
@@ -379,9 +384,14 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
   }) => {
     if (!editingTurno?.id) return;
     try {
-      const { turno } = await apiService.reprogramarTurno(editingTurno.id, payload);
-      setTurnoEfectivo(turno);
-      alert('Turno reprogramado.');
+      const result = await apiService.reprogramarTurno(editingTurno.id, payload);
+      setTurnoEfectivo(result.turno);
+      const pideAceptacion = Boolean(result.turno?.requiere_aceptacion_paciente);
+      alert(
+        pideAceptacion
+          ? 'Turno reprogramado. Se avisó al paciente: debe aceptar o rechazar el nuevo horario (app o portal).'
+          : 'Turno reprogramado.'
+      );
       onSuccess?.();
     } catch (error: unknown) {
       throw new Error(
@@ -589,6 +599,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         horaInicio: '',
         duracionMin: 20,
         motivo: '',
+        origen: 'SISTEMA',
         estado: 'RESERVADO',
         prioridad: 'NORMAL',
       });
@@ -628,6 +639,10 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         horaInicio: horaFormateada,
         duracionMin: duracion,
         motivo: editingTurno.motivo_reserva || editingTurno.motivo_consulta || '',
+        origen:
+          editingTurno.origen === 'TELEFONO' || editingTurno.origen === 'PRESENCIAL'
+            ? editingTurno.origen
+            : 'SISTEMA',
         estado: (() => {
           const estadoTurno = editingTurno.estado;
           if (estadoTurno && ['RESERVADO', 'CONFIRMADO', 'REALIZADO', 'CANCELADO'].includes(estadoTurno)) {
@@ -668,6 +683,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         horaInicio: formatHora(selectedDateTime),
         duracionMin: duracionMedico,
         motivo: '',
+        origen: 'SISTEMA',
         estado: baseEstado,
         prioridad: 'NORMAL',
       });
@@ -680,6 +696,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         horaInicio: '',
         duracionMin: duracionMedico,
         motivo: '',
+        origen: 'SISTEMA',
         estado: baseEstado,
         prioridad: 'NORMAL',
       });
@@ -772,6 +789,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           });
         }
         await refreshTurnos();
+        notifyTurnosChanged();
         onSuccess?.();
         onClose();
       } catch (err) {
@@ -865,13 +883,15 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       
       payload.estado = formData.estado || 'RESERVADO';
 
-      // Motivo
+      // Motivo y origen de reserva (staff puede setear teléfono/presencial)
       payload.motivo_reserva = formData.motivo || '';
+      payload.origen = formData.origen || 'SISTEMA';
 
       // Rol PACIENTE: si el cliente ya conoce el id de ficha, lo enviamos; si no, el
       // backend (ensure_paciente_linked_to_user) resuelve o devuelve error claro.
       if (currentUser?.rol === 'PACIENTE' && currentUser.paciente?.id) {
         payload.paciente_id = Number(currentUser.paciente.id);
+        payload.origen = 'SISTEMA';
       }
 
       // No enviar prioridad ya que no existe en el modelo del backend
@@ -995,6 +1015,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
       queryClient.setQueryData(['atencion', atencion.id], atencion);
       queryClient.invalidateQueries({ queryKey: ['atenciones'] });
       queryClient.invalidateQueries({ queryKey: ['turnos'] });
+      notifyTurnosChanged();
 
       if (onOpenAtencion) {
         onOpenAtencion(atencion.id);
@@ -1047,6 +1068,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         try {
           await apiService.iniciarAtencionTurno(editingTurno.id);
           queryClient.invalidateQueries({ queryKey: ['turnos'] });
+          notifyTurnosChanged();
         } catch (syncError: unknown) {
           alert(
             getSafeClinicalActionMessage(
@@ -1216,16 +1238,25 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               showEstudio={puedeAgendarEstudio}
             />
           )}
-          {isTurnoDeEstudio && editingTurno?.estudio_complementario?.id && (
+          {isTurnoDeEstudio && editingTurno && (
             <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                Estudio: {estudioNombreDeTurno(editingTurno)}
+              </Typography>
               Este horario corresponde a un <strong>estudio complementario</strong> en sala (no a una
-              consulta con médico). Para cambiar fecha o sala, abrí el estudio en{' '}
-              <RouterLink
-                to={`/estudios-complementarios/${editingTurno.estudio_complementario.id}`}
-              >
-                Agenda clínica
-              </RouterLink>
-              .
+              consulta con médico).
+              {editingTurno.estudio_complementario?.id ? (
+                <>
+                  {' '}
+                  Para cambiar fecha o sala, abrí el estudio en{' '}
+                  <RouterLink
+                    to={`/estudios-complementarios/${editingTurno.estudio_complementario.id}`}
+                  >
+                    Agenda clínica
+                  </RouterLink>
+                  .
+                </>
+              ) : null}
               {editingTurno.viene_de_pedido_estudio && editingTurno.pedido_estudio_id ? (
                 <>
                   {' '}
@@ -1237,6 +1268,16 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
                 </>
               ) : null}
             </Alert>
+          )}
+          {isTurnoDeEstudio && editingTurno && (
+            <TextField
+              fullWidth
+              label="Nombre del estudio"
+              value={estudioNombreDeTurno(editingTurno)}
+              disabled
+              sx={{ mb: 2 }}
+              helperText="Mismo nombre que en el calendario"
+            />
           )}
           {estudioFormError && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -1283,21 +1324,15 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
               )}
               {!lockEstudioSelection && (
                 <>
-                  <AsyncAutocomplete<Paciente>
+                  <PacienteAgendaSelect
                     label="👤 Paciente"
-                    endpoint="/pacientes/"
-                    getOptionLabel={(option) =>
-                      `${option.nombre || ''} ${option.apellido || ''} (${option.dni || 'Sin DNI'})`.trim()
-                    }
+                    value={selectedPaciente}
                     onChange={(newValue) => {
                       setSelectedPaciente(newValue);
                       setFormData({ ...formData, paciente: newValue ? String(newValue.id) : '' });
                     }}
-                    value={selectedPaciente}
                     required
                     placeholder="Buscar paciente por nombre, apellido o DNI"
-                    debounceMs={300}
-                    minSearchLength={2}
                     sx={{ mb: 2 }}
                   />
                   <Autocomplete
@@ -1365,20 +1400,20 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             <>
           {/* Campo Paciente - Solo mostrar selector si NO es paciente */}
           {!isPaciente() && (
-            <AsyncAutocomplete<Paciente>
+            <PacienteAgendaSelect
               label="👤 Paciente"
-              endpoint="/pacientes/"
-              getOptionLabel={(option) => `${option.nombre || ''} ${option.apellido || ''} (${option.dni || 'Sin DNI'})`.trim()}
+              value={selectedPaciente}
               onChange={(newValue) => {
                 setSelectedPaciente(newValue);
                 setFormData({ ...formData, paciente: newValue ? String(newValue.id) : '' });
               }}
-              value={selectedPaciente}
               required
               placeholder="Escriba al menos 2 caracteres para buscar por nombre, apellido o DNI..."
-              helperText={isTurnoRealizado() ? "Turno realizado - No se puede editar" : "Búsqueda asíncrona en servidor"}
-              debounceMs={300}
-              minSearchLength={2}
+              helperText={
+                isTurnoRealizado()
+                  ? 'Turno realizado - No se puede editar'
+                  : 'Si el DNI no existe, podés crear el paciente desde acá'
+              }
               disabled={!canEditFormFields()}
               sx={{ mb: 2 }}
             />
@@ -1590,6 +1625,29 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
             </FormControl>
           </Box>
 
+          {!isPaciente() && (
+            <FormControl fullWidth sx={{ mb: 2 }} disabled={!canEditFormFields()}>
+              <InputLabel>Origen de la reserva</InputLabel>
+              <Select
+                value={formData.origen}
+                label="Origen de la reserva"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    origen: e.target.value as TurnoFormData['origen'],
+                  })
+                }
+                disabled={!canEditFormFields()}
+              >
+                {TURNO_ORIGEN_OPTIONS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
           <TextField
             fullWidth
             multiline
@@ -1742,6 +1800,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
           setSelectedAtencionId(null);
           // Recargar turnos para actualizar la información de atención y estado
           await refreshTurnos();
+          notifyTurnosChanged();
           // Recargar el turno actual si estamos editando
           if (editingTurno) {
             try {
@@ -1760,6 +1819,7 @@ const TurnoModal: React.FC<TurnoModalProps> = ({
         onIntervencionSaved={async () => {
           // Recargar turnos después de guardar una intervención
           await refreshTurnos();
+          notifyTurnosChanged();
           if (editingTurno) {
             try {
               await apiService.getTurno(editingTurno.id);

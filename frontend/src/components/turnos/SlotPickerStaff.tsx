@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -17,6 +17,8 @@ import {
   type SlotMedico,
   type TipoAgenda,
 } from '../../services/agendaMedica';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { getTurnosRevision } from '../../services/apiService';
 import { getSafeClinicalActionMessage } from '../../utils/apiError';
 import { formatHoraDisplay } from '../../utils/dateFieldFormat';
 
@@ -76,6 +78,10 @@ const SlotPickerStaff: React.FC<SlotPickerStaffProps> = ({
   const [loadingDias, setLoadingDias] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState('');
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const mesMin = useMemo(() => inicioMes(hoy), [hoy]);
   const mesMax = useMemo(
@@ -187,6 +193,50 @@ const SlotPickerStaff: React.FC<SlotPickerStaffProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medicoId, fechaElegida, tipo, recursoIdsPermitidos, tipoEstudioId]);
+
+  /** Otras secretarías pueden ocupar el mismo slot: refrescar sin resetear la selección. */
+  const silentRefreshDisponibilidad = useCallback(async () => {
+    if (!medicoId || disabled) return;
+    try {
+      if (rangoMes.desde <= rangoMes.hasta) {
+        const dias = await getDiasDisponibles(medicoId, rangoMes.desde, rangoMes.hasta, tipo);
+        setDiasLibres(dias);
+      }
+      if (!fechaElegida) return;
+      if (recursoIdsPermitidos != null && recursoIdsPermitidos.length === 0) return;
+      const s = await getSlotsMedico(medicoId, fechaElegida, tipo, {
+        tipo_estudio: tipoEstudioId ?? undefined,
+      });
+      const filtrados =
+        recursoIdsPermitidos == null
+          ? s
+          : s.filter((x) => x.recurso_id != null && recursoIdsPermitidos.includes(x.recurso_id));
+      setSlots(filtrados);
+      const selected = valueRef.current;
+      if (
+        selected &&
+        !filtrados.some((x) => x.inicio === selected.inicio && x.recurso_id === selected.recurso_id)
+      ) {
+        onChangeRef.current(null);
+      }
+    } catch {
+      /* silencioso: el próximo tick reintenta */
+    }
+  }, [
+    medicoId,
+    disabled,
+    rangoMes.desde,
+    rangoMes.hasta,
+    tipo,
+    fechaElegida,
+    recursoIdsPermitidos,
+    tipoEstudioId,
+  ]);
+
+  useLiveRefresh(silentRefreshDisponibilidad, {
+    enabled: Boolean(medicoId) && !disabled,
+    getRevision: getTurnosRevision,
+  });
 
   const irMes = (delta: number) => {
     if (disabled) return;

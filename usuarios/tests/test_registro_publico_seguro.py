@@ -26,6 +26,8 @@ PAYLOAD_OK = {
     'telefono': '3511111111',
     'fecha_nacimiento': '1992-03-15',
     'obra_social': 'OSDE',
+    'numero_afiliado': 'OSDE-123',
+    'plan': '210',
 }
 
 
@@ -47,7 +49,9 @@ def test_alta_valida_auth_register():
     assert user.rol == 'paciente'
     pac = Paciente.objects.get(dni='REG-SAFE-001')
     assert pac.user_id == user.id
-    assert pac.obra_social == 'OSDE'
+    assert pac.obra_social.codigo == 'OSDE'
+    assert (pac.numero_afiliado or '') == 'OSDE-123'
+    assert (pac.plan_obra_social or '') == '210'
 
 
 def test_alta_valida_register_patient_legacy_aliases():
@@ -71,7 +75,7 @@ def test_alta_valida_register_patient_legacy_aliases():
     assert pac.nombre.upper() == 'PEDRO'
     assert pac.apellido.upper() == 'LEGACY'
     assert pac.fecha_nacimiento is not None
-    assert pac.obra_social == 'PARTICULAR'
+    assert pac.obra_social.codigo == 'PARTICULAR'
 
 
 @pytest.mark.parametrize(
@@ -112,13 +116,34 @@ def test_campos_obligatorios_register_patient(missing):
     assert not User.objects.filter(email=email).exists()
 
 
+def test_os_sin_plan_ni_afiliado_falla():
+    r = client().post(
+        '/api/auth/register/',
+        {
+            **PAYLOAD_OK,
+            'email': 'sinplan@example.com',
+            'dni': 'REG-SAFE-NOPLAN',
+            'obra_social': 'OSDE',
+            'numero_afiliado': '',
+            'plan': '',
+        },
+        format='json',
+    )
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+    details = r.data.get('details', r.data)
+    assert 'numero_afiliado' in details or 'plan' in details
+    assert not Paciente.objects.filter(dni='REG-SAFE-NOPLAN').exists()
+
+
 def test_no_reclama_ficha_existente_sin_user():
+    from pacientes.tests.os_helpers import os_ref
+
     Paciente.objects.create(
         dni='REG-SAFE-FICHA',
         nombre='Ficha',
         apellido='Sola',
         fecha_nacimiento='1990-01-01',
-        obra_social='PAMI',
+        obra_social=os_ref('PAMI'),
     )
     assert Paciente.objects.filter(dni='REG-SAFE-FICHA', user__isnull=True).exists()
 
@@ -140,6 +165,8 @@ def test_no_reclama_ficha_existente_sin_user():
                 'telefono': '3513333333',
                 'fecha_nacimiento': '1990-01-01',
                 'obra_social': 'PAMI',
+                'numero_afiliado': 'PAMI-1',
+                'plan': 'BASICO',
             }
         before_users = User.objects.count()
         r = client().post(url, data, format='json')

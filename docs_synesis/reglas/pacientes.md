@@ -52,10 +52,13 @@ Ver `DOC_INVARIANTES.md` (P1–P5). **[RECTOR]**
 | Backfill opcional de `creado_por` / `modificado_por` en datos históricos. | **[DEUDA]** |
 | Auditoría fail-closed (fallo de log revierte operación). | **[OBJETIVO]** — no C4 |
 | Prevención al alta: mensaje claro DNI duplicado + `GET /api/pacientes/candidatos-duplicado/` (DNI exacto bloquea; identidad nombre+apellido+fecha avisa). UI alta principal y LIMS. | **[IMPLEMENTADO]** |
+| Agenda (calendario): si la búsqueda por DNI no encuentra ficha, ofrecer alta inline (`PacienteAgendaSelect` + `PacienteFormDialog`) y seguir con el turno. Campos: DNI/nombre/apellido/fecha/OS (+ demografía del form). | **[IMPLEMENTADO]** |
 | Alta/edición API: nombre/apellido solo letras+espacios, cada palabra ≥2 letras (ej. `DIEGO ARMANDO` / `BAULDE`); rechaza puntos, símbolos, abreviaturas (`d.d.`) y letras sueltas. DNI dudoso (muy corto, dígitos iguales, placeholders `11111`/`12345`). No reescribe legacy hasta editar ese campo. | **[IMPLEMENTADO]** |
 | Soft delete / desactivación (`activo=False`) / fusión de duplicados. | **[OBJETIVO]** |
 | Estado activo/inactivo formal. | **[OBJETIVO]** |
-| Multi-afiliación OS (`PacienteAfiliacion`) + snapshot en órdenes nuevas (`obra_social_orden`). Órdenes viejas: fallback a ficha. Catálogo formal / reglas / pagos: fase posterior. | **[IMPLEMENTADO]** fase 1 |
+| Multi-afiliación OS (`PacienteAfiliacion`) + snapshot en órdenes nuevas (`obra_social_orden`). Órdenes viejas: fallback a ficha. | **[IMPLEMENTADO]** |
+| Catálogo formal `ObraSocial` (FK en ficha/afiliación; seed PARTICULAR/OSDE/PAMI/SEROS/…; legacy desde texto libre). API `GET /api/obras-sociales/`. Registro web/móvil con select. Snapshot LIMS sigue string. | **[IMPLEMENTADO]** |
+| Reserva/registro app: si OS ≠ PARTICULAR exigir afiliado + plan (`plan_obra_social` / `PacienteAfiliacion.plan`). Particular sin plan. Validación dura al reservar/registrar; fichas viejas no se migran. | **[IMPLEMENTADO]** |
 
 ---
 

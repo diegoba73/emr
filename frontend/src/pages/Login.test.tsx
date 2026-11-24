@@ -98,14 +98,17 @@ describe('Login', () => {
     );
   });
 
-  it('debe mostrar mensaje de validación cuando la contraseña tiene menos de 6 caracteres', async () => {
+  it('no bloquea contraseñas cortas en el cliente (legacy)', async () => {
     renderWithProviders(<Login />);
 
+    await userEvent.type(screen.getByLabelText(/usuario/i), '30123456');
     await userEvent.type(screen.getByLabelText(/contraseña/i), '12345');
     await userEvent.click(screen.getByRole('button', { name: /ingresar/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/la contraseña debe tener al menos 6 caracteres/i)).toBeInTheDocument();
+      expect(
+        screen.queryByText(/la contraseña debe tener al menos 6 caracteres/i)
+      ).not.toBeInTheDocument();
     });
   });
 

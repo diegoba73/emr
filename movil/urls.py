@@ -1,4 +1,8 @@
 from django.urls import path
+
+from pacientes.views import ObraSocialViewSet
+from usuarios.views import PacienteRegisterView
+
 from .views import (
     InstitucionMovil,
     LoginMovil,
@@ -33,6 +37,12 @@ from .views_pedidos_estudio import PedidosEstudioMovil
 urlpatterns = [
     path('institucion/', InstitucionMovil.as_view()),
     path('login/', LoginMovil.as_view()),
+    path('auth/register/', PacienteRegisterView.as_view()),
+    path(
+        'obras-sociales/',
+        ObraSocialViewSet.as_view({'get': 'list'}),
+        name='movil-obras-sociales',
+    ),
     path('me/', MiPerfil.as_view()),
     path('logout/', LogoutMovil.as_view()),
     path('push/', PushMovil.as_view()),
@@ -43,6 +53,7 @@ urlpatterns = [
     path('medicos/', MedicosMovil.as_view({'get': 'list'})),
     path('medicos/<int:pk>/slots/', MedicosMovil.as_view({'get': 'slots'})),
     path('turnos/', TurnosMovil.as_view({'get': 'list'})),
+    path('turnos/revision/', TurnosMovil.as_view({'get': 'revision'})),
     path('turnos/reservar-horario/', TurnosMovil.as_view({'post': 'reservar_horario'})),
     path('turnos/<int:pk>/', TurnosMovil.as_view({'get': 'retrieve'})),
     path('turnos/<int:pk>/asistencia/', TurnosMovil.as_view({'post': 'confirmar_asistencia'})),

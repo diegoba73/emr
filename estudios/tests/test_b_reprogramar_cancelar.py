@@ -36,8 +36,11 @@ def _uid():
 
 
 def _slot(*, day_offset: int = 5, hour: int = 4, minutes: int = 45):
-    """Duración variable (no exige 20' de consultorio)."""
-    inicio = timezone.now() + timedelta(days=day_offset, hours=hour)
+    """Duración variable en horario local fijo (evita cruce de medianoche según la hora actual)."""
+    from datetime import datetime, time as dt_time
+
+    fecha = timezone.localdate() + timedelta(days=day_offset)
+    inicio = timezone.make_aware(datetime.combine(fecha, dt_time(hour, 0)))
     return inicio, inicio + timedelta(minutes=minutes)
 
 
@@ -119,11 +122,71 @@ def test_reprogramar_crea_historial_y_cancela_anterior(
     e.refresh_from_db()
     assert e.turno_id != anterior_id
     assert Turno.objects.get(pk=anterior_id).estado == Turno.Estado.CANCELADO
-    assert Turno.objects.get(pk=e.turno_id).estado == Turno.Estado.CONFIRMADO
+    nuevo = Turno.objects.get(pk=e.turno_id)
+    assert nuevo.estado == Turno.Estado.RESERVADO
+    assert nuevo.requiere_aceptacion_paciente is True
     hist = HistorialTurnoSesionActividad.objects.get(turno_anterior_id=anterior_id)
     assert hist.turno_nuevo_id == e.turno_id
     assert hist.motivo == 'Cambio de agenda'
     assert hist.actor_id == admin_user.id
+
+
+@pytest.mark.django_db
+def test_paciente_acepta_y_rechaza_reprogramacion_estudio(
+    estudio_confirmado, admin_user, recurso_sala, medico, paciente,
+):
+    """Tras reprogramar estudio, el paciente puede aceptar o rechazar el nuevo horario."""
+    from unittest.mock import patch
+
+    e = estudio_confirmado
+    ini, fin = _slot(day_offset=10, hour=8, minutes=40)
+    with patch('turnos.notificar_reprogramacion.notificar_reprogramacion') as notif:
+        reprogramar_turno_estudio(
+            e,
+            user=admin_user,
+            recurso=recurso_sala,
+            fecha_hora_inicio=ini,
+            fecha_hora_fin=fin,
+            motivo='Nuevo horario estudio',
+            medico=medico,
+        )
+        assert notif.called
+    e.refresh_from_db()
+    nuevo = Turno.objects.get(pk=e.turno_id)
+    assert nuevo.requiere_aceptacion_paciente is True
+    assert turno_estado.puede_confirmar_turno(paciente.user, nuevo) is True
+
+    # Aceptar
+    out = turno_estado.confirmar_turno(nuevo, actor=paciente.user)
+    assert out.applied
+    nuevo.refresh_from_db()
+    assert nuevo.estado == Turno.Estado.CONFIRMADO
+    assert nuevo.requiere_aceptacion_paciente is False
+
+    # Segunda reprogramación → rechazar
+    ini2, fin2 = _slot(day_offset=11, hour=9, minutes=40)
+    with patch('turnos.notificar_reprogramacion.notificar_reprogramacion'):
+        reprogramar_turno_estudio(
+            e,
+            user=admin_user,
+            recurso=recurso_sala,
+            fecha_hora_inicio=ini2,
+            fecha_hora_fin=fin2,
+            motivo='Otro horario',
+            medico=medico,
+        )
+    e.refresh_from_db()
+    pendiente = Turno.objects.get(pk=e.turno_id)
+    assert pendiente.requiere_aceptacion_paciente is True
+    out_rej = turno_estado.cancelar_turno(
+        pendiente,
+        actor=paciente.user,
+        motivo='Paciente rechazó el horario reprogramado desde la app',
+    )
+    assert out_rej.applied
+    pendiente.refresh_from_db()
+    assert pendiente.estado == Turno.Estado.CANCELADO
+    assert pendiente.requiere_aceptacion_paciente is False
 
 
 @pytest.mark.django_db

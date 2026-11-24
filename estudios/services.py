@@ -490,6 +490,19 @@ def asignar_turno_estudio(
     if estado_final not in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
         raise ValidationError({'estado_turno': 'Estado de turno no permitido.'})
 
+    from turnos.separacion_paciente import SeparacionPacienteError, validar_separacion_paciente
+
+    try:
+        validar_separacion_paciente(
+            paciente=estudio.paciente,
+            inicio=fecha_hora_inicio,
+            fin=fecha_hora_fin,
+            recurso=recurso,
+            estado=estado_final,
+        )
+    except SeparacionPacienteError as exc:
+        raise ValidationError({'fecha_hora_inicio': exc.message}) from exc
+
     turno = Turno(
         paciente=estudio.paciente,
         medico=medico_turno,
@@ -933,14 +946,30 @@ def reprogramar_turno_estudio(
         exigir_franja_estudio=tipificado,
     )
 
+    from turnos.separacion_paciente import SeparacionPacienteError, validar_separacion_paciente
+
+    try:
+        validar_separacion_paciente(
+            paciente=estudio.paciente,
+            inicio=fecha_hora_inicio,
+            fin=fecha_hora_fin,
+            recurso=recurso,
+            excluir_turno_id=turno_anterior.pk,
+            estado=Turno.Estado.RESERVADO,
+        )
+    except SeparacionPacienteError as exc:
+        raise ValidationError({'fecha_hora_inicio': exc.message}) from exc
+
+    pedir_aceptacion = bool(estudio.paciente_id)
     turno_nuevo = Turno(
         paciente=estudio.paciente,
         medico=medico_efectivo,
         recurso=recurso,
         fecha_hora_inicio=fecha_hora_inicio,
         fecha_hora_fin=fecha_hora_fin,
-        estado=Turno.Estado.CONFIRMADO,
+        estado=Turno.Estado.RESERVADO if pedir_aceptacion else Turno.Estado.CONFIRMADO,
         motivo_reserva=_motivo_turno_desde_estudio(estudio),
+        requiere_aceptacion_paciente=pedir_aceptacion,
     )
     turno_nuevo.full_clean()
     turno_nuevo.save()
@@ -989,10 +1018,29 @@ def reprogramar_turno_estudio(
             'sesion_id': sesion.pk,
             'numero_sesion': sesion.numero_sesion,
             'motivo': motivo_limpio,
+            'requiere_aceptacion_paciente': pedir_aceptacion,
             **_estudio_meta(estudio),
         },
         success=True,
     )
+
+    # Aviso al paciente (push + WhatsApp); fallos de canal no revierten la reprogramación.
+    try:
+        from turnos.notificar_reprogramacion import notificar_reprogramacion
+
+        turno_notif = (
+            Turno.objects.select_related('paciente', 'medico')
+            .filter(pk=turno_nuevo.pk)
+            .first()
+        )
+        if turno_notif is not None:
+            notificar_reprogramacion(turno_notif)
+    except Exception:
+        logger.exception(
+            'Fallo notificando reprogramación de estudio turno_id=%s',
+            turno_nuevo.pk,
+        )
+
     return estudio
 
 

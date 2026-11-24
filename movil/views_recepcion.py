@@ -15,6 +15,9 @@ from turnos.models import Turno
 
 from .authentication import AutenticacionMovil, RolMovil
 
+# Ventana: desde 1 h antes del inicio hasta el inicio (no después).
+VENTANA_ESTOY_EN_SALA = timedelta(hours=1)
+
 
 def _paciente_o_403(user):
     if str(user.rol).lower() != 'paciente':
@@ -44,6 +47,17 @@ def _payload_anuncio(llegada, *, modo: str, tipo_actividad: str, turno_id=None):
     }
 
 
+def _en_ventana_estoy_en_sala(turno, now=None) -> bool:
+    """True si el turno es hoy y ahora está en [inicio-1h, inicio)."""
+    now = now or timezone.now()
+    inicio = turno.fecha_hora_inicio
+    if timezone.is_naive(inicio):
+        inicio = timezone.make_aware(inicio)
+    if timezone.localdate(inicio) != timezone.localdate(now):
+        return False
+    return inicio - VENTANA_ESTOY_EN_SALA <= now < inicio
+
+
 def _turnos_hoy_consulta_estudio(paciente):
     hoy = timezone.localdate()
     start = timezone.make_aware(datetime.strptime(hoy.isoformat(), '%Y-%m-%d'))
@@ -61,7 +75,8 @@ def _turnos_hoy_consulta_estudio(paciente):
     out = []
     for t in turnos:
         tipo = tipo_actividad_desde_turno(t)
-        if tipo in ('CONSULTA', 'ESTUDIO'):
+        # Consulta, estudio y procedimiento de sala (misma UI de anuncio).
+        if tipo in ('CONSULTA', 'ESTUDIO', 'PROCEDIMIENTO'):
             out.append((t, tipo))
     return out
 
@@ -104,6 +119,30 @@ def _llegada_lab_hoy(paciente):
     )
 
 
+def _estado_turnos_estoy_en_sala(paciente):
+    """Por cada turno de hoy (consulta/estudio): ventana + anuncio."""
+    items = []
+    for turno, tipo in _turnos_hoy_consulta_estudio(paciente):
+        llegada = _llegada_activa_turno(turno)
+        anunciado = bool(
+            llegada
+            and llegada.estado_flujo != LlegadaRecepcion.EstadoFlujo.PROGRAMADO
+        )
+        en_ventana = _en_ventana_estoy_en_sala(turno)
+        puedo = en_ventana and not anunciado
+        items.append(
+            {
+                'turno_id': turno.pk,
+                'tipo_actividad': tipo,
+                'en_ventana': en_ventana,
+                'puedo_estoy_en_sala': puedo,
+                'anunciado': anunciado,
+                'codigo_llamado': (llegada.codigo_llamado or '') if anunciado and llegada else '',
+            }
+        )
+    return items
+
+
 class RecepcionHoyMovil(APIView):
     """Estado de anuncio del día para la UI (Estoy en sala / lab)."""
 
@@ -112,27 +151,36 @@ class RecepcionHoyMovil(APIView):
 
     def get(self, request):
         paciente = _paciente_o_403(request.user)
-        candidatos = _turnos_hoy_consulta_estudio(paciente)
-        turno_hoy = candidatos[0][0] if candidatos else None
-        llegada_turno = _llegada_activa_turno(turno_hoy) if turno_hoy else None
-        anunciado = bool(
-            llegada_turno
-            and llegada_turno.estado_flujo
-            != LlegadaRecepcion.EstadoFlujo.PROGRAMADO
-        )
+        items = _estado_turnos_estoy_en_sala(paciente)
+        elegible = next((i for i in items if i['puedo_estoy_en_sala']), None)
+        anunciado_item = next((i for i in items if i['anunciado']), None)
+        turno_hoy_id = None
+        if elegible:
+            turno_hoy_id = elegible['turno_id']
+        elif anunciado_item:
+            turno_hoy_id = anunciado_item['turno_id']
+        elif items:
+            turno_hoy_id = items[0]['turno_id']
+
+        llegada_turno = None
+        if anunciado_item:
+            turno = Turno.objects.filter(pk=anunciado_item['turno_id']).first()
+            llegada_turno = _llegada_activa_turno(turno) if turno else None
+
         lab = _llegada_lab_hoy(paciente)
         return Response(
             {
-                'turno_hoy_id': turno_hoy.pk if turno_hoy else None,
-                'puedo_estoy_en_sala': bool(turno_hoy) and not anunciado,
+                'turno_hoy_id': turno_hoy_id,
+                'puedo_estoy_en_sala': bool(elegible),
+                'turnos_estoy_en_sala': items,
                 'estoy_en_sala': (
                     _payload_anuncio(
                         llegada_turno,
                         modo='turno',
                         tipo_actividad=llegada_turno.tipo_actividad,
-                        turno_id=turno_hoy.pk,
+                        turno_id=anunciado_item['turno_id'],
                     )
-                    if anunciado and llegada_turno
+                    if anunciado_item and llegada_turno
                     else None
                 ),
                 'lab': (
@@ -174,16 +222,24 @@ class EstoyEnSalaMovil(APIView):
             if turno is None:
                 raise ValidationError('Ese turno no está disponible para anunciarte hoy.')
         else:
-            turno, tipo = candidatos[0]
+            # Preferir el primero que esté en ventana; si no, el primero del día (fallará abajo).
+            en_ventana = [(t, tip) for t, tip in candidatos if _en_ventana_estoy_en_sala(t)]
+            turno, tipo = (en_ventana or candidatos)[0]
+
+        if not _en_ventana_estoy_en_sala(turno):
+            raise ValidationError(
+                'Solo podés anunciarte desde 1 hora antes del turno y hasta la hora de inicio.'
+            )
 
         motivo = 'CON_TURNO' if tipo == 'CONSULTA' else 'ESTUDIO'
+        tipo_resp = 'CONSULTA' if tipo == 'CONSULTA' else 'ESTUDIO'
         with transaction.atomic():
             llegada = recepcion_services.checkin_turno(
                 turno=turno, motivo=motivo, pasar_a_medico=False
             )
         return Response(
             _payload_anuncio(
-                llegada, modo='turno', tipo_actividad=tipo, turno_id=turno.pk
+                llegada, modo='turno', tipo_actividad=tipo_resp, turno_id=turno.pk
             )
         )
 

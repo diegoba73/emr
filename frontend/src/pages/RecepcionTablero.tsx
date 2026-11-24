@@ -260,7 +260,13 @@ const RecepcionTablero: React.FC = () => {
 
   const onAccion = async (
     l: LlegadaRecepcion,
-    accion: 'llamar' | 'derivar-espera' | 'en-atencion' | 'atendido' | 'no-asistio'
+    accion:
+      | 'llamar'
+      | 'derivar-espera'
+      | 'volver-recepcion'
+      | 'en-atencion'
+      | 'atendido'
+      | 'no-asistio'
   ) => {
     setBusyId(l.id);
     try {
@@ -363,8 +369,18 @@ const RecepcionTablero: React.FC = () => {
       return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end' }}>
           <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 160 }}>
-            En cola del médico
+            En cola del médico (ya no se llama desde recepción)
           </Typography>
+          {soySecretaria && l.estado_flujo === 'EN_ESPERA' && (
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={busy}
+              onClick={() => void onAccion(l, 'volver-recepcion')}
+            >
+              Volver a recepción
+            </Button>
+          )}
           <Button
             size="small"
             color="error"
@@ -393,7 +409,7 @@ const RecepcionTablero: React.FC = () => {
             disabled={busy}
             onClick={() => void onAccion(l, 'derivar-espera')}
           >
-            Check-in
+            A cola médico
           </Button>
         )}
         {((soyMedico &&
@@ -409,10 +425,10 @@ const RecepcionTablero: React.FC = () => {
             size="small"
             variant="contained"
             color="primary"
-            disabled={busy || (soySecretaria && !tieneCobertura)}
+            disabled={busy}
             onClick={() => void onAccion(l, 'llamar')}
           >
-            {l.estado_flujo === 'LLAMADO' ? 'Rellamar' : 'Llamar'}
+            {l.estado_flujo === 'LLAMADO' ? 'Rellamar ventanilla' : 'Llamar ventanilla'}
           </Button>
         )}
         {soyMedico && (l.estado_flujo === 'LLAMADO' || l.estado_flujo === 'EN_ATENCION') && (
@@ -573,8 +589,9 @@ const RecepcionTablero: React.FC = () => {
               : '…'}
           </Typography>
           {!tieneCobertura && (
-            <Alert severity="warning" sx={{ mb: 1.5 }}>
-              Configurá tu cobertura (puesto + tipos) antes de llamar pacientes.
+            <Alert severity="info" sx={{ mb: 1.5 }}>
+              Sin cobertura guardada: podés llamar igual (usa el puesto actual). Guardala para
+              filtrar la cola por tipos y fijar tu ventanilla.
             </Alert>
           )}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
@@ -636,9 +653,11 @@ const RecepcionTablero: React.FC = () => {
           </>
         ) : (
           <>
-            El paciente se anuncia por QR o app. La cola se filtra por los tipos de tu cobertura.
-            Cuando esté OK administrativamente, usá <strong>Check-in</strong> para enviarlo a la cola
-            del médico. <strong>En atención</strong> y <strong>Atendido</strong> los marca el médico.
+            El paciente se anuncia por QR o app («en sala» = espera en recepción).{' '}
+            <strong>Llamar ventanilla</strong> lo llama a tu puesto (no requiere cobertura).{' '}
+            <strong>A cola médico</strong> es el check-in administrativo y recién ahí el médico
+            puede llamarlo al consultorio. Si lo mandaste antes de tiempo, usá{' '}
+            <strong>Volver a recepción</strong>.
           </>
         )}
       </Alert>

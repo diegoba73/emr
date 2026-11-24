@@ -44,8 +44,9 @@
 - `user` OneToOne SET_NULL → User, `related_name='paciente'`
 - Identificación: `nombre`, `apellido`, `dni` **unique**, `fecha_nacimiento`, `sexo` (M/F/O)
 - Contacto: `telefono`, `email`, `direccion`
-- Obra social: `obra_social`, `numero_afiliado` (espejo de la afiliación **principal**; compat SEROS / serializers livianos)
-- Multi-afiliación: `PacienteAfiliacion` (N por paciente; `obra_social`, `numero_afiliado`, `es_principal`, `activo`) — fase 1 texto libre; catálogo formal pendiente
+- Obra social: FK `obra_social` → `ObraSocial` + `numero_afiliado` + `plan_obra_social` (espejo de la afiliación **principal**; compat SEROS / serializers livianos)
+- Catálogo `ObraSocial` (`codigo`, `nombre`, `activo`); seed incluye `PARTICULAR`
+- Multi-afiliación: `PacienteAfiliacion` (N por paciente; FK `obra_social`, `numero_afiliado`, `plan`, `es_principal`, `activo`)
 - Clínico: `observaciones`, `antecedentes_*`
 - `fecha_registro`, `ultima_actualizacion`
 - FK User nullable `creado_por`, `modificado_por` (`related_name` `pacientes_creados` / `pacientes_modificados`) — operador staff; distinto de `user` portal
@@ -111,7 +112,13 @@
 
 - FK `paciente` SET_NULL; `medico` SET_NULL; `recurso` CASCADE null
 - `fecha_hora_inicio` indexed, `fecha_hora_fin`, `estado` (TextChoices) indexed, `motivo_reserva`
+- `origen` (TextChoices: SISTEMA / TELEFONO / PRESENCIAL; default SISTEMA; indexed) — canal de reserva
+- `requiere_aceptacion_paciente`; `reprogramaciones_paciente` (contador de reprogs iniciadas por el paciente; máx. 1 en app)
 - `clean`/`save` validan intervalo temporal
+
+### PagoReservaTurno (movil)
+
+- Andamiaje cobro/garantía app (`CONSULTA` / `GARANTIA_OS`; estados PENDIENTE/PAGADO/ANULADO). Flag `MOBILE_PAGO_RESERVA_ENABLED` apagado por defecto (sin MP).
 
 ### Atencion
 

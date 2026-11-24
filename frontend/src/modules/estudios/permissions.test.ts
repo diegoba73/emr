@@ -15,15 +15,15 @@ const user = (partial: Partial<User>): User =>
   }) as User;
 
 describe('canAccessEstudiosModule', () => {
-  it('permite médico, secretaría institucional, enfermería, paciente y admin', () => {
+  it('permite médico, secretaría institucional, enfermería y admin', () => {
     expect(canAccessEstudiosModule(user({ rol: 'MEDICO' }))).toBe(true);
     expect(canAccessEstudiosModule(user({ rol: 'SECRETARIA' }))).toBe(true);
     expect(canAccessEstudiosModule(user({ rol: 'ENFERMERIA' }))).toBe(true);
-    expect(canAccessEstudiosModule(user({ rol: 'PACIENTE' }))).toBe(true);
     expect(canAccessEstudiosModule(user({ rol: 'ADMIN' }))).toBe(true);
   });
 
-  it('bloquea secretaría laboratorio, laboratorio y bioquímico', () => {
+  it('bloquea paciente, secretaría laboratorio, laboratorio y bioquímico', () => {
+    expect(canAccessEstudiosModule(user({ rol: 'PACIENTE' }))).toBe(false);
     expect(canAccessEstudiosModule(user({ rol: 'SECRETARIA_LAB' }))).toBe(false);
     expect(canAccessEstudiosModule(user({ rol: 'LABORATORIO' }))).toBe(false);
     expect(canAccessEstudiosModule(user({ rol: 'BIOQUIMICO' }))).toBe(false);

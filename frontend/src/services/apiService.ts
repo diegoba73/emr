@@ -152,6 +152,12 @@ export const getTurnos = async (): Promise<Turno[]> => {
   }
 };
 
+/** Stamp liviano para sync multi-cliente (`GET /api/turnos/revision/`). */
+export const getTurnosRevision = async (): Promise<string> => {
+  const response = await api.get<{ revision: string }>('/turnos/revision/');
+  return response.data?.revision ?? '0|0';
+};
+
 export const createTurno = async (turnoData: Partial<Turno>): Promise<Turno> => {
   try {
     const response = await api.post('/turnos/', turnoData);

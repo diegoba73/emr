@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from pacientes.models import Paciente
 from pacientes.serializers import PacienteLightSerializer
 from medicos.models import Medico, Especialidad
-from medicos.models import DisponibilidadMedico, ExcepcionMedico, Feriado
+from medicos.models import DisponibilidadMedico, ExcepcionMedico, Feriado, LicenciaMedico
 
 User = get_user_model()
 # from laboratorio.models import TipoExamen, PanelExamen, SolicitudExamen, ResultadoExamen
@@ -316,6 +316,57 @@ class FeriadoSerializer(serializers.ModelSerializer):
         read_only_fields = ('creado_en', 'actualizado_en', 'pendientes_count')
 
 
+class LicenciaMedicoSerializer(serializers.ModelSerializer):
+    pendientes_count = serializers.SerializerMethodField()
+    medico_nombre = serializers.SerializerMethodField()
+    motivo_display = serializers.CharField(source='get_motivo_display', read_only=True)
+
+    def get_pendientes_count(self, obj):
+        if not obj.activo:
+            return 0
+        from medicos.agenda import turnos_pendientes_licencia
+        return turnos_pendientes_licencia(obj).count()
+
+    def get_medico_nombre(self, obj):
+        med = obj.medico
+        if not med:
+            return None
+        return f'{med.apellido}, {med.nombre}'.strip(', ')
+
+    def validate(self, attrs):
+        inicio = attrs.get('fecha_inicio', getattr(self.instance, 'fecha_inicio', None))
+        fin = attrs.get('fecha_fin', getattr(self.instance, 'fecha_fin', None))
+        if inicio and fin and fin < inicio:
+            raise serializers.ValidationError({
+                'fecha_fin': 'La fecha fin no puede ser anterior a la fecha inicio.',
+            })
+        return attrs
+
+    class Meta:
+        model = LicenciaMedico
+        fields = (
+            'id',
+            'medico',
+            'medico_nombre',
+            'fecha_inicio',
+            'fecha_fin',
+            'motivo',
+            'motivo_display',
+            'detalle',
+            'activo',
+            'creado_en',
+            'actualizado_en',
+            'pendientes_count',
+        )
+        read_only_fields = (
+            'creado_en',
+            'actualizado_en',
+            'pendientes_count',
+            'medico_nombre',
+            'motivo_display',
+        )
+
+
 # class TipoExamenSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = TipoExamen
@@ -449,6 +500,7 @@ class TurnoAtencionNestedSerializer(serializers.ModelSerializer):
             'fecha_hora_fin',
             'estado',
             'motivo_reserva',
+            'origen',
         ]
 
 
@@ -464,7 +516,7 @@ class TurnoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Turno
         fields = ['id', 'paciente', 'paciente_id', 'medico', 'medico_id', 'recurso', 'recurso_id',
-                  'fecha_hora_inicio', 'fecha_hora_fin', 'estado', 'motivo_reserva', 'atencion']
+                  'fecha_hora_inicio', 'fecha_hora_fin', 'estado', 'motivo_reserva', 'origen', 'atencion']
     
     def to_representation(self, instance):
         """Sobrescribir para asegurar que los objetos relacionados se serialicen correctamente"""
@@ -599,11 +651,12 @@ class TurnoCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Turno
         fields = ['id', 'paciente', 'paciente_id', 'medico', 'medico_id', 'recurso', 'recurso_id',
-                  'fecha_hora_inicio', 'fecha_hora_fin', 'estado', 'motivo_reserva']
+                  'fecha_hora_inicio', 'fecha_hora_fin', 'estado', 'motivo_reserva', 'origen']
         extra_kwargs = {
             'fecha_hora_inicio': {'required': True},
             'fecha_hora_fin': {'required': False, 'allow_null': True},
             'motivo_reserva': {'required': False, 'allow_null': True},
+            'origen': {'required': False},
             'estado': {'required': False},
         }
     

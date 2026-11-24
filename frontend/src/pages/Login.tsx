@@ -44,12 +44,11 @@ const MOVIL_APK_URL =
 const loginSchema = yup.object({
   username: yup
     .string()
+    .transform((v) => (typeof v === 'string' ? v.trim() : v))
     .required('El DNI o usuario es requerido')
     .min(3, 'El DNI o usuario debe tener al menos 3 caracteres'),
-  password: yup
-    .string()
-    .required('La contraseña es requerida')
-    .min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  // Sin mínimo de longitud: no bloquear contraseñas legacy cortas en el cliente.
+  password: yup.string().required('La contraseña es requerida'),
 });
 
 type LoginFormData = yup.InferType<typeof loginSchema>;
@@ -85,7 +84,8 @@ const Login: React.FC = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      await login({ username: data.username, password: data.password });
+      const username = (data.username || '').trim();
+      await login({ username, password: data.password });
       toast.success('Inicio de sesión exitoso');
       const user = await authService.getCurrentUser();
       if (isPacienteRole(user)) {
@@ -97,6 +97,7 @@ const Login: React.FC = () => {
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.detail ||
+        error.response?.data?.error ||
         error.message ||
         'Credenciales inválidas. Por favor, intente nuevamente.';
       toast.error(errorMessage);

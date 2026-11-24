@@ -446,6 +446,9 @@ import synesis.db_checks  # noqa: F401, E402
 MOBILE_PUSH_ENABLED = env_bool('MOBILE_PUSH_ENABLED', default=False)
 EXPO_ACCESS_TOKEN = os.getenv('EXPO_ACCESS_TOKEN', '').strip()
 
+# Pago/garantía de reserva desde la app: andamiaje listo, cobro apagado por defecto.
+MOBILE_PAGO_RESERVA_ENABLED = env_bool('MOBILE_PAGO_RESERVA_ENABLED', default=False)
+
 # Cada despliegue corresponde a una institución y una base independientes.
 MOBILE_INSTITUTION_CODE = os.getenv('MOBILE_INSTITUTION_CODE', 'ICPL' if DEBUG else '').strip().upper()
 MOBILE_INSTITUTION_NAME = os.getenv('MOBILE_INSTITUTION_NAME', 'ICPL' if DEBUG else '').strip()

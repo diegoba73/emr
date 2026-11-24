@@ -34,6 +34,12 @@ def usuario_puede_gestionar_pedidos_estudio(user) -> bool:
     return es_secretaria_institucional(user)
 
 
+_MSG_ESTUDIO_SOLO_SECRETARIA = (
+    'Los turnos de estudio solo los agenda secretaría (presencial o por teléfono). '
+    'Desde el portal o la app solo podés reservar consultas.'
+)
+
+
 def crear_pedido_estudio_paciente(
     *,
     user,
@@ -42,24 +48,8 @@ def crear_pedido_estudio_paciente(
     origen_canal: str,
     notas: str = '',
 ) -> PedidoEstudioPaciente:
-    if _rol(user) != 'paciente':
-        raise ValidationError('Solo el paciente puede crear un pedido de estudio.')
-    if not foto:
-        raise ValidationError({'foto': 'Subí la foto del pedido del médico.'})
-    canal = (origen_canal or PedidoEstudioPaciente.OrigenCanal.MOVIL).upper()
-    if canal not in PedidoEstudioPaciente.OrigenCanal.values:
-        raise ValidationError({'origen_canal': 'Canal inválido.'})
-    pedido = PedidoEstudioPaciente(
-        paciente=paciente,
-        foto=foto,
-        origen_canal=canal,
-        notas=(notas or '')[:255],
-        creado_por=user,
-        estado=PedidoEstudioPaciente.Estado.PENDIENTE,
-    )
-    pedido.full_clean()
-    pedido.save()
-    return pedido
+    """Deshabilitado: estudios solo los agenda secretaría (presencial / teléfono)."""
+    raise ValidationError(_MSG_ESTUDIO_SOLO_SECRETARIA)
 
 
 def salas_ids_para_tipo(tipo_estudio_id: int) -> set[int]:
@@ -192,6 +182,25 @@ def turno_viene_de_pedido_paciente(turno: Turno) -> bool:
     ).exists()
 
 
+def turno_es_estudio_agenda(turno: Turno) -> bool:
+    """True si el turno es de estudio/procedimiento de agenda (no consulta)."""
+    if not turno or not turno.pk:
+        return False
+    if tipo_estudio_de_turno(turno) is not None:
+        return True
+    if turno_viene_de_pedido_paciente(turno):
+        return True
+    if EstudioComplementario.objects.filter(turno_id=turno.pk).exists():
+        return True
+    recurso = getattr(turno, 'recurso', None)
+    tipo_recurso = str(getattr(recurso, 'tipo_recurso', '') or '').upper()
+    return tipo_recurso in {
+        Recurso.TipoRecurso.SALA_PROCEDIMIENTO,
+        Recurso.TipoRecurso.SALA_HEMODINAMIA,
+        Recurso.TipoRecurso.QUIROFANO,
+    }
+
+
 def tipo_estudio_de_turno(turno: Turno) -> TipoEstudioComplementario | None:
     """Tipo tipificado vinculado al turno (pedido agendado o estudio directo)."""
     if not turno or not turno.pk:
@@ -235,21 +244,8 @@ def validar_reprogramacion_estudio(
         return
 
     rol = _rol(actor)
-    tipo_norm = str(tipo_franja or '').upper()
     if rol == 'paciente':
-        if medico.pk != turno.medico_id:
-            raise ValidationError(
-                'Solo podés reprogramar con el mismo médico del turno asignado.'
-            )
-        if tipo_norm and tipo_norm != 'ESTUDIO':
-            raise ValidationError(
-                'Elegí un horario de estudio del mismo médico, no una consulta.'
-            )
-        if tipo_estudio:
-            validar_catalogo_agenda_estudio(
-                medico=medico, tipo_estudio=tipo_estudio, recurso=recurso
-            )
-        return
+        raise ValidationError(_MSG_ESTUDIO_SOLO_SECRETARIA)
 
     # Staff: si hay tipo tipificado, médico y sala deben ser compatibles.
     if tipo_estudio and medico is not None and recurso is not None:

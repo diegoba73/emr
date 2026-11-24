@@ -19,6 +19,13 @@ interface AsyncAutocompleteProps<T> {
   error?: boolean;
   disabled?: boolean;
   sx?: any;
+  /** Estado de búsqueda (para acciones tipo «crear si no existe»). */
+  onSearchMetaChange?: (meta: {
+    inputValue: string;
+    options: T[];
+    loading: boolean;
+  }) => void;
+  noOptionsTextOverride?: React.ReactNode;
 }
 
 /**
@@ -46,6 +53,8 @@ export default function AsyncAutocomplete<T extends { id: any }>({
   error = false,
   disabled = false,
   sx,
+  onSearchMetaChange,
+  noOptionsTextOverride,
 }: AsyncAutocompleteProps<T>) {
   // Usar minSearchLength si está definido, sino minChars, sino 2 por defecto
   const minCharsToUse = minSearchLength ?? minChars ?? 2;
@@ -153,6 +162,10 @@ export default function AsyncAutocomplete<T extends { id: any }>({
     };
   }, [value, inputValue, fetchOptions, minCharsToUse]);
 
+  useEffect(() => {
+    onSearchMetaChange?.({ inputValue, options, loading });
+  }, [inputValue, options, loading, onSearchMetaChange]);
+
   return (
     <Autocomplete
       open={open}
@@ -188,14 +201,17 @@ export default function AsyncAutocomplete<T extends { id: any }>({
 
       // Deshabilitado
       disabled={disabled}
+      // Conserva el texto escrito al salir del campo (p. ej. clic en «Crear paciente»).
+      clearOnBlur={false}
 
       // Mensaje cuando no hay opciones
       noOptionsText={
-        loading
+        noOptionsTextOverride ??
+        (loading
           ? 'Buscando...'
           : inputValue.length < minCharsToUse
           ? `Escriba al menos ${minCharsToUse} caracteres para buscar`
-          : 'No se encontraron resultados'
+          : 'No se encontraron resultados')
       }
 
       renderInput={(params) => (

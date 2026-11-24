@@ -17,9 +17,17 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def data():
     cache.clear()
+    from pacientes.tests.os_helpers import os_ref
+
     U = get_user_model()
     u = U.objects.create_user(username='mobilepatient', password='test-password', rol='paciente')
-    p = Paciente.objects.create(user=u, nombre='Paciente', apellido='Privado', dni='MOB-1')
+    p = Paciente.objects.create(
+        user=u,
+        nombre='Paciente',
+        apellido='Privado',
+        dni='MOB-1',
+        obra_social=os_ref('PARTICULAR'),
+    )
     d = U.objects.create_user(username='mobiledoc', password='test-password', rol='medico')
     m = Medico.objects.create(user=d, nombre='Medico', apellido='Uno', matricula='MOB-1')
     start = timezone.now() + timedelta(hours=23)
@@ -141,7 +149,7 @@ def test_invalid_device_deactivated(data,settings):
         assert enviar_pendientes()==0
     data[5].refresh_from_db();assert not data[5].activo
 
-def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
+def test_mobile_booking_asistencia_and_no_cancel_paciente(data):
     from datetime import datetime, time
     from medicos.models import DisponibilidadMedico
     c,_,_,t,_,_,_=data
@@ -157,18 +165,41 @@ def test_mobile_booking_asistencia_and_secretaria_only_mutations(data):
     assert r.status_code==201,r.data
     pk=r.data['id']
     assert r.data['estado']=='RESERVADO'
+    assert r.data.get('puede_reprogramar') is True
+    assert r.data.get('puede_cancelar') is False
     assert 'prioridad' not in r.data and 'recurso' not in r.data
     assert c.post(f'/api/movil/turnos/{pk}/confirmar/').status_code==200
     assert Turno.objects.get(pk=pk).estado=='CONFIRMADO'
     assert c.post(f'/api/movil/turnos/{pk}/asistencia/').status_code==200
-    # Reprogramar desde la app: solo secretaría. Cancelar: el paciente sí puede.
-    r=c.post(f'/api/movil/turnos/{pk}/reprogramar-horario/',{'horario_id':h.pk,'inicio':(start+timedelta(minutes=20)).isoformat(),'motivo':'Cambio de horario'},format='json')
-    assert r.status_code==403
-    assert c.post(f'/api/movil/turnos/{pk}/cancelar/',{'motivo':'No puedo asistir'},format='json').status_code==200
-    updated=Turno.objects.get(pk=pk)
-    assert updated.asistencia_confirmada_en is not None
-    assert updated.fecha_hora_inicio==start
-    assert updated.estado=='CANCELADO'
+    # Cancelar normal: paciente no puede (403). Reprogramar ≥48 h: sí.
+    assert c.post(f'/api/movil/turnos/{pk}/cancelar/',{'motivo':'No puedo asistir'},format='json').status_code==403
+    r=c.post(
+        f'/api/movil/turnos/{pk}/reprogramar-horario/',
+        {
+            'horario_id': h.pk,
+            'inicio': (start + timedelta(minutes=20)).isoformat(),
+            'motivo': 'Cambio de horario',
+        },
+        format='json',
+    )
+    assert r.status_code == 200, r.data
+    nuevo = Turno.objects.get(pk=r.data['id'])
+    assert nuevo.reprogramaciones_paciente == 1
+    assert nuevo.estado == 'CONFIRMADO'
+    assert nuevo.requiere_aceptacion_paciente is False
+    # Segunda reprogramación: bloqueada.
+    r2 = c.post(
+        f'/api/movil/turnos/{nuevo.pk}/reprogramar-horario/',
+        {
+            'horario_id': h.pk,
+            'inicio': (start + timedelta(minutes=40)).isoformat(),
+            'motivo': 'Otro cambio',
+        },
+        format='json',
+    )
+    assert r2.status_code in (400, 403)
+    updated = Turno.objects.get(pk=pk)
+    assert updated.estado == 'CANCELADO'
 
 def test_transient_push_error_retries_later(data,settings):
     import requests
@@ -180,9 +211,12 @@ def test_transient_push_error_retries_later(data,settings):
     assert r.estado=='PENDIENTE' and r.intentos==1 and r.proximo_intento>timezone.now()
 
 def test_future_outside_window_not_prepared(data):
-    t=data[3]
-    t.fecha_hora_inicio+=timedelta(hours=2);t.fecha_hora_fin+=timedelta(hours=2);t.save()
-    assert preparar_recordatorios()==0
+    """Fuera de la ventana de ~48 hs (+ margen finde): no preparar asistencia."""
+    t = data[3]
+    t.fecha_hora_inicio = timezone.now() + timedelta(days=6)
+    t.fecha_hora_fin = t.fecha_hora_inicio + timedelta(minutes=20)
+    t.save(update_fields=['fecha_hora_inicio', 'fecha_hora_fin', 'updated_at'])
+    assert preparar_recordatorios() == 0
 
 def test_public_institution_identity(settings, monkeypatch):
     settings.MOBILE_INSTITUTION_CODE='CLINICA-B'
@@ -273,15 +307,27 @@ def test_estoy_en_sala_y_lab(data):
     hoy = c.get('/api/movil/recepcion/hoy/')
     assert hoy.status_code==200
     assert hoy.data['puedo_estoy_en_sala'] is False
-    # Mover turno a hoy.
+    # Hoy pero fuera de la ventana (faltan 2 h) → no.
     start = timezone.now()+timedelta(hours=2)
     t.fecha_hora_inicio=start
     t.fecha_hora_fin=start+timedelta(minutes=20)
     t.estado='CONFIRMADO'
     t.save()
     hoy = c.get('/api/movil/recepcion/hoy/')
+    assert hoy.data['puedo_estoy_en_sala'] is False
+    assert c.post('/api/movil/recepcion/estoy-en-sala/',{},format='json').status_code==400
+    # Dentro de la ventana (faltan 30 min) → sí.
+    start = timezone.now()+timedelta(minutes=30)
+    t.fecha_hora_inicio=start
+    t.fecha_hora_fin=start+timedelta(minutes=20)
+    t.save()
+    hoy = c.get('/api/movil/recepcion/hoy/')
     assert hoy.data['puedo_estoy_en_sala'] is True
-    r = c.post('/api/movil/recepcion/estoy-en-sala/',{},format='json')
+    assert any(
+        x['turno_id']==t.pk and x['puedo_estoy_en_sala']
+        for x in hoy.data.get('turnos_estoy_en_sala') or []
+    )
+    r = c.post('/api/movil/recepcion/estoy-en-sala/',{'turno_id': t.pk},format='json')
     assert r.status_code==200,r.data
     assert r.data['codigo_llamado']
     hoy2 = c.get('/api/movil/recepcion/hoy/')
@@ -290,3 +336,62 @@ def test_estoy_en_sala_y_lab(data):
     lab = c.post('/api/movil/recepcion/anuncio-lab/',{},format='json')
     assert lab.status_code==200,lab.data
     assert (lab.data.get('codigo_llamado') or '').startswith('L')
+
+
+def test_estoy_en_sala_rechaza_si_ya_paso_inicio(data):
+    from recepcion.models import PuestoRecepcion
+    from recepcion.services import CODIGO_PUESTO_1
+    c,_,_,t,_,_,_=data
+    PuestoRecepcion.objects.get_or_create(
+        codigo=CODIGO_PUESTO_1,
+        defaults={'nombre':'Puesto 1','etiqueta_paciente':'Puesto 1','activo':True,'orden':1},
+    )
+    start = timezone.now()-timedelta(minutes=5)
+    t.fecha_hora_inicio=start
+    t.fecha_hora_fin=start+timedelta(minutes=20)
+    t.estado='CONFIRMADO'
+    t.save()
+    hoy = c.get('/api/movil/recepcion/hoy/')
+    assert hoy.status_code==200
+    assert hoy.data['puedo_estoy_en_sala'] is False
+    r = c.post('/api/movil/recepcion/estoy-en-sala/',{'turno_id': t.pk},format='json')
+    assert r.status_code==400
+
+
+def test_estoy_en_sala_estudio_en_ventana(data):
+    """Misma ventana de 1 h para turnos de estudio (tipo_actividad ESTUDIO)."""
+    from turnos.models import Recurso
+    from recepcion.models import PuestoRecepcion
+    from recepcion.services import CODIGO_PUESTO_1
+    c,u,_,_,_,_,_=data
+    PuestoRecepcion.objects.get_or_create(
+        codigo=CODIGO_PUESTO_1,
+        defaults={'nombre':'Puesto 1','etiqueta_paciente':'Puesto 1','activo':True,'orden':1},
+    )
+    pac = Paciente.objects.get(user=u)
+    med = Medico.objects.first()
+    sala = Recurso.objects.create(
+        nombre='Sala estudio móvil',
+        ubicacion=Recurso.Ubicacion.CEHTA,
+        tipo_recurso=Recurso.TipoRecurso.SALA_PROCEDIMIENTO,
+        activo=True,
+    )
+    start = timezone.now()+timedelta(minutes=20)
+    te = Turno.objects.create(
+        paciente=pac,
+        medico=med,
+        recurso=sala,
+        fecha_hora_inicio=start,
+        fecha_hora_fin=start+timedelta(minutes=30),
+        estado='CONFIRMADO',
+        motivo_reserva='Estudio: Eco',
+    )
+    hoy = c.get('/api/movil/recepcion/hoy/')
+    assert hoy.status_code==200
+    assert hoy.data['puedo_estoy_en_sala'] is True
+    item = next(x for x in hoy.data['turnos_estoy_en_sala'] if x['turno_id']==te.pk)
+    assert item['tipo_actividad'] in ('ESTUDIO', 'PROCEDIMIENTO')
+    assert item['puedo_estoy_en_sala'] is True
+    r = c.post('/api/movil/recepcion/estoy-en-sala/',{'turno_id': te.pk},format='json')
+    assert r.status_code==200,r.data
+    assert r.data['tipo_actividad']=='ESTUDIO'

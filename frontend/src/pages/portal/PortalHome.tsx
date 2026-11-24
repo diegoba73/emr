@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Card, CardActionArea, CardContent, CircularProgress, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import AnnouncementsBanner from '../../components/AnnouncementsBanner';
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
 import type { PortalResumen } from '../../types/bi';
@@ -33,6 +34,7 @@ const PortalHome: React.FC = () => {
 
   return (
     <Box sx={{ p: 2 }} data-demo="page-portal">
+      <AnnouncementsBanner audience="paciente" />
       <Typography variant="h5" fontWeight={700} gutterBottom>
         Portal del paciente
       </Typography>

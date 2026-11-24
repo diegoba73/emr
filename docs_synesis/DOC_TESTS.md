@@ -213,7 +213,8 @@ bash scripts/smoke_local.sh
 |-----------|-------------------|
 | `pacientes/tests/` | `test_models.py`, `test_api.py` |
 | `medicos/tests/` | `test_models.py` |
-| `turnos/tests/` | `test_api.py`, `test_models.py`, `test_services.py`, `test_consulta_ambulatoria.py`, `test_atencion_viewset.py` |
+| `turnos/tests/` | `test_api.py`, `test_models.py`, `test_services.py`, `test_consulta_ambulatoria.py`, `test_atencion_viewset.py`, `test_turnos_revision.py` (stamp live híbrido web+móvil) |
+| `movil/tests/` | `test_mobile.py` (booking, cancel/reprog paciente), `test_politicas_reserva.py` (cobertura OS+plan, ≥48 h, flag pago) |
 | `historias_clinicas/tests/` | `test_api.py`, `test_models.py` |
 | `laboratorio/tests/` | `test_models.py`, `test_api.py` |
 | `archivos_medicos/tests/` | `test_models.py`, `tests.py` |

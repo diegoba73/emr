@@ -215,6 +215,17 @@ class LlegadaRecepcionViewSet(viewsets.ModelViewSet):
         llegada = services.derivar_a_espera_clinica(llegada)
         return Response(LlegadaRecepcionSerializer(llegada).data)
 
+    @action(detail=True, methods=['post'], url_path='volver-recepcion')
+    def volver_recepcion(self, request, pk=None):
+        """Deshace check-in administrativo: cola médico → recepción."""
+        llegada = self.get_object()
+        if not puede_derivar_a_medico(request.user, llegada):
+            raise ValidationError(
+                {'detalle': 'No podés devolver esta llegada a recepción.'}
+            )
+        llegada = services.volver_a_recepcion(llegada)
+        return Response(LlegadaRecepcionSerializer(llegada).data)
+
     @action(detail=True, methods=['post'], url_path='llamar')
     def llamar(self, request, pk=None):
         llegada = self.get_object()

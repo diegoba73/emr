@@ -3,7 +3,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
-from medicos.models import Medico, DisponibilidadMedico, ExcepcionMedico, Feriado
+from medicos.models import Medico, DisponibilidadMedico, ExcepcionMedico, Feriado, LicenciaMedico
 from pacientes.models import Paciente
 from turnos.models import Turno, Recurso
 
@@ -565,4 +565,128 @@ def test_roles_no_autorizados_no_gestionan_feriados(agenda, rol):
     fecha = agenda[6]
     assert client(u).post('/api/feriados/', {
         'fecha': fecha.isoformat(), 'nombre': 'No debe',
+    }, format='json').status_code == 403
+
+
+def test_licencia_cierra_slots_y_bloquea_reserva(agenda):
+    """Con licencia activa no hay slots ni reserva (igual que feriado, pero por médico)."""
+    med, other, _, admin, user, pac, fecha, inicio, h = agenda
+    LicenciaMedico.objects.create(
+        medico=med,
+        fecha_inicio=fecha,
+        fecha_fin=fecha,
+        motivo=LicenciaMedico.Motivo.LICENCIA_MEDICA,
+        activo=True,
+    )
+    c = client(user)
+    assert c.get(f'/api/medicos/{med.pk}/slots/', {'fecha': fecha.isoformat()}).data['slots'] == []
+    desde = fecha.replace(day=1)
+    if fecha.month == 12:
+        hasta = fecha.replace(year=fecha.year + 1, month=1, day=1) - timedelta(days=1)
+    else:
+        hasta = fecha.replace(month=fecha.month + 1, day=1) - timedelta(days=1)
+    dias = c.get(f'/api/medicos/{med.pk}/dias-disponibles/', {
+        'desde': desde.isoformat(), 'hasta': hasta.isoformat(),
+    }).data['dias']
+    assert fecha.isoformat() not in {d['fecha'] for d in dias}
+
+    r = c.post(
+        '/api/turnos/reservar-horario/',
+        {'horario_id': h.pk, 'inicio': inicio.isoformat()},
+        format='json',
+    )
+    assert r.status_code == 400
+    assert 'licencia' in str(r.data).lower()
+
+    data = {
+        'medico_id': med.pk, 'paciente_id': pac.pk,
+        'fecha_hora_inicio': inicio.isoformat(),
+        'fecha_hora_fin': (inicio + timedelta(minutes=20)).isoformat(),
+        'estado': 'RESERVADO', 'es_sobreturno': True,
+    }
+    assert client(admin).post('/api/turnos/', data, format='json').status_code == 400
+
+    # Otro médico sin licencia sigue teniendo agenda ese día.
+    DisponibilidadMedico.objects.create(
+        medico=other,
+        dia_semana=fecha.weekday(),
+        hora_inicio=time(9),
+        hora_fin=time(13),
+        tipo='CONSULTA',
+        recurso=h.recurso,
+    )
+    slots_otro = client(user).get(
+        f'/api/medicos/{other.pk}/slots/', {'fecha': fecha.isoformat()},
+    ).data['slots']
+    assert slots_otro
+
+
+def test_licencia_bloquea_reprogramacion(agenda):
+    med, _, _, admin, _, pac, fecha, inicio, h = agenda
+    t = Turno.objects.create(
+        medico=med, paciente=pac, fecha_hora_inicio=inicio,
+        fecha_hora_fin=inicio + timedelta(minutes=20), estado='CONFIRMADO',
+    )
+    otra = fecha + timedelta(days=7)  # mismo weekday → misma franja del fixture
+    LicenciaMedico.objects.create(
+        medico=med,
+        fecha_inicio=otra,
+        fecha_fin=otra + timedelta(days=1),
+        motivo=LicenciaMedico.Motivo.CONGRESO,
+        activo=True,
+    )
+    destino = timezone.make_aware(datetime.combine(otra, time(9)))
+    r = client(admin).post(f'/api/turnos/{t.pk}/reprogramar/', {
+        'fecha_hora_inicio': destino.isoformat(),
+        'fecha_hora_fin': (destino + timedelta(minutes=20)).isoformat(),
+        'motivo': 'Mover a día de licencia',
+    }, format='json')
+    assert r.status_code == 400
+    assert 'licencia' in str(r.data).lower()
+    t.refresh_from_db()
+    assert t.fecha_hora_inicio == inicio
+
+
+def test_crear_licencia_con_turnos_existentes_no_los_cancela(agenda):
+    med, _, _, admin, _, pac, fecha, inicio, h = agenda
+    t = Turno.objects.create(
+        medico=med, paciente=pac, fecha_hora_inicio=inicio,
+        fecha_hora_fin=inicio + timedelta(minutes=20), estado='RESERVADO',
+    )
+    c = client(admin)
+    r = c.post('/api/licencias-medico/', {
+        'medico': med.pk,
+        'fecha_inicio': fecha.isoformat(),
+        'fecha_fin': fecha.isoformat(),
+        'motivo': 'PERSONAL',
+        'detalle': 'Trámite',
+    }, format='json')
+    assert r.status_code == 201, r.data
+    assert r.data['activo'] is True
+    assert r.data['pendientes_count'] == 1
+    assert len(r.data['turnos_afectados']) == 1
+    assert r.data['turnos_afectados'][0]['id'] == t.pk
+    t.refresh_from_db()
+    assert t.estado == 'RESERVADO'
+
+    pend = c.get(f"/api/licencias-medico/{r.data['id']}/turnos-pendientes/")
+    assert pend.status_code == 200
+    assert pend.data['count'] == 1
+
+    t.estado = 'CANCELADO'
+    t.save(update_fields=['estado'])
+    pend = c.get(f"/api/licencias-medico/{r.data['id']}/turnos-pendientes/")
+    assert pend.data['count'] == 0
+    assert c.get(f'/api/medicos/{med.pk}/slots/', {'fecha': fecha.isoformat()}).data['slots'] == []
+
+
+@pytest.mark.parametrize('rol', ['paciente', 'medico', 'enfermeria'])
+def test_roles_no_autorizados_no_gestionan_licencias(agenda, rol):
+    u = get_user_model().objects.create_user(username='lic_blocked_' + rol, rol=rol, is_staff=True)
+    med, fecha = agenda[0], agenda[6]
+    assert client(u).post('/api/licencias-medico/', {
+        'medico': med.pk,
+        'fecha_inicio': fecha.isoformat(),
+        'fecha_fin': fecha.isoformat(),
+        'motivo': 'ESTUDIO',
     }, format='json').status_code == 403

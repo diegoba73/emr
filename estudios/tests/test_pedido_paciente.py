@@ -85,16 +85,44 @@ def client(user):
     return c
 
 
-def test_paciente_crea_pedido_portal(ctx):
+def _seed_pedido_pendiente(ctx, *, notas='', origen='MOVIL'):
+    """Pedidos legacy en DB (el alta por paciente/app está deshabilitada)."""
+    return PedidoEstudioPaciente.objects.create(
+        paciente=ctx['pac'],
+        foto=_img(),
+        origen_canal=origen,
+        notas=notas,
+        creado_por=ctx['pac_user'],
+        estado=PedidoEstudioPaciente.Estado.PENDIENTE,
+    )
+
+
+def _pedido_agendado(ctx):
+    pedido = _seed_pedido_pendiente(ctx)
+    ag = client(ctx['sec']).post(
+        f'/api/estudios-complementarios/pedidos/{pedido.id}/agendar/',
+        {
+            'tipo_estudio': ctx['tipo'].id,
+            'medico_id': ctx['med'].id,
+            'inicio': ctx['inicio'].isoformat(),
+        },
+        format='json',
+    )
+    assert ag.status_code == 200, ag.data
+    pedido.refresh_from_db()
+    turno = Turno.objects.get(pk=pedido.turno_id)
+    return pedido, turno
+
+
+def test_paciente_no_crea_pedido_portal(ctx):
     c = client(ctx['pac_user'])
     r = c.post(
         '/api/estudios-complementarios/pedidos/',
         {'foto': _img(), 'origen_canal': 'PORTAL', 'notas': 'pedido papel'},
         format='multipart',
     )
-    assert r.status_code == 201, r.data
-    assert r.data['estado'] == 'PENDIENTE'
-    assert PedidoEstudioPaciente.objects.filter(paciente=ctx['pac']).exists()
+    assert r.status_code == 403
+    assert not PedidoEstudioPaciente.objects.filter(paciente=ctx['pac']).exists()
 
 
 def test_admin_no_crea_pedido(ctx):
@@ -108,18 +136,10 @@ def test_admin_no_crea_pedido(ctx):
 
 
 def test_secretaria_agenda_pedido(ctx):
-    c_pac = client(ctx['pac_user'])
-    created = c_pac.post(
-        '/api/estudios-complementarios/pedidos/',
-        {'foto': _img(), 'origen_canal': 'MOVIL'},
-        format='multipart',
-    )
-    assert created.status_code == 201, created.data
-    pid = created.data['id']
-
+    pedido = _seed_pedido_pendiente(ctx)
     c = client(ctx['sec'])
     r = c.post(
-        f'/api/estudios-complementarios/pedidos/{pid}/agendar/',
+        f'/api/estudios-complementarios/pedidos/{pedido.id}/agendar/',
         {
             'tipo_estudio': ctx['tipo'].id,
             'medico_id': ctx['med'].id,
@@ -129,25 +149,23 @@ def test_secretaria_agenda_pedido(ctx):
     )
     assert r.status_code == 200, r.data
     assert r.data['estado'] == 'AGENDADO'
-    pedido = PedidoEstudioPaciente.objects.get(pk=pid)
+    pedido.refresh_from_db()
     assert pedido.turno_id
     turno = Turno.objects.get(pk=pedido.turno_id)
     assert turno.estado == Turno.Estado.RESERVADO
     assert turno.paciente_id == ctx['pac'].id
-    assert turno_estado.puede_reprogramar_turno(ctx['pac_user'], turno) is True
+    assert turno_estado.puede_reprogramar_turno(ctx['pac_user'], turno) is False
+    assert turno_estado.puede_confirmar_turno(ctx['pac_user'], turno) is False
+    assert turno_estado.puede_reprogramar_turno(ctx['sec'], turno) is True
+    assert turno_estado.puede_confirmar_turno(ctx['sec'], turno) is True
 
 
 def test_agenda_rechaza_medico_sin_catalogo(ctx):
     otro = Medico.objects.create(nombre='Otro', apellido='Sin', matricula='PED-M2')
-    c_pac = client(ctx['pac_user'])
-    created = c_pac.post(
-        '/api/estudios-complementarios/pedidos/',
-        {'foto': _img(), 'origen_canal': 'PORTAL'},
-        format='multipart',
-    ).data
+    pedido = _seed_pedido_pendiente(ctx)
     c = client(ctx['sec'])
     r = c.post(
-        f'/api/estudios-complementarios/pedidos/{created["id"]}/agendar/',
+        f'/api/estudios-complementarios/pedidos/{pedido.id}/agendar/',
         {
             'tipo_estudio': ctx['tipo'].id,
             'medico_id': otro.id,
@@ -158,43 +176,50 @@ def test_agenda_rechaza_medico_sin_catalogo(ctx):
     assert r.status_code == 400
 
 
-def test_paciente_reprograma_turno_de_pedido(ctx):
-    c_pac = client(ctx['pac_user'])
-    created = c_pac.post(
-        '/api/estudios-complementarios/pedidos/',
-        {'foto': _img(), 'origen_canal': 'MOVIL'},
-        format='multipart',
-    ).data
-    c_sec = client(ctx['sec'])
-    ag = c_sec.post(
-        f'/api/estudios-complementarios/pedidos/{created["id"]}/agendar/',
+def test_paciente_no_reprograma_ni_confirma_turno_de_pedido(ctx):
+    pedido, turno = _pedido_agendado(ctx)
+    nuevo_inicio = ctx['inicio'] + timedelta(minutes=20)
+    r_rep = client(ctx['pac_user']).post(
+        f'/api/turnos/{turno.id}/reprogramar/',
         {
-            'tipo_estudio': ctx['tipo'].id,
-            'medico_id': ctx['med'].id,
-            'inicio': ctx['inicio'].isoformat(),
+            'fecha_hora_inicio': nuevo_inicio.isoformat(),
+            'fecha_hora_fin': (nuevo_inicio + timedelta(minutes=20)).isoformat(),
+            'motivo': 'Otro horario',
+            'recurso_id': ctx['sala'].id,
         },
         format='json',
     )
-    assert ag.status_code == 200, ag.data
-    pedido = PedidoEstudioPaciente.objects.get(pk=created['id'])
-    turno = Turno.objects.get(pk=pedido.turno_id)
+    assert r_rep.status_code == 403, r_rep.data
+    r_conf = client(ctx['pac_user']).post(f'/api/turnos/{turno.id}/confirmar/', {}, format='json')
+    assert r_conf.status_code == 403, r_conf.data
+    turno.refresh_from_db()
+    pedido.refresh_from_db()
+    assert turno.estado == Turno.Estado.RESERVADO
+    assert pedido.turno_id == turno.id
+
+
+def test_secretaria_reprograma_turno_de_pedido(ctx):
+    pedido, turno = _pedido_agendado(ctx)
     nuevo_inicio = ctx['inicio'] + timedelta(minutes=20)
     nuevo_fin = nuevo_inicio + timedelta(minutes=20)
     outcome = turno_estado.reprogramar_turno(
         turno,
-        actor=ctx['pac_user'],
+        actor=ctx['sec'],
         fecha_hora_inicio=nuevo_inicio,
         fecha_hora_fin=nuevo_fin,
-        motivo='Otro horario',
+        motivo='Otro horario secretaría',
         recurso=ctx['sala'],
     )
     assert outcome.applied
     pedido.refresh_from_db()
     assert pedido.turno_id == outcome.turno.pk
     assert outcome.turno.estado == Turno.Estado.RESERVADO
+    assert outcome.turno.requiere_aceptacion_paciente is True
     from estudios.pedido_paciente import turno_viene_de_pedido_paciente
 
     assert turno_viene_de_pedido_paciente(outcome.turno) is True
+    # Paciente puede aceptar el horario reprogramado (excepción a «estudios no confirma»).
+    assert turno_estado.puede_confirmar_turno(ctx['pac_user'], outcome.turno) is True
 
 
 def test_catalogo_medico_tipo_crud(ctx):
@@ -205,109 +230,9 @@ def test_catalogo_medico_tipo_crud(ctx):
     assert any(row['medico'] == ctx['med'].id for row in data)
 
 
-def _pedido_agendado(ctx):
-    c_pac = client(ctx['pac_user'])
-    created = c_pac.post(
-        '/api/estudios-complementarios/pedidos/',
-        {'foto': _img(), 'origen_canal': 'MOVIL'},
-        format='multipart',
-    ).data
-    ag = client(ctx['sec']).post(
-        f'/api/estudios-complementarios/pedidos/{created["id"]}/agendar/',
-        {
-            'tipo_estudio': ctx['tipo'].id,
-            'medico_id': ctx['med'].id,
-            'inicio': ctx['inicio'].isoformat(),
-        },
-        format='json',
-    )
-    assert ag.status_code == 200, ag.data
-    pedido = PedidoEstudioPaciente.objects.get(pk=created['id'])
-    turno = Turno.objects.get(pk=pedido.turno_id)
-    return pedido, turno
-
-
-def test_paciente_no_reprograma_a_otro_medico_ni_consultorio(ctx):
-    """Regresión: API web no debe migrar el pedido a consulta de otro médico."""
-    pedido, turno = _pedido_agendado(ctx)
-    otro_med = Medico.objects.create(nombre='Otro', apellido='Doc', matricula='PED-M-X')
-    consultorio = Recurso.objects.create(
-        nombre='Cons X',
-        ubicacion='CEHTA',
-        tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
-        activo=True,
-    )
-    DisponibilidadMedico.objects.create(
-        medico=otro_med,
-        dia_semana=ctx['fecha'].weekday(),
-        hora_inicio=time(9, 0),
-        hora_fin=time(12, 0),
-        tipo='CONSULTA',
-        recurso=consultorio,
-        activo=True,
-    )
-    nuevo_inicio = ctx['inicio'] + timedelta(minutes=40)
-    r = client(ctx['pac_user']).post(
-        f'/api/turnos/{turno.id}/reprogramar/',
-        {
-            'fecha_hora_inicio': nuevo_inicio.isoformat(),
-            'fecha_hora_fin': (nuevo_inicio + timedelta(minutes=20)).isoformat(),
-            'motivo': 'Intento cambiar médico',
-            'medico_id': otro_med.id,
-            'recurso_id': consultorio.id,
-        },
-        format='json',
-    )
-    assert r.status_code == 400, r.data
-    turno.refresh_from_db()
-    pedido.refresh_from_db()
-    assert turno.estado == Turno.Estado.RESERVADO
-    assert turno.medico_id == ctx['med'].id
-    assert pedido.turno_id == turno.id
-
-
-def test_paciente_no_reprograma_franja_consulta_mismo_medico(ctx):
-    pedido, turno = _pedido_agendado(ctx)
-    consultorio = Recurso.objects.create(
-        nombre='Cons mismo',
-        ubicacion='CEHTA',
-        tipo_recurso=Recurso.TipoRecurso.CONSULTORIO,
-        activo=True,
-    )
-    DisponibilidadMedico.objects.create(
-        medico=ctx['med'],
-        dia_semana=ctx['fecha'].weekday(),
-        hora_inicio=time(14, 0),
-        hora_fin=time(16, 0),
-        tipo='CONSULTA',
-        recurso=consultorio,
-        activo=True,
-    )
-    nuevo_inicio = timezone.make_aware(datetime.combine(ctx['fecha'], time(14, 0)))
-    r = client(ctx['pac_user']).post(
-        f'/api/turnos/{turno.id}/reprogramar/',
-        {
-            'fecha_hora_inicio': nuevo_inicio.isoformat(),
-            'fecha_hora_fin': (nuevo_inicio + timedelta(minutes=20)).isoformat(),
-            'motivo': 'Intento consulta',
-            'recurso_id': consultorio.id,
-        },
-        format='json',
-    )
-    assert r.status_code == 400, r.data
-    turno.refresh_from_db()
-    assert turno.estado == Turno.Estado.RESERVADO
-    assert turno.recurso_id == ctx['sala'].id
-
-
 def test_paciente_no_ve_pedido_ajeno_ni_foto(ctx):
-    created = client(ctx['pac_user']).post(
-        '/api/estudios-complementarios/pedidos/',
-        {'foto': _img(), 'origen_canal': 'PORTAL'},
-        format='multipart',
-    )
-    assert created.status_code == 201, created.data
-    pid = created.data['id']
+    pedido = _seed_pedido_pendiente(ctx)
+    pid = pedido.id
     otro_user = User.objects.create_user(username='pac_otro_ped', password='x', rol='paciente')
     Paciente.objects.create(user=otro_user, nombre='Otro', apellido='Pac', dni='PED-2')
     c_otro = client(otro_user)
@@ -375,13 +300,13 @@ def test_alta_directa_estudio_confirmada_y_rechazos_catalogo(ctx):
     assert r_sala.status_code == 400
 
 
-def test_pedido_sin_foto_rechazado(ctx):
+def test_pedido_alta_paciente_rechazada_sin_persistir(ctx):
     r = client(ctx['pac_user']).post(
         '/api/estudios-complementarios/pedidos/',
         {'origen_canal': 'PORTAL', 'notas': 'sin foto'},
         format='multipart',
     )
-    assert r.status_code == 400
+    assert r.status_code == 403
     assert not PedidoEstudioPaciente.objects.filter(paciente=ctx['pac'], notas='sin foto').exists()
 
 
@@ -463,8 +388,8 @@ def test_asignar_turno_estudio_existente_exige_franja(ctx):
     assert estudio.estado == EstudioComplementario.Estado.CONFIRMADO
 
 
-def test_slots_reprogramacion_filtra_sala_y_rechaza_ajeno(ctx):
-    pedido, turno = _pedido_agendado(ctx)
+def test_slots_reprogramacion_filtra_sala_y_rechaza_paciente(ctx):
+    _pedido, turno = _pedido_agendado(ctx)
     # Segunda sala ESTUDIO del mismo médico, no asociada al tipo → no debe ofrecerse
     sala_otra = Recurso.objects.create(
         nombre='Sala otra',
@@ -481,8 +406,14 @@ def test_slots_reprogramacion_filtra_sala_y_rechaza_ajeno(ctx):
         recurso=sala_otra,
         activo=True,
     )
-    c = client(ctx['pac_user'])
-    r = c.get(
+    # Paciente ya no reprograma estudios.
+    r_pac = client(ctx['pac_user']).get(
+        f'/api/turnos/{turno.id}/slots-reprogramacion/',
+        {'fecha': ctx['fecha'].isoformat()},
+    )
+    assert r_pac.status_code == 403
+
+    r = client(ctx['sec']).get(
         f'/api/turnos/{turno.id}/slots-reprogramacion/',
         {'fecha': ctx['fecha'].isoformat()},
     )
@@ -492,24 +423,11 @@ def test_slots_reprogramacion_filtra_sala_y_rechaza_ajeno(ctx):
     assert all(s['recurso_id'] == ctx['sala'].id for s in slots)
     assert not any(s['recurso_id'] == sala_otra.id for s in slots)
 
-    otro_user = User.objects.create_user(username='pac_slots_aj', password='x', rol='paciente')
-    Paciente.objects.create(user=otro_user, nombre='Aj', apellido='Eno', dni='PED-AJ')
-    r_aj = client(otro_user).get(
-        f'/api/turnos/{turno.id}/slots-reprogramacion/',
-        {'fecha': ctx['fecha'].isoformat()},
-    )
-    assert r_aj.status_code in (403, 404)
 
-
-def test_paciente_lista_sus_pedidos(ctx):
+def test_paciente_lista_sus_pedidos_legacy(ctx):
+    pedido = _seed_pedido_pendiente(ctx, notas='ver listado', origen='PORTAL')
     c = client(ctx['pac_user'])
-    created = c.post(
-        '/api/estudios-complementarios/pedidos/',
-        {'foto': _img(), 'origen_canal': 'PORTAL', 'notas': 'ver listado'},
-        format='multipart',
-    )
-    assert created.status_code == 201, created.data
     r = c.get('/api/estudios-complementarios/pedidos/')
     assert r.status_code == 200
     rows = r.data['results'] if isinstance(r.data, dict) else r.data
-    assert any(p['id'] == created.data['id'] and p['estado'] == 'PENDIENTE' for p in rows)
+    assert any(p['id'] == pedido.id and p['estado'] == 'PENDIENTE' for p in rows)

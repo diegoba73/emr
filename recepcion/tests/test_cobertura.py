@@ -72,13 +72,18 @@ def paciente(db):
 
 
 @pytest.mark.django_db
-def test_llamar_sin_cobertura_falla(puestos, secretaria, paciente):
+def test_llamar_sin_cobertura_usa_puesto_actual(puestos, secretaria, paciente):
+    """Sin cobertura del día: secretaría igual puede llamar a ventanilla."""
+    p1, _p2, _sala = puestos
     llegada = services.checkin_walkin(
         paciente=paciente, tipo_actividad='SIN_TURNO', motivo='SIN_TURNO'
     )
-    with pytest.raises(ValidationError) as exc:
-        services.llamar_paciente(llegada, user=secretaria)
-    assert 'cobertura' in str(exc.value).lower()
+    assert llegada.puesto_id == p1.id
+    llamada = services.llamar_paciente(llegada, user=secretaria)
+    assert llamada.estado_flujo == 'LLAMADO'
+    assert llamada.zona_llamado == 'RECEPCION'
+    assert llamada.puesto_id == p1.id
+    assert llamada.destino_label == 'Puesto 1'
 
 
 @pytest.mark.django_db
@@ -224,3 +229,50 @@ def test_api_cobertura_hoy_y_tablero_filtra(puestos, secretaria, secretaria2, pa
     tipos2 = {x['tipo_actividad'] for x in r2.data['llegadas']}
     assert 'ESTUDIO' in tipos2
     assert 'SIN_TURNO' not in tipos2
+
+
+@pytest.mark.django_db
+def test_secretaria_derivar_sin_llamar_previo_y_volver_recepcion(puestos, secretaria, paciente):
+    """Check-in a cola médico no exige llamado previo; se puede devolver a recepción."""
+    from datetime import timedelta
+
+    from medicos.models import Medico
+    from recepcion.models import LlegadaRecepcion
+    from recepcion.permissions import puede_llamar_o_atender
+    from turnos.models import Recurso, Turno
+
+    p1, _p2, _sala = puestos
+    medico = Medico.objects.create(
+        nombre='Laura', apellido='Sosa', matricula='M-COV-DER'
+    )
+    recurso = Recurso.objects.create(
+        nombre='Consultorio Derivar', tipo_recurso='CONSULTORIO', activo=True
+    )
+    ahora = timezone.now()
+    turno = Turno.objects.create(
+        paciente=paciente,
+        medico=medico,
+        recurso=recurso,
+        fecha_hora_inicio=ahora,
+        fecha_hora_fin=ahora + timedelta(minutes=20),
+        estado='CONFIRMADO',
+    )
+    llegada = services.checkin_turno(turno=turno, puesto_id=p1.id, user=secretaria)
+    assert llegada.estado_flujo == LlegadaRecepcion.EstadoFlujo.EN_ESPERA_RECEPCION
+
+    client = APIClient()
+    client.force_authenticate(user=secretaria)
+    r = client.post(f'/api/recepcion/llegadas/{llegada.id}/derivar-espera/')
+    assert r.status_code == 200, r.data
+    assert r.data['estado_flujo'] == 'EN_ESPERA'
+    llegada.refresh_from_db()
+    assert not puede_llamar_o_atender(secretaria, llegada)
+
+    r2 = client.post(f'/api/recepcion/llegadas/{llegada.id}/llamar/')
+    assert r2.status_code == 400
+
+    r3 = client.post(f'/api/recepcion/llegadas/{llegada.id}/volver-recepcion/')
+    assert r3.status_code == 200, r3.data
+    assert r3.data['estado_flujo'] == 'EN_ESPERA_RECEPCION'
+    llegada.refresh_from_db()
+    assert puede_llamar_o_atender(secretaria, llegada)

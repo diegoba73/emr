@@ -8,9 +8,10 @@ from rest_framework.validators import UniqueValidator
 
 from catalogos.models import DiagnosticoCIE10
 
-from .models import Paciente, PacienteAfiliacion, ProblemaClinico
+from .models import ObraSocial, Paciente, PacienteAfiliacion, ProblemaClinico
 from .texto import normalizar_texto_paciente
 from .afiliaciones import sync_principal_desde_paciente_fields
+from .obras_sociales import codigo_obra_social, resolve_obra_social
 from .validacion_identidad import (
     dni_dudoso,
     mensaje_dni_dudoso,
@@ -28,13 +29,25 @@ def _normalize_name(value):
     return normalizar_texto_paciente(value)
 
 
+class ObraSocialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ObraSocial
+        fields = ['id', 'codigo', 'nombre', 'activo']
+        read_only_fields = fields
+
+
 class PacienteAfiliacionSerializer(serializers.ModelSerializer):
+    obra_social = serializers.CharField(required=False, allow_blank=True)
+    obra_social_id = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = PacienteAfiliacion
         fields = [
             "id",
             "obra_social",
+            "obra_social_id",
             "numero_afiliado",
+            "plan",
             "es_principal",
             "activo",
             "creado_en",
@@ -42,14 +55,38 @@ class PacienteAfiliacionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "creado_en", "actualizado_en"]
 
-    def validate_obra_social(self, value):
-        text = normalizar_texto_paciente(value) or ""
-        if not text:
-            raise serializers.ValidationError("La obra social es obligatoria.")
-        return text
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        os = instance.obra_social
+        data['obra_social'] = codigo_obra_social(os) or None
+        data['obra_social_id'] = os.pk if os else None
+        data['obra_social_nombre'] = (os.nombre if os else None)
+        return data
 
     def validate_numero_afiliado(self, value):
         return normalizar_texto_paciente(value) or ""
+
+    def validate_plan(self, value):
+        return normalizar_texto_paciente(value) or ""
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        raw_id = attrs.pop('obra_social_id', serializers.empty)
+        raw_code = attrs.pop('obra_social', serializers.empty)
+        if raw_id is serializers.empty and raw_code is serializers.empty:
+            if self.instance is None:
+                raise serializers.ValidationError(
+                    {'obra_social': 'La obra social es obligatoria.'}
+                )
+            return attrs
+        candidate = raw_id if raw_id is not serializers.empty else raw_code
+        os_obj = resolve_obra_social(candidate)
+        if os_obj is None:
+            raise serializers.ValidationError(
+                {'obra_social': 'Obra social inválida o inactiva.'}
+            )
+        attrs['obra_social'] = os_obj
+        return attrs
 
 
 class ProblemaClinicoSerializer(serializers.ModelSerializer):
@@ -121,6 +158,8 @@ class PacienteLightSerializer(serializers.ModelSerializer):
     nombre_completo = serializers.ReadOnlyField()
     edad = serializers.ReadOnlyField()
     afiliaciones = PacienteAfiliacionSerializer(many=True, read_only=True)
+    obra_social = serializers.SerializerMethodField()
+    obra_social_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Paciente
@@ -137,10 +176,18 @@ class PacienteLightSerializer(serializers.ModelSerializer):
             "email",
             "direccion",
             "obra_social",
+            "obra_social_id",
             "numero_afiliado",
+            "plan_obra_social",
             "afiliaciones",
         ]
         read_only_fields = fields
+
+    def get_obra_social(self, obj):
+        return codigo_obra_social(obj.obra_social) or None
+
+    def get_obra_social_id(self, obj):
+        return obj.obra_social_id
 
 
 class PacienteSerializer(serializers.ModelSerializer):
@@ -158,6 +205,9 @@ class PacienteSerializer(serializers.ModelSerializer):
     creado_por = serializers.SerializerMethodField()
     modificado_por = serializers.SerializerMethodField()
     afiliaciones = PacienteAfiliacionSerializer(many=True, read_only=True)
+    # Escritura: código (`obra_social`) o PK (`obra_social_id`). Lectura: código.
+    obra_social = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    obra_social_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = Paciente
@@ -176,7 +226,9 @@ class PacienteSerializer(serializers.ModelSerializer):
             "email",
             "direccion",
             "obra_social",
+            "obra_social_id",
             "numero_afiliado",
+            "plan_obra_social",
             "afiliaciones",
             "familiar_nombre",
             "familiar_telefono",
@@ -209,6 +261,15 @@ class PacienteSerializer(serializers.ModelSerializer):
             }
         }
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        os = instance.obra_social
+        data['obra_social'] = codigo_obra_social(os) or None
+        data['obra_social_id'] = os.pk if os else None
+        data['obra_social_nombre'] = os.nombre if os else None
+        return data
+
+
     def get_creado_por(self, obj):
         if obj.creado_por_id is None:
             return None
@@ -238,9 +299,6 @@ class PacienteSerializer(serializers.ModelSerializer):
     def validate_direccion(self, value):
         return normalizar_texto_paciente(value)
 
-    def validate_obra_social(self, value):
-        return normalizar_texto_paciente(value)
-
     def validate_numero_afiliado(self, value):
         return normalizar_texto_paciente(value)
 
@@ -259,6 +317,32 @@ class PacienteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        raw_id = attrs.pop('obra_social_id', serializers.empty)
+        raw_code = attrs.pop('obra_social', serializers.empty)
+        os_provided = raw_id is not serializers.empty or raw_code is not serializers.empty
+
+        if os_provided:
+            candidate = (
+                raw_id
+                if raw_id is not serializers.empty and raw_id is not None
+                else raw_code
+            )
+            if candidate is None or (
+                isinstance(candidate, str) and not str(candidate).strip()
+            ):
+                if self.instance is None:
+                    raise serializers.ValidationError(
+                        {'obra_social': 'La obra social es obligatoria al crear un paciente.'}
+                    )
+                attrs['obra_social'] = None
+            else:
+                os_obj = resolve_obra_social(candidate)
+                if os_obj is None:
+                    raise serializers.ValidationError(
+                        {'obra_social': 'Obra social inválida o inactiva.'}
+                    )
+                attrs['obra_social'] = os_obj
+
         if self.instance is not None:
             return attrs
 
@@ -280,10 +364,7 @@ class PacienteSerializer(serializers.ModelSerializer):
                 "La fecha de nacimiento es obligatoria al crear un paciente."
             )
 
-        obra_social = attrs.get("obra_social")
-        if obra_social is None or (
-            isinstance(obra_social, str) and not obra_social.strip()
-        ):
+        if not os_provided or not attrs.get('obra_social'):
             errors["obra_social"] = (
                 "La obra social es obligatoria al crear un paciente."
             )
@@ -299,6 +380,10 @@ class PacienteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         instance = super().update(instance, validated_data)
-        if "obra_social" in validated_data or "numero_afiliado" in validated_data:
+        if (
+            "obra_social" in validated_data
+            or "numero_afiliado" in validated_data
+            or "plan_obra_social" in validated_data
+        ):
             sync_principal_desde_paciente_fields(instance)
         return instance

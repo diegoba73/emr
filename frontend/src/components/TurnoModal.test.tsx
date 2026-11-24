@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import TurnoModal from './TurnoModal';
 import { CLINICAL_ACTION_ERRORS } from '../utils/apiError';
 
@@ -39,6 +40,11 @@ jest.mock('../contexts/DataContext', () => ({
 }));
 
 jest.mock('./common/AsyncAutocomplete', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+jest.mock('./turnos/PacienteAgendaSelect', () => ({
   __esModule: true,
   default: () => null,
 }));
@@ -105,15 +111,17 @@ function renderTurnoModal(props: Partial<React.ComponentProps<typeof TurnoModal>
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <TurnoModal
-        open
-        onClose={jest.fn()}
-        editingTurno={baseTurno}
-        onSuccess={jest.fn()}
-        {...props}
-      />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <TurnoModal
+          open
+          onClose={jest.fn()}
+          editingTurno={baseTurno}
+          onSuccess={jest.fn()}
+          {...props}
+        />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -135,6 +143,27 @@ describe('TurnoModal motivo dialog', () => {
       expect(screen.getByRole('button', { name: 'Reprogramar turno' })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Actualizar turno' })).not.toBeInTheDocument();
+  });
+
+  it('en detalle de estudio muestra siempre el nombre del estudio', async () => {
+    const estudioTurno = {
+      ...baseTurno,
+      recurso: { id: 2, nombre: 'Sala RX', tipo_recurso: 'SALA_PROCEDIMIENTO' },
+      recurso_id: 2,
+      medico: null,
+      medico_id: null,
+      motivo_reserva: 'Estudio: RX Tórax',
+      estudio_complementario: {
+        id: 99,
+        estado: 'CONFIRMADO',
+        tipo_actividad: 'ESTUDIO',
+        tipo_estudio_nombre: 'RX Tórax',
+      },
+    };
+    mockGetTurno.mockResolvedValue(estudioTurno);
+    renderTurnoModal({ editingTurno: estudioTurno as never });
+    expect(await screen.findByText(/Estudio: RX Tórax/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('RX Tórax')).toBeInTheDocument();
   });
 
   it('reprograma eligiendo horario libre + motivo, sin abrir WhatsApp', async () => {

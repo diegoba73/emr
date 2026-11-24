@@ -20,6 +20,7 @@ import { apiService } from '../services/api';
 import { useThemeMode } from '../contexts/ThemeModeContext';
 import ThemeModeToggle from '../components/ThemeModeToggle';
 import { authPageGradient } from '../theme/buildAppTheme';
+import ObraSocialSelect from '../components/ObraSocialSelect';
 
 // Esquema de validación con Yup
 const registerSchema = yup.object({
@@ -61,6 +62,20 @@ const registerSchema = yup.object({
     .trim()
     .min(2, 'La obra social es requerida')
     .required('La obra social es requerida'),
+  numero_afiliado: yup.string().trim().default(''),
+  plan: yup.string().trim().default(''),
+}).test('cobertura-os', 'Completá afiliado y plan si no sos particular', function (values) {
+  if (!values) return true;
+  if ((values.obra_social || '').toUpperCase() === 'PARTICULAR') return true;
+  const afil = (values.numero_afiliado || '').trim();
+  const plan = (values.plan || '').trim();
+  if (!afil) {
+    return this.createError({ path: 'numero_afiliado', message: 'El número de afiliado es obligatorio' });
+  }
+  if (!plan) {
+    return this.createError({ path: 'plan', message: 'El plan es obligatorio' });
+  }
+  return true;
 });
 
 type RegisterFormData = yup.InferType<typeof registerSchema>;
@@ -75,6 +90,8 @@ interface RegisterFormInputs {
   telefono: string;
   fecha_nacimiento: string;
   obra_social: string;
+  numero_afiliado?: string;
+  plan?: string;
 }
 
 const Register: React.FC = () => {
@@ -85,10 +102,14 @@ const Register: React.FC = () => {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: yupResolver(registerSchema),
+    defaultValues: { obra_social: 'PARTICULAR' },
   });
+  const obraSocialValue = watch('obra_social');
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
@@ -119,6 +140,10 @@ const Register: React.FC = () => {
         fecha_nacimiento: data.fecha_nacimiento.toISOString().split('T')[0],
         obra_social: data.obra_social.trim(),
       };
+      if (data.obra_social.trim().toUpperCase() !== 'PARTICULAR') {
+        registerData.numero_afiliado = (data.numero_afiliado || '').trim();
+        registerData.plan = (data.plan || '').trim();
+      }
 
       await apiService.registerPaciente(registerData);
 
@@ -415,18 +440,45 @@ const Register: React.FC = () => {
                 sx={{ mb: 2 }}
               />
 
-              <TextField
-                {...register('obra_social')}
-                margin="normal"
-                required
-                fullWidth
-                label="Obra Social"
-                autoComplete="organization"
-                error={!!errors.obra_social}
-                helperText={errors.obra_social?.message}
-                disabled={isLoading}
-                sx={{ mb: 3 }}
-              />
+              <Box sx={{ mt: 2, mb: 3 }}>
+                <ObraSocialSelect
+                  value={obraSocialValue || ''}
+                  onChange={(codigo) =>
+                    setValue('obra_social', codigo, { shouldValidate: true })
+                  }
+                  required
+                  disabled={isLoading}
+                  error={!!errors.obra_social}
+                  helperText={errors.obra_social?.message || 'Si no tenés cobertura, elegí Particular'}
+                />
+              </Box>
+
+              {(obraSocialValue || '').toUpperCase() !== 'PARTICULAR' && (
+                <>
+                  <TextField
+                    {...register('numero_afiliado')}
+                    margin="normal"
+                    required
+                    fullWidth
+                    label="Número de afiliado"
+                    error={!!errors.numero_afiliado}
+                    helperText={errors.numero_afiliado?.message}
+                    disabled={isLoading}
+                    sx={{ mb: 2 }}
+                  />
+                  <TextField
+                    {...register('plan')}
+                    margin="normal"
+                    required
+                    fullWidth
+                    label="Plan"
+                    error={!!errors.plan}
+                    helperText={errors.plan?.message}
+                    disabled={isLoading}
+                    sx={{ mb: 2 }}
+                  />
+                </>
+              )}
 
               <Button
                 type="submit"

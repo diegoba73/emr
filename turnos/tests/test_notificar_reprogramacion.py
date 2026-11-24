@@ -56,3 +56,13 @@ class TestNotificarReprogramacion:
         assert result.whatsapp_enviado is False
         assert result.push_enviados == 2
         assert result.detalle
+
+    def test_mensaje_pide_aceptar_o_rechazar_si_flag(self):
+        from turnos.notificar_reprogramacion import _mensaje_paciente
+
+        self.turno.requiere_aceptacion_paciente = True
+        msg = _mensaje_paciente(self.turno)
+        assert 'aceptar o rechazar' in msg.lower()
+        self.turno.requiere_aceptacion_paciente = False
+        msg2 = _mensaje_paciente(self.turno)
+        assert 'aceptar o rechazar' not in msg2.lower()

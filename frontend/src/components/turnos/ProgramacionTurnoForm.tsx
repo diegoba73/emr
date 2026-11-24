@@ -15,8 +15,10 @@ import {
   Typography,
 } from '@mui/material';
 import AsyncAutocomplete from '../common/AsyncAutocomplete';
+import PacienteAgendaSelect from './PacienteAgendaSelect';
 import SlotPickerStaff from './SlotPickerStaff';
 import { useData } from '../../contexts/DataContext';
+import { notifyTurnosChanged } from '../../hooks/useLiveRefresh';
 import { apiService } from '../../services/api';
 import {
   asignarTurnoEstudio,
@@ -37,6 +39,7 @@ import { formatLocalDateTimeSeconds } from '../../utils/formatLocalDateTime';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { getSafeClinicalActionMessage, CLINICAL_ACTION_ERRORS } from '../../utils/apiError';
 import { canCrearSobreturno } from '../../utils/turnoPermissions';
+import { TURNO_ORIGEN_OPTIONS } from '../../utils/turnoOrigen';
 import { getHorarios, type SlotMedico } from '../../services/agendaMedica';
 import type { Medico, Paciente, Recurso } from '../../types';
 import type {
@@ -124,6 +127,7 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
   const [medico, setMedico] = useState<Medico | null>(null);
   const [anestesista, setAnestesista] = useState<Medico | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [origenTurno, setOrigenTurno] = useState<'SISTEMA' | 'TELEFONO' | 'PRESENCIAL'>('SISTEMA');
   const [practica, setPractica] = useState<EstudioPractica>('');
   const [tipoEstudioId, setTipoEstudioId] = useState<number | undefined>();
   const [procSeleccionado, setProcSeleccionado] = useState<{
@@ -421,9 +425,11 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
             fecha_hora_fin: formatLocalDateTimeSeconds(fin),
             estado: 'CONFIRMADO',
             motivo_reserva: motivo || '',
+            origen: origenTurno,
             es_sobreturno: true,
           } as any);
           await refreshTurnos?.();
+          notifyTurnosChanged();
           onSuccess?.();
         } catch (err) {
           setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.turnoGuardar));
@@ -452,8 +458,10 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
           fecha_hora_fin: formatLocalDateTimeSeconds(fin),
           estado: 'CONFIRMADO',
           motivo_reserva: motivo || '',
+          origen: origenTurno,
         } as any);
         await refreshTurnos?.();
+        notifyTurnosChanged();
         onSuccess?.();
       } catch (err) {
         setError(getSafeClinicalActionMessage(err, CLINICAL_ACTION_ERRORS.turnoGuardar));
@@ -491,6 +499,7 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
           medico_id: medico.id,
         });
         await refreshTurnos?.();
+        notifyTurnosChanged();
         onSuccess?.();
       } catch (err) {
         setError(parseEstudiosApiError(err, 'No se pudo agendar el estudio.'));
@@ -558,6 +567,7 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
         medico_id: medico.id,
       });
       await refreshTurnos?.();
+      notifyTurnosChanged();
       onSuccess?.();
     } catch (err) {
       setError(parseEstudiosApiError(err, 'No se pudo crear y agendar la solicitud.'));
@@ -583,14 +593,11 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
       )}
 
       {!esPaciente ? (
-        <AsyncAutocomplete<Paciente>
+        <PacienteAgendaSelect
           label="Paciente *"
-          endpoint="/pacientes/"
           value={paciente}
           onChange={setPaciente}
-          getOptionLabel={formatPacienteLabel}
           required
-          minSearchLength={2}
         />
       ) : (
         <TextField
@@ -653,15 +660,34 @@ const ProgramacionTurnoForm: React.FC<ProgramacionTurnoFormProps> = ({
       </FormControl>
 
       {tipoActividad === 'CONSULTA' && (
-        <TextField
-          label="Motivo de consulta"
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          fullWidth
-          multiline
-          minRows={2}
-          inputProps={{ maxLength: 255 }}
-        />
+        <>
+          <FormControl fullWidth>
+            <InputLabel>Origen de la reserva</InputLabel>
+            <Select
+              label="Origen de la reserva"
+              value={origenTurno}
+              onChange={(e) =>
+                setOrigenTurno(e.target.value as 'SISTEMA' | 'TELEFONO' | 'PRESENCIAL')
+              }
+              disabled={saving}
+            >
+              {TURNO_ORIGEN_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Motivo de consulta"
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            fullWidth
+            multiline
+            minRows={2}
+            inputProps={{ maxLength: 255 }}
+          />
+        </>
       )}
 
       {puedeSobreturno && tipoActividad === 'CONSULTA' && (

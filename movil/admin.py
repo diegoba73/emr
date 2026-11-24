@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FavoritoLabMedico, PaqueteLabContexto
+from .models import FavoritoLabMedico, PagoReservaTurno, PaqueteLabContexto
 
 
 @admin.register(PaqueteLabContexto)
@@ -25,3 +25,12 @@ class FavoritoLabMedicoAdmin(admin.ModelAdmin):
         'tipo_examen__nombre',
     )
     raw_id_fields = ('medico', 'panel', 'tipo_examen')
+
+
+@admin.register(PagoReservaTurno)
+class PagoReservaTurnoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'tipo', 'estado', 'medio', 'monto', 'paciente', 'turno', 'creado_en')
+    list_filter = ('tipo', 'estado', 'medio')
+    search_fields = ('referencia', 'paciente__dni', 'paciente__apellido')
+    raw_id_fields = ('paciente', 'turno')
+    readonly_fields = ('creado_en', 'actualizado_en')

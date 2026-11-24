@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 from .serializers import (
     PacienteSerializer, MedicoSerializer, EspecialidadSerializer,
     DisponibilidadMedicoSerializer, ExcepcionMedicoSerializer, FeriadoSerializer,
+    LicenciaMedicoSerializer,
     # TipoExamenSerializer, PanelExamenSerializer, SolicitudExamenSerializer,
     # ResultadoExamenSerializer, 
     ConsultaSerializer, ConsultaCreateSerializer, DiagnosticoSerializer,
@@ -58,7 +59,9 @@ from .serializers import (
 )
 
 from pacientes.models import Paciente
-from medicos.models import Medico, Especialidad, DisponibilidadMedico, ExcepcionMedico, Feriado
+from medicos.models import (
+    Medico, Especialidad, DisponibilidadMedico, ExcepcionMedico, Feriado, LicenciaMedico,
+)
 # from laboratorio.models import TipoExamen, PanelExamen, SolicitudExamen, ResultadoExamen
 from historias_clinicas.models import Consulta, Diagnostico, Prescripcion, HistoriaClinica, Internacion
 from catalogos.models import Medicamento, DiagnosticoCIE10
@@ -284,6 +287,62 @@ class FeriadoViewSet(viewsets.ModelViewSet):
             'fecha': feriado.fecha.isoformat(),
             'nombre': feriado.nombre,
             'activo': feriado.activo,
+            'turnos': turnos,
+            'count': len(turnos),
+        })
+
+
+class LicenciaMedicoViewSet(viewsets.ModelViewSet):
+    """Licencias por profesional: cierran su agenda de turnos en el rango."""
+
+    queryset = LicenciaMedico.objects.select_related('medico').all()
+    serializer_class = LicenciaMedicoSerializer
+    permission_classes = [CanManageAgendaMedica]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['activo', 'medico', 'motivo']
+    ordering_fields = ['fecha_inicio', 'fecha_fin', 'id']
+    ordering = ['-fecha_inicio', '-id']
+
+    def _respuesta_con_afectados(self, instance, status_code=status.HTTP_200_OK):
+        from medicos.agenda import serializar_turnos_pendientes_licencia
+
+        data = self.get_serializer(instance).data
+        data['turnos_afectados'] = (
+            serializar_turnos_pendientes_licencia(instance) if instance.activo else []
+        )
+        return Response(data, status=status_code)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return self._respuesta_con_afectados(serializer.instance, status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return self._respuesta_con_afectados(serializer.instance)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    @action(detail=True, methods=['get'], url_path='turnos-pendientes')
+    def turnos_pendientes(self, request, pk=None):
+        from medicos.agenda import serializar_turnos_pendientes_licencia
+
+        licencia = self.get_object()
+        turnos = serializar_turnos_pendientes_licencia(licencia) if licencia.activo else []
+        return Response({
+            'licencia_id': licencia.pk,
+            'medico_id': licencia.medico_id,
+            'fecha_inicio': licencia.fecha_inicio.isoformat(),
+            'fecha_fin': licencia.fecha_fin.isoformat(),
+            'motivo': licencia.motivo,
+            'activo': licencia.activo,
             'turnos': turnos,
             'count': len(turnos),
         })
@@ -1760,16 +1819,20 @@ def csrf_token_view(request):
 @permission_classes([AllowAny])
 @throttle_classes([AuthLoginThrottle])
 def login_view(request):
-    """Vista para login de usuarios"""
+    """Vista para login de usuarios (username o DNI de paciente vinculado)."""
+    from usuarios.auth_login import authenticate_with_identifier
+
     username = request.data.get('username')
     password = request.data.get('password')
+    if isinstance(username, str):
+        username = username.strip()
     
     if not username or not password:
         return Response({
             'error': 'Username y password son requeridos'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    user = authenticate(username=username, password=password)
+    user = authenticate_with_identifier(request, username, password)
     
     if user is None:
         return Response({

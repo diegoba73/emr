@@ -29,6 +29,7 @@ class RecordatorioTurno(models.Model):
     class Tipo(models.TextChoices):
         ASISTENCIA = 'ASISTENCIA', 'Confirmar asistencia'
         CONFIRMAR_TURNO = 'CONFIRMAR_TURNO', 'Confirmar turno'
+        ESTOY_EN_SALA = 'ESTOY_EN_SALA', 'Aviso estoy en sala (1 h)'
 
     turno = models.ForeignKey('turnos.Turno', on_delete=models.CASCADE)
     dispositivo = models.ForeignKey(DispositivoPush, on_delete=models.CASCADE)
@@ -136,3 +137,59 @@ class FavoritoLabMedico(models.Model):
     def __str__(self):
         dest = self.panel or self.tipo_examen
         return f'{self.medico_id}: {dest}'
+
+
+class PagoReservaTurno(models.Model):
+    """Andamiaje de cobro/garantía para reserva desde la app (cobro apagado por flag)."""
+
+    class Tipo(models.TextChoices):
+        CONSULTA = 'CONSULTA', 'Pago de consulta (particular)'
+        GARANTIA_OS = 'GARANTIA_OS', 'Garantía de asistencia (obra social)'
+
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        PAGADO = 'PAGADO', 'Pagado'
+        ANULADO = 'ANULADO', 'Anulado'
+
+    class Medio(models.TextChoices):
+        MERCADOPAGO = 'MERCADOPAGO', 'Mercado Pago'
+        TRANSFERENCIA = 'TRANSFERENCIA', 'Transferencia'
+        OTRO = 'OTRO', 'Otro'
+
+    paciente = models.ForeignKey(
+        'pacientes.Paciente',
+        on_delete=models.CASCADE,
+        related_name='pagos_reserva_movil',
+    )
+    turno = models.ForeignKey(
+        'turnos.Turno',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pagos_reserva_movil',
+    )
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    estado = models.CharField(
+        max_length=15,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+        db_index=True,
+    )
+    medio = models.CharField(
+        max_length=20,
+        choices=Medio.choices,
+        blank=True,
+        default='',
+    )
+    monto = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    referencia = models.CharField(max_length=120, blank=True, default='')
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creado_en', '-id']
+        verbose_name = 'Pago reserva turno (móvil)'
+        verbose_name_plural = 'Pagos reserva turno (móvil)'
+
+    def __str__(self):
+        return f'{self.tipo} {self.estado} paciente={self.paciente_id}'

@@ -82,16 +82,18 @@ function Navigation() {
       </Stack.Protected>
       <Stack.Protected guard={Boolean(clinic) && !user}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ title: 'Crear cuenta' }} />
       </Stack.Protected>
       <Stack.Protected guard={Boolean(user)}>
         <Stack.Screen name="index" options={{ title: 'SYNESIS movil' }} />
-        <Stack.Screen name="reservar" options={{ title: 'Elegir horario' }} />
+        <Stack.Screen name="turnos" options={{ title: 'Mis turnos' }} />
+        <Stack.Screen name="reservar" options={{ title: 'Reservar un turno' }} />
         <Stack.Screen name="pedidos" options={{ title: 'Mis pedidos' }} />
         <Stack.Screen name="turno/[id]" options={{ title: 'Detalle del turno' }} />
         <Stack.Screen name="informes/index" options={{ title: 'Informes' }} />
         <Stack.Screen name="informes/[id]" options={{ title: 'Informe' }} />
         <Stack.Screen name="consultas" options={{ title: 'Consultas pasadas' }} />
-        <Stack.Screen name="estudios/index" options={{ title: 'Estudios' }} />
+        <Stack.Screen name="estudios/index" options={{ title: 'Mis estudios' }} />
         <Stack.Screen name="estudios/[id]" options={{ title: 'Estudio' }} />
         <Stack.Screen name="lab/index" options={{ title: 'Laboratorio' }} />
         <Stack.Screen name="lab/nueva" options={{ title: 'Nuevo pedido' }} />

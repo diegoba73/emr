@@ -23,11 +23,15 @@ from auditoria.snapshot import safe_model_snapshot
 
 def perfil(user):
     from medicos.ambito import ambito_atencion_de, contextos_lab_para_api, contextos_lab_permitidos
+    from pacientes.cobertura_reserva import cobertura_completa_para_reserva
 
     paciente = ensure_paciente_linked_to_user(user) if str(user.rol).lower() == 'paciente' else None
     medico = getattr(user, 'medico', None)
     rol = str(user.rol).lower()
     ambito = ambito_atencion_de(medico) if medico is not None else None
+    cobertura_ok, cobertura_msg = (True, '')
+    if paciente is not None:
+        cobertura_ok, cobertura_msg = cobertura_completa_para_reserva(paciente)
     return {
         'id': user.pk,
         'nombre': user.get_full_name() or user.username,
@@ -43,6 +47,8 @@ def perfil(user):
         'puede_pedir_lab': rol in ROLES_MOVIL_PEDIR_LAB and medico is not None,
         'puede_guardia': rol == 'medico' and medico is not None and ambito != 'AMBULATORIO',
         'puede_internacion': rol == 'medico' and medico is not None and ambito != 'AMBULATORIO',
+        'cobertura_completa': cobertura_ok if paciente is not None else None,
+        'cobertura_mensaje': cobertura_msg if paciente is not None else '',
     }
 
 
@@ -63,7 +69,13 @@ class LoginMovil(APIView):
             username = serializers.CharField(max_length=150)
             password = serializers.CharField(max_length=256, trim_whitespace=False)
         datos = Input(data=request.data); datos.is_valid(raise_exception=True)
-        user = authenticate(request=request, **datos.validated_data)
+        from usuarios.auth_login import authenticate_with_identifier
+
+        user = authenticate_with_identifier(
+            request,
+            datos.validated_data['username'],
+            datos.validated_data['password'],
+        )
         if not user or str(user.rol).lower() not in ROLES_MOVIL:
             raise AuthenticationFailed('No se pudo iniciar sesión con esas credenciales.')
         token = secrets.token_urlsafe(48)
@@ -181,6 +193,11 @@ class TurnoMovilSerializer(serializers.ModelSerializer):
     medico_id = serializers.IntegerField(read_only=True)
     tipo = serializers.SerializerMethodField()
     viene_de_pedido_estudio = serializers.SerializerMethodField()
+    estudio_nombre = serializers.SerializerMethodField()
+    estudio_complementario = serializers.SerializerMethodField()
+    puede_cancelar = serializers.SerializerMethodField()
+    puede_reprogramar = serializers.SerializerMethodField()
+    motivo_bloqueo_reprogramar = serializers.SerializerMethodField()
 
     def get_tipo(self, obj):
         from medicos.agenda import tipo_para_recurso
@@ -189,6 +206,70 @@ class TurnoMovilSerializer(serializers.ModelSerializer):
     def get_viene_de_pedido_estudio(self, obj):
         from estudios.pedido_paciente import turno_viene_de_pedido_paciente
         return turno_viene_de_pedido_paciente(obj)
+
+    def _actor(self):
+        request = self.context.get('request')
+        return getattr(request, 'user', None) if request else None
+
+    def get_puede_cancelar(self, obj):
+        from turnos import turno_estado
+
+        user = self._actor()
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        return turno_estado.puede_cancelar_turno(user, obj)
+
+    def get_puede_reprogramar(self, obj):
+        from turnos import turno_estado
+
+        user = self._actor()
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        return turno_estado.puede_reprogramar_turno(user, obj)
+
+    def get_motivo_bloqueo_reprogramar(self, obj):
+        from turnos import turno_estado
+
+        user = self._actor()
+        if not user or str(getattr(user, 'rol', '') or '').lower() != 'paciente':
+            return ''
+        if turno_estado.puede_reprogramar_turno(user, obj):
+            return ''
+        return turno_estado.motivo_bloqueo_reprogramacion_paciente(obj)
+
+    def get_estudio_complementario(self, obj):
+        try:
+            ec = obj.estudio_complementario
+        except Exception:
+            return None
+        if ec is None:
+            return None
+        tipo_nombre = None
+        if ec.tipo_estudio_id:
+            tipo_nombre = getattr(ec.tipo_estudio, 'nombre', None)
+        return {
+            'id': ec.id,
+            'tipo_estudio_id': ec.tipo_estudio_id,
+            'tipo_estudio_nombre': tipo_nombre,
+        }
+
+    def get_estudio_nombre(self, obj):
+        """Nombre visible del estudio (misma prioridad que el calendario web)."""
+        try:
+            ec = obj.estudio_complementario
+        except Exception:
+            ec = None
+        if ec is not None and ec.tipo_estudio_id:
+            nombre = getattr(ec.tipo_estudio, 'nombre', None)
+            if nombre:
+                return nombre
+        motivo = (obj.motivo_reserva or '').strip()
+        if motivo:
+            import re
+            limpio = re.sub(r'^(Estudio|Procedimiento)\s*:\s*', '', motivo, flags=re.I).strip()
+            if limpio:
+                return limpio
+        return 'Estudio' if self.get_tipo(obj) == 'ESTUDIO' else ''
 
     class Meta:
         model = Turno
@@ -201,8 +282,16 @@ class TurnoMovilSerializer(serializers.ModelSerializer):
             'fecha_hora_fin',
             'estado',
             'asistencia_confirmada_en',
+            'requiere_aceptacion_paciente',
+            'reprogramaciones_paciente',
+            'motivo_reserva',
             'tipo',
             'viene_de_pedido_estudio',
+            'estudio_nombre',
+            'estudio_complementario',
+            'puede_cancelar',
+            'puede_reprogramar',
+            'motivo_bloqueo_reprogramar',
         ]
         read_only_fields = fields
 
@@ -219,7 +308,13 @@ class TurnosMovil(TurnoViewSet):
 
     def get_queryset(self):
         # El rol médico conserva únicamente su propia agenda incluso con is_staff.
-        qs = Turno.objects.select_related('medico', 'paciente', 'recurso')
+        qs = Turno.objects.select_related(
+            'medico',
+            'paciente',
+            'recurso',
+            'estudio_complementario',
+            'estudio_complementario__tipo_estudio',
+        )
         if str(self.request.user.rol).lower() == 'medico':
             qs = qs.filter(medico__user=self.request.user)
         else:
@@ -251,7 +346,7 @@ class TurnosMovil(TurnoViewSet):
         return Response(self.get_serializer(turno).data)
 
     def cancelar(self, request, pk=None):
-        """Cancela el turno (paciente: propio futuro; secretaría vía API web)."""
+        """Cancela el turno (paciente: solo rechazo de reprogramación staff)."""
         from turnos import turno_estado
 
         motivo = ''
@@ -260,11 +355,14 @@ class TurnosMovil(TurnoViewSet):
         except Exception:
             motivo = ''
         if str(request.user.rol).lower() == 'paciente' and not str(motivo or '').strip():
-            motivo = 'Cancelado por el paciente desde la app'
+            motivo = 'Paciente rechazó el horario reprogramado desde la app'
         with transaction.atomic():
             turno = self._get_turno_locked_for_estado_action(pk)
             if not turno_estado.puede_cancelar_turno(request.user, turno):
-                raise PermissionDenied('No tiene permiso para cancelar este turno.')
+                raise PermissionDenied(
+                    'No podés cancelar turnos desde la app. Contactá a secretaría. '
+                    'Solo podés rechazar un horario que secretaría te haya propuesto.'
+                )
             try:
                 outcome = turno_estado.cancelar_turno(
                     turno,
@@ -288,7 +386,12 @@ class TurnosMovil(TurnoViewSet):
         with transaction.atomic():
             turno = self._get_turno_locked_for_estado_action(pk)
             if not turno_estado.puede_reprogramar_turno(request.user, turno):
-                raise PermissionDenied('No puede reprogramar este turno.')
+                msg = (
+                    turno_estado.motivo_bloqueo_reprogramacion_paciente(turno)
+                    if str(request.user.rol).lower() == 'paciente'
+                    else 'No puede reprogramar este turno.'
+                )
+                raise PermissionDenied(msg)
             try:
                 horario = DisponibilidadMedico.objects.select_related('medico', 'recurso').get(
                     pk=datos.validated_data['horario_id'], medico_id=turno.medico_id, activo=True)

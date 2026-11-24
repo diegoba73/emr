@@ -22,6 +22,7 @@ import {
   Insights,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import AnnouncementsBanner from '../components/AnnouncementsBanner';
 import { useData } from '../contexts/DataContext';
 import { canAccessBiDashboard } from '../utils/permissions';
 
@@ -41,7 +42,7 @@ const quickActions: QuickActionCard[] = [
     icon: <Add />,
     path: '/turnos?action=create',
     color: '#667eea',
-    roles: ['medico', 'admin', 'secretaria', 'paciente', 'enfermeria'],
+    roles: ['medico', 'admin', 'secretaria', 'enfermeria'],
   },
   {
     title: 'Buscar Paciente',
@@ -61,7 +62,6 @@ const quickActions: QuickActionCard[] = [
       'medico',
       'admin',
       'secretaria',
-      'paciente',
       'enfermeria',
       'kinesiologo',
       'radiologo',
@@ -102,10 +102,10 @@ const quickActions: QuickActionCard[] = [
     roles: ['paciente'],
   },
   {
-    title: 'Mis turnos programados',
-    description: 'Ver turnos e informes programados',
+    title: 'Mis turnos',
+    description: 'Reservar consultas y ver tus turnos',
     icon: <Folder />,
-    path: '/estudios-complementarios',
+    path: '/portal/turnos',
     color: '#38b2ac',
     roles: ['paciente'],
   },
@@ -215,6 +215,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box>
+      <AnnouncementsBanner audience="staff" />
+
       {/* Header de Bienvenida */}
       <Paper
         elevation={2}

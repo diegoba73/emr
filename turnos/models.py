@@ -53,6 +53,11 @@ class Turno(TimestampedModel):
         CANCELADO = 'CANCELADO', 'Cancelado'
         REALIZADO = 'REALIZADO', 'Realizado'
 
+    class Origen(models.TextChoices):
+        SISTEMA = 'SISTEMA', 'Sistema / online'
+        TELEFONO = 'TELEFONO', 'Teléfono'
+        PRESENCIAL = 'PRESENCIAL', 'Presencial'
+
     paciente = models.ForeignKey(
         Paciente,
         on_delete=models.SET_NULL,
@@ -83,10 +88,31 @@ class Turno(TimestampedModel):
         db_index=True
     )
     motivo_reserva = models.CharField(max_length=255, blank=True, null=True)
+    origen = models.CharField(
+        max_length=20,
+        choices=Origen.choices,
+        default=Origen.SISTEMA,
+        db_index=True,
+        verbose_name='Origen de la reserva',
+        help_text='Cómo se agendó el turno: sistema/online, teléfono o presencial.',
+    )
     asistencia_confirmada_en = models.DateTimeField(null=True, blank=True, editable=False)
+    # Tras reprogramación por secretaría/admin (consulta): el paciente debe aceptar o rechazar.
+    requiere_aceptacion_paciente = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            'True cuando secretaría/admin reprogramó el turno y el paciente '
+            'aún no aceptó ni rechazó el nuevo horario.'
+        ),
+    )
     # Sobreturno: secretaría agenda un paciente extra sobre un slot ya ocupado.
     es_sobreturno = models.BooleanField(default=False, db_index=True)
-
+    # Reprogramaciones iniciadas por el paciente en esta cadena (máx. 1 desde la app).
+    reprogramaciones_paciente = models.PositiveSmallIntegerField(
+        default=0,
+        help_text='Cantidad de reprogramaciones hechas por el paciente sobre esta cadena de turnos.',
+    )
 
     class Meta:
         ordering = ['fecha_hora_inicio']

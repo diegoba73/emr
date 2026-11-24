@@ -53,6 +53,7 @@
 
 - ~~**Ausencia de aplicación versionada**~~ — **parcialmente mitigado:** submódulo `frontend/` con consola LIMS UI-1/UI-1.2 y microbiología UI-2 (`d46d276`). Siguen sin tests E2E ni cobertura de pantallas micro.
 - **Drift UI/API:** el cliente usa prefijo `/lab/...`; el backend expone alias `/laboratorio/...` — documentar y no mezclar en nuevas pantallas.
+- **Agenda multi-secretaría sin WebSocket** — **mitigado parcialmente (fase híbrida):** `GET /api/turnos/revision/` + poll ~1s en `useLiveRefresh` (web/portal/móvil). Sync cross-PC ~1s; BroadcastChannel solo same-browser. **Deuda:** WebSocket real (Django Channels + Redis + ASGI) no implementado — requeriría infra nueva y más RAM en el host de prod (~3 GB). No priorizar mientras el stamp baste.
 
 ### Frontend UI-2 — Microbiología (deuda / riesgos pendientes)
 

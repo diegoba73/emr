@@ -56,19 +56,30 @@ def turno_tiene_atencion_clinica(turno: Turno) -> bool:
 
 
 def puede_confirmar_turno(user, turno: Turno) -> bool:
-    """Secretaría/admin, o el paciente dueño del turno (RESERVADO→CONFIRMADO)."""
+    """Secretaría/admin, o paciente dueño (consulta; estudio solo si pide aceptación)."""
     if puede_gestionar_turnos_global(user):
         return True
     if _rol_usuario(user) != 'paciente':
         return False
     from pacientes.services import ensure_paciente_linked_to_user
+    from estudios.pedido_paciente import turno_es_estudio_agenda
 
     paciente = ensure_paciente_linked_to_user(user)
-    return bool(paciente and turno.paciente_id == paciente.pk)
+    if not paciente or turno.paciente_id != paciente.pk:
+        return False
+    # Estudios: el paciente no confirma de rutina; sí puede aceptar un horario reprogramado.
+    if turno_es_estudio_agenda(turno):
+        return bool(getattr(turno, 'requiere_aceptacion_paciente', False))
+    return True
+
+
+# Paciente: 1 reprogramación de consulta si faltan ≥ 48 h al inicio.
+VENTANA_REPROGRAMACION_PACIENTE_HORAS = 48
+MAX_REPROGRAMACIONES_PACIENTE = 1
 
 
 def puede_cancelar_turno(user, turno: Turno) -> bool:
-    """Secretaría/admin, o el paciente dueño del turno (futuro RESERVADO/CONFIRMADO)."""
+    """Secretaría/admin; paciente dueño solo para rechazar horario reprogramado por staff."""
     if puede_gestionar_turnos_global(user):
         return True
     if _rol_usuario(user) != 'paciente':
@@ -78,32 +89,75 @@ def puede_cancelar_turno(user, turno: Turno) -> bool:
     paciente = ensure_paciente_linked_to_user(user)
     if not paciente or turno.paciente_id != paciente.pk:
         return False
-    from django.utils import timezone
-
+    # Política app: el paciente no cancela turnos normales; solo rechaza
+    # un horario propuesto tras reprogramación de secretaría.
+    if not bool(getattr(turno, 'requiere_aceptacion_paciente', False)):
+        return False
     return (
         turno.estado in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO)
         and turno.fecha_hora_inicio > timezone.now()
     )
 
 
+def _turno_es_consulta_agenda(turno: Turno) -> bool:
+    from estudios.pedido_paciente import turno_es_estudio_agenda
+    from medicos.agenda import tipo_para_recurso
+
+    if turno_es_estudio_agenda(turno):
+        return False
+    return tipo_para_recurso(turno.recurso) == 'CONSULTA'
+
+
 def puede_reprogramar_turno(user, turno: Turno) -> bool:
-    """Secretaría/admin, o paciente dueño de turno de estudio agendado desde su pedido."""
+    """Secretaría/admin; paciente dueño: consulta, ≥48 h, máx. 1 reprogramación propia."""
     if puede_gestionar_turnos_global(user):
         return True
     if _rol_usuario(user) != 'paciente':
         return False
-    from django.utils import timezone
     from pacientes.services import ensure_paciente_linked_to_user
-    from estudios.pedido_paciente import turno_viene_de_pedido_paciente
 
     paciente = ensure_paciente_linked_to_user(user)
     if not paciente or turno.paciente_id != paciente.pk:
+        return False
+    if not _turno_es_consulta_agenda(turno):
         return False
     if turno.estado not in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
         return False
     if turno.fecha_hora_inicio <= timezone.now():
         return False
-    return turno_viene_de_pedido_paciente(turno)
+    faltan = turno.fecha_hora_inicio - timezone.now()
+    if faltan.total_seconds() < VENTANA_REPROGRAMACION_PACIENTE_HORAS * 3600:
+        return False
+    if int(getattr(turno, 'reprogramaciones_paciente', 0) or 0) >= MAX_REPROGRAMACIONES_PACIENTE:
+        return False
+    if bool(getattr(turno, 'requiere_aceptacion_paciente', False)):
+        return False
+    return True
+
+
+def motivo_bloqueo_reprogramacion_paciente(turno: Turno) -> str:
+    """Mensaje claro para UI/API cuando el paciente no puede reprogramar."""
+    if not _turno_es_consulta_agenda(turno):
+        return 'Los turnos de estudio los gestiona secretaría.'
+    if turno.estado not in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO):
+        return 'Este turno ya no admite reprogramación.'
+    if turno.fecha_hora_inicio <= timezone.now():
+        return 'El turno ya comenzó o pasó.'
+    faltan = turno.fecha_hora_inicio - timezone.now()
+    if faltan.total_seconds() < VENTANA_REPROGRAMACION_PACIENTE_HORAS * 3600:
+        return (
+            f'Solo podés reprogramar con al menos '
+            f'{VENTANA_REPROGRAMACION_PACIENTE_HORAS} horas de anticipación. '
+            'Contactá a secretaría.'
+        )
+    if int(getattr(turno, 'reprogramaciones_paciente', 0) or 0) >= MAX_REPROGRAMACIONES_PACIENTE:
+        return (
+            'Ya usaste tu única reprogramación desde la app. '
+            'Para otro cambio contactá a secretaría.'
+        )
+    if bool(getattr(turno, 'requiere_aceptacion_paciente', False)):
+        return 'Primero aceptá o rechazá el horario que propuso secretaría.'
+    return 'No podés reprogramar este turno. Contactá a secretaría.'
 
 
 def puede_marcar_realizado_turno(user, turno: Turno) -> bool:
@@ -253,7 +307,12 @@ def confirmar_turno(
 
     before = safe_model_snapshot(turno)
     turno.estado = Turno.Estado.CONFIRMADO
-    turno.save(update_fields=['estado', 'updated_at'])
+    update_fields = ['estado', 'updated_at']
+    acepto_reprogramacion = bool(getattr(turno, 'requiere_aceptacion_paciente', False))
+    if acepto_reprogramacion:
+        turno.requiere_aceptacion_paciente = False
+        update_fields.append('requiere_aceptacion_paciente')
+    turno.save(update_fields=update_fields)
     _audit_transition(
         turno=turno,
         before=before,
@@ -262,6 +321,7 @@ def confirmar_turno(
         estado_anterior=estado_anterior,
         estado_nuevo=turno.estado,
         view_name=view_name,
+        extra_metadata={'aceptacion_reprogramacion': True} if acepto_reprogramacion else None,
     )
     return TurnoEstadoOutcome(
         turno=turno,
@@ -326,8 +386,15 @@ def cancelar_turno(
             'No se puede cancelar un turno en estado REALIZADO.'
         )
 
+    rechazo_reprogramacion = bool(getattr(turno, 'requiere_aceptacion_paciente', False))
     if not desde_modulo_estudios and _turno_vinculado_modulo_estudios(turno):
-        raise TurnoEstadoTransitionError(_MSG_OPERAR_DESDE_ESTUDIOS)
+        # Excepción: paciente rechaza el horario propuesto tras reprogramación.
+        if not (
+            rechazo_reprogramacion
+            and _rol_usuario(actor) == 'paciente'
+            and puede_cancelar_turno(actor, turno)
+        ):
+            raise TurnoEstadoTransitionError(_MSG_OPERAR_DESDE_ESTUDIOS)
 
     if estado_anterior not in (
         Turno.Estado.DISPONIBLE,
@@ -340,7 +407,11 @@ def cancelar_turno(
 
     before = safe_model_snapshot(turno)
     turno.estado = Turno.Estado.CANCELADO
-    turno.save(update_fields=['estado', 'updated_at'])
+    update_fields = ['estado', 'updated_at']
+    if rechazo_reprogramacion:
+        turno.requiere_aceptacion_paciente = False
+        update_fields.append('requiere_aceptacion_paciente')
+    turno.save(update_fields=update_fields)
     _audit_transition(
         turno=turno,
         before=before,
@@ -350,6 +421,7 @@ def cancelar_turno(
         estado_nuevo=turno.estado,
         view_name=view_name,
         motivo=motivo_limpio,
+        extra_metadata={'rechazo_reprogramacion': True} if rechazo_reprogramacion else None,
     )
     return TurnoEstadoOutcome(
         turno=turno,
@@ -469,8 +541,15 @@ def reprogramar_turno(
         return TurnoEstadoTransitionError(str(detail))
 
     tipo_franja_requerido = None
-    if es_pedido_estudio or rol == 'paciente':
+    if es_pedido_estudio:
         tipo_franja_requerido = 'ESTUDIO'
+    elif rol == 'paciente':
+        # Paciente solo reprograma consultas (no estudios).
+        tipo_franja_requerido = 'CONSULTA'
+        if not puede_reprogramar_turno(actor, turno):
+            raise TurnoEstadoTransitionError(
+                motivo_bloqueo_reprogramacion_paciente(turno)
+            )
 
     # Consultorio/sala del nuevo horario = el de la franja del médico (no elección libre).
     recurso_efectivo = recurso if recurso is not None else turno.recurso
@@ -488,8 +567,12 @@ def reprogramar_turno(
 
     tipo_franja_resuelto = tipo_para_recurso(recurso_efectivo)
     if tipo_franja_requerido and tipo_franja_resuelto != tipo_franja_requerido:
+        if tipo_franja_requerido == 'ESTUDIO':
+            raise TurnoEstadoTransitionError(
+                'Elegí un horario de estudio del mismo médico, no una consulta.'
+            )
         raise TurnoEstadoTransitionError(
-            'Elegí un horario de estudio del mismo médico, no una consulta.'
+            'Elegí un horario de consulta del mismo médico.'
         )
 
     try:
@@ -531,17 +614,38 @@ def reprogramar_turno(
     except AgendaValidationError as exc:
         raise _agenda_err(exc) from exc
 
+    estado_para_solape = (
+        estado_anterior if estado_anterior in (
+            Turno.Estado.RESERVADO,
+            Turno.Estado.CONFIRMADO,
+        ) else Turno.Estado.RESERVADO
+    )
     _validar_solapamiento(
         medico=medico_efectivo,
         inicio=inicio,
         fin=fin,
-        estado=estado_anterior if estado_anterior in (
-            Turno.Estado.RESERVADO,
-            Turno.Estado.CONFIRMADO,
-        ) else Turno.Estado.RESERVADO,
+        estado=estado_para_solape,
         excluir_turno_id=turno.pk,
         es_sobreturno=permitir_sobreturno,
     )
+
+    if turno.paciente_id:
+        from turnos.separacion_paciente import (
+            SeparacionPacienteError,
+            validar_separacion_paciente,
+        )
+
+        try:
+            validar_separacion_paciente(
+                paciente=turno.paciente,
+                inicio=inicio,
+                fin=fin,
+                recurso=recurso_efectivo,
+                excluir_turno_id=turno.pk,
+                estado=estado_para_solape,
+            )
+        except SeparacionPacienteError as exc:
+            raise TurnoEstadoTransitionError(exc.message) from exc
 
     before = safe_model_snapshot(turno)
     inicio_ant = turno.fecha_hora_inicio
@@ -550,11 +654,19 @@ def reprogramar_turno(
     recurso_id_ant = turno.recurso_id
     turno_anterior_id = turno.pk
 
-    estado_nuevo_turno = (
-        estado_anterior
-        if estado_anterior != Turno.Estado.DISPONIBLE
-        else Turno.Estado.RESERVADO
-    )
+    # Staff reprograma con paciente: nuevo horario pendiente de aceptar/rechazar.
+    # Si el paciente se reprograma a sí mismo: no pide aceptación y cuenta 1 uso.
+    reprogramacion_por_paciente = rol == 'paciente'
+    pedir_aceptacion = bool(turno.paciente_id) and not reprogramacion_por_paciente
+    if pedir_aceptacion:
+        estado_nuevo_turno = Turno.Estado.RESERVADO
+    elif estado_anterior != Turno.Estado.DISPONIBLE:
+        estado_nuevo_turno = estado_anterior
+    else:
+        estado_nuevo_turno = Turno.Estado.RESERVADO
+
+    prev_reprog_pac = int(getattr(turno, 'reprogramaciones_paciente', 0) or 0)
+    reprog_pac_nuevo = prev_reprog_pac + (1 if reprogramacion_por_paciente else 0)
 
     with transaction.atomic():
         turno_nuevo = Turno(
@@ -565,7 +677,10 @@ def reprogramar_turno(
             fecha_hora_fin=fin,
             estado=estado_nuevo_turno,
             motivo_reserva=turno.motivo_reserva,
+            origen=getattr(turno, 'origen', None) or Turno.Origen.SISTEMA,
             es_sobreturno=permitir_sobreturno,
+            requiere_aceptacion_paciente=pedir_aceptacion,
+            reprogramaciones_paciente=reprog_pac_nuevo,
         )
         try:
             turno_nuevo.full_clean()
@@ -628,6 +743,9 @@ def reprogramar_turno(
                 'recurso_id_anterior': recurso_id_ant,
                 'recurso_id_nuevo': turno_nuevo.recurso_id,
                 'viene_de_pedido_estudio': es_pedido_estudio,
+                'requiere_aceptacion_paciente': pedir_aceptacion,
+                'reprogramacion_por_paciente': reprogramacion_por_paciente,
+                'reprogramaciones_paciente': reprog_pac_nuevo,
             },
         )
     return TurnoEstadoOutcome(

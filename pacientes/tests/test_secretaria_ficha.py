@@ -9,7 +9,7 @@ def test_secretaria_crea_y_corrige_todos_los_campos_de_ficha(rol):
     user = User.objects.create_user(username='sec_ficha', rol=rol, password='test')
     client = APIClient()
     client.force_authenticate(user=user)
-    datos = dict(nombre='Ana', apellido='Test', dni='SEC-1', fecha_nacimiento='1990-01-01', sexo='O', estado_civil='Casada', telefono='123', email='ana@example.com', direccion='calle 1', obra_social='OS', numero_afiliado='123', familiar_nombre='Contacto', familiar_telefono='456', observaciones='Nota', antecedentes_personales='AP', antecedentes_familiares='AF')
+    datos = dict(nombre='Ana', apellido='Test', dni='SEC-1', fecha_nacimiento='1990-01-01', sexo='O', estado_civil='Casada', telefono='123', email='ana@example.com', direccion='calle 1', obra_social='PARTICULAR', numero_afiliado='123', familiar_nombre='Contacto', familiar_telefono='456', observaciones='Nota', antecedentes_personales='AP', antecedentes_familiares='AF')
     r = client.post('/api/pacientes/', datos, format='json')
     assert r.status_code == 201, r.data
     pid = r.data['id']

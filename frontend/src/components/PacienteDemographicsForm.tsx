@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, MenuItem, TextField } from '@mui/material';
+import ObraSocialSelect from './ObraSocialSelect';
 
 export interface PacienteDemographicsFormValues {
   nombre: string;
@@ -12,6 +13,7 @@ export interface PacienteDemographicsFormValues {
   direccion: string;
   obra_social: string;
   numero_afiliado: string;
+  plan_obra_social: string;
   estado_civil: string;
   familiar_nombre: string;
   familiar_telefono: string;
@@ -31,6 +33,7 @@ export const emptyPacienteFormValues = (): PacienteDemographicsFormValues => ({
   direccion: '',
   obra_social: '',
   numero_afiliado: '',
+  plan_obra_social: '',
   estado_civil: '',
   familiar_nombre: '',
   familiar_telefono: '',
@@ -125,21 +128,32 @@ const PacienteDemographicsForm: React.FC<PacienteDemographicsFormProps> = ({
     />
     {!hideObraSocial && (
       <>
-        <TextField
-          label={requireObraSocial ? 'Obra Social *' : 'Obra Social'}
-          required={requireObraSocial}
-          helperText={
-            requireObraSocial ? 'Obligatoria para crear el paciente' : undefined
-          }
-          value={values.obra_social}
-          onChange={(e) => onChange({ obra_social: e.target.value })}
-          sx={{ flex: '1 1 260px' }}
-        />
+        <Box sx={{ flex: '1 1 260px' }}>
+          <ObraSocialSelect
+            value={values.obra_social}
+            onChange={(codigo) => onChange({ obra_social: codigo })}
+            required={requireObraSocial}
+            helperText={
+              requireObraSocial ? 'Obligatoria para crear el paciente' : undefined
+            }
+          />
+        </Box>
         <TextField
           label="N° Afiliado"
           value={values.numero_afiliado}
           onChange={(e) => onChange({ numero_afiliado: e.target.value })}
           sx={{ flex: '1 1 180px' }}
+        />
+        <TextField
+          label="Plan"
+          value={values.plan_obra_social}
+          onChange={(e) => onChange({ plan_obra_social: e.target.value })}
+          sx={{ flex: '1 1 160px' }}
+          helperText={
+            values.obra_social && values.obra_social !== 'PARTICULAR'
+              ? 'Requerido para reservar desde la app'
+              : undefined
+          }
         />
       </>
     )}

@@ -41,15 +41,23 @@ import { getMedicos, getRecursos } from '../services/apiService';
 import {
   configurarSemana,
   createFeriado,
+  createLicenciaMedico,
   deleteFeriado,
+  deleteLicenciaMedico,
   Feriado,
   getFeriados,
   getHorarios,
+  getLicenciasMedico,
   getTurnosPendientesFeriado,
+  getTurnosPendientesLicencia,
   HorarioMedico,
+  LicenciaMedico,
+  MOTIVO_LICENCIA_OPTIONS,
+  MotivoLicencia,
   TipoAgenda,
   TurnoAfectadoFeriado,
   updateFeriado,
+  updateLicenciaMedico,
 } from '../services/agendaMedica';
 import { Medico, Recurso } from '../types';
 import { getSafeClinicalActionMessage } from '../utils/apiError';
@@ -98,6 +106,7 @@ export default function HorariosMedicos() {
   const [recursos, setRecursos] = useState<Recurso[]>([]);
   const [horarios, setHorarios] = useState<HorarioMedico[]>([]);
   const [feriados, setFeriados] = useState<Feriado[]>([]);
+  const [licencias, setLicencias] = useState<LicenciaMedico[]>([]);
   const [medico, setMedico] = useState('');
   const [tipo, setTipo] = useState<TipoAgenda>('CONSULTA');
   const [duracion, setDuracion] = useState(20);
@@ -110,8 +119,17 @@ export default function HorariosMedicos() {
   const [feriadoNombre, setFeriadoNombre] = useState('');
   const [calendarioMes, setCalendarioMes] = useState(() => startOfMonth(new Date()));
   const [savingFeriado, setSavingFeriado] = useState(false);
+  const [licInicio, setLicInicio] = useState('');
+  const [licFin, setLicFin] = useState('');
+  const [licMotivo, setLicMotivo] = useState<MotivoLicencia>('LICENCIA_MEDICA');
+  const [licDetalle, setLicDetalle] = useState('');
+  const [savingLicencia, setSavingLicencia] = useState(false);
   const [seguimiento, setSeguimiento] = useState<{
     feriado: Feriado;
+    turnos: TurnoAfectadoFeriado[];
+  } | null>(null);
+  const [seguimientoLic, setSeguimientoLic] = useState<{
+    licencia: LicenciaMedico;
     turnos: TurnoAfectadoFeriado[];
   } | null>(null);
   const [refrescandoPendientes, setRefrescandoPendientes] = useState(false);
@@ -120,16 +138,18 @@ export default function HorariosMedicos() {
     setBusy(true);
     setError('');
     try {
-      const [m, r, h, f] = await Promise.all([
+      const [m, r, h, f, lic] = await Promise.all([
         getMedicos(),
         getRecursos(),
         getHorarios(),
         getFeriados(),
+        getLicenciasMedico(),
       ]);
       setMedicos(m);
       setRecursos(r);
       setHorarios(h);
       setFeriados(f);
+      setLicencias(lic);
       if (m.length === 1) {
         setMedico(String(m[0].id));
         setDuracion(m[0].duracion_slot_min || 20);
@@ -162,6 +182,16 @@ export default function HorariosMedicos() {
   const feriadosConPendientes = useMemo(
     () => feriados.filter((f) => f.activo && (f.pendientes_count || 0) > 0),
     [feriados]
+  );
+
+  const licenciasDelMedico = useMemo(() => {
+    if (!medicoId) return [];
+    return licencias.filter((l) => l.medico === medicoId);
+  }, [licencias, medicoId]);
+
+  const licenciasConPendientes = useMemo(
+    () => licencias.filter((l) => l.activo && (l.pendientes_count || 0) > 0),
+    [licencias]
   );
 
   const feriadosPorFecha = useMemo(() => {
@@ -348,6 +378,92 @@ export default function HorariosMedicos() {
     }
   };
 
+  const guardarLicencia = async () => {
+    if (!medicoId || !licInicio || !licFin) {
+      setError('Elegí médico, fecha inicio y fecha fin de la licencia.');
+      return;
+    }
+    setSavingLicencia(true);
+    setError('');
+    setOk('');
+    try {
+      const creada = await createLicenciaMedico({
+        medico: medicoId,
+        fecha_inicio: licInicio,
+        fecha_fin: licFin,
+        motivo: licMotivo,
+        detalle: licDetalle.trim(),
+        activo: true,
+      });
+      setLicencias(await getLicenciasMedico());
+      setOk(
+        `Licencia guardada (${creada.fecha_inicio} → ${creada.fecha_fin}). En esas fechas no se pueden sacar turnos con este profesional.`,
+      );
+      if ((creada.turnos_afectados || []).length > 0) {
+        setSeguimientoLic({ licencia: creada, turnos: creada.turnos_afectados || [] });
+      }
+      setLicDetalle('');
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, 'No se pudo guardar la licencia.'));
+    } finally {
+      setSavingLicencia(false);
+    }
+  };
+
+  const desactivarLicencia = async (l: LicenciaMedico) => {
+    setSavingLicencia(true);
+    setError('');
+    try {
+      await updateLicenciaMedico(l.id, { activo: false });
+      setLicencias(await getLicenciasMedico());
+      setOk('Licencia desactivada: vuelve a admitir turnos en ese rango.');
+      if (seguimientoLic?.licencia.id === l.id) setSeguimientoLic(null);
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, 'No se pudo desactivar la licencia.'));
+    } finally {
+      setSavingLicencia(false);
+    }
+  };
+
+  const eliminarLicencia = async (l: LicenciaMedico) => {
+    setSavingLicencia(true);
+    setError('');
+    try {
+      await deleteLicenciaMedico(l.id);
+      setLicencias(await getLicenciasMedico());
+      setOk('Licencia eliminada.');
+      if (seguimientoLic?.licencia.id === l.id) setSeguimientoLic(null);
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, 'No se pudo eliminar la licencia.'));
+    } finally {
+      setSavingLicencia(false);
+    }
+  };
+
+  const verPendientesLicencia = async (l: LicenciaMedico) => {
+    setError('');
+    try {
+      const pend = await getTurnosPendientesLicencia(l.id);
+      setSeguimientoLic({ licencia: l, turnos: pend.turnos });
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, 'No se pudieron cargar los turnos de la licencia.'));
+    }
+  };
+
+  const refreshPendientesLicencia = async () => {
+    if (!seguimientoLic) return;
+    setRefrescandoPendientes(true);
+    try {
+      const pend = await getTurnosPendientesLicencia(seguimientoLic.licencia.id);
+      setSeguimientoLic({ licencia: seguimientoLic.licencia, turnos: pend.turnos });
+      setLicencias(await getLicenciasMedico());
+    } catch (e) {
+      setError(getSafeClinicalActionMessage(e, 'No se pudieron actualizar los turnos.'));
+    } finally {
+      setRefrescandoPendientes(false);
+    }
+  };
+
   const stepSeconds = Math.max(60, duracion * 60);
 
   return (
@@ -376,6 +492,18 @@ export default function HorariosMedicos() {
             .map((f) => `${f.fecha} (${f.nombre}: ${f.pendientes_count})`)
             .join(' · ')}
           . El día queda cerrado para turnos nuevos.
+        </Alert>
+      )}
+      {licenciasConPendientes.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Hay licencias con turnos pendientes de reprogramar o cancelar:{' '}
+          {licenciasConPendientes
+            .map(
+              (l) =>
+                `${l.medico_nombre || `Médico #${l.medico}`} ${l.fecha_inicio}→${l.fecha_fin} (${l.pendientes_count})`,
+            )
+            .join(' · ')}
+          . Esas fechas no admiten turnos nuevos con ese profesional.
         </Alert>
       )}
       {busy && <CircularProgress size={24} sx={{ mb: 2 }} />}
@@ -730,6 +858,130 @@ export default function HorariosMedicos() {
         </Table>
       </Paper>
 
+      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+        Licencias del profesional
+      </Typography>
+      <Typography sx={{ mb: 2 }}>
+        Elegí el médico arriba, cargá el rango y el motivo. Mientras la licencia esté activa,{' '}
+        <strong>no se pueden sacar turnos</strong> con ese profesional en esas fechas (igual que un
+        feriado, pero solo para él). Los turnos ya existentes no se cancelan solos: secretaría debe
+        reprogramarlos o cancelarlos.
+      </Typography>
+
+      <Paper sx={{ p: 2, mb: 2, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+        <TextField
+          type="date"
+          label="Desde"
+          value={licInicio}
+          onChange={(e) => setLicInicio(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          disabled={busy || savingLicencia || !medico}
+        />
+        <TextField
+          type="date"
+          label="Hasta"
+          value={licFin}
+          onChange={(e) => setLicFin(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          disabled={busy || savingLicencia || !medico}
+        />
+        <TextField
+          select
+          label="Motivo"
+          value={licMotivo}
+          onChange={(e) => setLicMotivo(e.target.value as MotivoLicencia)}
+          sx={{ minWidth: 200 }}
+          disabled={busy || savingLicencia || !medico}
+        >
+          {MOTIVO_LICENCIA_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value}>
+              {o.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          label="Detalle (opcional)"
+          value={licDetalle}
+          onChange={(e) => setLicDetalle(e.target.value)}
+          sx={{ minWidth: 220 }}
+          disabled={busy || savingLicencia || !medico}
+          inputProps={{ maxLength: 200 }}
+        />
+        <Button
+          variant="contained"
+          onClick={() => void guardarLicencia()}
+          disabled={busy || savingLicencia || !medico || !licInicio || !licFin}
+        >
+          {savingLicencia ? 'Guardando…' : 'Guardar licencia'}
+        </Button>
+      </Paper>
+
+      <Paper sx={{ p: 1, overflowX: 'auto', mb: 3 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Desde</TableCell>
+              <TableCell>Hasta</TableCell>
+              <TableCell>Motivo</TableCell>
+              <TableCell>Estado</TableCell>
+              <TableCell>Pendientes</TableCell>
+              <TableCell align="right">Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {!medico && (
+              <TableRow>
+                <TableCell colSpan={6}>Elegí un médico para ver y cargar sus licencias.</TableCell>
+              </TableRow>
+            )}
+            {medico && licenciasDelMedico.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6}>Sin licencias cargadas para este profesional.</TableCell>
+              </TableRow>
+            )}
+            {licenciasDelMedico.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell>{l.fecha_inicio}</TableCell>
+                <TableCell>{l.fecha_fin}</TableCell>
+                <TableCell>
+                  {l.motivo_display || l.motivo}
+                  {l.detalle ? ` — ${l.detalle}` : ''}
+                </TableCell>
+                <TableCell>{l.activo ? 'Activa' : 'Inactiva'}</TableCell>
+                <TableCell>
+                  {l.activo && (l.pendientes_count || 0) > 0 ? (
+                    <Button size="small" onClick={() => void verPendientesLicencia(l)}>
+                      {l.pendientes_count} turno(s)
+                    </Button>
+                  ) : (
+                    '0'
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  {l.activo && (
+                    <Button
+                      size="small"
+                      onClick={() => void desactivarLicencia(l)}
+                      disabled={savingLicencia}
+                    >
+                      Desactivar
+                    </Button>
+                  )}
+                  <Button
+                    size="small"
+                    color="error"
+                    onClick={() => void eliminarLicencia(l)}
+                    disabled={savingLicencia}
+                  >
+                    Eliminar
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Paper>
+
       <Dialog
         open={Boolean(seguimiento)}
         onClose={() => setSeguimiento(null)}
@@ -785,6 +1037,65 @@ export default function HorariosMedicos() {
             {refrescandoPendientes ? 'Actualizando…' : 'Actualizar lista'}
           </Button>
           <Button onClick={() => setSeguimiento(null)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(seguimientoLic)}
+        onClose={() => setSeguimientoLic(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          Turnos a gestionar — licencia{' '}
+          {seguimientoLic
+            ? `${seguimientoLic.licencia.fecha_inicio} → ${seguimientoLic.licencia.fecha_fin}`
+            : ''}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            La licencia ya está cargada: en ese rango no se pueden sacar turnos nuevos con este
+            profesional. Reprogramá o cancelá los turnos listados.
+          </Alert>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Hora</TableCell>
+                <TableCell>Paciente</TableCell>
+                <TableCell>Médico</TableCell>
+                <TableCell>Estado</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(seguimientoLic?.turnos || []).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4}>No quedan turnos pendientes en el rango.</TableCell>
+                </TableRow>
+              )}
+              {(seguimientoLic?.turnos || []).map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell>{formatHoraTurno(t.fecha_hora_inicio)}</TableCell>
+                  <TableCell>{t.paciente_nombre || '—'}</TableCell>
+                  <TableCell>{t.medico_nombre || '—'}</TableCell>
+                  <TableCell>{t.estado}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            component={RouterLink}
+            to="/turnos"
+            variant="contained"
+            onClick={() => setSeguimientoLic(null)}
+          >
+            Ir al calendario
+          </Button>
+          <Button onClick={() => void refreshPendientesLicencia()} disabled={refrescandoPendientes}>
+            {refrescandoPendientes ? 'Actualizando…' : 'Actualizar lista'}
+          </Button>
+          <Button onClick={() => setSeguimientoLic(null)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
     </Box>

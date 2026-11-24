@@ -15,6 +15,7 @@ export async function createPacienteAfiliacion(
   body: {
     obra_social: string;
     numero_afiliado?: string;
+    plan?: string;
     es_principal?: boolean;
   }
 ): Promise<PacienteAfiliacion> {
@@ -31,6 +32,7 @@ export async function updatePacienteAfiliacion(
   body: Partial<{
     obra_social: string;
     numero_afiliado: string;
+    plan: string;
     es_principal: boolean;
     activo: boolean;
   }>

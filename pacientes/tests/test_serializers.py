@@ -204,9 +204,11 @@ class TestPacienteSerializerCamposDerivados:
         assert data["nombre_completo"] == "Paciente SER-DRV-1"
 
     def test_light_serializer_expone_obra_social(self):
+        from pacientes.tests.os_helpers import os_ref
+
         paciente = Paciente.objects.create(
             dni="SER-DRV-2",
-            obra_social="PAMI",
+            obra_social=os_ref("PAMI"),
             numero_afiliado="150823406404-00",
         )
         data = PacienteLightSerializer(paciente).data

@@ -11,7 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
-from django.db.models import Q
+from django.db.models import Count, Max, Q
 from datetime import datetime
 from archivos_medicos.access import paciente_ids_vinculados_a_medico
 from pacientes.services import ensure_paciente_linked_to_user
@@ -296,14 +296,18 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 raise ValidationError('El horario ya no está disponible.') from None
             if str(getattr(horario, 'tipo', '') or '').upper() == 'ESTUDIO':
                 raise ValidationError(
-                    'Los estudios no se reservan por horario directo. '
-                    'Enviá la foto del pedido médico desde «Reservar turno» '
-                    '(opción Estudio) en el portal o la app; secretaría tipifica '
-                    'el estudio y te propone un horario para confirmar.'
+                    'Los turnos de estudio solo los agenda secretaría '
+                    '(presencial o por teléfono). Desde el portal solo podés '
+                    'reservar consultas.'
                 )
             paciente = ensure_paciente_linked_to_user(request.user)
             if not paciente:
                 raise ValidationError('Su usuario no tiene una ficha de paciente vinculada.')
+            from pacientes.cobertura_reserva import assert_cobertura_para_reserva
+            from movil.pago_reserva import assert_reserva_pago_ok
+
+            assert_cobertura_para_reserva(paciente)
+            assert_reserva_pago_ok(paciente=paciente, tipo='CONSULTA')
             from turnos.paciente_reserva import turno_activo_futuro
             if turno_activo_futuro(paciente):
                 raise ValidationError(
@@ -312,13 +316,36 @@ class TurnoViewSet(viewsets.ModelViewSet):
                 )
             inicio = datos.validated_data['inicio']
             slot = duracion_de(horario.medico)
-            validar_reserva(horario.medico, inicio, inicio + slot, horario.recurso,
+            fin = inicio + slot
+            validar_reserva(horario.medico, inicio, fin, horario.recurso,
                             exigir_horario=True, horario_id=horario.pk)
+            from turnos.separacion_paciente import (
+                SeparacionPacienteError,
+                validar_separacion_paciente,
+            )
+
+            try:
+                validar_separacion_paciente(
+                    paciente=paciente,
+                    inicio=inicio,
+                    fin=fin,
+                    recurso=horario.recurso,
+                    estado=Turno.Estado.RESERVADO,
+                )
+            except SeparacionPacienteError as exc:
+                raise ValidationError({'fecha_hora_inicio': exc.message}) from exc
             from turnos.paciente_reserva import estado_inicial_reserva_paciente
             estado_inicial = estado_inicial_reserva_paciente(inicio)
-            turno = Turno.objects.create(paciente=paciente, medico=horario.medico,
-                recurso=horario.recurso, fecha_hora_inicio=inicio, fecha_hora_fin=inicio+slot,
-                estado=estado_inicial, motivo_reserva=datos.validated_data.get('motivo', ''))
+            turno = Turno.objects.create(
+                paciente=paciente,
+                medico=horario.medico,
+                recurso=horario.recurso,
+                fecha_hora_inicio=inicio,
+                fecha_hora_fin=fin,
+                estado=estado_inicial,
+                motivo_reserva=datos.validated_data.get('motivo', ''),
+                origen=Turno.Origen.SISTEMA,
+            )
             _safe_audit(log_create, actor=request.user, entity=turno, module='turnos',
                         metadata={'view': 'TurnoViewSet.reservar_horario'})
         return Response(self.get_serializer(turno).data, status=201)
@@ -488,6 +515,24 @@ class TurnoViewSet(viewsets.ModelViewSet):
         if outcome.turno_anterior_id is not None:
             payload['turno_anterior_id'] = outcome.turno_anterior_id
         return Response(payload, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='revision')
+    def revision(self, request):
+        """
+        Stamp liviano para sync multi-cliente (fase híbrida; sin WebSocket).
+
+        Token = ``{max(updated_at).isoformat()}|{count}`` sobre el queryset
+        visible al usuario (mismo alcance que list). Vacío → ``0|0``.
+        """
+        qs = self.get_queryset()
+        agg = qs.aggregate(max_updated=Max('updated_at'), total=Count('id'))
+        max_updated = agg.get('max_updated')
+        total = int(agg.get('total') or 0)
+        if max_updated is None:
+            token = f'0|{total}'
+        else:
+            token = f'{max_updated.isoformat()}|{total}'
+        return Response({'revision': token})
 
     @action(detail=True, methods=['post'], url_path='confirmar')
     def confirmar(self, request, pk=None):

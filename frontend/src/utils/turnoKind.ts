@@ -57,6 +57,35 @@ export function getTurnoKindMeta(turno: TurnoKindInput): TurnoKindMeta {
   return TURNO_KIND_META[getTurnoAgendaKind(turno)];
 }
 
+/**
+ * Nombre visible del estudio/procedimiento en agenda y detalle de turno.
+ * Misma prioridad que el título del calendario.
+ */
+export function estudioNombreDeTurno(turno: TurnoKindInput): string {
+  const ec = turno.estudio_complementario as
+    | {
+        tipo_estudio_nombre?: string | null;
+        procedimiento_catalogo_nombre?: string | null;
+        practica?: string | null;
+      }
+    | null
+    | undefined;
+  const fromTipo = (ec?.tipo_estudio_nombre || '').trim();
+  if (fromTipo) return fromTipo;
+  const fromProc = (ec?.procedimiento_catalogo_nombre || '').trim();
+  if (fromProc) return fromProc;
+  const motivo = (turno.motivo_reserva || '').trim();
+  if (motivo) {
+    const sinPrefijo = motivo
+      .replace(/^(Estudio|Procedimiento)\s*:\s*/i, '')
+      .trim();
+    if (sinPrefijo) return sinPrefijo;
+  }
+  const practica = (ec?.practica || '').trim();
+  if (practica) return practica;
+  return 'Estudio';
+}
+
 export function formatTurnoCalendarTitle(
   turno: TurnoKindInput & {
     paciente?: { nombre?: string; apellido?: string } | null;
@@ -75,10 +104,7 @@ export function formatTurnoCalendarTitle(
     : null;
 
   if (kind === 'estudio' && pacienteNombre) {
-    const estudioLabel =
-      turno.estudio_complementario?.tipo_estudio_nombre ||
-      turno.motivo_reserva?.replace(/^Estudio:\s*/i, '') ||
-      'Estudio';
+    const estudioLabel = estudioNombreDeTurno(turno);
     const sala = turno.recurso?.nombre ? ` · ${turno.recurso.nombre}` : '';
     return `${prefijoSobreturno}${meta.shortLabel}: ${pacienteNombre} — ${estudioLabel}${sala}`;
   }

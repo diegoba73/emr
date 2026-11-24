@@ -74,7 +74,10 @@ export interface UpdateCurrentUserPayload {
 export interface PacienteAfiliacion {
   id: number;
   obra_social: string;
+  obra_social_id?: number | null;
+  obra_social_nombre?: string | null;
   numero_afiliado?: string;
+  plan?: string;
   es_principal: boolean;
   activo: boolean;
   creado_en?: string;
@@ -94,7 +97,10 @@ export interface Paciente extends BaseModel {
   familiar_nombre?: string;
   familiar_telefono?: string;
   obra_social?: string;
+  obra_social_id?: number | null;
+  obra_social_nombre?: string | null;
   numero_afiliado?: string;
+  plan_obra_social?: string;
   /** Afiliaciones activas (multi-OS). La principal se refleja en obra_social/numero_afiliado. */
   afiliaciones?: PacienteAfiliacion[];
   observaciones?: string;
@@ -547,6 +553,10 @@ export interface Turno extends BaseModel {
   fecha_hora_fin?: string;
   motivo_reserva?: string;
   motivo_consulta?: string; // Mantener para compatibilidad
+  /** Cómo se agendó: SISTEMA (online), TELEFONO o PRESENCIAL. */
+  origen?: 'SISTEMA' | 'TELEFONO' | 'PRESENCIAL';
+  /** Secretaría reprogramó: el paciente debe aceptar o rechazar el nuevo horario. */
+  requiere_aceptacion_paciente?: boolean;
   /** Sobreturno creado por secretaría sobre un slot ya ocupado. */
   es_sobreturno?: boolean;
   /** Turno agendado desde pedido de estudio del paciente (app/portal). */

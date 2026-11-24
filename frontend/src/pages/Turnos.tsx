@@ -9,6 +9,8 @@ import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import TurnoDrawer from '../components/TurnoDrawer';
 import AtencionDetailDrawer from '../modules/atenciones/components/AtencionDetailDrawer';
+import { notifyTurnosChanged, useLiveRefresh } from '../hooks/useLiveRefresh';
+import { getTurnosRevision } from '../services/apiService';
 import {
   Box,
   Typography,
@@ -33,6 +35,7 @@ import {
 } from '../utils/search';
 import { isSelectableSlotAction } from '../utils/calendarSlotSelection';
 import {
+	canAccessTurnosAgenda,
 	canCreateTurno,
 	canCrearSobreturno,
 	canEditTurno,
@@ -40,6 +43,7 @@ import {
 	isAgendaReadOnlyRole,
 } from '../utils/turnoPermissions';
 import { isTurnoEstudio } from '../utils/recursosEstudio';
+import { labelTurnoOrigen } from '../utils/turnoOrigen';
 import {
 	formatTurnoCalendarTitle,
 	getTurnoAgendaKind,
@@ -177,6 +181,11 @@ const Turnos: React.FC = () => {
 		currentUser, 
 		refreshTurnos,
 	} = useData();
+	/** Varias secretarías: poll de revisión ~1s; refetch completo solo si cambia el stamp. */
+	useLiveRefresh(refreshTurnos, {
+		enabled: Boolean(currentUser) && canAccessTurnosAgenda(currentUser),
+		getRevision: getTurnosRevision,
+	});
 	const [showModal, setShowModal] = useState(false);
 	/** Evita reemplazar toda la página al refrescar catálogos en segundo plano (p. ej. al abrir el modal). */
 	const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -615,6 +624,7 @@ const Turnos: React.FC = () => {
 			const parts = [
 				`Tipo: ${kindMeta.label}`,
 				`Estado: ${t.estado}`,
+				t.origen ? `Origen: ${labelTurnoOrigen(t.origen)}` : '',
 				t.recurso?.nombre ? `Recurso: ${t.recurso.nombre}` : '',
 				t.motivo_reserva || t.motivo_consulta || '',
 			].filter(Boolean);
@@ -1192,6 +1202,7 @@ const Turnos: React.FC = () => {
 				onSuccess={async () => {
 					try {
 						await refreshTurnos();
+						notifyTurnosChanged();
 						setShowModal(false);
 						setEditingTurno(null);
 						setSelectedDateTime(null);

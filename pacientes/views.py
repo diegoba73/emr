@@ -19,14 +19,15 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .afiliaciones import sync_paciente_desde_principal
 from .duplicados import clasificar_candidatos, tiene_bloqueo_dni
-from .models import Paciente, PacienteAfiliacion, ProblemaClinico
+from .models import ObraSocial, Paciente, PacienteAfiliacion, ProblemaClinico
 from .problemas import actualizar_problema, crear_problema, establecer_principal_desde_texto
 from .serializers import (
+    ObraSocialSerializer,
     PacienteAfiliacionSerializer,
     PacienteLightSerializer,
     PacienteSerializer,
@@ -92,6 +93,23 @@ _AFILIACIONES_ACTIVAS = Prefetch(
 )
 
 
+class ObraSocialViewSet(viewsets.ReadOnlyModelViewSet):
+    """Catálogo de obras sociales (lectura pública para registro). ``?activo=0`` incluye inactivas."""
+
+    serializer_class = ObraSocialSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = ObraSocial.objects.all().order_by('nombre', 'codigo')
+        activo = self.request.query_params.get('activo')
+        if activo is None or str(activo).lower() in ('1', 'true', 'yes'):
+            qs = qs.filter(activo=True)
+        elif str(activo).lower() in ('0', 'false', 'no'):
+            qs = qs.filter(activo=False)
+        return qs
+
+
 class PacienteViewSet(viewsets.ModelViewSet):
     """CRUD de pacientes con filtros estrictos por rol.
 
@@ -129,12 +147,14 @@ class PacienteViewSet(viewsets.ModelViewSet):
         return PacienteSerializer
 
     def _deny_si_no_puede_gestionar_afiliaciones(self) -> None:
-        """Alta LIMS + editores demográficos pueden gestionar afiliaciones."""
+        """Editores demográficos + lab/bio (OS en pedidos) pueden gestionar afiliaciones."""
         user = self.request.user
         if getattr(user, "is_superuser", False):
             return
         rol = _user_rol(user)
         if rol in _ROLES_ALTA_PACIENTE:
+            return
+        if rol in {"laboratorio", "bioquimico", "secretaria_lab"}:
             return
         raise PermissionDenied("No tiene permiso para gestionar afiliaciones.")
 
@@ -167,7 +187,11 @@ class PacienteViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="afiliaciones")
     def afiliaciones(self, request, pk=None):
         paciente = self.get_object()
-        qs = paciente.afiliaciones.filter(activo=True).order_by("-es_principal", "obra_social", "id")
+        qs = (
+            paciente.afiliaciones.filter(activo=True)
+            .select_related("obra_social")
+            .order_by("-es_principal", "obra_social__nombre", "id")
+        )
         return Response(PacienteAfiliacionSerializer(qs, many=True).data)
 
     @action(detail=True, methods=["post"], url_path="afiliaciones/crear")
@@ -190,6 +214,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
             paciente=paciente,
             obra_social=ser.validated_data["obra_social"],
             numero_afiliado=ser.validated_data.get("numero_afiliado") or "",
+            plan=ser.validated_data.get("plan") or "",
             es_principal=es_principal,
             activo=True,
         )
@@ -210,7 +235,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
         afil = self._afiliacion_del_paciente(paciente.pk, int(afiliacion_id))
         ser = PacienteAfiliacionSerializer(afil, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
-        for field in ("obra_social", "numero_afiliado", "es_principal", "activo"):
+        for field in ("obra_social", "numero_afiliado", "plan", "es_principal", "activo"):
             if field in ser.validated_data:
                 setattr(afil, field, ser.validated_data[field])
         if not afil.activo:

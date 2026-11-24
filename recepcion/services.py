@@ -348,6 +348,13 @@ def derivar_a_espera_clinica(llegada: LlegadaRecepcion) -> LlegadaRecepcion:
         LlegadaRecepcion.EstadoFlujo.LLAMADO,
     ):
         raise ValidationError({'estado_flujo': 'La llegada no está en recepción.'})
+    if (
+        llegada.estado_flujo == LlegadaRecepcion.EstadoFlujo.LLAMADO
+        and (llegada.zona_llamado or '') == 'MEDICO'
+    ):
+        raise ValidationError(
+            {'estado_flujo': 'Este paciente ya está en la cola del médico.'}
+        )
     llegada.estado_flujo = LlegadaRecepcion.EstadoFlujo.EN_ESPERA
     if llegada.turno.recurso_id:
         llegada.destino_recurso_id = llegada.turno.recurso_id
@@ -361,6 +368,32 @@ def derivar_a_espera_clinica(llegada: LlegadaRecepcion) -> LlegadaRecepcion:
             'zona_llamado',
             'updated_at',
         ]
+    )
+    return llegada
+
+
+@transaction.atomic
+def volver_a_recepcion(llegada: LlegadaRecepcion) -> LlegadaRecepcion:
+    """Deshace el check-in administrativo: cola médico → espera en recepción."""
+    llegada = LlegadaRecepcion.objects.select_for_update().get(pk=llegada.pk)
+    if llegada.tipo_actividad == LlegadaRecepcion.TipoActividad.EXTRACCION:
+        raise ValidationError(
+            {'tipo_actividad': 'Extracción/laboratorio no usa cola del médico.'}
+        )
+    if llegada.estado_flujo != LlegadaRecepcion.EstadoFlujo.EN_ESPERA:
+        raise ValidationError(
+            {
+                'estado_flujo': (
+                    'Solo se puede devolver a recepción si el paciente está '
+                    'en cola del médico (aún no llamado a consultorio).'
+                )
+            }
+        )
+    llegada.estado_flujo = LlegadaRecepcion.EstadoFlujo.EN_ESPERA_RECEPCION
+    llegada.zona_llamado = ''
+    llegada.llamado_en = None
+    llegada.save(
+        update_fields=['estado_flujo', 'zona_llamado', 'llamado_en', 'updated_at']
     )
     return llegada
 
@@ -529,28 +562,26 @@ def llamar_paciente(llegada: LlegadaRecepcion, *, user=None) -> LlegadaRecepcion
         llegada = _asegurar_puesto_extraccion(llegada)
         llegada.destino_label = llegada.puesto.label_publico
     else:
-        # Secretaría: destino = ventanilla de su cobertura del día.
+        # Secretaría: preferir ventanilla de cobertura; sin cobertura usa puesto actual/fallback.
+        # (No bloquear el llamado: check-in administrativo es independiente.)
         if user is not None:
             cov = cobertura_hoy(usuario=user)
-            if not cov:
-                raise ValidationError(
-                    {
-                        'cobertura': (
-                            'Configurá tu cobertura de hoy (puesto y tipos) antes de llamar.'
-                        )
-                    }
-                )
-            if llegada.tipo_actividad not in (cov.tipos or []):
-                raise ValidationError(
-                    {
-                        'cobertura': (
-                            f'Hoy no atendés {llegada.tipo_actividad}. '
-                            'Actualizá tu cobertura o pedile a otra secretaria.'
-                        )
-                    }
-                )
-            llegada.puesto = cov.puesto
-            llegada.destino_label = cov.puesto.label_publico
+            if cov:
+                if cov.tipos and llegada.tipo_actividad not in list(cov.tipos):
+                    raise ValidationError(
+                        {
+                            'cobertura': (
+                                f'Hoy no atendés {llegada.tipo_actividad}. '
+                                'Actualizá tu cobertura o pedile a otra secretaria.'
+                            )
+                        }
+                    )
+                llegada.puesto = cov.puesto
+                llegada.destino_label = cov.puesto.label_publico
+            else:
+                if not llegada.puesto_id:
+                    llegada.puesto = puesto_placeholder_recepcion()
+                llegada.destino_label = llegada.puesto.label_publico
         else:
             llegada.destino_label = llegada.puesto.label_publico
     llegada.save(

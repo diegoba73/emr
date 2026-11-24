@@ -1,45 +1,115 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSession } from '../lib/session';
 import { allPages, api } from '../lib/api';
-import { AnuncioRecepcion, RecepcionHoy, Turno } from '../lib/types';
-import { dateKey } from '../lib/calendar';
-import Calendar from '../components/Calendar';
-import { Action, Body, Card, colors, ErrorText, Loading, Page, Title } from '../components/ui';
-import { formatFechaHoraDisplay, formatHora } from '../utils/dateFieldFormat';
+import { AnuncioRecepcion, EstudioResumen, RecepcionHoy, Turno } from '../lib/types';
+import AnnouncementsBanner from '../components/AnnouncementsBanner';
+import { Action, Body, Card, ErrorText, Loading, Page, Title } from '../components/ui';
+import { formatFechaHoraDisplay } from '../utils/dateFieldFormat';
+import type { AnnouncementAudience } from '../lib/announcements';
+
+/** Turnos futuros activos (pendientes de atención / confirmación). */
+function countTurnosPendientes(turnos: Turno[], nowMs: number): number {
+  return turnos.filter((t) => {
+    if (t.estado === 'CANCELADO' || t.estado === 'REALIZADO' || t.estado === 'NO_ASISTIO') {
+      return false;
+    }
+    if (new Date(t.fecha_hora_inicio).getTime() <= nowMs) return false;
+    return (
+      t.estado === 'RESERVADO' ||
+      t.estado === 'CONFIRMADO' ||
+      Boolean(t.requiere_aceptacion_paciente)
+    );
+  }).length;
+}
+
+/** Estudios disponibles en la bandeja móvil (validados/entregados según API). */
+function countEstudiosPendientes(estudios: EstudioResumen[]): number {
+  return estudios.length;
+}
 
 export default function Home() {
-  const [now, setNow] = useState(() => Date.now());
   const { user } = useSession();
   const puedeTurnos = Boolean(user?.puede_turnos ?? (user?.rol === 'paciente' || user?.rol === 'medico'));
+  const puedeEstudios = user?.rol === 'paciente' || user?.rol === 'medico';
   const [turnos, setTurnos] = useState<Turno[]>([]);
-  const [loading, setLoading] = useState(puedeTurnos || user?.rol === 'paciente');
+  const [estudios, setEstudios] = useState<EstudioResumen[]>([]);
+  const [loadingHome, setLoadingHome] = useState(
+    Boolean(user?.rol === 'paciente' || puedeTurnos || puedeEstudios)
+  );
   const [error, setError] = useState('');
-  const [fecha, setFecha] = useState(dateKey(new Date()));
-  const [porDia, setPorDia] = useState(user?.rol === 'medico');
   const [recepcionHoy, setRecepcionHoy] = useState<RecepcionHoy | null>(null);
   const [busyAnuncio, setBusyAnuncio] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setNow(Date.now());
-    setLoading(true);
+  const audience: AnnouncementAudience = useMemo(() => {
+    if (user?.rol === 'paciente') return 'paciente';
+    if (user?.rol === 'medico' || user?.rol === 'bioquimico' || user?.rol === 'secretaria') return 'staff';
+    return 'all';
+  }, [user?.rol]);
+
+  const refreshHome = useCallback(async () => {
     setError('');
+    setLoadingHome(true);
     try {
+      const tasks: Array<Promise<void>> = [];
+
       if (puedeTurnos) {
-        setTurnos(await allPages<Turno>('/turnos/'));
+        tasks.push(
+          allPages<Turno>('/turnos/').then((lista) => {
+            setTurnos(lista);
+          })
+        );
+      } else {
+        setTurnos([]);
       }
+
+      if (puedeEstudios) {
+        tasks.push(
+          api<{ results: EstudioResumen[] }>('/estudios/').then((data) => {
+            setEstudios(data.results || []);
+          })
+        );
+      } else {
+        setEstudios([]);
+      }
+
       if (user?.rol === 'paciente') {
-        setRecepcionHoy(await api<RecepcionHoy>('/recepcion/hoy/'));
+        tasks.push(
+          api<RecepcionHoy>('/recepcion/hoy/').then((recepcion) => {
+            setRecepcionHoy(recepcion);
+          })
+        );
       } else {
         setRecepcionHoy(null);
       }
+
+      await Promise.all(tasks);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo consultar la agenda.');
+      setError(e instanceof Error ? e.message : 'No se pudo actualizar el inicio.');
     } finally {
-      setLoading(false);
+      setLoadingHome(false);
     }
-  }, [puedeTurnos, user?.rol]);
+  }, [puedeEstudios, puedeTurnos, user?.rol]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshHome();
+    }, [refreshHome])
+  );
+
+  const now = Date.now();
+  const badgeTurnos = countTurnosPendientes(turnos, now);
+  const badgeEstudios = countEstudiosPendientes(estudios);
+
+  const turnoActivoPaciente =
+    user?.rol === 'paciente'
+      ? turnos.find(
+          (t) =>
+            new Date(t.fecha_hora_inicio).getTime() > now &&
+            (t.estado === 'RESERVADO' || t.estado === 'CONFIRMADO')
+        )
+      : undefined;
 
   const mostrarAnuncio = (data: AnuncioRecepcion, titulo: string) => {
     Alert.alert(
@@ -56,13 +126,13 @@ export default function Home() {
     try {
       const data = await api<AnuncioRecepcion>('/recepcion/estoy-en-sala/', 'POST', {});
       mostrarAnuncio(data, 'Estoy en sala');
-      await refresh();
+      await refreshHome();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo anunciarte en recepción.');
     } finally {
       setBusyAnuncio(false);
     }
-  }, [refresh]);
+  }, [refreshHome]);
 
   const anuncioLab = useCallback(async () => {
     setBusyAnuncio(true);
@@ -70,65 +140,53 @@ export default function Home() {
     try {
       const data = await api<AnuncioRecepcion>('/recepcion/anuncio-lab/', 'POST', {});
       mostrarAnuncio(data, 'Laboratorio');
-      await refresh();
+      await refreshHome();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo anunciarte al laboratorio.');
     } finally {
       setBusyAnuncio(false);
     }
-  }, [refresh]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh])
-  );
-
-  const visibles = turnos.filter((t) =>
-    porDia
-      ? dateKey(new Date(t.fecha_hora_inicio)) === fecha
-      : new Date(t.fecha_hora_inicio).getTime() > now && t.estado !== 'CANCELADO'
-  );
-  const turnoActivoPaciente =
-    user?.rol === 'paciente'
-      ? turnos.find(
-          (t) =>
-            new Date(t.fecha_hora_inicio).getTime() > now &&
-            (t.estado === 'RESERVADO' || t.estado === 'CONFIRMADO')
-        )
-      : undefined;
+  }, [refreshHome]);
 
   return (
     <Page>
       <View style={{ gap: 6 }}>
         <Body>{user?.nombre}</Body>
-        <Title>{puedeTurnos ? (user?.rol === 'medico' ? 'Mi agenda' : 'Mis turnos') : 'Inicio'}</Title>
+        <Title>Inicio</Title>
       </View>
 
+      <AnnouncementsBanner audience={audience} />
+
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        {puedeTurnos && (
-          <View style={{ flex: 1 }}>
-            <Action
-              secondary
-              title={porDia ? 'Ver próximos' : 'Ver calendario'}
-              onPress={() => setPorDia((v) => !v)}
-            />
-          </View>
-        )}
         <View style={{ flex: 1 }}>
           <Action secondary title="Mi cuenta" onPress={() => router.push('/ajustes')} />
         </View>
+        <View style={{ flex: 1 }}>
+          <Action secondary title="Informes" onPress={() => router.push('/informes')} />
+        </View>
       </View>
 
-      <Action title="Informes de laboratorio" onPress={() => router.push('/informes')} />
-      {(user?.rol === 'paciente' || user?.rol === 'medico') && (
-        <Action title="Estudios" onPress={() => router.push('/estudios')} />
+      {puedeTurnos && (
+        <Action
+          title={user?.rol === 'medico' ? 'Mi agenda' : 'Mis turnos'}
+          badge={badgeTurnos}
+          onPress={() => router.push('/turnos')}
+        />
       )}
+
+      {puedeEstudios && (
+        <Action
+          title="Mis estudios"
+          badge={badgeEstudios}
+          onPress={() => router.push('/estudios')}
+        />
+      )}
+
       {user?.rol === 'paciente' && (
-        <Action title="Consultas pasadas" onPress={() => router.push('/consultas')} />
+        <Action title="Consultas pasadas" secondary onPress={() => router.push('/consultas')} />
       )}
       {user?.puede_pedir_lab && (
-        <Action title="Pedir laboratorio" onPress={() => router.push('/lab')} />
+        <Action title="Pedir laboratorio" secondary onPress={() => router.push('/lab')} />
       )}
 
       {user?.rol === 'paciente' && (
@@ -171,22 +229,14 @@ export default function Home() {
         </Card>
       )}
 
-      {user?.rol === 'paciente' && (
-        <Action title="Mis pedidos de estudio" secondary onPress={() => router.push('/pedidos')} />
-      )}
-      {user?.rol === 'paciente' && !turnoActivoPaciente && (
-        <Action title="Reservar un turno" onPress={() => router.push('/reservar')} />
-      )}
-      {user?.rol === 'paciente' && turnoActivoPaciente && (
+      {user?.rol === 'paciente' && loadingHome && <Loading />}
+
+      {user?.rol === 'paciente' && !loadingHome && turnoActivoPaciente && (
         <Card>
           <Body>
-            Ya tenés un turno el{' '}
-            {formatFechaHoraDisplay(turnoActivoPaciente.fecha_hora_inicio)}. No
-            podés sacar otro desde la app; si necesitás cambiarlo, contactá a secretaría.
+            Ya tenés un turno el {formatFechaHoraDisplay(turnoActivoPaciente.fecha_hora_inicio)}.
+            No podés sacar otro desde la app; si necesitás cambiarlo, contactá a secretaría.
           </Body>
-          {turnoActivoPaciente.estado === 'RESERVADO' && (
-            <Body>Pendiente de confirmación: abrí el turno y confirmalo.</Body>
-          )}
           <Action
             secondary
             title="Ver turno"
@@ -200,68 +250,23 @@ export default function Home() {
         </Card>
       )}
 
-      {puedeTurnos && (
-        <>
-          {porDia && (
-            <Card>
-              <Calendar value={fecha} onChange={setFecha} />
-            </Card>
-          )}
-          <ErrorText text={error} />
-          {loading ? (
-            <Loading />
-          ) : (
-            <>
-              {!visibles.length && (
-                <Card>
-                  <Body>No hay turnos {porDia ? 'para este día' : 'próximos'}.</Body>
-                </Card>
-              )}
-              {visibles.map((t) => (
-                <Card key={t.id}>
-                  <Text style={{ fontWeight: '700', fontSize: 17, color: colors.ink }}>
-                    {(() => {
-                      const d = new Date(t.fecha_hora_inicio);
-                      const dia = d.toLocaleDateString('es-AR', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                      });
-                      return `${dia} ${formatHora(d)}`;
-                    })()}
-                  </Text>
-                  <Body>
-                    {user?.rol === 'medico' ? t.paciente_nombre : t.medico_nombre} ·{' '}
-                    {t.tipo === 'ESTUDIO' ? 'Estudio' : 'Consulta'}
-                  </Body>
-                  <Body>
-                    {t.estado} ·{' '}
-                    {t.asistencia_confirmada_en
-                      ? 'Asistencia confirmada'
-                      : t.estado === 'CONFIRMADO'
-                        ? 'Sin respuesta de asistencia'
-                        : 'Pendiente de confirmación'}
-                  </Body>
-                  <Action
-                    secondary
-                    title="Ver turno"
-                    onPress={() => router.push({ pathname: '/turno/[id]', params: { id: String(t.id) } })}
-                  />
-                </Card>
-              ))}
-            </>
-          )}
-          <Action title="Actualizar agenda" secondary disabled={loading} onPress={refresh} />
-        </>
-      )}
+      <ErrorText text={error} />
 
-      {!puedeTurnos && (
+      {!puedeTurnos && !puedeEstudios && (
         <Card>
           <Body>
             Con tu rol ({user?.rol}) podés consultar informes de laboratorio
             {user?.rol === 'bioquimico' ? ' y validar u informar parcialmente' : ''}.
           </Body>
         </Card>
+      )}
+
+      {user?.rol === 'paciente' && (
+        <Action
+          title="Reservar un turno"
+          disabled={Boolean(turnoActivoPaciente) || loadingHome}
+          onPress={() => router.push('/reservar')}
+        />
       )}
     </Page>
   );

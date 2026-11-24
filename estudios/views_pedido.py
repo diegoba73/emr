@@ -21,13 +21,11 @@ from usuarios.roles import es_secretaria_institucional
 from .models import MedicoTipoEstudio, PedidoEstudioPaciente, TipoEstudioSala
 from .pedido_paciente import (
     agendar_pedido_estudio,
-    crear_pedido_estudio_paciente,
     usuario_puede_gestionar_pedidos_estudio,
 )
 from .serializers_pedido import (
     AgendarPedidoEstudioSerializer,
     MedicoTipoEstudioSerializer,
-    PedidoEstudioCreateSerializer,
     PedidoEstudioPacienteSerializer,
     TipoEstudioSalaSerializer,
 )
@@ -116,27 +114,10 @@ class PedidoEstudioPacienteViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def create(self, request, *args, **kwargs):
-        if _rol(request.user) != 'paciente':
-            raise PermissionDenied('Solo el paciente puede crear un pedido de estudio.')
-        pac = ensure_paciente_linked_to_user(request.user)
-        if not pac:
-            raise ValidationError('Su usuario no tiene ficha de paciente vinculada.')
-        ser = PedidoEstudioCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        try:
-            pedido = crear_pedido_estudio_paciente(
-                user=request.user,
-                paciente=pac,
-                foto=ser.validated_data['foto'],
-                origen_canal=ser.validated_data.get(
-                    'origen_canal', PedidoEstudioPaciente.OrigenCanal.PORTAL
-                ),
-                notas=ser.validated_data.get('notas', ''),
-            )
-        except DjangoValidationError as exc:
-            raise ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages) from exc
-        out = PedidoEstudioPacienteSerializer(pedido, context={'request': request})
-        return Response(out.data, status=status.HTTP_201_CREATED)
+        raise PermissionDenied(
+            'Los turnos de estudio solo los agenda secretaría '
+            '(presencial o por teléfono). No se aceptan pedidos desde el portal ni la app.'
+        )
 
     def retrieve(self, request, *args, **kwargs):
         pedido = self.get_object()

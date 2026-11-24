@@ -23,6 +23,9 @@ export interface Perfil {
   puede_pedir_lab?: boolean;
   puede_guardia?: boolean;
   puede_internacion?: boolean;
+  /** Ficha OS+afiliado+plan completa para reservar (solo paciente). */
+  cobertura_completa?: boolean | null;
+  cobertura_mensaje?: string;
 }
 
 export interface Turno {
@@ -34,6 +37,15 @@ export interface Turno {
   fecha_hora_fin: string;
   estado: string;
   asistencia_confirmada_en: string | null;
+  /** Secretaría reprogramó: hay que aceptar o rechazar el nuevo horario. */
+  requiere_aceptacion_paciente?: boolean;
+  reprogramaciones_paciente?: number;
+  puede_cancelar?: boolean;
+  puede_reprogramar?: boolean;
+  motivo_bloqueo_reprogramar?: string;
+  motivo_reserva?: string | null;
+  /** Nombre del estudio (tipo / motivo), mismo criterio que el calendario web. */
+  estudio_nombre?: string | null;
   tipo: 'CONSULTA' | 'ESTUDIO';
   viene_de_pedido_estudio?: boolean;
   estudio_complementario?: {
@@ -67,9 +79,20 @@ export interface AnuncioRecepcion {
   estado_flujo?: string;
 }
 
+export interface TurnoEstoyEnSalaEstado {
+  turno_id: number;
+  tipo_actividad: string;
+  en_ventana: boolean;
+  puedo_estoy_en_sala: boolean;
+  anunciado: boolean;
+  codigo_llamado?: string;
+}
+
 export interface RecepcionHoy {
   turno_hoy_id: number | null;
   puedo_estoy_en_sala: boolean;
+  /** Estado por turno de hoy (consulta/estudio) para badges/botones. */
+  turnos_estoy_en_sala?: TurnoEstoyEnSalaEstado[];
   estoy_en_sala: AnuncioRecepcion | null;
   lab: AnuncioRecepcion | null;
 }

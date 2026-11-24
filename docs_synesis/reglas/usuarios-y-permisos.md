@@ -72,8 +72,8 @@ Además: **superuser**, **staff**, grupos Django (`Secretarias`, `Médicos`, `Pa
 | Eliminar pacientes (API) | solo admin/superuser; bloqueado si hay historia clínica asociada (`pacientes.eliminacion`) |
 | Alta / edición básica de médicos | admin/staff, secretaría, laboratorio, bioquímico (`CanWriteMedico`); **sin** DELETE; sin gestión de agenda |
 | Alta / edición de **profesionales** (directorio CEHTA no médicos) | Mismos roles/permisos que médicos (`CanWriteProfesional`, UI `/profesionales`) |
-| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaría institucional / admin/staff (UI); API `ROLES_SECRETARIA_EMR` incluye ambas secretarías; paciente solo reserva portal (`RESERVADO`); médico solo inicia atención; enfermería solo lectura (C5.8.1). **Sobreturno** (`es_sobreturno`): solo `secretaria` institucional |
-| Módulo Estudios / Agenda clínica | secretaría **institucional**, médico, admin, enfermería (lectura), profesionales de estudio — **no** `secretaria_lab` |
+| Gestionar turnos (crear/modificar/confirmar/cancelar/reprogramar) | secretaría institucional / admin/staff (UI); API `ROLES_SECRETARIA_EMR` incluye ambas secretarías; paciente solo reserva **consultas** en portal/app (`RESERVADO`); **estudios** solo secretaría (presencial/teléfono); médico solo inicia atención; enfermería solo lectura (C5.8.1). **Sobreturno** (`es_sobreturno`): solo `secretaria` institucional |
+| Módulo Estudios / Agenda clínica | secretaría **institucional**, médico, admin, enfermería (lectura), profesionales de estudio — **no** `secretaria_lab` ni **paciente** (paciente ve entregados en portal/documentos) |
 | Cerrar atención | medico, enfermeria, admin |
 | Catálogo quirúrgico jerárquico (`cirugia-especialidades` / `-procedimientos` / `-abordajes`) | Lectura: operadores del módulo Estudios (médico, secretaría, admin, …). **Escritura solo admin/superuser** (`CirugiaCatalogoPermission`). UI admin: `/catalogos/cirugias`. No LIMS. |
 | Catálogo procedimientos plano (`procedimientos-catalogo`) | Lectura: operadores del módulo (incl. secretaría) vía `ProcedimientoCatalogoPermission`. Escritura: médico/admin. Necesario para alta de PROCEDIMIENTO. |
@@ -147,7 +147,7 @@ Implementación: `turnos.views.TurnoViewSet.get_queryset`, tests en `turnos/test
 | `enfermeria` | Global | No (403) | No (403) |
 | `medico` (con ficha) | Propios | No (403); solo inicia atención | No (403); agenda = secretaría |
 | `medico` sin ficha | Vacío | No (403) | No (403) |
-| `paciente` vinculado | Propios | Solo `POST .../reservar-horario/` → `RESERVADO` | No (403); cambios vía secretaría |
+| `paciente` vinculado | Propios | Solo `POST .../reservar-horario/` → `RESERVADO`/`CONFIRMADO` (hoy/mañana); exige cobertura completa (OS+afiliado+plan si ≠ PARTICULAR) | Cancelar normal: no (403); rechazo de reprogramación staff: sí; reprogramar consulta 1× si ≥48 h |
 | `laboratorio` | No | No (403) | No (403) |
 | Rol no reconocido | Vacío | No (403) | No (403) |
 
@@ -182,8 +182,8 @@ Endpoints en `turnos.views.TurnoViewSet`:
 | Acción | Ruta | Transición / efecto | Roles |
 |--------|------|---------------------|-------|
 | Confirmar | `POST .../confirmar/` | `RESERVADO` → `CONFIRMADO` | admin/staff, secretaría |
-| Cancelar | `POST .../cancelar/` | → `CANCELADO` (motivo obligatorio) | admin/staff, secretaría |
-| Reprogramar | `POST .../reprogramar/` | turno nuevo en horario libre de la agenda del médico; cancela el anterior y libera el slot; historial vínculo; notifica paciente (push + WhatsApp) | admin/staff, secretaría |
+| Cancelar | `POST .../cancelar/` | → `CANCELADO` (motivo obligatorio) | admin/staff, secretaría; paciente dueño **solo** si `requiere_aceptacion_paciente` (rechazo) |
+| Reprogramar | `POST .../reprogramar/` (consultas / pedidos) o `POST …/estudios-complementarios/{id}/reprogramar-turno/` / móvil `reprogramar-horario` | turno nuevo; cancela el anterior; historial; notifica paciente (push + WhatsApp). Staff con paciente: nuevo en `RESERVADO` + `requiere_aceptacion_paciente`. Paciente (app): consulta, ≥48 h, máx. 1× (`reprogramaciones_paciente`); sin pedir aceptación | admin/staff, secretaría; paciente dueño (consulta, límites) |
 | Marcar realizado | `POST .../marcar-realizado/` | → `REALIZADO` | admin/staff, secretaría |
 | Marcar no asistió | `POST .../marcar-no-asistio/` | → `CANCELADO` (`marcar_no_asistio`) | admin/staff, secretaría |
 | Iniciar atención **(C5.10.1)** | `POST .../iniciar-atencion/` | `REALIZADO` + atención clínica | médico propio; admin/staff/superuser; **no** secretaría/paciente/enfermería/laboratorio |
@@ -191,7 +191,9 @@ Endpoints en `turnos.views.TurnoViewSet`:
 
 - **PATCH/PUT `estado`:** bloqueado para **todos** (400).
 - Auditoría: metadata por acción (`reprogramar` incluye fechas/médico/recurso antes/después).
-- Notificación reprogramación: `turnos/notificar_reprogramacion.py` (Expo push + WhatsApp).
+- Separación entre turnos del mismo paciente: ≥30 min (consulta–consulta) o ≥60 min (consulta–estudio / estudio–estudio); validado en alta/reprogramación (`turnos/separacion_paciente.py`).
+- Notificación reprogramación: `turnos/notificar_reprogramacion.py` (Expo push + WhatsApp). Si `requiere_aceptacion_paciente`, el texto pide aceptar/rechazar en app/portal.
+- Aceptación paciente: `POST .../confirmar/` (acepta) o `POST .../cancelar/` (rechaza); limpia el flag. En estudios de rutina el paciente no confirma; **sí** puede si `requiere_aceptacion_paciente` (también bypass de la guarda «operar desde Estudios» al rechazar). UI: app móvil y portal.
 - Servicio: `turnos/turno_estado.py`. Tests: `turnos/tests/test_estado_turnos.py`.
 - **[DEUDA]:** estado `NO_ASISTIO`; campos estructurales; endpoints legacy `api/views.py`.
 

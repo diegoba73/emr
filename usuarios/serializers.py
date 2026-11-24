@@ -320,6 +320,36 @@ class UserSerializer(serializers.ModelSerializer):
                 # Si el usuario no tiene teléfono, tomarlo del paciente
                 if not validated_data.get('telefono') and paciente.telefono:
                     validated_data['telefono'] = paciente.telefono
+                # Portal: el login promete DNI → forzar username = DNI de la ficha.
+                dni_login = (paciente.dni or '').strip()
+                if dni_login:
+                    if User.objects.filter(username=dni_login).exclude(
+                        pk=getattr(self.instance, 'pk', None)
+                    ).exists():
+                        raise serializers.ValidationError({
+                            'username': (
+                                'Ya existe un usuario con este DNI como nombre de acceso. '
+                                'Usá esa cuenta o pedí a sistemas que unifique el acceso.'
+                            ),
+                        })
+                    validated_data['username'] = dni_login
+
+            elif rol == 'paciente' and paciente_data:
+                dni_login = (
+                    (paciente_data.get('dni') or '').strip()
+                    if isinstance(paciente_data.get('dni'), str)
+                    else str(paciente_data.get('dni') or '').strip()
+                )
+                if dni_login:
+                    if User.objects.filter(username=dni_login).exists():
+                        raise serializers.ValidationError({
+                            'paciente_data': {
+                                'dni': (
+                                    'Ya existe un usuario con este DNI como nombre de acceso.'
+                                ),
+                            },
+                        })
+                    validated_data['username'] = dni_login
             
             # Crear usuario
             user = User.objects.create_user(**validated_data)
@@ -396,6 +426,17 @@ class UserSerializer(serializers.ModelSerializer):
                         })
                     
                     # Sincronizar datos desde usuario hacia paciente
+                    from pacientes.obras_sociales import resolve_obra_social
+
+                    os_raw = paciente_data.pop('obra_social', None)
+                    paciente_data.pop('obra_social_id', None)
+                    os_obj = resolve_obra_social(os_raw)
+                    if os_obj is None:
+                        raise serializers.ValidationError({
+                            'paciente_data': {
+                                'obra_social': 'Obra social inválida o inactiva.',
+                            },
+                        })
                     paciente = Paciente.objects.create(
                         user=user,
                         dni=dni,
@@ -403,8 +444,12 @@ class UserSerializer(serializers.ModelSerializer):
                         apellido=user.last_name or paciente_data.pop('apellido', None),
                         email=user.email or paciente_data.pop('email', None),
                         telefono=user.telefono or paciente_data.pop('telefono', None),
+                        obra_social=os_obj,
                         **paciente_data
                     )
+                    from pacientes.afiliaciones import sync_principal_desde_paciente_fields
+
+                    sync_principal_desde_paciente_fields(paciente)
             
             return user
     
@@ -564,14 +609,53 @@ class PacienteRegistrationSerializer(serializers.Serializer):
     telefono = serializers.CharField(max_length=25, required=True, allow_blank=False)
     fecha_nacimiento = serializers.DateField(required=True)
     obra_social = serializers.CharField(max_length=100, required=True, allow_blank=False)
+    obra_social_id = serializers.IntegerField(required=False, allow_null=True)
+    numero_afiliado = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, default=''
+    )
+    plan = serializers.CharField(max_length=80, required=False, allow_blank=True, default='')
 
-    def validate_obra_social(self, value: str) -> str:
+    def validate_obra_social(self, value: str):
+        from pacientes.obras_sociales import resolve_obra_social
+
         text = (value or '').strip()
         if not text:
             raise serializers.ValidationError(
                 'La obra social es obligatoria al crear un paciente.'
             )
-        return text.upper()
+        os_obj = resolve_obra_social(text)
+        if os_obj is None:
+            raise serializers.ValidationError(
+                'Obra social inválida. Elegí una del catálogo (p. ej. PARTICULAR).'
+            )
+        return os_obj
+
+    def validate_obra_social_id(self, value):
+        if value is None:
+            return None
+        from pacientes.obras_sociales import resolve_obra_social
+
+        os_obj = resolve_obra_social(value)
+        if os_obj is None:
+            raise serializers.ValidationError('Obra social inválida o inactiva.')
+        return os_obj
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        from pacientes.cobertura_reserva import validar_campos_cobertura_registro
+        from pacientes.texto import normalizar_texto_paciente
+
+        obra = attrs.get('obra_social_id') or attrs.get('obra_social')
+        afil = normalizar_texto_paciente(attrs.get('numero_afiliado')) or ''
+        plan = normalizar_texto_paciente(attrs.get('plan')) or ''
+        attrs['numero_afiliado'] = afil
+        attrs['plan'] = plan
+        errors = validar_campos_cobertura_registro(
+            obra_social=obra, numero_afiliado=afil, plan=plan
+        )
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     def validate_email(self, value: str) -> str:
         """
@@ -621,7 +705,9 @@ class PacienteRegistrationSerializer(serializers.Serializer):
         apellido = validated_data.get('apellido', '')
         telefono = validated_data.get('telefono', '')
         fecha_nacimiento = validated_data.get('fecha_nacimiento')
-        obra_social = validated_data.get('obra_social', '')
+        obra_social = validated_data.get('obra_social_id') or validated_data.get('obra_social')
+        numero_afiliado = validated_data.get('numero_afiliado') or ''
+        plan = validated_data.get('plan') or ''
 
         try:
             with transaction.atomic():
@@ -642,7 +728,9 @@ class PacienteRegistrationSerializer(serializers.Serializer):
                     rol='paciente',
                     is_active=True,
                 )
-                Paciente.objects.create(
+                from pacientes.afiliaciones import sync_principal_desde_paciente_fields
+
+                pac = Paciente.objects.create(
                     user=user,
                     dni=dni,
                     nombre=nombre,
@@ -651,7 +739,10 @@ class PacienteRegistrationSerializer(serializers.Serializer):
                     telefono=telefono,
                     email=email,
                     obra_social=obra_social,
+                    numero_afiliado=numero_afiliado or None,
+                    plan_obra_social=plan,
                 )
+                sync_principal_desde_paciente_fields(pac)
                 return user
         except serializers.ValidationError:
             raise

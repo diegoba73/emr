@@ -6,6 +6,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { api } from '../services/apiService';
+import { notifyTurnosChanged, TURNOS_LIVE_INTERVAL_MS } from './useLiveRefresh';
 
 const STALE_TIME = 60 * 1000; // 1 minuto
 const GC_TIME = 5 * 60 * 1000; // 5 minutos
@@ -19,6 +20,9 @@ export const useTurnosQuery = () =>
     },
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
+    refetchOnWindowFocus: true,
+    refetchInterval: TURNOS_LIVE_INTERVAL_MS,
+    refetchIntervalInBackground: false,
   });
 
 export const usePacientesQuery = (options?: { all?: boolean; enabled?: boolean }) =>
@@ -53,7 +57,10 @@ export const useArchivosMedicosQuery = (pacienteId?: number | null) =>
  */
 export const useInvalidateTurnos = () => {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['turnos'] });
+  return () => {
+    notifyTurnosChanged();
+    return queryClient.invalidateQueries({ queryKey: ['turnos'] });
+  };
 };
 
 /**

@@ -10,6 +10,8 @@ from pacientes.afiliaciones import (
     upsert_afiliacion,
 )
 from pacientes.models import Paciente, PacienteAfiliacion
+from pacientes.obras_sociales import ensure_seed_obras_sociales
+from pacientes.tests.os_helpers import os_ref
 from laboratorio.obra_social import obra_social_efectiva
 from laboratorio.models import SolicitudExamen
 from medicos.models import Especialidad, Medico
@@ -18,12 +20,15 @@ User = get_user_model()
 
 
 class TestPacienteAfiliacionHelpers(TestCase):
+    def setUp(self):
+        ensure_seed_obras_sociales()
+
     def test_upsert_y_sync_principal(self):
         p = Paciente.objects.create(dni="OS-AF-1", nombre="A", apellido="B")
         a1 = upsert_afiliacion(p, obra_social="OSDE", numero_afiliado="11", marcar_principal=True)
         self.assertTrue(a1.es_principal)
         p.refresh_from_db()
-        self.assertEqual(p.obra_social, "OSDE")
+        self.assertEqual(p.obra_social.codigo, "OSDE")
         self.assertEqual(p.numero_afiliado, "11")
 
         a2 = upsert_afiliacion(p, obra_social="PAMI", numero_afiliado="22", marcar_principal=True)
@@ -31,7 +36,7 @@ class TestPacienteAfiliacionHelpers(TestCase):
         a1.refresh_from_db()
         self.assertFalse(a1.es_principal)
         p.refresh_from_db()
-        self.assertEqual(p.obra_social, "PAMI")
+        self.assertEqual(p.obra_social.codigo, "PAMI")
 
     def test_snapshot_vacio(self):
         self.assertEqual(normalizar_snapshot_os("", "x"), ("", ""))
@@ -41,7 +46,11 @@ class TestPacienteAfiliacionHelpers(TestCase):
 class TestObraSocialEfectiva(TestCase):
     def test_fallback_paciente_si_orden_sin_snapshot(self):
         p = Paciente.objects.create(
-            dni="OS-EF-1", nombre="A", apellido="B", obra_social="SEROS", numero_afiliado="9"
+            dni="OS-EF-1",
+            nombre="A",
+            apellido="B",
+            obra_social=os_ref("SEROS"),
+            numero_afiliado="9",
         )
         esp = Especialidad.objects.create(nombre="Esp OS ef")
         med = Medico.objects.create(
@@ -56,7 +65,11 @@ class TestObraSocialEfectiva(TestCase):
 
     def test_snapshot_gana_sobre_paciente(self):
         p = Paciente.objects.create(
-            dni="OS-EF-2", nombre="A", apellido="B", obra_social="SEROS", numero_afiliado="9"
+            dni="OS-EF-2",
+            nombre="A",
+            apellido="B",
+            obra_social=os_ref("SEROS"),
+            numero_afiliado="9",
         )
         esp = Especialidad.objects.create(nombre="Esp OS ef2")
         med = Medico.objects.create(
@@ -91,7 +104,11 @@ class TestAfiliacionesApi(TestCase):
             rol="laboratorio",
         )
         self.paciente = Paciente.objects.create(
-            dni="OS-API-1", nombre="P", apellido="A", obra_social="OSDE", numero_afiliado="1"
+            dni="OS-API-1",
+            nombre="P",
+            apellido="A",
+            obra_social=os_ref("OSDE"),
+            numero_afiliado="1",
         )
         upsert_afiliacion(
             self.paciente, obra_social="OSDE", numero_afiliado="1", marcar_principal=True
@@ -116,7 +133,7 @@ class TestAfiliacionesApi(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         self.paciente.refresh_from_db()
-        self.assertEqual(self.paciente.obra_social, "PAMI")
+        self.assertEqual(self.paciente.obra_social.codigo, "PAMI")
         self.assertEqual(self.paciente.numero_afiliado, "77")
 
 
@@ -131,7 +148,7 @@ class TestCreateSolicitudConSnapshotOs(TestCase):
             is_staff=True,
         )
         self.paciente = Paciente.objects.create(
-            dni="OS-SNAP-1", nombre="P", apellido="S", obra_social="SEROS"
+            dni="OS-SNAP-1", nombre="P", apellido="S", obra_social=os_ref("SEROS")
         )
         from laboratorio.models import TipoExamen, TipoMuestra
 

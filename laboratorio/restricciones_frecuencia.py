@@ -190,7 +190,7 @@ def ultima_fecha_pedido_codigo(
 def paciente_obra_social_es_seros(paciente_id: int) -> bool:
     os_val = (
         Paciente.objects.filter(pk=paciente_id)
-        .values_list("obra_social", flat=True)
+        .values_list("obra_social__codigo", flat=True)
         .first()
     )
     if not os_val:

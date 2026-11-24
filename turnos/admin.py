@@ -37,9 +37,11 @@ class TurnoAdmin(admin.ModelAdmin):
         'fecha_hora_inicio',
         'fecha_hora_fin',
         'estado',
+        'origen',
     )
     list_filter = (
         'estado',
+        'origen',
         'medico',
         'recurso__tipo_recurso',
         'recurso__ubicacion',

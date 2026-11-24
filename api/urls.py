@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from pacientes.views import PacienteViewSet
+from pacientes.views import ObraSocialViewSet, PacienteViewSet
 from medicos.views import MedicoViewSet, EspecialidadViewSet
 from profesionales.views import ProfesionalViewSet
 from catalogos.views import CentroFisicoViewSet, TipoAtencionViewSet
@@ -97,6 +97,7 @@ from .views_bi import BiKpisView
 
 router = DefaultRouter()
 router.register(r'pacientes', PacienteViewSet, basename='pacientes')
+router.register(r'obras-sociales', ObraSocialViewSet, basename='obras-sociales')
 router.register(r'medicos', MedicoViewSet, basename='medicos')
 router.register(r'profesionales', ProfesionalViewSet, basename='profesionales')
 router.register(r'especialidades', EspecialidadViewSet, basename='especialidades')
@@ -377,6 +378,7 @@ router.register(
 router.register(r'disponibilidades', views.DisponibilidadMedicoViewSet, basename='disponibilidades')
 router.register(r'excepciones', views.ExcepcionMedicoViewSet, basename='excepciones')
 router.register(r'feriados', views.FeriadoViewSet, basename='feriados')
+router.register(r'licencias-medico', views.LicenciaMedicoViewSet, basename='licencias-medico')
 # router.register(r'tipos-examen', views.TipoExamenViewSet)
 # router.register(r'paneles-examen', views.PanelExamenViewSet)
 # router.register(r'solicitudes-examen', views.SolicitudExamenViewSet)

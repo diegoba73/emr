@@ -18,13 +18,14 @@ import {
   updatePacienteAfiliacion,
 } from '../services/pacienteAfiliaciones';
 import { getSafeApiErrorMessage } from '../utils/apiError';
+import ObraSocialSelect from './ObraSocialSelect';
 
 type Props = {
   pacienteId: number;
   /** Campos legacy del form (espejo de la principal); se sincronizan al cambiar. */
   obraSocialForm: string;
   numeroAfiliadoForm: string;
-  onPrincipalChange: (obra_social: string, numero_afiliado: string) => void;
+  onPrincipalChange: (obra_social: string, numero_afiliado: string, plan?: string) => void;
   disabled?: boolean;
 };
 
@@ -40,6 +41,7 @@ const PacienteAfiliacionesEditor: React.FC<Props> = ({
   const [error, setError] = useState('');
   const [nuevaOs, setNuevaOs] = useState('');
   const [nuevaAfil, setNuevaAfil] = useState('');
+  const [nuevaPlan, setNuevaPlan] = useState('');
   const [saving, setSaving] = useState(false);
 
   const reload = useCallback(async () => {
@@ -50,9 +52,13 @@ const PacienteAfiliacionesEditor: React.FC<Props> = ({
       setItems(data);
       const principal = data.find((a) => a.es_principal) || data[0];
       if (principal) {
-        onPrincipalChange(principal.obra_social || '', principal.numero_afiliado || '');
+        onPrincipalChange(
+          principal.obra_social || '',
+          principal.numero_afiliado || '',
+          principal.plan || ''
+        );
       } else {
-        onPrincipalChange('', '');
+        onPrincipalChange('', '', '');
       }
     } catch (e) {
       setError(getSafeApiErrorMessage(e, 'No se pudieron cargar las afiliaciones.'));
@@ -77,10 +83,12 @@ const PacienteAfiliacionesEditor: React.FC<Props> = ({
       await createPacienteAfiliacion(pacienteId, {
         obra_social: os,
         numero_afiliado: nuevaAfil.trim(),
+        plan: nuevaPlan.trim(),
         es_principal: items.length === 0,
       });
       setNuevaOs('');
       setNuevaAfil('');
+      setNuevaPlan('');
       await reload();
     } catch (e) {
       setError(getSafeApiErrorMessage(e, 'No se pudo agregar la afiliación.'));
@@ -142,6 +150,7 @@ const PacienteAfiliacionesEditor: React.FC<Props> = ({
                 <Typography variant="body2" noWrap>
                   <strong>{a.obra_social}</strong>
                   {a.numero_afiliado ? ` · ${a.numero_afiliado}` : ''}
+                  {a.plan ? ` · plan ${a.plan}` : ''}
                 </Typography>
               </Box>
               {a.es_principal ? (
@@ -178,14 +187,15 @@ const PacienteAfiliacionesEditor: React.FC<Props> = ({
             </Typography>
           )}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
-            <TextField
-              size="small"
-              label="Nueva obra social"
-              value={nuevaOs}
-              onChange={(e) => setNuevaOs(e.target.value)}
-              disabled={disabled || saving}
-              sx={{ flex: 2, minWidth: 160 }}
-            />
+            <Box sx={{ flex: 2, minWidth: 160 }}>
+              <ObraSocialSelect
+                size="small"
+                label="Nueva obra social"
+                value={nuevaOs}
+                onChange={setNuevaOs}
+                disabled={disabled || saving}
+              />
+            </Box>
             <TextField
               size="small"
               label="N° afiliado"
@@ -193,6 +203,14 @@ const PacienteAfiliacionesEditor: React.FC<Props> = ({
               onChange={(e) => setNuevaAfil(e.target.value)}
               disabled={disabled || saving}
               sx={{ flex: 1, minWidth: 120 }}
+            />
+            <TextField
+              size="small"
+              label="Plan"
+              value={nuevaPlan}
+              onChange={(e) => setNuevaPlan(e.target.value)}
+              disabled={disabled || saving}
+              sx={{ flex: 1, minWidth: 100 }}
             />
             <Button
               variant="outlined"

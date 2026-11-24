@@ -226,7 +226,9 @@ class TurnoSerializer(serializers.ModelSerializer):
             'fecha_hora_fin',
             'estado',
             'motivo_reserva',
+            'origen',
             'asistencia_confirmada_en',
+            'requiere_aceptacion_paciente',
             'es_sobreturno',
             'created_at',
             'updated_at',
@@ -244,9 +246,13 @@ class TurnoSerializer(serializers.ModelSerializer):
             'viene_de_pedido_estudio',
             'pedido_estudio_id',
             'asistencia_confirmada_en',
+            'requiere_aceptacion_paciente',
             'created_at',
             'updated_at',
         ]
+        extra_kwargs = {
+            'origen': {'required': False},
+        }
 
     def get_atencion(self, obj: Turno):
         if not obj:
@@ -435,6 +441,28 @@ class TurnoSerializer(serializers.ModelSerializer):
                     f"Turno existente: {turno_solapado.fecha_hora_inicio} - {turno_solapado.fecha_hora_fin} "
                     f"(usá es_sobreturno=true para agenda de sobreturno)."
                 })
+
+        if (
+            paciente
+            and inicio
+            and estado in [Turno.Estado.CONFIRMADO, Turno.Estado.RESERVADO]
+        ):
+            from turnos.separacion_paciente import (
+                SeparacionPacienteError,
+                validar_separacion_paciente,
+            )
+
+            try:
+                validar_separacion_paciente(
+                    paciente=paciente,
+                    inicio=inicio,
+                    fin=fin,
+                    recurso=recurso,
+                    excluir_turno_id=inst.id if inst else None,
+                    estado=estado,
+                )
+            except SeparacionPacienteError as exc:
+                raise serializers.ValidationError({'fecha_hora_inicio': exc.message}) from exc
 
         return attrs
 

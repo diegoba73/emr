@@ -210,3 +210,60 @@ class Feriado(models.Model):
     def __str__(self):
         estado = '' if self.activo else ' (inactivo)'
         return f"{self.fecha} — {self.nombre}{estado}"
+
+
+class LicenciaMedico(models.Model):
+    """Ausencia de un médico: cierra su agenda de turnos en el rango de fechas."""
+
+    class Motivo(models.TextChoices):
+        LICENCIA_MEDICA = 'LICENCIA_MEDICA', 'Licencia médica'
+        CONGRESO = 'CONGRESO', 'Congreso'
+        ESTUDIO = 'ESTUDIO', 'Estudio'
+        PERSONAL = 'PERSONAL', 'Asuntos personales'
+        OTRO = 'OTRO', 'Otro'
+
+    medico = models.ForeignKey(
+        Medico,
+        on_delete=models.CASCADE,
+        related_name='licencias',
+        verbose_name='Médico / profesional',
+    )
+    fecha_inicio = models.DateField(verbose_name='Fecha inicio')
+    fecha_fin = models.DateField(verbose_name='Fecha fin')
+    motivo = models.CharField(
+        max_length=30,
+        choices=Motivo.choices,
+        verbose_name='Motivo',
+    )
+    detalle = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Detalle',
+        help_text='Opcional (p. ej. nombre del congreso).',
+    )
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Licencia de médico'
+        verbose_name_plural = 'Licencias de médicos'
+        ordering = ['-fecha_inicio', '-id']
+        indexes = [
+            models.Index(fields=['medico', 'fecha_inicio', 'fecha_fin']),
+            models.Index(fields=['activo', 'fecha_inicio', 'fecha_fin']),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.fecha_inicio and self.fecha_fin and self.fecha_fin < self.fecha_inicio:
+            raise ValidationError({
+                'fecha_fin': 'La fecha fin no puede ser anterior a la fecha inicio.',
+            })
+
+    def __str__(self):
+        estado = '' if self.activo else ' (inactiva)'
+        return (
+            f"{self.medico_id} {self.fecha_inicio}→{self.fecha_fin} "
+            f"{self.get_motivo_display()}{estado}"
+        )

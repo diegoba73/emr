@@ -47,19 +47,18 @@ export async function listPedidosEstudio(params?: {
   return pages(data);
 }
 
-export async function createPedidoEstudioPaciente(payload: {
+/** Deshabilitado: estudios solo los agenda secretaría (presencial / teléfono). */
+export async function createPedidoEstudioPaciente(_payload: {
   foto: File;
   notas?: string;
   origen_canal?: PedidoEstudioCanal;
 }): Promise<PedidoEstudioPaciente> {
-  const fd = new FormData();
-  fd.append('foto', payload.foto);
-  if (payload.notas) fd.append('notas', payload.notas);
-  fd.append('origen_canal', payload.origen_canal || 'PORTAL');
-  const { data } = await apiClient.post(`${BASE}/pedidos/`, fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return data;
+  throw Object.assign(
+    new Error(
+      'Los turnos de estudio solo los agenda secretaría (presencial o por teléfono).'
+    ),
+    { response: { status: 403, data: { detail: 'Los turnos de estudio solo los agenda secretaría.' } } }
+  );
 }
 
 export async function agendarPedidoEstudio(

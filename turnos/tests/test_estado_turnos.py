@@ -879,6 +879,78 @@ class TestReprogramarTurno(APITestCase):
         assert r.data['notificacion']['whatsapp_enviado'] is False
         assert r.data['notificacion']['whatsapp_url']
         assert 'wa.me/' in r.data['notificacion']['whatsapp_url']
+        assert nuevo.requiere_aceptacion_paciente is True
+        assert r.data['turno']['requiere_aceptacion_paciente'] is True
+
+    def test_reprogramar_confirmado_pide_aceptacion_paciente(self):
+        """Secretaría reprograma CONSULTA CONFIRMADO → nuevo RESERVADO pendiente de aceptar."""
+        sec = User.objects.create_user(
+            username='te_rep_acc_sec', email='te_rep_acc_sec@test.com', password='x',
+            rol='secretaria',
+        )
+        pac_user = User.objects.create_user(
+            username='te_rep_acc_pac', email='te_rep_acc_pac@test.com', password='x',
+            rol='paciente',
+        )
+        self.paciente.user = pac_user
+        self.paciente.telefono = '1199887766'
+        self.paciente.save(update_fields=['user', 'telefono'])
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 2, hour=9)
+        nuevo_inicio, nuevo_fin = self._slot(4, hour=10)
+        self.client.force_authenticate(user=sec)
+        r = self.client.post(
+            f'/api/turnos/{turno.id}/reprogramar/',
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
+            format='json',
+        )
+        assert r.status_code == status.HTTP_200_OK, r.data
+        nuevo = Turno.objects.get(pk=r.data['turno']['id'])
+        assert nuevo.estado == Turno.Estado.RESERVADO
+        assert nuevo.requiere_aceptacion_paciente is True
+        notif = r.data.get('notificacion') or {}
+        assert notif.get('whatsapp_url')
+        from urllib.parse import unquote
+        assert 'aceptar o rechazar' in unquote(notif['whatsapp_url']).lower()
+
+        # Paciente acepta (confirmar).
+        self.client.force_authenticate(user=pac_user)
+        r_ok = self.client.post(f'/api/turnos/{nuevo.id}/confirmar/', {}, format='json')
+        assert r_ok.status_code == status.HTTP_200_OK, r_ok.data
+        nuevo.refresh_from_db()
+        assert nuevo.estado == Turno.Estado.CONFIRMADO
+        assert nuevo.requiere_aceptacion_paciente is False
+
+    def test_paciente_rechaza_horario_reprogramado(self):
+        sec = User.objects.create_user(
+            username='te_rep_rej_sec', email='te_rep_rej_sec@test.com', password='x',
+            rol='secretaria',
+        )
+        pac_user = User.objects.create_user(
+            username='te_rep_rej_pac', email='te_rep_rej_pac@test.com', password='x',
+            rol='paciente',
+        )
+        self.paciente.user = pac_user
+        self.paciente.save(update_fields=['user'])
+        turno = self._turno(self.medico_a, Turno.Estado.CONFIRMADO, 5, hour=9)
+        nuevo_inicio, nuevo_fin = self._slot(8, hour=11)
+        self.client.force_authenticate(user=sec)
+        r = self.client.post(
+            f'/api/turnos/{turno.id}/reprogramar/',
+            self._payload_reprog(turno, nuevo_inicio, nuevo_fin),
+            format='json',
+        )
+        assert r.status_code == status.HTTP_200_OK, r.data
+        nuevo_id = r.data['turno']['id']
+        self.client.force_authenticate(user=pac_user)
+        r_rej = self.client.post(
+            f'/api/turnos/{nuevo_id}/cancelar/',
+            {'motivo': 'Paciente rechazó el horario reprogramado desde la app'},
+            format='json',
+        )
+        assert r_rej.status_code == status.HTTP_200_OK, r_rej.data
+        nuevo = Turno.objects.get(pk=nuevo_id)
+        assert nuevo.estado == Turno.Estado.CANCELADO
+        assert nuevo.requiere_aceptacion_paciente is False
 
     def test_medico_propio_no_puede_reprogramar(self):
         user = User.objects.create_user(

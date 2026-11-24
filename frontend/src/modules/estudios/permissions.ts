@@ -28,13 +28,13 @@ function puedeOperarEstudios(user: User | null | undefined): boolean {
 export function canAccessEstudiosModule(user: User | null | undefined): boolean {
   if (!user) return false;
   // Laboratorio/bioquímico/secretaria_lab no usan este módulo: trabajan en LIMS.
+  // Paciente: sin acceso al módulo (ni menú ni ruta útil); solo reserva consultas en portal.
   if (user.is_superuser) return true;
   if (isOperadorLimsRole(normalizedRol(user)) || isSecretariaLabRole(normalizedRol(user))) return false;
   const rol = normalizedRol(user);
   return (
     rol === 'admin' ||
     rol === 'medico' ||
-    rol === 'paciente' ||
     isSecretariaInstitucionalRole(rol) ||
     rol === 'enfermeria' ||
     isProfesionalEstudioRole(rol)

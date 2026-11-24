@@ -4,7 +4,9 @@ ACEPTADO/ENTREGADO no significan que el usuario haya leído la notificación.
 
 Tipos:
 - CONFIRMAR_TURNO: turnos RESERVADO a más de 1 día (paciente debe confirmar estado).
-- ASISTENCIA: turnos CONFIRMADO en ventana ~24 hs (¿venís?).
+- ASISTENCIA: turnos CONFIRMADO ~48 hs antes (¿venís?), con adelanto a viernes
+  si las 48 hs caen sábado o domingo (p. ej. turno lunes).
+- ESTOY_EN_SALA: ~1 h antes del turno (RESERVADO/CONFIRMADO): avisar llegada en sala.
 """
 from datetime import datetime, time as dtime, timedelta
 import requests
@@ -19,6 +21,11 @@ EXPO_RECEIPTS = 'https://exp.host/--/api/v2/push/getReceipts'
 
 TIPO_ASISTENCIA = RecordatorioTurno.Tipo.ASISTENCIA
 TIPO_CONFIRMAR = RecordatorioTurno.Tipo.CONFIRMAR_TURNO
+TIPO_ESTOY_EN_SALA = RecordatorioTurno.Tipo.ESTOY_EN_SALA
+
+# Horizonte de búsqueda: 48 hs + hasta 2 días de adelanto (domingo→viernes).
+_HORIZONTE_ASISTENCIA = timedelta(days=5)
+VENTANA_ESTOY_EN_SALA = timedelta(hours=1)
 
 
 def headers():
@@ -26,6 +33,28 @@ def headers():
     if settings.EXPO_ACCESS_TOKEN:
         h['Authorization'] = f'Bearer {settings.EXPO_ACCESS_TOKEN}'
     return h
+
+
+def momento_aviso_asistencia_48h(fecha_hora_inicio):
+    """Instante en que el aviso de asistencia queda habilitado.
+
+    Nominal: 48 horas antes del turno.
+    Si ese instante cae sábado o domingo (TZ local), se adelanta al viernes
+    anterior a la misma hora. Así un turno del lunes no dispara el aviso el
+    sábado: se envía el viernes.
+    """
+    if timezone.is_naive(fecha_hora_inicio):
+        inicio = timezone.make_aware(fecha_hora_inicio)
+    else:
+        inicio = fecha_hora_inicio
+    nominal = inicio - timedelta(hours=48)
+    local = timezone.localtime(nominal)
+    # Monday=0 … Saturday=5, Sunday=6
+    if local.weekday() == 5:  # sábado → viernes
+        return nominal - timedelta(days=1)
+    if local.weekday() == 6:  # domingo → viernes
+        return nominal - timedelta(days=2)
+    return nominal
 
 
 def _dispositivos_paciente(user_id, now):
@@ -39,17 +68,19 @@ def _dispositivos_paciente(user_id, now):
 
 
 def preparar_recordatorios_asistencia(now=None):
-    """Push ~24 hs para turnos ya CONFIRMADO sin asistencia confirmada."""
+    """Push ~48 hs (regla finde→viernes) para CONFIRMADO sin asistencia confirmada."""
     now = now or timezone.now()
     turnos = Turno.objects.filter(
         estado=Turno.Estado.CONFIRMADO,
         fecha_hora_inicio__gt=now,
-        fecha_hora_inicio__lte=now + timedelta(hours=24),
+        fecha_hora_inicio__lte=now + _HORIZONTE_ASISTENCIA,
         asistencia_confirmada_en__isnull=True,
         paciente__user__isnull=False,
     ).select_related('paciente')
     count = 0
     for turno in turnos.iterator():
+        if now < momento_aviso_asistencia_48h(turno.fecha_hora_inicio):
+            continue
         for dispositivo in _dispositivos_paciente(turno.paciente.user_id, now):
             _, created = RecordatorioTurno.objects.get_or_create(
                 turno=turno,
@@ -86,10 +117,38 @@ def preparar_recordatorios_confirmacion(now=None):
     return count
 
 
-def preparar_recordatorios(now=None):
-    """Prepara ambos tipos de recordatorio. Compatibilidad con el comando periódico."""
+def preparar_recordatorios_estoy_en_sala(now=None):
+    """Push ~1 h antes: avisar llegada en sala (RESERVADO o CONFIRMADO)."""
     now = now or timezone.now()
-    return preparar_recordatorios_asistencia(now) + preparar_recordatorios_confirmacion(now)
+    # Incluye turnos cuyo inicio está entre ahora y ahora+1h (ya entraron en ventana).
+    turnos = Turno.objects.filter(
+        estado__in=[Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO],
+        fecha_hora_inicio__gt=now,
+        fecha_hora_inicio__lte=now + VENTANA_ESTOY_EN_SALA,
+        paciente__user__isnull=False,
+    ).select_related('paciente')
+    count = 0
+    for turno in turnos.iterator():
+        for dispositivo in _dispositivos_paciente(turno.paciente.user_id, now):
+            _, created = RecordatorioTurno.objects.get_or_create(
+                turno=turno,
+                dispositivo=dispositivo,
+                fecha_turno=turno.fecha_hora_inicio,
+                tipo=TIPO_ESTOY_EN_SALA,
+                defaults={'proximo_intento': now},
+            )
+            count += created
+    return count
+
+
+def preparar_recordatorios(now=None):
+    """Prepara los tres tipos de recordatorio. Compatibilidad con el comando periódico."""
+    now = now or timezone.now()
+    return (
+        preparar_recordatorios_asistencia(now)
+        + preparar_recordatorios_confirmacion(now)
+        + preparar_recordatorios_estoy_en_sala(now)
+    )
 
 
 def vigente(recordatorio, turno, dispositivo, now):
@@ -107,6 +166,8 @@ def vigente(recordatorio, turno, dispositivo, now):
     tipo = getattr(recordatorio, 'tipo', None) or TIPO_ASISTENCIA
     if tipo == TIPO_CONFIRMAR:
         return turno.estado == Turno.Estado.RESERVADO
+    if tipo == TIPO_ESTOY_EN_SALA:
+        return turno.estado in (Turno.Estado.RESERVADO, Turno.Estado.CONFIRMADO)
     return (
         turno.estado == Turno.Estado.CONFIRMADO
         and not turno.asistencia_confirmada_en
@@ -125,8 +186,18 @@ def _cuerpo_y_data(recordatorio, turno):
                 'tipo': 'confirmar_turno',
             },
         )
+    if tipo == TIPO_ESTOY_EN_SALA:
+        return (
+            'Falta 1 hora para tu turno. Cuando llegues, avisá que estás en la sala '
+            'desde la app (Mis turnos → Estoy en sala).',
+            {
+                'turno_id': turno.pk,
+                'institucion': settings.MOBILE_INSTITUTION_CODE,
+                'tipo': 'estoy_en_sala',
+            },
+        )
     return (
-        'Tenés un turno próximo. Abrí la app para confirmar tu asistencia. '
+        'En menos de 48 horas tenés un turno. Abrí la app para confirmar tu asistencia. '
         'Si necesitás cancelar, contactá a secretaría.',
         {
             'turno_id': turno.pk,

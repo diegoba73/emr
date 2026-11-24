@@ -9,8 +9,9 @@ CAMPOS_PACIENTE_MAYUSCULAS: tuple[str, ...] = (
     "nombre",
     "apellido",
     "direccion",
-    "obra_social",
+    # obra_social es FK al catálogo (no texto).
     "numero_afiliado",
+    "plan_obra_social",
 )
 
 

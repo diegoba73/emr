@@ -86,6 +86,121 @@ class TestTurnoAPI(APITestCase):
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'fecha_hora_inicio' in response.data or 'non_field_errors' in response.data
 
+    def test_origen_default_sistema_y_staff_puede_setear_telefono(self):
+        """Altas por API: default SISTEMA; secretaría puede indicar TELEFONO/PRESENCIAL.
+
+        Portal ``reservar-horario`` fuerza SISTEMA; reprogramar conserva el origen.
+        """
+        from datetime import datetime, time as time_cls
+
+        from medicos.models import DisponibilidadMedico
+
+        dia = timezone.localdate() + timedelta(days=7)
+        while dia.weekday() != 0:  # lunes estable para franja 9–13
+            dia += timedelta(days=1)
+        inicio_9 = timezone.make_aware(datetime.combine(dia, time_cls(9, 0)))
+        inicio_10 = inicio_9 + timedelta(minutes=20)
+        inicio_11 = inicio_9 + timedelta(minutes=40)
+        inicio_12 = inicio_9 + timedelta(hours=1)
+
+        DisponibilidadMedico.objects.create(
+            medico=self.medico,
+            dia_semana=dia.weekday(),
+            hora_inicio=time_cls(9, 0),
+            hora_fin=time_cls(13, 0),
+            tipo='CONSULTA',
+            recurso=self.recurso,
+            activo=True,
+        )
+        horario = DisponibilidadMedico.objects.filter(medico=self.medico).latest('id')
+
+        base = {
+            'paciente_id': self.paciente.id,
+            'medico_id': self.medico.id,
+            'recurso_id': self.recurso.id,
+            'fecha_hora_inicio': inicio_9.isoformat(),
+            'fecha_hora_fin': (inicio_9 + timedelta(minutes=20)).isoformat(),
+            'estado': Turno.Estado.CONFIRMADO,
+        }
+        r1 = self.client.post('/api/turnos/', base, format='json')
+        assert r1.status_code == status.HTTP_201_CREATED, r1.data
+        assert r1.data.get('origen') == Turno.Origen.SISTEMA
+
+        otro = Paciente.objects.create(dni='TA-ORIG-2', nombre='Lucia', apellido='Origen')
+        r2 = self.client.post(
+            '/api/turnos/',
+            {
+                **base,
+                'paciente_id': otro.id,
+                'fecha_hora_inicio': inicio_10.isoformat(),
+                'fecha_hora_fin': (inicio_10 + timedelta(minutes=20)).isoformat(),
+                'origen': Turno.Origen.TELEFONO,
+            },
+            format='json',
+        )
+        assert r2.status_code == status.HTTP_201_CREATED, r2.data
+        assert r2.data.get('origen') == Turno.Origen.TELEFONO
+        assert Turno.objects.get(pk=r2.data['id']).origen == Turno.Origen.TELEFONO
+
+        r3 = self.client.post(
+            '/api/turnos/',
+            {
+                **base,
+                'paciente_id': Paciente.objects.create(
+                    dni='TA-ORIG-3', nombre='Pedro', apellido='Presencial'
+                ).id,
+                'fecha_hora_inicio': inicio_11.isoformat(),
+                'fecha_hora_fin': (inicio_11 + timedelta(minutes=20)).isoformat(),
+                'origen': Turno.Origen.PRESENCIAL,
+            },
+            format='json',
+        )
+        assert r3.status_code == status.HTTP_201_CREATED, r3.data
+        assert r3.data.get('origen') == Turno.Origen.PRESENCIAL
+
+        # Portal: reservar-horario fuerza SISTEMA (slot libre 12:00).
+        pac_user = User.objects.create_user(
+            username='ta_pac_origen',
+            email='ta_pac_origen@example.com',
+            password='testpass123',
+            rol='paciente',
+        )
+        self.paciente.user = pac_user
+        self.paciente.save(update_fields=['user'])
+        Turno.objects.filter(paciente=self.paciente).exclude(
+            estado=Turno.Estado.CANCELADO
+        ).update(estado=Turno.Estado.CANCELADO)
+        self.client.force_authenticate(user=pac_user)
+        rp = self.client.post(
+            '/api/turnos/reservar-horario/',
+            {
+                'horario_id': horario.pk,
+                'inicio': inicio_12.isoformat(),
+                'motivo': 'Portal',
+            },
+            format='json',
+        )
+        assert rp.status_code == status.HTTP_201_CREATED, rp.data
+        assert rp.data.get('origen') == Turno.Origen.SISTEMA
+
+        # Reprogramar el de teléfono a 12:20 conserva TELEFONO.
+        self.client.force_authenticate(user=self.user)
+        t_tel = Turno.objects.get(pk=r2.data['id'])
+        nuevo_inicio = inicio_12 + timedelta(minutes=20)
+        rr = self.client.post(
+            f'/api/turnos/{t_tel.pk}/reprogramar/',
+            {
+                'fecha_hora_inicio': nuevo_inicio.isoformat(),
+                'fecha_hora_fin': (nuevo_inicio + timedelta(minutes=20)).isoformat(),
+                'motivo': 'Mantiene origen teléfono',
+                'recurso_id': self.recurso.id,
+            },
+            format='json',
+        )
+        assert rr.status_code == status.HTTP_200_OK, rr.data
+        nuevo_id = rr.data['turno']['id'] if 'turno' in rr.data else rr.data['id']
+        assert Turno.objects.get(pk=nuevo_id).origen == Turno.Origen.TELEFONO
+
     def test_secretaria_puede_crear_sobreturno_solapado(self):
         """Secretaría agenda un sobreturno sobre un slot ya ocupado."""
         secretaria = User.objects.create_user(

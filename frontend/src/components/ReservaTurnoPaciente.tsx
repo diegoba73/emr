@@ -24,11 +24,11 @@ import {
   reservarHorario,
   DiaDisponible,
   SlotMedico,
-  TipoAgenda,
 } from '../services/agendaMedica';
+import { notifyTurnosChanged, useLiveRefresh } from '../hooks/useLiveRefresh';
+import { getTurnosRevision } from '../services/apiService';
 import { Medico, Turno } from '../types';
 import { getSafeClinicalActionMessage } from '../utils/apiError';
-import { createPedidoEstudioPaciente } from '../services/pedidosEstudioApi';
 
 const Calendar = CalendarBase as any;
 
@@ -80,7 +80,7 @@ export default function ReservaTurnoPaciente({
   }, []);
 
   const [selectedMedico, setSelectedMedico] = useState<Medico | null>(null);
-  const [tipo, setTipo] = useState<TipoAgenda>('CONSULTA');
+  const tipo = 'CONSULTA' as const;
   const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [diasLibres, setDiasLibres] = useState<DiaDisponible[]>([]);
@@ -95,9 +95,8 @@ export default function ReservaTurnoPaciente({
   const [success, setSuccess] = useState('');
   const [reloadDias, setReloadDias] = useState(0);
   const savingRef = useRef(false);
-  const [fotoPedido, setFotoPedido] = useState<File | null>(null);
-  const [notasPedido, setNotasPedido] = useState('');
-
+  const selectedRef = useRef<SlotMedico | null>(null);
+  selectedRef.current = selected;
   const medicoId = selectedMedico?.id ?? null;
   const duracionLabel = selectedMedico?.duracion_slot_min || slots[0]?.duracion_min;
 
@@ -162,6 +161,29 @@ export default function ReservaTurnoPaciente({
     };
   }, [medicoId, fechaElegida, tipo]);
 
+  const silentRefreshDisponibilidad = useCallback(async () => {
+    if (!medicoId || savingRef.current) return;
+    try {
+      if (rangoMes.desde <= rangoMes.hasta) {
+        setDiasLibres(await getDiasDisponibles(medicoId, rangoMes.desde, rangoMes.hasta, tipo));
+      }
+      if (!fechaElegida) return;
+      const s = await getSlotsMedico(medicoId, fechaElegida, tipo);
+      setSlots(s);
+      const sel = selectedRef.current;
+      if (sel && !s.some((x) => x.inicio === sel.inicio && x.recurso_id === sel.recurso_id)) {
+        setSelected(null);
+      }
+    } catch {
+      /* silencioso */
+    }
+  }, [medicoId, rangoMes.desde, rangoMes.hasta, tipo, fechaElegida]);
+
+  useLiveRefresh(silentRefreshDisponibilidad, {
+    enabled: Boolean(medicoId),
+    getRevision: getTurnosRevision,
+  });
+
   const calendarEvents: DiaEvent[] = useMemo(
     () =>
       diasLibres.map((d) => {
@@ -205,6 +227,7 @@ export default function ReservaTurnoPaciente({
       setFechaElegida('');
       setSlots([]);
       setReloadDias((r) => r + 1);
+      notifyTurnosChanged();
       onReserved();
     } catch (e) {
       setError(
@@ -235,7 +258,8 @@ export default function ReservaTurnoPaciente({
         Pedir un turno
       </Typography>
       <Typography sx={{ mb: 2 }} color="text.secondary">
-        Buscá tu médico, elegí el día en el calendario y después la hora libre.
+        Solo consultas: buscá tu médico, elegí el día y la hora libre. Los estudios los agenda
+        secretaría (presencial o por teléfono).
       </Typography>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
@@ -256,134 +280,40 @@ export default function ReservaTurnoPaciente({
       )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>
-          ¿Consulta o estudio?
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant={tipo === 'CONSULTA' ? 'contained' : 'outlined'}
-            disabled={saving}
-            onClick={() => {
-              setTipo('CONSULTA');
-              setSuccess('');
-            }}
-          >
-            Consulta
-          </Button>
-          <Button
-            variant={tipo === 'ESTUDIO' ? 'contained' : 'outlined'}
-            disabled={saving}
-            onClick={() => {
-              setTipo('ESTUDIO');
-              setSelectedMedico(null);
-              setSlots([]);
-              setFechaElegida('');
-              setSelected(null);
-              setSuccess('');
-              setError('');
-            }}
-          >
-            Estudio
-          </Button>
-        </Box>
-
-        {tipo === 'ESTUDIO' ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 520 }}>
-            <Alert severity="info">
-              No hace falta elegir médico ni horario. Subí una foto clara del pedido que te hizo el
-              médico. Secretaría tipifica el estudio, agenda el turno y después podés confirmarlo o
-              pedir otro día desde Mis turnos.
-            </Alert>
-            <Button variant="outlined" component="label" disabled={saving}>
-              {fotoPedido ? 'Cambiar foto' : 'Elegir foto del pedido'}
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => setFotoPedido(e.target.files?.[0] || null)}
-              />
-            </Button>
-            {fotoPedido && (
-              <Typography variant="body2" color="text.secondary">
-                Archivo: {fotoPedido.name}
-              </Typography>
-            )}
-            <TextField
-              label="Nota (opcional)"
-              value={notasPedido}
-              onChange={(e) => setNotasPedido(e.target.value)}
-              fullWidth
-              inputProps={{ maxLength: 255 }}
-              disabled={saving}
-            />
-            <Button
-              variant="contained"
-              disabled={saving || !fotoPedido}
-              onClick={async () => {
-                if (!fotoPedido || savingRef.current) return;
-                savingRef.current = true;
-                setSaving(true);
-                setError('');
-                setSuccess('');
-                try {
-                  await createPedidoEstudioPaciente({
-                    foto: fotoPedido,
-                    notas: notasPedido,
-                    origen_canal: 'PORTAL',
-                  });
-                  setSuccess(
-                    'Pedido enviado. Secretaría lo tipifica y te propone un horario; después podés confirmarlo o reprogramarlo.'
-                  );
-                  setFotoPedido(null);
-                  setNotasPedido('');
-                  onReserved();
-                } catch (e) {
-                  setError(getSafeClinicalActionMessage(e, 'No se pudo enviar el pedido.'));
-                } finally {
-                  savingRef.current = false;
-                  setSaving(false);
-                }
-              }}
-            >
-              {saving ? 'Enviando…' : 'Enviar pedido de estudio'}
-            </Button>
-          </Box>
-        ) : (
-          <AsyncAutocomplete<Medico>
-            label="Buscar médico"
-            endpoint="/medicos/"
-            value={selectedMedico}
-            onChange={(m) => {
-              setSelectedMedico(m);
-              setSuccess('');
-              setCalendarDate(new Date());
-              setCalendarView('month');
-            }}
-            getOptionLabel={(option) => {
-              const apellido = option.apellido || '';
-              const nombre = option.nombre || '';
-              const esp =
-                (option as Medico & { especialidad_nombre?: string }).especialidad_nombre ||
-                (option.especialidad as { nombre?: string } | undefined)?.nombre ||
-                '';
-              const dur = option.duracion_slot_min ? ` · ${option.duracion_slot_min} min` : '';
-              return `${apellido}, ${nombre}${esp ? ` — ${esp}` : ''}${dur}`.trim();
-            }}
-            placeholder="Escribí apellido o nombre (mín. 2 letras)"
-            helperText={
-              selectedMedico?.duracion_slot_min
-                ? `Cada turno dura ${selectedMedico.duracion_slot_min} minutos`
-                : 'Escribí para buscar y elegí un médico de la lista'
-            }
-            minSearchLength={2}
-            debounceMs={400}
-            disabled={saving}
-            sx={{ maxWidth: 480 }}
-          />
-        )}
+        <AsyncAutocomplete<Medico>
+          label="Buscar médico"
+          endpoint="/medicos/"
+          value={selectedMedico}
+          onChange={(m) => {
+            setSelectedMedico(m);
+            setSuccess('');
+            setCalendarDate(new Date());
+            setCalendarView('month');
+          }}
+          getOptionLabel={(option) => {
+            const apellido = option.apellido || '';
+            const nombre = option.nombre || '';
+            const esp =
+              (option as Medico & { especialidad_nombre?: string }).especialidad_nombre ||
+              (option.especialidad as { nombre?: string } | undefined)?.nombre ||
+              '';
+            const dur = option.duracion_slot_min ? ` · ${option.duracion_slot_min} min` : '';
+            return `${apellido}, ${nombre}${esp ? ` — ${esp}` : ''}${dur}`.trim();
+          }}
+          placeholder="Escribí apellido o nombre (mín. 2 letras)"
+          helperText={
+            selectedMedico?.duracion_slot_min
+              ? `Cada turno dura ${selectedMedico.duracion_slot_min} minutos`
+              : 'Escribí para buscar y elegí un médico de la lista'
+          }
+          minSearchLength={2}
+          debounceMs={400}
+          disabled={saving}
+          sx={{ maxWidth: 480 }}
+        />
       </Paper>
 
-      {tipo === 'CONSULTA' && medicoId && (
+      {medicoId && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle1" gutterBottom>
             Calendario de {medicoLabel}
@@ -450,7 +380,7 @@ export default function ReservaTurnoPaciente({
         </Paper>
       )}
 
-      {tipo === 'CONSULTA' && medicoId && fechaElegida && (
+      {medicoId && fechaElegida && (
         <Paper sx={{ p: 2, mb: 2 }} data-testid="reserva-horarios">
           <Typography variant="subtitle1" gutterBottom>
             Horarios del{' '}
@@ -485,13 +415,13 @@ export default function ReservaTurnoPaciente({
         </Paper>
       )}
 
-      {tipo === 'CONSULTA' && medicoId && !!turnos.length && (
+      {medicoId && !!turnos.length && (
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
           Tus turnos ya reservados aparecen en la lista de abajo.
         </Typography>
       )}
 
-      <Dialog open={tipo === 'CONSULTA' && Boolean(selected)} onClose={() => { if (!saving) setSelected(null); }} fullWidth maxWidth="sm">
+      <Dialog open={Boolean(selected)} onClose={() => { if (!saving) setSelected(null); }} fullWidth maxWidth="sm">
         <DialogTitle>Confirmar turno</DialogTitle>
         <DialogContent>
           {selected && (
@@ -500,7 +430,7 @@ export default function ReservaTurnoPaciente({
                 <strong>Médico:</strong> {medicoLabel || '—'}
               </Typography>
               <Typography>
-                <strong>Atención:</strong> {tipo === 'ESTUDIO' ? 'Estudio' : 'Consulta'}
+                <strong>Atención:</strong> Consulta
               </Typography>
               <Typography>
                 <strong>Día y hora:</strong>{' '}
@@ -511,7 +441,7 @@ export default function ReservaTurnoPaciente({
               </Typography>
               {selected.recurso_nombre && (
                 <Typography>
-                  <strong>{tipo === 'ESTUDIO' ? 'Sala' : 'Consultorio'}:</strong> {selected.recurso_nombre}
+                  <strong>Consultorio:</strong> {selected.recurso_nombre}
                 </Typography>
               )}
             </Box>

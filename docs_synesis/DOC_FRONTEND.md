@@ -285,12 +285,26 @@ Alineado con matriz backend C5.8.1 (`turnos.views.TurnoViewSet`).
 | Cerrar atención | `POST .../cerrar/` vía `closeAtencion` (C5.10.1-A; antes `/cerrar_atencion/` legacy) |
 | `TurnosMedico.tsx` | **No enrutado** en `App.tsx`; migrado a `iniciarAtencionTurno` por si se reactiva |
 | Chip de estado (solo lectura) para todos los roles | PATCH/PUT `estado` bloqueado (400) |
-| Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo vía `MotivoDialog`); crea turno nuevo + cancela anterior + historial; franja de agenda del médico |
+| Guardar con cambio de fecha/médico/recurso | `POST .../reprogramar/` (motivo vía `MotivoDialog`); crea turno nuevo + cancela anterior + historial; franja de agenda del médico; consulta queda pendiente de aceptación del paciente (aviso en alert) |
+| Portal / app: aceptar o rechazar reprogramación | Si `requiere_aceptacion_paciente` (consulta **o** estudio): botones «Aceptar/Rechazar nuevo horario» (`confirmar` / `cancelar`) |
+| Agenda: DNI inexistente | `PacienteAgendaSelect` en `TurnoModal` / `ProgramacionTurnoForm`: alerta + «Crear paciente» → `PacienteFormDialog` (DNI prefilled) → selecciona la ficha y sigue el turno |
 | `cancelarTurno(id, motivo)` en `api.ts` | Motivo obligatorio (prompt mínimo) |
 | Pedidos de estudio (bandeja) | `/estudios-complementarios/pedidos` — tipificar + agendar desde foto |
 | Catálogo agenda estudios | `/estudios-complementarios/catalogo-agenda` — médico↔tipo y tipo↔sala |
-| Portal / app: Estudio | Solo foto (`createPedidoEstudioPaciente` / `POST /api/movil/pedidos-estudio/`); consulta intacta con slots |
-| Portal Mis turnos | Confirmar `RESERVADO`; reprogramar si `viene_de_pedido_estudio` |
+| Portal / app: Estudio | **No** reserva/confirmación/reprogramación de estudios; alta de pedido foto deshabilitada (403). Solo consulta con slots |
+| Portal Mis turnos | Confirmar `RESERVADO` solo en **consultas**; estudios: mensaje a contactar secretaría |
+
+### Turnos — sync multi-secretaría (fase híbrida)
+
+| Pieza | Rol |
+|-------|-----|
+| `GET /api/turnos/revision/` | Stamp `max(updated_at)\|count` del alcance del usuario |
+| `useLiveRefresh` + `getTurnosRevision` | Poll ~1s del stamp; `refreshTurnos` / slots solo si cambia |
+| `notifyTurnosChanged` + BroadcastChannel | Inmediato en la misma PC / otras pestañas |
+| Agenda `/turnos`, SlotPicker, portal, estudios | Cableados a `getRevision` |
+| Móvil | `GET /api/movil/turnos/revision/` + mismo patrón en home/detalle/reservar |
+
+**No** hay WebSocket/SSE en esta fase (Gunicorn WSGI, sin Redis). WebSocket Channels queda deuda en `DOC_RIESGOS_DEUDA_TECNICA.md`.
 
 - Validación: `cd frontend && npm run build && npm exec -- tsc --noEmit`.
 

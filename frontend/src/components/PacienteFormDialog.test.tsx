@@ -20,6 +20,18 @@ beforeEach(() => {
   jest.resetAllMocks();
   (getCandidatosDuplicadoPaciente as jest.Mock).mockResolvedValue({ bloquea_alta: false, resultados: [] });
 });
+it('precompleta el DNI inicial al abrir desde la agenda', () => {
+  render(
+    <PacienteFormDialog
+      open
+      mode="create"
+      initialValues={{ dni: '30111999' }}
+      onSaved={jest.fn()}
+      onClose={jest.fn()}
+    />,
+  );
+  expect(screen.getByDisplayValue('30111999')).toBeInTheDocument();
+});
 it('explica la fecha obligatoria antes de intentar crear', () => {
   render(<PacienteFormDialog open mode="create" onSaved={jest.fn()} onClose={jest.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Crear Paciente' }));

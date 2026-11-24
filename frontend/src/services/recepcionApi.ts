@@ -86,7 +86,13 @@ export const checkinWalkinRecepcion = async (payload: {
 
 export const accionLlegada = async (
   id: number,
-  accion: 'llamar' | 'derivar-espera' | 'en-atencion' | 'atendido' | 'no-asistio',
+  accion:
+    | 'llamar'
+    | 'derivar-espera'
+    | 'volver-recepcion'
+    | 'en-atencion'
+    | 'atendido'
+    | 'no-asistio',
   body?: Record<string, unknown>
 ): Promise<LlegadaRecepcion> => {
   const { data } = await api.post(`/recepcion/llegadas/${id}/${accion}/`, body || {});

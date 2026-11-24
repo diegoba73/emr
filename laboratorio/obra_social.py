@@ -21,8 +21,11 @@ def obra_social_efectiva(obj: Any) -> tuple[str, str]:
     paciente = getattr(obj, "paciente", None)
     if paciente is None:
         return "", ""
+    from pacientes.obras_sociales import label_obra_social
+
+    os_raw = getattr(paciente, "obra_social", None)
     return (
-        (getattr(paciente, "obra_social", None) or "").strip(),
+        label_obra_social(os_raw),
         (getattr(paciente, "numero_afiliado", None) or "").strip(),
     )
 

@@ -27,6 +27,8 @@ import { Add, Clear, Visibility } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { withNavBack } from '../utils/navBack';
 import { useData } from '../contexts/DataContext';
+import { useLiveRefresh } from '../hooks/useLiveRefresh';
+import { getTurnosRevision } from '../services/apiService';
 import { parseEstudiosApiError } from '../modules/estudios/apiErrors';
 import {
   PRACTICA_OPTIONS,
@@ -197,20 +199,10 @@ const EstudiosComplementarios: React.FC = () => {
       .catch(() => setTipos([]));
   }, [currentUser]);
 
-  useEffect(() => {
-    if (!canAccessEstudiosModule(currentUser)) return;
-    const refreshIfVisible = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    document.addEventListener('visibilitychange', refreshIfVisible);
-    window.addEventListener('focus', refreshIfVisible);
-    const id = window.setInterval(refreshIfVisible, 20000);
-    return () => {
-      document.removeEventListener('visibilitychange', refreshIfVisible);
-      window.removeEventListener('focus', refreshIfVisible);
-      window.clearInterval(id);
-    };
-  }, [currentUser, load]);
+  useLiveRefresh(() => load(), {
+    enabled: canAccessEstudiosModule(currentUser),
+    getRevision: getTurnosRevision,
+  });
 
   const rows = useMemo(() => {
     let merged = mergeProgramacionRows(turnos, estudios, filtroTipoActividad);

@@ -103,13 +103,20 @@ def _mensaje_paciente(turno) -> str:
         med = turno.medico
         medico = getattr(med, 'nombre_completo', None) or str(med)
     institucion = getattr(settings, 'MOBILE_INSTITUTION_NAME', None) or 'SYNESIS'
+    pide_aceptacion = bool(getattr(turno, 'requiere_aceptacion_paciente', False))
     partes = [
         f'Hola, le informamos que su turno en {institucion} fue reprogramado.',
         f'Nueva fecha y hora: {cuando}.',
     ]
     if medico:
         partes.append(f'Médico: {medico}.')
-    partes.append('Ante cualquier duda, comuníquese con secretaría.')
+    if pide_aceptacion:
+        partes.append(
+            'Por favor abra la app o el portal para aceptar o rechazar el nuevo horario. '
+            'Si no puede, comuníquese con secretaría.'
+        )
+    else:
+        partes.append('Ante cualquier duda, comuníquese con secretaría.')
     return ' '.join(partes)
 
 
@@ -139,11 +146,18 @@ def _enviar_push(turno) -> int:
         sesion__expira_en__gt=now,
         sesion__user__is_active=True,
     )
-    body = (
-        f'Su turno fue reprogramado para el {_formato_fecha_hora(turno.fecha_hora_inicio)}. '
-        'Abrí la app para ver el detalle.'
-    )
-    title = f'SYNESIS · turno reprogramado'
+    pide_aceptacion = bool(getattr(turno, 'requiere_aceptacion_paciente', False))
+    if pide_aceptacion:
+        body = (
+            f'Su turno fue reprogramado para el {_formato_fecha_hora(turno.fecha_hora_inicio)}. '
+            'Abrí la app para aceptar o rechazar el nuevo horario.'
+        )
+    else:
+        body = (
+            f'Su turno fue reprogramado para el {_formato_fecha_hora(turno.fecha_hora_inicio)}. '
+            'Abrí la app para ver el detalle.'
+        )
+    title = 'SYNESIS · turno reprogramado'
     enviados = 0
     for dispositivo in dispositivos.iterator():
         try:
@@ -158,6 +172,7 @@ def _enviar_push(turno) -> int:
                     'data': {
                         'turno_id': turno.pk,
                         'tipo': 'turno_reprogramado',
+                        'requiere_aceptacion': pide_aceptacion,
                         'institucion': getattr(settings, 'MOBILE_INSTITUTION_CODE', ''),
                     },
                     'sound': 'default',

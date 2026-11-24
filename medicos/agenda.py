@@ -2,7 +2,7 @@
 from datetime import datetime, time, timedelta
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-from .models import DisponibilidadMedico, ExcepcionMedico, Feriado, Medico
+from .models import DisponibilidadMedico, ExcepcionMedico, Feriado, LicenciaMedico, Medico
 
 DEFAULT_DURACION_MIN = 20
 # Compat: importadores legacy. Preferir duracion_de(medico).
@@ -40,6 +40,33 @@ def mensaje_feriado(fecha) -> str:
     return f'Día feriado: {feriado.nombre}.'
 
 
+def licencia_activa(medico, fecha):
+    """Devuelve una LicenciaMedico activa que cubra la fecha para ese médico, o None."""
+    if not medico or not fecha:
+        return None
+    medico_id = getattr(medico, 'pk', medico)
+    return (
+        LicenciaMedico.objects.filter(
+            medico_id=medico_id,
+            activo=True,
+            fecha_inicio__lte=fecha,
+            fecha_fin__gte=fecha,
+        )
+        .order_by('fecha_inicio', 'id')
+        .first()
+    )
+
+
+def mensaje_licencia(medico, fecha) -> str:
+    licencia = licencia_activa(medico, fecha)
+    if not licencia:
+        return ''
+    motivo = licencia.get_motivo_display()
+    detalle = (licencia.detalle or '').strip()
+    extra = f' ({detalle})' if detalle else ''
+    return f'El profesional está de licencia: {motivo}{extra}.'
+
+
 def turnos_pendientes_feriado(fecha):
     """Turnos RESERVADO/CONFIRMADO del día local que secretaría debe gestionar."""
     from turnos.models import Turno
@@ -58,29 +85,58 @@ def turnos_pendientes_feriado(fecha):
     )
 
 
+def turnos_pendientes_licencia(licencia: LicenciaMedico):
+    """Turnos RESERVADO/CONFIRMADO del médico en el rango de la licencia."""
+    from turnos.models import Turno
+
+    tz = timezone.get_current_timezone()
+    inicio = timezone.make_aware(datetime.combine(licencia.fecha_inicio, time.min), tz)
+    fin = timezone.make_aware(
+        datetime.combine(licencia.fecha_fin + timedelta(days=1), time.min),
+        tz,
+    )
+    return (
+        Turno.objects.filter(
+            medico_id=licencia.medico_id,
+            fecha_hora_inicio__gte=inicio,
+            fecha_hora_inicio__lt=fin,
+            estado__in=ESTADOS_TURNO_PENDIENTE_FERIADO,
+        )
+        .select_related('paciente', 'medico')
+        .order_by('fecha_hora_inicio')
+    )
+
+
+def _serializar_turno_pendiente(t) -> dict:
+    paciente = t.paciente
+    medico = t.medico
+    return {
+        'id': t.pk,
+        'estado': t.estado,
+        'fecha_hora_inicio': t.fecha_hora_inicio.isoformat() if t.fecha_hora_inicio else None,
+        'paciente_id': paciente.pk if paciente else None,
+        'paciente_nombre': (
+            f'{paciente.apellido}, {paciente.nombre}'.strip(', ') if paciente else None
+        ),
+        'medico_id': medico.pk if medico else None,
+        'medico_nombre': (
+            f'{medico.apellido}, {medico.nombre}'.strip(', ') if medico else None
+        ),
+    }
+
+
 def serializar_turnos_pendientes_feriado(fecha):
-    rows = []
-    for t in turnos_pendientes_feriado(fecha):
-        paciente = t.paciente
-        medico = t.medico
-        rows.append({
-            'id': t.pk,
-            'estado': t.estado,
-            'fecha_hora_inicio': t.fecha_hora_inicio.isoformat() if t.fecha_hora_inicio else None,
-            'paciente_id': paciente.pk if paciente else None,
-            'paciente_nombre': (
-                f'{paciente.apellido}, {paciente.nombre}'.strip(', ') if paciente else None
-            ),
-            'medico_id': medico.pk if medico else None,
-            'medico_nombre': (
-                f'{medico.apellido}, {medico.nombre}'.strip(', ') if medico else None
-            ),
-        })
-    return rows
+    return [_serializar_turno_pendiente(t) for t in turnos_pendientes_feriado(fecha)]
+
+
+def serializar_turnos_pendientes_licencia(licencia: LicenciaMedico):
+    return [_serializar_turno_pendiente(t) for t in turnos_pendientes_licencia(licencia)]
 
 
 def intervalos(medico, fecha, tipo=None):
     if feriado_activo(fecha):
+        return
+    if licencia_activa(medico, fecha):
         return
     horarios = DisponibilidadMedico.objects.filter(medico=medico, activo=True, dia_semana=fecha.weekday()).select_related('recurso')
     if tipo:
@@ -164,6 +220,9 @@ def franja_publicada(medico, inicio, fin, *, tipo=None, horario_id=None):
     msg = mensaje_feriado(local.date())
     if msg:
         raise ValidationError(msg)
+    msg_lic = mensaje_licencia(medico, local.date())
+    if msg_lic:
+        raise ValidationError(msg_lic)
     for horario, a, b in intervalos(medico, local.date(), tipo):
         if a == inicio and b == fin and (horario_id is None or horario.pk == horario_id):
             return horario
@@ -258,6 +317,9 @@ def validar_reserva(
     msg_feriado = mensaje_feriado(local.date())
     if msg_feriado:
         raise ValidationError(msg_feriado)
+    msg_lic = mensaje_licencia(medico, local.date())
+    if msg_lic:
+        raise ValidationError(msg_lic)
     recurso_efectivo = recurso
     if exigir_horario or configurado:
         if inicio <= timezone.now():

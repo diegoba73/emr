@@ -4,6 +4,29 @@ from django.conf import settings
 from pacientes.texto import aplicar_mayusculas_paciente, normalizar_texto_paciente
 
 
+class ObraSocial(models.Model):
+    """Catálogo formal de obras sociales (incl. PARTICULAR = sin cobertura)."""
+
+    codigo = models.CharField(max_length=80, unique=True, verbose_name='Código')
+    nombre = models.CharField(max_length=150, verbose_name='Nombre')
+    activo = models.BooleanField(default=True, db_index=True, verbose_name='Activo')
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Obra social'
+        verbose_name_plural = 'Obras sociales'
+        ordering = ['nombre', 'codigo']
+
+    def __str__(self):
+        return self.nombre or self.codigo
+
+    def save(self, *args, **kwargs):
+        self.codigo = (self.codigo or '').strip().upper()
+        self.nombre = (self.nombre or '').strip() or self.codigo
+        super().save(*args, **kwargs)
+
+
 class Paciente(models.Model):
     """
     Modelo para pacientes del sistema.
@@ -42,9 +65,23 @@ class Paciente(models.Model):
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
     direccion = models.TextField(blank=True, null=True, verbose_name="Dirección")
     
-    # Información de obra social
-    obra_social = models.CharField(max_length=100, blank=True, null=True, verbose_name="Obra Social")
+    # Información de obra social (FK al catálogo; espejo de afiliación principal)
+    obra_social = models.ForeignKey(
+        ObraSocial,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pacientes',
+        verbose_name='Obra Social',
+    )
     numero_afiliado = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número de Afiliado")
+    plan_obra_social = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        verbose_name='Plan de obra social',
+        help_text='Plan de la cobertura principal (obligatorio si no es PARTICULAR al reservar desde la app).',
+    )
     familiar_nombre = models.CharField(
         max_length=150,
         blank=True,
@@ -134,7 +171,7 @@ class Paciente(models.Model):
 
 
 class PacienteAfiliacion(models.Model):
-    """Afiliación a obra social de un paciente (fase 1: texto libre).
+    """Afiliación a obra social de un paciente (FK al catálogo).
 
     ``Paciente.obra_social`` / ``numero_afiliado`` siguen siendo el espejo de la
     afiliación principal para compatibilidad (SEROS, serializers livianos, PDF
@@ -147,12 +184,24 @@ class PacienteAfiliacion(models.Model):
         related_name="afiliaciones",
         verbose_name="Paciente",
     )
-    obra_social = models.CharField(max_length=100, verbose_name="Obra Social")
+    obra_social = models.ForeignKey(
+        ObraSocial,
+        on_delete=models.PROTECT,
+        related_name='afiliaciones',
+        verbose_name='Obra Social',
+    )
     numero_afiliado = models.CharField(
         max_length=50,
         blank=True,
         default="",
         verbose_name="Número de Afiliado",
+    )
+    plan = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        verbose_name='Plan',
+        help_text='Plan de la obra social (obligatorio para coberturas no PARTICULAR en reserva app).',
     )
     es_principal = models.BooleanField(default=False, verbose_name="Principal")
     activo = models.BooleanField(default=True, verbose_name="Activo")
@@ -162,7 +211,7 @@ class PacienteAfiliacion(models.Model):
     class Meta:
         verbose_name = "Afiliación de paciente"
         verbose_name_plural = "Afiliaciones de paciente"
-        ordering = ["-es_principal", "obra_social", "id"]
+        ordering = ["-es_principal", "obra_social__nombre", "id"]
         indexes = [
             models.Index(fields=["paciente", "activo"], name="pac_afil_pac_act_idx"),
         ]
@@ -176,11 +225,12 @@ class PacienteAfiliacion(models.Model):
 
     def __str__(self):
         marca = " *" if self.es_principal else ""
-        return f"{self.obra_social} ({self.numero_afiliado or 's/n'}){marca}"
+        os_label = self.obra_social.nombre if self.obra_social_id else '?'
+        return f"{os_label} ({self.numero_afiliado or 's/n'}){marca}"
 
     def save(self, *args, **kwargs):
-        self.obra_social = normalizar_texto_paciente(self.obra_social) or ""
         self.numero_afiliado = normalizar_texto_paciente(self.numero_afiliado) or ""
+        self.plan = normalizar_texto_paciente(self.plan) or ""
         super().save(*args, **kwargs)
 
 

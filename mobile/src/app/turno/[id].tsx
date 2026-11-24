@@ -2,11 +2,13 @@ import React, { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Alert } from 'react-native';
 import { api } from '../../lib/api';
-import { AnuncioRecepcion, RecepcionHoy, Slot, Turno } from '../../lib/types';
+import { AnuncioRecepcion, RecepcionHoy, Turno } from '../../lib/types';
 import { useSession } from '../../lib/session';
 import { dateKey } from '../../lib/calendar';
-import { Action, Body, Card, ErrorText, Field, Loading, Page, Title } from '../../components/ui';
+import { Action, Body, Card, ErrorText, Loading, Page, Title } from '../../components/ui';
 import { formatFechaHoraDisplay, formatHoraDisplay } from '../../utils/dateFieldFormat';
+import { useLiveRefresh } from '../../lib/useLiveRefresh';
+import { enVentanaEstoyEnSala } from '../../lib/estoyEnSala';
 
 export default function Detail() {
   const [now, setNow] = useState(() => Date.now());
@@ -19,16 +21,15 @@ export default function Detail() {
   const [error, setError] = useState('');
   const lock = useRef(false);
   const loadGen = useRef(0);
-  const [reprogFecha, setReprogFecha] = useState('');
-  const [reprogSlots, setReprogSlots] = useState<Slot[]>([]);
-  const [showReprog, setShowReprog] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     const gen = ++loadGen.current;
     const turnoId = id;
     setNow(Date.now());
-    setLoading(true);
-    setError('');
+    if (!opts?.silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const data = await api<Turno>(`/turnos/${turnoId}/`);
       if (gen !== loadGen.current) return;
@@ -40,10 +41,12 @@ export default function Detail() {
       }
     } catch (e) {
       if (gen !== loadGen.current) return;
-      setTurno(null);
-      setError(e instanceof Error ? e.message : 'No se pudo cargar el turno.');
+      if (!opts?.silent) {
+        setTurno(null);
+        setError(e instanceof Error ? e.message : 'No se pudo cargar el turno.');
+      }
     } finally {
-      if (gen === loadGen.current) setLoading(false);
+      if (gen === loadGen.current && !opts?.silent) setLoading(false);
     }
   }, [id, user?.rol]);
 
@@ -52,6 +55,14 @@ export default function Detail() {
       void refresh();
     }, [refresh])
   );
+
+  useLiveRefresh(() => refresh({ silent: true }), {
+    enabled: Boolean(id),
+    getRevision: async () => {
+      const data = await api<{ revision: string }>('/turnos/revision/');
+      return data.revision;
+    },
+  });
 
   const run = async (fn: () => Promise<void | 'skip-refresh'>, fail: string) => {
     if (lock.current) return;
@@ -102,13 +113,35 @@ export default function Detail() {
   const esHoy =
     turno && dateKey(new Date(turno.fecha_hora_inicio)) === dateKey(new Date());
 
+  const estadoRecepcionTurno = recepcionHoy?.turnos_estoy_en_sala?.find(
+    (x) => x.turno_id === turno?.id
+  );
   const puedeEstoyEnSala =
     user?.rol === 'paciente' &&
-    esHoy &&
-    turno &&
-    ['RESERVADO', 'CONFIRMADO'].includes(turno.estado) &&
-    recepcionHoy?.puedo_estoy_en_sala &&
-    recepcionHoy.turno_hoy_id === turno.id;
+    Boolean(turno) &&
+    ['RESERVADO', 'CONFIRMADO'].includes(turno!.estado) &&
+    enVentanaEstoyEnSala(turno!.fecha_hora_inicio, now) &&
+    (estadoRecepcionTurno
+      ? estadoRecepcionTurno.puedo_estoy_en_sala
+      : Boolean(recepcionHoy?.puedo_estoy_en_sala && recepcionHoy.turno_hoy_id === turno!.id));
+
+  const esEstudio =
+    Boolean(turno?.viene_de_pedido_estudio) || Boolean(turno?.estudio_complementario?.id);
+  const pideAceptacion = Boolean(turno?.requiere_aceptacion_paciente);
+  const puedeAceptarOConfirmar =
+    Boolean(activo) &&
+    user?.rol === 'paciente' &&
+    turno?.estado === 'RESERVADO' &&
+    (!esEstudio || pideAceptacion);
+  const puedeRechazarReprogramacion =
+    Boolean(activo) && user?.rol === 'paciente' && Boolean(turno?.puede_cancelar) && pideAceptacion;
+  const puedeReprogramar =
+    Boolean(activo) && user?.rol === 'paciente' && Boolean(turno?.puede_reprogramar);
+  const mostrarAyudaCancel =
+    Boolean(activo) &&
+    user?.rol === 'paciente' &&
+    !pideAceptacion &&
+    !esEstudio;
 
   return (
     <Page>
@@ -127,119 +160,61 @@ export default function Detail() {
                   month: 'long',
                 })}
               </Title>
+              {turno.tipo === 'ESTUDIO' && (
+                <Body>
+                  {turno.estudio_nombre ||
+                    turno.estudio_complementario?.tipo_estudio_nombre ||
+                    (turno.motivo_reserva
+                      ? turno.motivo_reserva.replace(/^(Estudio|Procedimiento)\s*:\s*/i, '')
+                      : 'Estudio')}
+                </Body>
+              )}
               <Body>
                 {formatHoraDisplay(new Date(turno.fecha_hora_inicio))} · {turno.medico_nombre}
               </Body>
               {user?.rol === 'medico' && <Body>{turno.paciente_nombre}</Body>}
               <Body>Estado: {turno.estado}</Body>
               <Body>
-                {turno.asistencia_confirmada_en
-                  ? 'El paciente confirmó su asistencia.'
-                  : turno.estado === 'CONFIRMADO'
-                    ? 'La asistencia todavía no fue confirmada por el paciente.'
-                    : 'Primero hay que confirmar el turno; después se pide la asistencia.'}
+                {pideAceptacion
+                  ? 'Secretaría reprogramó este turno: aceptá o rechazá el nuevo horario.'
+                  : turno.asistencia_confirmada_en
+                    ? 'El paciente confirmó su asistencia.'
+                    : turno.estado === 'CONFIRMADO'
+                      ? 'La asistencia todavía no fue confirmada por el paciente.'
+                      : 'Primero hay que confirmar el turno; después se pide la asistencia.'}
               </Body>
             </Card>
 
-            {activo && user?.rol === 'paciente' && turno.estado === 'RESERVADO' && (
+            {puedeAceptarOConfirmar && (
               <Action
-                title="Confirmar este turno"
+                title={pideAceptacion ? 'Aceptar nuevo horario' : 'Confirmar este turno'}
                 disabled={busy}
                 onPress={() =>
                   Alert.alert(
-                    'Confirmar este turno',
-                    'Esto confirma la reserva en la agenda. Después, cerca del día, te pediremos confirmar que vas a asistir. Si no podés, cancelá desde acá o contactá a secretaría.',
+                    pideAceptacion ? 'Aceptar nuevo horario' : 'Confirmar este turno',
+                    pideAceptacion
+                      ? 'Secretaría cambió tu turno a este horario. ¿Estás de acuerdo? Si no, rechazalo con «Rechazar nuevo horario».'
+                      : 'Esto confirma la reserva en la agenda. Después, cerca del día, te pediremos confirmar que vas a asistir. Si no podés venir, contactá a secretaría para cancelar.',
                     [
                       { text: 'Volver', style: 'cancel' },
-                      { text: 'Sí, confirmo el turno', onPress: () => void confirmarTurno() },
+                      {
+                        text: pideAceptacion ? 'Sí, acepto el horario' : 'Sí, confirmo el turno',
+                        onPress: () => void confirmarTurno(),
+                      },
                     ]
                   )
                 }
               />
             )}
 
-            {activo &&
-              user?.rol === 'paciente' &&
-              turno.viene_de_pedido_estudio &&
-              turno.medico_id && (
-                <Card>
-                  <Body>¿Otro día u horario? Elegí fecha y un slot libre del mismo médico.</Body>
-                  {!showReprog ? (
-                    <Action title="Pedir otro horario" secondary disabled={busy} onPress={() => setShowReprog(true)} />
-                  ) : (
-                    <>
-                      <Field
-                        label="Fecha (AAAA-MM-DD)"
-                        value={reprogFecha}
-                        onChangeText={(v) => {
-                          setReprogFecha(v);
-                          setReprogSlots([]);
-                        }}
-                        editable={!busy}
-                      />
-                      <Action
-                        title="Ver horarios"
-                        secondary
-                        disabled={busy || !/^\d{4}-\d{2}-\d{2}$/.test(reprogFecha)}
-                        onPress={() =>
-                          void run(async () => {
-                            const r = await api<{ slots: Slot[]; detail?: string }>(
-                              `/turnos/${id}/slots-reprogramacion/?fecha=${reprogFecha}`
-                            );
-                            setReprogSlots(r.slots || []);
-                            if (!(r.slots || []).length) {
-                              throw new Error(
-                                r.detail || 'No hay horarios libres compatibles con tu estudio ese día.'
-                              );
-                            }
-                          }, 'No se pudieron cargar horarios.')
-                        }
-                      />
-                      {reprogSlots.map((s) => (
-                        <Action
-                          key={s.inicio}
-                          title={
-                            s.recurso_nombre
-                              ? `${formatFechaHoraDisplay(s.inicio)} · ${s.recurso_nombre}`
-                              : formatFechaHoraDisplay(s.inicio)
-                          }
-                          disabled={busy}
-                          onPress={() =>
-                            Alert.alert('Reprogramar', `¿Pasar el turno a ${formatFechaHoraDisplay(s.inicio)}?`, [
-                              { text: 'Volver', style: 'cancel' },
-                              {
-                                text: 'Sí',
-                                onPress: () =>
-                                  void run(async () => {
-                                    const nuevo = await api<Turno>(
-                                      `/turnos/${id}/reprogramar-horario/`,
-                                      'POST',
-                                      {
-                                        horario_id: s.horario_id,
-                                        inicio: s.inicio,
-                                        motivo: 'Reprogramado por el paciente (pedido de estudio)',
-                                      }
-                                    );
-                                    loadGen.current += 1;
-                                    setTurno(nuevo);
-                                    setShowReprog(false);
-                                    setReprogSlots([]);
-                                    Alert.alert('Listo', 'Turno reprogramado.');
-                                    router.replace({
-                                      pathname: '/turno/[id]',
-                                      params: { id: String(nuevo.id) },
-                                    });
-                                    return 'skip-refresh';
-                                  }, 'No se pudo reprogramar.'),
-                              },
-                            ])
-                          }
-                        />
-                      ))}
-                    </>
-                  )}
-                </Card>
-              )}
+            {activo && user?.rol === 'paciente' && esEstudio && !pideAceptacion && (
+              <Card>
+                <Body>
+                  Este turno de estudio lo gestiona secretaría. Si necesitás cambiarlo, contactalos
+                  (presencial o por teléfono).
+                </Body>
+              </Card>
+            )}
 
             {activo &&
               user?.rol === 'paciente' &&
@@ -279,28 +254,56 @@ export default function Detail() {
                 </Card>
               )}
 
-            {activo && user?.rol === 'paciente' && (
+            {puedeReprogramar && (
               <Action
-                title="Cancelar turno"
+                title="Reprogramar"
+                disabled={busy}
+                onPress={() =>
+                  router.push({
+                    pathname: '/reservar',
+                    params: { reprogramar: String(id) },
+                  })
+                }
+              />
+            )}
+            {mostrarAyudaCancel && !puedeReprogramar && Boolean(turno?.motivo_bloqueo_reprogramar) && (
+              <Card>
+                <Body>{turno?.motivo_bloqueo_reprogramar}</Body>
+              </Card>
+            )}
+            {mostrarAyudaCancel && (
+              <Card>
+                <Body>
+                  Para cancelar el turno contactá a secretaría (presencial o por teléfono). Desde la
+                  app no se cancela.
+                </Body>
+              </Card>
+            )}
+            {puedeRechazarReprogramacion && (
+              <Action
+                title="Rechazar nuevo horario"
                 secondary
                 disabled={busy}
                 onPress={() =>
                   Alert.alert(
-                    'Cancelar turno',
-                    '¿Cancelás este turno? El horario queda libre. Si necesitás otro día, después podés reservar de nuevo o contactar a secretaría.',
+                    'Rechazar nuevo horario',
+                    '¿Rechazás el horario que propuso secretaría? El turno se cancela y el horario queda libre. Después podés pedir otro turno o contactar a secretaría.',
                     [
                       { text: 'Volver', style: 'cancel' },
                       {
-                        text: 'Sí, cancelar',
+                        text: 'Sí, rechazar',
                         style: 'destructive',
                         onPress: () =>
                           void run(async () => {
                             await api(`/turnos/${id}/cancelar/`, 'POST', {
-                              motivo: 'Cancelado por el paciente desde la app',
+                              motivo: 'Paciente rechazó el horario reprogramado desde la app',
                             });
-                            Alert.alert('Listo', 'Turno cancelado.');
+                            Alert.alert(
+                              'Listo',
+                              'Rechazaste el nuevo horario. El turno quedó cancelado.'
+                            );
                             router.replace('/');
-                          }, 'No se pudo cancelar el turno.'),
+                          }, 'No se pudo rechazar el horario.'),
                       },
                     ]
                   )

@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Paciente, PacienteAfiliacion, ProblemaClinico
+from .models import ObraSocial, Paciente, PacienteAfiliacion, ProblemaClinico
+
+
+@admin.register(ObraSocial)
+class ObraSocialAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'activo')
+    list_filter = ('activo',)
+    search_fields = ('codigo', 'nombre')
 
 
 @admin.register(Paciente)
@@ -40,7 +47,7 @@ class PacienteAdmin(admin.ModelAdmin):
         (
             "Obra Social",
             {
-                "fields": ("obra_social", "numero_afiliado"),
+                "fields": ("obra_social", "numero_afiliado", "plan_obra_social"),
                 "classes": ("collapse",),
             },
         ),
@@ -81,7 +88,7 @@ class PacienteAdmin(admin.ModelAdmin):
 class PacienteAfiliacionInline(admin.TabularInline):
     model = PacienteAfiliacion
     extra = 0
-    fields = ("obra_social", "numero_afiliado", "es_principal", "activo")
+    fields = ("obra_social", "numero_afiliado", "plan", "es_principal", "activo")
 
 
 class ProblemaClinicoInline(admin.TabularInline):
@@ -97,9 +104,17 @@ PacienteAdmin.inlines = [PacienteAfiliacionInline, ProblemaClinicoInline]
 
 @admin.register(PacienteAfiliacion)
 class PacienteAfiliacionAdmin(admin.ModelAdmin):
-    list_display = ("paciente", "obra_social", "numero_afiliado", "es_principal", "activo")
-    list_filter = ("es_principal", "activo")
-    search_fields = ("obra_social", "numero_afiliado", "paciente__dni", "paciente__apellido")
+    list_display = ("paciente", "obra_social", "numero_afiliado", "plan", "es_principal", "activo")
+    list_filter = ("es_principal", "activo", "obra_social")
+    search_fields = (
+        "obra_social__codigo",
+        "obra_social__nombre",
+        "numero_afiliado",
+        "plan",
+        "paciente__dni",
+        "paciente__apellido",
+    )
+    raw_id_fields = ("obra_social",)
 
 
 @admin.register(ProblemaClinico)

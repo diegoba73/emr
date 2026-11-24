@@ -5,8 +5,9 @@ from movil.recordatorios import preparar_recordatorios, enviar_pendientes, consu
 
 class Command(BaseCommand):
     help = (
-        'Procesa recordatorios móviles: confirmación de turno (RESERVADO lejanos) '
-        'y asistencia (~24 hs, CONFIRMADO). Ejecutar periódicamente (cada 5 minutos).'
+        'Procesa recordatorios móviles: confirmación de turno (RESERVADO lejanos), '
+        'asistencia (~48 hs antes, CONFIRMADO; si cae finde → viernes) '
+        'y aviso Estoy en sala (~1 h antes). Ejecutar periódicamente (cada 5 minutos).'
     )
 
     def handle(self, *args, **options):

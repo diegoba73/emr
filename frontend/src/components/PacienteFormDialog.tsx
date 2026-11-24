@@ -43,6 +43,7 @@ function pacienteToFormValues(p: Paciente): PacienteDemographicsFormValues {
     direccion: p.direccion || '',
     obra_social: p.obra_social || '',
     numero_afiliado: p.numero_afiliado || '',
+    plan_obra_social: p.plan_obra_social || '',
     estado_civil: p.estado_civil || '',
     familiar_nombre: p.familiar_nombre || '',
     familiar_telefono: p.familiar_telefono || '',
@@ -63,6 +64,7 @@ function formToPayload(values: PacienteDemographicsFormValues): Record<string, s
     direccion: upper(values.direccion),
     obra_social: upper(values.obra_social),
     numero_afiliado: upper(values.numero_afiliado),
+    plan_obra_social: upper(values.plan_obra_social),
     estado_civil: values.estado_civil.trim(),
     familiar_nombre: values.familiar_nombre.trim(),
     familiar_telefono: values.familiar_telefono.trim(),
@@ -87,9 +89,12 @@ export interface PacienteFormDialogProps {
   mode: 'create' | 'edit';
   paciente?: Paciente | null;
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  /** Tras guardar: recibe la ficha creada/editada (útil para seleccionarla en agenda). */
+  onSaved: (paciente?: Paciente) => void | Promise<void>;
   /** Si hay duplicado y el usuario elige la ficha existente. */
   onUseExisting?: (paciente: Paciente) => void;
+  /** Prefill al abrir en modo create (p. ej. DNI buscado en el calendario). */
+  initialValues?: Partial<PacienteDemographicsFormValues>;
 }
 
 const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
@@ -99,6 +104,7 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
   onClose,
   onSaved,
   onUseExisting,
+  initialValues,
 }) => {
   const [values, setValues] = useState<PacienteDemographicsFormValues>(emptyPacienteFormValues());
   const [saving, setSaving] = useState(false);
@@ -118,7 +124,10 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
     setBloqueaAlta(false);
     setConfirmDistinct(false);
     setDetailsReady(mode === 'create');
-    setValues(emptyPacienteFormValues());
+    setValues({
+      ...emptyPacienteFormValues(),
+      ...(mode === 'create' && initialValues ? initialValues : {}),
+    });
     setLoadingDetails(mode === 'edit');
     if (mode === 'edit' && paciente) {
       // El listado usa un serializer reducido: leer la ficha evita borrar datos omitidos.
@@ -131,7 +140,9 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
       }).finally(() => { if (!cancelled) setLoadingDetails(false); });
     }
     return () => { cancelled = true; };
-  }, [open, mode, paciente]);
+    // initialValues solo se aplica al abrir (evita resetear el form al tipear).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open/mode/paciente.id
+  }, [open, mode, paciente?.id]);
 
   useEffect(() => {
     if (!open || mode !== 'create') return;
@@ -187,9 +198,17 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
     values.fecha_nacimiento,
   ]);
 
-  const handlePrincipalChange = useCallback((obra_social: string, numero_afiliado: string) => {
-    setValues((prev) => ({ ...prev, obra_social, numero_afiliado }));
-  }, []);
+  const handlePrincipalChange = useCallback(
+    (obra_social: string, numero_afiliado: string, plan?: string) => {
+      setValues((prev) => ({
+        ...prev,
+        obra_social,
+        numero_afiliado,
+        plan_obra_social: plan ?? prev.plan_obra_social,
+      }));
+    },
+    []
+  );
 
   const hasIdentidadOnly = useMemo(
     () => !bloqueaAlta && candidatos.some((c) => c.match === 'identidad'),
@@ -231,12 +250,13 @@ const PacienteFormDialog: React.FC<PacienteFormDialogProps> = ({
     setSaving(true);
     try {
       const payload = formToPayload(values);
+      let saved: Paciente | undefined;
       if (mode === 'create') {
-        await createPaciente(payload as Partial<Paciente>);
+        saved = await createPaciente(payload as Partial<Paciente>);
       } else if (paciente) {
-        await updatePaciente(paciente.id, payload as Partial<Paciente>);
+        saved = await updatePaciente(paciente.id, payload as Partial<Paciente>);
       }
-      await onSaved();
+      await onSaved(saved);
       onClose();
     } catch (e: unknown) {
       setError(getSafeApiErrorMessage(e, mode === 'create' ? 'Error al crear el paciente' : 'Error al guardar los cambios'));

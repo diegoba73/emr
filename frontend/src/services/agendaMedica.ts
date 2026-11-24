@@ -170,3 +170,84 @@ export const deleteFeriado = async (id: number) => apiClient.delete(`/feriados/$
 
 export const getTurnosPendientesFeriado = async (id: number): Promise<TurnosPendientesFeriado> =>
   (await apiClient.get(`/feriados/${id}/turnos-pendientes/`)).data;
+
+export type MotivoLicencia =
+  | 'LICENCIA_MEDICA'
+  | 'CONGRESO'
+  | 'ESTUDIO'
+  | 'PERSONAL'
+  | 'OTRO';
+
+export const MOTIVO_LICENCIA_OPTIONS: { value: MotivoLicencia; label: string }[] = [
+  { value: 'LICENCIA_MEDICA', label: 'Licencia médica' },
+  { value: 'CONGRESO', label: 'Congreso' },
+  { value: 'ESTUDIO', label: 'Estudio' },
+  { value: 'PERSONAL', label: 'Asuntos personales' },
+  { value: 'OTRO', label: 'Otro' },
+];
+
+export interface LicenciaMedico {
+  id: number;
+  medico: number;
+  medico_nombre?: string | null;
+  fecha_inicio: string;
+  fecha_fin: string;
+  motivo: MotivoLicencia;
+  motivo_display?: string;
+  detalle: string;
+  activo: boolean;
+  creado_en?: string;
+  actualizado_en?: string;
+  pendientes_count: number;
+  turnos_afectados?: TurnoAfectadoFeriado[];
+}
+
+export interface TurnosPendientesLicencia {
+  licencia_id: number;
+  medico_id: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  motivo: string;
+  activo: boolean;
+  turnos: TurnoAfectadoFeriado[];
+  count: number;
+}
+
+export const getLicenciasMedico = async (medicoId?: number): Promise<LicenciaMedico[]> => {
+  let url: string | null = medicoId
+    ? `/licencias-medico/?medico=${medicoId}`
+    : '/licencias-medico/';
+  const rows: LicenciaMedico[] = [];
+  while (url) {
+    const { data }: { data: any } = await apiClient.get(url);
+    rows.push(...(Array.isArray(data) ? data : data.results));
+    url = data.next ? `/licencias-medico/?${String(data.next).split('?')[1]}` : null;
+  }
+  return rows;
+};
+
+export const createLicenciaMedico = async (payload: {
+  medico: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  motivo: MotivoLicencia;
+  detalle?: string;
+  activo?: boolean;
+}): Promise<LicenciaMedico> => (await apiClient.post('/licencias-medico/', payload)).data;
+
+export const updateLicenciaMedico = async (
+  id: number,
+  payload: Partial<{
+    fecha_inicio: string;
+    fecha_fin: string;
+    motivo: MotivoLicencia;
+    detalle: string;
+    activo: boolean;
+  }>,
+): Promise<LicenciaMedico> => (await apiClient.patch(`/licencias-medico/${id}/`, payload)).data;
+
+export const deleteLicenciaMedico = async (id: number) =>
+  apiClient.delete(`/licencias-medico/${id}/`);
+
+export const getTurnosPendientesLicencia = async (id: number): Promise<TurnosPendientesLicencia> =>
+  (await apiClient.get(`/licencias-medico/${id}/turnos-pendientes/`)).data;

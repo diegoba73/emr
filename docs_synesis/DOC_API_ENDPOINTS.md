@@ -226,6 +226,7 @@ Upload en create/update: campo `adjunto_resultado` / `consentimiento_informado` 
 | `/api/atenciones/{id}/cerrar/` | POST | Cerrar atención |
 | `/api/turnos/{id}/iniciar-atencion/` | POST | **Flujo clínico activo (C5.10.1):** crea/obtiene atención, turno → `REALIZADO`, registro hijo; sin headers deprecated |
 | `/api/turnos/` + query | GET | `start`, `end`, `all` |
+| `/api/turnos/revision/` | GET | Stamp liviano `{ revision: "<iso>\|<count>" }` sobre el queryset visible al usuario (mismo alcance que list). Fase híbrida multi-cliente: el front hace poll ~1s y solo refetch completo si cambia. Sin WebSocket/SSE. Espejo móvil: `GET /api/movil/turnos/revision/` |
 
 **Alias:** mismas acciones bajo `/api/laboratorio/solicitudes/{id}/...` (mismo `SolicitudExamenViewSet` registrado dos veces en `api/urls.py`).
 
