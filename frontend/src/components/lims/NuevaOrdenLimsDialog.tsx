@@ -96,6 +96,11 @@ import {
   muestraPreferidaPorCultivoDeMateriales,
   syncMicroItemsConMateriales,
 } from '../../utils/limsMaterialesMicro';
+import {
+  materialCodigoParaCultivo as materialCodigoParaCultivoCatalog,
+  materialesPedidoEfectivos,
+  resolverMaterialesSeleccionados,
+} from '../../utils/limsMaterialesPedidoCatalog';
 import { mensajeBloqueoExamen, puedeOmitirRestriccionFrecuenciaEnsayos } from '../../utils/limsRestriccionesEnsayos';
 import {
   agruparParaPedidoCompleto,
@@ -449,13 +454,17 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     [examenes, restriccionesEnsayos, selectedExamenesIds, toggleExamen]
   );
 
-  const materialesSeleccionados = useMemo(() => {
-    if (!selectedMaterialCodigos.length) return [];
-    const byCode = new Map(materialesPedido.map((m) => [m.codigo, m]));
-    return selectedMaterialCodigos
-      .map((c) => byCode.get(c))
-      .filter((m): m is MaterialPedidoLims => Boolean(m));
-  }, [selectedMaterialCodigos, materialesPedido]);
+  /** Misma fuente que el form (API o fallback): evita fallar hemocultivo/micro. */
+  const catalogoMateriales = useMemo(
+    () => materialesPedidoEfectivos(materialesPedido),
+    [materialesPedido]
+  );
+
+  const materialesSeleccionados = useMemo(
+    () =>
+      resolverMaterialesSeleccionados(selectedMaterialCodigos, catalogoMateriales),
+    [selectedMaterialCodigos, catalogoMateriales]
+  );
 
   /**
    * Cultivos permitidos = unión de todos los materiales del pedido.
@@ -709,11 +718,11 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   };
 
   const materialCodigoParaCultivo = (cultivoCodigo: string): string => {
-    const up = (cultivoCodigo || '').toUpperCase();
-    const mat = materialesSeleccionados.find(
-      (m) => (m.cultivo_micro_codigo || '').toUpperCase() === up
+    // 1) materiales del pedido; 2) catálogo completo (API/fallback) por cultivo.
+    return (
+      materialCodigoParaCultivoCatalog(cultivoCodigo, materialesSeleccionados) ||
+      materialCodigoParaCultivoCatalog(cultivoCodigo, catalogoMateriales)
     );
-    return (mat?.codigo || '').toUpperCase();
   };
 
   const executeDraft = () => {
@@ -1406,7 +1415,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
               <SolicitudAnalisisMaterialesForm
                 examenes={examenes}
                 paneles={paneles}
-                materialesPedido={materialesPedido}
+                materialesPedido={catalogoMateriales}
                 selectedPanelesIds={selectedPanelesIds}
                 selectedExamenesIds={selectedExamenesIds}
                 onTogglePanel={togglePanel}
