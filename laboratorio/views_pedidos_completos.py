@@ -66,12 +66,24 @@ class PedidoCompletoCreateView(APIView):
         except Exception as exc:
             from rest_framework.exceptions import ValidationError as DRFValidationError
 
+            from laboratorio.restricciones_frecuencia import RestriccionFrecuenciaError
+            from laboratorio.solicitud_orden_abierta import (
+                OrdenNoAbiertaError,
+                TuboNuevoRequeridoError,
+            )
+
             if isinstance(exc, DRFValidationError):
                 detail = exc.detail
                 # Conflicto de idempotencia → 409
                 if isinstance(detail, dict) and detail.get("code") == "idempotency_conflict":
                     return Response(detail, status=status.HTTP_409_CONFLICT)
                 return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+            # Errores de dominio no convertidos → 400 legible (antes caían en 500 HTML).
+            if isinstance(
+                exc,
+                (OrdenNoAbiertaError, TuboNuevoRequeridoError, RestriccionFrecuenciaError),
+            ):
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             raise
 
         return Response(result, status=status.HTTP_201_CREATED)

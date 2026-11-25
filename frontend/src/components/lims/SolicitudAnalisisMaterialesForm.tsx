@@ -20,6 +20,7 @@ import {
   createFilterOptions,
 } from '@mui/material';
 import { Add, DeleteOutline } from '@mui/icons-material';
+import toast from 'react-hot-toast';
 import type {
   LimsPanelExamen,
   LimsTipoExamen,
@@ -514,10 +515,24 @@ export default function SolicitudAnalisisMaterialesForm({
 
   const toggleCultivoMaterial = (mat: MaterialPedidoLims) => {
     if (!onChangeMicroItems || disabled) return;
+    const cultivoCode = (mat.cultivo_micro_codigo || '').trim().toUpperCase();
     const cultivo = cultivoDeMaterial(mat, cultivos);
-    if (!cultivo) return;
+    if (!cultivo) {
+      toast.error(
+        cultivoCode
+          ? `No está cargado el cultivo «${cultivoCode}» en el catálogo de microbiología. En el servidor hay que correr seed_materiales_pedido (o seed de catálogos micro).`
+          : `El material «${mat.nombre}» no tiene cultivo de microbiología asociado.`
+      );
+      return;
+    }
     if (selectedCultivoIds.has(cultivo.id)) {
       onChangeMicroItems(microItems.filter((i) => i.tipo_cultivo_id !== cultivo.id));
+      return;
+    }
+    if (tiposMuestraMicro.length === 0) {
+      toast.error(
+        'No hay tipos de muestra de microbiología cargados. Corré seed_materiales_pedido en el backend.'
+      );
       return;
     }
     const muestra = resolverMuestraMicro(
@@ -525,7 +540,15 @@ export default function SolicitudAnalisisMaterialesForm({
       tiposMuestraMicro,
       mat.muestra_micro_codigo
     );
-    if (!muestra) return;
+    if (!muestra) {
+      const preferida = (mat.muestra_micro_codigo || '').trim().toUpperCase();
+      toast.error(
+        preferida
+          ? `Falta la muestra micro «${preferida}» (o una compatible) para el cultivo «${cultivo.codigo}». Corré seed_materiales_pedido.`
+          : `No se pudo resolver el tipo de muestra para el cultivo «${cultivo.codigo}».`
+      );
+      return;
+    }
     onChangeMicroItems([
       ...microItems,
       {
@@ -664,6 +687,16 @@ export default function SolicitudAnalisisMaterialesForm({
                       Este material (p. ej. hisopo) no genera tubos de Lab. Clínico. Marcá el
                       cultivo en <strong>Microbiología</strong> (abajo) para pedirlo; la etiqueta
                       es de microbiología, no de tubo.
+                    </Typography>
+                  ) : null}
+                  {!soloMicro &&
+                  (matDef?.grilla_codigos?.length || 0) > 0 &&
+                  grid.length === 0 &&
+                  !sangreRows ? (
+                    <Typography variant="body2" color="error.main" sx={{ mb: 1 }}>
+                      La grilla clínica de «{matDef?.nombre}» está vacía: faltan exámenes en el
+                      catálogo (p. ej. líquido ascítico). En el backend corré{' '}
+                      <code>seed_materiales_pedido --solo-nuevos</code>.
                     </Typography>
                   ) : null}
                   {(sangreRows ? sangreRows.length > 0 : grid.length > 0) && (
@@ -981,11 +1014,7 @@ export default function SolicitudAnalisisMaterialesForm({
                               <Checkbox
                                 size="small"
                                 checked={cultivoChecked}
-                                disabled={
-                                  disabled ||
-                                  !onChangeMicroItems ||
-                                  tiposMuestraMicro.length === 0
-                                }
+                                disabled={disabled || !onChangeMicroItems}
                                 onChange={() => toggleCultivoMaterial(matDef!)}
                                 sx={{ pt: 0.25 }}
                               />
@@ -1006,10 +1035,17 @@ export default function SolicitudAnalisisMaterialesForm({
                           />
                           {tiposMuestraMicro.length === 0 && (
                             <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.5 }}>
-                              No hay tipos de muestra de microbiología cargados.
+                              No hay tipos de muestra de microbiología cargados. Corré
+                              seed_materiales_pedido en el backend.
                             </Typography>
                           )}
                         </>
+                      ) : matDef?.cultivo_micro_codigo ? (
+                        <Typography variant="body2" color="error.main">
+                          El material pide el cultivo «{matDef.cultivo_micro_codigo}», pero no
+                          está en el catálogo activo. En producción: desplegar backend y correr{' '}
+                          <code>seed_materiales_pedido --solo-nuevos</code>.
+                        </Typography>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
                           Este material no tiene cultivo de microbiología asociado.

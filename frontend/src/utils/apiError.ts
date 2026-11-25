@@ -148,6 +148,8 @@ export const CLINICAL_ACTION_ERRORS = {
     'No se pudo enviar el informe. Verificá SMTP o intentá solo WhatsApp / descarga manual del PDF.',
   limsDescargarInforme: 'No se pudo descargar el informe PDF. Intentá nuevamente.',
   limsCargarOrdenes: 'No se pudieron cargar las órdenes. Intentá nuevamente.',
+  limsCrearPedido:
+    'No se pudo crear el pedido de laboratorio. Revisá materiales, fecha y origen e intentá nuevamente.',
   limsCargarCatalogo: 'No se pudo cargar el catálogo. Intentá nuevamente.',
   limsGuardarCatalogo: 'No se pudo guardar en el catálogo. Intentá nuevamente.',
   limsCargarEstudiosMicro: 'No se pudieron cargar los estudios. Intentá nuevamente.',
@@ -196,7 +198,7 @@ export function getSafeClinicalActionMessage(error: unknown, fallback: string): 
   if (status === 401) {
     return 'Debe iniciar sesión para continuar.';
   }
-  if (status === 400) {
+  if (status === 400 || status === 409) {
     const validation = validationMessageFrom400(error);
     if (validation) {
       return validation;

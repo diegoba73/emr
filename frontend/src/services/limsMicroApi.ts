@@ -163,6 +163,10 @@ export const createEstudioMicrobiologia = (body: {
   muestra_id?: number;
   tipo_estudio?: TipoEstudioMicrobiologia | string;
   observaciones?: string;
+  fecha_programada_toma?: string;
+  obra_social?: string;
+  numero_afiliado?: string;
+  afiliacion_id?: number | null;
 }) => apiClient.post<EstudioMicrobiologia>(`${MICRO}/estudios/`, body).then((r) => r.data);
 
 export const createEstudiosMicrobiologiaBatch = (body: {
@@ -268,6 +272,9 @@ export const updateEstudioMicrobiologia = (
     tipo_cultivo_id?: number;
     tipo_muestra_micro_id?: number;
     origen_solicitud?: string;
+    obra_social?: string;
+    numero_afiliado?: string;
+    afiliacion_id?: number | null;
   }
 ) => apiClient.patch<EstudioMicrobiologia>(`${MICRO}/estudios/${id}/`, body).then((r) => r.data);
 export const iniciarEstudioMicrobiologia = (id: number) =>

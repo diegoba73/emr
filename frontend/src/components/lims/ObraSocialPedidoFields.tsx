@@ -10,6 +10,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import ObraSocialSelect from '../ObraSocialSelect';
 import type { Paciente, PacienteAfiliacion } from '../../types';
 import { formatPacienteObraSocial } from '../../utils/pacienteFormat';
 
@@ -24,6 +25,11 @@ type Props = {
   value: ObraSocialPedidoValue;
   onChange: (next: ObraSocialPedidoValue) => void;
   disabled?: boolean;
+  /**
+   * Si viene (p. ej. editar orden pendiente), se usa en lugar de la afiliación
+   * principal al cambiar de paciente. `obra_social` puede ser código o label.
+   */
+  seedFrom?: ObraSocialPedidoValue | null;
 };
 
 function afiliacionesActivas(paciente: Paciente | null | undefined): PacienteAfiliacion[] {
@@ -53,6 +59,7 @@ const ObraSocialPedidoFields: React.FC<Props> = ({
   value,
   onChange,
   disabled = false,
+  seedFrom = null,
 }) => {
   const afils = useMemo(() => afiliacionesActivas(paciente), [paciente]);
   const [modoNueva, setModoNueva] = useState(false);
@@ -61,6 +68,31 @@ const ObraSocialPedidoFields: React.FC<Props> = ({
     if (!paciente) {
       onChange({ afiliacionId: null, obra_social: '', numero_afiliado: '' });
       setModoNueva(false);
+      return;
+    }
+    const seedOs = (seedFrom?.obra_social || '').trim();
+    if (seedOs) {
+      const match = afils.find(
+        (a) =>
+          (a.obra_social || '').trim().toLowerCase() === seedOs.toLowerCase() ||
+          (a.obra_social_nombre || '').trim().toLowerCase() === seedOs.toLowerCase()
+      );
+      if (match && match.id > 0) {
+        onChange({
+          afiliacionId: match.id,
+          obra_social: match.obra_social || seedOs,
+          numero_afiliado:
+            (seedFrom?.numero_afiliado || '').trim() || match.numero_afiliado || '',
+        });
+        setModoNueva(false);
+      } else {
+        onChange({
+          afiliacionId: null,
+          obra_social: seedOs,
+          numero_afiliado: (seedFrom?.numero_afiliado || '').trim(),
+        });
+        setModoNueva(true);
+      }
       return;
     }
     const principal =
@@ -80,9 +112,9 @@ const ObraSocialPedidoFields: React.FC<Props> = ({
       });
       setModoNueva(true);
     }
-    // Solo al cambiar de paciente
+    // Solo al cambiar de paciente / seed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paciente?.id]);
+  }, [paciente?.id, seedFrom?.obra_social, seedFrom?.numero_afiliado]);
 
   const selectValue = modoNueva
     ? '__nueva__'
@@ -143,21 +175,21 @@ const ObraSocialPedidoFields: React.FC<Props> = ({
           </FormControl>
         )}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <TextField
-            size="small"
-            label="Obra social"
-            value={value.obra_social}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                afiliacionId: null,
-                obra_social: e.target.value,
-              })
-            }
-            disabled={disabled}
-            fullWidth
-            sx={{ flex: 2 }}
-          />
+          <Box sx={{ flex: 2, minWidth: 0 }}>
+            <ObraSocialSelect
+              size="small"
+              value={value.obra_social}
+              onChange={(codigo) =>
+                onChange({
+                  ...value,
+                  afiliacionId: null,
+                  obra_social: codigo,
+                })
+              }
+              disabled={disabled}
+              fullWidth
+            />
+          </Box>
           <TextField
             size="small"
             label="N° afiliado"

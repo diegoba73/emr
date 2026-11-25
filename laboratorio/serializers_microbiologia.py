@@ -404,12 +404,16 @@ class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
     observaciones = serializers.CharField(required=False, allow_blank=True, default="")
     fecha_programada_toma = serializers.DateField(required=True)
     material_pedido = serializers.CharField(required=False, allow_blank=True, default="")
+    obra_social = serializers.CharField(required=False, allow_blank=True, default="")
+    numero_afiliado = serializers.CharField(required=False, allow_blank=True, default="")
+    afiliacion_id = serializers.IntegerField(required=False, allow_null=True, default=None)
 
     def validate(self, attrs):
-        from pacientes.models import Paciente
+        from pacientes.models import Paciente, PacienteAfiliacion
         from medicos.models import Medico
         from historias_clinicas.models import Consulta
         from laboratorio.origen_solicitud import normalizar_origen_solicitud
+        from pacientes.afiliaciones import normalizar_snapshot_os, upsert_afiliacion
 
         if not attrs.get("fecha_programada_toma"):
             raise serializers.ValidationError(
@@ -506,6 +510,38 @@ class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
             attrs.get("origen_solicitud") or ""
         ).strip()
 
+        snap_os, snap_afil = "", ""
+        afiliacion_id = attrs.get("afiliacion_id")
+        if afiliacion_id is not None:
+            try:
+                afil = PacienteAfiliacion.objects.get(
+                    pk=afiliacion_id, paciente_id=paciente.pk, activo=True
+                )
+            except PacienteAfiliacion.DoesNotExist as exc:
+                raise serializers.ValidationError(
+                    {"afiliacion_id": "Afiliación inexistente para este paciente."}
+                ) from exc
+            snap_os, snap_afil = normalizar_snapshot_os(
+                afil.obra_social, afil.numero_afiliado or ""
+            )
+            upsert_afiliacion(
+                paciente,
+                obra_social=snap_os,
+                numero_afiliado=snap_afil,
+                marcar_principal=True,
+            )
+        else:
+            snap_os, snap_afil = normalizar_snapshot_os(
+                attrs.get("obra_social"), attrs.get("numero_afiliado")
+            )
+            if snap_os:
+                upsert_afiliacion(
+                    paciente,
+                    obra_social=snap_os,
+                    numero_afiliado=snap_afil,
+                    marcar_principal=True,
+                )
+
         attrs["_modo"] = "pedido"
         attrs["_paciente"] = paciente
         attrs["_medico"] = medico
@@ -513,6 +549,8 @@ class EstudioMicrobiologiaCreateSerializer(serializers.Serializer):
         attrs["_tipo_muestra_micro"] = muestra_micro
         attrs["_consulta_hc"] = consulta
         attrs["_origen_solicitud"] = origen
+        attrs["_obra_social_orden"] = snap_os
+        attrs["_afiliado_orden"] = snap_afil
         return attrs
 
 
@@ -616,7 +654,10 @@ class EstudioMicrobiologiaBatchCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"afiliacion_id": "Afiliación inexistente para este paciente."}
                 ) from exc
-            snap_os, snap_afil = afil.obra_social, afil.numero_afiliado or ""
+            # afil.obra_social es FK ObraSocial; snapshot LIMS exige str (label).
+            snap_os, snap_afil = normalizar_snapshot_os(
+                afil.obra_social, afil.numero_afiliado or ""
+            )
             upsert_afiliacion(
                 paciente,
                 obra_social=snap_os,
@@ -665,6 +706,13 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
     tipo_cultivo_id = serializers.IntegerField(required=False, write_only=True)
     tipo_muestra_micro_id = serializers.IntegerField(required=False, write_only=True)
     origen_solicitud = serializers.CharField(required=False, allow_blank=True)
+    obra_social = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    numero_afiliado = serializers.CharField(
+        required=False, allow_blank=True, write_only=True
+    )
+    afiliacion_id = serializers.IntegerField(
+        required=False, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = EstudioMicrobiologia
@@ -680,6 +728,9 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
             "tipo_cultivo_id",
             "tipo_muestra_micro_id",
             "origen_solicitud",
+            "obra_social",
+            "numero_afiliado",
+            "afiliacion_id",
         )
 
     def validate_fecha_programada_toma(self, value):
@@ -772,6 +823,63 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
         elif "medico_externo_nombre" in attrs and (attrs.get("medico_externo_nombre") or "").strip():
             attrs["_medico"] = None
 
+        from pacientes.afiliaciones import normalizar_snapshot_os, upsert_afiliacion
+        from pacientes.models import PacienteAfiliacion
+
+        afiliacion_id = attrs.pop("afiliacion_id", serializers.empty)
+        obra_social_in = attrs.pop("obra_social", serializers.empty)
+        numero_afiliado_in = attrs.pop("numero_afiliado", serializers.empty)
+        if (
+            afiliacion_id is not serializers.empty
+            or obra_social_in is not serializers.empty
+            or numero_afiliado_in is not serializers.empty
+        ):
+            paciente = attrs.get("_paciente") or (
+                getattr(self.instance, "paciente", None) if self.instance else None
+            )
+            if paciente is None:
+                raise serializers.ValidationError(
+                    {"paciente_id": "Paciente requerido para actualizar obra social."}
+                )
+            snap_os, snap_afil = "", ""
+            if afiliacion_id is not serializers.empty and afiliacion_id is not None:
+                try:
+                    afil = PacienteAfiliacion.objects.get(
+                        pk=afiliacion_id, paciente_id=paciente.pk, activo=True
+                    )
+                except PacienteAfiliacion.DoesNotExist as exc:
+                    raise serializers.ValidationError(
+                        {"afiliacion_id": "Afiliación inexistente para este paciente."}
+                    ) from exc
+                snap_os, snap_afil = normalizar_snapshot_os(
+                    afil.obra_social, afil.numero_afiliado or ""
+                )
+                upsert_afiliacion(
+                    paciente,
+                    obra_social=snap_os,
+                    numero_afiliado=snap_afil,
+                    marcar_principal=True,
+                )
+            else:
+                os_raw = (
+                    "" if obra_social_in is serializers.empty else obra_social_in
+                )
+                afil_raw = (
+                    ""
+                    if numero_afiliado_in is serializers.empty
+                    else numero_afiliado_in
+                )
+                snap_os, snap_afil = normalizar_snapshot_os(os_raw, afil_raw)
+                if snap_os:
+                    upsert_afiliacion(
+                        paciente,
+                        obra_social=snap_os,
+                        numero_afiliado=snap_afil,
+                        marcar_principal=True,
+                    )
+            attrs["obra_social_orden"] = snap_os
+            attrs["afiliado_orden"] = snap_afil
+
         return attrs
 
     def validate_examen_orina(self, value):
@@ -849,6 +957,10 @@ class EstudioMicrobiologiaPartialUpdateSerializer(serializers.ModelSerializer):
             instance.examen_fresco = validated_data.pop("examen_fresco")
         if "tipo_estudio" in validated_data and cultivo is None:
             instance.tipo_estudio = validated_data.pop("tipo_estudio") or instance.tipo_estudio
+        if "obra_social_orden" in validated_data:
+            instance.obra_social_orden = validated_data.pop("obra_social_orden") or ""
+        if "afiliado_orden" in validated_data:
+            instance.afiliado_orden = validated_data.pop("afiliado_orden") or ""
 
         instance.save()
         return instance

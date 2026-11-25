@@ -46,12 +46,23 @@ const ObraSocialSelect: React.FC<ObraSocialSelectProps> = ({
     };
   }, []);
 
+  // Snapshots LIMS pueden traer nombre; el select opera por código.
+  const selectValue = (() => {
+    const raw = (value || '').trim();
+    if (!raw) return '';
+    if (options.some((o) => o.codigo === raw)) return raw;
+    const byNombre = options.find(
+      (o) => o.nombre.trim().toLowerCase() === raw.toLowerCase()
+    );
+    return byNombre?.codigo || raw;
+  })();
+
   return (
     <FormControl fullWidth={fullWidth} required={required} error={error} size={size} disabled={disabled || loading}>
       <InputLabel>{required ? `${label} *` : label}</InputLabel>
       <Select
         label={required ? `${label} *` : label}
-        value={value || ''}
+        value={selectValue}
         onChange={(e) => onChange(String(e.target.value))}
       >
         {!required && <MenuItem value="">—</MenuItem>}
@@ -61,6 +72,9 @@ const ObraSocialSelect: React.FC<ObraSocialSelectProps> = ({
             {o.codigo === 'PARTICULAR' ? ' (sin cobertura)' : ''}
           </MenuItem>
         ))}
+        {selectValue && !options.some((o) => o.codigo === selectValue) ? (
+          <MenuItem value={selectValue}>{selectValue} (legado)</MenuItem>
+        ) : null}
       </Select>
       {helperText ? <FormHelperText>{helperText}</FormHelperText> : null}
     </FormControl>

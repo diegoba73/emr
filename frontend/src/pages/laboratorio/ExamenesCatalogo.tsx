@@ -362,7 +362,8 @@ const ExamenesCatalogo: React.FC = () => {
       nombre: form.nombre.trim(),
       codigo_nbu: form.codigo_nbu.trim() || null,
       ub_nbu: form.ub_nbu.trim() || null,
-      abreviatura: form.abreviatura.trim() || undefined,
+      // Vacío debe persistir ('' / null), no omitirse en el PATCH.
+      abreviatura: form.abreviatura.trim(),
       tipo_muestra_requerida: Number(form.tipo_muestra_requerida),
       tipo_contenedor:
         esTuboFrascoEsterilFijo && frascoEsterilId != null
@@ -371,13 +372,13 @@ const ExamenesCatalogo: React.FC = () => {
             ? null
             : Number(form.tipo_contenedor),
       tipo_resultado: form.tipo_resultado,
-      metodo: form.metodo.trim() || undefined,
-      unidad_default: form.unidad_default.trim() || undefined,
+      metodo: form.metodo.trim(),
+      unidad_default: form.unidad_default.trim(),
       modo_entrada: form.modo_entrada,
       ticket_decimales: esTicket ? form.ticket_decimales : 0,
       multiplicador_clinico: esTicket ? form.multiplicador_clinico.trim() || '1' : 1,
-      formato_informe_entrada: formatoInforme,
-      rango_referencia_texto: form.rango_referencia_texto.trim() || undefined,
+      formato_informe_entrada: formatoInforme ?? '',
+      rango_referencia_texto: form.rango_referencia_texto.trim(),
       campos_detalle: form.campos_detalle
         .map((c) => ({
           etiqueta: c.etiqueta.trim(),
@@ -393,8 +394,8 @@ const ExamenesCatalogo: React.FC = () => {
             ),
           }
         : null,
-      rango_min: form.rango_min.trim() || undefined,
-      rango_max: form.rango_max.trim() || undefined,
+      rango_min: form.rango_min.trim() || null,
+      rango_max: form.rango_max.trim() || null,
       requiere_muestra: form.requiere_muestra,
       activo: form.activo,
     };

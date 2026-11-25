@@ -650,7 +650,10 @@ def crear_pedido_completo(
             raise ValidationError(
                 {"afiliacion_id": "Afiliación inexistente para este paciente."}
             ) from exc
-        snap_os, snap_afil = afil.obra_social, afil.numero_afiliado or ""
+        # afil.obra_social es FK ObraSocial; snapshot LIMS exige str (label).
+        snap_os, snap_afil = normalizar_snapshot_os(
+            afil.obra_social, afil.numero_afiliado or ""
+        )
         upsert_afiliacion(
             paciente, obra_social=snap_os, numero_afiliado=snap_afil, marcar_principal=True
         )
@@ -737,12 +740,26 @@ def crear_pedido_completo(
             # Mismo material + PENDIENTE sin etiquetas → agregar a esa orden.
             # Otro estado (con etiquetas / en proceso) → no crear orden duplicada.
             if orden_esta_abierta(sol_exist):
-                agregar_examenes_a_solicitud(
-                    sol_exist,
-                    examenes_ids=list(g.get("examenes_ids") or []),
-                    paneles_ids=list(g.get("paneles_ids") or []),
-                    user=user,
+                # Dominio (OrdenNoAbierta/TuboNuevo/frecuencia) → 400, no 500 HTML.
+                from laboratorio.restricciones_frecuencia import RestriccionFrecuenciaError
+                from laboratorio.solicitud_orden_abierta import (
+                    OrdenNoAbiertaError,
+                    TuboNuevoRequeridoError,
                 )
+
+                try:
+                    agregar_examenes_a_solicitud(
+                        sol_exist,
+                        examenes_ids=list(g.get("examenes_ids") or []),
+                        paneles_ids=list(g.get("paneles_ids") or []),
+                        user=user,
+                    )
+                except (
+                    OrdenNoAbiertaError,
+                    TuboNuevoRequeridoError,
+                    RestriccionFrecuenciaError,
+                ) as exc:
+                    raise ValidationError({"detail": str(exc)}) from exc
                 if (g.get("observaciones") or observaciones) and not (
                     sol_exist.observaciones or ""
                 ).strip():

@@ -42,6 +42,16 @@ class TestPacienteAfiliacionHelpers(TestCase):
         self.assertEqual(normalizar_snapshot_os("", "x"), ("", ""))
         self.assertEqual(normalizar_snapshot_os("  osde ", " 1 "), ("OSDE", "1"))
 
+    def test_snapshot_desde_fk_obrasocial(self):
+        """Afiliación.obra_social es FK; no debe romperse con .strip() del objeto."""
+        from pacientes.models import ObraSocial
+
+        os_obj = ObraSocial.objects.get(codigo="OSDE")
+        label, afil = normalizar_snapshot_os(os_obj, " 99 ")
+        self.assertEqual(label, "OSDE")
+        self.assertEqual(afil, "99")
+        self.assertIsInstance(label, str)
+
 
 class TestObraSocialEfectiva(TestCase):
     def test_fallback_paciente_si_orden_sin_snapshot(self):
@@ -152,7 +162,9 @@ class TestCreateSolicitudConSnapshotOs(TestCase):
         )
         from laboratorio.models import TipoExamen, TipoMuestra
 
-        tm = TipoMuestra.objects.create(codigo="TM_OSS", nombre="S", activo=True)
+        tm, _ = TipoMuestra.objects.get_or_create(
+            codigo="SUERO", defaults={"nombre": "Suero", "activo": True}
+        )
         self.te = TipoExamen.objects.create(
             codigo="OSS_A",
             nombre="A",
@@ -172,6 +184,7 @@ class TestCreateSolicitudConSnapshotOs(TestCase):
             {
                 "paciente_id": self.paciente.pk,
                 "examenes_ids": [self.te.pk],
+                "material_pedido": "SANGRE",
                 "fecha_programada_toma": str(timezone.localdate()),
                 "origen_solicitud": "AMBULATORIO_ICPL",
                 "obra_social": "osde",
@@ -185,4 +198,4 @@ class TestCreateSolicitudConSnapshotOs(TestCase):
         self.assertEqual(sol.afiliado_orden, "55")
         self.assertEqual(r.data.get("obra_social_efectiva"), "OSDE")
         self.paciente.refresh_from_db()
-        self.assertEqual(self.paciente.obra_social, "OSDE")
+        self.assertEqual(self.paciente.obra_social.codigo, "OSDE")

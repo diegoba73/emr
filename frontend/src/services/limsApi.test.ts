@@ -1,9 +1,39 @@
 import { apiClient } from './apiClient';
-import { listTiposExamenLims } from './limsApi';
+import { listTiposExamenLims, sanitizeTipoExamenWriteBody } from './limsApi';
 
 jest.mock('./apiClient', () => ({
   apiClient: { defaults: { baseURL: '/api' }, get: jest.fn() },
 }));
+
+describe('sanitizeTipoExamenWriteBody', () => {
+  it('persiste vacíos en campos texto y rangos (no omite la clave)', () => {
+    const out = sanitizeTipoExamenWriteBody({
+      nombre: 'Glucosa',
+      metodo: '',
+      unidad_default: null as unknown as string,
+      abreviatura: '',
+      rango_referencia_texto: '',
+      rango_min: '',
+      rango_max: null,
+      formato_informe_entrada: '',
+    });
+    expect(out.metodo).toBe('');
+    expect(out.unidad_default).toBe('');
+    expect(out.abreviatura).toBe('');
+    expect(out.rango_referencia_texto).toBe('');
+    expect(out.formato_informe_entrada).toBe('');
+    expect(out.rango_min).toBeNull();
+    expect(out.rango_max).toBeNull();
+  });
+
+  it('sigue omitiendo undefined (PATCH parcial)', () => {
+    const out = sanitizeTipoExamenWriteBody({
+      nombre: 'Glucosa',
+      metodo: undefined,
+    });
+    expect(out).toEqual({ nombre: 'Glucosa' });
+  });
+});
 
 describe('paginación del catálogo detrás del proxy', () => {
   beforeEach(() => jest.clearAllMocks());

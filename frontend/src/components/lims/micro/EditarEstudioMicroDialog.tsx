@@ -40,6 +40,10 @@ import {
   esOrigenAmbulatorioExterno,
 } from '../../../utils/limsOrigenSolicitud';
 import { sugerirMuestraPorCultivo } from '../../../utils/limsMicroUx';
+import ObraSocialSelect from '../../ObraSocialSelect';
+import ObraSocialPedidoFields, {
+  type ObraSocialPedidoValue,
+} from '../ObraSocialPedidoFields';
 
 export interface EditarEstudioMicroDialogProps {
   open: boolean;
@@ -76,6 +80,11 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
   );
   const [fechaProgramada, setFechaProgramada] = useState(estudio.fecha_programada_toma || '');
   const [observaciones, setObservaciones] = useState(estudio.observaciones || '');
+  const [obraSocialPedido, setObraSocialPedido] = useState<ObraSocialPedidoValue>({
+    afiliacionId: null,
+    obra_social: '',
+    numero_afiliado: '',
+  });
   const [tiposCultivo, setTiposCultivo] = useState<TipoCultivoMicrobiologia[]>([]);
   const [tiposMuestra, setTiposMuestra] = useState<TipoMuestraMicrobiologia[]>([]);
   const [tipoCultivoId, setTipoCultivoId] = useState<number | ''>('');
@@ -244,6 +253,9 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
         tipo_cultivo_id: Number(tipoCultivoId),
         tipo_muestra_micro_id: Number(tipoMuestraId),
         observaciones: observaciones.trim(),
+        obra_social: obraSocialPedido.obra_social.trim() || undefined,
+        numero_afiliado: obraSocialPedido.numero_afiliado.trim() || undefined,
+        afiliacion_id: obraSocialPedido.afiliacionId ?? undefined,
       };
       const fechaOriginal = estudio.fecha_programada_toma || '';
       if (fechaEditable && fechaProgramada && fechaProgramada !== fechaOriginal) {
@@ -314,6 +326,19 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
                 </Button>
               )}
             </Stack>
+            {paciente && (
+              <ObraSocialPedidoFields
+                paciente={paciente}
+                value={obraSocialPedido}
+                onChange={setObraSocialPedido}
+                disabled={saving}
+                seedFrom={{
+                  afiliacionId: null,
+                  obra_social: estudio.obra_social_orden || estudio.obra_social_efectiva || '',
+                  numero_afiliado: estudio.afiliado_orden || estudio.afiliado_efectivo || '',
+                }}
+              />
+            )}
             <FormControl fullWidth size="small">
               <InputLabel id="edit-micro-origen-label">Origen clínico</InputLabel>
               <Select
@@ -511,12 +536,12 @@ const EditarEstudioMicroDialog: React.FC<EditarEstudioMicroDialogProps> = ({
                 setNuevoPacienteForm((f) => ({ ...f, fecha_nacimiento: e.target.value }))
               }
             />
-            <TextField
+            <ObraSocialSelect
+              required
               size="small"
-              label="Obra social *"
               value={nuevoPacienteForm.obra_social}
-              onChange={(e) =>
-                setNuevoPacienteForm((f) => ({ ...f, obra_social: e.target.value }))
+              onChange={(codigo) =>
+                setNuevoPacienteForm((f) => ({ ...f, obra_social: codigo }))
               }
             />
           </Stack>

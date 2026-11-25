@@ -50,6 +50,7 @@ PANELES_GUARDIA_PERMITIDOS = frozenset(
 )
 
 # Exámenes sueltos pedibles en guardia (códigos TipoExamen).
+# ORI_GLU: permite paneles mixtos sangre+orina cuyos componentes estén allowlistados.
 EXAMENES_GUARDIA_PERMITIDOS = frozenset(
     {
         "GLU",
@@ -61,6 +62,7 @@ EXAMENES_GUARDIA_PERMITIDOS = frozenset(
         "CPK_MB",
         "CPK",
         "MIOG",
+        "ORI_GLU",
     }
 )
 
@@ -87,7 +89,8 @@ MENSAJE_EXAMEN_NO_PERMITIDO_GUARDIA = (
     "En guardia solo se pueden pedir: hemograma, ionograma plasmático, "
     "calcio iónico, coagulograma, glucemia, uremia, creatininemia, "
     "hepatograma, enzimas cardíacas (troponina I ultrasensible, troponina I, "
-    "CPK-MB, CPK, mioglobina) y EAB arterial/venoso. No permitido: {codigos}."
+    "CPK-MB, CPK, mioglobina), EAB arterial/venoso y glucosa en orina "
+    "(p. ej. en panel mixto). No permitido: {codigos}."
 )
 
 
@@ -100,6 +103,17 @@ def origen_es_guardia(origen: str | None) -> bool:
     return (o or "").strip().upper() == GUARDIA
 
 
+def _codigo_examen_permitido_guardia(codigo: str | None) -> bool:
+    c = (codigo or "").strip().upper()
+    if not c:
+        return False
+    return (
+        c in EXAMENES_GUARDIA_PERMITIDOS
+        or c in COMPONENTES_GUARDIA_PERMITIDOS
+        or c in PANELES_GUARDIA_PERMITIDOS
+    )
+
+
 def assert_examenes_permitidos_en_guardia(
     *,
     origen_solicitud: str | None,
@@ -108,6 +122,11 @@ def assert_examenes_permitidos_en_guardia(
 ) -> None:
     """
     Fail-closed si origen es GUARDIA y hay paneles/exámenes fuera del allowlist.
+
+    Paneles: se aceptan si el código está en ``PANELES_GUARDIA_PERMITIDOS`` **o**
+    si **todos** sus componentes activos tienen código permitido (examen suelto /
+    componente de panel allowlist). Así un panel mixto (p. ej. sangre+orina)
+    con exámenes ya permitidos no se rechaza solo por tener código inventado.
 
     No-op si el origen no es guardia o no hay ítems.
     """
@@ -124,19 +143,30 @@ def assert_examenes_permitidos_en_guardia(
     rechazados: list[str] = []
 
     if panel_ids:
-        for panel in PanelExamen.objects.filter(pk__in=panel_ids).only("id", "codigo", "nombre"):
-            codigo = (panel.codigo or "").strip().upper()
-            if codigo not in PANELES_GUARDIA_PERMITIDOS:
-                rechazados.append(codigo or f"panel#{panel.pk}")
+        for panel in PanelExamen.objects.filter(pk__in=panel_ids).prefetch_related(
+            "tipos_examen"
+        ):
+            codigo_panel = (panel.codigo or "").strip().upper()
+            if codigo_panel in PANELES_GUARDIA_PERMITIDOS:
+                continue
+            componentes = [
+                te
+                for te in panel.tipos_examen.all()
+                if getattr(te, "activo", True)
+            ]
+            if not componentes:
+                rechazados.append(codigo_panel or f"panel#{panel.pk}")
+                continue
+            for te in componentes:
+                codigo = (te.codigo or "").strip().upper()
+                if _codigo_examen_permitido_guardia(codigo):
+                    continue
+                rechazados.append(codigo or f"examen#{te.pk}")
 
     if exam_ids:
         for te in TipoExamen.objects.filter(pk__in=exam_ids).only("id", "codigo", "nombre"):
             codigo = (te.codigo or "").strip().upper()
-            if (
-                codigo in EXAMENES_GUARDIA_PERMITIDOS
-                or codigo in COMPONENTES_GUARDIA_PERMITIDOS
-                or codigo in PANELES_GUARDIA_PERMITIDOS
-            ):
+            if _codigo_examen_permitido_guardia(codigo):
                 continue
             rechazados.append(codigo or f"examen#{te.pk}")
 

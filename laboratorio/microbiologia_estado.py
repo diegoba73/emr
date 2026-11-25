@@ -45,6 +45,23 @@ class MicrobiologiaAccionError(ValueError):
     """Acción o transición no permitida sobre el estudio/siembra/lectura."""
 
 
+def _texto_snapshot_orden(value: Any) -> str:
+    """Normaliza snapshot OS/afiliado a str (FK ObraSocial no tiene .strip())."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    from pacientes.afiliaciones import normalizar_snapshot_os
+
+    label, _ = normalizar_snapshot_os(value, "")
+    if label:
+        return label
+    nombre = getattr(value, "nombre", None)
+    if isinstance(nombre, str) and nombre.strip():
+        return nombre.strip()
+    return str(value).strip()
+
+
 # Estados en los que no se admiten mutaciones técnicas (B3-frontend-validación-A).
 # No modifica el modelo: la constante del modelo sigue siendo solo CANCELADO para clean().
 ESTADOS_BLOQUEAN_OPERACION_MICRO = frozenset({"CANCELADO", "VALIDADO", "INFORMADO"})
@@ -200,8 +217,8 @@ def crear_estudio(
             tipo_estudio=codigo,
             observaciones=observaciones or "",
             fecha_programada_toma=fecha_programada_toma,
-            obra_social_orden=(obra_social_orden or "").strip(),
-            afiliado_orden=(afiliado_orden or "").strip(),
+            obra_social_orden=_texto_snapshot_orden(obra_social_orden),
+            afiliado_orden=_texto_snapshot_orden(afiliado_orden),
             material_pedido=(material_pedido or "").strip().upper(),
             estado="PENDIENTE",
         )

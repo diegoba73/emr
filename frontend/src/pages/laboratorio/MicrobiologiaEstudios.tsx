@@ -43,6 +43,7 @@ import {
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
+import { formatFechaLocal, startOfLocalDay } from '../../utils/limsOrdenesFecha';
 import { formatPacienteLabel } from '../../utils/pacienteFormat';
 import { sugerirMuestraPorCultivo, validateCrearEstudioMicroPedido } from '../../utils/limsMicroUx';
 import {
@@ -51,6 +52,9 @@ import {
   canOperateMicrobiologia,
 } from '../../utils/limsAccess';
 import { EstudioMicrobiologiaEstadoBadge } from '../../components/lims/micro/MicroBadges';
+import ObraSocialPedidoFields, {
+  type ObraSocialPedidoValue,
+} from '../../components/lims/ObraSocialPedidoFields';
 import { labelEstadoEstudioMicroTecnico } from '../../utils/limsEstadosMicro';
 
 const ESTADOS_OPERADOR: EstadoEstudioMicrobiologia[] = [
@@ -97,6 +101,11 @@ const MicrobiologiaEstudios: React.FC = () => {
   const [tipoCultivoId, setTipoCultivoId] = useState<number | ''>('');
   const [tipoMuestraId, setTipoMuestraId] = useState<number | ''>('');
   const [observaciones, setObservaciones] = useState('');
+  const [obraSocialPedido, setObraSocialPedido] = useState<ObraSocialPedidoValue>({
+    afiliacionId: null,
+    obra_social: '',
+    numero_afiliado: '',
+  });
   const [formError, setFormError] = useState('');
 
   const allowed = canAccessMicrobiologiaListado(currentUser);
@@ -224,6 +233,7 @@ const MicrobiologiaEstudios: React.FC = () => {
     setTipoCultivoId('');
     setTipoMuestraId('');
     setObservaciones('');
+    setObraSocialPedido({ afiliacionId: null, obra_social: '', numero_afiliado: '' });
     setFormError('');
     setOpenCreate(true);
   };
@@ -244,6 +254,7 @@ const MicrobiologiaEstudios: React.FC = () => {
     }
     setSaving(true);
     try {
+      const os = obraSocialPedido.obra_social.trim();
       const est = await createEstudioMicrobiologia({
         paciente_id: paciente!.id,
         tipo_cultivo_id: Number(tipoCultivoId),
@@ -251,6 +262,10 @@ const MicrobiologiaEstudios: React.FC = () => {
         observaciones: observaciones.trim() || undefined,
         medico_id: medicoExternoMode ? null : medicoInterno?.id ?? null,
         medico_externo_nombre: medicoExternoMode ? medicoExterno.trim() : undefined,
+        fecha_programada_toma: formatFechaLocal(startOfLocalDay()),
+        obra_social: os || undefined,
+        numero_afiliado: obraSocialPedido.numero_afiliado.trim() || undefined,
+        afiliacion_id: obraSocialPedido.afiliacionId ?? undefined,
       });
       toast.success(`Estudio ${est.numero || est.id} creado`);
       setOpenCreate(false);
@@ -415,6 +430,15 @@ const MicrobiologiaEstudios: React.FC = () => {
                 <TextField {...params} label="Paciente *" placeholder="DNI, apellido o nombre" />
               )}
             />
+
+            {paciente && (
+              <ObraSocialPedidoFields
+                paciente={paciente}
+                value={obraSocialPedido}
+                onChange={setObraSocialPedido}
+                disabled={saving}
+              />
+            )}
 
             <Button
               size="small"

@@ -203,6 +203,9 @@ export async function patchSolicitudExamenLims(
     fecha_programada_toma?: string;
     fecha_entrega_prometida?: string | null;
     observaciones?: string;
+    obra_social?: string;
+    numero_afiliado?: string;
+    afiliacion_id?: number | null;
   }
 ): Promise<SolicitudExamenLims> {
   const { data } = await apiClient.patch<SolicitudExamenLims>(
@@ -1287,8 +1290,23 @@ export function sanitizeTipoExamenWriteBody(body: TipoExamenLimsWriteBody): Tipo
     if (value === undefined) continue;
     out[key] = value;
   }
-  for (const key of ['metodo', 'unidad_default', 'abreviatura', 'rango_referencia_texto'] as const) {
-    if (out[key] === null) delete out[key];
+  // Campos texto opcionales: null → '' para que el PATCH limpie el valor en DB
+  // (antes se borraba la clave y el vaciado nunca persistía).
+  for (const key of [
+    'metodo',
+    'unidad_default',
+    'abreviatura',
+    'rango_referencia_texto',
+    'formato_informe_entrada',
+  ] as const) {
+    if (key in out && out[key] === null) {
+      out[key] = '';
+    }
+  }
+  for (const key of ['rango_min', 'rango_max'] as const) {
+    if (out[key] === '') {
+      out[key] = null;
+    }
   }
   const modo = out.modo_entrada;
   if (modo && modo !== 'ESTANDAR') {

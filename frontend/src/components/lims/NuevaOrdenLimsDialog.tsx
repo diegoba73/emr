@@ -934,7 +934,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       );
       onClose();
     } catch (e) {
-      const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCargarOrdenes);
+      const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsCrearPedido);
       setError(msg);
     } finally {
       setSaving(false);

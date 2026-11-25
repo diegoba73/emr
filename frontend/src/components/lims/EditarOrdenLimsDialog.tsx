@@ -29,6 +29,10 @@ import {
   ORIGEN_SOLICITUD_LIMS_OPTIONS,
   esOrigenAmbulatorioExterno,
 } from '../../utils/limsOrigenSolicitud';
+import ObraSocialSelect from '../ObraSocialSelect';
+import ObraSocialPedidoFields, {
+  type ObraSocialPedidoValue,
+} from './ObraSocialPedidoFields';
 
 export interface EditarOrdenLimsDialogProps {
   open: boolean;
@@ -63,6 +67,11 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
   const [fechaProgramada, setFechaProgramada] = useState(orden.fecha_programada_toma || '');
   const [fechaEntrega, setFechaEntrega] = useState(orden.fecha_entrega_prometida || '');
   const [observaciones, setObservaciones] = useState(orden.observaciones || '');
+  const [obraSocialPedido, setObraSocialPedido] = useState<ObraSocialPedidoValue>({
+    afiliacionId: null,
+    obra_social: '',
+    numero_afiliado: '',
+  });
 
   const [openNuevoPaciente, setOpenNuevoPaciente] = useState(false);
   const [nuevoPacienteSaving, setNuevoPacienteSaving] = useState(false);
@@ -196,6 +205,9 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
         origen_solicitud: origen,
         fecha_entrega_prometida: fechaEntrega || null,
         observaciones: observaciones.trim(),
+        obra_social: obraSocialPedido.obra_social.trim() || undefined,
+        numero_afiliado: obraSocialPedido.numero_afiliado.trim() || undefined,
+        afiliacion_id: obraSocialPedido.afiliacionId ?? undefined,
       };
       // Solo enviar fecha si el operador la cambió (evita restaurar valor viejo en carrera).
       if (fechaProgramada !== fechaOriginal) {
@@ -258,6 +270,19 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                 </Button>
               )}
             </Stack>
+            {paciente && (
+              <ObraSocialPedidoFields
+                paciente={paciente}
+                value={obraSocialPedido}
+                onChange={setObraSocialPedido}
+                disabled={saving}
+                seedFrom={{
+                  afiliacionId: null,
+                  obra_social: orden.obra_social_orden || orden.obra_social_efectiva || '',
+                  numero_afiliado: orden.afiliado_orden || orden.afiliado_efectivo || '',
+                }}
+              />
+            )}
             <FormControl fullWidth size="small">
               <InputLabel id="edit-origen-label">Origen clínico</InputLabel>
               <Select
@@ -425,12 +450,12 @@ const EditarOrdenLimsDialog: React.FC<EditarOrdenLimsDialogProps> = ({
                 setNuevoPacienteForm((f) => ({ ...f, fecha_nacimiento: e.target.value }))
               }
             />
-            <TextField
-              label="Obra social *"
+            <ObraSocialSelect
+              required
               size="small"
               value={nuevoPacienteForm.obra_social}
-              onChange={(e) =>
-                setNuevoPacienteForm((f) => ({ ...f, obra_social: e.target.value }))
+              onChange={(codigo) =>
+                setNuevoPacienteForm((f) => ({ ...f, obra_social: codigo }))
               }
             />
           </Stack>

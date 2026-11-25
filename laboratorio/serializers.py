@@ -1634,7 +1634,10 @@ class SolicitudExamenCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"afiliacion_id": "Afiliación inexistente para este paciente."}
                 ) from exc
-            snap_os, snap_afil = afil.obra_social, afil.numero_afiliado or ""
+            # afil.obra_social es FK ObraSocial; snapshot LIMS exige str (label).
+            snap_os, snap_afil = normalizar_snapshot_os(
+                afil.obra_social, afil.numero_afiliado or ""
+            )
             upsert_afiliacion(
                 paciente,
                 obra_social=snap_os,
@@ -1717,6 +1720,15 @@ class SolicitudExamenUpdateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    obra_social = serializers.CharField(
+        required=False, allow_blank=True, write_only=True
+    )
+    numero_afiliado = serializers.CharField(
+        required=False, allow_blank=True, write_only=True
+    )
+    afiliacion_id = serializers.IntegerField(
+        required=False, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = SolicitudExamen
@@ -1728,6 +1740,9 @@ class SolicitudExamenUpdateSerializer(serializers.ModelSerializer):
             "fecha_programada_toma",
             "fecha_entrega_prometida",
             "observaciones",
+            "obra_social",
+            "numero_afiliado",
+            "afiliacion_id",
         ]
 
     def validate_origen_solicitud(self, value):
@@ -1805,6 +1820,66 @@ class SolicitudExamenUpdateSerializer(serializers.ModelSerializer):
                         raise serializers.ValidationError(
                             {"fecha_programada_toma": conflictos[0].mensaje}
                         )
+
+        from pacientes.afiliaciones import normalizar_snapshot_os, upsert_afiliacion
+        from pacientes.models import PacienteAfiliacion
+
+        afiliacion_id = attrs.pop("afiliacion_id", serializers.empty)
+        obra_social_in = attrs.pop("obra_social", serializers.empty)
+        numero_afiliado_in = attrs.pop("numero_afiliado", serializers.empty)
+        if (
+            afiliacion_id is not serializers.empty
+            or obra_social_in is not serializers.empty
+            or numero_afiliado_in is not serializers.empty
+        ):
+            paciente = attrs.get("paciente") or (
+                getattr(instance, "paciente", None) if instance else None
+            )
+            if paciente is None:
+                raise serializers.ValidationError(
+                    {"paciente_id": "Paciente requerido para actualizar obra social."}
+                )
+            snap_os, snap_afil = "", ""
+            if afiliacion_id is not serializers.empty and afiliacion_id is not None:
+                try:
+                    afil = PacienteAfiliacion.objects.get(
+                        pk=afiliacion_id, paciente_id=paciente.pk, activo=True
+                    )
+                except PacienteAfiliacion.DoesNotExist as exc:
+                    raise serializers.ValidationError(
+                        {"afiliacion_id": "Afiliación inexistente para este paciente."}
+                    ) from exc
+                snap_os, snap_afil = normalizar_snapshot_os(
+                    afil.obra_social, afil.numero_afiliado or ""
+                )
+                upsert_afiliacion(
+                    paciente,
+                    obra_social=snap_os,
+                    numero_afiliado=snap_afil,
+                    marcar_principal=True,
+                )
+            else:
+                os_raw = (
+                    ""
+                    if obra_social_in is serializers.empty
+                    else obra_social_in
+                )
+                afil_raw = (
+                    ""
+                    if numero_afiliado_in is serializers.empty
+                    else numero_afiliado_in
+                )
+                snap_os, snap_afil = normalizar_snapshot_os(os_raw, afil_raw)
+                if snap_os:
+                    upsert_afiliacion(
+                        paciente,
+                        obra_social=snap_os,
+                        numero_afiliado=snap_afil,
+                        marcar_principal=True,
+                    )
+            attrs["obra_social_orden"] = snap_os
+            attrs["afiliado_orden"] = snap_afil
+
         return attrs
 
 

@@ -464,6 +464,8 @@ class EstudioMicrobiologiaViewSet(viewsets.ModelViewSet):
                     consulta_hc=vd.get("_consulta_hc"),
                     fecha_programada_toma=vd.get("fecha_programada_toma"),
                     material_pedido=vd.get("material_pedido") or "",
+                    obra_social_orden=vd.get("_obra_social_orden") or "",
+                    afiliado_orden=vd.get("_afiliado_orden") or "",
                 )
             else:
                 estudio = crear_estudio(

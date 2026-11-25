@@ -40,13 +40,20 @@ class TestPedidosCompletosRemediacion(TestCase):
         self.tm_orina, _ = TipoMuestra.objects.get_or_create(
             codigo="ORINA", defaults={"nombre": "Orina", "activo": True}
         )
-        self.glu = TipoExamen.objects.create(
-            codigo=f"G{suf}",
-            nombre="Glu PC",
-            tipo_muestra_requerida=self.tm_suero,
-            tipo_resultado="NUMERICO",
-            activo=True,
+        # Códigos canónicos allowlistados en guardia (no random): panel mixto
+        # sangre+orina se valida por componentes, no por código de panel.
+        self.glu, _ = TipoExamen.objects.get_or_create(
+            codigo="GLU",
+            defaults={
+                "nombre": "Glucemia",
+                "tipo_muestra_requerida": self.tm_suero,
+                "tipo_resultado": "NUMERICO",
+                "activo": True,
+            },
         )
+        if self.glu.tipo_muestra_requerida_id != self.tm_suero.id:
+            self.glu.tipo_muestra_requerida = self.tm_suero
+            self.glu.save(update_fields=["tipo_muestra_requerida"])
         self.crea = TipoExamen.objects.create(
             codigo=f"C{suf}",
             nombre="Crea PC",
@@ -54,13 +61,18 @@ class TestPedidosCompletosRemediacion(TestCase):
             tipo_resultado="NUMERICO",
             activo=True,
         )
-        self.orina_ex = TipoExamen.objects.create(
-            codigo=f"O{suf}",
-            nombre="Orina PC",
-            tipo_muestra_requerida=self.tm_orina,
-            tipo_resultado="TEXTO",
-            activo=True,
+        self.orina_ex, _ = TipoExamen.objects.get_or_create(
+            codigo="ORI_GLU",
+            defaults={
+                "nombre": "Glucosa (orina)",
+                "tipo_muestra_requerida": self.tm_orina,
+                "tipo_resultado": "CUALITATIVO",
+                "activo": True,
+            },
         )
+        if self.orina_ex.tipo_muestra_requerida_id != self.tm_orina.id:
+            self.orina_ex.tipo_muestra_requerida = self.tm_orina
+            self.orina_ex.save(update_fields=["tipo_muestra_requerida"])
         self.panel_mixto = PanelExamen.objects.create(
             codigo=f"PM{suf}", nombre="Panel mixto PC", activo=True
         )
@@ -644,3 +656,45 @@ class TestPedidosCompletosRemediacion(TestCase):
         )
         self.assertEqual(r2.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(SolicitudExamen.objects.filter(paciente=self.pac).count(), 1)
+
+    def test_pedido_completo_afiliacion_id_normaliza_fk_os_con_micro(self):
+        """afiliacion_id → FK ObraSocial debe normalizarse a str (no .strip() sobre modelo)."""
+        from pacientes.afiliaciones import upsert_afiliacion
+        from pacientes.obras_sociales import ensure_seed_obras_sociales
+
+        ensure_seed_obras_sociales()
+        afil = upsert_afiliacion(
+            self.pac, obra_social="OSDE", numero_afiliado="AF-PC-1", marcar_principal=True
+        )
+        self.assertIsNotNone(afil)
+        self.client.force_authenticate(self.lab)
+        r = self.client.post(
+            "/api/lab/pedidos-completos/",
+            {
+                "paciente_id": self.pac.pk,
+                "fecha_programada_toma": self.hoy.isoformat(),
+                "afiliacion_id": afil.pk,
+                "solicitudes_lab": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "examenes_ids": [self.glu.pk],
+                        "paneles_ids": [],
+                    }
+                ],
+                "estudios_micro": [
+                    {
+                        "material_pedido": "SANGRE",
+                        "tipo_cultivo_id": self.cultivo.pk,
+                        "tipo_muestra_micro_id": self.muestra_micro.pk,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        sol = SolicitudExamen.objects.get(pk=r.data["solicitudes_ids"][0])
+        self.assertEqual(sol.obra_social_orden, "OSDE")
+        self.assertEqual(sol.afiliado_orden, "AF-PC-1")
+        est = EstudioMicrobiologia.objects.get(pk=r.data["estudios_micro_ids"][0])
+        self.assertEqual(est.obra_social_orden, "OSDE")
+        self.assertEqual(est.afiliado_orden, "AF-PC-1")

@@ -14,15 +14,26 @@ def obra_social_efectiva(obj: Any) -> tuple[str, str]:
 
     Compatible con órdenes históricas sin ``obra_social_orden``.
     """
-    snap_os = (getattr(obj, "obra_social_orden", None) or "").strip()
-    snap_afil = (getattr(obj, "afiliado_orden", None) or "").strip()
-    if snap_os:
-        return snap_os, snap_afil
+    from pacientes.afiliaciones import normalizar_snapshot_os
+    from pacientes.obras_sociales import label_obra_social
+
+    raw_os = getattr(obj, "obra_social_orden", None)
+    raw_afil = getattr(obj, "afiliado_orden", None)
+    # CharField debería ser str; tolerar legado/objeto por si filtró un FK.
+    if raw_os and not isinstance(raw_os, str):
+        snap_os, snap_afil = normalizar_snapshot_os(raw_os, raw_afil)
+        if snap_os:
+            return snap_os, snap_afil
+    else:
+        snap_os = (raw_os or "").strip()
+        snap_afil = (raw_afil or "").strip() if isinstance(raw_afil, str) else (
+            str(raw_afil).strip() if raw_afil else ""
+        )
+        if snap_os:
+            return snap_os, snap_afil
     paciente = getattr(obj, "paciente", None)
     if paciente is None:
         return "", ""
-    from pacientes.obras_sociales import label_obra_social
-
     os_raw = getattr(paciente, "obra_social", None)
     return (
         label_obra_social(os_raw),
