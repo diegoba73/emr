@@ -100,7 +100,7 @@ Se configura en **Médicos** (web) o Admin Django. No es un rol Django distinto:
 
 El backend rechaza contextos/orígenes de guardia e internación y el acceso a APIs de internación / `iniciar-guardia` cuando el médico es solo ambulatorio.
 
-**Frecuencia / cobertura ensayos:** médico (y roles no LIMS-write) no pueden pedir fuera de política: PROBNP (31 días), PSA/VITD (1/año calendario), TSH/T3/T4/T4L (2/año calendario + ≥2 meses por analito), T4 si obra social SEROS. **admin / laboratorio / bioquímico** pueden agregar cualquiera (`laboratorio/restricciones_frecuencia.py`).
+**Frecuencia / cobertura ensayos:** médico (y roles no LIMS-write) no pueden pedir fuera de política: PROBNP (31 días), HBA1C (**prohibida en guardia**; en internación/ambulatorio/externo: 90 días / 3 meses), PSA/VITD (1/año calendario), TSH/T3/T4/T4L (2/año calendario + ≥2 meses por analito), T4 si obra social SEROS. **admin / laboratorio / bioquímico** (roles LIMS-write) pueden agregar cualquiera, incluida HBA1C (`laboratorio/restricciones_frecuencia.py`).
 
 Los **paquetes por contexto** se configuran en el EMR web:
 **Laboratorio → Catálogos → Paquetes app móvil** (`/laboratorio/catalogos/paquetes-movil`).

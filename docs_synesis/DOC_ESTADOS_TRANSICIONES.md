@@ -51,8 +51,8 @@ Transiciones C5.9.2 **[IMPLEMENTADO]** (`turnos/turno_estado.py`):
 
 | Conceptual | **[IMPLEMENTADO]** | Acción / transición |
 |------------|---------------------|---------------------|
-| Pendiente | `PENDIENTE` | Creación |
-| En proceso | `EN_PROCESO` | **No** es regla universal que `POST .../tomar-muestra/` pase inmediatamente `PENDIENTE` → `EN_PROCESO`. Con tubos reales la orden puede seguir `PENDIENTE` hasta que el tubo correspondiente se registre/escanee como `TOMADA`. El flujo legacy **sin** tubos puede avanzar durante `tomar-muestra`. |
+| Pendiente | `PENDIENTE` | Creación / etiquetas sin escaneo. UI: «Pendiente». |
+| En proceso | `EN_PROCESO` | **No** es regla universal que `POST .../tomar-muestra/` pase inmediatamente `PENDIENTE` → `EN_PROCESO`. Con tubos reales la orden puede seguir `PENDIENTE` hasta que el tubo correspondiente se registre/escanee como `TOMADA` (o recepción que implique toma). El flujo legacy **sin** tubos puede avanzar durante `tomar-muestra`. **UI extracción parcial:** si `EN_PROCESO` y quedan tubos `PENDIENTE_TOMA`, el chip muestra «En proceso/Pendiente» (cada tramo con su color). Extracción completa → solo «En proceso». |
 | Informe parcial | `INFORMADO_PARCIAL` | Carga incompleta de ensayos exigibles; médico ve valores en pantalla y puede descargar/enviar PDF parcial (banner «INFORME PARCIAL»). Label UI: «Informe parcial». |
 | Listo para validar | `LISTO_PARA_VALIDAR` | Carga completa de ensayos exigibles (vacíos de tubos `CANCELADA`/`RECHAZADA`/`DESCARTADA` no cuentan); exige IQC del día. Reapertura: vaciar un resultado completo → `EN_PROCESO`. Vaciar el último valor de un `INFORMADO_PARCIAL` también vuelve a `EN_PROCESO`. |
 | Finalizado | `FINALIZADO` | `POST .../validar/` (alias `.../finalizar/`); admin / bioquímico / superuser. Reapertura: `POST .../desvalidar/` (motivo obligatorio) → `LISTO_PARA_VALIDAR` |

@@ -48,6 +48,21 @@ class EtiquetaMuestraPayload:
     validation_errors: list[str]
 
 
+def _etiqueta_citrato_por_codigo(codigo: str) -> str | None:
+    """
+    Distinguir citrato coagulación vs eritrosedimentación en 40 mm.
+
+    Ambos aditivos empiezan con «Citrato…»; el código del tubo es la señal
+    operativa (CITRATO → coag; ERITRO / legacy CITRATO_VSG → VSG).
+    """
+    c = (codigo or "").strip().upper()
+    if c == "CITRATO":
+        return "CIT COA"
+    if c in ("ERITRO", "CITRATO_VSG"):
+        return "CIT ERIT"
+    return None
+
+
 def tipo_operacional_imprimible(muestra: Muestra) -> str:
     """
     Texto de la 4.ª línea (tubo/anticoagulante operativo).
@@ -56,9 +71,15 @@ def tipo_operacional_imprimible(muestra: Muestra) -> str:
     mientras ``TipoMuestra`` es material (p.ej. SANGRE_EDTA / sangre).
     Preferimos aditivo corto del contenedor; si no, código del contenedor;
     si no hay contenedor, código del tipo de muestra.
+
+    Citrato: «CIT COA» (coagulación) / «CIT ERIT» (eritrosedimentación).
     """
     tc = getattr(muestra, "tipo_contenedor", None)
     if tc is not None:
+        codigo_tc = (tc.codigo or "").strip()
+        cit_label = _etiqueta_citrato_por_codigo(codigo_tc)
+        if cit_label:
+            return cit_label
         aditivo = (getattr(tc, "aditivo", None) or "").strip()
         if aditivo:
             # "EDTA K2" → preferir token corto legible en 40 mm.
@@ -67,14 +88,12 @@ def tipo_operacional_imprimible(muestra: Muestra) -> str:
                 return "EDTA"
             # Evitar "SIN ADITIVO" verboso: usar código del tubo.
             if upper.startswith("SIN "):
-                codigo = (tc.codigo or "").strip()
-                return codigo or aditivo
-            # Primer token significativo (p.ej. "Citrato de sodio" → CITRATO).
+                return codigo_tc or aditivo
+            # Primer token significativo (p.ej. "Heparina de litio" → HEPARINA).
             token = aditivo.split()[0].strip(" ,.;")
-            return token.upper() if token else (tc.codigo or "").strip()
-        codigo = (tc.codigo or "").strip()
-        if codigo:
-            return codigo
+            return token.upper() if token else codigo_tc
+        if codigo_tc:
+            return codigo_tc
     tm = getattr(muestra, "tipo_muestra", None)
     if tm is not None:
         codigo = (getattr(tm, "codigo", None) or "").strip()

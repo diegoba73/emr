@@ -69,7 +69,6 @@ import {
   ORIGEN_SOLICITUD_LIMS_OPTIONS,
   esOrigenAmbulatorioExterno,
   esOrigenInternacion,
-  origenExigeBloqueoFrecuenciaEnsayos,
 } from '../../utils/limsOrigenSolicitud';
 import {
   esOrigenCatalogoGuardia,
@@ -404,11 +403,9 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const origenParaAgrupar = origenInicial || origenManual;
 
   useEffect(() => {
+    // Siempre consultar al backend: HBA1C también bloquea en ambulatorio (90 días)
+    // y está prohibida en guardia; el resto de códigos solo bloquean en internación/guardia.
     if (!open || omiteRestriccionesEnsayos) {
-      setRestriccionesEnsayos({});
-      return;
-    }
-    if (!origenExigeBloqueoFrecuenciaEnsayos(origenParaRestricciones)) {
       setRestriccionesEnsayos({});
       return;
     }

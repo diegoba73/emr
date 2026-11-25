@@ -41,6 +41,19 @@ export function labelEstadoOrdenLims(estado: EstadoSolicitudLims | string): stri
   return ESTADO_ORDEN_LABEL[estado as EstadoSolicitudLims] || estado;
 }
 
+/** Orden ya en curso con al menos un tubo aún PENDIENTE_TOMA. */
+export type OrdenExtraccionParcialInput = {
+  estado: EstadoSolicitudLims | string;
+  tubos_pendientes_extraccion?: readonly unknown[] | null;
+  extraccion_completa?: boolean | null;
+};
+
+export function ordenTieneExtraccionParcial(orden: OrdenExtraccionParcialInput): boolean {
+  if (orden.estado !== 'EN_PROCESO') return false;
+  const pendientes = orden.tubos_pendientes_extraccion;
+  return Array.isArray(pendientes) && pendientes.length > 0;
+}
+
 /**
  * Cuatro estados generales de UI (plan remediación LIMS):
  * Pendientes | En proceso | Informe parcial | Finalizado.

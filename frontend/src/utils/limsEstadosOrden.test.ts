@@ -11,6 +11,7 @@ import {
   ordenPuedeCorregirResultados,
   ordenPuedeDesvalidar,
   ordenPuedeEnviarInforme,
+  ordenTieneExtraccionParcial,
 } from './limsEstadosOrden';
 
 describe('limsEstadosOrden — LISTO_PARA_VALIDAR', () => {
@@ -49,6 +50,32 @@ describe('limsEstadosOrden — LISTO_PARA_VALIDAR', () => {
     expect(ordenPuedeEnviarInforme('FINALIZADO')).toBe(true);
     expect(ordenPuedeEnviarInforme('EN_PROCESO')).toBe(false);
     expect(ordenEsFinalizada('LISTO_PARA_VALIDAR')).toBe(false);
+  });
+
+  it('detecta extracción parcial solo en EN_PROCESO con tubos PENDIENTE_TOMA', () => {
+    expect(
+      ordenTieneExtraccionParcial({
+        estado: 'EN_PROCESO',
+        tubos_pendientes_extraccion: [{ id: 1 }],
+      })
+    ).toBe(true);
+    expect(
+      ordenTieneExtraccionParcial({
+        estado: 'EN_PROCESO',
+        tubos_pendientes_extraccion: [],
+      })
+    ).toBe(false);
+    expect(
+      ordenTieneExtraccionParcial({
+        estado: 'PENDIENTE',
+        tubos_pendientes_extraccion: [{ id: 1 }],
+      })
+    ).toBe(false);
+    expect(
+      ordenTieneExtraccionParcial({
+        estado: 'EN_PROCESO',
+      })
+    ).toBe(false);
   });
 
   it('permite cancelar órdenes abiertas y trata CANCELADO como terminal', () => {

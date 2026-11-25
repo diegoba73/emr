@@ -50,8 +50,6 @@ import { normalizeRol } from '../../utils/permissions';
 import { formatLimsPdfDownloadError } from '../../utils/limsDownload';
 import { formatFechaHoraDisplay } from '../../utils/dateFieldFormat';
 import {
-  estadoOrdenColor,
-  labelEstadoOrdenLims,
   ordenListaParaValidar,
   ordenPuedeAgregarExamenes,
   ordenPuedeCancelar,
@@ -63,6 +61,7 @@ import {
 import { MotivoDialog, useMotivoDialog } from '../../components/common/MotivoDialog';
 import { countResultadosConValor, ordenResultadosCompletos } from '../../utils/limsOrdenResultados';
 import CargaResultadosLims from '../../components/lims/CargaResultadosLims';
+import EstadoOrdenLimsChip from '../../components/lims/EstadoOrdenLimsChip';
 import OrdenLimsResumenPanel from '../../components/lims/OrdenLimsResumenPanel';
 import MuestrasOrdenPanel from '../../components/lims/MuestrasOrdenPanel';
 import TomarMuestraOrdenDialog from '../../components/lims/TomarMuestraOrdenDialog';
@@ -368,7 +367,14 @@ const OrdenLimsDetalle: React.FC = () => {
           target="_blank" rel="noopener noreferrer">
           Ver historial de laboratorio del paciente
         </Button>
-        <Chip label={labelEstadoOrdenLims(e)} color={estadoOrdenColor(e)} />
+        <EstadoOrdenLimsChip
+          size="medium"
+          orden={{
+            estado: e,
+            tubos_pendientes_extraccion: orden.tubos_pendientes_extraccion,
+            extraccion_completa: orden.extraccion_completa,
+          }}
+        />
         {orden.estado_obra_social ? (
           <Chip
             size="small"

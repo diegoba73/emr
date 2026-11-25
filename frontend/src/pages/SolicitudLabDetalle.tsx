@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Paper,
   Typography,
@@ -26,12 +25,9 @@ import {
   isSecretariaEntregaLab,
 } from '../utils/limsAccess';
 import { formatLimsPdfDownloadError } from '../utils/limsDownload';
-import {
-  estadoOrdenColor,
-  labelEstadoOrdenLims,
-  ordenPuedeEnviarInforme,
-} from '../utils/limsEstadosOrden';
+import { ordenPuedeEnviarInforme } from '../utils/limsEstadosOrden';
 import { resolveNavBack } from '../utils/navBack';
+import EstadoOrdenLimsChip from '../components/lims/EstadoOrdenLimsChip';
 
 const SolicitudLabDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -140,7 +136,14 @@ const SolicitudLabDetalle: React.FC = () => {
         <Typography variant="h5">
           Orden {orden.numero || `#${orden.id}`}
         </Typography>
-        <Chip label={labelEstadoOrdenLims(orden.estado)} color={estadoOrdenColor(orden.estado)} />
+        <EstadoOrdenLimsChip
+          size="medium"
+          orden={{
+            estado: orden.estado,
+            tubos_pendientes_extraccion: orden.tubos_pendientes_extraccion,
+            extraccion_completa: orden.extraccion_completa,
+          }}
+        />
         {puedeEnviar && (
           <Button variant="contained" onClick={() => setOpenEnviarInforme(true)}>
             Enviar informe

@@ -21,6 +21,13 @@ const CONTEXTOS_FALLBACK: Array<{ id: ContextoLab; label: string }> = [
   { id: 'INTERNACION', label: 'Internado' },
 ];
 
+/** Alineado a movil.roles.CONTEXTO_A_ORIGEN — para restricciones-ensayos. */
+const CONTEXTO_A_ORIGEN: Record<ContextoLab, string> = {
+  GUARDIA: 'GUARDIA',
+  AMBULATORIO: 'AMBULATORIO_CEHTA',
+  INTERNACION: 'INTERNACION_UCE',
+};
+
 function keyOf(item: Pick<LabCatalogItem, 'kind' | 'id'>): SelectionKey {
   return `${item.kind}:${item.id}`;
 }
@@ -202,12 +209,28 @@ export default function NuevaOrdenLab() {
     setError('');
     setSelected({});
     setRestriccionesEnsayos({});
-    void api<Record<string, { bloqueado: boolean; mensaje: string | null }>>(
-      `/lab/pacientes/${p.id}/restricciones-ensayos/`
-    )
-      .then((data) => setRestriccionesEnsayos(data || {}))
-      .catch(() => setRestriccionesEnsayos({}));
   };
+
+  useEffect(() => {
+    if (!paciente?.id) {
+      setRestriccionesEnsayos({});
+      return;
+    }
+    const origen = CONTEXTO_A_ORIGEN[contexto] || 'AMBULATORIO_CEHTA';
+    let cancelled = false;
+    void api<Record<string, { bloqueado: boolean; mensaje: string | null }>>(
+      `/lab/pacientes/${paciente.id}/restricciones-ensayos/?origen_solicitud=${encodeURIComponent(origen)}`
+    )
+      .then((data) => {
+        if (!cancelled) setRestriccionesEnsayos(data || {});
+      })
+      .catch(() => {
+        if (!cancelled) setRestriccionesEnsayos({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [paciente?.id, contexto]);
 
   const toggleItem = (item: LabCatalogItem) => {
     const k = keyOf(item);

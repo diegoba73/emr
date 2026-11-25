@@ -383,6 +383,45 @@ class TestEtiquetaMuestraApi(TestCase):
         m = self._muestra_lista()
         self.assertEqual(tipo_operacional_imprimible(m), "EDTA")
 
+    def test_tipo_operacional_citrato_coa_y_erit(self):
+        """Coagulación → CIT COA; eritrosedimentación → CIT ERIT (no «CITRATO»)."""
+        from laboratorio.models_catalog import TipoContenedor
+
+        tc_coa, _ = TipoContenedor.objects.get_or_create(
+            codigo="CITRATO",
+            defaults={
+                "nombre": "Tubo Citrato coagulación",
+                "aditivo": "Citrato de sodio",
+                "activo": True,
+            },
+        )
+        tc_erit, _ = TipoContenedor.objects.get_or_create(
+            codigo="ERITRO",
+            defaults={
+                "nombre": "Tubo Eritro (VSG)",
+                "aditivo": "Citrato de sodio trisódico 3,8%",
+                "activo": True,
+            },
+        )
+        m_coa = crear_muestra(
+            solicitud=self.solicitud,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=tc_coa.pk,
+            observaciones="",
+            actor=self.lab,
+            view="test",
+        )
+        m_erit = crear_muestra(
+            solicitud=self.solicitud,
+            tipo_muestra_id=self.tm.pk,
+            tipo_contenedor_id=tc_erit.pk,
+            observaciones="",
+            actor=self.lab,
+            view="test",
+        )
+        self.assertEqual(tipo_operacional_imprimible(m_coa), "CIT COA")
+        self.assertEqual(tipo_operacional_imprimible(m_erit), "CIT ERIT")
+
     def test_tomar_guarda_lugar_y_cambiar_ubicacion_no_lo_pisa(self):
         m = crear_muestra(
             solicitud=self.solicitud,

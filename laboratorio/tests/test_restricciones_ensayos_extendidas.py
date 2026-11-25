@@ -1,4 +1,4 @@
-"""Restricciones PSA, Vitamina D, tiroides y T4/SEROS (bloqueo en guardia/internación)."""
+"""Restricciones PSA, Vitamina D, tiroides, T4/SEROS y HBA1C (bloqueo en guardia/internación)."""
 
 from datetime import datetime, timedelta
 
@@ -14,7 +14,7 @@ from laboratorio.restricciones_frecuencia import (
     assert_puede_agregar_ensayos,
 )
 from medicos.models import Especialidad, Medico
-from pacientes.models import Paciente
+from pacientes.models import ObraSocial, Paciente
 
 User = get_user_model()
 
@@ -31,11 +31,20 @@ class TestRestriccionesEnsayosExtendidas(TestCase):
         self.lab = User.objects.create_user(
             username="lab_restx", email="lab-rx@t.com", password="x", rol="laboratorio", is_staff=True
         )
+        self.bio = User.objects.create_user(
+            username="bio_restx", email="bio-rx@t.com", password="x", rol="bioquimico", is_staff=True
+        )
+        os_osde, _ = ObraSocial.objects.get_or_create(
+            codigo="OSDE", defaults={"nombre": "OSDE", "activo": True}
+        )
+        os_seros, _ = ObraSocial.objects.get_or_create(
+            codigo="SEROS", defaults={"nombre": "SEROS", "activo": True}
+        )
         self.paciente = Paciente.objects.create(
-            dni="9013001", nombre="P", apellido="RestX", obra_social="OSDE"
+            dni="9013001", nombre="P", apellido="RestX", obra_social=os_osde
         )
         self.paciente_seros = Paciente.objects.create(
-            dni="9013002", nombre="S", apellido="Seros", obra_social="SEROS"
+            dni="9013002", nombre="S", apellido="Seros", obra_social=os_seros
         )
         esp = Especialidad.objects.create(nombre="Esp RestX")
         self.medico = Medico.objects.create(
@@ -67,6 +76,7 @@ class TestRestriccionesEnsayosExtendidas(TestCase):
         self.t3 = te("T3", "T3")
         self.t4 = te("T4", "T4")
         self.t4l = te("T4L", "T4 libre")
+        self.hba1c = te("HBA1C", "Hemoglobina glicosilada (HbA1c)")
         self.glu = te("GLU_RX", "Glucosa RX")
 
     def _orden_con(self, paciente, tipo, *, dias_atras=0, fecha_solicitud=None):
@@ -199,4 +209,85 @@ class TestRestriccionesEnsayosExtendidas(TestCase):
         self.assertTrue(r.data["PSA"]["bloqueado"])
         self.assertIn("TSH", r.data)
         self.assertIn("VITD", r.data)
+        self.assertIn("HBA1C", r.data)
         self.assertFalse(r.data["TSH"]["bloqueado"])
+        # En guardia HBA1C está siempre bloqueada para el médico.
+        self.assertTrue(r.data["HBA1C"]["bloqueado"])
+        self.assertIn("Guardia", r.data["HBA1C"]["mensaje"])
+
+    def test_medico_hba1c_prohibida_en_guardia(self):
+        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                self.paciente.pk,
+                [self.hba1c.pk],
+                origen_solicitud="GUARDIA",
+            )
+        self.assertIn("Guardia", str(ctx.exception))
+        self.assertIn("HbA1c", str(ctx.exception))
+
+    def test_medico_hba1c_internacion_bloqueado_si_menos_de_90_dias(self):
+        self._orden_con(self.paciente, self.hba1c, dias_atras=30)
+        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                self.paciente.pk,
+                [self.hba1c.pk],
+                origen_solicitud="INTERNACION_UCE",
+            )
+        self.assertIn("3 meses", str(ctx.exception))
+
+    def test_medico_hba1c_internacion_ok_si_mas_de_90_dias(self):
+        self._orden_con(self.paciente, self.hba1c, dias_atras=91)
+        self._assert_ok(self.paciente, self.hba1c.pk, origen="INTERNACION_UCE")
+
+    def test_medico_hba1c_ambulatorio_bloqueado_si_reciente(self):
+        self._orden_con(self.paciente, self.hba1c, dias_atras=10)
+        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
+            assert_puede_agregar_ensayos(
+                self.medico_user,
+                self.paciente.pk,
+                [self.hba1c.pk],
+                origen_solicitud="AMBULATORIO_CEHTA",
+            )
+        self.assertIn("3 meses", str(ctx.exception))
+
+    def test_medico_hba1c_ambulatorio_ok_sin_previa(self):
+        self._assert_ok(self.paciente, self.hba1c.pk, origen="AMBULATORIO_CEHTA")
+
+    def test_medico_hba1c_ambulatorio_ok_si_mas_de_90_dias(self):
+        self._orden_con(self.paciente, self.hba1c, dias_atras=91)
+        self._assert_ok(self.paciente, self.hba1c.pk, origen="AMBULATORIO_CEHTA")
+
+    def test_lab_puede_hba1c_en_guardia(self):
+        assert_puede_agregar_ensayos(
+            self.lab,
+            self.paciente.pk,
+            [self.hba1c.pk],
+            origen_solicitud="GUARDIA",
+        )
+
+    def test_bioquimico_puede_hba1c_aunque_reciente(self):
+        self._orden_con(self.paciente, self.hba1c, dias_atras=10)
+        assert_puede_agregar_ensayos(
+            self.bio,
+            self.paciente.pk,
+            [self.hba1c.pk],
+            origen_solicitud="INTERNACION_UCO",
+        )
+
+    def test_endpoint_hba1c_bloqueado_ambulatorio_si_reciente(self):
+        self._orden_con(self.paciente, self.hba1c, dias_atras=15)
+        self.client.force_authenticate(user=self.medico_user)
+        r = self.client.get(
+            "/api/lab/solicitudes/restricciones-ensayos/",
+            {
+                "paciente_id": self.paciente.pk,
+                "origen_solicitud": "AMBULATORIO_CEHTA",
+            },
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertTrue(r.data["HBA1C"]["bloqueado"])
+        self.assertIn("3 meses", r.data["HBA1C"]["mensaje"])
+        # Otros códigos no bloquean en ambulatorio al pedir.
+        self.assertFalse(r.data["PSA"]["bloqueado"])

@@ -1,7 +1,12 @@
 """Restricciones de frecuencia / cobertura de ensayos (obra social).
 
-Bloqueo duro al pedir: solo internación y guardia.
-Ambulatorio / externo: se puede pedir; al imprimir etiquetas el lab revisa alertas.
+Bloqueo duro al pedir (códigos generales): internación y guardia.
+Ambulatorio / externo: pedir libre; al imprimir etiquetas el lab revisa alertas.
+
+Excepción HBA1C:
+- Guardia: el médico no puede pedirla nunca.
+- Internación / ambulatorio / externo: bloqueo duro si hay pedido en los últimos 90 días.
+Admin / laboratorio / bioquímico (LIMS-write) siguen exentos.
 """
 
 from __future__ import annotations
@@ -19,11 +24,12 @@ from usuarios.roles import puede_escribir_lims
 CODIGO_PROBNP = "PROBNP"
 CODIGO_PSA = "PSA"
 CODIGO_VITD = "VITD"
+CODIGO_HBA1C = "HBA1C"
 CODIGO_T4 = "T4"
 CODIGOS_TIROIDES = frozenset({"TSH", "T3", "T4", "T4L"})
 CODIGOS_UNA_VEZ_ANIO = frozenset({CODIGO_PSA, CODIGO_VITD})
 CODIGOS_RESTRINGIDOS = frozenset(
-    {CODIGO_PROBNP, CODIGO_PSA, CODIGO_VITD, *CODIGOS_TIROIDES}
+    {CODIGO_PROBNP, CODIGO_PSA, CODIGO_VITD, CODIGO_HBA1C, *CODIGOS_TIROIDES}
 )
 
 
@@ -31,13 +37,20 @@ def origen_exige_bloqueo_frecuencia(origen: str | None) -> bool:
     """
     True = bloquear al crear/agregar (internación, guardia, origen vacío/desconocido).
     False = ambulatorio / externo: pedir libre; revisión al imprimir etiquetas.
+    (HBA1c tiene reglas propias; ver ``_mensaje_bloqueo_hba1c``.)
     """
     o = (origen or "").strip().upper()
     if o.startswith("AMBULATORIO") or o.startswith("EXTERNO"):
         return False
     return True
 
+
+def origen_es_guardia(origen: str | None) -> bool:
+    o = (origen or "").strip().upper()
+    return o == "GUARDIA" or o.startswith("GUARDIA")
+
 VENTANA_DIAS_PROBNP = 31
+VENTANA_DIAS_HBA1C = 90  # 3 meses
 MIN_DIAS_ENTRE_TIROIDES = 60  # 2 meses
 MAX_TIROIDES_POR_ANIO = 2
 OBRA_SOCIAL_SEROS = "SEROS"
@@ -49,6 +62,17 @@ MENSAJE_CONSULTAR_LAB = (
 MENSAJE_PROBNP_FRECUENCIA = (
     "La Obra Social no le permite realizar la determinación de proBNP debido a "
     "que tiene ya una realizada hace menos de 1 mes. "
+    + MENSAJE_CONSULTAR_LAB
+)
+
+MENSAJE_HBA1C_GUARDIA = (
+    "La determinación de hemoglobina glicosilada (HbA1c) no se puede pedir en Guardia. "
+    + MENSAJE_CONSULTAR_LAB
+)
+
+MENSAJE_HBA1C_FRECUENCIA = (
+    "La Obra Social exige un intervalo mínimo de 3 meses entre determinaciones "
+    "de hemoglobina glicosilada (HbA1c). "
     + MENSAJE_CONSULTAR_LAB
 )
 
@@ -86,6 +110,7 @@ _NOMBRES = {
     CODIGO_PROBNP: "proBNP",
     CODIGO_PSA: "PSA",
     CODIGO_VITD: "Vitamina D",
+    CODIGO_HBA1C: "hemoglobina glicosilada (HbA1c)",
 }
 
 
@@ -94,7 +119,11 @@ class RestriccionFrecuenciaError(ValueError):
 
 
 def usuario_exento_restricciones_ensayos(user: Any) -> bool:
-    """Admin, laboratorio y bioquímico pueden agregar cualquier ensayo."""
+    """
+    Roles con escritura LIMS quedan exentos (admin, laboratorio, bioquímico,
+    secretaría lab). El médico (y roles sin LIMS-write) sí están sujetos a
+    las restricciones, incluida HBA1C.
+    """
     return puede_escribir_lims(user)
 
 
@@ -152,6 +181,21 @@ def paciente_tiene_probnp_reciente(
     )
 
 
+def paciente_tiene_hba1c_reciente(
+    paciente_id: int,
+    *,
+    exclude_solicitud_id: int | None = None,
+) -> bool:
+    desde = timezone.now() - timedelta(days=VENTANA_DIAS_HBA1C)
+    return (
+        _qs_pedidos_con_codigo(
+            paciente_id, CODIGO_HBA1C, exclude_solicitud_id=exclude_solicitud_id
+        )
+        .filter(fecha_solicitud__gte=desde)
+        .exists()
+    )
+
+
 def count_pedidos_codigo_anio_calendario(
     paciente_id: int,
     codigo: str,
@@ -198,11 +242,31 @@ def paciente_obra_social_es_seros(paciente_id: int) -> bool:
     return str(os_val).strip().upper() == OBRA_SOCIAL_SEROS
 
 
+def _mensaje_bloqueo_hba1c(
+    paciente_id: int,
+    *,
+    exclude_solicitud_id: int | None = None,
+    origen_solicitud: str | None = None,
+) -> str | None:
+    """
+    HBA1C: prohibida en guardia; en internación/ambulatorio/externo exige ≥90 días
+    desde el último pedido.
+    """
+    if origen_es_guardia(origen_solicitud):
+        return MENSAJE_HBA1C_GUARDIA
+    if paciente_tiene_hba1c_reciente(
+        paciente_id, exclude_solicitud_id=exclude_solicitud_id
+    ):
+        return MENSAJE_HBA1C_FRECUENCIA
+    return None
+
+
 def _mensaje_bloqueo_codigo(
     codigo: str,
     paciente_id: int,
     *,
     exclude_solicitud_id: int | None = None,
+    origen_solicitud: str | None = None,
 ) -> str | None:
     """Devuelve mensaje de bloqueo para un código, o None si está permitido."""
     if codigo == CODIGO_T4 and paciente_obra_social_es_seros(paciente_id):
@@ -214,6 +278,13 @@ def _mensaje_bloqueo_codigo(
         ):
             return MENSAJE_PROBNP_FRECUENCIA
         return None
+
+    if codigo == CODIGO_HBA1C:
+        return _mensaje_bloqueo_hba1c(
+            paciente_id,
+            exclude_solicitud_id=exclude_solicitud_id,
+            origen_solicitud=origen_solicitud,
+        )
 
     if codigo == CODIGO_PSA:
         if count_pedidos_codigo_anio_calendario(
@@ -258,29 +329,39 @@ def assert_puede_agregar_ensayos(
 ) -> None:
     """
     Bloquea ensayos restringidos en internación/guardia (salvo lab/bio/admin).
-    Ambulatorio/externo: no bloquea al pedir (revisión al imprimir etiquetas).
+    Ambulatorio/externo: no bloquea al pedir (revisión al imprimir etiquetas),
+    salvo HBA1C (prohibida en guardia; 90 días en internación/ambulatorio/externo).
     """
     if usuario_exento_restricciones_ensayos(user):
-        return
-    if not origen_exige_bloqueo_frecuencia(origen_solicitud):
         return
     codigos = _codigos_de_tipos(tipo_examen_ids)
     if not codigos:
         return
 
+    # HBA1C aplica en todos los orígenes (regla propia).
+    bloqueo_general = origen_exige_bloqueo_frecuencia(origen_solicitud)
+    if not bloqueo_general and CODIGO_HBA1C not in codigos:
+        return
+
     # Orden preferido de mensajes si hay varios en el mismo request
     candidatos: list[str] = []
-    if CODIGO_T4 in codigos:
-        candidatos.append(CODIGO_T4)
-    if CODIGO_PROBNP in codigos:
-        candidatos.append(CODIGO_PROBNP)
-    for c in (CODIGO_PSA, CODIGO_VITD, "TSH", "T3", "T4L"):
-        if c in codigos and c not in candidatos:
-            candidatos.append(c)
+    if CODIGO_HBA1C in codigos:
+        candidatos.append(CODIGO_HBA1C)
+    if bloqueo_general:
+        if CODIGO_T4 in codigos:
+            candidatos.append(CODIGO_T4)
+        if CODIGO_PROBNP in codigos:
+            candidatos.append(CODIGO_PROBNP)
+        for c in (CODIGO_PSA, CODIGO_VITD, "TSH", "T3", "T4L"):
+            if c in codigos and c not in candidatos:
+                candidatos.append(c)
 
     for codigo in candidatos:
         msg = _mensaje_bloqueo_codigo(
-            codigo, paciente_id, exclude_solicitud_id=exclude_solicitud_id
+            codigo,
+            paciente_id,
+            exclude_solicitud_id=exclude_solicitud_id,
+            origen_solicitud=origen_solicitud,
         )
         if msg:
             raise RestriccionFrecuenciaError(msg)
@@ -310,17 +391,28 @@ def restricciones_ensayos_para(
     *,
     origen_solicitud: str | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Payload UX: mapa código → {bloqueado, mensaje}. Ambulatorio → sin bloqueo."""
+    """
+    Payload UX: mapa código → {bloqueado, mensaje}.
+    Ambulatorio/externo: sin bloqueo general; HBA1C sí se evalúa siempre.
+    """
     out: dict[str, dict[str, Any]] = {}
-    if usuario_exento_restricciones_ensayos(user) or not origen_exige_bloqueo_frecuencia(
-        origen_solicitud
-    ):
+    if usuario_exento_restricciones_ensayos(user):
         for codigo in sorted(CODIGOS_RESTRINGIDOS):
             out[codigo] = {"bloqueado": False, "mensaje": None}
         return out
 
+    bloqueo_general = origen_exige_bloqueo_frecuencia(origen_solicitud)
     for codigo in sorted(CODIGOS_RESTRINGIDOS):
-        msg = _mensaje_bloqueo_codigo(codigo, paciente_id)
+        if codigo == CODIGO_HBA1C:
+            msg = _mensaje_bloqueo_hba1c(
+                paciente_id, origen_solicitud=origen_solicitud
+            )
+        elif bloqueo_general:
+            msg = _mensaje_bloqueo_codigo(
+                codigo, paciente_id, origen_solicitud=origen_solicitud
+            )
+        else:
+            msg = None
         out[codigo] = {
             "bloqueado": bool(msg),
             "mensaje": msg,
@@ -357,10 +449,14 @@ def alertas_frecuencia_para_solicitud(solicitud) -> list[dict[str, Any]]:
                 continue
             por_codigo[c] = (tid, (nombre or c).strip())
 
+    origen = getattr(solicitud, "origen_solicitud", None)
     alertas: list[dict[str, Any]] = []
     for codigo in sorted(set(por_codigo) & CODIGOS_RESTRINGIDOS):
         msg = _mensaje_bloqueo_codigo(
-            codigo, paciente_id, exclude_solicitud_id=exclude_id
+            codigo,
+            paciente_id,
+            exclude_solicitud_id=exclude_id,
+            origen_solicitud=origen,
         )
         if not msg:
             continue

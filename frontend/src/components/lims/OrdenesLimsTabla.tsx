@@ -11,8 +11,6 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import type { EstadoSolicitudLims } from '../../types/lims';
-import { estadoOrdenColor, labelEstadoOrdenLims } from '../../utils/limsEstadosOrden';
 import {
   estadoEstudioMicroColor,
   labelEstadoEstudioMicro,
@@ -21,6 +19,7 @@ import { limsActionBtnSoftSx, limsActionBtnSx } from '../../utils/limsActionButt
 import type { PendientePedidoRow } from '../../utils/limsPendientesUnificados';
 import OrigenProcedenciaCellView from './OrigenProcedenciaCell';
 import EstadoObraSocialDialog from './EstadoObraSocialDialog';
+import EstadoOrdenLimsChip from './EstadoOrdenLimsChip';
 import { colorEstadoObraSocial, labelObraSocialConMonto } from '../../utils/limsObraSocial';
 import { patchEstadoObraSocialSolicitud } from '../../services/limsApi';
 import { patchEstadoObraSocialEstudio } from '../../services/limsMicroApi';
@@ -152,19 +151,21 @@ const OrdenesLimsTabla: React.FC<OrdenesLimsTablaProps> = ({
                 </TableCell>
                 <TableCell>
                   <Stack spacing={0.5} alignItems="flex-start">
-                    <Chip
-                      size="small"
-                      label={
-                        r.tipo === 'MICROBIOLOGIA'
-                          ? labelEstadoEstudioMicro(r.estado)
-                          : labelEstadoOrdenLims(r.estado)
-                      }
-                      color={
-                        r.tipo === 'MICROBIOLOGIA'
-                          ? estadoEstudioMicroColor(r.estado)
-                          : estadoOrdenColor(r.estado as EstadoSolicitudLims)
-                      }
-                    />
+                    {r.tipo === 'MICROBIOLOGIA' ? (
+                      <Chip
+                        size="small"
+                        label={labelEstadoEstudioMicro(r.estado)}
+                        color={estadoEstudioMicroColor(r.estado)}
+                      />
+                    ) : (
+                      <EstadoOrdenLimsChip
+                        orden={{
+                          estado: r.estado,
+                          tubos_pendientes_extraccion: r.tubos_pendientes_extraccion,
+                          extraccion_completa: r.labOrden?.extraccion_completa,
+                        }}
+                      />
+                    )}
                     {r.estado_obra_social ? (
                       <Chip
                         size="small"

@@ -152,15 +152,16 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 
 - Catálogo `TipoMuestra`; cada `TipoExamen` exige un tipo de muestra.
 - **Fase B1:** entidad **`Muestra`** vinculada a `SolicitudExamen` y `Paciente` (redundante validada en `Muestra.clean`); eventos y transiciones en `laboratorio/muestra_estado.py`.
-- **`tomar-muestra` [VIGENTE]:** genera tubos (`Muestra` en `PENDIENTE_TOMA`). Con tubos reales la **orden** puede permanecer `PENDIENTE` hasta que un tubo se registre/escanee como `TOMADA` (`PENDIENTE`→`EN_PROCESO`). Sin tubos (legacy) puede avanzar en el mismo `POST`. La toma física es `muestra_estado.py` (`PENDIENTE_TOMA` → `TOMADA` → …). **[HISTÓRICO]** el marcador de orden `TOMA_MUESTRA` ya no existe.
+- **`tomar-muestra` [VIGENTE]:** genera tubos (`Muestra` en `PENDIENTE_TOMA`). Con tubos reales la **orden** puede permanecer `PENDIENTE` hasta que un tubo se registre/escanee como `TOMADA` (`PENDIENTE`→`EN_PROCESO`). Sin tubos (legacy) puede avanzar en el mismo `POST`. La toma física es `muestra_estado.py` (`PENDIENTE_TOMA` → `TOMADA` → …). **UI:** si la orden ya está `EN_PROCESO` y quedan tubos `PENDIENTE_TOMA`, el chip muestra «En proceso/Pendiente» (colores actuales de cada estado). **[HISTÓRICO]** el marcador de orden `TOMA_MUESTRA` ya no existe.
 
 ---
 
 ## Reglas de determinaciones
 
 - Una fila `ResultadoExamen` por par (solicitud, tipo_examen) — `unique_together`.
-- **Restricciones de frecuencia / cobertura obra social [IMPLEMENTADO]** (`laboratorio/restricciones_frecuencia.py`): aplican al crear orden y en `agregar-examenes`. **Exentos:** `admin`, `laboratorio`, `bioquimico` (`ROLES_LIMS_WRITE`). **Bloqueados:** médico y demás roles. UX: alerta al tildar (web/móvil); `GET …/solicitudes/restricciones-ensayos/?paciente_id=` (móvil: `…/lab/pacientes/{id}/restricciones-ensayos/`).
-  - **PROBNP:** no repetir si hay pedido en los últimos **31 días** (ventana rodante).
+- **Restricciones de frecuencia / cobertura obra social [IMPLEMENTADO]** (`laboratorio/restricciones_frecuencia.py`): aplican al crear orden y en `agregar-examenes`. **Exentos:** `admin`, `laboratorio`, `bioquimico` (y demás `ROLES_LIMS_WRITE`). **Bloqueados:** médico y demás roles sin escritura LIMS. UX: alerta al tildar (web/móvil); `GET …/solicitudes/restricciones-ensayos/?paciente_id=` (móvil: `…/lab/pacientes/{id}/restricciones-ensayos/`).
+  - **PROBNP:** no repetir si hay pedido en los últimos **31 días** (ventana rodante). Bloqueo duro solo en internación/guardia; ambulatorio revisa al imprimir etiquetas.
+  - **HBA1C** (hemoglobina glicosilada): **guardia** — el médico no puede pedirla nunca. **Internación / ambulatorio / externo** — no repetir si hay pedido en los últimos **90 días** / 3 meses (ventana rodante; bloqueo duro al pedir). Lab/bio/admin exentos.
   - **PSA** y **VITD:** máx. **1** pedido en el **año calendario**.
   - **TSH / T3 / T4 / T4L** (por analito): máx. **2** en el año calendario y **≥ 60 días** desde el último pedido de ese código.
   - **T4 + SEROS:** si `paciente.obra_social` es SEROS (case-insensitive), el médico no puede agregar `T4`.
