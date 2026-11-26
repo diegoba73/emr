@@ -42,6 +42,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
 import { User } from '../../types';
 import Logo from '../Logo';
+import InstitutionalLogos from '../InstitutionalLogos';
 import { administracionUrl } from '../../utils/administracionUrl';
 import {
   canAccessArchivosMedicos,
@@ -301,12 +302,18 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate }) =>
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          p: 2,
+          px: 1.5,
+          pt: 2,
+          pb: 1.5,
           borderBottom: 1,
           borderColor: 'divider',
         }}
       >
-        <Logo size={110} demo={isDemoSessionForUser(currentUser)} />
+        {isDemoSessionForUser(currentUser) ? (
+          <Logo size={110} demo />
+        ) : (
+          <InstitutionalLogos height={64} variant="compact" />
+        )}
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
         {isPacienteRole(currentUser) ? 'Mi portal' : 'Principal'}

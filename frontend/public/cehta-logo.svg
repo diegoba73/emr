@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 200" role="img" aria-label="CEHTA Cardiovascular">
+  <defs>
+    <style type="text/css"><![CDATA[
+      .cehta {
+        font: 700 78px "Times New Roman", Times, Georgia, serif;
+        fill: #9B2C2C;
+        letter-spacing: 2px;
+      }
+      .cardio {
+        font: 700 26px Arial, Helvetica, "Segoe UI", sans-serif;
+        fill: #1F3A6E;
+        letter-spacing: 3.8px;
+      }
+    ]]></style>
+  </defs>
+  <text class="cehta" x="198" y="92" text-anchor="middle">CEHTA</text>
+  <text class="cardio" x="198" y="132" text-anchor="middle">CARDIOVASCULAR</text>
+  <g transform="translate(360, 28)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M78 138 C20 88, 8 42, 38 18 C58 2, 86 10, 98 34 C108 12, 136 0, 158 16 C186 36, 190 78, 156 118 C132 146, 102 160, 78 172" stroke="#1F3A6E" stroke-width="11"/>
+    <path d="M78 128 C32 86, 24 48, 46 28 C62 14, 86 20, 96 40 C104 22, 128 12, 148 26 C170 42, 172 76, 146 108 C128 130, 100 142, 78 152" stroke="#9B2C2C" stroke-width="8"/>
+    <polyline points="18,92 48,92 58,72 74,122 90,58 102,92 168,92" stroke="#9B2C2C" stroke-width="5"/>
+  </g>
+</svg>

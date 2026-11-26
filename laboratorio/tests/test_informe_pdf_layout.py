@@ -95,7 +95,7 @@ class TestInformePdfLayout(TestCase):
         from laboratorio.pdf_logos import CEHTA_LOGO
 
         self.assertTrue((LABORATORIO_STATIC / "icpl_logo.png").is_file())
-        # CEHTA puede ser PNG o el fallback vectorial de pdf_logos.
+        # CEHTA: PNG opcional; si no está, pdf_logos dibuja el fallback vectorial.
         self.assertTrue(CEHTA_LOGO)
 
         resultados = list(self.sol.resultados.all())

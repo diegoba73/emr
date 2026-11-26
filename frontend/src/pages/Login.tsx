@@ -1,4 +1,5 @@
 import Logo from '../components/Logo';
+import InstitutionalLogos from '../components/InstitutionalLogos';
 import React, { useState } from 'react';
 import {
   Box,
@@ -17,7 +18,6 @@ import {
   Visibility,
   VisibilityOff,
   Login as LoginIcon,
-  MedicalServices,
   PhoneAndroid,
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -130,16 +130,12 @@ const Login: React.FC = () => {
             borderRadius: 3,
           }}
         >
-          {/* Identidad genérica en el despliegue demo. */}
           {isDemoMode ? (
             <Box sx={{ mb: 3 }}><Logo demo size={150} /></Box>
           ) : (
-          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <MedicalServices sx={{ fontSize: 40, color: 'primary.main' }} />
-            <Typography variant="h4" component="h1" fontWeight="bold">
-              Synesis EMR
-            </Typography>
-          </Box>
+            <Box sx={{ mb: 3, width: '100%', maxWidth: 420 }}>
+              <InstitutionalLogos height={88} variant="login" />
+            </Box>
           )}
 
           <Typography variant="h6" color="text.secondary" gutterBottom>

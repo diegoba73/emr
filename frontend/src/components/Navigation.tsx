@@ -37,6 +37,7 @@ import {
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import Logo from './Logo';
+import InstitutionalLogos from './InstitutionalLogos';
 import { getHomeNavLabel, getSolicitudesModuleLabel } from '../utils/navLabels';
 import { canAccessGuardia, canAccessInternacion } from '../utils/permissions';
 
@@ -154,11 +155,17 @@ const Navigation: React.FC<NavigationProps> = ({ children }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          p: 2,
+          px: 1.5,
+          pt: 2,
+          pb: 1.5,
           borderBottom: '1px solid rgba(0,0,0,0.1)',
         }}
       >
-        <Logo size={120} demo={isDemoSessionForUser(currentUser)} />
+        {isDemoSessionForUser(currentUser) ? (
+          <Logo size={120} demo />
+        ) : (
+          <InstitutionalLogos height={64} variant="compact" />
+        )}
       </Box>
       <Divider />
       <List sx={{ pt: 1 }}>
