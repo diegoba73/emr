@@ -83,7 +83,7 @@ const CODIGOS_HEPARINA_COMPARTEN_EAB = new Set([
 ]);
 /** Paquete automático EAB (iono/HTO) + lactato: se informan desde jeringa art/ven. */
 const CODIGOS_CARGABLES_EN_JERINGA_EAB = new Set([
-  ...CODIGOS_HEPARINA_COMPARTEN_EAB,
+  ...Array.from(CODIGOS_HEPARINA_COMPARTEN_EAB),
   'NA',
   'K',
   'CL',

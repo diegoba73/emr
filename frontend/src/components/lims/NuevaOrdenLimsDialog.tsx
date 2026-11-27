@@ -982,11 +982,11 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       nombre?: string | null;
       componentes?: Array<{ codigo?: string | null; nombre?: string | null }> | null;
     }> = [];
-    for (const id of selectedExamenesIds) {
+    for (const id of Array.from(selectedExamenesIds)) {
       const e = examenes.find((x) => x.id === id);
       items.push({ codigo: e?.codigo, nombre: e?.nombre });
     }
-    for (const id of selectedPanelesIds) {
+    for (const id of Array.from(selectedPanelesIds)) {
       const p = paneles.find((x) => x.id === id);
       items.push({
         codigo: p?.codigo,
@@ -995,7 +995,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       });
     }
     if (repeticionMode) {
-      for (const id of selectedRepeticionIds) {
+      for (const id of Array.from(selectedRepeticionIds)) {
         const e = examenes.find((x) => x.id === id);
         items.push({ codigo: e?.codigo, nombre: e?.nombre });
       }
