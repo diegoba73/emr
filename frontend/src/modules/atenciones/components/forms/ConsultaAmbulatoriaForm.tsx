@@ -16,7 +16,12 @@ import { ConsultaAmbulatoriaRecord } from '../../../../types';
 import toast from 'react-hot-toast';
 import AtencionPedidosSection from '../AtencionPedidosSection';
 import { useSaveConsultaAmbulatoriaMutation, useAtencionQuery, useCloseAtencionMutation } from '../../hooks';
-import { flushConsultaPedidosDrafts } from '../../consultaPedidosDraft';
+import {
+  flushConsultaPedidosDrafts,
+  loadConsultaPedidosDraft,
+  previewAvisosFrecuenciaDraft,
+} from '../../consultaPedidosDraft';
+import { formatAvisosFrecuenciaConfirmacion } from '../../../../utils/limsRestriccionesEnsayos';
 import SignosVitalesPanel from '../../../../components/clinical/SignosVitalesPanel';
 import { establecerProblemaPrincipal } from '../../../../services/pacienteProblemas';
 import { marcarAtendidoPorTurno } from '../../../../services/recepcionApi';
@@ -321,12 +326,28 @@ const ConsultaAmbulatoriaForm: React.FC<ConsultaAmbulatoriaFormProps> = ({
 
       if (consultaHcId && pacienteId) {
         try {
+          const origenSolicitud =
+            atencion?.contexto_atencion === 'GUARDIA' ? 'GUARDIA' : undefined;
+          const draft = loadConsultaPedidosDraft(consultaHcId);
+          const avisos = await previewAvisosFrecuenciaDraft(
+            pacienteId,
+            draft,
+            origenSolicitud
+          );
+          if (
+            avisos.length > 0 &&
+            !window.confirm(formatAvisosFrecuenciaConfirmacion(avisos))
+          ) {
+            toast.error(
+              'La consulta se guardó, pero no se enviaron los pedidos de laboratorio (aviso de cobertura). Podés corregirlos y reintentar.'
+            );
+            return;
+          }
           await flushConsultaPedidosDrafts({
             consultaHcId,
             pacienteId,
             medicoId,
-            origenSolicitud:
-              atencion?.contexto_atencion === 'GUARDIA' ? 'GUARDIA' : undefined,
+            origenSolicitud,
           });
         } catch (flushError) {
           const message =

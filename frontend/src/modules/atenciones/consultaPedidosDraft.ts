@@ -2,11 +2,16 @@ import toast from 'react-hot-toast';
 import {
   createPedidoCompletoLims,
   formatDrfError,
+  getRestriccionesEnsayosPaciente,
   type ItemImpresionOrden,
 } from '../../services/limsApi';
 import { createEstudioComplementario } from '../../services/estudiosComplementariosApi';
 import { parseEstudiosApiError } from '../estudios/apiErrors';
 import type { EstudioPractica } from '../../types/estudios';
+import {
+  collectAvisosFrecuencia,
+  type AvisoFrecuenciaItem,
+} from '../../utils/limsRestriccionesEnsayos';
 
 export interface DraftSolicitudLab {
   id: string;
@@ -14,6 +19,9 @@ export interface DraftSolicitudLab {
   paneles_ids: number[];
   examenes_labels: string[];
   paneles_labels: string[];
+  /** Códigos TipoExamen / Panel para avisos de frecuencia al flush. */
+  examenes_codigos?: string[];
+  paneles_codigos?: string[];
   observaciones?: string;
   /** YYYY-MM-DD */
   fecha_programada_toma: string;
@@ -195,6 +203,33 @@ function pushPedidoUnique(
 ): void {
   if (dest.some((x) => x.tipo === item.tipo && x.id === item.id)) return;
   dest.push(item);
+}
+
+/** Avisos soft de OS/frecuencia para el borrador (antes de flush / confirmación). */
+export async function previewAvisosFrecuenciaDraft(
+  pacienteId: number,
+  draft: ConsultaPedidosDraft,
+  origenSolicitud?: string | null
+): Promise<AvisoFrecuenciaItem[]> {
+  if (!draft.solicitudesLab.length) return [];
+  const restricciones = await getRestriccionesEnsayosPaciente(
+    pacienteId,
+    origenSolicitud
+  );
+  const items: Array<{ codigo?: string; nombre?: string }> = [];
+  for (const sol of draft.solicitudesLab) {
+    const codigosEx = sol.examenes_codigos || [];
+    const labelsEx = sol.examenes_labels || [];
+    codigosEx.forEach((codigo, i) => {
+      items.push({ codigo, nombre: labelsEx[i] || codigo });
+    });
+    const codigosPan = sol.paneles_codigos || [];
+    const labelsPan = sol.paneles_labels || [];
+    codigosPan.forEach((codigo, i) => {
+      items.push({ codigo, nombre: labelsPan[i] || codigo });
+    });
+  }
+  return collectAvisosFrecuencia(items, restricciones);
 }
 
 /**

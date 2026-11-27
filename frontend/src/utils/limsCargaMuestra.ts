@@ -74,14 +74,23 @@ const ORINA_COMPAT = new Set(['ORINA', 'ORINA_24_H']);
 /** Química migró HEPARINA→SUERO; tubos vivos pueden seguir en plasma/sangre heparina. */
 const LEGACY_HEPARINA_PARA_SUERO = new Set(['PLASMA_HEPARINA', 'SANGRE_HEPARINA']);
 
-/** Lactato (y legacy CAIE/CAIISE) comparten jeringa EAB: catálogo SANGRE_HEPARINA ↔ art/ven.
- * CA_ION (K-ión) es suero y no entra en este puente. */
+/** Lactato (y legacy CAIE/CAIISE) comparten jeringa EAB: catálogo SANGRE_HEPARINA ↔ art/ven. */
 const CODIGOS_HEPARINA_COMPARTEN_EAB = new Set([
   'LACT',
   'LACPLA',
   'CAIISE',
   'CAIE',
 ]);
+/** Paquete automático EAB (iono/HTO) + lactato: se informan desde jeringa art/ven. */
+const CODIGOS_CARGABLES_EN_JERINGA_EAB = new Set([
+  ...CODIGOS_HEPARINA_COMPARTEN_EAB,
+  'NA',
+  'K',
+  'CL',
+  'CA_ION',
+  'HTO',
+]);
+const JERINGA_EAB = new Set(['SANGRE_HEPARINA_ART', 'SANGRE_HEPARINA_VEN']);
 const MUESTRAS_HEPARINA_SANGRE = new Set([
   'SANGRE_HEPARINA',
   'SANGRE_HEPARINA_ART',
@@ -102,6 +111,9 @@ export function muestraTipoCompatibleConExamen(
   if (req && got && req === got) return true;
   if (req === 'SUERO' && LEGACY_HEPARINA_PARA_SUERO.has(got)) return true;
   const exam = (codigoExamen || '').trim().toUpperCase();
+  if (exam && CODIGOS_CARGABLES_EN_JERINGA_EAB.has(exam) && JERINGA_EAB.has(got)) {
+    return true;
+  }
   if (
     exam &&
     CODIGOS_HEPARINA_COMPARTEN_EAB.has(exam) &&

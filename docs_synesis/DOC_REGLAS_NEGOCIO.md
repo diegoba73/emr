@@ -159,12 +159,14 @@ Además: **superuser**, **staff** Django, y **grupos** nombrados en permisos (`S
 ## Reglas de determinaciones
 
 - Una fila `ResultadoExamen` por par (solicitud, tipo_examen) — `unique_together`.
-- **Restricciones de frecuencia / cobertura obra social [IMPLEMENTADO]** (`laboratorio/restricciones_frecuencia.py`): aplican al crear orden y en `agregar-examenes`. **Exentos:** `admin`, `laboratorio`, `bioquimico` (y demás `ROLES_LIMS_WRITE`). **Bloqueados:** médico y demás roles sin escritura LIMS. UX: alerta al tildar (web/móvil); `GET …/solicitudes/restricciones-ensayos/?paciente_id=` (móvil: `…/lab/pacientes/{id}/restricciones-ensayos/`).
-  - **PROBNP:** no repetir si hay pedido en los últimos **31 días** (ventana rodante). Bloqueo duro solo en internación/guardia; ambulatorio revisa al imprimir etiquetas.
-  - **HBA1C** (hemoglobina glicosilada): **guardia** — el médico no puede pedirla nunca. **Internación / ambulatorio / externo** — no repetir si hay pedido en los últimos **90 días** / 3 meses (ventana rodante; bloqueo duro al pedir). Lab/bio/admin exentos.
-  - **PSA** y **VITD:** máx. **1** pedido en el **año calendario**.
-  - **TSH / T3 / T4 / T4L** (por analito): máx. **2** en el año calendario y **≥ 60 días** desde el último pedido de ese código.
-  - **T4 + SEROS:** si `paciente.obra_social` es SEROS (case-insensitive), el médico no puede agregar `T4`.
+- **Restricciones de frecuencia / cobertura obra social [IMPLEMENTADO]** (`laboratorio/restricciones_frecuencia.py`): **no bloquean al pedir**. El médico puede crear/agregar; al **enviar** el FE muestra aviso soft (`GET …/restricciones-ensayos/` → `bloqueado: false`, `aviso` + `mensaje`) listando ensayos y aclarando que el lab puede quitarlos si la OS no habilita o no pagan particular. Al **imprimir etiquetas/talón** el lab vuelve a ver alertas (`GET …/solicitudes/{id}/alertas-frecuencia/`) y decide. **Guardia:** el catálogo pedible por el médico lo fija `restricciones_guardia_catalogo` (modal); otros ensayos no aparecen ahí — consultar laboratorio/OS.
+  - **PROBNP:** alerta si hay pedido en los últimos **31 días** (ventana rodante).
+  - **HBA1C** (hemoglobina glicosilada): alerta si hay pedido en los últimos **90 días** / 3 meses. (En guardia no está en el allowlist del modal.)
+  - **LPA** (Lipoproteína A / Lp(a)): alerta si hay pedido en los últimos **90 días** / 3 meses. (Tampoco en allowlist de guardia.)
+  - **PSA** y **VITD:** alerta si ya hubo **1** pedido en el **año calendario**.
+  - **TSH / T3 / T4 / T4L** (por analito): alerta si ≥ **2** en el año calendario o **< 60 días** desde el último de ese código.
+  - **T4 + SEROS:** alerta si `paciente.obra_social` es SEROS (case-insensitive).
+  - **Ionograma + SEROS:** alerta si OS es SEROS y ya hubo ionograma plasmático (`PAN_IONO` / Na-K-Cl) en el **año calendario**. No aplica a ionogramas urinarios.
 
 ---
 

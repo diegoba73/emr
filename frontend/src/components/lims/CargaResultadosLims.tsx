@@ -103,7 +103,10 @@ export interface CargaResultadosLimsProps {
   canOperate: boolean;
   /** Si false, oculta el formulario de carga/edición (solo lectura). */
   permitirEdicion?: boolean;
-  onGuardado: (o: SolicitudExamenLims) => void;
+  onGuardado: (
+    o: SolicitudExamenLims,
+    meta?: { informarParcial?: boolean }
+  ) => void;
   /** Mostrar «Validar y liberar» junto a Guardar (bioquímico/admin, lista para validar). */
   mostrarValidar?: boolean;
   onValidar?: () => void;
@@ -128,13 +131,16 @@ function CargaColGroup({ ticket }: { ticket: boolean }) {
   );
 }
 
-/** Claves de foco para navegación con Enter en la grilla de carga. */
-function buildCargaFocusOrder(
+/**
+ * Claves de foco para navegación con Enter en la grilla de carga.
+ * Tras el hemograma: «Sugerir conclusión» y luego el próximo panel (no observaciones),
+ * para seguir cargando resultados. Observaciones queda al final del recorrido.
+ */
+export function buildCargaFocusOrder(
   grupos: ReturnType<typeof groupResultadosPorPanel>,
   tiposExamenMap: Map<number, LimsTipoExamen>
 ): string[] {
   const keys: string[] = [];
-  let observacionesInsertada = false;
   for (const grupo of grupos) {
     for (const r of grupo.resultados) {
       const te = tiposExamenMap.get(r.tipo_examen);
@@ -147,28 +153,40 @@ function buildCargaFocusOrder(
         keys.push(`valor-${r.id}`);
       }
     }
-    // Conclusión del hemograma: foco justo debajo del panel.
     if (grupo.codigo === PANEL_HEMOGRAMA) {
-      keys.push('observaciones');
-      observacionesInsertada = true;
+      keys.push('sugerir-conclusion');
     }
   }
-  if (!observacionesInsertada) {
-    keys.push('observaciones');
-  }
+  keys.push('observaciones');
   return keys;
 }
 
 function focusCargaField(key: string): boolean {
-  const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-    `[data-carga-focus="${key}"]`
-  );
-  if (!input) return false;
-  input.focus();
-  if (input instanceof HTMLInputElement && input.type !== 'hidden') {
-    input.select();
-  } else if (input instanceof HTMLTextAreaElement) {
-    input.select();
+  const el = document.querySelector<HTMLElement>(`[data-carga-focus="${key}"]`);
+  if (!el) return false;
+  if (el instanceof HTMLButtonElement && el.disabled) return false;
+  if (
+    (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) &&
+    (el.disabled || el.readOnly)
+  ) {
+    return false;
+  }
+  el.focus();
+  if (typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  if (el instanceof HTMLInputElement && el.type !== 'hidden') {
+    try {
+      el.select();
+    } catch {
+      /* algunos inputs no permiten select */
+    }
+  } else if (el instanceof HTMLTextAreaElement) {
+    try {
+      el.select();
+    } catch {
+      /* ignore */
+    }
   }
   return true;
 }
@@ -574,7 +592,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
     [orden.id, ordenGrupos, onGuardado]
   );
 
-  const handleSugerirConclusion = async () => {
+  const handleSugerirConclusion = async (): Promise<boolean> => {
     setSugeriendo(true);
     try {
       const valores_borrador = buildValoresBorradorConclusion(
@@ -585,12 +603,12 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       );
       if (Object.keys(valores_borrador).length === 0) {
         toast.error('Ingresá al menos un valor del hemograma para sugerir la conclusión.');
-        return;
+        return false;
       }
       const data = await postSugerirConclusionHemograma(orden.id, { valores_borrador });
       if (!data.texto?.trim()) {
         toast.error('No se pudo generar una conclusión con los valores actuales.');
-        return;
+        return false;
       }
       setObservacionesOrden(data.texto.trim());
       setSugerenciaMeta({
@@ -602,8 +620,10 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
           ? 'Sugerencia MedGemma lista — revisá y guardá.'
           : 'Sugerencia por reglas lista — revisá y guardá.'
       );
+      return true;
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, 'No se pudo sugerir la conclusión.'));
+      return false;
     } finally {
       setSugeriendo(false);
     }
@@ -720,10 +740,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
         } else {
           toast.success('Avance guardado');
         }
-        if (updated.estado === 'LISTO_PARA_VALIDAR') {
-          requestFocusValidar();
-        }
-        onGuardado(updated);
+        onGuardado(updated, { informarParcial: true });
       } catch (e) {
         toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado));
       } finally {
@@ -852,13 +869,16 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
       } else {
         toast.success('Avance guardado');
       }
-      if (updated.estado === 'LISTO_PARA_VALIDAR') {
+      if (!informarParcial && updated.estado === 'LISTO_PARA_VALIDAR') {
         requestFocusValidar();
       }
       for (const r of filasPayload) {
         clearedIdsRef.current.delete(r.id);
       }
-      onGuardado(updated);
+      onGuardado(
+        updated,
+        informarParcial ? { informarParcial: true } : undefined
+      );
     } catch (e) {
       toast.error(getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado));
     } finally {
@@ -1399,8 +1419,23 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                       <Button
                         variant="outlined"
                         size="small"
-                        onClick={() => void handleSugerirConclusion()}
+                        data-carga-focus="sugerir-conclusion"
                         disabled={sugeriendo || saving}
+                        onClick={(ev) => {
+                          // Enter/Space en botón enfocado → click con detail 0.
+                          // Mouse → revisar conclusión; teclado → seguir al próximo examen.
+                          const viaTeclado = ev.detail === 0;
+                          void (async () => {
+                            const ok = await handleSugerirConclusion();
+                            requestAnimationFrame(() => {
+                              if (viaTeclado) {
+                                focusNextField('sugerir-conclusion');
+                              } else if (ok) {
+                                focusCargaField('observaciones');
+                              }
+                            });
+                          })();
+                        }}
                       >
                         {sugeriendo ? 'Sugiriendo…' : 'Sugerir conclusión'}
                       </Button>
@@ -1432,7 +1467,7 @@ const CargaResultadosLims: React.FC<CargaResultadosLimsProps> = ({
                         }
                       }}
                       placeholder="Ej.: Anemia normocítica normocrómica, con trombocitopenia leve y anisocitosis."
-                      helperText="Enter → siguiente · Shift+Enter → nueva línea. La sugerencia es borrador; el bioquímico debe revisar y guardar."
+                      helperText="Enter → fin del recorrido / guardar · Shift+Enter → nueva línea. La sugerencia es borrador; revisá y guardá."
                       inputProps={{ 'data-carga-focus': 'observaciones' }}
                     />
                   </Box>

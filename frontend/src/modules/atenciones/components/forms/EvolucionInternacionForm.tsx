@@ -16,7 +16,12 @@ import {
   useAtencionQuery,
   useCloseAtencionMutation,
 } from '../../hooks';
-import { flushConsultaPedidosDrafts } from '../../consultaPedidosDraft';
+import {
+  flushConsultaPedidosDrafts,
+  loadConsultaPedidosDraft,
+  previewAvisosFrecuenciaDraft,
+} from '../../consultaPedidosDraft';
+import { formatAvisosFrecuenciaConfirmacion } from '../../../../utils/limsRestriccionesEnsayos';
 import AtencionPedidosSection from '../AtencionPedidosSection';
 import SignosVitalesPanel from '../../../../components/clinical/SignosVitalesPanel';
 
@@ -137,6 +142,17 @@ const EvolucionInternacionForm: React.FC<EvolucionInternacionFormProps> = ({
 
       if (consultaHcId && pacienteId) {
         try {
+          const draft = loadConsultaPedidosDraft(consultaHcId);
+          const avisos = await previewAvisosFrecuenciaDraft(pacienteId, draft);
+          if (
+            avisos.length > 0 &&
+            !window.confirm(formatAvisosFrecuenciaConfirmacion(avisos))
+          ) {
+            toast.error(
+              'Evolución guardada, pero no se enviaron los pedidos de laboratorio (aviso de cobertura).'
+            );
+            return;
+          }
           await flushConsultaPedidosDrafts({
             consultaHcId,
             pacienteId,

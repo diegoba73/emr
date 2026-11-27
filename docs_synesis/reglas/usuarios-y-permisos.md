@@ -100,7 +100,7 @@ Se configura en **Médicos** (web) o Admin Django. No es un rol Django distinto:
 
 El backend rechaza contextos/orígenes de guardia e internación y el acceso a APIs de internación / `iniciar-guardia` cuando el médico es solo ambulatorio.
 
-**Frecuencia / cobertura ensayos:** médico (y roles no LIMS-write) no pueden pedir fuera de política: PROBNP (31 días), HBA1C (**prohibida en guardia**; en internación/ambulatorio/externo: 90 días / 3 meses), PSA/VITD (1/año calendario), TSH/T3/T4/T4L (2/año calendario + ≥2 meses por analito), T4 si obra social SEROS. **admin / laboratorio / bioquímico** (roles LIMS-write) pueden agregar cualquiera, incluida HBA1C (`laboratorio/restricciones_frecuencia.py`).
+**Frecuencia / cobertura ensayos:** **no bloquean al pedir** (médico puede solicitar; particular permitido). Al **enviar** el médico ve aviso soft con los ensayos afectados y que el lab puede quitarlos si la OS no habilita o no pagan particular. Al imprimir etiquetas/talón el lab ve las mismas alertas y decide: PROBNP (31 días), HBA1C (90 días / 3 meses), LPA (90 días / 3 meses), PSA/VITD (1/año calendario), TSH/T3/T4/T4L (2/año calendario + ≥2 meses por analito), T4 si obra social SEROS, ionograma plasmático + SEROS (1/año calendario). **Guardia:** el médico solo ve/pide el allowlist de `restricciones_guardia_catalogo` (modal); otros ensayos → consultar laboratorio/OS. Detalle: `laboratorio/restricciones_frecuencia.py`.
 
 Los **paquetes por contexto** se configuran en el EMR web:
 **Laboratorio → Catálogos → Paquetes app móvil** (`/laboratorio/catalogos/paquetes-movil`).

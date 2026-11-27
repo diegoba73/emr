@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -15,6 +15,9 @@ import {
   FormControlLabel,
   FormGroup,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Select,
   Stack,
@@ -100,7 +103,13 @@ import {
   materialesPedidoEfectivos,
   resolverMaterialesSeleccionados,
 } from '../../utils/limsMaterialesPedidoCatalog';
-import { mensajeBloqueoExamen, puedeOmitirRestriccionFrecuenciaEnsayos } from '../../utils/limsRestriccionesEnsayos';
+import {
+  collectAvisosFrecuencia,
+  mensajeBloqueoExamen,
+  puedeOmitirRestriccionFrecuenciaEnsayos,
+  TEXTO_LAB_PUEDE_QUITAR_ENSAYOS,
+  type AvisoFrecuenciaItem,
+} from '../../utils/limsRestriccionesEnsayos';
 import {
   agruparParaPedidoCompleto,
   particionarSeleccionPorMateriales,
@@ -137,6 +146,8 @@ export interface NuevaOrdenLimsDialogProps {
     paneles_ids: number[];
     examenes_labels: string[];
     paneles_labels: string[];
+    examenes_codigos?: string[];
+    paneles_codigos?: string[];
     observaciones?: string;
     fecha_programada_toma: string;
     material_pedido: string;
@@ -191,6 +202,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const [repeticionInfo, setRepeticionInfo] = useState<RepeticionControlResponse | null>(null);
   const [selectedRepeticionIds, setSelectedRepeticionIds] = useState<Set<number>>(() => new Set());
   const [restriccionesEnsayos, setRestriccionesEnsayos] = useState<RestriccionesEnsayosLims>({});
+  const [avisosConfirm, setAvisosConfirm] = useState<AvisoFrecuenciaItem[] | null>(null);
+  const skipAvisosRef = useRef(false);
   const { currentUser } = useData();
   const omiteRestriccionesEnsayos = puedeOmitirRestriccionFrecuenciaEnsayos(currentUser?.rol);
   const soloAmbulatorio = isMedicoSoloAmbulatorio(currentUser);
@@ -403,8 +416,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
   const origenParaAgrupar = origenInicial || origenManual;
 
   useEffect(() => {
-    // Siempre consultar al backend: HBA1C también bloquea en ambulatorio (90 días)
-    // y está prohibida en guardia; el resto de códigos solo bloquean en internación/guardia.
+    // Soft avisos (bloqueado=false): se usan al enviar; no impiden tildar.
     if (!open || omiteRestriccionesEnsayos) {
       setRestriccionesEnsayos({});
       return;
@@ -449,6 +461,23 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       toggleExamen(id);
     },
     [examenes, restriccionesEnsayos, selectedExamenesIds, toggleExamen]
+  );
+
+  const handleTogglePanel = useCallback(
+    (id: number) => {
+      if (selectedPanelesIds.has(id)) {
+        togglePanel(id);
+        return;
+      }
+      const panel = paneles.find((p) => p.id === id);
+      const msg = mensajeBloqueoExamen(panel?.codigo, restriccionesEnsayos);
+      if (msg) {
+        window.alert(msg);
+        return;
+      }
+      togglePanel(id);
+    },
+    [paneles, restriccionesEnsayos, selectedPanelesIds, togglePanel]
   );
 
   /** Misma fuente que el form (API o fallback): evita fallar hemocultivo/micro. */
@@ -741,11 +770,19 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       const examenes_labels = g.examenes_ids
         .map((id) => examenes.find((e) => e.id === id)?.nombre)
         .filter(Boolean) as string[];
+      const paneles_codigos = g.paneles_ids
+        .map((id) => paneles.find((p) => p.id === id)?.codigo)
+        .filter(Boolean) as string[];
+      const examenes_codigos = g.examenes_ids
+        .map((id) => examenes.find((e) => e.id === id)?.codigo)
+        .filter(Boolean) as string[];
       onAddDraft?.({
         paneles_ids: g.paneles_ids,
         examenes_ids: g.examenes_ids,
         paneles_labels,
         examenes_labels,
+        paneles_codigos,
+        examenes_codigos,
         observaciones: observaciones.trim() || undefined,
         fecha_programada_toma: fechaProgramadaToma,
         material_pedido: mat,
@@ -938,6 +975,56 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     }
   };
 
+  const collectAvisosSeleccionActual = useCallback((): AvisoFrecuenciaItem[] => {
+    if (omiteRestriccionesEnsayos) return [];
+    const items: Array<{
+      codigo?: string | null;
+      nombre?: string | null;
+      componentes?: Array<{ codigo?: string | null; nombre?: string | null }> | null;
+    }> = [];
+    for (const id of selectedExamenesIds) {
+      const e = examenes.find((x) => x.id === id);
+      items.push({ codigo: e?.codigo, nombre: e?.nombre });
+    }
+    for (const id of selectedPanelesIds) {
+      const p = paneles.find((x) => x.id === id);
+      items.push({
+        codigo: p?.codigo,
+        nombre: p?.nombre,
+        componentes: p?.tipos_examen_detalle || null,
+      });
+    }
+    if (repeticionMode) {
+      for (const id of selectedRepeticionIds) {
+        const e = examenes.find((x) => x.id === id);
+        items.push({ codigo: e?.codigo, nombre: e?.nombre });
+      }
+    }
+    return collectAvisosFrecuencia(items, restriccionesEnsayos);
+  }, [
+    examenes,
+    omiteRestriccionesEnsayos,
+    paneles,
+    repeticionMode,
+    restriccionesEnsayos,
+    selectedExamenesIds,
+    selectedPanelesIds,
+    selectedRepeticionIds,
+  ]);
+
+  /** true = se abrió el diálogo de aviso; no continuar aún. */
+  const gateAvisosFrecuencia = (next: 'create' | 'draft' | 'agregar'): boolean => {
+    if (skipAvisosRef.current) {
+      skipAvisosRef.current = false;
+      return false;
+    }
+    const avisos = collectAvisosSeleccionActual();
+    if (!avisos.length) return false;
+    setAvisosConfirm(avisos);
+    setPendingSubmit(next);
+    return true;
+  };
+
   const handleSubmit = async () => {
     setError('');
 
@@ -946,6 +1033,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         setError('Seleccioná al menos un análisis o panel.');
         return;
       }
+      if (gateAvisosFrecuencia('agregar')) return;
       if (gateSugerenciaSeguimiento('agregar')) return;
       await executeAgregar();
       return;
@@ -965,6 +1053,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
         setError('La repetición/control se crea como orden real (no como borrador de consulta).');
         return;
       }
+      if (gateAvisosFrecuencia('create')) return;
       await executeCreate();
       return;
     }
@@ -977,6 +1066,8 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
       setError('Seleccioná análisis de Lab. Clínico y/o cultivos de Microbiología.');
       return;
     }
+
+    if (gateAvisosFrecuencia(draftMode ? 'draft' : 'create')) return;
 
     // Mismo material + PENDIENTE sin etiquetas → avisar merge a esa orden.
     // Otro material → orden nueva (sin este diálogo). Con etiquetas/en proceso el BE rechaza.
@@ -1007,6 +1098,13 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
     }
     if (gateSugerenciaSeguimiento('create')) return;
     await executeCreate();
+  };
+
+  const confirmAvisosContinuar = () => {
+    setAvisosConfirm(null);
+    setPendingSubmit(null);
+    skipAvisosRef.current = true;
+    void handleSubmit();
   };
 
   const confirmMerge = async () => {
@@ -1415,7 +1513,7 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
                 materialesPedido={catalogoMateriales}
                 selectedPanelesIds={selectedPanelesIds}
                 selectedExamenesIds={selectedExamenesIds}
-                onTogglePanel={togglePanel}
+                onTogglePanel={handleTogglePanel}
                 onToggleExamen={handleToggleExamen}
                 onDeselectMany={deselectMany}
                 onSelectedMaterialsChange={setSelectedMaterialCodigos}
@@ -1458,6 +1556,50 @@ const NuevaOrdenLimsDialog: React.FC<NuevaOrdenLimsDialogProps> = ({
             ) : (
               'Crear pedido'
             )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(avisosConfirm?.length)}
+        onClose={() => {
+          setAvisosConfirm(null);
+          setPendingSubmit(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Aviso de cobertura / frecuencia</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Podés enviar el pedido igual. {TEXTO_LAB_PUEDE_QUITAR_ENSAYOS}
+          </Alert>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Estos ensayos pueden no cumplir la política de la obra social:
+          </Typography>
+          <List dense disablePadding>
+            {(avisosConfirm || []).map((a) => (
+              <ListItem key={a.codigo} alignItems="flex-start" sx={{ px: 0 }}>
+                <ListItemText
+                  primary={`${a.nombre} (${a.codigo})`}
+                  secondary={a.mensaje}
+                  primaryTypographyProps={{ fontWeight: 600 }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setAvisosConfirm(null);
+              setPendingSubmit(null);
+            }}
+          >
+            Volver
+          </Button>
+          <Button variant="contained" color="warning" onClick={confirmAvisosContinuar}>
+            Enviar de todas formas
           </Button>
         </DialogActions>
       </Dialog>

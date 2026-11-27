@@ -540,20 +540,20 @@ class SolicitudExamenViewSet(viewsets.ModelViewSet):
     def alertas_frecuencia(self, request, pk=None):
         """
         Alertas de frecuencia/cobertura para ensayos ya en la orden.
-        Usado al imprimir etiquetas en ambulatorio (lab/bioquímico decide).
+        Usado al imprimir etiquetas/talón (lab/bioquímico decide).
+
+        Aplica en **todos** los orígenes: el médico puede pedir; la revisión
+        es al imprimir (misma política que ionograma+SEROS).
         """
         from laboratorio.restricciones_frecuencia import (
             alertas_frecuencia_para_solicitud,
-            origen_exige_bloqueo_frecuencia,
         )
 
         solicitud = self.get_object()
-        origen = getattr(solicitud, 'origen_solicitud', None)
-        revision = not origen_exige_bloqueo_frecuencia(origen)
-        alertas = alertas_frecuencia_para_solicitud(solicitud) if revision else []
+        alertas = alertas_frecuencia_para_solicitud(solicitud)
         return Response(
             {
-                'aplica_revision_etiquetas': revision,
+                'aplica_revision_etiquetas': bool(alertas),
                 'alertas': alertas,
             }
         )

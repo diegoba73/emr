@@ -218,7 +218,7 @@ describe('limsCargaMuestra', () => {
     ).toEqual([1]);
   });
 
-  it('CA_ION en suero no acepta jeringa EAB arterial', () => {
+  it('CA_ION / HTO / iono de paquete EAB aceptan jeringa arterial', () => {
     const proc = [
       {
         ...muestra(1, 10, 'RECIBIDA'),
@@ -228,6 +228,25 @@ describe('limsCargaMuestra', () => {
     ] as MuestraTransaccional[];
     expect(
       muestrasCompatiblesParaTipo(proc, 99, 50, 'SUERO', 'CA_ION').map((m) => m.id)
+    ).toEqual([1]);
+    expect(
+      muestrasCompatiblesParaTipo(proc, 99, 50, 'SANGRE_EDTA', 'HTO').map((m) => m.id)
+    ).toEqual([1]);
+    expect(
+      muestrasCompatiblesParaTipo(proc, 99, 50, 'SUERO', 'NA').map((m) => m.id)
+    ).toEqual([1]);
+  });
+
+  it('GLU en suero no acepta jeringa EAB arterial', () => {
+    const proc = [
+      {
+        ...muestra(1, 10, 'RECIBIDA'),
+        tipo_muestra_codigo: 'SANGRE_HEPARINA_ART',
+        tipo_contenedor: 50,
+      },
+    ] as MuestraTransaccional[];
+    expect(
+      muestrasCompatiblesParaTipo(proc, 99, 50, 'SUERO', 'GLU').map((m) => m.id)
     ).toEqual([]);
   });
 

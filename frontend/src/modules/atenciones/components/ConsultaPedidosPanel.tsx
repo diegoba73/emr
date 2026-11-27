@@ -261,6 +261,8 @@ const ConsultaPedidosPanel: React.FC<ConsultaPedidosPanelProps> = ({
     paneles_ids: number[];
     examenes_labels: string[];
     paneles_labels: string[];
+    examenes_codigos?: string[];
+    paneles_codigos?: string[];
     observaciones?: string;
     fecha_programada_toma: string;
     material_pedido: string;

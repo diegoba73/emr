@@ -859,7 +859,10 @@ export async function getRepeticionControlCandidatos(
 }
 
 export type RestriccionEnsayoLims = {
+  /** Siempre false: no impide pedir; el aviso es informativo. */
   bloqueado: boolean;
+  /** true si hay política OS/frecuencia aplicable (confirmar al enviar). */
+  aviso?: boolean;
   mensaje: string | null;
 };
 

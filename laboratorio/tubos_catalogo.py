@@ -131,6 +131,14 @@ _EAB_JERINGA_INDIVIDUAL = _EAB_ART | _EAB_VEN
 _CODIGOS_HEPARINA_COMPARTEN_EAB = frozenset(
     {"LACT", "LACPLA", "CAIISE", "CAIE"}
 )
+# Paquete automático al pedir EAB (iono + Ca iónico + HTO). No generan tubo propio
+# salvo que otra determinación justifique suero/EDTA; se informan desde la jeringa.
+_CODIGOS_IONO_ACOMP_EAB = frozenset({"NA", "K", "CL", "CA_ION"})
+_CODIGOS_ACOMPANAMIENTO_EAB = _CODIGOS_IONO_ACOMP_EAB | frozenset({"HTO"})
+# Carga de resultados: estos códigos pueden asociarse a jeringa EAB art/ven.
+_CODIGOS_CARGABLES_EN_JERINGA_EAB = (
+    _CODIGOS_ACOMPANAMIENTO_EAB | _CODIGOS_HEPARINA_COMPARTEN_EAB
+)
 # Alias legacy (imports / compat).
 _CODIGOS_LACTATO_COMPARTEN_EAB = frozenset({"LACT", "LACPLA"})
 _HEPARINA_SUELTOS = _CODIGOS_HEPARINA_COMPARTEN_EAB

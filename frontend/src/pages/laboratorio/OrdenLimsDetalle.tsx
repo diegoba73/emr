@@ -204,13 +204,7 @@ const OrdenLimsDetalle: React.FC = () => {
       toast.success('Orden validada y liberada');
       setQcOverrideOpen(false);
       setQcOverrideMotivo('');
-      try {
-        const fresh = await getSolicitudExamen(updated.id);
-        setOrden(fresh);
-        setIqcPrecheck(await getIqcPrecheck(fresh.id));
-      } catch {
-        /* keep updated */
-      }
+      navigate(back.path);
     } catch (e) {
       const msg = getSafeClinicalActionMessage(e, CLINICAL_ACTION_ERRORS.limsGuardarResultado);
       if (canQcOverride && /control de calidad no vigente/i.test(msg)) {
@@ -782,7 +776,12 @@ const OrdenLimsDetalle: React.FC = () => {
                 ? undefined
                 : 'La obra social tiene que estar Autorizada para validar y emitir el informe.'
             }
-            onGuardado={async (o) => {
+            onGuardado={async (o, meta) => {
+              if (meta?.informarParcial) {
+                setOrden(o);
+                navigate(back.path);
+                return;
+              }
               setOrden(o);
               await refreshMuestras(o.id, o.numero);
               try {

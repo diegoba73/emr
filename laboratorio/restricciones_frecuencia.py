@@ -1,12 +1,18 @@
 """Restricciones de frecuencia / cobertura de ensayos (obra social).
 
-Bloqueo duro al pedir (códigos generales): internación y guardia.
-Ambulatorio / externo: pedir libre; al imprimir etiquetas el lab revisa alertas.
+Política unificada (como ionograma + SEROS):
+- **Al pedir** (médico u otros): **no** se bloquea. El pedido puede crearse/
+  ampliarse; el paciente puede abonar en particular si la OS no cubre.
+- **Al imprimir etiquetas/talón**: el laboratorio recibe alertas y decide
+  continuar o quitar ensayos.
 
-Excepción HBA1C:
-- Guardia: el médico no puede pedirla nunca.
-- Internación / ambulatorio / externo: bloqueo duro si hay pedido en los últimos 90 días.
-Admin / laboratorio / bioquímico (LIMS-write) siguen exentos.
+Guardia: el catálogo pedible por el médico lo fija
+``restricciones_guardia_catalogo`` (modal). Cualquier otro examen queda fuera
+del allowlist; no se usa esta capa de frecuencia para eso.
+
+``assert_puede_agregar_ensayos`` queda como no-op (compat call sites).
+``restricciones_ensayos_para`` reporta ``bloqueado: false`` + ``aviso``/``mensaje``
+para que el FE avise al médico al enviar sin impedir el pedido.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any, Iterable
 
+from django.db.models import Q
 from django.utils import timezone
 
 from laboratorio.models import SolicitudExamen, TipoExamen
@@ -25,19 +32,37 @@ CODIGO_PROBNP = "PROBNP"
 CODIGO_PSA = "PSA"
 CODIGO_VITD = "VITD"
 CODIGO_HBA1C = "HBA1C"
+CODIGO_LPA = "LPA"
 CODIGO_T4 = "T4"
+CODIGO_PAN_IONO = "PAN_IONO"
 CODIGOS_TIROIDES = frozenset({"TSH", "T3", "T4", "T4L"})
+# Componentes del ionograma plasmático (panel PAN_IONO). No incluye urinarios.
+CODIGOS_IONOGRAMA_COMPONENTES = frozenset({"NA", "K", "CL"})
+CODIGOS_IONOGRAMA = frozenset({CODIGO_PAN_IONO, *CODIGOS_IONOGRAMA_COMPONENTES})
 CODIGOS_UNA_VEZ_ANIO = frozenset({CODIGO_PSA, CODIGO_VITD})
+# Compat: antes HBA1C/LPA bloqueaban en todos los orígenes al pedir.
+CODIGOS_VENTANA_90_SIEMPRE = frozenset({CODIGO_HBA1C, CODIGO_LPA})
 CODIGOS_RESTRINGIDOS = frozenset(
-    {CODIGO_PROBNP, CODIGO_PSA, CODIGO_VITD, CODIGO_HBA1C, *CODIGOS_TIROIDES}
+    {
+        CODIGO_PROBNP,
+        CODIGO_PSA,
+        CODIGO_VITD,
+        CODIGO_HBA1C,
+        CODIGO_LPA,
+        CODIGO_PAN_IONO,
+        *CODIGOS_TIROIDES,
+    }
 )
+# Todas las reglas de este módulo son solo aviso al imprimir (ninguna bloquea al pedir).
+CODIGOS_SOLO_ALERTA_IMPRESION = frozenset(CODIGOS_RESTRINGIDOS)
 
 
 def origen_exige_bloqueo_frecuencia(origen: str | None) -> bool:
     """
-    True = bloquear al crear/agregar (internación, guardia, origen vacío/desconocido).
-    False = ambulatorio / externo: pedir libre; revisión al imprimir etiquetas.
-    (HBA1c tiene reglas propias; ver ``_mensaje_bloqueo_hba1c``.)
+    Clasifica origen: True = internación/guardia/desconocido; False = ambulatorio/externo.
+
+    Ya **no** implica bloqueo al pedir (política unificada = alerta al imprimir).
+    Se conserva por callers/tests que distinguen el origen.
     """
     o = (origen or "").strip().upper()
     if o.startswith("AMBULATORIO") or o.startswith("EXTERNO"):
@@ -49,8 +74,10 @@ def origen_es_guardia(origen: str | None) -> bool:
     o = (origen or "").strip().upper()
     return o == "GUARDIA" or o.startswith("GUARDIA")
 
+
 VENTANA_DIAS_PROBNP = 31
 VENTANA_DIAS_HBA1C = 90  # 3 meses
+VENTANA_DIAS_LPA = 90  # 3 meses
 MIN_DIAS_ENTRE_TIROIDES = 60  # 2 meses
 MAX_TIROIDES_POR_ANIO = 2
 OBRA_SOCIAL_SEROS = "SEROS"
@@ -62,44 +89,59 @@ MENSAJE_CONSULTAR_LAB = (
 MENSAJE_PROBNP_FRECUENCIA = (
     "La Obra Social no le permite realizar la determinación de proBNP debido a "
     "que tiene ya una realizada hace menos de 1 mes. "
-    + MENSAJE_CONSULTAR_LAB
-)
-
-MENSAJE_HBA1C_GUARDIA = (
-    "La determinación de hemoglobina glicosilada (HbA1c) no se puede pedir en Guardia. "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 MENSAJE_HBA1C_FRECUENCIA = (
     "La Obra Social exige un intervalo mínimo de 3 meses entre determinaciones "
     "de hemoglobina glicosilada (HbA1c). "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
+)
+
+MENSAJE_LPA_FRECUENCIA = (
+    "La Obra Social exige un intervalo mínimo de 3 meses entre determinaciones "
+    "de Lipoproteína A (Lp(a)). "
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 MENSAJE_PSA_ANUAL = (
     "La Obra Social solo permite realizar PSA una vez al año. "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 MENSAJE_VITD_ANUAL = (
     "La Obra Social solo permite realizar Vitamina D una vez al año. "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 MENSAJE_T4_SEROS = (
     "La Obra Social SEROS no cubre la determinación de T4. "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
+)
+
+MENSAJE_IONO_SEROS_ANUAL = (
+    "La Obra Social SEROS solo cubre ionograma plasmático una vez al año. "
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 MENSAJE_TIROIDES_ANUAL = (
     "La Obra Social solo permite realizar {nombre} dos veces al año. "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 MENSAJE_TIROIDES_INTERVALO = (
     "La Obra Social exige un intervalo mínimo de 2 meses entre determinaciones "
     "de {nombre}. "
-    + MENSAJE_CONSULTAR_LAB
+    "Si el paciente abona en forma particular puede continuar; "
+    "si no, quitar el ensayo de la orden."
 )
 
 _NOMBRES = {
@@ -111,19 +153,17 @@ _NOMBRES = {
     CODIGO_PSA: "PSA",
     CODIGO_VITD: "Vitamina D",
     CODIGO_HBA1C: "hemoglobina glicosilada (HbA1c)",
+    CODIGO_LPA: "Lipoproteína A (Lp(a))",
+    CODIGO_PAN_IONO: "ionograma plasmático",
 }
 
 
 class RestriccionFrecuenciaError(ValueError):
-    """El usuario no puede agregar el ensayo por política de frecuencia/cobertura."""
+    """Reservado por compatibilidad; ya no se lanza en el flujo de pedido."""
 
 
 def usuario_exento_restricciones_ensayos(user: Any) -> bool:
-    """
-    Roles con escritura LIMS quedan exentos (admin, laboratorio, bioquímico,
-    secretaría lab). El médico (y roles sin LIMS-write) sí están sujetos a
-    las restricciones, incluida HBA1C.
-    """
+    """Roles con escritura LIMS (admin, laboratorio, bioquímico, …)."""
     return puede_escribir_lims(user)
 
 
@@ -196,6 +236,21 @@ def paciente_tiene_hba1c_reciente(
     )
 
 
+def paciente_tiene_lpa_reciente(
+    paciente_id: int,
+    *,
+    exclude_solicitud_id: int | None = None,
+) -> bool:
+    desde = timezone.now() - timedelta(days=VENTANA_DIAS_LPA)
+    return (
+        _qs_pedidos_con_codigo(
+            paciente_id, CODIGO_LPA, exclude_solicitud_id=exclude_solicitud_id
+        )
+        .filter(fecha_solicitud__gte=desde)
+        .exists()
+    )
+
+
 def count_pedidos_codigo_anio_calendario(
     paciente_id: int,
     codigo: str,
@@ -213,6 +268,28 @@ def count_pedidos_codigo_anio_calendario(
         .distinct()
         .count()
     )
+
+
+def count_pedidos_ionograma_anio_calendario(
+    paciente_id: int,
+    *,
+    anio: int | None = None,
+    exclude_solicitud_id: int | None = None,
+) -> int:
+    """Pedidos con ionograma plasmático (panel PAN_IONO o componentes Na/K/Cl)."""
+    anio = anio if anio is not None else _anio_calendario()
+    inicio, fin = _inicio_fin_anio(anio)
+    qs = SolicitudExamen.objects.filter(
+        paciente_id=paciente_id,
+        fecha_solicitud__gte=inicio,
+        fecha_solicitud__lte=fin,
+    ).filter(
+        Q(paneles__codigo=CODIGO_PAN_IONO)
+        | Q(tipos_examen__codigo__in=CODIGOS_IONOGRAMA_COMPONENTES)
+    )
+    if exclude_solicitud_id is not None:
+        qs = qs.exclude(pk=exclude_solicitud_id)
+    return qs.distinct().count()
 
 
 def ultima_fecha_pedido_codigo(
@@ -242,22 +319,44 @@ def paciente_obra_social_es_seros(paciente_id: int) -> bool:
     return str(os_val).strip().upper() == OBRA_SOCIAL_SEROS
 
 
-def _mensaje_bloqueo_hba1c(
+def _mensaje_alerta_hba1c(
     paciente_id: int,
     *,
     exclude_solicitud_id: int | None = None,
-    origen_solicitud: str | None = None,
 ) -> str | None:
-    """
-    HBA1C: prohibida en guardia; en internación/ambulatorio/externo exige ≥90 días
-    desde el último pedido.
-    """
-    if origen_es_guardia(origen_solicitud):
-        return MENSAJE_HBA1C_GUARDIA
+    """HBA1C: alerta si hay pedido en los últimos 90 días (no bloquea al pedir)."""
     if paciente_tiene_hba1c_reciente(
         paciente_id, exclude_solicitud_id=exclude_solicitud_id
     ):
         return MENSAJE_HBA1C_FRECUENCIA
+    return None
+
+
+def _mensaje_alerta_lpa(
+    paciente_id: int,
+    *,
+    exclude_solicitud_id: int | None = None,
+) -> str | None:
+    """LPA: alerta si hay pedido en los últimos 90 días (no bloquea al pedir)."""
+    if paciente_tiene_lpa_reciente(
+        paciente_id, exclude_solicitud_id=exclude_solicitud_id
+    ):
+        return MENSAJE_LPA_FRECUENCIA
+    return None
+
+
+def _mensaje_alerta_ionograma_seros(
+    paciente_id: int,
+    *,
+    exclude_solicitud_id: int | None = None,
+) -> str | None:
+    """SEROS: máx. 1 ionograma plasmático por año calendario."""
+    if not paciente_obra_social_es_seros(paciente_id):
+        return None
+    if count_pedidos_ionograma_anio_calendario(
+        paciente_id, exclude_solicitud_id=exclude_solicitud_id
+    ) >= 1:
+        return MENSAJE_IONO_SEROS_ANUAL
     return None
 
 
@@ -268,9 +367,21 @@ def _mensaje_bloqueo_codigo(
     exclude_solicitud_id: int | None = None,
     origen_solicitud: str | None = None,
 ) -> str | None:
-    """Devuelve mensaje de bloqueo para un código, o None si está permitido."""
+    """
+    Mensaje de alerta de frecuencia/cobertura para un código, o None si no aplica.
+
+    El nombre histórico «bloqueo» se conserva; **no** se usa para rechazar pedidos.
+    ``origen_solicitud`` se acepta por compat de callers (ya no altera HBA1C/LPA).
+    """
+    del origen_solicitud  # catálogo de guardia es otra capa; no aplica acá
+
     if codigo == CODIGO_T4 and paciente_obra_social_es_seros(paciente_id):
         return MENSAJE_T4_SEROS
+
+    if codigo == CODIGO_PAN_IONO or codigo in CODIGOS_IONOGRAMA_COMPONENTES:
+        return _mensaje_alerta_ionograma_seros(
+            paciente_id, exclude_solicitud_id=exclude_solicitud_id
+        )
 
     if codigo == CODIGO_PROBNP:
         if paciente_tiene_probnp_reciente(
@@ -280,10 +391,13 @@ def _mensaje_bloqueo_codigo(
         return None
 
     if codigo == CODIGO_HBA1C:
-        return _mensaje_bloqueo_hba1c(
-            paciente_id,
-            exclude_solicitud_id=exclude_solicitud_id,
-            origen_solicitud=origen_solicitud,
+        return _mensaje_alerta_hba1c(
+            paciente_id, exclude_solicitud_id=exclude_solicitud_id
+        )
+
+    if codigo == CODIGO_LPA:
+        return _mensaje_alerta_lpa(
+            paciente_id, exclude_solicitud_id=exclude_solicitud_id
         )
 
     if codigo == CODIGO_PSA:
@@ -328,43 +442,13 @@ def assert_puede_agregar_ensayos(
     origen_solicitud: str | None = None,
 ) -> None:
     """
-    Bloquea ensayos restringidos en internación/guardia (salvo lab/bio/admin).
-    Ambulatorio/externo: no bloquea al pedir (revisión al imprimir etiquetas),
-    salvo HBA1C (prohibida en guardia; 90 días en internación/ambulatorio/externo).
+    No-op: las reglas de frecuencia **no** bloquean al crear/agregar.
+
+    La revisión es ``alertas_frecuencia_para_solicitud`` al imprimir etiquetas/talón.
+    Firma conservada por call sites (pedidos-completos, serializers, views).
     """
-    if usuario_exento_restricciones_ensayos(user):
-        return
-    codigos = _codigos_de_tipos(tipo_examen_ids)
-    if not codigos:
-        return
-
-    # HBA1C aplica en todos los orígenes (regla propia).
-    bloqueo_general = origen_exige_bloqueo_frecuencia(origen_solicitud)
-    if not bloqueo_general and CODIGO_HBA1C not in codigos:
-        return
-
-    # Orden preferido de mensajes si hay varios en el mismo request
-    candidatos: list[str] = []
-    if CODIGO_HBA1C in codigos:
-        candidatos.append(CODIGO_HBA1C)
-    if bloqueo_general:
-        if CODIGO_T4 in codigos:
-            candidatos.append(CODIGO_T4)
-        if CODIGO_PROBNP in codigos:
-            candidatos.append(CODIGO_PROBNP)
-        for c in (CODIGO_PSA, CODIGO_VITD, "TSH", "T3", "T4L"):
-            if c in codigos and c not in candidatos:
-                candidatos.append(c)
-
-    for codigo in candidatos:
-        msg = _mensaje_bloqueo_codigo(
-            codigo,
-            paciente_id,
-            exclude_solicitud_id=exclude_solicitud_id,
-            origen_solicitud=origen_solicitud,
-        )
-        if msg:
-            raise RestriccionFrecuenciaError(msg)
+    del user, paciente_id, tipo_examen_ids, exclude_solicitud_id, origen_solicitud
+    return
 
 
 # Compat: callers antiguos
@@ -392,29 +476,23 @@ def restricciones_ensayos_para(
     origen_solicitud: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """
-    Payload UX: mapa código → {bloqueado, mensaje}.
-    Ambulatorio/externo: sin bloqueo general; HBA1C sí se evalúa siempre.
-    """
-    out: dict[str, dict[str, Any]] = {}
-    if usuario_exento_restricciones_ensayos(user):
-        for codigo in sorted(CODIGOS_RESTRINGIDOS):
-            out[codigo] = {"bloqueado": False, "mensaje": None}
-        return out
+    Payload UX: mapa código → {bloqueado, aviso, mensaje}.
 
-    bloqueo_general = origen_exige_bloqueo_frecuencia(origen_solicitud)
-    for codigo in sorted(CODIGOS_RESTRINGIDOS):
-        if codigo == CODIGO_HBA1C:
-            msg = _mensaje_bloqueo_hba1c(
-                paciente_id, origen_solicitud=origen_solicitud
-            )
-        elif bloqueo_general:
-            msg = _mensaje_bloqueo_codigo(
-                codigo, paciente_id, origen_solicitud=origen_solicitud
-            )
-        else:
-            msg = None
+    - ``bloqueado`` siempre False (no impide tildar/enviar).
+    - ``aviso`` + ``mensaje`` si la política de OS/frecuencia aplica: el FE
+      muestra confirmación al enviar; el lab vuelve a verlo al imprimir.
+    """
+    del user  # ya no hay exención de aviso: lab también puede ver el mapa
+    out: dict[str, dict[str, Any]] = {}
+    # Incluir Na/K/Cl sueltos (mismo aviso que PAN_IONO) para selección por componente.
+    codigos = set(CODIGOS_RESTRINGIDOS) | set(CODIGOS_IONOGRAMA_COMPONENTES)
+    for codigo in sorted(codigos):
+        msg = _mensaje_bloqueo_codigo(
+            codigo, paciente_id, origen_solicitud=origen_solicitud
+        )
         out[codigo] = {
-            "bloqueado": bool(msg),
+            "bloqueado": False,
+            "aviso": bool(msg),
             "mensaje": msg,
         }
     return out
@@ -423,7 +501,7 @@ def restricciones_ensayos_para(
 def alertas_frecuencia_para_solicitud(solicitud) -> list[dict[str, Any]]:
     """
     Alertas de frecuencia para ensayos ya cargados en la orden.
-    Pensado para la puerta de impresión de etiquetas (ambulatorio).
+    Puerta de impresión de etiquetas/talón (cualquier origen).
     No depende del rol: lab/bioquímico decide si dejar o quitar.
     """
     paciente_id = getattr(solicitud, "paciente_id", None)
@@ -451,7 +529,11 @@ def alertas_frecuencia_para_solicitud(solicitud) -> list[dict[str, Any]]:
 
     origen = getattr(solicitud, "origen_solicitud", None)
     alertas: list[dict[str, Any]] = []
-    for codigo in sorted(set(por_codigo) & CODIGOS_RESTRINGIDOS):
+    codigos_check = set(por_codigo) & CODIGOS_RESTRINGIDOS
+    # Ionograma llega como componentes (NA/K/Cl); unificar alerta bajo PAN_IONO.
+    if set(por_codigo) & CODIGOS_IONOGRAMA_COMPONENTES:
+        codigos_check.add(CODIGO_PAN_IONO)
+    for codigo in sorted(codigos_check):
         msg = _mensaje_bloqueo_codigo(
             codigo,
             paciente_id,
@@ -460,7 +542,15 @@ def alertas_frecuencia_para_solicitud(solicitud) -> list[dict[str, Any]]:
         )
         if not msg:
             continue
-        tipo_id, nombre = por_codigo[codigo]
+        if codigo == CODIGO_PAN_IONO and codigo not in por_codigo:
+            tipo_id = None
+            for c_comp in ("NA", "K", "CL"):
+                if c_comp in por_codigo:
+                    tipo_id = por_codigo[c_comp][0]
+                    break
+            nombre = _NOMBRES.get(CODIGO_PAN_IONO, CODIGO_PAN_IONO)
+        else:
+            tipo_id, nombre = por_codigo[codigo]
         alertas.append(
             {
                 "codigo": codigo,

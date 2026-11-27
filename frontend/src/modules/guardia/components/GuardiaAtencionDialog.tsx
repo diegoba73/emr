@@ -22,11 +22,14 @@ import {
   clearGuardiaPendingDraft,
   countConsultaPedidosDraftItems,
   flushConsultaPedidosDrafts,
+  loadConsultaPedidosDraft,
   loadGuardiaPendingDraft,
+  previewAvisosFrecuenciaDraft,
   type ConsultaPedidosDraft,
 } from '../../atenciones/consultaPedidosDraft';
 import { apiService } from '../../../services/api';
 import { imprimirPedidosPapel } from '../../../services/limsApi';
+import { formatAvisosFrecuenciaConfirmacion } from '../../../utils/limsRestriccionesEnsayos';
 import type { Medico, Paciente } from '../../../types';
 import { formatPacienteLabel } from '../../../utils/pacienteFormat';
 import { normalizeRol } from '../../../utils/permissions';
@@ -291,6 +294,21 @@ const GuardiaAtencionDialog: React.FC<GuardiaAtencionDialogProps> = ({
     }
 
     // No migrar/limpiar borrador hasta que el flush LIMS/estudios confirme.
+    const draftAvisos =
+      draftToFlush ?? (hcId ? loadConsultaPedidosDraft(hcId) : emptyPendingDraft());
+    const avisos = await previewAvisosFrecuenciaDraft(
+      pacienteId,
+      draftAvisos,
+      'GUARDIA'
+    );
+    if (
+      avisos.length > 0 &&
+      !window.confirm(formatAvisosFrecuenciaConfirmacion(avisos))
+    ) {
+      throw new Error(
+        'Pedidos no enviados: revisá el aviso de cobertura/frecuencia de obra social.'
+      );
+    }
     const { pedidosPapel } = await flushConsultaPedidosDrafts(
       {
         consultaHcId: hcId,

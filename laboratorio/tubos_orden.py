@@ -12,6 +12,11 @@ Excepciones (cuentan como 1 unidad hacia el tope, no como N componentes):
 
 Contenedores SUERO / FRASCO_ORINA / BIDON_ORINA_24H: siempre 1 unidad física
 (si hace falta otro, se reimprime la etiqueta).
+
+EAB / gases: el pedido automático arrastra ionograma, CA_ION, lactato y HTO.
+Esos acompañamientos se informan desde la jeringa y **no** generan suero/EDTA
+propios, salvo que otra determinación lo justifique (p. ej. creatinina → suero;
+hemograma → EDTA). Pedido solo-EAB → una heparina.
 """
 from __future__ import annotations
 
@@ -30,7 +35,9 @@ from laboratorio.tubos_catalogo import (
     MUESTRA_ORINA_24H,
     PANELES_ORINA_24H,
     SUERO,
+    _CODIGOS_ACOMPANAMIENTO_EAB,
     _CODIGOS_HEPARINA_COMPARTEN_EAB,
+    _CODIGOS_IONO_ACOMP_EAB,
     _EAB_ART,
     _EAB_VEN,
     _FRASCO_ORINA,
@@ -233,6 +240,69 @@ def _ancla_eab_en_orden(examenes) -> dict[str, Any]:
     return {"art": art, "ven": ven}
 
 
+def _orden_tiene_eab(examenes) -> bool:
+    for ex in examenes:
+        codigo = (getattr(ex, "codigo", None) or "").strip().upper()
+        if codigo in _EAB_ART or codigo in _EAB_VEN:
+            return True
+    return False
+
+
+def _acomp_eab_excluidos_de_tubo(solicitud: SolicitudExamen, examenes) -> frozenset[str]:
+    """
+    Acompañamientos EAB (iono/CA_ION/HTO) que no deben generar tubo propio.
+
+    - HTO: solo si hay PAN_HEMO u otros componentes de hemograma además de HTO.
+    - NA/K/CL/CA_ION: solo si hay otra práctica de suero/química fuera del iono.
+    - LACT sigue en el cálculo (se remapea a la jeringa EAB).
+    """
+    if not _orden_tiene_eab(examenes):
+        return frozenset()
+
+    codigos = {
+        (getattr(ex, "codigo", None) or "").strip().upper()
+        for ex in examenes
+        if getattr(ex, "codigo", None)
+    }
+    try:
+        paneles = {
+            (c or "").strip().upper()
+            for c in solicitud.paneles.values_list("codigo", flat=True)
+        }
+    except Exception:
+        paneles = set()
+
+    excluir: set[str] = set()
+
+    # HTO de acompañamiento: no EDTA propio sin hemograma real.
+    if "HTO" in codigos:
+        tiene_hemo_panel = PANEL_HEMOGRAMA_CODIGO in paneles
+        otros_hemo = (codigos & _CODIGOS_HEMOGRAMA) - {"HTO"}
+        if not tiene_hemo_panel and not otros_hemo:
+            excluir.add("HTO")
+
+    # Iono/CA_ION: no suero propio si no hay otra química/suero.
+    if codigos & _CODIGOS_IONO_ACOMP_EAB:
+        tiene_otro_suero = False
+        for ex in examenes:
+            c = (getattr(ex, "codigo", None) or "").strip().upper()
+            if not c or c in _CODIGOS_IONO_ACOMP_EAB:
+                continue
+            if c in _CODIGOS_ACOMPANAMIENTO_EAB:
+                continue
+            tc = getattr(ex, "tipo_contenedor", None)
+            if tc is not None and (getattr(tc, "codigo", None) or "") == SUERO:
+                tiene_otro_suero = True
+                break
+            if es_codigo_quimica_rutina(c):
+                tiene_otro_suero = True
+                break
+        if not tiene_otro_suero:
+            excluir.update(codigos & _CODIGOS_IONO_ACOMP_EAB)
+
+    return frozenset(excluir)
+
+
 def _remap_heparina_suelta_a_jeringa_eab(
     codigo: str,
     *,
@@ -255,6 +325,27 @@ def _remap_heparina_suelta_a_jeringa_eab(
     return tc_ancla, getattr(ancla, "tipo_muestra_requerida_id", None), split
 
 
+def _remap_acomp_eab_excluido_a_jeringa(
+    codigo: str,
+    *,
+    tc_eff,
+    tm_id: int | None,
+    ancla_eab: dict[str, Any],
+    excluidos: frozenset[str],
+) -> tuple[Any, int | None]:
+    """HTO/iono excluidos del tubo propio se anclan a la jeringa EAB (cierre/carga)."""
+    c = (codigo or "").strip().upper()
+    if c not in excluidos:
+        return tc_eff, tm_id
+    ancla = ancla_eab.get("art") or ancla_eab.get("ven")
+    if ancla is None:
+        return tc_eff, tm_id
+    tc_ancla = getattr(ancla, "tipo_contenedor", None)
+    if tc_ancla is None or not getattr(tc_ancla, "activo", False):
+        return tc_eff, tm_id
+    return tc_ancla, getattr(ancla, "tipo_muestra_requerida_id", None)
+
+
 # Alias legacy
 _remap_lactato_a_jeringa_eab = _remap_heparina_suelta_a_jeringa_eab
 
@@ -266,6 +357,9 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
     Orina 24 hs (incl. duales NA_U/CREA_U/MICROALB cuando la orden tiene
     contexto 24 hs) van al bidón; orina completa/al azar quedan en frasco.
     Todos los de 24 hs juntos → 1 bidón; completa + al azar → 1 frasco.
+
+    Con EAB: iono/CA_ION/HTO de acompañamiento no abren suero/EDTA propios
+    (pedido solo-EAB → una jeringa heparina).
     """
     examenes = [
         e for e in _tipos_examen_para_tubos(solicitud) if not _examen_sin_tubo_fisico(e)
@@ -295,9 +389,15 @@ def resolver_tubos_para_solicitud(solicitud: SolicitudExamen) -> list[TuboOrdenG
             )
 
     ancla_eab = _ancla_eab_en_orden(con_tubo)
+    excluidos_acomp = _acomp_eab_excluidos_de_tubo(solicitud, con_tubo)
+    con_tubo_calc = [
+        e
+        for e in con_tubo
+        if (getattr(e, "codigo", None) or "").strip().upper() not in excluidos_acomp
+    ]
     by_key: dict[tuple, list] = {}
     meta: dict[tuple, TuboOrdenGrupo] = {}
-    for ex in con_tubo:
+    for ex in con_tubo_calc:
         tc = ex.tipo_contenedor
         assert tc is not None
         if not tc.activo:
@@ -418,6 +518,8 @@ def mapa_tipo_examen_a_clave_tubo(
     Misma remisión 24 hs / duales que ``resolver_tubos_para_solicitud``, pero
     omite exámenes sin contenedor y no falla si el catálogo de bidón falta
     (queda el contenedor del tipo). Usado para cierre/completitud.
+
+    Acompañamientos EAB excluidos de tubo propio se anclan a la jeringa EAB.
     """
     examenes = [
         e
@@ -433,6 +535,7 @@ def mapa_tipo_examen_a_clave_tubo(
         bidon, muestra_24h = _resolver_bidon_y_muestra_24h()
 
     ancla_eab = _ancla_eab_en_orden(examenes)
+    excluidos_acomp = _acomp_eab_excluidos_de_tubo(solicitud, examenes)
     out: dict[int, tuple[int | None, int | None]] = {}
     for ex in examenes:
         tc = ex.tipo_contenedor
@@ -453,6 +556,13 @@ def mapa_tipo_examen_a_clave_tubo(
                 tm_id = muestra_24h.pk
         tc_eff, tm_id, _split = _remap_heparina_suelta_a_jeringa_eab(
             codigo, tc_eff=tc_eff, tm_id=tm_id, ancla_eab=ancla_eab
+        )
+        tc_eff, tm_id = _remap_acomp_eab_excluido_a_jeringa(
+            codigo,
+            tc_eff=tc_eff,
+            tm_id=tm_id,
+            ancla_eab=ancla_eab,
+            excluidos=excluidos_acomp,
         )
         if not tc_eff.activo:
             continue

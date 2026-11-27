@@ -377,8 +377,8 @@ class TestTipoExamenMuestraRequerida(APITestCase):
             raw_muestra_id=m.pk,
         )
 
-    def test_ca_ion_suero_acepta_jeringa_eab_legacy(self):
-        """CA_ION migró a SUERO; jeringa EAB art/ven de pedidos viejos sigue válida."""
+    def test_paquete_eab_acepta_jeringa_art_glu_no(self):
+        """CA_ION/HTO/iono del paquete EAB cargan sobre jeringa; GLU no."""
         from laboratorio.resultado_muestra_validacion import (
             MSG_TIPO_MUESTRA_INCORRECTO,
             assert_tipo_examen_muestra_carga,
@@ -386,6 +386,9 @@ class TestTipoExamenMuestraRequerida(APITestCase):
 
         tm_suero, _ = TipoMuestra.objects.get_or_create(
             codigo="SUERO", defaults={"nombre": "Suero", "activo": True}
+        )
+        tm_edta, _ = TipoMuestra.objects.get_or_create(
+            codigo="SANGRE_EDTA", defaults={"nombre": "Sangre EDTA", "activo": True}
         )
         tm_art, _ = TipoMuestra.objects.get_or_create(
             codigo="SANGRE_HEPARINA_ART",
@@ -403,10 +406,28 @@ class TestTipoExamenMuestraRequerida(APITestCase):
         )
         te_ca.tipo_muestra_requerida = tm_suero
         te_ca.save(update_fields=["tipo_muestra_requerida"])
+        te_hto, _ = TipoExamen.objects.update_or_create(
+            codigo="HTO",
+            defaults={
+                "nombre": "Hematocrito",
+                "tipo_muestra_requerida": tm_edta,
+                "requiere_muestra": True,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te_hto.tipo_muestra_requerida = tm_edta
+        te_hto.save(update_fields=["tipo_muestra_requerida"])
         sol, _res = self._solicitud_con_tipo(te_ca)
         m = self._muestra_recibida(sol, tipo_muestra=tm_art)
         assert_tipo_examen_muestra_carga(
             tipo_examen=te_ca,
+            resultado_muestra=m,
+            muestra_id_en_payload=True,
+            raw_muestra_id=m.pk,
+        )
+        assert_tipo_examen_muestra_carga(
+            tipo_examen=te_hto,
             resultado_muestra=m,
             muestra_id_en_payload=True,
             raw_muestra_id=m.pk,

@@ -22,7 +22,6 @@ import {
 } from '../../services/limsApi';
 import { CLINICAL_ACTION_ERRORS, getSafeClinicalActionMessage } from '../../utils/apiError';
 import type { OrigenParaLugarExtraccion } from '../../utils/limsOrigenSolicitud';
-import { origenExigeBloqueoFrecuenciaEnsayos } from '../../utils/limsOrigenSolicitud';
 import AlertasFrecuenciaEtiquetasDialog from './AlertasFrecuenciaEtiquetasDialog';
 import EtiquetasMuestrasZplOrdenDialog from './EtiquetasMuestrasZplOrdenDialog';
 import QuitarExamenesOrdenDialog from './QuitarExamenesOrdenDialog';
@@ -54,8 +53,8 @@ type Fase =
 
 /**
  * «Imprimir etiquetas»: crea tubos (PENDIENTE_TOMA) y abre ZPL.
- * En ambulatorio, si hay alertas de frecuencia/cobertura, lab/bioquímico decide
- * continuar o quitar exámenes antes de preparar tubos.
+ * Si hay alertas de frecuencia/cobertura (p. ej. ambulatorio o SEROS+ionograma),
+ * lab/bioquímico decide continuar o quitar exámenes antes de preparar tubos/talón.
  */
 const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   open,
@@ -114,14 +113,12 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
   const iniciarFlujo = useCallback(async () => {
     setPrepError(null);
     setAlertas([]);
-    const origen = origenEfectivo.origen_solicitud || orden.origen_solicitud;
-    const revisaAmbulatorio = !origenExigeBloqueoFrecuenciaEnsayos(origen);
 
-    if (revisaAmbulatorio && !skipAlertasRef.current) {
+    if (!skipAlertasRef.current) {
       setFase('check_alertas');
       try {
         const data = await getAlertasFrecuenciaOrden(orden.id);
-        if (data.aplica_revision_etiquetas && (data.alertas?.length ?? 0) > 0) {
+        if ((data.alertas?.length ?? 0) > 0) {
           setAlertas(data.alertas);
           setFase('alertas');
           return;
@@ -132,7 +129,7 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
     }
     skipAlertasRef.current = false;
     await prepareTubos();
-  }, [origenEfectivo.origen_solicitud, orden.origen_solicitud, orden.id, prepareTubos]);
+  }, [orden.id, prepareTubos]);
 
   useEffect(() => {
     if (!open) {
@@ -270,7 +267,7 @@ const TomarMuestraOrdenDialog: React.FC<TomarMuestraOrdenDialogProps> = ({
           setFase('check_alertas');
           try {
             const data = await getAlertasFrecuenciaOrden(updated.id);
-            if (data.aplica_revision_etiquetas && (data.alertas?.length ?? 0) > 0) {
+            if ((data.alertas?.length ?? 0) > 0) {
               setAlertas(data.alertas);
               setFase('alertas');
               return;

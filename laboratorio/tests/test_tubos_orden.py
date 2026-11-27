@@ -592,8 +592,8 @@ class TestResolverTubosOrden(TestCase):
         assert len(grupos) == 1
         assert grupos[0].tipo_muestra_id == tm_hep.pk
 
-    def test_ca_ion_con_eab_art_queda_en_suero_aparte(self):
-        """CA_ION ya no comparte jeringa EAB: EAB + suero = 2 grupos."""
+    def test_ca_ion_con_eab_art_no_abre_suero_si_solo_acomp(self):
+        """CA_ION de acompañamiento EAB no genera suero: solo jeringa heparina."""
         tm_art = TipoMuestra.objects.create(
             codigo=f"A3{self.suf}", nombre="Sangre heparina arterial", activo=True
         )
@@ -629,9 +629,10 @@ class TestResolverTubosOrden(TestCase):
 
         sol = self._solicitud(ph, ca)
         grupos = resolver_tubos_para_solicitud(sol)
-        assert len(grupos) == 2
-        assert {g.tipo_muestra_id for g in grupos} == {tm_art.pk, tm_sue.pk}
-        assert len(expandir_items_crear_muestras(sol, grupos)) == 2
+        assert len(grupos) == 1
+        assert grupos[0].tipo_muestra_id == tm_art.pk
+        assert grupos[0].cantidad == 1
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 1
 
     def test_ca_ion_solo_sigue_suero(self):
         tm_sue = TipoMuestra.objects.create(
@@ -698,6 +699,218 @@ class TestResolverTubosOrden(TestCase):
         assert grupos[0].tipo_muestra_id == tm_sue.pk
         assert "HEP" not in (grupos[0].tipo_contenedor_codigo or "").upper()
         assert len(expandir_items_crear_muestras(sol, grupos)) == 1
+
+    def _eab_art_ph(self, tm_art):
+        ph, _ = TipoExamen.objects.update_or_create(
+            codigo="PH_ART",
+            defaults={
+                "nombre": "pH (arterial)",
+                "tipo_muestra_requerida": tm_art,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        ph.tipo_muestra_requerida = tm_art
+        ph.tipo_contenedor = self.hep
+        ph.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        return ph
+
+    def _examen_suero(self, codigo, nombre, tm_sue):
+        te, _ = TipoExamen.objects.update_or_create(
+            codigo=codigo,
+            defaults={
+                "nombre": nombre,
+                "tipo_muestra_requerida": tm_sue,
+                "tipo_contenedor": self.sue,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te.tipo_muestra_requerida = tm_sue
+        te.tipo_contenedor = self.sue
+        te.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor", "nombre"])
+        return te
+
+    def _examen_edta(self, codigo, nombre, tm_edta):
+        te, _ = TipoExamen.objects.update_or_create(
+            codigo=codigo,
+            defaults={
+                "nombre": nombre,
+                "tipo_muestra_requerida": tm_edta,
+                "tipo_contenedor": self.edta,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        te.tipo_muestra_requerida = tm_edta
+        te.tipo_contenedor = self.edta
+        te.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor", "nombre"])
+        return te
+
+    def test_eab_solo_con_paquete_automatico_una_heparina(self):
+        """EAB + iono + CA_ION + LACT + HTO → solo 1 jeringa heparina."""
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"EA{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_hep = TipoMuestra.objects.create(
+            codigo=f"EH{self.suf}", nombre="Sangre heparina", activo=True
+        )
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"ES{self.suf}", nombre="Suero", activo=True
+        )
+        tm_edta = TipoMuestra.objects.create(
+            codigo=f"EE{self.suf}", nombre="Sangre EDTA", activo=True
+        )
+        ph = self._eab_art_ph(tm_art)
+        lact, _ = TipoExamen.objects.update_or_create(
+            codigo="LACT",
+            defaults={
+                "nombre": "Lactato",
+                "tipo_muestra_requerida": tm_hep,
+                "tipo_contenedor": self.hep,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        lact.tipo_muestra_requerida = tm_hep
+        lact.tipo_contenedor = self.hep
+        lact.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        comps = [
+            ph,
+            lact,
+            self._examen_suero("NA", "Sodio", tm_sue),
+            self._examen_suero("K", "Potasio", tm_sue),
+            self._examen_suero("CL", "Cloro", tm_sue),
+            self._examen_suero("CA_ION", "Calcio ionico", tm_sue),
+            self._examen_edta("HTO", "Hematocrito", tm_edta),
+        ]
+        sol = self._solicitud(*comps)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 1
+        assert grupos[0].cantidad == 1
+        assert grupos[0].tipo_muestra_id == tm_art.pk
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 1
+
+    def test_eab_mas_creatinina_heparina_y_suero_sin_edta(self):
+        """EAB + creatinina (+ paquete) → heparina + suero; HTO no abre EDTA."""
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"EB{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"EU{self.suf}", nombre="Suero", activo=True
+        )
+        tm_edta = TipoMuestra.objects.create(
+            codigo=f"ED{self.suf}", nombre="Sangre EDTA", activo=True
+        )
+        comps = [
+            self._eab_art_ph(tm_art),
+            self._examen_suero("NA", "Sodio", tm_sue),
+            self._examen_suero("CA_ION", "Calcio ionico", tm_sue),
+            self._examen_suero("CREATI", "Creatininemia", tm_sue),
+            self._examen_edta("HTO", "Hematocrito", tm_edta),
+        ]
+        sol = self._solicitud(*comps)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 2
+        mats = {g.tipo_muestra_id for g in grupos}
+        assert mats == {tm_art.pk, tm_sue.pk}
+        assert all(g.cantidad == 1 for g in grupos)
+        assert len(expandir_items_crear_muestras(sol, grupos)) == 2
+
+    def test_eab_mas_creatinina_y_hemograma_tres_tubos(self):
+        """EAB + creatinina + hemograma → heparina + suero + EDTA."""
+        from laboratorio.models import PanelExamen
+
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"EC{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"EV{self.suf}", nombre="Suero", activo=True
+        )
+        tm_edta = TipoMuestra.objects.create(
+            codigo=f"EW{self.suf}", nombre="Sangre EDTA", activo=True
+        )
+        hemo_comps = [
+            self._examen_edta("HTO", "Hematocrito", tm_edta),
+            self._examen_edta("HGB", "Hemoglobina", tm_edta),
+            self._examen_edta("PLAQ", "Plaquetas", tm_edta),
+        ]
+        panel, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_HEMO",
+            defaults={"nombre": "Hemograma", "activo": True},
+        )
+        panel.tipos_examen.set(hemo_comps)
+        comps = [
+            self._eab_art_ph(tm_art),
+            self._examen_suero("CREATI", "Creatininemia", tm_sue),
+            self._examen_suero("NA", "Sodio", tm_sue),
+            *hemo_comps,
+        ]
+        sol = self._solicitud(*comps)
+        sol.paneles.add(panel)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 3
+        mats = {g.tipo_muestra_id for g in grupos}
+        assert mats == {tm_art.pk, tm_sue.pk, tm_edta.pk}
+        assert sum(g.cantidad for g in grupos) == 3
+
+    def test_eab_mas_creatinina_hemo_y_coag_cuatro_tubos(self):
+        """EAB + creatinina + hemograma + coag → heparina + suero + EDTA + citrato."""
+        from laboratorio.models import PanelExamen
+
+        tm_art = TipoMuestra.objects.create(
+            codigo=f"EX{self.suf}", nombre="Sangre heparina arterial", activo=True
+        )
+        tm_sue = TipoMuestra.objects.create(
+            codigo=f"EY{self.suf}", nombre="Suero", activo=True
+        )
+        tm_edta = TipoMuestra.objects.create(
+            codigo=f"EZ{self.suf}", nombre="Sangre EDTA", activo=True
+        )
+        tm_cit = TipoMuestra.objects.create(
+            codigo=f"ECIT{self.suf}", nombre="Plasma citrato", activo=True
+        )
+        hemo_comps = [
+            self._examen_edta("HTO", "Hematocrito", tm_edta),
+            self._examen_edta("HGB", "Hemoglobina", tm_edta),
+        ]
+        panel_hemo, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_HEMO",
+            defaults={"nombre": "Hemograma", "activo": True},
+        )
+        panel_hemo.tipos_examen.set(hemo_comps)
+        tp, _ = TipoExamen.objects.update_or_create(
+            codigo="TP",
+            defaults={
+                "nombre": "TP",
+                "tipo_muestra_requerida": tm_cit,
+                "tipo_contenedor": self.cit,
+                "precio": 1,
+                "activo": True,
+            },
+        )
+        tp.tipo_muestra_requerida = tm_cit
+        tp.tipo_contenedor = self.cit
+        tp.save(update_fields=["tipo_muestra_requerida", "tipo_contenedor"])
+        panel_coag, _ = PanelExamen.objects.update_or_create(
+            codigo="PAN_COAG",
+            defaults={"nombre": "Coagulograma", "activo": True},
+        )
+        panel_coag.tipos_examen.set([tp])
+        comps = [
+            self._eab_art_ph(tm_art),
+            self._examen_suero("CREATI", "Creatininemia", tm_sue),
+            *hemo_comps,
+            tp,
+        ]
+        sol = self._solicitud(*comps)
+        sol.paneles.add(panel_hemo, panel_coag)
+        grupos = resolver_tubos_para_solicitud(sol)
+        assert len(grupos) == 4
+        mats = {g.tipo_muestra_id for g in grupos}
+        assert mats == {tm_art.pk, tm_sue.pk, tm_edta.pk, tm_cit.pk}
+        assert sum(g.cantidad for g in grupos) == 4
 
 
 @pytest.mark.django_db

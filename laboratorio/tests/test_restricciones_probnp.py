@@ -1,4 +1,4 @@
-"""Bloqueo de frecuencia PROBNP (obra social, 31 días) + revisión ambulatorio."""
+"""PROBNP: no bloquea al pedir; alerta al imprimir etiquetas/talón."""
 
 from datetime import timedelta
 
@@ -10,7 +10,6 @@ from rest_framework.test import APIClient
 
 from laboratorio.models import ResultadoExamen, SolicitudExamen, TipoExamen, TipoMuestra
 from laboratorio.restricciones_frecuencia import (
-    RestriccionFrecuenciaError,
     alertas_frecuencia_para_solicitud,
     assert_puede_agregar_ensayos,
     origen_exige_bloqueo_frecuencia,
@@ -132,7 +131,7 @@ class TestRestriccionProbnpFrecuencia(TestCase):
             format="json",
         )
 
-    def test_origen_exige_bloqueo(self):
+    def test_origen_clasificacion_conservada(self):
         self.assertTrue(origen_exige_bloqueo_frecuencia("GUARDIA"))
         self.assertTrue(origen_exige_bloqueo_frecuencia("INTERNACION_UCO"))
         self.assertFalse(origen_exige_bloqueo_frecuencia("AMBULATORIO_CEHTA"))
@@ -146,16 +145,14 @@ class TestRestriccionProbnpFrecuencia(TestCase):
         self._orden_con_probnp(dias_atras=40)
         self.assertFalse(paciente_tiene_probnp_reciente(self.paciente.pk))
 
-    def test_assert_bloquea_medico_guardia(self):
+    def test_assert_no_bloquea_medico_guardia(self):
         self._orden_con_probnp(dias_atras=5)
-        with self.assertRaises(RestriccionFrecuenciaError) as ctx:
-            assert_puede_agregar_ensayos(
-                self.medico_user,
-                self.paciente.pk,
-                [self.probnp.pk],
-                origen_solicitud="GUARDIA",
-            )
-        self.assertIn("proBNP", str(ctx.exception))
+        assert_puede_agregar_ensayos(
+            self.medico_user,
+            self.paciente.pk,
+            [self.probnp.pk],
+            origen_solicitud="GUARDIA",
+        )
 
     def test_assert_ambulatorio_no_bloquea(self):
         self._orden_con_probnp(dias_atras=5)
@@ -175,11 +172,15 @@ class TestRestriccionProbnpFrecuencia(TestCase):
             origen_solicitud="GUARDIA",
         )
 
-    def test_medico_pedido_completo_bloqueado_guardia(self):
+    def test_medico_pedido_completo_guardia_rechaza_por_catalogo_no_frecuencia(self):
+        """PROBNP no está en el modal/allowlist de guardia; eso sí bloquea (no la OS)."""
         self._orden_con_probnp(dias_atras=5)
         r = self._pedido_completo(self.medico_user, [self.probnp.pk], origen="GUARDIA")
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("proBNP", str(r.data))
+        detail = str(r.data).lower()
+        self.assertIn("guardia solo se pueden pedir", detail)
+        self.assertNotIn("obra social", detail)
+        self.assertNotIn("1 mes", detail)
 
     def test_medico_pedido_completo_ambulatorio_ok(self):
         self._orden_con_probnp(dias_atras=5)
@@ -188,7 +189,7 @@ class TestRestriccionProbnpFrecuencia(TestCase):
         )
         self.assertIn(r.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED), r.data)
 
-    def test_agregar_examenes_bloquea_medico_internacion(self):
+    def test_agregar_examenes_medico_internacion_ok(self):
         abierta = SolicitudExamen.objects.create(
             paciente=self.paciente,
             medico_interno=self.medico,
@@ -208,8 +209,7 @@ class TestRestriccionProbnpFrecuencia(TestCase):
             {"examenes_ids": [self.probnp.pk], "paneles_ids": []},
             format="json",
         )
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("proBNP", str(r.data.get("detail") or r.data))
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
 
     def test_agregar_examenes_ambulatorio_medico_ok(self):
         abierta = SolicitudExamen.objects.create(
@@ -233,67 +233,41 @@ class TestRestriccionProbnpFrecuencia(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
 
-    def test_endpoint_restricciones_medico_bloqueado_guardia(self):
+    def test_endpoint_restricciones_nunca_bloquea_pero_avisa(self):
         self._orden_con_probnp(dias_atras=2)
         self.client.force_authenticate(user=self.medico_user)
-        r = self.client.get(
-            "/api/lab/solicitudes/restricciones-ensayos/",
-            {"paciente_id": self.paciente.pk, "origen_solicitud": "GUARDIA"},
-        )
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertTrue(r.data["PROBNP"]["bloqueado"])
+        for origen in ("GUARDIA", "AMBULATORIO_CEHTA"):
+            r = self.client.get(
+                "/api/lab/solicitudes/restricciones-ensayos/",
+                {"paciente_id": self.paciente.pk, "origen_solicitud": origen},
+            )
+            self.assertEqual(r.status_code, status.HTTP_200_OK)
+            self.assertFalse(r.data["PROBNP"]["bloqueado"])
+            self.assertTrue(r.data["PROBNP"]["aviso"])
+            self.assertIn("proBNP", r.data["PROBNP"]["mensaje"] or "")
 
-    def test_endpoint_restricciones_ambulatorio_libre(self):
-        self._orden_con_probnp(dias_atras=2)
-        self.client.force_authenticate(user=self.medico_user)
-        r = self.client.get(
-            "/api/lab/solicitudes/restricciones-ensayos/",
-            {
-                "paciente_id": self.paciente.pk,
-                "origen_solicitud": "AMBULATORIO_CEHTA",
-            },
-        )
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertFalse(r.data["PROBNP"]["bloqueado"])
-
-    def test_alertas_frecuencia_ambulatorio(self):
+    def test_alertas_frecuencia_ambulatorio_y_guardia(self):
         self._orden_con_probnp(dias_atras=5)
-        amb = SolicitudExamen.objects.create(
-            paciente=self.paciente,
-            medico_interno=self.medico,
-            origen_solicitud="AMBULATORIO_ICPL",
-            estado="PENDIENTE",
-            fecha_programada_toma=timezone.localdate(),
-            material_pedido="SANGRE",
-        )
-        amb.tipos_examen.add(self.probnp)
-        ResultadoExamen.objects.create(
-            solicitud=amb, tipo_examen=self.probnp, valor_obtenido=""
-        )
-        alertas = alertas_frecuencia_para_solicitud(amb)
-        self.assertTrue(any(a["codigo"] == "PROBNP" for a in alertas))
-        self.client.force_authenticate(user=self.lab)
-        r = self.client.get(f"/api/lab/solicitudes/{amb.pk}/alertas-frecuencia/")
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertTrue(r.data["aplica_revision_etiquetas"])
-        self.assertIn("PROBNP", [a["codigo"] for a in r.data["alertas"]])
-
-    def test_alertas_frecuencia_guardia_sin_revision(self):
-        self._orden_con_probnp(dias_atras=5)
-        g = SolicitudExamen.objects.create(
-            paciente=self.paciente,
-            medico_interno=self.medico,
-            origen_solicitud="GUARDIA",
-            estado="PENDIENTE",
-            fecha_programada_toma=timezone.localdate(),
-            material_pedido="SANGRE",
-        )
-        g.tipos_examen.add(self.probnp)
-        ResultadoExamen.objects.create(
-            solicitud=g, tipo_examen=self.probnp, valor_obtenido=""
-        )
-        self.client.force_authenticate(user=self.lab)
-        r = self.client.get(f"/api/lab/solicitudes/{g.pk}/alertas-frecuencia/")
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertFalse(r.data["aplica_revision_etiquetas"])
-        self.assertEqual(r.data["alertas"], [])
+        for origen in ("AMBULATORIO_ICPL", "GUARDIA", "INTERNACION_UCO"):
+            sol = SolicitudExamen.objects.create(
+                paciente=self.paciente,
+                medico_interno=self.medico,
+                origen_solicitud=origen,
+                estado="PENDIENTE",
+                fecha_programada_toma=timezone.localdate(),
+                material_pedido="SANGRE",
+            )
+            sol.tipos_examen.add(self.probnp)
+            ResultadoExamen.objects.create(
+                solicitud=sol, tipo_examen=self.probnp, valor_obtenido=""
+            )
+            alertas = alertas_frecuencia_para_solicitud(sol)
+            self.assertTrue(
+                any(a["codigo"] == "PROBNP" for a in alertas),
+                msg=f"origen={origen}",
+            )
+            self.client.force_authenticate(user=self.lab)
+            r = self.client.get(f"/api/lab/solicitudes/{sol.pk}/alertas-frecuencia/")
+            self.assertEqual(r.status_code, status.HTTP_200_OK)
+            self.assertTrue(r.data["aplica_revision_etiquetas"])
+            self.assertIn("PROBNP", [a["codigo"] for a in r.data["alertas"]])

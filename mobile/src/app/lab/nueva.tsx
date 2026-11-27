@@ -126,7 +126,7 @@ export default function NuevaOrdenLab() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [restriccionesEnsayos, setRestriccionesEnsayos] = useState<
-    Record<string, { bloqueado: boolean; mensaje: string | null }>
+    Record<string, { bloqueado: boolean; aviso?: boolean; mensaje: string | null }>
   >({});
 
   const selectedList = useMemo(() => Object.values(selected), [selected]);
@@ -151,6 +151,25 @@ export default function NuevaOrdenLab() {
       }
     }
     return null;
+  };
+
+  const collectAvisosSeleccion = (): Array<{ codigo: string; nombre: string; mensaje: string }> => {
+    const byCodigo = new Map<string, { codigo: string; nombre: string; mensaje: string }>();
+    const push = (codigoRaw: string | undefined, nombreRaw: string | undefined) => {
+      const codigo = (codigoRaw || '').trim().toUpperCase();
+      if (!codigo || byCodigo.has(codigo)) return;
+      const r = restriccionesEnsayos[codigo];
+      if (!r?.mensaje || r.bloqueado || r.aviso === false) return;
+      byCodigo.set(codigo, {
+        codigo,
+        nombre: (nombreRaw || codigo).trim() || codigo,
+        mensaje: r.mensaje,
+      });
+    };
+    for (const item of selectedList) {
+      push(item.codigo, item.nombre);
+    }
+    return Array.from(byCodigo.values()).sort((a, b) => a.codigo.localeCompare(b.codigo));
   };
 
   const buscarPacientes = async () => {
@@ -282,12 +301,8 @@ export default function NuevaOrdenLab() {
     await persistFavoritos([...current.values()]);
   };
 
-  const enviar = async () => {
+  const doEnviar = async () => {
     if (!paciente) return;
-    if (!selectedList.length) {
-      setError('Seleccioná al menos un panel o examen.');
-      return;
-    }
     setBusy(true);
     setError('');
     try {
@@ -317,6 +332,28 @@ export default function NuevaOrdenLab() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const enviar = async () => {
+    if (!paciente) return;
+    if (!selectedList.length) {
+      setError('Seleccioná al menos un panel o examen.');
+      return;
+    }
+    const avisos = collectAvisosSeleccion();
+    if (avisos.length > 0) {
+      const detalle = avisos.map((a) => `• ${a.nombre} (${a.codigo}): ${a.mensaje}`).join('\n');
+      Alert.alert(
+        'Aviso de cobertura / frecuencia',
+        `Podés enviar el pedido igual.\n\n${detalle}\n\nEl laboratorio puede quitar estos ensayos si la obra social no los habilita o el paciente no los abona en forma particular.`,
+        [
+          { text: 'Volver', style: 'cancel' },
+          { text: 'Enviar de todas formas', onPress: () => void doEnviar() },
+        ]
+      );
+      return;
+    }
+    await doEnviar();
   };
 
   return (
